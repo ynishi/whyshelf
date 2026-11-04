@@ -32,3 +32,5 @@ walkdir = "2.5"
 regex = { version = "1.13", default-features = false, features = ["std", "unicode"] }
 tokio = { version = "1.54", default-features = false }
 tempfile = "3.27"
+clap = { version = "4.6", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }
+rmcp = { version = "3.8", default-features = false, features = ["server", "macros", "transport-io"] }

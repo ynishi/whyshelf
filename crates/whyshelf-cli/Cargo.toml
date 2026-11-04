@@ -17,3 +17,14 @@ path = "src/main.rs"
 [dependencies]
 whyshelf-core.workspace = true
 whyshelf-infra.workspace = true
+clap.workspace = true
+rmcp.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std", "signal", "sync"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["process", "fs"] }
