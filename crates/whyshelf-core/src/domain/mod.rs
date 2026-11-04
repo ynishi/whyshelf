@@ -65,7 +65,9 @@
 //! Every entity has an approval state (Invalid, Draft, Approved, Modified) and an
 //! upstream state (Ok, Stale, Blocked), so "edited after approval" and "upstream
 //! changed" are told apart (an entity is Stale only while its own approval stands;
-//! see [`state`] for which pairs occur). An item adds an integration state (whether the
+//! see [`state`] for which pairs occur). A third fact, completeness, says whether
+//! everything it stands on can be read in this environment (Partial when a `private:`
+//! upstream cannot, as in a public clone). An item adds an integration state (whether the
 //! approved revision reached the baseline) and a progress display (how many of its
 //! pins the tests carry). See [`state`] for the meanings and [`evaluate`] for how
 //! they are derived, upstream to downstream, with the causes passed down.
@@ -126,8 +128,9 @@
 //!
 //! References say where they point ([`mod@reference`]): a bare alias or identifier is in
 //! the same store, `private:<id>` in the private store, `ext:<project>/<id>` in another
-//! project, a URL outside. A `private:` or `ext:` reference that cannot be looked up
-//! (a CI machine, a public clone) is shown as unresolved, never as an error. A public
+//! project, a URL outside. A `private:` or `ext:` reference into a store that cannot
+//! be read here (a CI machine, a public clone) is shown as unresolved, never as an
+//! error; one into a store that can be read, and names nothing, is dangling. A public
 //! document may point at a private entity only by its opaque identifier; copying its
 //! alias or title is stopped by the leak lint ([`lint::leak_lint`]).
 //!

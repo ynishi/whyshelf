@@ -14,7 +14,7 @@ use std::fmt::Write;
 use whyshelf_core::app::projection::ChangelogDoc;
 use whyshelf_core::app::view::{StatusReport, StatusRow};
 use whyshelf_core::domain::event::{Event, EventBody};
-use whyshelf_core::domain::state::{Approval, Integration, Upstream};
+use whyshelf_core::domain::state::{Approval, EntityState, Integration, Upstream};
 
 /// A table cell: no pipe, no line break.
 fn cell(text: &str) -> String {
@@ -51,6 +51,17 @@ fn upstream_name(upstream: &Upstream) -> &'static str {
     }
 }
 
+/// The upstream cell: the axis, and "unresolved" beside it when something the
+/// entity stands on cannot be read where the report was made.
+fn upstream_cell(state: &EntityState) -> String {
+    let axis = upstream_name(state.upstream());
+    if state.completeness().is_partial() {
+        format!("{axis}, unresolved")
+    } else {
+        axis.to_owned()
+    }
+}
+
 fn integration_name(integration: &Integration) -> &'static str {
     match integration {
         Integration::Unapproved => "unapproved",
@@ -66,11 +77,8 @@ pub fn render_status(report: &StatusReport) -> String {
     out.push_str("| entity | kind | approval | upstream | integration | pins | next |\n");
     out.push_str("|---|---|---|---|---|---|---|\n");
     for row in report.rows() {
-        let (approval, upstream) = row.state().map_or(("missing", "-"), |state| {
-            (
-                approval_name(state.approval()),
-                upstream_name(state.upstream()),
-            )
+        let (approval, upstream) = row.state().map_or(("missing", "-".to_owned()), |state| {
+            (approval_name(state.approval()), upstream_cell(state))
         });
         let integration = row.integration().map_or("-", integration_name);
         let pins = row.pins().map_or_else(

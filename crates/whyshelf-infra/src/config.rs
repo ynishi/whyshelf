@@ -465,15 +465,13 @@ pub fn parse(text: &str, dirs: &UserDirs) -> Result<Settings, ConfigError> {
         value("test.pin_pattern", PinPattern::new(pattern))?,
     );
 
-    let default_store = match dto.stores.default.as_str() {
-        "private" => StoreKind::Private,
-        "repo" => StoreKind::Repo,
-        other => {
-            return Err(ConfigError::DefaultStore {
-                found: other.to_owned(),
-            });
-        }
-    };
+    let default_store =
+        dto.stores
+            .default
+            .parse::<StoreKind>()
+            .map_err(|_| ConfigError::DefaultStore {
+                found: dto.stores.default.clone(),
+            })?;
 
     let mut config = Config::new(project, paths, test)
         .with_default_store(default_store)

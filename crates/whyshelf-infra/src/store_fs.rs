@@ -61,6 +61,17 @@
 //! history by rewriting it. The secret scan before a write (see [`crate::secret`])
 //! is what keeps this from being needed.
 //!
+//! # Whether the private store is there
+//!
+//! The private store is there when its directory is. A directory that exists and
+//! holds no event yet is a store with nothing in it ([`Reach::Available`]); a
+//! directory that does not exist (a clone, a CI machine) is a store that cannot be
+//! read ([`Reach::Absent`]). [`StorePort::events`] gives an empty list for both, so
+//! the two are told apart by [`StorePort::private_reach`] alone: a `private:`
+//! reference that names nothing is a mistyped id in the first case and an entity
+//! this environment cannot see in the second. The directory is made by the first
+//! write to the private store, and by nothing else.
+//!
 //! # Many writers, no lock
 //!
 //! The identifier of an event is the hash of its content and heads, so the same
@@ -87,6 +98,7 @@ use whyshelf_core::app::ports::{AppendOutcome, ExportDoc, ExportFile, ExportPart
 use whyshelf_core::app::raw::NormalizedText;
 use whyshelf_core::domain::event::{Event, EventId, StoreKind};
 use whyshelf_core::domain::hash::ContentHash;
+use whyshelf_core::domain::reference::Reach;
 
 use crate::export::{self, RenderError};
 use crate::map_dto;
@@ -291,6 +303,22 @@ impl StorePort for FsStore {
             events.push(event);
         }
         Ok(events)
+    }
+
+    async fn private_reach(&self) -> Result<Reach, StoreError> {
+        // The store is there when its directory can be listed.
+        match tokio::fs::read_dir(&self.private).await {
+            Ok(_) => Ok(Reach::Available),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                ) =>
+            {
+                Ok(Reach::Absent)
+            }
+            Err(error) => Err(io_error(&self.private)(error)),
+        }
     }
 
     async fn put_object(

@@ -28,10 +28,13 @@
 
 use crate::domain::actor::Actor;
 use crate::domain::approval::{Attestation, CmResult, Gate, Pinned};
+use crate::domain::evaluate::Evaluated;
 use crate::domain::event::{EntityKind, EventBody, EventId};
 use crate::domain::finding::FindingSource;
 use crate::domain::id::{DesignId, EntityId, FindingId, SpecId};
-use crate::domain::lint::{CheckViolation, check_ca, check_ci, check_cm, check_cr, check_cs};
+use crate::domain::lint::{
+    CheckViolation, UpstreamProblem, check_ca, check_ci, check_cm, check_cr, check_cs,
+};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::reference::{ItemRef, Ref};
 use crate::domain::revision::Revision;
@@ -164,6 +167,26 @@ fn prepare_cr(model: &Model, target: &Ref) -> Result<Checked, AppError> {
     })
 }
 
+/// The grounds of a Spec at the hashes they have, or the grounds that cannot be
+/// pinned (not there, or not parsed).
+fn pin_grounds(
+    model: &Model,
+    spec: &Spec,
+) -> Result<NonEmptyVec<Pinned<FindingId>>, Vec<EntityId>> {
+    let mut pinned = Vec::new();
+    let mut absent = Vec::new();
+    for ground in spec.grounds().iter() {
+        match model.findings().get(ground).and_then(Evaluated::entity) {
+            Some(finding) => pinned.push(Pinned::new(*ground, *finding.hash())),
+            None => absent.push(ground.entity()),
+        }
+    }
+    match (absent.is_empty(), NonEmptyVec::from_vec(pinned)) {
+        (true, Ok(pinned)) => Ok(pinned),
+        _ => Err(absent),
+    }
+}
+
 fn prepare_cs(model: &Model, target: &Ref) -> Result<Checked, AppError> {
     let id = model.resolve_as(target, EntityKind::Spec)?;
     let ev = model
@@ -172,28 +195,30 @@ fn prepare_cs(model: &Model, target: &Ref) -> Result<Checked, AppError> {
         .ok_or(AppError::TargetFileMissing { id })?;
     ensure_valid(id, ev.state().approval())?;
     let spec = ev.entity().ok_or(AppError::TargetUnparsed { id })?;
-    let violations = check_cs(spec, model.findings());
-    let attestation = if violations.is_empty() {
-        let grounds: Vec<Pinned<FindingId>> = spec
-            .grounds()
-            .iter()
-            .filter_map(|g| {
-                model
-                    .findings()
-                    .get(g)
-                    .and_then(|ev| ev.entity())
-                    .map(|f| Pinned::new(*g, *f.hash()))
-            })
-            .collect();
-        NonEmptyVec::from_vec(grounds)
-            .ok()
-            .map(|grounds| Attestation::Cs {
-                spec: Pinned::new(spec.id(), *spec.contract_hash()),
-                hyp: *spec.hyp_hash(),
-                grounds,
-            })
-    } else {
-        None
+    let mut violations = check_cs(spec, ev.state(), model.findings());
+    let pinned = pin_grounds(model, spec);
+    if let Err(absent) = &pinned {
+        // An attestation names every ground at its hash. A ground that cannot be
+        // pinned is a violation, never a ground left out.
+        for upstream in absent {
+            let known = violations.iter().any(
+                |v| matches!(v, CheckViolation::Upstream { upstream: u, .. } if u == upstream),
+            );
+            if !known {
+                violations.push(CheckViolation::Upstream {
+                    upstream: *upstream,
+                    problem: UpstreamProblem::Missing,
+                });
+            }
+        }
+    }
+    let attestation = match pinned {
+        Ok(grounds) if violations.is_empty() => Some(Attestation::Cs {
+            spec: Pinned::new(spec.id(), *spec.contract_hash()),
+            hyp: *spec.hyp_hash(),
+            grounds,
+        }),
+        _ => None,
     };
     Ok(Checked {
         gate: Gate::Cs,
@@ -211,7 +236,7 @@ fn prepare_ci(model: &Model, target: &Ref) -> Result<Checked, AppError> {
         .ok_or(AppError::TargetFileMissing { id })?;
     ensure_valid(id, ev.state().approval())?;
     let design = ev.entity().ok_or(AppError::TargetUnparsed { id })?;
-    let violations = check_ci(design, model.specs());
+    let violations = check_ci(design, ev.state(), model.specs());
     let attestation = if violations.is_empty() {
         model
             .specs()

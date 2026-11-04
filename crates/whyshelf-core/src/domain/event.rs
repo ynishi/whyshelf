@@ -184,8 +184,36 @@ pub enum StoreKind {
     Private,
 }
 
+impl StoreKind {
+    /// The name a person reads and types: `repo` or `private`.
+    ///
+    /// This is the name of the display and of the input (settings, the command
+    /// line, the tool server). The hash (the canonical form) and the wire format
+    /// keep their own literals, so renaming a display cannot change an identifier
+    /// or break a stored event.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Repo => "repo",
+            Self::Private => "private",
+        }
+    }
+}
+
+impl FromStr for StoreKind {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "repo" => Ok(Self::Repo),
+            "private" => Ok(Self::Private),
+            _ => Err(ValueError::StoreKind),
+        }
+    }
+}
+
 impl ToCanon for StoreKind {
     fn to_canon(&self) -> Canon {
+        // The hash has its own literals: see `as_str`.
         Canon::str(match self {
             Self::Repo => "repo",
             Self::Private => "private",
@@ -1048,6 +1076,32 @@ mod tests {
         assert_ne!(parsed.key(), Version::Unparsed { raw }.key());
         assert_eq!(parsed.content(), Some(&content));
         assert_eq!(Version::Unparsed { raw }.content(), None);
+    }
+
+    #[test]
+    fn a_store_is_named_for_display_and_input_and_read_back() {
+        for (store, name) in [(StoreKind::Repo, "repo"), (StoreKind::Private, "private")] {
+            assert_eq!(store.as_str(), name);
+            assert_eq!(name.parse::<StoreKind>(), Ok(store));
+        }
+        for bad in ["", "Repo", "public", " private"] {
+            assert_eq!(bad.parse::<StoreKind>(), Err(ValueError::StoreKind));
+        }
+    }
+
+    // Golden vector: the canonical bytes of a store, which the event hash covers.
+    // They are written out here, not derived from `as_str`, so that renaming the
+    // display cannot move an identifier.
+    #[test]
+    fn golden_store_kind_canon() {
+        assert_eq!(
+            StoreKind::Repo.to_canon().to_bytes(),
+            [&[0x03, 0, 0, 0, 0, 0, 0, 0, 4][..], b"repo"].concat()
+        );
+        assert_eq!(
+            StoreKind::Private.to_canon().to_bytes(),
+            [&[0x03, 0, 0, 0, 0, 0, 0, 0, 7][..], b"private"].concat()
+        );
     }
 
     // Golden vector: fixed event, fixed identifier.

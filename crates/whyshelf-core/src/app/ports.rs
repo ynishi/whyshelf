@@ -18,7 +18,7 @@
 //! | port | gives the use cases |
 //! |---|---|
 //! | [`RevisionPort`] | the current revision, whether the tree is clean, whether a revision reached the baseline, validation of a revision text |
-//! | [`StorePort`] | the event log and the stored objects of the repo store and the private store, and the generated files |
+//! | [`StorePort`] | the event log and the stored objects of the repo store and the private store, whether the private store is there, and the generated files |
 //! | [`CurrentPort`] | the document files: a listing with stamps, and one file read and parsed (read only) |
 //! | [`ScaffoldPort`] | creating a new document file from a template, never overwriting |
 //! | [`CodeScanPort`] | the pins found in the scan directories at a given revision |
@@ -43,7 +43,7 @@ use crate::domain::id::EntityId;
 use crate::domain::location::{CodeLocation, RelPath};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::pin::PinId;
-use crate::domain::reference::Ref;
+use crate::domain::reference::{Reach, Ref};
 use crate::domain::revision::RevisionId;
 
 use super::config::{PinPattern, TestCommand};
@@ -259,10 +259,21 @@ pub trait StorePort: Send + Sync {
     ) -> impl Future<Output = Result<AppendOutcome, Self::Error>> + Send;
 
     /// Every event of the store.
+    ///
+    /// A store that is not there has no events: this cannot tell it from an empty
+    /// one, which [`private_reach`](Self::private_reach) does.
     fn events(
         &self,
         scope: StoreKind,
     ) -> impl Future<Output = Result<Vec<Event>, Self::Error>> + Send;
+
+    /// Whether the private store is there to be read: a store that is there and has
+    /// no event yet is [`Reach::Available`], a store that is not there (a public
+    /// clone, a CI machine) is [`Reach::Absent`].
+    ///
+    /// A reference into the private store that names nothing is a typing mistake
+    /// in the first case and a thing this environment cannot see in the second.
+    fn private_reach(&self) -> impl Future<Output = Result<Reach, Self::Error>> + Send;
 
     /// Store the text of a version under its `raw` hash. Idempotent.
     fn put_object(

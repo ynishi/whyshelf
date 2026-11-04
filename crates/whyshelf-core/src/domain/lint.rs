@@ -5,8 +5,8 @@
 //! - **CHECK, layer 1.** One function per gate ([`check_cr`], [`check_cs`],
 //!   [`check_ci`], [`check_ca`], [`check_cm`]) returns every violation found, not
 //!   the first. An approval (layer 2) may be recorded only when the list is empty.
-//!   The machine looks at form: links resolve, upstream is approved and current,
-//!   pins match in both directions, tests pass. Whether a claim follows from its
+//!   The machine looks at form: links resolve and can be read here, upstream is
+//!   approved and current, pins match in both directions, tests pass. Whether a claim follows from its
 //!   evidence is for the human who approves.
 //! - **Leak lint.** [`leak_lint`] stops a public document from carrying the alias
 //!   or the title of a private entity. A public document may point at a private
@@ -35,15 +35,21 @@
 //! | `CsApprovalNotFound` | CM | no CS approval fixed the hypotheses of this Spec | there is no unrevoked CS approval to compare with | approve the Spec (CS) first |
 //! | `HypothesisChanged` | CM | the hypotheses changed after CS fixed them | `accept.hyp` is not what the CS approval fixed | put the hypotheses back, or approve CS again and measure against the new ones |
 //!
-//! What can be wrong with an upstream ([`UpstreamProblem`]):
+//! What can be wrong with an upstream ([`UpstreamProblem`]), in the order in which
+//! [`upstream_problems`] puts them (the first is the one to look at first):
 //!
 //! | problem | the command line says | what it means | how to clear it |
 //! |---|---|---|---|
 //! | `Missing` | it does not exist | the reference names no entity | correct the alias or identifier, or register the file it should name |
 //! | `Invalid` | it is invalid | the upstream file does not parse, or breaks a rule | fix the upstream file (`whyshelf status` shows the reasons) |
+//! | `Unresolved` | it cannot be read here | the upstream, or something above it, is in a store this environment cannot read (a `private:` reference in a clone), so it cannot be checked or pinned | open the project where the private store is, and check there |
 //! | `NotApproved` | it is not approved | the upstream is a Draft, or was edited after its approval (Modified) | run the upstream's own gate and approve it |
 //! | `Stale` | it is stale | the upstream is approved, but something above it changed | run the gates again from the top: the first stale one, then the next |
 //! | `Blocked` | it is blocked | the upstream is approved, but something above it is not ready | follow the NEXT column of `whyshelf status` from the top |
+//!
+//! One problem is reported per upstream, the first that applies: an upstream that is
+//! Approved, Stale and Partial is `Unresolved`, because staleness cannot be cleared
+//! where the entity cannot be read.
 //!
 //! # Generated files
 //!
@@ -72,9 +78,12 @@ use super::id::{Alias, DesignId, EntityId, FindingId, SpecId};
 use super::nonempty::NonBlank;
 use super::pin::PinId;
 use super::spec::Spec;
-use super::state::{Approval, EntityState, Upstream};
+use super::state::{Approval, Completeness, EntityState, Upstream};
 
 /// What is wrong with an upstream entity a gate depends on.
+///
+/// The variants are in the order of [`upstream_problems`]: the first that applies
+/// to an upstream wins, and the problems of several upstreams are listed by it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UpstreamProblem {
     /// The entity is not there (a dangling reference).
@@ -85,6 +94,11 @@ pub enum UpstreamProblem {
     ///
     /// Fix: repair the upstream file.
     Invalid,
+    /// The entity, or something it stands on, is in a store this environment
+    /// cannot read, so it can be neither checked nor pinned here.
+    ///
+    /// Fix: open the project where the private store is, and check there.
+    Unresolved,
     /// The entity has no approval for its current content (a Draft, or edited after
     /// its approval).
     ///
@@ -172,25 +186,61 @@ pub enum CheckViolation {
     },
 }
 
-fn upstream_problem(state: &EntityState) -> Option<UpstreamProblem> {
-    match (state.approval(), state.upstream()) {
-        (Approval::Invalid(_), _) => Some(UpstreamProblem::Invalid),
-        (Approval::Draft | Approval::Modified { .. }, _) => Some(UpstreamProblem::NotApproved),
-        (Approval::Approved, Upstream::Stale(_)) => Some(UpstreamProblem::Stale),
-        (Approval::Approved, Upstream::Blocked(_)) => Some(UpstreamProblem::Blocked),
-        (Approval::Approved, Upstream::Ok) => None,
+/// The one problem of an upstream that is there, the first that applies.
+fn problem_of(state: &EntityState) -> Option<UpstreamProblem> {
+    match state.approval() {
+        Approval::Invalid(_) => Some(UpstreamProblem::Invalid),
+        _ if state.completeness().is_partial() => Some(UpstreamProblem::Unresolved),
+        Approval::Draft | Approval::Modified { .. } => Some(UpstreamProblem::NotApproved),
+        Approval::Approved => match state.upstream() {
+            Upstream::Stale(_) => Some(UpstreamProblem::Stale),
+            Upstream::Blocked(_) => Some(UpstreamProblem::Blocked),
+            Upstream::Ok => None,
+        },
     }
 }
 
-fn upstream_violation<T>(id: EntityId, found: Option<&Evaluated<T>>) -> Option<CheckViolation> {
-    let problem = match found {
-        None => Some(UpstreamProblem::Missing),
-        Some(ev) => upstream_problem(ev.state()),
-    };
-    problem.map(|problem| CheckViolation::Upstream {
-        upstream: id,
-        problem,
-    })
+/// What stands in the way of depending on each upstream of an entity.
+///
+/// `target` is the completeness of the entity that depends on them; each upstream
+/// is its identifier and its state, or `None` when no entity of that identifier is
+/// in the model. An upstream that is not there is `Unresolved` when the target
+/// wrote it with a mark into a store this environment cannot read (it names the
+/// upstream in its completeness), else `Missing`.
+///
+/// One problem is returned per upstream, the first that applies in the order of
+/// [`UpstreamProblem`]: Invalid, then Unresolved (an upstream that is itself
+/// partial counts, so a gate stops on whatever it cannot read further up), then
+/// NotApproved, Stale, Blocked. Across upstreams the result is ordered by that same
+/// order, the order the upstreams were given breaking ties. The gates and the
+/// `NEXT` column both read this and keep no order of their own.
+pub fn upstream_problems(
+    target: &Completeness,
+    upstreams: &[(EntityId, Option<&EntityState>)],
+) -> Vec<(EntityId, UpstreamProblem)> {
+    let mut out: Vec<(EntityId, UpstreamProblem)> = upstreams
+        .iter()
+        .filter_map(|(id, found)| {
+            let problem = match found {
+                None if target.names_upstream(*id) => Some(UpstreamProblem::Unresolved),
+                None => Some(UpstreamProblem::Missing),
+                Some(state) => problem_of(state),
+            };
+            problem.map(|problem| (*id, problem))
+        })
+        .collect();
+    out.sort_by_key(|(_, problem)| *problem);
+    out
+}
+
+fn upstream_violations(
+    target: &Completeness,
+    upstreams: &[(EntityId, Option<&EntityState>)],
+) -> Vec<CheckViolation> {
+    upstream_problems(target, upstreams)
+        .into_iter()
+        .map(|(upstream, problem)| CheckViolation::Upstream { upstream, problem })
+        .collect()
 }
 
 /// CR, layer 1: the Finding is complete as a record.
@@ -210,17 +260,23 @@ pub fn check_cr(finding: &Finding) -> Vec<CheckViolation> {
     out
 }
 
-/// CS, layer 1: every ground exists, passed CR and is current; pins and
-/// hypotheses are declared.
+/// CS, layer 1: every ground exists and can be read here, passed CR and is
+/// current; pins and hypotheses are declared.
+///
+/// `state` is the Spec's own state: its completeness says which grounds were
+/// written with a mark into a store this environment cannot read. Such a ground is
+/// a violation: it cannot be checked, and the hash of it cannot be recorded.
 pub fn check_cs(
     spec: &Spec,
+    state: &EntityState,
     findings: &BTreeMap<FindingId, Evaluated<Finding>>,
 ) -> Vec<CheckViolation> {
-    let mut out: Vec<CheckViolation> = spec
+    let upstreams: Vec<_> = spec
         .grounds()
         .iter()
-        .filter_map(|g| upstream_violation(g.entity(), findings.get(g)))
+        .map(|g| (g.entity(), findings.get(g).map(Evaluated::state)))
         .collect();
+    let mut out = upstream_violations(state.completeness(), &upstreams);
     if spec.pins().is_empty() {
         out.push(CheckViolation::NoPinsDeclared);
     }
@@ -230,16 +286,26 @@ pub fn check_cs(
     out
 }
 
-/// CI, layer 1: the Spec passed CS and is current; pins are covered in both
-/// directions.
+/// CI, layer 1: the Spec passed CS, is current and can be read in full here; pins
+/// are covered in both directions.
+///
+/// An approved Spec that is Partial (something it stands on cannot be read here) is
+/// a violation: whether it is still current cannot be told. `state` is the
+/// Design's own state, for the Spec it wrote with a mark into a store this
+/// environment cannot read.
 ///
 /// That the Crux gives a reason for each rejected option is held by its type, so
 /// there is nothing to check for it here.
-pub fn check_ci(design: &Design, specs: &BTreeMap<SpecId, Evaluated<Spec>>) -> Vec<CheckViolation> {
+pub fn check_ci(
+    design: &Design,
+    state: &EntityState,
+    specs: &BTreeMap<SpecId, Evaluated<Spec>>,
+) -> Vec<CheckViolation> {
     let found = specs.get(&design.spec());
-    let mut out: Vec<CheckViolation> = upstream_violation(design.spec().entity(), found)
-        .into_iter()
-        .collect();
+    let mut out = upstream_violations(
+        state.completeness(),
+        &[(design.spec().entity(), found.map(Evaluated::state))],
+    );
     if let Some(spec) = found.and_then(Evaluated::entity) {
         out.extend(
             design
@@ -251,8 +317,13 @@ pub fn check_ci(design: &Design, specs: &BTreeMap<SpecId, Evaluated<Spec>>) -> V
     out
 }
 
-/// CA, layer 1: the Design passed CI and is current; the item's pins and the
-/// tests' tags match in both directions at the revision; the tests passed.
+/// CA, layer 1: the Design passed CI, is current and can be read in full here; the
+/// item's pins and the tests' tags match in both directions at the revision; the
+/// tests passed.
+///
+/// An approved Design that is Partial, through its Spec or further up, is a
+/// violation, for the same reason as at CI. An item is named by its number inside
+/// its Design, never by a mark, so it has nothing of its own that cannot be read.
 pub fn check_ca(
     key: &ItemKey,
     item: &WorkItem,
@@ -262,9 +333,10 @@ pub fn check_ca(
     tests: TestOutcome,
 ) -> Vec<CheckViolation> {
     let found = designs.get(&key.design);
-    let mut out: Vec<CheckViolation> = upstream_violation(key.design.entity(), found)
-        .into_iter()
-        .collect();
+    let mut out = upstream_violations(
+        &Completeness::Complete,
+        &[(key.design.entity(), found.map(Evaluated::state))],
+    );
     let design = found.and_then(Evaluated::entity);
     if let Some(design) = design
         && design.items().get(&key.number) != Some(item)
@@ -430,9 +502,17 @@ mod tests {
     use crate::domain::id::test_support::{did, eid, fid, iid, sid};
     use crate::domain::nonempty::NonEmptyVec;
     use crate::domain::spec::test_support::{hyps, spec};
+    use crate::domain::state::{BlockReason, InvalidReason, StaleReason, UnresolvedReason};
+    use std::collections::BTreeSet;
 
     fn ledger(events: &[crate::domain::event::Event]) -> ApprovalSet {
         ApprovalSet::from_events(events, &fold(events))
+    }
+
+    /// Any state that has nothing the target could not read, for the gates whose
+    /// own state does not matter to the case.
+    fn complete() -> EntityState {
+        EntityState::new(Approval::Draft, Upstream::Ok, Completeness::Complete)
     }
 
     // --- CR ---------------------------------------------------------------
@@ -503,7 +583,7 @@ mod tests {
         // Ground 1 approved; ground 2 absent.
         let map = findings_map(vec![(1, f1.clone(), approved.to_vec())]);
         assert_eq!(
-            check_cs(&s, &map),
+            check_cs(&s, &complete(), &map),
             vec![CheckViolation::Upstream {
                 upstream: eid(2),
                 problem: UpstreamProblem::Missing
@@ -517,7 +597,7 @@ mod tests {
             (2, f2, Vec::new()),
         ]);
         assert_eq!(
-            check_cs(&s, &map),
+            check_cs(&s, &complete(), &map),
             vec![CheckViolation::Upstream {
                 upstream: eid(2),
                 problem: UpstreamProblem::NotApproved
@@ -531,7 +611,7 @@ mod tests {
             approve(cr(2, f2.hash()), &[]),
         ];
         let map = findings_map(vec![(1, f1, both.to_vec()), (2, f2, both.to_vec())]);
-        assert_eq!(check_cs(&s, &map), vec![]);
+        assert_eq!(check_cs(&s, &complete(), &map), vec![]);
     }
 
     #[test]
@@ -548,7 +628,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            check_cs(&bare, &map),
+            check_cs(&bare, &complete(), &map),
             vec![
                 CheckViolation::NoPinsDeclared,
                 CheckViolation::NoHypsDeclared
@@ -563,7 +643,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            check_cs(&no_hyp, &map),
+            check_cs(&no_hyp, &complete(), &map),
             vec![CheckViolation::NoHypsDeclared]
         );
     }
@@ -577,7 +657,13 @@ mod tests {
         let l = ledger(events);
         let f = finding(1, "one");
         let ef = Evaluator::finding(&f, &l, &[]);
-        let es = Evaluator::spec(s, &BTreeMap::from([(fid(1), ef)]), &l, &[]);
+        let es = Evaluator::spec(
+            s,
+            &BTreeMap::from([(fid(1), ef)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
         BTreeMap::from([(s.id(), es)])
     }
 
@@ -590,7 +676,7 @@ mod tests {
         // Spec is a draft and UT-B is unassigned.
         let drafts = spec_map(&s, &[]);
         assert_eq!(
-            check_ci(&d, &drafts),
+            check_ci(&d, &complete(), &drafts),
             vec![
                 CheckViolation::Upstream {
                     upstream: eid(11),
@@ -613,11 +699,14 @@ mod tests {
             11,
             vec![(1, item("a", &["PIN-A"])), (2, item("b", &["UT-B"]))],
         );
-        assert_eq!(check_ci(&ok_design, &spec_map(&s, &events)), vec![]);
+        assert_eq!(
+            check_ci(&ok_design, &complete(), &spec_map(&s, &events)),
+            vec![]
+        );
 
         // Missing spec.
         assert_eq!(
-            check_ci(&ok_design, &BTreeMap::new()),
+            check_ci(&ok_design, &complete(), &BTreeMap::new()),
             vec![CheckViolation::Upstream {
                 upstream: eid(11),
                 problem: UpstreamProblem::Missing
@@ -661,8 +750,20 @@ mod tests {
         }
         let l = ledger(&events);
         let ef = Evaluator::finding(&f1, &l, &[]);
-        let es = Evaluator::spec(&s, &BTreeMap::from([(fid(1), ef)]), &l, &[]);
-        let ed = Evaluator::design(&d, &BTreeMap::from([(sid(11), es.clone())]), &l, &[]);
+        let es = Evaluator::spec(
+            &s,
+            &BTreeMap::from([(fid(1), ef)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
+        let ed = Evaluator::design(
+            &d,
+            &BTreeMap::from([(sid(11), es.clone())]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
         CaWorld {
             designs: BTreeMap::from([(did(21), ed)]),
             specs: BTreeMap::from([(sid(11), es)]),
@@ -775,6 +876,214 @@ mod tests {
                 TestOutcome::Passed
             ),
             vec![CheckViolation::ItemNotInDesign]
+        );
+    }
+
+    // --- upstreams that cannot be read here ---------------------------------
+
+    fn partial(root: u128, through: u128) -> Completeness {
+        Completeness::from_reasons(BTreeSet::from([UnresolvedReason::new(
+            eid(root),
+            eid(through),
+        )]))
+    }
+
+    fn stale_upstream() -> Upstream {
+        Upstream::Stale(NonEmptyVec::new(
+            StaleReason::UpstreamStale { upstream: eid(9) },
+            vec![],
+        ))
+    }
+
+    #[test]
+    fn upstream_problems_come_in_one_order_and_one_per_upstream() {
+        let invalid = EntityState::new(
+            Approval::Invalid(NonEmptyVec::new(
+                InvalidReason::DanglingRef { upstream: eid(9) },
+                vec![],
+            )),
+            Upstream::Ok,
+            Completeness::Complete,
+        );
+        let unresolved = EntityState::new(Approval::Approved, Upstream::Ok, partial(5, 5));
+        let draft = complete();
+        let stale = EntityState::new(Approval::Approved, stale_upstream(), Completeness::Complete);
+        let blocked = EntityState::new(
+            Approval::Approved,
+            Upstream::Blocked(NonEmptyVec::new(
+                BlockReason::UpstreamUnapproved { upstream: eid(9) },
+                vec![],
+            )),
+            Completeness::Complete,
+        );
+        let ready = EntityState::new(Approval::Approved, Upstream::Ok, Completeness::Complete);
+        // Given back to front, and with one that has no problem among them.
+        let given = [
+            (eid(7), Some(&ready)),
+            (eid(6), Some(&blocked)),
+            (eid(5), Some(&stale)),
+            (eid(4), Some(&draft)),
+            (eid(3), Some(&unresolved)),
+            (eid(2), Some(&invalid)),
+            (eid(1), None),
+        ];
+        assert_eq!(
+            upstream_problems(&Completeness::Complete, &given),
+            vec![
+                (eid(1), UpstreamProblem::Missing),
+                (eid(2), UpstreamProblem::Invalid),
+                (eid(3), UpstreamProblem::Unresolved),
+                (eid(4), UpstreamProblem::NotApproved),
+                (eid(5), UpstreamProblem::Stale),
+                (eid(6), UpstreamProblem::Blocked),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_approved_stale_and_partial_upstream_is_unresolved() {
+        // Not Stale: a clone cannot approve again, whatever changed.
+        let state = EntityState::new(Approval::Approved, stale_upstream(), partial(5, 5));
+        assert_eq!(
+            upstream_problems(&Completeness::Complete, &[(eid(1), Some(&state))]),
+            vec![(eid(1), UpstreamProblem::Unresolved)]
+        );
+    }
+
+    #[test]
+    fn a_partial_upstream_and_an_unrelated_draft_upstream_are_both_reported() {
+        let partial_state = EntityState::new(Approval::Approved, Upstream::Ok, partial(5, 1));
+        let draft = complete();
+        // The Draft is given first: the order of the problems decides, not the list.
+        assert_eq!(
+            upstream_problems(
+                &Completeness::Complete,
+                &[(eid(2), Some(&draft)), (eid(1), Some(&partial_state))]
+            ),
+            vec![
+                (eid(1), UpstreamProblem::Unresolved),
+                (eid(2), UpstreamProblem::NotApproved),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_upstream_that_is_not_there_is_unresolved_only_when_the_target_names_it() {
+        let named = partial(1, 1);
+        assert_eq!(
+            upstream_problems(&named, &[(eid(1), None), (eid(2), None)]),
+            vec![
+                (eid(2), UpstreamProblem::Missing),
+                (eid(1), UpstreamProblem::Unresolved),
+            ]
+        );
+    }
+
+    #[test]
+    fn cs_stops_on_a_ground_it_cannot_read_and_pins_nothing() {
+        let s = spec(11, &[1], &["PIN-A"]);
+        let unreadable = Evaluator::spec(
+            &s,
+            &BTreeMap::new(),
+            &ledger(&[]),
+            &BTreeSet::from([eid(1)]),
+            &[],
+        );
+        assert_eq!(
+            check_cs(&s, unreadable.state(), &BTreeMap::new()),
+            vec![CheckViolation::Upstream {
+                upstream: eid(1),
+                problem: UpstreamProblem::Unresolved
+            }]
+        );
+        // Without the mark the same missing ground is only missing.
+        let dangling = Evaluator::spec(&s, &BTreeMap::new(), &ledger(&[]), &BTreeSet::new(), &[]);
+        assert_eq!(
+            check_cs(&s, dangling.state(), &BTreeMap::new()),
+            vec![CheckViolation::Upstream {
+                upstream: eid(1),
+                problem: UpstreamProblem::Missing
+            }]
+        );
+    }
+
+    /// A Spec that was approved where the private store is, looked at where it is not.
+    fn approved_partial_spec() -> (Spec, Evaluated<Spec>, Vec<crate::domain::event::Event>) {
+        let f1 = finding(1, "one");
+        let s = spec(11, &[1], &["PIN-A", "UT-B"]);
+        let events = vec![
+            approve(cr(1, f1.hash()), &[]),
+            approve(
+                cs(11, s.contract_hash(), s.hyp_hash(), &[(1, *f1.hash())]),
+                &[],
+            ),
+        ];
+        let es = Evaluator::spec(
+            &s,
+            &BTreeMap::new(),
+            &ledger(&events),
+            &BTreeSet::from([eid(1)]),
+            &[],
+        );
+        (s, es, events)
+    }
+
+    #[test]
+    fn ci_stops_on_an_approved_spec_that_is_partial() {
+        let (s, es, _) = approved_partial_spec();
+        assert_eq!(es.state().approval(), &Approval::Approved);
+        let d = design(
+            21,
+            11,
+            vec![(1, item("a", &["PIN-A"])), (2, item("b", &["UT-B"]))],
+        );
+        assert_eq!(
+            check_ci(&d, &complete(), &BTreeMap::from([(s.id(), es)])),
+            vec![CheckViolation::Upstream {
+                upstream: eid(11),
+                problem: UpstreamProblem::Unresolved
+            }]
+        );
+    }
+
+    #[test]
+    fn ca_stops_on_an_approved_design_that_is_partial_further_up() {
+        let (s, es, mut events) = approved_partial_spec();
+        let d = design(
+            21,
+            11,
+            vec![(1, item("a", &["PIN-A"])), (2, item("b", &["UT-B"]))],
+        );
+        events.push(approve(
+            crate::domain::approval::test_support::ci(21, d.design_hash(), 11, s.contract_hash()),
+            &[],
+        ));
+        let ed = Evaluator::design(
+            &d,
+            &BTreeMap::from([(s.id(), es.clone())]),
+            &ledger(&events),
+            &BTreeSet::new(),
+            &[],
+        );
+        assert_eq!(ed.state().approval(), &Approval::Approved);
+        let key = ItemKey {
+            id: iid(31),
+            design: did(21),
+            number: num(1),
+        };
+        assert_eq!(
+            check_ca(
+                &key,
+                &d.items()[&num(1)],
+                &BTreeMap::from([(did(21), ed)]),
+                &BTreeMap::from([(s.id(), es)]),
+                &view(&["PIN-A"]),
+                TestOutcome::Passed
+            ),
+            vec![CheckViolation::Upstream {
+                upstream: eid(21),
+                problem: UpstreamProblem::Unresolved
+            }]
         );
     }
 

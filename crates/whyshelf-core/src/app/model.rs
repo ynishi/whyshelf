@@ -54,8 +54,12 @@
 //! graph of a store is its own (a publication starts a new root in the repo
 //! store). An entity belongs to one *home* store: the repo store if it appears
 //! there, else the private store. References are resolved by the rules of the
-//! domain: a reference without a mark stays in the entity's own store (a private
-//! entity may also name a public one), `private:<id>` reaches the private store.
+//! domain ([`EntityRef::resolve`]); the index only answers its questions: a
+//! reference without a mark stays in the entity's own store (a private entity may
+//! also name a public one), `private:<id>` is looked up by its identifier in either
+//! store, and whether the private store is there at all is asked of the store port
+//! once per load. A `private:` identifier that nothing holds, where the private store
+//! is not there, leaves the entity that names it *partial*, not invalid.
 //! Approvals are read from both stores together, because an entity that was
 //! published keeps its earlier approvals in the private store.
 //!
@@ -85,7 +89,9 @@ use crate::domain::id::{Alias, DesignId, EntityId, FindingId, ItemId, ItemNumber
 use crate::domain::lint::PrivateName;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
-use crate::domain::reference::{ItemRef, LocalRef, Ref};
+use crate::domain::reference::{
+    Directory, EntityRef, ItemRef, LocalRef, Lookup, Reach, Ref, Resolution,
+};
 use crate::domain::revision::RevisionId;
 use crate::domain::spec::Spec;
 use crate::domain::state::{EntityState, InvalidReason, UnparsedReason};
@@ -131,6 +137,7 @@ pub(crate) struct Snapshot {
     repo: Side,
     private: Side,
     ledger: ApprovalSet,
+    reach: Reach,
 }
 
 impl Snapshot {
@@ -145,10 +152,19 @@ impl Snapshot {
             .events(StoreKind::Private)
             .await
             .map_err(AppError::port(super::ports::PortName::Store))?;
-        Ok(Self::from_events(repo_events, private_events))
+        let reach = ports
+            .store()
+            .private_reach()
+            .await
+            .map_err(AppError::port(super::ports::PortName::Store))?;
+        Ok(Self::from_events(repo_events, private_events, reach))
     }
 
-    pub(crate) fn from_events(repo_events: Vec<Event>, private_events: Vec<Event>) -> Self {
+    pub(crate) fn from_events(
+        repo_events: Vec<Event>,
+        private_events: Vec<Event>,
+        reach: Reach,
+    ) -> Self {
         // The ledger is read from both stores at once: approvals of a published
         // entity stay in the private store. The union fold is used only for its
         // duplicate registrations (which approval belongs to which survivor).
@@ -171,7 +187,13 @@ impl Snapshot {
             repo,
             private,
             ledger,
+            reach,
         }
+    }
+
+    /// Whether the private store can be read in this environment.
+    pub(crate) fn reach(&self) -> Reach {
+        self.reach
     }
 
     pub(crate) fn side(&self, store: StoreKind) -> &Side {
@@ -256,13 +278,6 @@ pub(crate) struct Found {
     pub(crate) store: StoreKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Lookup {
-    Found(Found),
-    Missing,
-    Ambiguous,
-}
-
 /// Where a reference is read from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Scope {
@@ -274,16 +289,46 @@ pub(crate) enum Scope {
 }
 
 /// Aliases and identifiers of every entity, for resolving references.
-#[derive(Debug, Default)]
+///
+/// It holds the data and answers [`Directory`]'s questions through
+/// [`Index::seen_from`]; the rule that turns the answers into a resolution is the
+/// domain's.
+#[derive(Debug)]
 pub(crate) struct Index {
     entries: BTreeMap<EntityId, Found>,
     aliases: BTreeMap<StoreKind, BTreeMap<Alias, BTreeSet<EntityId>>>,
     canonical: BTreeMap<EntityId, EntityId>,
+    reach: Reach,
+}
+
+/// The index as a reference in one place sees it.
+pub(crate) struct Scoped<'a> {
+    index: &'a Index,
+    scope: Scope,
+}
+
+impl Directory<Found> for Scoped<'_> {
+    fn local(&self, reference: &LocalRef) -> Lookup<Found> {
+        self.index.lookup(self.scope, reference)
+    }
+
+    fn by_id(&self, id: EntityId) -> Option<Found> {
+        self.index.by_id(id)
+    }
+
+    fn private_reach(&self) -> Reach {
+        self.index.reach
+    }
 }
 
 impl Index {
     pub(crate) fn from_snapshot(snap: &Snapshot) -> Self {
-        let mut index = Index::default();
+        let mut index = Index {
+            entries: BTreeMap::new(),
+            aliases: BTreeMap::new(),
+            canonical: BTreeMap::new(),
+            reach: snap.reach(),
+        };
         for store in [StoreKind::Repo, StoreKind::Private] {
             index
                 .canonical
@@ -332,7 +377,12 @@ impl Index {
         }
     }
 
-    pub(crate) fn lookup(&self, scope: Scope, reference: &LocalRef) -> Lookup {
+    /// The questions of a reference read from `scope`.
+    pub(crate) fn seen_from(&self, scope: Scope) -> Scoped<'_> {
+        Scoped { index: self, scope }
+    }
+
+    fn lookup(&self, scope: Scope, reference: &LocalRef) -> Lookup<Found> {
         match reference {
             LocalRef::Id(id) => {
                 let id = self.canonical.get(id).copied().unwrap_or(*id);
@@ -365,13 +415,13 @@ impl Index {
         }
     }
 
-    /// An entity of the private store by its opaque identifier.
-    pub(crate) fn lookup_private(&self, id: EntityId) -> Option<Found> {
+    /// An entity by its identifier, in whichever store holds it, following the
+    /// identifiers a merge made equal. A publication moves an entity to the repo
+    /// store and a file keeps writing `private:<id>`, so the store is no part of
+    /// the question.
+    fn by_id(&self, id: EntityId) -> Option<Found> {
         let id = self.canonical.get(&id).copied().unwrap_or(id);
-        self.entries
-            .get(&id)
-            .filter(|f| f.store == StoreKind::Private)
-            .copied()
+        self.entries.get(&id).copied()
     }
 
     /// Who holds the alias in a store.
@@ -384,11 +434,16 @@ impl Index {
 }
 
 /// The result of building an entity from a file.
+///
+/// A Spec and a Design carry, beside the entity, the upstream identifiers the file
+/// wrote with a mark into a store this environment cannot read: the entity holds
+/// the identifier, and this is the fact about how it was written that the
+/// evaluator needs and the entity must not hold (it would reach the hashes).
 #[derive(Debug, Clone)]
 pub(crate) enum Built {
     Finding(Finding),
-    Spec(Spec),
-    Design(Design),
+    Spec(Spec, BTreeSet<EntityId>),
+    Design(Design, BTreeSet<EntityId>),
     Unparsed(Unparsed),
 }
 
@@ -401,11 +456,11 @@ impl Built {
                 content: *f.hash(),
                 raw,
             },
-            Self::Spec(s) => Version::Parsed {
+            Self::Spec(s, _) => Version::Parsed {
                 content: *s.contract_hash(),
                 raw,
             },
-            Self::Design(d) => Version::Parsed {
+            Self::Design(d, _) => Version::Parsed {
                 content: *d.design_hash(),
                 raw,
             },
@@ -421,47 +476,51 @@ fn invalid_field(field: &str, detail: impl Into<String>) -> UnparsedReason {
     }
 }
 
+/// Where a reference in a field came to.
+enum Reached {
+    /// An entity of the kind the field wants.
+    Entity(EntityId),
+    /// An identifier written with a mark into a store this environment cannot
+    /// read: kept as written, and told apart so the entity that holds it is
+    /// partial and not invalid.
+    Unreadable(EntityId),
+}
+
 fn resolve_to(
-    index: &Index,
-    store: StoreKind,
+    directory: &Scoped<'_>,
     reference: &Ref,
     field: &str,
     expected: EntityKind,
-) -> Result<EntityId, UnparsedReason> {
-    let found = match reference {
-        Ref::Local(local) => match index.lookup(Scope::Doc(store), local) {
-            Lookup::Found(found) => found,
-            Lookup::Missing | Lookup::Ambiguous => {
-                return Err(UnparsedReason::UnresolvedRef {
-                    reference: reference.clone(),
-                });
-            }
-        },
-        Ref::Private(id) => match index.lookup_private(*id) {
-            Some(found) => found,
-            // Not found here (a clone without the private store): the opaque
-            // identifier is still the identifier. The evaluator will show the
-            // entity that depends on it as having a missing upstream.
-            None => return Ok(*id),
-        },
-        Ref::External { .. } | Ref::Url(_) => {
-            return Err(invalid_field(
+) -> Result<Reached, UnparsedReason> {
+    // A URL names no entity, and an `ext:` reference could never be approved
+    // anywhere (see the module documentation of `reference`).
+    let entity = reference
+        .as_entity()
+        .filter(|entity| !matches!(entity, EntityRef::External { .. }))
+        .ok_or_else(|| {
+            invalid_field(
                 field,
                 "an external reference cannot stand for an entity of this project",
-            ));
-        }
-    };
-    if found.kind == expected {
-        Ok(found.id)
-    } else {
-        Err(invalid_field(
+            )
+        })?;
+    match entity.resolve(directory) {
+        Resolution::Found(found) if found.kind == expected => Ok(Reached::Entity(found.id)),
+        Resolution::Found(found) => Err(invalid_field(
             field,
             format!(
                 "`{reference}` is a {}, not a {}",
                 found.kind.name(),
                 expected.name()
             ),
-        ))
+        )),
+        Resolution::Unresolved => entity.spelled_id().map(Reached::Unreadable).ok_or_else(|| {
+            UnparsedReason::UnresolvedRef {
+                reference: reference.clone(),
+            }
+        }),
+        Resolution::Dangling | Resolution::Ambiguous => Err(UnparsedReason::UnresolvedRef {
+            reference: reference.clone(),
+        }),
     }
 }
 
@@ -525,11 +584,17 @@ pub(crate) async fn build<P: Ports>(
             }
         }
         RawDoc::Spec(raw) => {
+            let directory = index.seen_from(Scope::Doc(store));
             let mut grounds = Vec::new();
+            let mut unresolved = BTreeSet::new();
             let mut reasons = Vec::new();
             for reference in raw.grounds().iter() {
-                match resolve_to(index, store, reference, "grounds", EntityKind::Finding) {
-                    Ok(found) => grounds.push(FindingId::new(found)),
+                match resolve_to(&directory, reference, "grounds", EntityKind::Finding) {
+                    Ok(Reached::Entity(found)) => grounds.push(FindingId::new(found)),
+                    Ok(Reached::Unreadable(unreadable)) => {
+                        unresolved.insert(unreadable);
+                        grounds.push(FindingId::new(unreadable));
+                    }
                     Err(reason) => reasons.push(reason),
                 }
             }
@@ -538,15 +603,23 @@ pub(crate) async fn build<P: Ports>(
             }
             let grounds = NonEmptyVec::from_vec(grounds)?;
             match raw.build(SpecId::new(id), grounds) {
-                Ok(spec) => Ok(Built::Spec(spec)),
+                Ok(spec) => Ok(Built::Spec(spec, unresolved)),
                 Err(error) => unparsed(vec![invalid_field("grounds", error.to_string())]),
             }
         }
         RawDoc::Design(raw) => {
-            match resolve_to(index, store, raw.spec(), "spec", EntityKind::Spec) {
-                Ok(spec) => Ok(Built::Design(
-                    raw.build(DesignId::new(id), SpecId::new(spec)),
-                )),
+            let directory = index.seen_from(Scope::Doc(store));
+            match resolve_to(&directory, raw.spec(), "spec", EntityKind::Spec) {
+                Ok(reached) => {
+                    let (spec, unresolved) = match reached {
+                        Reached::Entity(spec) => (spec, BTreeSet::new()),
+                        Reached::Unreadable(spec) => (spec, BTreeSet::from([spec])),
+                    };
+                    Ok(Built::Design(
+                        raw.build(DesignId::new(id), SpecId::new(spec)),
+                        unresolved,
+                    ))
+                }
                 Err(reason) => unparsed(vec![reason]),
             }
         }
@@ -570,8 +643,8 @@ impl From<&Built> for Content {
     fn from(built: &Built) -> Self {
         match built {
             Built::Finding(f) => Self::Finding(f.clone()),
-            Built::Spec(s) => Self::Spec(s.clone()),
-            Built::Design(d) => Self::Design(d.clone()),
+            Built::Spec(s, _) => Self::Spec(s.clone()),
+            Built::Design(d, _) => Self::Design(d.clone()),
             Built::Unparsed(u) => Self::Unparsed(u.clone()),
         }
     }
@@ -923,10 +996,16 @@ impl Model {
         for l in &loaded {
             let id = l.entry.id;
             match &l.built {
-                Some((Built::Spec(s), _)) => {
+                Some((Built::Spec(s, unresolved), _)) => {
                     specs.insert(
                         s.id(),
-                        Evaluator::spec(s, &findings, &ledger, &external(l.entry.store, id)),
+                        Evaluator::spec(
+                            s,
+                            &findings,
+                            &ledger,
+                            unresolved,
+                            &external(l.entry.store, id),
+                        ),
                     );
                 }
                 Some((Built::Unparsed(u), _)) if l.entry.kind == DocKind::Spec => {
@@ -942,10 +1021,16 @@ impl Model {
         for l in &loaded {
             let id = l.entry.id;
             match &l.built {
-                Some((Built::Design(d), _)) => {
+                Some((Built::Design(d, unresolved), _)) => {
                     designs.insert(
                         d.id(),
-                        Evaluator::design(d, &specs, &ledger, &external(l.entry.store, id)),
+                        Evaluator::design(
+                            d,
+                            &specs,
+                            &ledger,
+                            unresolved,
+                            &external(l.entry.store, id),
+                        ),
                     );
                 }
                 Some((Built::Unparsed(u), _)) if l.entry.kind == DocKind::Design => {
@@ -970,7 +1055,7 @@ impl Model {
         let mut items: BTreeMap<EntityId, ItemEntry> = BTreeMap::new();
         let mut pending_items = BTreeSet::new();
         for l in &loaded {
-            let Some((Built::Design(design), _)) = &l.built else {
+            let Some((Built::Design(design, _), _)) = &l.built else {
                 continue;
             };
             let view = snap.side(l.entry.store).view();
@@ -1017,7 +1102,7 @@ impl Model {
                         let ev = findings.get(&FindingId::new(id));
                         pack(ev, |f: &Finding| Content::Finding(f.clone()))
                     }
-                    Built::Spec(_) | Built::Unparsed(_) if entry.kind == DocKind::Spec => {
+                    Built::Spec(..) | Built::Unparsed(_) if entry.kind == DocKind::Spec => {
                         let ev = specs.get(&SpecId::new(id));
                         pack(ev, |s: &Spec| Content::Spec(s.clone()))
                     }
@@ -1201,35 +1286,27 @@ impl Model {
     }
 
     /// Resolve a reference written by a person to an entity of this project.
+    ///
+    /// The reference is looked up everywhere, in both stores. What cannot be
+    /// found is [`AppError::NotFound`] (dangling), [`AppError::Ambiguous`], or
+    /// [`AppError::Unresolved`] when the store it points into cannot be read in
+    /// this environment; a URL names no entity ([`AppError::NotLocal`]).
     pub fn resolve(&self, reference: &Ref) -> Result<(EntityId, EntityKind, StoreKind), AppError> {
-        let found = match reference {
-            Ref::Local(local) => match self.index.lookup(Scope::Everywhere, local) {
-                Lookup::Found(found) => found,
-                Lookup::Missing => {
-                    return Err(AppError::NotFound {
-                        reference: reference.clone(),
-                    });
-                }
-                Lookup::Ambiguous => {
-                    return Err(AppError::Ambiguous {
-                        reference: reference.clone(),
-                    });
-                }
-            },
-            Ref::Private(id) => {
-                self.index
-                    .lookup_private(*id)
-                    .ok_or_else(|| AppError::NotFound {
-                        reference: reference.clone(),
-                    })?
-            }
-            Ref::External { .. } | Ref::Url(_) => {
-                return Err(AppError::NotLocal {
-                    reference: reference.clone(),
-                });
-            }
-        };
-        Ok((found.id, found.kind, found.store))
+        let entity = reference.as_entity().ok_or_else(|| AppError::NotLocal {
+            reference: reference.clone(),
+        })?;
+        match entity.resolve(&self.index.seen_from(Scope::Everywhere)) {
+            Resolution::Found(found) => Ok((found.id, found.kind, found.store)),
+            Resolution::Dangling => Err(AppError::NotFound {
+                reference: reference.clone(),
+            }),
+            Resolution::Ambiguous => Err(AppError::Ambiguous {
+                reference: reference.clone(),
+            }),
+            Resolution::Unresolved => Err(AppError::Unresolved {
+                reference: reference.clone(),
+            }),
+        }
     }
 
     /// Resolve a reference that must name an entity of this kind.

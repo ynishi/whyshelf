@@ -13,11 +13,13 @@ use crate::domain::event::{
 };
 use crate::domain::finding::FindingType;
 use crate::domain::id::{Alias, EntityId, test_support::eid};
-use crate::domain::lint::CheckViolation;
+use crate::domain::lint::{CheckViolation, UpstreamProblem};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::query::Query;
 use crate::domain::reference::{ItemRef, Ref};
-use crate::domain::state::{Approval, Integration, Upstream};
+use crate::domain::state::{
+    Approval, BlockReason, Integration, InvalidReason, UnparsedReason, Upstream,
+};
 use crate::domain::tag::TagChange;
 
 use super::Workspace;
@@ -1128,4 +1130,430 @@ fn an_approval_needs_a_name() {
     ));
     let bob = Actor::new("bob").expect("name");
     block_on(ws.approve_cr(&r("finding/slow-login"), Some(bob))).expect("cr");
+}
+
+// --- references into a store that cannot be read ----------------------------
+//
+// A "clone" below is the same files and the repo store without the private store
+// (`drop_private_store`): what a CI machine or a public checkout has.
+
+fn add_to(ws: &mut Workspace<FakePorts>, at: &str, alias: &str, store: StoreKind) {
+    let options = AddOptions::new().with_alias(a(alias)).with_store(store);
+    block_on(ws.add(&[path(at)], &options)).expect("add");
+}
+
+/// A private Finding, a public Spec that names it as `private:<id>`, and a public
+/// Design on the Spec.
+fn private_ground_world() -> (Workspace<FakePorts>, EntityId) {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports()
+        .put_finding("docs/finding/slow.md", "Slow login", "p95 is 4s");
+    add_to(
+        &mut ws,
+        "docs/finding/slow.md",
+        "finding/slow-login",
+        StoreKind::Private,
+    );
+    let finding = id_of(&ws, "finding/slow-login");
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &[&format!("private:{finding}")],
+        "cache the token",
+        &["PIN-TTL"],
+    );
+    ws.ports().put_design(
+        "docs/design/cache.md",
+        "spec/cache-timeout",
+        &[(1, "add a ttl", &["PIN-TTL"])],
+    );
+    ws.ports().set_pins(&["PIN-TTL"]);
+    add_to(
+        &mut ws,
+        "docs/spec/cache.md",
+        "spec/cache-timeout",
+        StoreKind::Repo,
+    );
+    add_to(
+        &mut ws,
+        "docs/design/cache.md",
+        "design/cache",
+        StoreKind::Repo,
+    );
+    (ws, finding)
+}
+
+/// A public Finding and a private one, both grounds of a public Spec (the private
+/// one as `private:<id>`), and a public Design on the Spec. Returns the private
+/// Finding.
+fn two_ground_world() -> (Workspace<FakePorts>, EntityId) {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports()
+        .put_finding("docs/finding/slow.md", "Slow login", "p95 is 4s");
+    ws.ports()
+        .put_finding("docs/finding/cold.md", "Cold start", "9s");
+    add_to(
+        &mut ws,
+        "docs/finding/slow.md",
+        "finding/slow-login",
+        StoreKind::Repo,
+    );
+    add_to(
+        &mut ws,
+        "docs/finding/cold.md",
+        "finding/cold-start",
+        StoreKind::Private,
+    );
+    let cold = id_of(&ws, "finding/cold-start");
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &["finding/slow-login", &format!("private:{cold}")],
+        "cache the token",
+        &["PIN-TTL"],
+    );
+    ws.ports().put_design(
+        "docs/design/cache.md",
+        "spec/cache-timeout",
+        &[(1, "add a ttl", &["PIN-TTL"])],
+    );
+    ws.ports().set_pins(&["PIN-TTL"]);
+    add_to(
+        &mut ws,
+        "docs/spec/cache.md",
+        "spec/cache-timeout",
+        StoreKind::Repo,
+    );
+    add_to(
+        &mut ws,
+        "docs/design/cache.md",
+        "design/cache",
+        StoreKind::Repo,
+    );
+    (ws, cold)
+}
+
+/// What a row cannot read here, as `(root, upstream)`.
+fn unreadable(row: &StatusRow) -> Vec<(EntityId, EntityId)> {
+    row.state()
+        .expect("a state")
+        .completeness()
+        .reasons()
+        .map(|reason| (reason.root(), reason.upstream()))
+        .collect()
+}
+
+fn upstream_violation(upstream: EntityId, problem: UpstreamProblem) -> CheckViolation {
+    CheckViolation::Upstream { upstream, problem }
+}
+
+fn repo_and_private_events(ws: &Workspace<FakePorts>) -> (usize, usize) {
+    (
+        ws.ports().events_in(StoreKind::Repo).len(),
+        ws.ports().events_in(StoreKind::Private).len(),
+    )
+}
+
+#[test]
+fn an_unreadable_ground_makes_the_spec_partial_not_invalid_and_cs_writes_nothing() {
+    let (ws, finding) = private_ground_world();
+    // Where the private store is, the Spec reads everything.
+    let here = status(&ws);
+    assert!(unreadable(row(&here, "spec/cache-timeout")).is_empty());
+
+    ws.ports().drop_private_store();
+    let there = status(&ws);
+    let spec = row(&there, "spec/cache-timeout");
+    assert!(
+        matches!(approval_of(spec), Approval::Draft),
+        "partial, not Invalid"
+    );
+    assert_eq!(unreadable(spec), vec![(finding, finding)]);
+    assert!(matches!(spec.next(), NextAction::OpenWithPrivateStore));
+
+    let mut ws = ws;
+    let before = repo_and_private_events(&ws);
+    let report = block_on(ws.check_cs(&r("spec/cache-timeout"))).expect("check");
+    assert_eq!(
+        report.violations(),
+        [upstream_violation(finding, UpstreamProblem::Unresolved)]
+    );
+    let refused = block_on(ws.approve_cs(&r("spec/cache-timeout"), None));
+    assert!(matches!(
+        refused,
+        Err(AppError::CheckFailed { gate: Gate::Cs, .. })
+    ));
+    assert_eq!(repo_and_private_events(&ws), before, "nothing was written");
+}
+
+#[test]
+fn a_spec_approved_where_the_store_is_makes_its_design_and_item_partial_in_a_clone() {
+    let (mut ws, finding) = private_ground_world();
+    approve_chain(&mut ws);
+    let here = status(&ws);
+    for alias in ["spec/cache-timeout", "design/cache"] {
+        assert!(unreadable(row(&here, alias)).is_empty(), "{alias}");
+    }
+
+    ws.ports().drop_private_store();
+    let there = status(&ws);
+    let (spec_id, design_id) = (id_of(&ws, "spec/cache-timeout"), id_of(&ws, "design/cache"));
+    let spec = row(&there, "spec/cache-timeout");
+    let design = row(&there, "design/cache");
+    let item = item_row(&there);
+    // The approvals are in the repo store, so all three still read as Approved.
+    for r in [spec, design, item] {
+        assert!(matches!(approval_of(r), Approval::Approved));
+    }
+    assert_eq!(unreadable(spec), vec![(finding, finding)]);
+    assert_eq!(unreadable(design), vec![(finding, spec_id)]);
+    assert_eq!(unreadable(item), vec![(finding, design_id)]);
+
+    // CI and CA stop on it, and write nothing.
+    let before = repo_and_private_events(&ws);
+    let ci = block_on(ws.check_ci(&r("design/cache"))).expect("check");
+    assert_eq!(
+        ci.violations(),
+        [upstream_violation(spec_id, UpstreamProblem::Unresolved)]
+    );
+    assert!(matches!(
+        block_on(ws.approve_ci(&r("design/cache"), None)),
+        Err(AppError::CheckFailed { gate: Gate::Ci, .. })
+    ));
+    let ca = block_on(ws.check_ca(&it("design/cache#1"), None)).expect("check");
+    assert_eq!(
+        ca.violations(),
+        [upstream_violation(design_id, UpstreamProblem::Unresolved)]
+    );
+    assert!(matches!(
+        block_on(ws.approve_ca(&it("design/cache#1"), None, None)),
+        Err(AppError::CheckFailed { gate: Gate::Ca, .. })
+    ));
+    assert_eq!(repo_and_private_events(&ws), before);
+}
+
+#[test]
+fn stale_and_partial_are_seen_together_and_the_next_step_is_to_open_the_store() {
+    let (mut ws, cold) = two_ground_world();
+    block_on(ws.approve_cr(&r("finding/slow-login"), None)).expect("cr");
+    block_on(ws.approve_cr(&r("finding/cold-start"), None)).expect("cr");
+    block_on(ws.approve_cs(&r("spec/cache-timeout"), None)).expect("cs");
+    // The public Finding changes: the Spec is stale.
+    ws.ports()
+        .put_finding("docs/finding/slow.md", "Slow login", "p95 is 9s");
+    block_on(ws.ingest()).expect("ingest");
+    ws.ports().drop_private_store();
+
+    let s = status(&ws);
+    let spec = row(&s, "spec/cache-timeout");
+    assert!(matches!(approval_of(spec), Approval::Approved));
+    assert!(matches!(upstream_of(spec), Upstream::Stale(_)));
+    assert_eq!(unreadable(spec), vec![(cold, cold)]);
+    assert!(matches!(spec.next(), NextAction::OpenWithPrivateStore));
+
+    // The Design under it: the same upstream is Stale and Partial, and the next
+    // step is the one, not two.
+    let design = row(&s, "design/cache");
+    assert!(!matches!(upstream_of(design), Upstream::Ok));
+    assert_eq!(
+        unreadable(design),
+        vec![(cold, id_of(&ws, "spec/cache-timeout"))]
+    );
+    assert!(matches!(design.next(), NextAction::OpenWithPrivateStore));
+}
+
+#[test]
+fn a_draft_that_is_partial_asks_to_open_the_store_not_to_approve() {
+    let (ws, _) = private_ground_world();
+    ws.ports().drop_private_store();
+    let s = status(&ws);
+    let spec = row(&s, "spec/cache-timeout");
+    assert!(matches!(approval_of(spec), Approval::Draft));
+    assert!(matches!(spec.next(), NextAction::OpenWithPrivateStore));
+    // The Design on it is a Draft of a partial Spec: the same.
+    assert!(matches!(
+        row(&s, "design/cache").next(),
+        NextAction::OpenWithPrivateStore
+    ));
+}
+
+#[test]
+fn another_upstream_that_is_a_public_draft_is_listed_beside_the_partial_one() {
+    let (ws, cold) = two_ground_world();
+    ws.ports().drop_private_store();
+    let public = id_of(&ws, "finding/slow-login");
+    let s = status(&ws);
+    let spec = row(&s, "spec/cache-timeout");
+    // The next step is one, the one that has to come first.
+    assert!(matches!(spec.next(), NextAction::OpenWithPrivateStore));
+    // The Draft Finding is not hidden by it: the reasons of the state list it.
+    let Upstream::Blocked(reasons) = upstream_of(spec) else {
+        panic!("blocked by the Draft Finding");
+    };
+    assert!(
+        reasons.iter().any(
+            |r| matches!(r, BlockReason::UpstreamUnapproved { upstream } if *upstream == public)
+        )
+    );
+    assert_eq!(unreadable(spec), vec![(cold, cold)]);
+}
+
+#[test]
+fn a_blocked_entity_names_the_root_of_the_chain_of_the_first_upstream_problem() {
+    // Two grounds, each blocking for its own reason: the first listed is a Draft,
+    // the second does not parse. The Invalid one comes first in the order of
+    // problems, so it is the one the next step names.
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports().put_finding("docs/finding/a.md", "A", "a");
+    ws.ports().put_finding("docs/finding/b.md", "B", "b");
+    add_to(&mut ws, "docs/finding/a.md", "finding/a", StoreKind::Repo);
+    add_to(&mut ws, "docs/finding/b.md", "finding/b", StoreKind::Repo);
+    ws.ports().put_spec(
+        "docs/spec/s.md",
+        &["finding/a", "finding/b"],
+        "contract",
+        &["PIN-TTL"],
+    );
+    add_to(&mut ws, "docs/spec/s.md", "spec/s", StoreKind::Repo);
+    ws.ports()
+        .put_broken("docs/finding/b.md", "<<<<<<< ours\nb\n=======\n");
+    block_on(ws.ingest()).expect("ingest");
+
+    let s = status(&ws);
+    let spec = row(&s, "spec/s");
+    let Upstream::Blocked(reasons) = upstream_of(spec) else {
+        panic!("blocked");
+    };
+    assert_eq!(reasons.len(), 2, "both reasons are listed");
+    let NextAction::ApproveUpstream { upstream } = spec.next() else {
+        panic!("a Blocked entity names an upstream");
+    };
+    assert_eq!(upstream, &r("finding/b"), "not the Draft listed first");
+}
+
+#[test]
+fn the_same_id_written_without_the_mark_stays_dangling() {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports()
+        .put_finding("docs/finding/slow.md", "Slow login", "p95 is 4s");
+    add_to(
+        &mut ws,
+        "docs/finding/slow.md",
+        "finding/slow-login",
+        StoreKind::Private,
+    );
+    let finding = id_of(&ws, "finding/slow-login");
+    // No mark: a public document sees only the repo store, with or without the
+    // private store being there.
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &[&finding.to_string()],
+        "cache the token",
+        &["PIN-TTL"],
+    );
+    add_to(
+        &mut ws,
+        "docs/spec/cache.md",
+        "spec/cache-timeout",
+        StoreKind::Repo,
+    );
+    for clone in [false, true] {
+        if clone {
+            ws.ports().drop_private_store();
+        }
+        let s = status(&ws);
+        let spec = row(&s, "spec/cache-timeout");
+        let Approval::Invalid(reasons) = approval_of(spec) else {
+            panic!("dangling is Invalid, clone={clone}");
+        };
+        assert!(reasons.iter().any(|r| matches!(
+            r,
+            InvalidReason::Unparsed(UnparsedReason::UnresolvedRef { .. })
+        )));
+        assert!(unreadable(spec).is_empty(), "never partial, clone={clone}");
+    }
+}
+
+#[test]
+fn a_private_id_nothing_holds_is_dangling_where_the_store_is_there_and_partial_where_not() {
+    let nothing = format!("private:{}", eid(999));
+    // The private store is there (it holds an unrelated Finding).
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports()
+        .put_finding("docs/finding/other.md", "Other", "x");
+    add_to(
+        &mut ws,
+        "docs/finding/other.md",
+        "finding/other",
+        StoreKind::Private,
+    );
+    ws.ports()
+        .put_spec("docs/spec/cache.md", &[&nothing], "cache", &["PIN-TTL"]);
+    add_to(
+        &mut ws,
+        "docs/spec/cache.md",
+        "spec/cache-timeout",
+        StoreKind::Repo,
+    );
+    let s = status(&ws);
+    let spec = row(&s, "spec/cache-timeout");
+    assert!(matches!(approval_of(spec), Approval::Invalid(_)));
+    assert!(unreadable(spec).is_empty());
+
+    // The private store is not there: the same text is unresolved, not wrong.
+    ws.ports().drop_private_store();
+    let s = status(&ws);
+    let spec = row(&s, "spec/cache-timeout");
+    assert!(matches!(approval_of(spec), Approval::Draft));
+    assert_eq!(unreadable(spec).len(), 1);
+}
+
+#[test]
+fn resolving_a_private_reference_in_a_clone_is_unresolved_not_missing() {
+    let (ws, finding) = private_ground_world();
+    let reference = Ref::Private(finding);
+    let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
+    let (id, kind, store) = model.resolve(&reference).expect("found where it is");
+    assert_eq!(
+        (id, kind, store),
+        (finding, EntityKind::Finding, StoreKind::Private)
+    );
+
+    ws.ports().drop_private_store();
+    let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
+    assert!(matches!(
+        model.resolve(&reference),
+        Err(AppError::Unresolved { reference: found }) if found == reference
+    ));
+    // A command that needs the entity says so, and `get` shows it.
+    assert!(matches!(
+        block_on(ws.check_cs(&reference)),
+        Err(AppError::Unresolved { .. })
+    ));
+    assert!(matches!(
+        block_on(ws.get(&Target::Entity(reference))).expect("get"),
+        GetResult::Unresolved(Ref::Private(_))
+    ));
+}
+
+#[test]
+fn a_published_finding_named_by_private_mark_is_found_in_a_clone_and_the_spec_is_complete() {
+    let (mut ws, finding) = private_ground_world();
+    block_on(ws.approve_cr(&r("finding/slow-login"), None)).expect("cr");
+    block_on(ws.publish(&r("finding/slow-login"))).expect("publish");
+    ws.ports().drop_private_store();
+
+    let s = status(&ws);
+    let spec = row(&s, "spec/cache-timeout");
+    assert!(
+        unreadable(spec).is_empty(),
+        "found by its id in the repo store"
+    );
+    // The approval stayed private, so the Finding is a Draft here: the Spec is
+    // blocked by it, not unresolved.
+    assert!(matches!(upstream_of(spec), Upstream::Blocked(_)));
+    assert!(matches!(spec.next(), NextAction::ApproveUpstream { .. }));
+    let report = block_on(ws.check_cs(&r("spec/cache-timeout"))).expect("check");
+    assert_eq!(
+        report.violations(),
+        [upstream_violation(finding, UpstreamProblem::NotApproved)]
+    );
 }

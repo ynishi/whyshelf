@@ -1,14 +1,21 @@
-//! The derived state of an entity: two axes, plus integration and progress.
+//! The derived state of an entity: two axes and completeness, plus integration and
+//! progress.
 //!
 //! State is never written down. It is derived on demand from the content and the
 //! event log, so it cannot be written early or late.
 //!
-//! # Two axes
+//! # Two axes, and a third fact
 //!
-//! | axis | values | meaning |
+//! | fact | values | meaning |
 //! |---|---|---|
 //! | [`Approval`] | Invalid / Draft / Approved / Modified | the entity's own content against its own approvals |
 //! | [`Upstream`] | Ok / Stale / Blocked | whether what it stands on is current (Stale) or not yet approved (Blocked) |
+//! | [`Completeness`] | Complete / Partial | whether everything it stands on can be read in this environment |
+//!
+//! Completeness is a fact of its own and not a value of [`Upstream`], because
+//! an entity can be Stale or Blocked and Partial at once, and a value of one axis
+//! keeps only the reason that won. A Partial entity is shown as such; it is never
+//! Invalid for that. See [`Completeness`] for how it travels downstream.
 //!
 //! - **Invalid**: a syntax error, missing metadata, a reference to nothing, a PIN
 //!   left unassigned, a path or alias shared with another entity, or a file that
@@ -55,6 +62,9 @@
 //! Stale. A Draft entity has recorded no upstream hashes, so it is never Stale: its
 //! upstream health is Ok or Blocked.
 //!
+//! [`Completeness`] is independent of both axes: any cell of the matrix can also be
+//! Partial, and a Partial entity keeps every other fact it has.
+//!
 //! # Stale
 //!
 //! The approval event of an entity records the hashes of its upstream at approval
@@ -83,8 +93,8 @@
 //! | [`UnparsedReason::MalformedFrontmatter`] | Invalid | no `---` pair, YAML that does not read, or not a mapping | repair the front matter |
 //! | [`UnparsedReason::MissingField`] | Invalid | a required key or section is absent | add it |
 //! | [`UnparsedReason::InvalidField`] | Invalid | a key holds a value its type refuses | correct the value (the reason names the key and why) |
-//! | [`UnparsedReason::UnresolvedRef`] | Invalid | an alias in `grounds` or `spec` names nothing, or names several | register the target, correct the alias, or give the alias to one entity |
-//! | [`InvalidReason::DanglingRef`] | Invalid | the identifier a reference stands for is not an entity here (a `private:` reference in a clone that has no private store comes to this) | bring the entity back, or open the project where it exists |
+//! | [`UnparsedReason::UnresolvedRef`] | Invalid | a reference in `grounds` or `spec` names nothing (an alias, an identifier, or a `private:` id where the private store can be read), or an alias names several | register the target, correct the reference, or give the alias to one entity |
+//! | [`InvalidReason::DanglingRef`] | Invalid | the identifier a reference stands for is not an entity here, though the store that would hold it can be read | bring the entity back, or correct the reference |
 //! | [`InvalidReason::PinCoverage`] | Invalid | the Design and its Spec disagree about a pin | assign each declared pin to an item; assign no undeclared one |
 //! | [`InvalidReason::PathCollision`] | Invalid | two entities sit at one path | move one with `whyshelf mv` |
 //! | [`InvalidReason::AliasCollision`] | Invalid | two entities have one alias | one of them must take another alias (the application's `reclassify` does it; no command does) |
@@ -95,13 +105,20 @@
 //! | [`BlockReason::UpstreamUnapproved`] | Blocked | the upstream is a Draft, or was edited after it was approved | approve the upstream |
 //! | [`BlockReason::UpstreamStale`] | Blocked | the upstream is stale and this entity has no approval to be stale against | clear the upstream, then approve this entity |
 //! | [`BlockReason::UpstreamBlocked`] | Blocked | the upstream is itself blocked | follow the chain up (the causes of the view name it) |
+//! | [`UnresolvedReason`] | Partial | an entity it stands on, directly or further up, is in a store that cannot be read here (a `private:` reference in a clone that has no private store) | open the project where that store is; approving needs it too |
 //!
 //! When the cause is not the direct upstream but something further up, the evaluation
 //! also keeps the chain of causes, root first (see `evaluate`). A library caller reads
 //! it from the evaluated entity; the command line uses the root of the chain for the
-//! `NEXT` column ("approve upstream *x* first").
+//! `NEXT` column ("approve upstream *x* first"). A Partial entity keeps its own chain
+//! inside [`Completeness`], so a reason is never lost to one that outranks it.
+//!
+//! Which upstream problem to show first, when several apply, is decided in one place:
+//! `upstream_problems` of the lint module, which the gates and the `NEXT` column both
+//! call.
 
 use std::collections::BTreeSet;
+use std::fmt;
 
 use super::design::CoverageIssue;
 use super::hash::ContentHash;
@@ -166,11 +183,11 @@ pub enum InvalidReason {
     /// The file did not parse.
     #[error("the file did not parse: {0}")]
     Unparsed(UnparsedReason),
-    /// An upstream identifier is known to the content but to no entity.
+    /// An upstream identifier is known to the content but to no entity that has a
+    /// file here (the file of a registered entity is gone, say).
     ///
-    /// This is also what a `private:` reference becomes where the private store is
-    /// not there (a public clone, a CI machine). Fix: bring the entity back, or
-    /// open the project where it exists.
+    /// A reference into a store that cannot be read here is not this: it leaves the
+    /// entity Partial. Fix: bring the entity back, or correct the reference.
     #[error("the upstream {upstream} does not exist")]
     DanglingRef {
         /// The identifier that points at nothing.
@@ -298,17 +315,115 @@ pub enum Upstream {
     Blocked(NonEmptyVec<BlockReason>),
 }
 
-/// The pair of axes.
+/// An entity that cannot be read here, and the way to it.
+///
+/// `root` is the entity that cannot be read in this environment; `upstream` is the
+/// direct upstream of the holder through which it is reached, equal to `root` when
+/// the holder names it directly. The same shape as the link of a chain of causes
+/// (`StaleReason::UpstreamStale`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct UnresolvedReason {
+    root: EntityId,
+    upstream: EntityId,
+}
+
+impl UnresolvedReason {
+    /// The entity that cannot be read, reached through this direct upstream.
+    pub fn new(root: EntityId, upstream: EntityId) -> Self {
+        Self { root, upstream }
+    }
+
+    /// The entity that cannot be read here.
+    pub fn root(&self) -> EntityId {
+        self.root
+    }
+
+    /// The direct upstream through which it is reached.
+    pub fn upstream(&self) -> EntityId {
+        self.upstream
+    }
+}
+
+impl fmt::Display for UnresolvedReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.root == self.upstream {
+            write!(f, "{} cannot be read here", self.root)
+        } else {
+            write!(
+                f,
+                "{} cannot be read here (reached through {})",
+                self.root, self.upstream
+            )
+        }
+    }
+}
+
+/// Whether everything an entity stands on can be read in this environment.
+///
+/// An upstream in a store that cannot be read here (a `private:` reference in a
+/// public clone) is not an error, and it hides the upstream's state, so the entity
+/// is judged without it. Completeness says so, and the gates that need the upstream
+/// stop on it. It travels downstream: an entity on a Partial upstream is Partial,
+/// with the same `root` and `upstream` set to that upstream.
+///
+/// The chain lives here and not in the causes of the evaluation, because a Stale or
+/// a Blocked can hold the same entity at the same time and each fact keeps its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Completeness {
+    /// Everything it stands on can be read.
+    Complete,
+    /// Something it stands on cannot, for these reasons.
+    Partial(NonEmptyVec<UnresolvedReason>),
+}
+
+impl Completeness {
+    /// The reasons collected, `Complete` when there are none. Each
+    /// `(root, upstream)` pair counts once.
+    pub fn from_reasons(reasons: BTreeSet<UnresolvedReason>) -> Self {
+        match NonEmptyVec::from_vec(reasons.into_iter().collect()) {
+            Ok(reasons) => Self::Partial(reasons),
+            Err(_) => Self::Complete,
+        }
+    }
+
+    /// Whether something cannot be read.
+    pub fn is_partial(&self) -> bool {
+        matches!(self, Self::Partial(_))
+    }
+
+    /// The reasons; none when complete.
+    pub fn reasons(&self) -> impl Iterator<Item = &UnresolvedReason> {
+        match self {
+            Self::Complete => None,
+            Self::Partial(reasons) => Some(reasons.iter()),
+        }
+        .into_iter()
+        .flatten()
+    }
+
+    /// Whether the entity that cannot be read is reached through this direct
+    /// upstream.
+    pub fn names_upstream(&self, upstream: EntityId) -> bool {
+        self.reasons().any(|r| r.upstream() == upstream)
+    }
+}
+
+/// The two axes and completeness.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityState {
     approval: Approval,
     upstream: Upstream,
+    completeness: Completeness,
 }
 
 impl EntityState {
-    /// A state from its two axes.
-    pub fn new(approval: Approval, upstream: Upstream) -> Self {
-        Self { approval, upstream }
+    /// A state from its two axes and its completeness.
+    pub fn new(approval: Approval, upstream: Upstream, completeness: Completeness) -> Self {
+        Self {
+            approval,
+            upstream,
+            completeness,
+        }
     }
 
     /// The approval axis.
@@ -321,10 +436,9 @@ impl EntityState {
         &self.upstream
     }
 
-    /// Whether an approval of this entity may be recorded now: its content is
-    /// valid and nothing upstream is stale or blocked.
-    pub fn is_ready_to_approve(&self) -> bool {
-        !matches!(self.approval, Approval::Invalid(_)) && matches!(self.upstream, Upstream::Ok)
+    /// Whether everything it stands on can be read here.
+    pub fn completeness(&self) -> &Completeness {
+        &self.completeness
     }
 }
 
@@ -402,18 +516,46 @@ mod tests {
     }
 
     #[test]
-    fn ready_to_approve_needs_valid_content_and_a_sound_upstream() {
+    fn completeness_keeps_each_root_and_upstream_pair_once() {
+        let direct = UnresolvedReason::new(eid(1), eid(1));
+        let through = UnresolvedReason::new(eid(1), eid(2));
+        let partial = Completeness::from_reasons(BTreeSet::from([direct, through, direct]));
+        assert!(partial.is_partial());
+        assert_eq!(partial.reasons().count(), 2);
+        assert!(partial.names_upstream(eid(1)));
+        assert!(partial.names_upstream(eid(2)));
+        assert!(!partial.names_upstream(eid(3)));
+    }
+
+    #[test]
+    fn no_reason_is_complete() {
+        let complete = Completeness::from_reasons(BTreeSet::new());
+        assert_eq!(complete, Completeness::Complete);
+        assert!(!complete.is_partial());
+        assert_eq!(complete.reasons().count(), 0);
+        assert!(!complete.names_upstream(eid(1)));
+    }
+
+    #[test]
+    fn a_reason_says_how_the_unreadable_entity_is_reached() {
+        let direct = UnresolvedReason::new(eid(1), eid(1)).to_string();
+        let through = UnresolvedReason::new(eid(1), eid(2)).to_string();
+        assert!(direct.contains(&eid(1).to_string()) && !direct.contains("through"));
+        assert!(through.contains(&eid(1).to_string()));
+        assert!(through.contains(&format!("through {}", eid(2))));
+    }
+
+    #[test]
+    fn completeness_is_a_fact_beside_the_two_axes() {
         let blocked = Upstream::Blocked(NonEmptyVec::new(
             BlockReason::UpstreamUnapproved { upstream: eid(1) },
             vec![],
         ));
-        let invalid = Approval::Invalid(NonEmptyVec::new(
-            InvalidReason::DanglingRef { upstream: eid(1) },
-            vec![],
-        ));
-        assert!(EntityState::new(Approval::Draft, Upstream::Ok).is_ready_to_approve());
-        assert!(EntityState::new(Approval::Approved, Upstream::Ok).is_ready_to_approve());
-        assert!(!EntityState::new(Approval::Draft, blocked).is_ready_to_approve());
-        assert!(!EntityState::new(invalid, Upstream::Ok).is_ready_to_approve());
+        let partial =
+            Completeness::from_reasons(BTreeSet::from([UnresolvedReason::new(eid(2), eid(2))]));
+        let state = EntityState::new(Approval::Draft, blocked, partial.clone());
+        // Blocked and Partial at once: neither hides the other.
+        assert!(matches!(state.upstream(), Upstream::Blocked(_)));
+        assert_eq!(state.completeness(), &partial);
     }
 }

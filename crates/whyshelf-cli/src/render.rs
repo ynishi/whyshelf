@@ -24,7 +24,7 @@ use whyshelf_core::domain::event::{EventBody, StoreKind};
 use whyshelf_core::domain::id::EntityId;
 use whyshelf_core::domain::lint::{CheckViolation, UpstreamProblem};
 use whyshelf_core::domain::revision::Revision;
-use whyshelf_core::domain::state::{Approval, EntityState, Integration, Upstream};
+use whyshelf_core::domain::state::{Approval, Completeness, EntityState, Integration, Upstream};
 
 use crate::command::Outcome;
 use crate::error::CliError;
@@ -349,6 +349,7 @@ pub fn violation_text(violation: &CheckViolation) -> String {
             let why = match problem {
                 UpstreamProblem::Missing => "it does not exist",
                 UpstreamProblem::Invalid => "it is invalid",
+                UpstreamProblem::Unresolved => "it cannot be read here",
                 UpstreamProblem::NotApproved => "it is not approved",
                 UpstreamProblem::Stale => "it is stale",
                 UpstreamProblem::Blocked => "it is blocked",
@@ -372,13 +373,6 @@ pub fn violation_text(violation: &CheckViolation) -> String {
         CheckViolation::HypothesisChanged { fixed, current } => {
             format!("the hypotheses changed after CS fixed them ({fixed} became {current})")
         }
-    }
-}
-
-fn store_name(store: StoreKind) -> &'static str {
-    match store {
-        StoreKind::Repo => "repo",
-        StoreKind::Private => "private",
     }
 }
 
@@ -425,7 +419,21 @@ fn reasons(state: &EntityState) -> Vec<String> {
         Upstream::Stale(list) => out.extend(list.iter().map(ToString::to_string)),
         Upstream::Blocked(list) => out.extend(list.iter().map(ToString::to_string)),
     }
+    // Partial is a fact of its own: it is listed whatever the axes say.
+    out.extend(
+        state
+            .completeness()
+            .reasons()
+            .map(|reason| format!("unresolved: {reason}")),
+    );
     out
+}
+
+fn completeness_text(completeness: &Completeness) -> &'static str {
+    match completeness {
+        Completeness::Complete => "Complete",
+        Completeness::Partial(_) => "Unresolved",
+    }
 }
 
 /// What to call an entity: its alias, else its path, else (an item) its
@@ -506,12 +514,12 @@ fn status_doc(report: &StatusReport) -> Doc {
         report
             .issues()
             .iter()
-            .map(|i| format!("{} store: {:?}", store_name(i.store), i.issue)),
+            .map(|i| format!("{} store: {:?}", i.store.as_str(), i.issue)),
     );
     notes.extend(report.exports().iter().map(|e| {
         format!(
             "{} store: {:?} is {:?}; `whyshelf rebuild` writes it again",
-            store_name(e.scope),
+            e.scope.as_str(),
             e.kind,
             e.problem
         )
@@ -539,7 +547,7 @@ fn entity_fields(view: &EntityView) -> Vec<(&'static str, Cell)> {
     let mut fields = vec![
         ("id", json!(view.id().to_string())),
         ("kind", json!(view.kind().name())),
-        ("store", json!(store_name(view.store()))),
+        ("store", json!(view.store().as_str())),
         ("path", json!(view.path().map(ToString::to_string))),
         ("alias", json!(view.alias().map(ToString::to_string))),
         ("owner", json!(view.owner().map(ToString::to_string))),
@@ -556,6 +564,10 @@ fn entity_fields(view: &EntityView) -> Vec<(&'static str, Cell)> {
     if let Some(state) = view.state() {
         fields.push(("approval", json!(approval_text(state.approval()))));
         fields.push(("upstream", json!(upstream_text(state.upstream()))));
+        fields.push((
+            "completeness",
+            json!(completeness_text(state.completeness())),
+        ));
         fields.push(("reasons", json!(reasons(state))));
     }
     fields.extend(content_fields(view.content()));
@@ -743,7 +755,7 @@ fn found_doc(page: &FoundPage, fields: &std::collections::BTreeSet<Field>) -> Do
         .map(|row| {
             let mut cells = vec![json!(row.id.to_string()), json!(row.kind.name())];
             if wants(Field::Store) {
-                cells.push(json!(row.store.map(store_name)));
+                cells.push(json!(row.store.as_ref().map(StoreKind::as_str)));
             }
             if wants(Field::Path) {
                 cells.push(json!(row.path.as_ref().map(ToString::to_string)));
@@ -881,7 +893,7 @@ fn changelog_doc(log: &Changelog) -> Doc {
                 json!(event.id().to_string()),
                 json!(event.body().kind_name()),
                 json!(detail),
-                json!(store_name(entry.store())),
+                json!(entry.store().as_str()),
             ]
         })
         .collect();
@@ -935,7 +947,7 @@ fn context_doc(report: &ContextReport) -> Doc {
             ("worktree", json!(line.worktree().to_string())),
             ("revision", json!(line.revision().to_string())),
             ("branch", json!(line.label())),
-            ("default_store", json!(store_name(report.default_store()))),
+            ("default_store", json!(report.default_store().as_str())),
             ("repo_events", json!(report.events_in(StoreKind::Repo))),
             (
                 "private_events",
@@ -1013,5 +1025,73 @@ pub fn document(outcome: &Outcome, fields: &std::collections::BTreeSet<Field>) -
         Outcome::Rebuilt { revised } => {
             Doc::default().fields("rebuilt", vec![("revised", json!(revised))])
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use whyshelf_core::domain::nonempty::NonEmptyVec;
+    use whyshelf_core::domain::state::{BlockReason, UnresolvedReason};
+
+    use super::*;
+
+    fn id(last: u8) -> EntityId {
+        format!("01912345-6789-7abc-8def-0123456789a{last}")
+            .parse()
+            .expect("a test identifier")
+    }
+
+    fn partial(root: u8, upstream: u8) -> Completeness {
+        Completeness::from_reasons(BTreeSet::from([UnresolvedReason::new(
+            id(root),
+            id(upstream),
+        )]))
+    }
+
+    #[test]
+    fn a_partial_state_lists_its_reasons_beside_the_ones_of_the_axes() {
+        // A public Draft upstream blocks, and another upstream cannot be read.
+        let state = EntityState::new(
+            Approval::Draft,
+            Upstream::Blocked(NonEmptyVec::new(
+                BlockReason::UpstreamUnapproved { upstream: id(1) },
+                vec![],
+            )),
+            partial(2, 2),
+        );
+        let lines = reasons(&state);
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert!(lines[0].contains(&id(1).to_string()) && lines[0].contains("not approved"));
+        assert!(lines[1].starts_with("unresolved: "));
+        assert!(lines[1].contains(&id(2).to_string()));
+    }
+
+    #[test]
+    fn a_complete_state_adds_no_line() {
+        let state = EntityState::new(Approval::Draft, Upstream::Ok, Completeness::Complete);
+        assert!(reasons(&state).is_empty());
+        assert_eq!(completeness_text(&Completeness::Complete), "Complete");
+        assert_eq!(completeness_text(&partial(2, 3)), "Unresolved");
+    }
+
+    #[test]
+    fn the_route_to_an_unreadable_entity_is_told() {
+        let state = EntityState::new(Approval::Approved, Upstream::Ok, partial(2, 3));
+        let lines = reasons(&state);
+        assert!(
+            lines[0].contains(&format!("through {}", id(3))),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn a_check_says_in_words_that_an_upstream_cannot_be_read() {
+        let text = violation_text(&CheckViolation::Upstream {
+            upstream: id(1),
+            problem: UpstreamProblem::Unresolved,
+        });
+        assert!(text.ends_with("it cannot be read here"), "{text}");
     }
 }

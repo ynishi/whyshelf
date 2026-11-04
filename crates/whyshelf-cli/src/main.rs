@@ -276,7 +276,7 @@
 //!
 //! **Queries** for `find` and `audit`: terms separated by spaces, all of which must
 //! match. `tag:area:auth`, `kind:spec` (finding, spec, design, item),
-//! `state:stale` (invalid, draft, approved, modified, ok, stale, blocked),
+//! `state:stale` (invalid, draft, approved, modified, ok, stale, blocked, unresolved),
 //! `owner:alice`, `grounds:<ref>` (what takes this Finding as a ground),
 //! `upstream:<ref>`, `orphan:true`, and any other word or `"quoted phrase"` is
 //! searched in the text.

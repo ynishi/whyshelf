@@ -7,7 +7,7 @@
 //! |---|---|
 //! | `tag:<tag>` | the entity has the tag (`tag:area:auth`; everything after the first `:` is the tag) |
 //! | `kind:<kind>` | `finding`, `spec`, `design` or `item` |
-//! | `state:<state>` | one of the state values: `invalid`, `draft`, `approved`, `modified` (approval axis) or `ok`, `stale`, `blocked` (upstream axis) |
+//! | `state:<state>` | one of the state values: `invalid`, `draft`, `approved`, `modified` (approval axis), `ok`, `stale`, `blocked` (upstream axis) or `unresolved` (partial: something it stands on cannot be read here) |
 //! | `owner:<name>` | the owner |
 //! | `grounds:<ref>` | entities that take this Finding as a ground |
 //! | `upstream:<ref>` | entities whose upstream is this one |
@@ -50,6 +50,8 @@ pub enum StateFilter {
     Stale,
     /// Upstream axis: blocked.
     Blocked,
+    /// Completeness: partial.
+    Unresolved,
 }
 
 impl StateFilter {
@@ -62,6 +64,7 @@ impl StateFilter {
             "ok" => Some(Self::Ok),
             "stale" => Some(Self::Stale),
             "blocked" => Some(Self::Blocked),
+            "unresolved" => Some(Self::Unresolved),
             _ => None,
         }
     }
@@ -76,6 +79,7 @@ impl StateFilter {
             Self::Ok => matches!(state.upstream(), Upstream::Ok),
             Self::Stale => matches!(state.upstream(), Upstream::Stale(_)),
             Self::Blocked => matches!(state.upstream(), Upstream::Blocked(_)),
+            Self::Unresolved => state.completeness().is_partial(),
         }
     }
 }
@@ -257,7 +261,9 @@ mod tests {
     use crate::domain::error::ValueError;
     use crate::domain::id::test_support::eid;
     use crate::domain::nonempty::NonEmptyVec;
-    use crate::domain::state::{BlockReason, InvalidReason, StaleReason};
+    use crate::domain::state::{
+        BlockReason, Completeness, InvalidReason, StaleReason, UnresolvedReason,
+    };
 
     fn parse(q: &str) -> Vec<Term> {
         Query::parse(q).unwrap().terms().to_vec()
@@ -353,6 +359,7 @@ mod tests {
             ("ok", StateFilter::Ok),
             ("stale", StateFilter::Stale),
             ("blocked", StateFilter::Blocked),
+            ("unresolved", StateFilter::Unresolved),
         ] {
             assert_eq!(parse(&format!("state:{name}")), vec![Term::State(filter)]);
         }
@@ -434,6 +441,7 @@ mod tests {
                 vec![],
             )),
             Upstream::Ok,
+            Completeness::Complete,
         );
         let draft_blocked = EntityState::new(
             Approval::Draft,
@@ -441,6 +449,7 @@ mod tests {
                 BlockReason::UpstreamUnapproved { upstream: eid(1) },
                 vec![],
             )),
+            Completeness::Complete,
         );
         let approved_stale = EntityState::new(
             Approval::Approved,
@@ -448,18 +457,39 @@ mod tests {
                 StaleReason::UpstreamStale { upstream: eid(1) },
                 vec![],
             )),
+            Completeness::Complete,
         );
         let modified = EntityState::new(
             Approval::Modified {
                 approved: crate::domain::hash::ContentHash::raw(b"x"),
             },
             Upstream::Ok,
+            Completeness::Complete,
+        );
+        let draft_partial = EntityState::new(
+            Approval::Draft,
+            Upstream::Ok,
+            Completeness::from_reasons(
+                [UnresolvedReason::new(eid(2), eid(2))]
+                    .into_iter()
+                    .collect(),
+            ),
         );
         let table = [
-            (&invalid, [StateFilter::Invalid, StateFilter::Ok]),
-            (&draft_blocked, [StateFilter::Draft, StateFilter::Blocked]),
-            (&approved_stale, [StateFilter::Approved, StateFilter::Stale]),
-            (&modified, [StateFilter::Modified, StateFilter::Ok]),
+            (&invalid, vec![StateFilter::Invalid, StateFilter::Ok]),
+            (
+                &draft_blocked,
+                vec![StateFilter::Draft, StateFilter::Blocked],
+            ),
+            (
+                &approved_stale,
+                vec![StateFilter::Approved, StateFilter::Stale],
+            ),
+            (&modified, vec![StateFilter::Modified, StateFilter::Ok]),
+            (
+                &draft_partial,
+                vec![StateFilter::Draft, StateFilter::Ok, StateFilter::Unresolved],
+            ),
         ];
         let all = [
             StateFilter::Invalid,
@@ -469,6 +499,7 @@ mod tests {
             StateFilter::Ok,
             StateFilter::Stale,
             StateFilter::Blocked,
+            StateFilter::Unresolved,
         ];
         for (state, expected) in table {
             for filter in all {

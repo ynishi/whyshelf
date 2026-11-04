@@ -2,9 +2,10 @@
 //!
 //! [`Workspace::get`] returns any kind of entity with its content and its
 //! classification together, and resolves every kind of reference: an alias, an
-//! identifier, `private:<id>` (resolved in the private store, shown as unresolved
-//! when this environment has none), `ext:<project>/<id>` (another project, which
-//! this layer does not look into, so it is always shown as unresolved), a URL (an
+//! identifier, `private:<id>` (looked up by its identifier in either store, shown as
+//! unresolved when nothing holds it and this environment has no private store),
+//! `ext:<project>/<id>` (another project, which this layer does not look into, so
+//! it is always shown as unresolved), a URL (an
 //! outside document, returned as is), and `<design-ref>#<n>` for an item, also
 //! `<spec-ref>#<n>` when exactly one Design refers to that Spec.
 //!
@@ -40,7 +41,7 @@ use crate::domain::tag::Tag;
 
 use super::Workspace;
 use super::error::AppError;
-use super::model::{Content, DocEntry, ItemEntry, Lookup, Model, Scope};
+use super::model::{Content, DocEntry, ItemEntry, Model};
 use super::ports::{IndexCachePort, PortName, Ports};
 
 /// What a command names: an entity, or an item by `<ref>#<n>`.
@@ -455,15 +456,7 @@ fn resolve_query_ref(
     model: &Model,
     r: &crate::domain::reference::LocalRef,
 ) -> Result<EntityId, AppError> {
-    match model.index().lookup(Scope::Everywhere, r) {
-        Lookup::Found(found) => Ok(found.id),
-        Lookup::Missing => Err(AppError::NotFound {
-            reference: Ref::Local(r.clone()),
-        }),
-        Lookup::Ambiguous => Err(AppError::Ambiguous {
-            reference: Ref::Local(r.clone()),
-        }),
-    }
+    model.resolve(&Ref::Local(r.clone())).map(|(id, _, _)| id)
 }
 
 impl<P: Ports> Workspace<P> {
@@ -478,16 +471,12 @@ impl<P: Ports> Workspace<P> {
                 Ok(GetResult::Entity(Box::new(view)))
             }
             Target::Entity(Ref::Url(uri)) => Ok(GetResult::External(uri.clone())),
-            Target::Entity(reference @ Ref::External { .. }) => {
-                Ok(GetResult::Unresolved(reference.clone()))
-            }
             Target::Entity(reference) => match model.resolve(reference) {
                 Ok((id, _, _)) => Ok(GetResult::Entity(Box::new(entity_view(
                     &model, id, reference,
                 )?))),
-                Err(AppError::NotFound { .. }) if matches!(reference, Ref::Private(_)) => {
-                    Ok(GetResult::Unresolved(reference.clone()))
-                }
+                // What the domain's rule calls unresolved is shown, not an error.
+                Err(AppError::Unresolved { reference }) => Ok(GetResult::Unresolved(reference)),
                 Err(other) => Err(other),
             },
         }

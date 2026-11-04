@@ -160,6 +160,9 @@ pub enum ValueError {
     /// A local reference was neither an entity id nor an alias.
     #[error("a reference is an entity id or an alias")]
     RefLocalShape(#[source] Box<ValueError>),
+    /// A store name was neither `repo` nor `private`.
+    #[error("a store is `repo` or `private`")]
+    StoreKind,
 }
 
 /// Why an entity could not be built from its parts.
@@ -250,7 +253,7 @@ pub enum QueryError {
     },
     /// The value of `state:` was not a state.
     #[error(
-        "`state:` takes invalid, draft, approved, modified, ok, stale or blocked, found `{found}`"
+        "`state:` takes invalid, draft, approved, modified, ok, stale, blocked or unresolved, found `{found}`"
     )]
     BadState {
         /// The value found.

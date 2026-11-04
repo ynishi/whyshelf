@@ -25,7 +25,7 @@ use crate::domain::evaluate::Cause;
 use crate::domain::event::{DocKind, EntityKind, Event, EventId, StoreKind};
 use crate::domain::hash::ContentHash;
 use crate::domain::id::{Alias, DesignId, EntityId, ItemNumber};
-use crate::domain::lint::{ExportDrift, export_drift};
+use crate::domain::lint::{ExportDrift, UpstreamProblem, export_drift, upstream_problems};
 use crate::domain::location::RelPath;
 use crate::domain::query::Query;
 use crate::domain::reference::{ItemRef, LocalRef, ProjectName, Ref};
@@ -35,7 +35,7 @@ use crate::domain::state::{Approval, EntityState, Integration, Upstream};
 use super::Workspace;
 use super::config::Config;
 use super::error::AppError;
-use super::model::{Content, DocEntry, ItemEntry, Model};
+use super::model::{Content, DocEntry, ItemEntry, Model, Present};
 use super::ports::{
     ExportDoc, ExportFile, ExportKind, PortName, Ports, RevisionPort, StorePort, WorktreeRoot,
 };
@@ -199,6 +199,11 @@ pub enum NextAction {
         /// The upstream that stands in the way.
         upstream: Ref,
     },
+    /// Something this entity stands on is in a store that cannot be read here (a
+    /// `private:` reference in a clone): open the project where the private store
+    /// is. It comes before every other command, because none of them can be
+    /// carried out without it.
+    OpenWithPrivateStore,
     /// The item's tests do not yet carry its pins.
     Implement,
     /// Approved at a revision that has not reached the baseline.
@@ -223,6 +228,7 @@ impl fmt::Display for NextAction {
                 write!(f, "changed: whyshelf check {} {target}", gate(g))
             }
             Self::ApproveUpstream { upstream } => write!(f, "approve upstream {upstream} first"),
+            Self::OpenWithPrivateStore => f.write_str("open where the private store is"),
             Self::Implement => f.write_str("implementing"),
             Self::AwaitIntegration => f.write_str("awaiting integration"),
             Self::AwaitingCm { target } => write!(f, "awaiting CM: whyshelf check cm {target}"),
@@ -556,23 +562,65 @@ fn awaits_cm(model: &Model, spec: &crate::domain::spec::Spec) -> bool {
     all_integrated && !measured
 }
 
+/// The upstreams of a document as the status looks at them: the identifier and the
+/// state of what the model has, `None` for what it has not.
+fn upstream_states<'m>(
+    model: &'m Model,
+    ids: &[EntityId],
+) -> Vec<(EntityId, Option<&'m EntityState>)> {
+    ids.iter()
+        .map(|id| {
+            let state = model
+                .doc(*id)
+                .and_then(DocEntry::present)
+                .map(Present::state);
+            (*id, state)
+        })
+        .collect()
+}
+
+/// What the upstream asks for first, if it asks for anything.
+///
+/// Which upstream problem comes first is the domain's to say
+/// ([`upstream_problems`]); this only turns the first into a command. A Blocked
+/// entity names the root of the chain through that upstream, not the root of some
+/// other upstream's chain. An upstream that is Modified or Stale leaves the entity
+/// itself to be approved again.
+fn upstream_action(
+    model: &Model,
+    state: &EntityState,
+    causes: &[Cause],
+    upstreams: &[(EntityId, Option<&EntityState>)],
+) -> Option<NextAction> {
+    let (upstream, problem) = upstream_problems(state.completeness(), upstreams)
+        .into_iter()
+        .next()?;
+    if problem == UpstreamProblem::Unresolved {
+        return Some(NextAction::OpenWithPrivateStore);
+    }
+    if !matches!(state.upstream(), Upstream::Blocked(_)) {
+        return None;
+    }
+    let root = causes.iter().find(|c| c.through() == upstream)?.via();
+    Some(NextAction::ApproveUpstream {
+        upstream: ref_of_doc(model.doc(root)?),
+    })
+}
+
 fn next_from_state(
     model: &Model,
     gate: Gate,
     target: Target,
     state: &EntityState,
     causes: &[Cause],
+    upstreams: &[(EntityId, Option<&EntityState>)],
 ) -> Option<NextAction> {
+    let from_upstream = upstream_action(model, state, causes, upstreams);
     match (state.approval(), state.upstream()) {
         (Approval::Invalid(_), _) => Some(NextAction::FixFile),
-        (_, Upstream::Blocked(_)) => {
-            let upstream = causes
-                .first()
-                .map(|c| c.via())
-                .and_then(|id| model.doc(id))
-                .map(ref_of_doc)?;
-            Some(NextAction::ApproveUpstream { upstream })
-        }
+        _ if from_upstream.is_some() => from_upstream,
+        // Blocked by something no document of the model names: nothing to point at.
+        (_, Upstream::Blocked(_)) => None,
         (Approval::Modified { .. }, _) | (_, Upstream::Stale(_)) => {
             Some(NextAction::Reapprove { gate, target })
         }
@@ -586,13 +634,20 @@ fn doc_row(model: &Model, doc: &DocEntry) -> StatusRow {
     let present = doc.present();
     let next = match present {
         None => NextAction::RestoreFile,
-        Some(p) => next_from_state(model, gate_of(doc.kind()), target, p.state(), p.causes())
-            .unwrap_or_else(|| match p.content() {
-                Content::Spec(spec) if awaits_cm(model, spec) => NextAction::AwaitingCm {
-                    target: ref_of_doc(doc),
-                },
-                _ => NextAction::None,
-            }),
+        Some(p) => next_from_state(
+            model,
+            gate_of(doc.kind()),
+            target,
+            p.state(),
+            p.causes(),
+            &upstream_states(model, &p.content().upstream()),
+        )
+        .unwrap_or_else(|| match p.content() {
+            Content::Spec(spec) if awaits_cm(model, spec) => NextAction::AwaitingCm {
+                target: ref_of_doc(doc),
+            },
+            _ => NextAction::None,
+        }),
     };
     let pins = match present.map(|p| p.content()) {
         Some(Content::Spec(spec)) => Some(pin_tally(model, spec)),
@@ -630,6 +685,7 @@ fn item_row(model: &Model, design: &DocEntry, item: &ItemEntry) -> StatusRow {
         target,
         evaluation.state(),
         evaluation.causes(),
+        &upstream_states(model, &[design.id()]),
     )
     .map(|action| match action {
         NextAction::Approve { .. } if progress.is_implementing() => NextAction::Implement,

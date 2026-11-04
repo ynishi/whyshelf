@@ -38,16 +38,19 @@
 //!   I  likewise
 //!        upstream = Stale [UpstreamStale{D}]                  causes: [F, S, D]
 //!
-//!   Each entry of `causes` is a Cause { via, reason }: the upstream entity the
-//!   link goes through, and the StaleReason or BlockReason it gave. The first
-//!   entry is the root: it is where to start fixing.
+//!   Each entry of `causes` is a Cause { via, through, reason }: the upstream entity
+//!   the link goes through, the direct upstream of the holder it is reached by (the
+//!   chains of several upstreams share the list), and the StaleReason or
+//!   BlockReason it gave. The first entry of a chain is its root: it is where to
+//!   start fixing.
 //! ```
 //!
 //! # How a state is decided
 //!
 //! 1. **Invalid** if the entity's own content is unusable: it did not parse
-//!    ([`Unparsed`]), an upstream identifier names nothing in the map (dangling), the
-//!    Design does not cover the Spec's pins exactly, or the caller reports a
+//!    ([`Unparsed`]), an upstream identifier names nothing in the map (dangling) and
+//!    was not written with a mark that points into a store this environment cannot
+//!    read, the Design does not cover the Spec's pins exactly, or the caller reports a
 //!    classification problem (a path or alias collision) as an external reason.
 //! 2. Otherwise **Approved** if an unrevoked approval exists for the current hash,
 //!    **Modified** if approvals exist but none for the current hash, else **Draft**.
@@ -66,6 +69,20 @@
 //! A Draft entity recorded no upstream hashes and so cannot be Stale. When it sits
 //! on a Stale upstream it is shown **Blocked** (`UpstreamStale`) rather than Stale:
 //! it cannot be approved until the upstream is approved again.
+//!
+//! # Completeness
+//!
+//! A third fact, beside the two axes: whether everything the entity stands on can be
+//! read here ([`Completeness`]). The application passes, for each entity, the set of
+//! upstream identifiers that the entity wrote with a mark pointing into a store this
+//! environment cannot read (`unresolved`). An upstream that is not in the map is then
+//! one of two things: in that set, the entity is **Partial** with the reason
+//! `(root: it, upstream: it)`; not in it, the entity is Invalid with a dangling
+//! reference. An upstream that is in the map and Partial passes its reasons on, each
+//! keeping its `root` and taking that upstream as `upstream`. Reasons are collected
+//! by `(root, upstream)`, so several upstreams that lead to the same root give one
+//! reason each. An item names no upstream by mark (its Design is in its own file), so
+//! it takes no set and passes its Design's reasons on.
 //!
 //! When several approvals exist for one `(gate, entity, hash)`, the entity is Stale
 //! only if none of them recorded the upstream as it is today. Two worktrees may have
@@ -91,8 +108,8 @@ use super::pin::PinId;
 use super::revision::RevisionId;
 use super::spec::Spec;
 use super::state::{
-    Approval, BlockReason, EntityState, Integration, InvalidReason, ItemProgress, StaleReason,
-    UnparsedReason, Upstream,
+    Approval, BlockReason, Completeness, EntityState, Integration, InvalidReason, ItemProgress,
+    StaleReason, UnparsedReason, UnresolvedReason, Upstream,
 };
 
 /// A file that could not become an entity.
@@ -145,6 +162,7 @@ pub enum CauseReason {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cause {
     via: EntityId,
+    through: EntityId,
     reason: CauseReason,
 }
 
@@ -154,9 +172,28 @@ impl Cause {
         self.via
     }
 
+    /// The direct upstream of the entity that holds the chain, through which this
+    /// link is reached (equal to [`via`](Self::via) for the last link of a chain).
+    ///
+    /// An entity with several upstreams has the chains of all of them in one list;
+    /// this says which chain a link belongs to, so the root of one upstream's chain
+    /// is the first link whose `through` is that upstream.
+    pub fn through(&self) -> EntityId {
+        self.through
+    }
+
     /// What that upstream did to the entity.
     pub fn reason(&self) -> &CauseReason {
         &self.reason
+    }
+
+    /// The same link, seen from the entity one step down, which reaches it through
+    /// `upstream`.
+    fn reached_through(&self, upstream: EntityId) -> Self {
+        Self {
+            through: upstream,
+            ..self.clone()
+        }
     }
 }
 
@@ -196,6 +233,7 @@ impl<T> Evaluated<T> {
             state: EntityState::new(
                 Approval::Invalid(NonEmptyVec::new(first, it.collect())),
                 Upstream::Ok,
+                Completeness::Complete,
             ),
             causes: Vec::new(),
         }
@@ -365,10 +403,12 @@ struct Health {
 impl Health {
     fn block(&mut self, up: &UpView<'_>, reason: BlockReason, inherit: bool) {
         if inherit {
-            self.block_causes.extend_from_slice(up.causes);
+            self.block_causes
+                .extend(up.causes.iter().map(|c| c.reached_through(up.id)));
         }
         self.block_causes.push(Cause {
             via: up.id,
+            through: up.id,
             reason: CauseReason::Blocked(reason.clone()),
         });
         self.blocks.push(reason);
@@ -376,10 +416,12 @@ impl Health {
 
     fn stale(&mut self, up: &UpView<'_>, reason: StaleReason, inherit: bool) {
         if inherit {
-            self.stale_causes.extend_from_slice(up.causes);
+            self.stale_causes
+                .extend(up.causes.iter().map(|c| c.reached_through(up.id)));
         }
         self.stale_causes.push(Cause {
             via: up.id,
+            through: up.id,
             reason: CauseReason::Stale(reason.clone()),
         });
         self.stales.push(reason);
@@ -393,6 +435,35 @@ impl Health {
                 Err(_) => (Upstream::Ok, Vec::new()),
             },
         }
+    }
+}
+
+/// What an entity cannot read here, collected while its upstreams are looked at.
+///
+/// A set keyed by `(root, upstream)`, so the same pair reached twice is one reason.
+#[derive(Default)]
+struct Gaps(BTreeSet<UnresolvedReason>);
+
+impl Gaps {
+    /// `upstream` is written with a mark that points into a store that cannot be
+    /// read here: it is itself what cannot be read.
+    fn unreadable(&mut self, upstream: EntityId) {
+        self.0.insert(UnresolvedReason::new(upstream, upstream));
+    }
+
+    /// `upstream` is in the map; whatever it cannot read, this entity cannot
+    /// either, through it.
+    fn inherit(&mut self, upstream: EntityId, state: &EntityState) {
+        self.0.extend(
+            state
+                .completeness()
+                .reasons()
+                .map(|reason| UnresolvedReason::new(reason.root(), upstream)),
+        );
+    }
+
+    fn finish(self) -> Completeness {
+        Completeness::from_reasons(self.0)
     }
 }
 
@@ -542,32 +613,36 @@ impl Evaluator {
         );
         Evaluated {
             subject: Subject::Parsed(f.clone()),
-            state: EntityState::new(approval, Upstream::Ok),
+            state: EntityState::new(approval, Upstream::Ok, Completeness::Complete),
             causes: Vec::new(),
         }
     }
 
     /// Evaluate a Spec against its evaluated grounds.
     ///
-    /// A ground missing from `findings` makes the Spec Invalid (dangling).
+    /// `unresolved` are the grounds the Spec wrote with a mark that points into a
+    /// store this environment cannot read. A ground missing from `findings` makes
+    /// the Spec Partial when it is in that set, and Invalid (dangling) when it is
+    /// not.
     pub fn spec(
         s: &Spec,
         findings: &BTreeMap<FindingId, Evaluated<Finding>>,
         ledger: &ApprovalSet,
+        unresolved: &BTreeSet<EntityId>,
         external: &[InvalidReason],
     ) -> Evaluated<Spec> {
         let mut invalid = external.to_vec();
+        let mut gaps = Gaps::default();
         let mut ups = Vec::new();
         for ground in s.grounds().iter() {
+            let id = ground.entity();
             match findings.get(ground) {
-                None => invalid.push(InvalidReason::DanglingRef {
-                    upstream: ground.entity(),
-                }),
-                Some(ev) => ups.push(UpView::from((
-                    ground.entity(),
-                    ev,
-                    ev.entity().map(Finding::hash),
-                ))),
+                None if unresolved.contains(&id) => gaps.unreadable(id),
+                None => invalid.push(InvalidReason::DanglingRef { upstream: id }),
+                Some(ev) => {
+                    gaps.inherit(id, ev.state());
+                    ups.push(UpView::from((id, ev, ev.entity().map(Finding::hash))));
+                }
             }
         }
         let subject = s.id().entity();
@@ -576,28 +651,32 @@ impl Evaluator {
         let (upstream, causes) = assess(basis, &ups, ledger);
         Evaluated {
             subject: Subject::Parsed(s.clone()),
-            state: EntityState::new(approval, upstream),
+            state: EntityState::new(approval, upstream, gaps.finish()),
             causes,
         }
     }
 
     /// Evaluate a Design against its evaluated Spec.
     ///
-    /// A Spec missing from `specs` makes the Design Invalid (dangling). When the
-    /// Spec parsed, its pins are checked against the Design's assignment and every
-    /// mismatch is an Invalid reason.
+    /// `unresolved` holds the Spec when the Design wrote it with a mark that points
+    /// into a store this environment cannot read. A Spec missing from `specs`
+    /// makes the Design Partial when it is in that set, and Invalid (dangling)
+    /// when it is not. When the Spec parsed, its pins are checked against the
+    /// Design's assignment and every mismatch is an Invalid reason.
     pub fn design(
         d: &Design,
         specs: &BTreeMap<SpecId, Evaluated<Spec>>,
         ledger: &ApprovalSet,
+        unresolved: &BTreeSet<EntityId>,
         external: &[InvalidReason],
     ) -> Evaluated<Design> {
         let mut invalid = external.to_vec();
+        let mut gaps = Gaps::default();
         let mut ups = Vec::new();
+        let spec_id = d.spec().entity();
         match specs.get(&d.spec()) {
-            None => invalid.push(InvalidReason::DanglingRef {
-                upstream: d.spec().entity(),
-            }),
+            None if unresolved.contains(&spec_id) => gaps.unreadable(spec_id),
+            None => invalid.push(InvalidReason::DanglingRef { upstream: spec_id }),
             Some(ev) => {
                 if let Some(spec) = ev.entity() {
                     invalid.extend(
@@ -606,8 +685,9 @@ impl Evaluator {
                             .map(InvalidReason::PinCoverage),
                     );
                 }
+                gaps.inherit(spec_id, ev.state());
                 ups.push(UpView::from((
-                    d.spec().entity(),
+                    spec_id,
                     ev,
                     ev.entity().map(Spec::contract_hash),
                 )));
@@ -619,7 +699,7 @@ impl Evaluator {
         let (upstream, causes) = assess(basis, &ups, ledger);
         Evaluated {
             subject: Subject::Parsed(d.clone()),
-            state: EntityState::new(approval, upstream),
+            state: EntityState::new(approval, upstream, gaps.finish()),
             causes,
         }
     }
@@ -635,16 +715,20 @@ impl Evaluator {
         external: &[InvalidReason],
     ) -> ItemEvaluation {
         let mut invalid = external.to_vec();
+        let mut gaps = Gaps::default();
         let mut ups = Vec::new();
         match designs.get(&key.design) {
             None => invalid.push(InvalidReason::DanglingRef {
                 upstream: key.design.entity(),
             }),
-            Some(ev) => ups.push(UpView::from((
-                key.design.entity(),
-                ev,
-                ev.entity().map(Design::design_hash),
-            ))),
+            Some(ev) => {
+                gaps.inherit(key.design.entity(), ev.state());
+                ups.push(UpView::from((
+                    key.design.entity(),
+                    ev,
+                    ev.entity().map(Design::design_hash),
+                )));
+            }
         }
         let hash = item.hash(key.design, key.number);
         let subject = key.id.entity();
@@ -663,7 +747,7 @@ impl Evaluator {
             .cloned()
             .collect();
         ItemEvaluation {
-            state: EntityState::new(approval, upstream),
+            state: EntityState::new(approval, upstream, gaps.finish()),
             causes,
             integration,
             progress: ItemProgress::new(found, declared),
@@ -770,12 +854,14 @@ mod tests {
             spec_,
             &BTreeMap::from([(finding_.id(), ef.clone())]),
             &l,
+            &BTreeSet::new(),
             &[],
         );
         let ed = Evaluator::design(
             design_,
             &BTreeMap::from([(spec_.id(), es.clone())]),
             &l,
+            &BTreeSet::new(),
             &[],
         );
         let key = ItemKey {
@@ -1004,7 +1090,7 @@ mod tests {
     #[test]
     fn a_ground_missing_from_the_map_is_dangling_and_invalid() {
         let l = ledger(&[]);
-        let r = Evaluator::spec(&s(), &BTreeMap::new(), &l, &[]);
+        let r = Evaluator::spec(&s(), &BTreeMap::new(), &l, &BTreeSet::new(), &[]);
         let Approval::Invalid(reasons) = r.state().approval() else {
             panic!("expected Invalid");
         };
@@ -1025,7 +1111,13 @@ mod tests {
         let ef: Evaluated<Finding> = Evaluated::from_unparsed(unparsed, &[]);
         assert!(matches!(ef.state().approval(), Approval::Invalid(_)));
         assert!(ef.entity().is_none() && ef.unparsed().is_some());
-        let r = Evaluator::spec(&s(), &BTreeMap::from([(fid(F), ef)]), &l, &[]);
+        let r = Evaluator::spec(
+            &s(),
+            &BTreeMap::from([(fid(F), ef)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
         assert_eq!(r.state().approval(), &Approval::Draft);
         assert_eq!(
             blocked_reasons(r.state().upstream()),
@@ -1064,7 +1156,13 @@ mod tests {
         let r = Evaluator::finding(&f("b"), &l, &external);
         assert!(matches!(r.state().approval(), Approval::Invalid(_)));
         // And an invalid finding blocks the spec above it.
-        let es = Evaluator::spec(&s(), &BTreeMap::from([(fid(F), r)]), &l, &[]);
+        let es = Evaluator::spec(
+            &s(),
+            &BTreeMap::from([(fid(F), r)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
         assert_eq!(
             blocked_reasons(es.state().upstream()),
             vec![BlockReason::UpstreamInvalid { upstream: eid(F) }]
@@ -1074,7 +1172,7 @@ mod tests {
     #[test]
     fn a_design_whose_spec_is_missing_is_dangling() {
         let l = ledger(&[]);
-        let r = Evaluator::design(&d(), &BTreeMap::new(), &l, &[]);
+        let r = Evaluator::design(&d(), &BTreeMap::new(), &l, &BTreeSet::new(), &[]);
         assert!(matches!(r.state().approval(), Approval::Invalid(_)));
     }
 
@@ -1083,10 +1181,22 @@ mod tests {
         let (f0, s0) = (f("body"), s());
         let l = ledger(&approvals(&f0, &s0, &d()));
         let ef = Evaluator::finding(&f0, &l, &[]);
-        let es = Evaluator::spec(&s0, &BTreeMap::from([(fid(F), ef)]), &l, &[]);
+        let es = Evaluator::spec(
+            &s0,
+            &BTreeMap::from([(fid(F), ef)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
         // PIN-A is assigned; UT-B is left out; PIN-Z is not declared.
         let bad = design(D, S, vec![(1, item("do a", &["PIN-A", "PIN-Z"]))]);
-        let r = Evaluator::design(&bad, &BTreeMap::from([(sid(S), es)]), &l, &[]);
+        let r = Evaluator::design(
+            &bad,
+            &BTreeMap::from([(sid(S), es)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
         let Approval::Invalid(reasons) = r.state().approval() else {
             panic!("expected Invalid");
         };
@@ -1126,11 +1236,232 @@ mod tests {
             ContentHash::raw(b"x"),
         );
         let es: Evaluated<Spec> = Evaluated::from_unparsed(unparsed, &[]);
-        let r = Evaluator::design(&d(), &BTreeMap::from([(sid(S), es)]), &l, &[]);
+        let r = Evaluator::design(
+            &d(),
+            &BTreeMap::from([(sid(S), es)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
         assert_eq!(r.state().approval(), &Approval::Draft);
         assert_eq!(
             blocked_reasons(r.state().upstream()),
             vec![BlockReason::UpstreamInvalid { upstream: eid(S) }]
+        );
+    }
+
+    // --- completeness ------------------------------------------------------
+
+    const F2: u128 = 2;
+
+    fn s2() -> Spec {
+        spec(S, &[F, F2], &["PIN-A", "UT-B"])
+    }
+
+    fn only(ids: &[u128]) -> BTreeSet<EntityId> {
+        ids.iter().map(|n| eid(*n)).collect()
+    }
+
+    fn reasons_of(state: &EntityState) -> Vec<(EntityId, EntityId)> {
+        state
+            .completeness()
+            .reasons()
+            .map(|r| (r.root(), r.upstream()))
+            .collect()
+    }
+
+    #[test]
+    fn a_ground_written_with_a_mark_into_an_unreadable_store_makes_the_spec_partial() {
+        let l = ledger(&[]);
+        let r = Evaluator::spec(&s(), &BTreeMap::new(), &l, &only(&[F]), &[]);
+        assert_eq!(
+            r.state().approval(),
+            &Approval::Draft,
+            "not Invalid: the ground is not missing, it cannot be read"
+        );
+        assert!(is_ok(r.state().upstream()));
+        assert_eq!(reasons_of(r.state()), vec![(eid(F), eid(F))]);
+    }
+
+    #[test]
+    fn a_ground_that_is_not_marked_unresolved_stays_dangling() {
+        let l = ledger(&[]);
+        // Another identifier is marked, not this one.
+        let r = Evaluator::spec(&s(), &BTreeMap::new(), &l, &only(&[F2]), &[]);
+        assert!(matches!(r.state().approval(), Approval::Invalid(_)));
+        assert!(!r.state().completeness().is_partial());
+    }
+
+    #[test]
+    fn a_spec_that_can_read_everything_is_complete() {
+        let (f0, s0, d0) = (f("body"), s(), d());
+        let r = evaluate_all(&f0, &s0, &d0, &[], &[], &[]);
+        for state in [
+            r.finding.state(),
+            r.spec.state(),
+            r.design.state(),
+            r.item.state(),
+        ] {
+            assert_eq!(state.completeness(), &Completeness::Complete);
+        }
+    }
+
+    #[test]
+    fn a_design_marks_its_spec_unresolved_the_same_way() {
+        let l = ledger(&[]);
+        let r = Evaluator::design(&d(), &BTreeMap::new(), &l, &only(&[S]), &[]);
+        assert_eq!(r.state().approval(), &Approval::Draft);
+        assert_eq!(reasons_of(r.state()), vec![(eid(S), eid(S))]);
+    }
+
+    #[test]
+    fn partial_passes_down_keeping_the_root_and_naming_the_upstream() {
+        let l = ledger(&[]);
+        let es = Evaluator::spec(&s(), &BTreeMap::new(), &l, &only(&[F]), &[]);
+        let ed = Evaluator::design(
+            &d(),
+            &BTreeMap::from([(sid(S), es)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
+        assert_eq!(reasons_of(ed.state()), vec![(eid(F), eid(S))]);
+        let key = ItemKey {
+            id: iid(I),
+            design: did(D),
+            number: num(1),
+        };
+        let it = Evaluator::item(
+            &key,
+            &d().items()[&num(1)],
+            &BTreeMap::from([(did(D), ed)]),
+            &l,
+            &view(&[], &[]),
+            &[],
+        );
+        assert_eq!(
+            reasons_of(it.state()),
+            vec![(eid(F), eid(D))],
+            "an item takes no set of its own and names its Design"
+        );
+    }
+
+    #[test]
+    fn a_reason_is_kept_once_per_root_and_upstream() {
+        let mut gaps = Gaps::default();
+        gaps.unreadable(eid(1));
+        gaps.unreadable(eid(1));
+        gaps.unreadable(eid(2));
+        let complete = gaps.finish();
+        assert_eq!(complete.reasons().count(), 2);
+
+        // Two upstreams that lead to one root give a reason each.
+        let state = |through: u128| {
+            EntityState::new(
+                Approval::Draft,
+                Upstream::Ok,
+                Completeness::from_reasons(BTreeSet::from([UnresolvedReason::new(
+                    eid(9),
+                    eid(through),
+                )])),
+            )
+        };
+        let mut gaps = Gaps::default();
+        gaps.inherit(eid(3), &state(7));
+        gaps.inherit(eid(4), &state(8));
+        gaps.inherit(eid(4), &state(8));
+        let merged = gaps.finish();
+        let pairs: Vec<_> = merged.reasons().map(|r| (r.root(), r.upstream())).collect();
+        assert_eq!(pairs, vec![(eid(9), eid(3)), (eid(9), eid(4))]);
+    }
+
+    #[test]
+    fn stale_and_partial_are_both_kept() {
+        let (f0, s0, d0) = (f("body"), s2(), d());
+        let events = vec![
+            approve(cr(F, f0.hash()), &[]),
+            approve(
+                cs(S, s0.contract_hash(), s0.hyp_hash(), &[(F, *f0.hash())]),
+                &[],
+            ),
+        ];
+        let l = ledger(&events);
+        let edited = f("body, corrected");
+        let ef = Evaluator::finding(&edited, &l, &[]);
+        let es = Evaluator::spec(&s0, &BTreeMap::from([(fid(F), ef)]), &l, &only(&[F2]), &[]);
+        assert_eq!(es.state().approval(), &Approval::Approved);
+        assert_eq!(
+            stale_reasons(es.state().upstream()),
+            vec![StaleReason::UpstreamChanged {
+                upstream: eid(F),
+                recorded: *f0.hash(),
+                current: *edited.hash(),
+            }]
+        );
+        assert_eq!(reasons_of(es.state()), vec![(eid(F2), eid(F2))]);
+        // The Design under it is Stale by inheritance and Partial by inheritance.
+        let ed = Evaluator::design(
+            &d0,
+            &BTreeMap::from([(sid(S), es)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
+        assert!(!is_ok(ed.state().upstream()));
+        assert_eq!(reasons_of(ed.state()), vec![(eid(F2), eid(S))]);
+    }
+
+    #[test]
+    fn blocked_and_partial_are_both_kept() {
+        let l = ledger(&[]);
+        // F is a Draft (blocks); F2 cannot be read.
+        let ef = Evaluator::finding(&f("body"), &l, &[]);
+        let es = Evaluator::spec(
+            &s2(),
+            &BTreeMap::from([(fid(F), ef)]),
+            &l,
+            &only(&[F2]),
+            &[],
+        );
+        assert_eq!(
+            blocked_reasons(es.state().upstream()),
+            vec![BlockReason::UpstreamUnapproved { upstream: eid(F) }]
+        );
+        assert_eq!(reasons_of(es.state()), vec![(eid(F2), eid(F2))]);
+    }
+
+    #[test]
+    fn the_chain_of_one_upstream_is_told_from_the_chain_of_another() {
+        let l = ledger(&[]);
+        // Both grounds are Drafts: a Cause for each, each reached through its own ground.
+        let (f1, f2) = (f("one"), finding(F2, "two"));
+        let e1 = Evaluator::finding(&f1, &l, &[]);
+        let e2 = Evaluator::finding(&f2, &l, &[]);
+        let es = Evaluator::spec(
+            &s2(),
+            &BTreeMap::from([(fid(F), e1), (fid(F2), e2)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
+        let through: Vec<_> = es.causes().iter().map(|c| (c.via(), c.through())).collect();
+        assert_eq!(
+            through,
+            vec![(eid(F), eid(F)), (eid(F2), eid(F2))],
+            "a link knows the upstream it is reached by"
+        );
+        // And one level down the same links are seen through the Spec.
+        let ed = Evaluator::design(
+            &d(),
+            &BTreeMap::from([(sid(S), es)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
+        let down: Vec<_> = ed.causes().iter().map(|c| (c.via(), c.through())).collect();
+        assert_eq!(
+            down,
+            vec![(eid(F), eid(S)), (eid(F2), eid(S)), (eid(S), eid(S))]
         );
     }
 

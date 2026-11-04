@@ -278,7 +278,7 @@ impl<P: Ports> Workspace<P> {
                         part.object(doc.store(), candidate.text().clone());
                         revised = Some(doc.id());
                     }
-                    if let Built::Design(design) = &built {
+                    if let Built::Design(design, _) = &built {
                         let view = model.view(doc.store());
                         for number in design.items().keys() {
                             if view.item_id(design.id(), *number).is_none() {

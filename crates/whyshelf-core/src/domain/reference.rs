@@ -13,12 +13,44 @@
 //!
 //! # State of a reference
 //!
-//! [`RefState`] has three outcomes: **resolved** (the target is there),
-//! **dangling** (a reference with no mark whose target does not exist, which
-//! makes the referring entity invalid) and **unresolved** (a `private:` or `ext:`
-//! reference that cannot be looked up in this environment, as on a CI machine or
-//! in a public clone). An unresolved reference is shown, never an error: a public
-//! clone must stay usable although it cannot see the private store.
+//! Looking up a reference that names an entity ([`EntityRef`]) gives a
+//! [`Resolution`], and [`EntityRef::resolve`] is the one place that decides which:
+//!
+//! | reference | looked up as | result |
+//! |---|---|---|
+//! | no mark | [`Directory::local`] | found / **dangling** (nothing has that name) / **ambiguous** (several do) |
+//! | `private:<id>` | [`Directory::by_id`] first, in whichever store holds the id | found |
+//! | `private:<id>`, not found, the private store can be read | nothing more is asked | **dangling** (a mistyped id) |
+//! | `private:<id>`, not found, the private store cannot be read | nothing more is asked | **unresolved** |
+//! | `ext:<project>/<id-or-alias>` | nothing is asked: there is no way to another project | **unresolved** |
+//!
+//! A URL is not an entity reference ([`Ref::as_entity`] is `None`): it points at a
+//! document outside the model and is never looked up.
+//!
+//! Dangling makes the referring entity invalid. Unresolved is shown, never an
+//! error: a public clone must stay usable although it cannot see the private store.
+//! Whether the private store can be read is a fact about the environment, [`Reach`],
+//! which the application asks of its store port; the rule above only reads it.
+//!
+//! # Decided
+//!
+//! - **A mark is not a fact about a store.** A `private:<id>` in a file stays as it
+//!   was written after the entity is published, because the tool never rewrites a
+//!   user's file. So the identifier is looked up first, in both stores, and a
+//!   published Finding that is in the repo store is found from a clone too.
+//! - **A `private:` id that names nothing is dangling where the private store can be
+//!   read.** A dangling reference is, strictly, one without a mark. Reading the rule
+//!   wider here is deliberate: a mistyped id must not hide behind "unresolved".
+//! - **`ext:` in `grounds` or `spec` stays a refused value.** An entity that stands on
+//!   an `ext:` reference could not be approved in any environment, because nothing
+//!   reads the hash of another project's entity. A `private:` reference can be approved
+//!   where the private store is, so it is accepted and the entity is *partial* (see
+//!   [`Completeness`](crate::domain::state::Completeness)) elsewhere. An `ext:`
+//!   reference is unresolved only where it is shown: `get`, and references inside a
+//!   text.
+//! - **The mark does not reach identity.** A Spec holds the identifiers of its grounds,
+//!   not the marks they were written with: a mark is how a file was written and
+//!   changes with publication, so it stays out of every hash.
 //!
 //! # Leak guard
 //!
@@ -27,22 +59,6 @@
 //! the leak lint (see `lint`). The reverse direction, private to public, is
 //! free. Identifiers in the private store carry no meaning (UUID v7); the human
 //! readable alias lives only inside the private store.
-//!
-//! # Where the code stops short of this
-//!
-//! The three outcomes above describe the intent; the application applies them in
-//! one place and not everywhere.
-//!
-//! - **`get`** shows an unresolved `private:` or `ext:` reference as unresolved, and
-//!   a URL as external. That is the case in which "unresolved, not an error" holds.
-//! - **A `private:` reference in `grounds` or `spec`** that the private store cannot
-//!   answer (a public clone, a CI machine) is kept as the identifier it carries, and
-//!   the entity that names it is then found to have an upstream that does not exist:
-//!   it is **Invalid** with a dangling reference, not "unresolved". A published Spec
-//!   that stands on a private Finding therefore reads as Invalid wherever the
-//!   private store is missing.
-//! - **An `ext:` reference or a URL in `grounds` or `spec`** is refused as a field
-//!   that cannot stand for an entity of this project; `ext:` has no resolver.
 //!
 //! # Item references
 //!
@@ -152,11 +168,18 @@ pub enum Ref {
 }
 
 impl Ref {
-    /// Whether this reference may fail to resolve without being an error.
-    ///
-    /// True for `private:` and `ext:` references.
-    pub fn may_be_unresolved(&self) -> bool {
-        matches!(self, Self::Private(_) | Self::External { .. })
+    /// The reference as one that names an entity, or `None` for a URL (which
+    /// names a document outside the model and is never looked up).
+    pub fn as_entity(&self) -> Option<EntityRef> {
+        match self {
+            Self::Local(local) => Some(EntityRef::Local(local.clone())),
+            Self::Private(id) => Some(EntityRef::Private(*id)),
+            Self::External { project, target } => Some(EntityRef::External {
+                project: project.clone(),
+                target: target.clone(),
+            }),
+            Self::Url(_) => None,
+        }
     }
 }
 
@@ -204,29 +227,109 @@ impl ToCanon for Ref {
     }
 }
 
-/// What looking a reference up gave.
+/// What a lookup of a local reference found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Lookup<T> {
+    /// Exactly one entity has that name or identifier.
+    Found(T),
+    /// None has.
+    Missing,
+    /// Several have: an alias held by an entity in each store.
+    Ambiguous,
+}
+
+/// Whether the private store can be read in this environment.
+///
+/// The repo store always can (it is the checkout); another project never can (the
+/// model has no path to it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RefState {
-    /// The target exists.
-    Resolved,
-    /// A reference with no mark whose target does not exist. Invalidates the
-    /// entity that holds it.
+pub enum Reach {
+    /// The private store is here and can be read.
+    Available,
+    /// The private store is not here (a public clone, a CI machine).
+    Absent,
+}
+
+/// The entities a reference can be looked up in.
+///
+/// Implemented by the application's index: the domain holds the rule that turns
+/// these answers into a [`Resolution`], not the data.
+pub trait Directory<T> {
+    /// Look up a reference without a mark, where the referring document sees.
+    fn local(&self, reference: &LocalRef) -> Lookup<T>;
+
+    /// Look an entity up by its identifier, in whichever store holds it (an
+    /// identifier names the same entity in both stores, after a publication for
+    /// one), following the identifiers that a merge made equal.
+    fn by_id(&self, id: EntityId) -> Option<T>;
+
+    /// Whether the private store can be read here.
+    fn private_reach(&self) -> Reach;
+}
+
+/// A reference that names an entity: every [`Ref`] except a URL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EntityRef {
+    /// An alias or an identifier, no mark.
+    Local(LocalRef),
+    /// `private:<id>`.
+    Private(EntityId),
+    /// `ext:<project>/<target>`.
+    External {
+        /// The other project.
+        project: ProjectName,
+        /// The entity inside it.
+        target: LocalRef,
+    },
+}
+
+/// What looking an entity reference up in this environment gave.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Resolution<T> {
+    /// The reference names this entity.
+    Found(T),
+    /// The store the reference points into can be read here, and nothing in it
+    /// has that name: the entity that holds the reference is Invalid.
     Dangling,
-    /// A `private:` or `ext:` reference that cannot be looked up here. Shown,
+    /// A reference without a mark that names several entities.
+    Ambiguous,
+    /// A `private:` or `ext:` reference whose store cannot be read here. Shown,
     /// not an error.
     Unresolved,
 }
 
-impl RefState {
-    /// The state of `reference` given whether its target was found.
+impl EntityRef {
+    /// Look the reference up. The table in the module documentation is this
+    /// function and nothing else decides it.
     ///
-    /// A URL is never looked up: it is a pointer to a document outside the
-    /// model and counts as resolved.
-    pub fn of(reference: &Ref, found: bool) -> Self {
-        match (reference, found) {
-            (Ref::Url(_), _) | (_, true) => Self::Resolved,
-            (Ref::Local(_), false) => Self::Dangling,
-            (Ref::Private(_) | Ref::External { .. }, false) => Self::Unresolved,
+    /// A pair that cannot happen (a reference without a mark that cannot be
+    /// reached, a `private:` reference that is ambiguous, an `ext:` reference
+    /// that is looked up) has no way to be asked.
+    pub fn resolve<T>(&self, directory: &impl Directory<T>) -> Resolution<T> {
+        match self {
+            Self::Local(local) => match directory.local(local) {
+                Lookup::Found(found) => Resolution::Found(found),
+                Lookup::Missing => Resolution::Dangling,
+                Lookup::Ambiguous => Resolution::Ambiguous,
+            },
+            Self::Private(id) => match directory.by_id(*id) {
+                Some(found) => Resolution::Found(found),
+                None => match directory.private_reach() {
+                    Reach::Available => Resolution::Dangling,
+                    Reach::Absent => Resolution::Unresolved,
+                },
+            },
+            Self::External { .. } => Resolution::Unresolved,
+        }
+    }
+
+    /// The identifier the reference spells out, when it spells one: `private:<id>`
+    /// and a local reference written as an identifier. Not an alias, not `ext:`.
+    pub fn spelled_id(&self) -> Option<EntityId> {
+        match self {
+            Self::Local(local) => local.as_id(),
+            Self::Private(id) => Some(*id),
+            Self::External { .. } => None,
         }
     }
 }
@@ -284,6 +387,8 @@ impl fmt::Display for ItemRef {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use super::*;
     use crate::domain::id::test_support::{did, eid};
 
@@ -353,23 +458,109 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn dangling_only_for_unmarked_references() {
-        let local: Ref = "spec/a".parse().unwrap();
-        let private: Ref = format!("private:{}", eid(1)).parse().unwrap();
-        let ext: Ref = "ext:p/a".parse().unwrap();
-        let url: Ref = "https://x.org/a".parse().unwrap();
-        // found
-        for r in [&local, &private, &ext, &url] {
-            assert_eq!(RefState::of(r, true), RefState::Resolved);
+    /// A directory with fixed answers that counts how often it was asked.
+    struct Fixed {
+        local: Lookup<u8>,
+        by_id: Option<u8>,
+        reach: Reach,
+        asked: Cell<u32>,
+    }
+
+    impl Fixed {
+        fn new(local: Lookup<u8>, by_id: Option<u8>, reach: Reach) -> Self {
+            Self {
+                local,
+                by_id,
+                reach,
+                asked: Cell::new(0),
+            }
         }
-        // not found
-        assert_eq!(RefState::of(&local, false), RefState::Dangling);
-        assert_eq!(RefState::of(&private, false), RefState::Unresolved);
-        assert_eq!(RefState::of(&ext, false), RefState::Unresolved);
-        assert_eq!(RefState::of(&url, false), RefState::Resolved);
-        assert!(private.may_be_unresolved() && ext.may_be_unresolved());
-        assert!(!local.may_be_unresolved() && !url.may_be_unresolved());
+    }
+
+    impl Directory<u8> for Fixed {
+        fn local(&self, _: &LocalRef) -> Lookup<u8> {
+            self.asked.set(self.asked.get() + 1);
+            self.local.clone()
+        }
+
+        fn by_id(&self, _: EntityId) -> Option<u8> {
+            self.asked.set(self.asked.get() + 1);
+            self.by_id
+        }
+
+        fn private_reach(&self) -> Reach {
+            self.asked.set(self.asked.get() + 1);
+            self.reach
+        }
+    }
+
+    fn entity(text: &str) -> EntityRef {
+        text.parse::<Ref>()
+            .unwrap()
+            .as_entity()
+            .expect("an entity reference")
+    }
+
+    #[test]
+    fn a_reference_without_a_mark_is_found_dangling_or_ambiguous() {
+        let local = entity("spec/a");
+        for (lookup, expected) in [
+            (Lookup::Found(7), Resolution::Found(7)),
+            (Lookup::Missing, Resolution::Dangling),
+            (Lookup::Ambiguous, Resolution::Ambiguous),
+        ] {
+            // Whether the private store can be read does not matter to it.
+            for reach in [Reach::Available, Reach::Absent] {
+                let directory = Fixed::new(lookup.clone(), None, reach);
+                assert_eq!(local.resolve(&directory), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn a_private_reference_is_looked_up_by_id_before_the_reach_is_read() {
+        let private = entity(&format!("private:{}", eid(1)));
+        for reach in [Reach::Available, Reach::Absent] {
+            let directory = Fixed::new(Lookup::Missing, Some(9), reach);
+            assert_eq!(private.resolve(&directory), Resolution::Found(9));
+        }
+    }
+
+    #[test]
+    fn a_private_id_nothing_has_is_dangling_where_the_store_is_readable() {
+        let private = entity(&format!("private:{}", eid(1)));
+        let readable = Fixed::new(Lookup::Missing, None, Reach::Available);
+        assert_eq!(private.resolve(&readable), Resolution::Dangling);
+    }
+
+    #[test]
+    fn a_private_id_nothing_has_is_unresolved_where_the_store_is_absent() {
+        let private = entity(&format!("private:{}", eid(1)));
+        let absent = Fixed::new(Lookup::Missing, None, Reach::Absent);
+        assert_eq!(private.resolve(&absent), Resolution::Unresolved);
+    }
+
+    #[test]
+    fn an_external_reference_asks_nothing_and_is_unresolved() {
+        let external = entity("ext:p/a");
+        let directory = Fixed::new(Lookup::Found(1), Some(1), Reach::Available);
+        assert_eq!(external.resolve(&directory), Resolution::Unresolved);
+        assert_eq!(directory.asked.get(), 0);
+    }
+
+    #[test]
+    fn a_url_names_no_entity() {
+        let url: Ref = "https://x.org/a".parse().unwrap();
+        assert_eq!(url.as_entity(), None);
+    }
+
+    #[test]
+    fn only_an_identifier_is_spelled() {
+        let id = eid(3);
+        assert_eq!(entity(&id.to_string()).spelled_id(), Some(id));
+        assert_eq!(entity(&format!("private:{id}")).spelled_id(), Some(id));
+        assert_eq!(entity("spec/a").spelled_id(), None);
+        assert_eq!(entity("ext:p/a").spelled_id(), None);
     }
 
     #[test]

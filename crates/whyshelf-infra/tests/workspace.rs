@@ -10,8 +10,9 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 use whyshelf_core::app::Workspace;
 use whyshelf_core::app::ports::{AppendOutcome, ExportKind, IndexCachePort, Ports, StorePort};
+use whyshelf_core::app::query::{GetResult, Target};
 use whyshelf_core::app::register::AddOptions;
-use whyshelf_core::app::view::ExportProblem;
+use whyshelf_core::app::view::{ExportProblem, NextAction};
 use whyshelf_core::domain::actor::Timestamp;
 use whyshelf_core::domain::event::{
     DocKind, DocRegistration, Event, EventBody, Publication, Registration, StoreKind, Version,
@@ -23,6 +24,7 @@ use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::reference::Ref;
 use whyshelf_infra::export::{render_json, split_marker, with_marker};
+use whyshelf_infra::status_md::render_status;
 use whyshelf_infra::store_fs::FsStore;
 use whyshelf_infra::{InfraPorts, Shutdown, open, open_with};
 
@@ -634,5 +636,66 @@ async fn the_map_conforms_to_the_schema_that_is_written_next_to_it() {
 
     // The schema file is what `schema_json` renders, deterministically.
     assert_eq!(schema_text, whyshelf_infra::map_dto::schema_json().unwrap());
+    shutdown.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_clone_without_the_private_store_shows_a_private_ground_as_unresolved() {
+    let p = with_one_finding("[export]\nstatus_md = true\n").await;
+    let (mut ws, shutdown) = opened(&p).await;
+    ws.add(
+        &[rel(LOGIN)],
+        &alias("finding/slow-login").with_store(StoreKind::Private),
+    )
+    .await
+    .unwrap();
+    let GetResult::Entity(finding) = ws
+        .get(&Target::Entity(refer("finding/slow-login")))
+        .await
+        .unwrap()
+    else {
+        panic!("an entity");
+    };
+    write(
+        p.root(),
+        "docs/spec/cache.md",
+        &spec_text(
+            &[&format!("private:{}", finding.id())],
+            "Cache the session.",
+        ),
+    )
+    .await;
+    ws.add(
+        &[rel("docs/spec/cache.md")],
+        &alias("spec/cache").with_store(StoreKind::Repo),
+    )
+    .await
+    .unwrap();
+    shutdown.close().await.unwrap();
+
+    // Where the private store is, nothing is unresolved.
+    let (ws, shutdown) = opened(&p).await;
+    let here = ws.status().await.unwrap();
+    assert!(
+        here.rows()
+            .iter()
+            .all(|r| !r.state().unwrap().completeness().is_partial())
+    );
+    shutdown.close().await.unwrap();
+
+    // A clone has the project and no private store: not an error, and said so.
+    tokio::fs::remove_dir_all(p.private()).await.unwrap();
+    let (ws, shutdown) = opened(&p).await;
+    let there = ws.status().await.unwrap();
+    let spec = there
+        .rows()
+        .iter()
+        .find(|r| r.alias().is_some_and(|a| a.as_str() == "spec/cache"))
+        .unwrap();
+    assert!(spec.state().unwrap().completeness().is_partial());
+    assert_eq!(spec.next(), &NextAction::OpenWithPrivateStore);
+    let markdown = render_status(&there.public_part());
+    assert!(markdown.contains("ok, unresolved"), "{markdown}");
+    assert!(markdown.contains("open where the private store is"));
     shutdown.close().await.unwrap();
 }

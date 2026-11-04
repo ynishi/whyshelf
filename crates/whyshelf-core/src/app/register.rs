@@ -170,7 +170,7 @@ impl<P: Ports> Workspace<P> {
             ))),
         )?;
         draft.object(store, candidate.text().clone());
-        if let Built::Design(design) = &built {
+        if let Built::Design(design, _) = &built {
             for number in design.items().keys() {
                 let item = self.new_entity_id().await?;
                 draft.push(

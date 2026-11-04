@@ -31,7 +31,7 @@ mod in_memory {
     use crate::domain::location::{CodeLocation, RelPath};
     use crate::domain::nonempty::{NonBlank, NonEmptyVec};
     use crate::domain::pin::{HypId, Hypothesis, PinContract, PinId};
-    use crate::domain::reference::Ref;
+    use crate::domain::reference::{Reach, Ref};
     use crate::domain::revision::RevisionId;
     use crate::domain::state::UnparsedReason;
 
@@ -345,6 +345,16 @@ mod in_memory {
             self.lock().fail_exports = fail;
         }
 
+        /// What a clone has: the same files and the repo store, and no private store.
+        pub(crate) fn drop_private_store(&self) {
+            let mut s = self.lock();
+            s.events.remove(&StoreKind::Private);
+            s.objects
+                .retain(|(store, _), _| *store != StoreKind::Private);
+            s.exports
+                .retain(|(store, _), _| *store != StoreKind::Private);
+        }
+
         pub(crate) fn events_in(&self, store: StoreKind) -> Vec<Event> {
             self.lock().events.get(&store).cloned().unwrap_or_default()
         }
@@ -462,6 +472,15 @@ mod in_memory {
 
         async fn events(&self, scope: StoreKind) -> Result<Vec<Event>, FakeError> {
             Ok(self.lock().events.get(&scope).cloned().unwrap_or_default())
+        }
+
+        async fn private_reach(&self) -> Result<Reach, FakeError> {
+            // Like a directory, the private store is there once it was written to.
+            Ok(if self.lock().events.contains_key(&StoreKind::Private) {
+                Reach::Available
+            } else {
+                Reach::Absent
+            })
         }
 
         async fn put_object(

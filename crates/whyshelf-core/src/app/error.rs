@@ -79,10 +79,21 @@ pub enum AppError {
         /// What the reference names.
         found: EntityKind,
     },
-    /// An external reference (`ext:` or a URL) was used where an entity of
-    /// this project is needed.
+    /// A URL was used where an entity of this project is needed.
     #[error("`{reference}` is not an entity of this project")]
     NotLocal {
+        /// The reference as given.
+        reference: Ref,
+    },
+    /// A `private:` or `ext:` reference points into a store this environment
+    /// cannot read, so it names no entity that can be used here.
+    ///
+    /// Fix: open the project where the private store is (for `ext:`, there is no
+    /// way to another project).
+    #[error(
+        "`{reference}` cannot be read here: open the project where its store is (for `private:`, where the private store is)"
+    )]
+    Unresolved {
         /// The reference as given.
         reference: Ref,
     },

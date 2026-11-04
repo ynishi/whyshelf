@@ -92,9 +92,9 @@
 //! | events, the stream graph, how an identifier is made | [`domain::event`] |
 //! | tags, kind, owner, path, alias: the fold and its conflicts | [`domain::classification`], [`domain::tag`] |
 //! | approvals and what each gate records | [`domain::approval`], [`app::check`] |
-//! | derived state, causes of Stale and Blocked | [`domain::state`], [`domain::evaluate`] |
+//! | derived state, causes of Stale and Blocked, what cannot be read here | [`domain::state`], [`domain::evaluate`] |
 //! | check violations and how to clear them | [`domain::lint`] |
-//! | reasons for Invalid, Stale, Blocked and unparsed files | [`domain::state`] |
+//! | reasons for Invalid, Stale, Blocked, partial and unparsed files | [`domain::state`] |
 //! | the `find` query language | [`domain::query`], [`app::query`] |
 //! | references: `private:`, `ext:`, items (`design#1`) | [`domain::reference`] |
 //! | the two stores, publish, purge and complete deletion | [`infra::store_fs`], [`app::register`] |
@@ -346,11 +346,6 @@
 //!
 //! **Behaviour a user can meet**
 //!
-//! - *`private:` and `ext:` references.* A `private:<id>` reference that the private
-//!   store cannot answer, in `grounds` or `spec`, makes the entity that holds it
-//!   Invalid with a dangling reference; it is not shown as "unresolved". `get` does
-//!   show it as unresolved. An `ext:` reference or a URL in those keys is refused;
-//!   there is no resolver for another project. See [`domain::reference`].
 //! - *Every command loads everything.* Loading the model reads every registered file
 //!   and asks Git for the pins (one `git show` per file under the scan directories)
 //!   and the baseline; a command line command does that at least twice (ingest, then

@@ -320,16 +320,11 @@ impl AddArgs {
             options = options.with_alias(parse::<Alias>("alias", alias)?);
         }
         if let Some(store) = &self.store {
-            options = options.with_store(match store.as_str() {
-                "repo" => StoreKind::Repo,
-                "private" => StoreKind::Private,
-                _ => {
-                    return Err(CliError::argument(
-                        "store",
-                        std::io::Error::other("`repo` or `private`"),
-                    ));
-                }
-            });
+            options = options.with_store(
+                store
+                    .parse::<StoreKind>()
+                    .map_err(|e| CliError::argument("store", e))?,
+            );
         }
         Ok(Command::Add {
             paths: parse_all::<RelPath>("paths", &self.paths)?,

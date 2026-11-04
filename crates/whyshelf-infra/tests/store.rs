@@ -14,6 +14,7 @@ use whyshelf_core::domain::actor::Timestamp;
 use whyshelf_core::domain::event::{Event, EventBody, StoreKind};
 use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::id::EntityId;
+use whyshelf_core::domain::reference::Reach;
 use whyshelf_infra::markdown::normalize;
 use whyshelf_infra::store_fs::{FsStore, StoreError};
 
@@ -97,6 +98,37 @@ async fn the_two_stores_are_separate() {
 async fn an_empty_store_has_no_events() {
     let s = stores();
     assert!(s.store.events(StoreKind::Repo).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_private_store_that_is_not_there_is_absent_and_an_empty_one_is_available() {
+    let s = stores();
+    // No directory: the events are empty, and the store cannot be read.
+    assert!(s.store.events(StoreKind::Private).await.unwrap().is_empty());
+    assert_eq!(s.store.private_reach().await.unwrap(), Reach::Absent);
+
+    // A directory with nothing in it is a store: the same empty events, readable.
+    tokio::fs::create_dir_all(&s.private).await.unwrap();
+    assert!(s.store.events(StoreKind::Private).await.unwrap().is_empty());
+    assert_eq!(s.store.private_reach().await.unwrap(), Reach::Available);
+}
+
+#[tokio::test]
+async fn the_first_write_to_the_private_store_makes_it_available() {
+    let s = stores();
+    assert_eq!(s.store.private_reach().await.unwrap(), Reach::Absent);
+    let event = moved(1, "docs/b.md", "2026-11-04T21:40:00Z");
+    s.store.append(StoreKind::Private, &event).await.unwrap();
+    assert_eq!(s.store.private_reach().await.unwrap(), Reach::Available);
+}
+
+#[tokio::test]
+async fn a_file_where_the_private_store_should_be_is_not_a_store() {
+    let s = stores();
+    tokio::fs::write(&s.private, b"not a directory")
+        .await
+        .unwrap();
+    assert_eq!(s.store.private_reach().await.unwrap(), Reach::Absent);
 }
 
 #[tokio::test]
