@@ -7,6 +7,26 @@
 //! not guess at high-entropy strings, which would stop ordinary hashes and
 //! identifiers, and it does not claim to find every secret: the report names the
 //! rule and the line, never the text matched.
+//!
+//! | rule (as reported) | the shape it looks for |
+//! |---|---|
+//! | private key header | a `-----BEGIN ... PRIVATE KEY-----` line |
+//! | cloud access key id | `AKIA`, `ASIA` and a few sibling prefixes, then 16 capitals or digits |
+//! | code-hosting token | `ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_` with 30 or more characters; `github_pat_` with 22 or more |
+//! | chat service token | `xox` and a letter, then 10 or more token characters |
+//! | cloud API key | `AIza` and 35 characters |
+//! | payment live key | `sk_live_` or `rk_live_` with 16 or more |
+//! | model API key | `sk-` (or `sk-ant-`) with 32 or more |
+//!
+//! **What it stops, and when.** Every text about to be stored as an object (the
+//! normalized text of a document version) passes through it before anything is
+//! written; a hit refuses that write, and ingest then leaves that one file out and
+//! reports it, retrying at the next run. **What it does not stop.** A secret that has
+//! no such form (a password in a sentence, a high-entropy string, a key of a service
+//! not listed) is not seen; the fields of an event (a reason, a hint) and the files
+//! of the project outside the documents are not scanned. A document that already
+//! holds a secret stays in the working tree and in Git as it is: the scan keeps it
+//! out of the store, it does not remove it from the file.
 
 use std::num::NonZeroU32;
 

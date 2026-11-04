@@ -287,7 +287,13 @@ impl RevisionPort for GitRevision {
     }
 }
 
-/// Finds pins in the test files of a revision.
+/// Finds pins in the files of a revision that sit under the scan directories.
+///
+/// Every file Git lists there (not a submodule or a link) is read with
+/// `git show`, one process per file, skipped when it is not UTF-8 text or holds a
+/// NUL byte; each line is matched against the pin pattern, and the first group is
+/// the pin. A file is not told from a test: a tag in a comment of a source file
+/// counts as well. The directories are the settings' `paths.scan_dirs`.
 #[derive(Debug, Clone)]
 pub struct GitCodeScan {
     git: Git,

@@ -6,9 +6,9 @@
 - Issue, branch, commit and PR conventions:
   [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security reports: [SECURITY.md](SECURITY.md)
-- Decisions that outlive a change: `docs/adr/`
-- API detail lives in RustDoc (`cargo doc`); code documentation outranks stale
-  issue text.
+- Documentation lives in RustDoc only (crate and module docs, diagrams as ASCII
+  in code blocks tagged `text`); there is no `docs/` directory. `cargo doc` must be
+  warning-free (`just rust-doc`). Code documentation outranks stale issue text.
 - Never work on `main`; one branch per issue, cut from `origin/main` after a
   fetch. `just worktree-new <type> <slug>` from the main checkout does that and
   runs `just branch-check`.

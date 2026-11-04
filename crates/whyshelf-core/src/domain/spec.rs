@@ -13,6 +13,44 @@
 //! [`NonEmptyVec`]). It never contains a Design: a Design is a separate file with
 //! its own life.
 //!
+//! # A Spec file
+//!
+//! The front matter has `grounds` (references to Findings, by alias or identifier,
+//! and never a hash) and `accept`, the acceptance declaration. The body has a
+//! `## Contract` section, which is the Contract and is required; any other section
+//! (`## Design Notes`, say) is kept in the file and read by people, and is outside
+//! the hash.
+//!
+//! ```markdown
+//! ---
+//! grounds:
+//!   - finding/slow-login        # at least one; a reference, not a hash
+//!   - finding/session-dropped
+//! accept:
+//!   pins:                       # invariants the code must keep
+//!     - id: PIN-LOGIN-CACHE     # PIN-* or UT-*; carried by a test as `@pin: PIN-...`
+//!       contract: "The session is reused for five minutes"
+//!     - id: UT-LOGIN-EXPIRY
+//!       contract: "An expired session is not reused"
+//!   hyp:                        # hypotheses, fixed by hash at CS, measured at CM
+//!     - id: HYP-FASTER-LOGIN
+//!       metric: "median login time"
+//!       target: "under 2 s"
+//! ---
+//!
+//! ## Contract
+//! A session that is younger than five minutes is reused without a new sign-in;
+//! an older one is not.
+//!
+//! ## Design Notes
+//! Free notes. Correcting a typo here never removes an approval.
+//! ```
+//!
+//! Gate CS asks for at least one pin and at least one hypothesis, so a Spec whose
+//! `accept` is empty parses (it is a draft) but cannot be approved. The identifier of
+//! a pin is `PIN-` or `UT-` followed by capital letters, digits, `_` or `-`; a
+//! hypothesis is `HYP-` and the same.
+//!
 //! # Hashes
 //!
 //! The Spec has two hashes, both computed here:

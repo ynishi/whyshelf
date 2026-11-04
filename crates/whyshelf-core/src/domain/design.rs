@@ -1,8 +1,48 @@
 //! Stage 3: the Design, a structured decision record and a split into items.
 //!
 //! A Design lives in its own file, apart from the Spec it implements. A Spec file
-//! that contains a Design section is stopped by the lint, with a pointer to the
-//! Design file.
+//! has no place for a Design: the file reader takes from a Spec only its front
+//! matter and its `## Contract`, so a design written under another heading in a
+//! Spec file is neither read nor hashed, and is not reported either.
+//!
+//! # A Design file
+//!
+//! The front matter holds `spec` (a reference to the Spec, never a hash), the
+//! `crux` and the `items`; the body holds free notes, outside the hash.
+//!
+//! ```markdown
+//! ---
+//! spec: spec/session-reuse
+//! crux:
+//!   question: "Where is the session kept?"
+//!   options:                          # exactly one chosen, at least one rejected
+//!     - id: opt-memory
+//!       summary: "Keep it in memory"
+//!       chosen: true
+//!       reason: "No new storage to secure"
+//!     - id: opt-disk
+//!       summary: "Keep it on disk"
+//!       rejected: "A file to protect and to clean up"   # the reason is the value
+//!     - id: opt-server
+//!       summary: "Keep it on the server only"
+//!       rejected: "Every start would need a round trip"
+//! items:
+//!   - number: 1                       # the key of the item; stable across edits
+//!     summary: "Reuse the session inside the window"
+//!     pins: [PIN-LOGIN-CACHE]         # every pin of the Spec is assigned to some item
+//!   - number: 2
+//!     summary: "Drop the session when it expires"
+//!     pins: [UT-LOGIN-EXPIRY]
+//! ---
+//!
+//! ## Design Notes
+//! Free notes. They are kept in the file and left out of the hash.
+//! ```
+//!
+//! An option is either `chosen: true` with a `reason`, or `rejected` with its
+//! reason as the value. The assignment of pins is checked in both directions
+//! ([`Design::check_pin_coverage`]): a pin of the Spec that no item carries, and a
+//! pin on an item that the Spec never declared, are both reported.
 //!
 //! # Crux
 //!
@@ -282,8 +322,12 @@ impl WorkItem {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CoverageIssue {
     /// A pin the Spec declared that no item is assigned.
+    ///
+    /// Fix: list the pin in the `pins` of some item.
     Unassigned(PinId),
     /// A pin assigned to an item that the Spec did not declare.
+    ///
+    /// Fix: remove it from the item, or declare it in the Spec.
     Undeclared {
         /// The pin that is not in the Spec.
         pin: PinId,

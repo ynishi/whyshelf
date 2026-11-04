@@ -15,6 +15,52 @@
 //! `<hex>` is the 64 hex digits of the identifier or hash, without the `sha256:`
 //! scheme, so the names are valid on every file system.
 //!
+//! # Two stores
+//!
+//! ```text
+//!   repo store     <project>/.whyshelf/             committed with the project
+//!                    events/  objects/  map.json  map.schema.json
+//!                    [status.md  changelog.md]      (if the settings ask)
+//!                    cache/                          not a store: ignored by Git
+//!
+//!   private store  <data dir>/<project>/            outside the repository, never
+//!                    events/  objects/  map.json     committed or published;
+//!                    map.schema.json                 the same shape
+//! ```
+//!
+//! Where a document goes is decided by where it is put (`[stores] default`, or
+//! `--store` at `add`), never by a flag in the file. An entity lives in one store.
+//! A public document can name a private entity only as `private:<id>`, the opaque
+//! identifier (a UUID v7, no alias, no title); the leak lint refuses a public text
+//! that carries a private alias or title. The reverse is free. The repo store's
+//! `map.json` lists public entities only, and a private reference in it is the same
+//! opaque `private:<id>`.
+//!
+//! **Publish** moves an entity from the private store to the repo store:
+//!
+//! ```text
+//!   private store                             repo store
+//!   events: ... , Published{to: repo}  ---->  Published{from: private, snapshot}
+//!   objects: all versions                     objects: the latest text only
+//!   approvals stay here                       items of a Design: Registered again
+//!                                             (the snapshot is a root: no heads)
+//! ```
+//!
+//! The snapshot carries the classification (kind, path, alias, owner, tags) and the
+//! latest version, so the repo store folds on its own to the classification the
+//! private store had. Older events and objects, and the **approvals**, stay in the
+//! private store: a clone that has only the repo store sees the entity and not its
+//! approvals, so it reads as a Draft there.
+//!
+//! **Purge and complete deletion.** `Workspace::purge` (the library; there is no
+//! command or tool for it) deletes the object file of one version from both stores
+//! and writes a `Purged` event in the entity's store, so the history is not cut and
+//! the version is known to be gone. That removes a text from the working tree and
+//! nothing more: a commit that already holds the file still holds it, so a secret
+//! that has been pushed must first be revoked, and only then removed from the Git
+//! history by rewriting it. The secret scan before a write (see [`crate::secret`])
+//! is what keeps this from being needed.
+//!
 //! # Many writers, no lock
 //!
 //! The identifier of an event is the hash of its content and heads, so the same

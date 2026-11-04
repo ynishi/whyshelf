@@ -14,9 +14,71 @@
 //!
 //! A problem in a file is a [`UnparsedReason`], never a panic and never the first
 //! one only: every key that is missing or wrong is reported, so a person fixes
-//! the file in one pass. The kind of file is told by its keys: `finding_type`
-//! makes a Finding, `grounds` a Spec, `spec` a Design. A key that is not listed is
-//! ignored (a classification key written in a file is taken in at registration).
+//! the file in one pass. The kind of file is told by its keys, looked at in this
+//! order: `finding_type` makes a Finding, `grounds` a Spec, `spec` a Design. A key
+//! that is not listed is ignored. That includes the keys of the classification
+//! (`tags`, `owner`, `alias`, ...): they belong to the tool and live in events, so
+//! a file that carries them is read without them and is not warned about.
+//!
+//! | what is wrong | reported as | the key it names |
+//! |---|---|---|
+//! | a line starts with seven `<` or seven `>` (what a failed merge leaves) | `MergeConflictMarker` | none; nothing else is read |
+//! | no front matter, YAML that does not parse, or a front matter that is not a mapping | `MalformedFrontmatter` | none; nothing else is read |
+//! | a required key is absent | `MissingField` | the key, such as `context` or `crux.question`; `## Contract` for the section |
+//! | a key is present and refused | `InvalidField` | the key with its position, such as `accept.pins[1].id` or `crux.options[0].reason` |
+//! | a reference names nothing | `UnresolvedRef` | raised by the application after parsing, not here |
+//!
+//! # The keys of a Finding
+//!
+//! Every Finding has `finding_type`, `title` and `evidence`; the rest depends on the
+//! type. The body, everything after the front matter, is the text of the Finding.
+//!
+//! | `finding_type` | further keys (all required) |
+//! |---|---|
+//! | `measured_data` | `measured_at` (RFC 3339, the calendar is checked), `revision`, `environment` |
+//! | `usage_observation` | `context`, `reproducibility` (`reproducible` or `not-reproducible`) |
+//! | `external_source` | `source` (a URI, or a citation as text), `version`, `maturity` (`experimental`, `emerging`, `established` or `standard`) |
+//! | `code_observation` | `ref` (`path:line`), `revision`, `method` (`read` or `executed`) |
+//! | `domain_constraint` | `authority`, `scope`, `review_condition` |
+//!
+//! `evidence` is `measured`, `theoretical` or `estimated`. A `revision` is read here
+//! as text only; whether it names a revision is asked of the version-control port
+//! when the entity is built, so a revision that does not exist makes the file
+//! unparsed there.
+//!
+//! # Examples
+//!
+//! The complete files below are the examples of the model documentation
+//! (`whyshelf_core::domain::finding`, `spec` and `design`); this checks that they
+//! read.
+//!
+//! ```
+//! use whyshelf_core::domain::event::DocKind;
+//! use whyshelf_infra::{markdown::normalize, parse::parse};
+//!
+//! let findings = [
+//!     "---\nfinding_type: measured_data\ntitle: \"Median login time on a cold start\"\nevidence: measured\nmeasured_at: \"2026-11-04T09:30:00Z\"\nrevision: \"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2\"\nenvironment: \"mid-range phone, release build, office network\"\n---\nThe median of 40 cold starts was 8.2 s.\n",
+//!     "---\nfinding_type: usage_observation\ntitle: \"Testers sign in again after every app switch\"\nevidence: measured\ncontext: \"demo app, sign in, switch to the mail app and back\"\nreproducibility: reproducible\n---\nThree of three testers were asked to sign in again.\n",
+//!     "---\nfinding_type: external_source\ntitle: \"Session lifetimes in the platform guidelines\"\nevidence: theoretical\nsource: \"https://example.org/guidelines/sessions\"\nversion: \"2026 edition\"\nmaturity: established\n---\nThe guidelines advise sessions of at least five minutes.\n",
+//!     "---\nfinding_type: code_observation\ntitle: \"The session is dropped when the app is backgrounded\"\nevidence: measured\nref: \"src/session.rs:42\"\nrevision: \"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2\"\nmethod: read\n---\n`Session::on_background` clears the token.\n",
+//!     "---\nfinding_type: domain_constraint\ntitle: \"Tokens must not outlive one hour\"\nevidence: theoretical\nauthority: \"the security team\"\nscope: \"all clients of the sign-in service\"\nreview_condition: \"when the sign-in provider changes\"\n---\nThe policy forbids tokens that live longer than one hour.\n",
+//! ];
+//! for text in findings {
+//!     let doc = parse(&normalize(text)).expect("a complete Finding file reads");
+//!     assert_eq!(doc.kind(), DocKind::Finding);
+//! }
+//!
+//! let spec = "---\ngrounds:\n  - finding/slow-login\n  - finding/session-dropped\naccept:\n  pins:\n    - id: PIN-LOGIN-CACHE\n      contract: \"The session is reused for five minutes\"\n    - id: UT-LOGIN-EXPIRY\n      contract: \"An expired session is not reused\"\n  hyp:\n    - id: HYP-FASTER-LOGIN\n      metric: \"median login time\"\n      target: \"under 2 s\"\n---\n\n## Contract\nA session younger than five minutes is reused.\n\n## Design Notes\nFree notes.\n";
+//! assert_eq!(parse(&normalize(spec)).unwrap().kind(), DocKind::Spec);
+//!
+//! let design = "---\nspec: spec/session-reuse\ncrux:\n  question: \"Where is the session kept?\"\n  options:\n    - id: opt-memory\n      summary: \"Keep it in memory\"\n      chosen: true\n      reason: \"No new storage to secure\"\n    - id: opt-disk\n      summary: \"Keep it on disk\"\n      rejected: \"A file to protect and to clean up\"\n    - id: opt-server\n      summary: \"Keep it on the server only\"\n      rejected: \"Every start would need a round trip\"\nitems:\n  - number: 1\n    summary: \"Reuse the session inside the window\"\n    pins: [PIN-LOGIN-CACHE]\n  - number: 2\n    summary: \"Drop the session when it expires\"\n    pins: [UT-LOGIN-EXPIRY]\n---\n\n## Design Notes\nFree notes.\n";
+//! assert_eq!(parse(&normalize(design)).unwrap().kind(), DocKind::Design);
+//!
+//! // Every problem is reported, not the first: two keys are missing here.
+//! let broken = "---\nfinding_type: usage_observation\ntitle: \"t\"\nevidence: measured\n---\nbody\n";
+//! let reasons = parse(&normalize(broken)).unwrap_err();
+//! assert_eq!(reasons.iter().count(), 2);
+//! ```
 //!
 //! # Finding
 //!

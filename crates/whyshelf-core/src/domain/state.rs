@@ -18,8 +18,40 @@
 //! - **Modified**: approvals exist, none for the current hash; the entity was
 //!   edited after it was approved.
 //!
-//! The axes combine, so "edited since approval" and "upstream changed" can both be
-//! shown. A Finding that has not passed CR makes the Specs on it **Blocked**, not
+//! How the approval axis is decided, in order (the first question answered "yes"
+//! settles it):
+//!
+//! ```text
+//!   is the entity's own content unusable?          -- yes --> Invalid
+//!        | no
+//!   an unrevoked approval for the current hash?    -- yes --> Approved
+//!        | no
+//!   an unrevoked approval for an earlier hash?     -- yes --> Modified
+//!        | no
+//!        v
+//!      Draft
+//! ```
+//!
+//! The two axes are independent, with one exception that follows from how Stale is
+//! judged. A Stale compares the upstream hashes an approval *recorded* with the
+//! upstream's hashes today, so only an entity that is **Approved** at its current
+//! hash can be Stale; every other entity is Ok or Blocked.
+//!
+//! ```text
+//!                      upstream axis
+//!                      Ok      Stale   Blocked
+//!   approval axis    +-------+-------+---------+
+//!     Invalid        |   x   |   -   |    x    |
+//!     Draft          |   x   |   -   |    x    |
+//!     Modified       |   x   |   -   |    x    |
+//!     Approved       |   x   |   x   |    x    |
+//!                    +-------+-------+---------+
+//!     x  can occur      -  cannot (a Draft or Modified entity that sits on a
+//!                          Stale upstream is shown Blocked, since it has no
+//!                          approval to be stale against)
+//! ```
+//!
+//! A Finding that has not passed CR makes the Specs on it **Blocked**, not
 //! Stale. A Draft entity has recorded no upstream hashes, so it is never Stale: its
 //! upstream health is Ok or Blocked.
 //!
@@ -38,6 +70,36 @@
 //! item's pins the tests at the current revision already carry; an item whose
 //! tests do not yet cover its pins is shown as "in progress", and that is never
 //! Invalid. Only the CA lint stops on it.
+//!
+//! # Reading a reason, and clearing it
+//!
+//! The reasons are values, so a view can list every one of them, not the first.
+//! `whyshelf status` prints them under its table, one line each, and `whyshelf get`
+//! under the entity.
+//!
+//! | reason | axis | what it means | how to clear it |
+//! |---|---|---|---|
+//! | [`UnparsedReason::MergeConflictMarker`] | Invalid | a line starts with seven `<` or `>` | resolve the merge in the file |
+//! | [`UnparsedReason::MalformedFrontmatter`] | Invalid | no `---` pair, YAML that does not read, or not a mapping | repair the front matter |
+//! | [`UnparsedReason::MissingField`] | Invalid | a required key or section is absent | add it |
+//! | [`UnparsedReason::InvalidField`] | Invalid | a key holds a value its type refuses | correct the value (the reason names the key and why) |
+//! | [`UnparsedReason::UnresolvedRef`] | Invalid | an alias in `grounds` or `spec` names nothing, or names several | register the target, correct the alias, or give the alias to one entity |
+//! | [`InvalidReason::DanglingRef`] | Invalid | the identifier a reference stands for is not an entity here (a `private:` reference in a clone that has no private store comes to this) | bring the entity back, or open the project where it exists |
+//! | [`InvalidReason::PinCoverage`] | Invalid | the Design and its Spec disagree about a pin | assign each declared pin to an item; assign no undeclared one |
+//! | [`InvalidReason::PathCollision`] | Invalid | two entities sit at one path | move one with `whyshelf mv` |
+//! | [`InvalidReason::AliasCollision`] | Invalid | two entities have one alias | one of them must take another alias (the application's `reclassify` does it; no command does) |
+//! | [`StaleReason::UpstreamChanged`] | Stale | an upstream's hash today is not the one this approval recorded | check and approve this entity again |
+//! | [`StaleReason::UpstreamNotRecorded`] | Stale | the approval recorded no hash for an upstream that is there today | check and approve this entity again |
+//! | [`StaleReason::UpstreamStale`] | Stale | the upstream is itself stale | clear the upstream first, then this entity |
+//! | [`BlockReason::UpstreamInvalid`] | Blocked | the upstream is invalid or did not parse | repair the upstream |
+//! | [`BlockReason::UpstreamUnapproved`] | Blocked | the upstream is a Draft, or was edited after it was approved | approve the upstream |
+//! | [`BlockReason::UpstreamStale`] | Blocked | the upstream is stale and this entity has no approval to be stale against | clear the upstream, then approve this entity |
+//! | [`BlockReason::UpstreamBlocked`] | Blocked | the upstream is itself blocked | follow the chain up (the causes of the view name it) |
+//!
+//! When the cause is not the direct upstream but something further up, the evaluation
+//! also keeps the chain of causes, root first (see `evaluate`). A library caller reads
+//! it from the evaluated entity; the command line uses the root of the chain for the
+//! `NEXT` column ("approve upstream *x* first").
 
 use std::collections::BTreeSet;
 
@@ -57,21 +119,30 @@ use super::revision::RevisionId;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum UnparsedReason {
     /// The file holds an unresolved merge-conflict marker.
+    ///
+    /// Fix: resolve the merge in the file.
     #[error("the file holds a merge-conflict marker")]
     MergeConflictMarker,
     /// The front matter is not well formed.
+    ///
+    /// Fix: the file starts with a `---` line and the front matter ends with another;
+    /// the YAML between them is a mapping.
     #[error("the front matter is malformed: {detail}")]
     MalformedFrontmatter {
         /// What the parser reported, free text.
         detail: String,
     },
     /// A required key is missing.
+    ///
+    /// Fix: add it.
     #[error("the key `{field}` is missing")]
     MissingField {
         /// The key, as written in the file format.
         field: String,
     },
     /// A key has a value that its type refuses.
+    ///
+    /// Fix: correct the value; `detail` says what the type wants.
     #[error("the key `{field}` is invalid: {detail}")]
     InvalidField {
         /// The key, as written in the file format.
@@ -80,6 +151,8 @@ pub enum UnparsedReason {
         detail: String,
     },
     /// An alias or reference in the file names nothing.
+    ///
+    /// Fix: register the entity it should name, or correct the reference.
     #[error("the reference `{reference}` names nothing")]
     UnresolvedRef {
         /// The reference that could not be resolved.
@@ -94,21 +167,32 @@ pub enum InvalidReason {
     #[error("the file did not parse: {0}")]
     Unparsed(UnparsedReason),
     /// An upstream identifier is known to the content but to no entity.
+    ///
+    /// This is also what a `private:` reference becomes where the private store is
+    /// not there (a public clone, a CI machine). Fix: bring the entity back, or
+    /// open the project where it exists.
     #[error("the upstream {upstream} does not exist")]
     DanglingRef {
         /// The identifier that points at nothing.
         upstream: EntityId,
     },
     /// The Design does not cover the Spec's pins exactly.
+    ///
+    /// Fix: assign each declared pin to an item and no undeclared one.
     #[error("the pin coverage is wrong: {0:?}")]
     PinCoverage(CoverageIssue),
     /// Another entity sits at the same path.
+    ///
+    /// Fix: move one of them with `whyshelf mv`.
     #[error("another entity sits at {path}")]
     PathCollision {
         /// The shared path.
         path: RelPath,
     },
     /// Another entity has the same alias.
+    ///
+    /// Fix: give one of them another alias (the application's `reclassify`; there is
+    /// no command for it).
     #[error("another entity has the alias {alias}")]
     AliasCollision {
         /// The shared alias.
@@ -120,6 +204,8 @@ pub enum InvalidReason {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StaleReason {
     /// An upstream hash today differs from the one the approval recorded.
+    ///
+    /// Fix: check and approve this entity again.
     #[error("{upstream} changed since the approval")]
     UpstreamChanged {
         /// The upstream entity.
@@ -130,12 +216,16 @@ pub enum StaleReason {
         current: ContentHash,
     },
     /// The approval recorded nothing for an upstream that is there today.
+    ///
+    /// Fix: check and approve this entity again.
     #[error("the approval recorded nothing for {upstream}")]
     UpstreamNotRecorded {
         /// The upstream entity.
         upstream: EntityId,
     },
     /// The upstream entity is itself Stale.
+    ///
+    /// Fix: clear the upstream first, then this entity.
     #[error("{upstream} is stale")]
     UpstreamStale {
         /// The upstream entity.
@@ -147,12 +237,16 @@ pub enum StaleReason {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum BlockReason {
     /// An upstream entity is Invalid or did not parse.
+    ///
+    /// Fix: repair the upstream.
     #[error("{upstream} is invalid")]
     UpstreamInvalid {
         /// The upstream entity.
         upstream: EntityId,
     },
     /// An upstream entity has no approval for its current content.
+    ///
+    /// Fix: approve the upstream.
     #[error("{upstream} is not approved")]
     UpstreamUnapproved {
         /// The upstream entity.
@@ -160,12 +254,16 @@ pub enum BlockReason {
     },
     /// An upstream entity is Stale and this entity has no approval to be stale
     /// against.
+    ///
+    /// Fix: clear the upstream, then approve this entity.
     #[error("{upstream} is stale")]
     UpstreamStale {
         /// The upstream entity.
         upstream: EntityId,
     },
     /// An upstream entity is itself Blocked.
+    ///
+    /// Fix: follow the chain up to the first entity that is not ready.
     #[error("{upstream} is blocked")]
     UpstreamBlocked {
         /// The upstream entity.

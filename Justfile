@@ -8,7 +8,7 @@ default:
     @just --list
 
 # Everything a change owes before it is handed over.
-check: rust-fmt-check rust-clippy rust-test deny
+check: rust-fmt-check rust-clippy rust-test rust-doc deny
 
 rust-fmt-check:
     cargo fmt --all -- --check
@@ -18,6 +18,14 @@ rust-clippy:
 
 rust-test:
     cargo test --workspace
+
+# The documentation is the rustdoc, and it builds without a warning (a broken
+# link counts). The `whyshelf` binary and the umbrella library are both named
+# `whyshelf`, so cargo would write both into one directory; the command line's page
+# is built apart, into a target directory of its own.
+rust-doc:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude whyshelf-cli --no-deps
+    RUSTDOCFLAGS="-D warnings" cargo doc -p whyshelf-cli --no-deps --target-dir target/doc-cli
 
 deny:
     cargo deny check

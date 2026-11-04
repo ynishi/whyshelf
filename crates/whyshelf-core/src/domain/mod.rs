@@ -64,7 +64,8 @@
 //!
 //! Every entity has an approval state (Invalid, Draft, Approved, Modified) and an
 //! upstream state (Ok, Stale, Blocked), so "edited after approval" and "upstream
-//! changed" are both visible at once. An item adds an integration state (whether the
+//! changed" are told apart (an entity is Stale only while its own approval stands;
+//! see [`state`] for which pairs occur). An item adds an integration state (whether the
 //! approved revision reached the baseline) and a progress display (how many of its
 //! pins the tests carry). See [`state`] for the meanings and [`evaluate`] for how
 //! they are derived, upstream to downstream, with the causes passed down.

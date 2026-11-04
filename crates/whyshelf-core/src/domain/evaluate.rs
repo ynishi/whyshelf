@@ -7,6 +7,42 @@
 //! [`EntityState`] and a chain of [`Cause`]s that says where a Stale or Blocked came
 //! from.
 //!
+//! ```text
+//!   events (ledger of approvals)     files, built into entities
+//!              \                        /
+//!               v                      v
+//!   Evaluator::finding   -->  Evaluated<Finding>   state { approval, upstream=Ok }
+//!                                  |  map by FindingId
+//!                                  v
+//!   Evaluator::spec      -->  Evaluated<Spec>      each ground: Ok|Blocked|Stale
+//!                                  |  map by SpecId
+//!                                  v
+//!   Evaluator::design    -->  Evaluated<Design>    the Spec, and the pin coverage
+//!                                  |  map by DesignId
+//!                                  v
+//!   Evaluator::item      -->  ItemEvaluation       the Design; + integration,
+//!                                                  progress (ImplView: pins found,
+//!                                                  revisions at the baseline)
+//! ```
+//!
+//! The chain of causes. Take Finding F, Spec S on F, Design D on S, item I of D, all
+//! approved, then correct F. Each stage looks only at the stage above, and appends
+//! its own link to the causes it inherits, so the chain reads from the root:
+//!
+//! ```text
+//!   F  edited          approval  Modified (its hash is not the approved one)
+//!   S  approved at its own hash, but its CS recorded F's old hash
+//!        upstream = Stale [UpstreamChanged{F}]                causes: [F]
+//!   D  approved, recorded S's contract_hash, which has not changed
+//!        upstream = Stale [UpstreamStale{S}]                  causes: [F, S]
+//!   I  likewise
+//!        upstream = Stale [UpstreamStale{D}]                  causes: [F, S, D]
+//!
+//!   Each entry of `causes` is a Cause { via, reason }: the upstream entity the
+//!   link goes through, and the StaleReason or BlockReason it gave. The first
+//!   entry is the root: it is where to start fixing.
+//! ```
+//!
 //! # How a state is decided
 //!
 //! 1. **Invalid** if the entity's own content is unusable: it did not parse

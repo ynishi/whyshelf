@@ -51,6 +51,77 @@
 //! Every table except `project` and `[test]` may be left out; the values shown
 //! above are the defaults, except `project`, which names the project, and
 //! `test.command`, which has no default because it depends on the language.
+//!
+//! # Environment and trust boundary
+//!
+//! Two sources give the settings, and they are trusted differently.
+//!
+//! ```text
+//!   .whyshelf.toml  (committed; whoever can change the repository can change it)
+//!        decides:  project name, document and test directories, the test command,
+//!                  the pin pattern, the baseline ref, the default store of new
+//!                  documents, the official tag vocabulary, which Markdown
+//!                  files are generated, the ingest threshold, the default
+//!                  approver's name
+//!        may NOT:  say where the private store is  (`stores.private` is an error)
+//!
+//!   the user's environment  (this process; not committed)
+//!        decides:  the data dir, and so where every private store is
+//! ```
+//!
+//! | variable | meaning |
+//! |---|---|
+//! | `WHYSHELF_DATA_DIR` | the directory the private stores go in; must be an absolute path, and a relative one is an error rather than a store in an unexpected place |
+//! | `XDG_DATA_HOME` | when the first is not set: the data dir is `$XDG_DATA_HOME/whyshelf` (an unset, empty or relative value is skipped) |
+//! | `HOME` | when neither of those is usable: the data dir is `$HOME/.local/share/whyshelf` |
+//!
+//! The private store of a project is `<data dir>/<project>`. Nothing is expanded in
+//! these values (no `~`, no `$VAR`). If none of the three gives an absolute path the
+//! workspace cannot be opened, even when no document is ever private, because the
+//! location is resolved with the settings. Whyshelf reads no other variable. The
+//! processes it starts (`git`, the test command) get its environment, and `git` is
+//! also told not to take optional locks and not to prompt.
+//!
+//! **Why the private store is not a setting.** The settings file travels with the
+//! repository, so a path in it would let anyone who can change the repository point
+//! the next run of whoever uses it at any directory they can write to, or read from.
+//! The user's environment is the only thing that places the private store, and the
+//! key is refused rather than ignored so that nobody believes it works.
+//!
+//! **What the file still decides, with that trust.** `test.command` is run through
+//! the shell, in the tree being approved, when an item is checked (see
+//! [`crate::test_run`]); it has the privileges of the person running the check, as
+//! a `Makefile` or a CI script has. `git.baseline` is handed to Git as a ref and
+//! `test.pin_pattern` is compiled as a regular expression; neither runs anything.
+//! `user.name` is the declared approver: it is a label, and nothing authenticates it.
+//!
+//! The same facts, run:
+//!
+//! ```
+//! use std::path::Path;
+//! use whyshelf_infra::config::{ConfigError, UserDirs, parse};
+//!
+//! let text = "version = 1\nproject = \"demo\"\n[test]\ncommand = \"make test\"\n";
+//!
+//! // The private store: the data dir of the environment, then the project.
+//! let dirs = UserDirs::default().with_data_dir("/data");
+//! assert_eq!(parse(text, &dirs).unwrap().private_dir(), Path::new("/data/demo"));
+//!
+//! // Without WHYSHELF_DATA_DIR the XDG base directory is next, then HOME.
+//! let dirs = UserDirs::default().with_data_home("/xdg").with_home("/srv/alice");
+//! assert_eq!(dirs.data_dir().unwrap(), Path::new("/xdg/whyshelf"));
+//! let dirs = UserDirs::default().with_home("/srv/alice");
+//! assert_eq!(dirs.data_dir().unwrap(), Path::new("/srv/alice/.local/share/whyshelf"));
+//!
+//! // A committed file cannot place the private store.
+//! let placed = format!("{text}[stores]\nprivate = \"/anywhere\"\n");
+//! let dirs = UserDirs::default().with_data_dir("/data");
+//! assert!(matches!(parse(&placed, &dirs), Err(ConfigError::PrivateInRepo)));
+//!
+//! // A relative WHYSHELF_DATA_DIR is an error.
+//! let dirs = UserDirs::default().with_data_dir("relative");
+//! assert!(matches!(dirs.data_dir(), Err(ConfigError::RelativeDataDir { .. })));
+//! ```
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

@@ -3,11 +3,11 @@
 //! A subscriber is told which events were just recorded and gets the model as it
 //! is afterwards. It cannot stop anything: the gate (see [`commit`](super::commit))
 //! is where a write is refused, and a subscriber that fails only produces a
-//! [`SubscriberWarning`] that the use case returns next to its result. The same
-//! mechanism runs the built-in work (so it is exercised from the first day) and is
-//! where a user's own hook would plug in later. There is no hook on a file change or
-//! on a command: the entry is the event, so a change made by the command line, the
-//! tool server or a direct edit (found by ingest) is heard alike.
+//! [`SubscriberWarning`] that the use case returns next to its result. The built-in
+//! work runs through this mechanism, the shape a user's own hook would have. There
+//! is no hook on a file change or on a command: the entry is the event, so a change
+//! made by the command line, the tool server or a direct edit (found by ingest) is
+//! heard alike.
 //!
 //! | subscriber | does |
 //! |---|---|
@@ -18,6 +18,30 @@
 //!
 //! There is no `dyn`: the built-in subscribers are variants of [`Builtin`], and the
 //! trait is generic over the ports so that a subscriber borrows them for the call.
+//!
+//! ```text
+//!   events just written + the Model loaded after them
+//!        |
+//!        +--> CacheUpdater         cache rows of the documents the events touch
+//!        +--> MapExporter          map.json (+ map.schema.json), touched stores
+//!        +--> StatusMdExporter     status.md, repo store    [export.status_md]
+//!        +--> ChangelogMdExporter  changelog.md, repo store [export.changelog_md]
+//!             (in this order; each one failing only adds a SubscriberWarning)
+//! ```
+//!
+//! A `rebuild` runs them with no events, which rewrites the map of every store that
+//! has events, and the Markdown files if enabled.
+//!
+//! # User hooks do not exist
+//!
+//! Everything above is built in. [`Builtin::from_config`] chooses the set from the
+//! settings, and nothing in the settings, the command line or the tool server
+//! registers another subscriber, so a project cannot add a hook of its own (for
+//! example "tag a Spec when it is approved"). The trait is public so that a
+//! program using the library can hold its own type and call it, but
+//! [`Workspace`](super::Workspace) runs only the built-in set. The rules of the
+//! trait hold for any subscriber: its entry is an event, it cannot stop a write,
+//! and what it decides is recorded as an event, never as an edit of a document.
 
 use std::collections::BTreeSet;
 use std::error::Error;

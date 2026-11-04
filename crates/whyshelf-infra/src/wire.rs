@@ -31,6 +31,49 @@
 //! differs from the one computed is refused ([`WireError::IdMismatch`]) because it
 //! was edited or corrupted. Revisions are only checked for their outline here: the
 //! revision port was already asked when the approval was made.
+//!
+//! # Compatibility
+//!
+//! Five things carry a version. Which change moves which, and what happens to data
+//! written before:
+//!
+//! | what | where it is written | moves when | older data |
+//! |---|---|---|---|
+//! | settings `version` | `.whyshelf.toml` (`config::SUPPORTED_VERSION`) | a key is renamed, removed, or means something else | a build reads its own version only; another is `ConfigError::Version`, naming both |
+//! | event `v` | every event file ([`VERSION`]) | the JSON of an event changes in a way an old reader would misread (a key renamed, retyped or made required) | [`decode`] picks the reader by `v`; a version it does not know is `UnsupportedVersion`, never guessed at. A new version adds a reader and keeps the old one, so an old file is read without being rewritten |
+//! | map `version` | `map.json` and its `map.schema.json` | the shape of the map changes; the schema of the old version is kept | the map is generated and never read back as input: a newer build writes it again (`whyshelf rebuild`) |
+//! | cache `schema_version` | the `meta` table of `index.db` | the tables change | a cache of another version is dropped and built again |
+//! | hash domain tag | `whyshelf/<kind>/v1` at the start of every digest | the canonical form of a value, or the scope of a hash, changes | see below |
+//!
+//! An event file's `v` is about the file. It is not in the event identifier, so
+//! moving to a new `v` does not change any identifier. A key that a reader does not
+//! know is ignored, which is how a key can be added without a new `v`; an old
+//! build then simply does not see it.
+//!
+//! The hash tag is the one that cannot be handled by choosing a reader. The
+//! identifier of an event, and the content hash an approval records, are computed
+//! from the domain's values under the `v1` tags, and a file whose stored identifier
+//! is not the one recomputed is refused. A change of the canonical form or of a hash
+//! scope would be a new tag, and every identifier and approval already written
+//! would then disagree with the recomputed ones; it would need a migration that
+//! rewrites them with their new hashes. There is none: `whyshelf migrate` says that
+//! the files are in the newest format and does nothing, because there is one format.
+//!
+//! ```
+//! use whyshelf_infra::wire::{WireError, decode};
+//!
+//! // A file of a version this build does not read is refused, not guessed at.
+//! let future = br#"{"v": 2}"#;
+//! assert!(matches!(
+//!     decode(future),
+//!     Err(WireError::UnsupportedVersion { found: Some(2) })
+//! ));
+//! // A file with no version is refused the same way.
+//! assert!(matches!(
+//!     decode(b"{}"),
+//!     Err(WireError::UnsupportedVersion { found: None })
+//! ));
+//! ```
 
 use std::collections::BTreeSet;
 use std::str::FromStr;

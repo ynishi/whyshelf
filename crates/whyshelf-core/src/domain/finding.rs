@@ -24,6 +24,77 @@
 //! are not kept in step with later code; a fact that must follow the code is a
 //! PIN instead.
 //!
+//! # A Finding file
+//!
+//! A Finding is a Markdown file: a YAML front matter between two `---` lines, then
+//! the body, free Markdown that says what was seen and how it is known. The keys
+//! below are read by the `parse` module of the `whyshelf-infra` crate, which lists
+//! what it reports when one is missing or wrong. `title`, `evidence` and the keys
+//! of the type are required; the body must not be blank (gate CR). The label
+//! `evidence` is `measured`, `theoretical` or `estimated`, and a `measured_data`
+//! Finding must say `measured`.
+//!
+//! One complete file for each type:
+//!
+//! ```markdown
+//! ---
+//! finding_type: measured_data
+//! title: "Median login time on a cold start"
+//! evidence: measured
+//! measured_at: "2026-11-04T09:30:00Z"   # RFC 3339
+//! revision: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"   # 40 hex digits
+//! environment: "mid-range phone, release build, office network"
+//! ---
+//! The median of 40 cold starts was 8.2 s (p95 11.0 s) [measured].
+//! ```
+//!
+//! ```markdown
+//! ---
+//! finding_type: usage_observation
+//! title: "Testers sign in again after every app switch"
+//! evidence: measured
+//! context: "demo app, sign in, switch to the mail app and back"
+//! reproducibility: reproducible   # or: not-reproducible
+//! ---
+//! Three of three testers were asked to sign in again within a minute.
+//! ```
+//!
+//! ```markdown
+//! ---
+//! finding_type: external_source
+//! title: "Session lifetimes in the platform guidelines"
+//! evidence: theoretical
+//! source: "https://example.org/guidelines/sessions"   # a URI, or a citation as text
+//! version: "2026 edition"
+//! maturity: established   # experimental | emerging | established | standard
+//! ---
+//! The guidelines advise sessions of at least five minutes on mobile.
+//! ```
+//!
+//! ```markdown
+//! ---
+//! finding_type: code_observation
+//! title: "The session is dropped when the app is backgrounded"
+//! evidence: measured
+//! ref: "src/session.rs:42"   # path:line, at the revision below
+//! revision: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+//! method: read   # or: executed
+//! ---
+//! `Session::on_background` clears the token unconditionally.
+//! ```
+//!
+//! ```markdown
+//! ---
+//! finding_type: domain_constraint
+//! title: "Tokens must not outlive one hour"
+//! evidence: theoretical
+//! authority: "the security team"
+//! scope: "all clients of the sign-in service"
+//! review_condition: "when the sign-in provider changes"
+//! ---
+//! The policy forbids tokens that live longer than one hour.
+//! ```
+//!
 //! # What the hash covers
 //!
 //! The hash covers the type, its metadata, the title, the evidence label and the

@@ -26,6 +26,68 @@
 //! | [`approve_cr`](Workspace::approve_cr), [`approve_cs`](Workspace::approve_cs), [`approve_ci`](Workspace::approve_ci), [`approve_ca`](Workspace::approve_ca), [`record_cm`](Workspace::record_cm), [`revoke`](Workspace::revoke) | [`check_cr`](Workspace::check_cr), [`check_cs`](Workspace::check_cs), [`check_ci`](Workspace::check_ci), [`check_ca`](Workspace::check_ca) |
 //! | [`finding_new`](Workspace::finding_new), [`spec_new`](Workspace::spec_new), [`design_new`](Workspace::design_new) | [`trace`](Workspace::trace), [`changelog`](Workspace::changelog), [`audit`](Workspace::audit), [`context`](Workspace::context) |
 //!
+//! # Concurrency and merge
+//!
+//! Who can write at the same time, and what keeps them from hurting each other:
+//!
+//! | writers | what makes it safe |
+//! |---|---|
+//! | two calls on one [`Workspace`] | none needed: `&mut self` lets one write run at a time |
+//! | the tool server's requests | the server hands its one workspace to a single task with a bounded queue, so requests run one after another; the workspace is not behind a lock |
+//! | a command line and a tool server, in one worktree or in two | an event file is named by the hash of its content and heads, so the same change is the same file; a file is written under a name of its own and renamed, and an existing target is a success; the cache is SQLite in WAL mode with a busy timeout; generated files are rebuilt whole, so the last writer wins and the state converges |
+//! | two branches (a merge) | one event is one file, so the files of both sides simply add up; see below |
+//!
+//! ```text
+//!   worktree A (branch a)                     worktree B (branch b)
+//!   .whyshelf/events/  e1 e2 e3               .whyshelf/events/  e1 e2 e4
+//!   .whyshelf/cache/   (its own, ignored)     .whyshelf/cache/   (its own)
+//!                \                                 /
+//!                 +------- git merge  -----------+
+//!                                  |
+//!                                  v
+//!   .whyshelf/events/  e1 e2 e3 e4      the union; the same event is one file
+//!   docs/*.md          ordinary text merge; a conflict marker makes that
+//!                      entity Invalid until a person resolves it
+//!   .whyshelf/map.json may conflict (one file rewritten by both sides):
+//!                      `whyshelf rebuild` writes it again from the events
+//!   .whyshelf/cache/   not merged; each worktree's next command catches up
+//!                      with what its own checkout now holds
+//! ```
+//!
+//! After a merge a stream can have more than one tip. A value that the two sides set
+//! differently (a path, an owner, an alias) is listed as a conflict by the status; a
+//! person settles it with `tag` or `mv`, and that write lists every tip, which joins
+//! the stream. Tags need no settling: concurrent additions both stay, and a removal
+//! only removes the additions it saw.
+//!
+//! Two things are shared that look separate. The private store is
+//! `<data dir>/<project>`, so every worktree of a project on one machine reads and
+//! writes the same private store, while each has its own repo-store files and its own
+//! cache. And a private store is named by the project's name alone, so two unrelated
+//! projects that use one name on one machine share one too.
+//!
+//! # The write path
+//!
+//! One picture of a write, from the command to the warnings; [`commit`] has the same
+//! picture with each step spelled out.
+//!
+//! ```text
+//!   Workspace::tag / add / approve_cs / ingest / ...        (&mut self)
+//!        |
+//!        |  Model::load -> decide -> Draft { events, texts, check results }
+//!        v
+//!   gate     machine check -> secret scan -> leak lint   refused: nothing written
+//!        |
+//!        v
+//!   append   texts, then events, into the store(s)       already there = success
+//!        |
+//!        v
+//!   notify   Model::load again; cache -> map -> [status md] -> [changelog md]
+//!        |
+//!        v
+//!   Result { events, warnings }    a failed subscriber is a warning, no undo
+//! ```
+//!
 //! # The two layers of a gate (CHECK)
 //!
 //! Each stage has a gate with a machine layer and a human layer. The machine layer
@@ -49,8 +111,10 @@
 //! the current revision; the person types no hash. An older one can be named. A dirty
 //! working tree stops the approval ("commit first") and there is no override. The pin
 //! check and the test run use the very revision that is recorded, and the pin check
-//! reads test files only, in both directions (a pin the item declares that no test
-//! carries, and a tag in the tests that nothing declares).
+//! reads the files under the scan directories (`paths.scan_dirs`; `src` and `tests`
+//! by default) in both directions: a pin the item declares that no file carries, and
+//! a tag in those files that the Spec never declared. The adapter does not tell test
+//! files from other files there: any text file under a scan directory counts.
 //!
 //! **CM is a record, not a state.** [`record_cm`](Workspace::record_cm) takes a
 //! [`CmInput`](check::CmInput): a pass, a *wiring gap* with a hint at the missing item

@@ -13,6 +13,19 @@
 //! | `files` | `path`, `mtime`, `size`, `raw` of each document |
 //! | `files_fts` | an FTS5 index of the text, one row per file, with the same `rowid` as `files` |
 //!
+//! # A cache per worktree, never merged
+//!
+//! Each worktree has its own `index.db`, because its rows describe the files that
+//! worktree holds. The directory is in `.gitignore` (`whyshelf init` puts it there),
+//! so a merge never brings one in, and two worktrees of a project can disagree about
+//! the cache without any harm: each mirrors its own checkout. What a merge, a rebase
+//! or a branch switch changes in the documents shows up as files whose stamps differ
+//! from the rows; the next command's ingest reads those files, and if there are more
+//! than `ingest.rebuild_threshold` of them it replaces the whole cache instead of
+//! patching it. `whyshelf rebuild` does that on request. The cache is read for two
+//! things only: the stamps (what changed) and the full-text search of `find`; the
+//! state of an entity is never taken from it.
+//!
 //! # One thread owns the connection
 //!
 //! `rusqlite-isle` keeps the SQLite connection on a thread of its own and gives the

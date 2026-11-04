@@ -52,7 +52,8 @@ already have is equally fine; that choice is your setup's.
 
 `just check` is the definition of green, and CI runs it and nothing else. It
 formats, lints with warnings denied, tests (the architecture rules in
-`arch-lint.toml` included), and runs `cargo deny`.
+`arch-lint.toml` and the doctests included), builds the documentation with
+warnings denied (`just rust-doc`), and runs `cargo deny`.
 
 Report what was actually run. "I did not verify X" is a usable report; a green
 claim resting on a recipe nobody ran is not.
@@ -125,12 +126,13 @@ a human hand.
 
 ## Documentation
 
-API detail lives in the rustdoc (`cargo doc`): what a type is and what a
-function promises. When two texts disagree the code wins, then the doc comment;
-a comment contradicting an issue is a finding about the issue.
-
-Decisions that outlive a single change go under `docs/adr/`, one decision per
-file, with the measurement that settled it.
+Documentation lives in RustDoc only: crate and module docs (`//!`) and item docs
+(`///`), with diagrams as ASCII in code blocks tagged `text`. There is no `docs/`
+directory and no other prose document; concepts, design, file formats, settings,
+the command line, compatibility and known limits are in the rustdoc, beside the
+code they describe. `cargo doc` must be warning-free (`just rust-doc`, part of
+`just check`). When two texts disagree the code wins, then the doc comment; a
+comment contradicting an issue is a finding about the issue.
 
 Four rules for writing that prose:
 

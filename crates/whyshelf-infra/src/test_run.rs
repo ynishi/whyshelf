@@ -15,6 +15,34 @@
 //! The command's own output is collected and dropped: a tool server speaks on its
 //! standard output, so a test run must never write there. The outcome is the exit
 //! status: zero passes, anything else fails.
+//!
+//! ```text
+//!   run(revision, command)
+//!     |
+//!     |  revision == HEAD  and  tree clean (outside .whyshelf/)?
+//!     |
+//!     +-- yes --> run `sh -c <command>` in the project root ------------+
+//!     |                                                                  |
+//!     +-- no  --> git worktree add --detach                              |
+//!                   <root>/.whyshelf/cache/rev-<12 hex>-<pid>-<n>  <rev> |
+//!                        |                                               |
+//!                        v                                               |
+//!                 run `sh -c <command>` in that checkout                 |
+//!                        |                                               |
+//!                        v                                               |
+//!                 git worktree remove --force <checkout>                 |
+//!                        |   a failed removal is an error, returned       |
+//!                        v                                               v
+//!                 TestOutcome::Passed (exit 0) | Failed (anything else)
+//!
+//!   open():  git worktree prune   clears a checkout left by a killed run
+//! ```
+//!
+//! Two things to know about a run at another revision. The command is the one in the
+//! settings **as they are**, not the one the revision had. And the checkout holds the
+//! tracked files of that revision only: what a build leaves untracked in the working
+//! tree (build output, installed dependencies) is not there, so the
+//! command starts as it would in a fresh clone.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};

@@ -22,7 +22,8 @@
 //! type a hash. An older revision can be named explicitly. A dirty working tree
 //! stops the approval ("commit first"); there is no override. The pin check and
 //! the test run use the same revision that is recorded, and the pin check looks
-//! only at test files.
+//! only at the files under the scan directories of the settings (the application
+//! passes the tags it found as an `ImplView`).
 //!
 //! # What an approval records: [`GateBinding`]
 //!
@@ -35,6 +36,33 @@
 //! | CM | Spec, `hyp_hash` | the event id of the CS approval that fixed that `hyp_hash` | nothing: a CM is a one-time record |
 //!
 //! A CS approval also records the `hyp_hash` it fixed, so a later CM can find it.
+//!
+//! The same, drawn along the chain. Each approval is an event that names its own
+//! target at a hash (`=>`) and the upstream facts it stood on (`->`); a later change
+//! of any of those hashes is what makes the approval Stale or Modified.
+//!
+//! ```text
+//!   Finding      CR  => Finding @ finding hash
+//!      ^                (no upstream)
+//!      |
+//!   Spec         CS  => Spec @ contract_hash          + hyp_hash fixed here
+//!      ^                -> each ground: Finding @ its hash
+//!      |
+//!      +-------- CM  => Spec @ hyp_hash               + result (pass |
+//!      |                -> the id of the CS event        fail-wiring | fail-hyp)
+//!      |                   that fixed that hyp_hash   (a record, never Modified)
+//!   Design       CI  => Design @ design_hash
+//!      ^                -> Spec @ contract_hash
+//!      |
+//!   Item         CA  => Item @ item hash              + revision + test outcome
+//!                       -> Design @ design_hash
+//! ```
+//!
+//! A hash that is not in an approval's own row does not matter to it: editing a
+//! Design Notes section changes no `design_hash`, and a Design records the Spec's
+//! `contract_hash`, so any change to the Spec's pins, hypotheses, grounds or
+//! Contract reaches the Design, while a change to the Spec's supplementary
+//! sections does not.
 //!
 //! # Approved is a question about a set
 //!

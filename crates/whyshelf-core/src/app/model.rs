@@ -7,6 +7,47 @@
 //! items. It is derived data: nothing in it is written back, and a use case that
 //! writes loads a new one afterwards.
 //!
+//! # The read path, second half: from events and files to a state
+//!
+//! [`Model::load`] does all of this, every time; the cache is not consulted (it is
+//! used by ingest to find what changed, and by `find` for full-text search). The
+//! views and the machine checks read the loaded model and nothing else.
+//!
+//! ```text
+//!   repo store events        private store events
+//!   .whyshelf/events/        <data dir>/<project>/events/
+//!            \                    /
+//!             v                  v
+//!   1. Snapshot: each store folded (classification: tags, kind, owner, path,
+//!      alias, conflicts), and one ledger of approvals over both stores
+//!                              |
+//!   2. for each registered doc: read its file (CurrentPort), build the entity,
+//!      resolving references through the alias index; a file that cannot be
+//!      built stays as Unparsed, with the reasons
+//!                              |
+//!   3. evaluate, upstream to downstream, each stage taking the stage above:
+//!        Findings --> Specs --> Designs          (state on two axes + causes)
+//!                              |
+//!   4. the code and the baseline (ports): current revision, pins found in the
+//!      scan directories at that revision, which approved revisions reached
+//!      the baseline  =  ImplView
+//!                              |
+//!   5. evaluate each item of each Design that parsed (state, integration,
+//!      pin progress); a number with no registration yet is "pending"
+//!                              |
+//!   6. list the document directories again: a file no entity owns is
+//!      "unregistered"
+//!                              v
+//!                           Model
+//!                              |
+//!        status | get | find | trace | changelog | audit | check_*  (views, pure)
+//! ```
+//!
+//! Step 2 reads every registered file, and step 4 asks Git for the pins and the
+//! baseline, each time a model is loaded. A write loads a model before it decides and
+//! again after it has written (to tell the subscribers), so a command costs at least
+//! one full load.
+//!
 //! # Two stores, one model
 //!
 //! The repo store and the private store are folded separately, because the event

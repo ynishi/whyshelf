@@ -21,7 +21,7 @@
 //! | [`StorePort`] | the event log and the stored objects of the repo store and the private store, and the generated files |
 //! | [`CurrentPort`] | the document files: a listing with stamps, and one file read and parsed (read only) |
 //! | [`ScaffoldPort`] | creating a new document file from a template, never overwriting |
-//! | [`CodeScanPort`] | the pins found in test files at a given revision |
+//! | [`CodeScanPort`] | the pins found in the scan directories at a given revision |
 //! | [`TestRunPort`] | running the tests at a given revision |
 //! | [`IndexCachePort`] | a cache of file stamps and searchable text (rebuildable, never a source of truth) |
 //! | [`SecretScanPort`] | finding secrets in text before it is written |
@@ -425,8 +425,10 @@ pub trait CodeScanPort: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// The pins in the test files under `scan_dirs` at `revision`, with where
-    /// each was found. Reads the revision, not the working tree.
+    /// The pins in the files under `scan_dirs` at `revision`, with where
+    /// each was found. Reads the revision, not the working tree. Which files in
+    /// those directories are tests is not the port's business; it reports a pin
+    /// wherever the pattern matches.
     fn pins_at(
         &self,
         revision: &RevisionId,

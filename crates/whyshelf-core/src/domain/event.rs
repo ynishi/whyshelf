@@ -31,6 +31,31 @@
 //! Whether one event "saw" another is defined by ancestry, never by time. The time
 //! `at` is for display and decides nothing.
 //!
+//! ```text
+//!  one stream (all events are about one entity; an arrow is "lists as head")
+//!
+//!   R  Registered          heads = {}
+//!   ^
+//!   |
+//!   E1 Reclassified        heads = {R}       <- tips seen by E1: {R}
+//!   ^  ^
+//!   |  +-----------------+     two branches each wrote one event after E1
+//!   |                    |
+//!   E2 Revised           E3 Reclassified     <- the merge brings both files in;
+//!   heads = {E1}         heads = {E1}           tips are now {E2, E3}: a fork
+//!   ^                    ^
+//!   +----------+---------+
+//!              |
+//!              J  any next write   heads = {E2, E3}   <- the join: one tip {J}
+//!
+//!   event id = hash( kind, target, kind-specific content, heads )
+//!                                   (not at, not by, not the file format version)
+//! ```
+//!
+//! Nothing resolves the fork but the next write: it reads every tip, lists them
+//! all as its heads and so becomes the single tip. Until then a value that two
+//! branches set differently is reported as a conflict (see `classification`).
+//!
 //! # Identifiers
 //!
 //! An [`EventId`] is the hash of the kind, the target, the kind-specific content

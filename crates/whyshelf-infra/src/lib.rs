@@ -19,6 +19,51 @@
 //! `<project>/.whyshelf/cache/index.db`. The cache directory is not committed;
 //! `whyshelf init` adds it to `.gitignore`.
 //!
+//! ```text
+//!   open(root)                                          failure
+//!     |
+//!     1  canonicalize root ............................. OpenError::Root
+//!     |
+//!     2  config::load: <root>/.whyshelf.toml ........... OpenError::Config
+//!     |    private store = <data dir>/<project>,
+//!     |    the data dir from the environment (UserDirs)
+//!     |
+//!     3  git worktree prune ............................ OpenError::Git
+//!     |    (clears leftovers of a killed test run;
+//!     |     fails outside a Git repository)
+//!     |
+//!     4  build the secret scanner ...................... OpenError::Secret
+//!     |
+//!     5  open the cache: <root>/.whyshelf/cache/index.db  OpenError::Cache
+//!     |    (starts the cache's thread; last, so that a failure above
+//!     |     never leaves it running)
+//!     |
+//!     6  bundle the adapters as InfraPorts:
+//!          GitRevision, FsStore (repo store, private store), FsCurrent,
+//!          FsScaffold, GitCodeScan, GitTestRun, SqliteCache,
+//!          RegexSecretScan, SystemClock, UuidV7Ids
+//!        Workspace::new(ports, config)  ->  (Workspace<InfraPorts>, Shutdown)
+//! ```
+//!
+//! Opening creates the cache directory, and neither store's `events/` nor `objects/`:
+//! those appear at the first write. [`open_with`] is [`open`] with the environment given as a value,
+//! which is how a test or a program places the private store itself:
+//!
+//! ```no_run
+//! use std::path::Path;
+//! use whyshelf_infra::{config::UserDirs, open_with};
+//!
+//! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
+//! let dirs = UserDirs::default().with_data_dir("/data/whyshelf");
+//! let (workspace, shutdown) = open_with(Path::new("."), &dirs).await?;
+//! // ... use the workspace ...
+//! # let _ = &workspace;
+//! shutdown.close().await?;
+//! # Ok(())
+//! # }
+//! # fn main() {}
+//! ```
+//!
 //! # The adapters
 //!
 //! | module | port or job |

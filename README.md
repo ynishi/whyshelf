@@ -6,6 +6,21 @@ Ground specs in findings: hash-pinned Finding -> Spec -> Design -> Impl with eve
 cargo install whyshelf-cli   # installs the `whyshelf` command
 ```
 
+## Documentation
+
+The documentation is the RustDoc, and nothing else: concepts, the file formats,
+settings, the command line and its walkthrough, the tool server, compatibility and
+the known limitations. Build and read it with:
+
+```sh
+just rust-doc
+```
+
+Cargo prints the path of each page it generates. Start at the `whyshelf` crate
+page, which has a map from each topic to the module that documents it. The
+command line's guide is the page of the `whyshelf` binary (the `whyshelf-cli`
+crate), built as the second step.
+
 ## Crates
 
 | crate | role | depends on |

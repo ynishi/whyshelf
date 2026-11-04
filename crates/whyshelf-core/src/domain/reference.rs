@@ -28,6 +28,22 @@
 //! free. Identifiers in the private store carry no meaning (UUID v7); the human
 //! readable alias lives only inside the private store.
 //!
+//! # Where the code stops short of this
+//!
+//! The three outcomes above describe the intent; the application applies them in
+//! one place and not everywhere.
+//!
+//! - **`get`** shows an unresolved `private:` or `ext:` reference as unresolved, and
+//!   a URL as external. That is the case in which "unresolved, not an error" holds.
+//! - **A `private:` reference in `grounds` or `spec`** that the private store cannot
+//!   answer (a public clone, a CI machine) is kept as the identifier it carries, and
+//!   the entity that names it is then found to have an upstream that does not exist:
+//!   it is **Invalid** with a dangling reference, not "unresolved". A published Spec
+//!   that stands on a private Finding therefore reads as Invalid wherever the
+//!   private store is missing.
+//! - **An `ext:` reference or a URL in `grounds` or `spec`** is refused as a field
+//!   that cannot stand for an entity of this project; `ext:` has no resolver.
+//!
 //! # Item references
 //!
 //! An item is named `<design-ref>#<n>`. A Spec reference followed by `#<n>`

@@ -14,6 +14,37 @@
 //! - **Drift of generated files.** [`export_drift`] tells whether a generated file
 //!   was edited by hand or has fallen behind its sources.
 //!
+//! # The violations of a gate, and how to clear each
+//!
+//! A check returns a list of [`CheckViolation`]s; the command line prints each as one
+//! line (the third column) and exits with status 1 when there is any. The list is
+//! complete: fix them together, then run the check again.
+//!
+//! | violation | gate | the command line says | what it means | how to clear it |
+//! |---|---|---|---|---|
+//! | `EmptyBody` | CR | the Finding has no body | nothing is written under the front matter | write what was seen and how it is known |
+//! | `MeasuredDataNotLabelledMeasured` | CR | a measured_data Finding must be labelled `evidence: measured` | a measurement carries a weaker label | set `evidence: measured`, or change `finding_type` if it was not measured |
+//! | `Upstream` | CS, CI, CA | upstream *x* is not ready: *why* | an entity this one stands on cannot be depended on yet; *why* is an [`UpstreamProblem`] (next table) | clear the problem upstream first, nearest to the Finding first |
+//! | `NoPinsDeclared` | CS | the Spec declares no pin | `accept.pins` is empty | declare at least one `PIN-*` or `UT-*` with its contract sentence |
+//! | `NoHypsDeclared` | CS | the Spec declares no hypothesis | `accept.hyp` is empty | declare at least one `HYP-*` with a metric and a target |
+//! | `PinCoverage` | CI | pin coverage: *issue* | the Design and the Spec disagree about a pin; *issue* is a [`CoverageIssue`] | assign the pin to an item, or declare it in the Spec |
+//! | `PinMissingInTests` | CA | the item declares *pin* but no test carries it | no `@pin: ...` tag for it in the scanned directories, at the revision | add the tag to the test that holds the contract, commit, check again |
+//! | `PinUndeclaredInTests` | CA | a test carries *pin* but the Spec never declared it | a tag in the scanned directories at the revision that the Spec does not list (it counts wherever it is, not only on this item's tests) | declare it in the Spec, or take the tag off the test |
+//! | `TestsFailed` | CA | the tests did not pass | `test.command` exited with a non-zero status at the revision | make the tests pass at that revision |
+//! | `ItemNotInDesign` | CA | the Design no longer has this item | the Design's item at that number is not the item that was handed to the check (a guard: the application takes the item from the same Design, so it is not expected) | run the command again |
+//! | `CsApprovalNotFound` | CM | no CS approval fixed the hypotheses of this Spec | there is no unrevoked CS approval to compare with | approve the Spec (CS) first |
+//! | `HypothesisChanged` | CM | the hypotheses changed after CS fixed them | `accept.hyp` is not what the CS approval fixed | put the hypotheses back, or approve CS again and measure against the new ones |
+//!
+//! What can be wrong with an upstream ([`UpstreamProblem`]):
+//!
+//! | problem | the command line says | what it means | how to clear it |
+//! |---|---|---|---|
+//! | `Missing` | it does not exist | the reference names no entity | correct the alias or identifier, or register the file it should name |
+//! | `Invalid` | it is invalid | the upstream file does not parse, or breaks a rule | fix the upstream file (`whyshelf status` shows the reasons) |
+//! | `NotApproved` | it is not approved | the upstream is a Draft, or was edited after its approval (Modified) | run the upstream's own gate and approve it |
+//! | `Stale` | it is stale | the upstream is approved, but something above it changed | run the gates again from the top: the first stale one, then the next |
+//! | `Blocked` | it is blocked | the upstream is approved, but something above it is not ready | follow the NEXT column of `whyshelf status` from the top |
+//!
 //! # Generated files
 //!
 //! A generated file (the map, a status or changelog Markdown) carries a marker with
@@ -47,25 +78,43 @@ use super::state::{Approval, EntityState, Upstream};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UpstreamProblem {
     /// The entity is not there (a dangling reference).
+    ///
+    /// Fix: correct the alias or identifier, or register the file it should name.
     Missing,
     /// The entity is invalid or did not parse.
+    ///
+    /// Fix: repair the upstream file.
     Invalid,
-    /// The entity has no approval for its current content.
+    /// The entity has no approval for its current content (a Draft, or edited after
+    /// its approval).
+    ///
+    /// Fix: run the upstream's own gate and approve it.
     NotApproved,
     /// The entity is approved but stale.
+    ///
+    /// Fix: approve again from the top, the first stale entity first.
     Stale,
     /// The entity is approved but blocked.
+    ///
+    /// Fix: follow the next command of the status from the top.
     Blocked,
 }
 
-/// One reason a gate's machine check fails.
+/// One reason a gate's machine check fails. The module documentation has a table
+/// of the violations with the command line's sentence and how to clear each.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckViolation {
     /// CR: the Finding has no body.
+    ///
+    /// Fix: write the body under the front matter.
     EmptyBody,
     /// CR: a measured-data Finding is not labelled as measured.
+    ///
+    /// Fix: set `evidence: measured`, or use another `finding_type`.
     MeasuredDataNotLabelledMeasured,
     /// An upstream entity is not ready to be depended on.
+    ///
+    /// Fix: see [`UpstreamProblem`] for the problem named.
     Upstream {
         /// The upstream entity.
         upstream: EntityId,
@@ -73,28 +122,48 @@ pub enum CheckViolation {
         problem: UpstreamProblem,
     },
     /// CS: the Spec declares no PIN or unit-test tag.
+    ///
+    /// Fix: declare at least one under `accept.pins`.
     NoPinsDeclared,
     /// CS: the Spec declares no hypothesis.
+    ///
+    /// Fix: declare at least one under `accept.hyp`.
     NoHypsDeclared,
     /// CI: the Design and the Spec disagree about a pin.
+    ///
+    /// Fix: assign every pin of the Spec to an item, and assign no pin the Spec
+    /// does not declare.
     PinCoverage(CoverageIssue),
     /// CA: the item's pin is not carried by any test at the revision.
+    ///
+    /// Fix: add the `@pin: ...` tag to the test, commit, and check again.
     PinMissingInTests {
         /// The pin.
         pin: PinId,
     },
     /// CA: a test carries a tag the Spec never declared.
+    ///
+    /// Fix: declare the tag in the Spec, or remove it from the test.
     PinUndeclaredInTests {
         /// The tag.
         pin: PinId,
     },
     /// CA: the tests did not pass.
+    ///
+    /// Fix: make `test.command` pass at the revision.
     TestsFailed,
     /// CA: the item is not (or no longer) the one the Design has at that number.
+    ///
+    /// Fix: run the command again.
     ItemNotInDesign,
     /// CM: the CS approval that should have fixed the hypotheses is not there.
+    ///
+    /// Fix: approve the Spec (CS) first.
     CsApprovalNotFound,
     /// CM: the hypotheses were changed after the CS approval fixed them.
+    ///
+    /// Fix: restore the hypotheses, or approve CS again and measure against the
+    /// new ones.
     HypothesisChanged {
         /// The hash the CS approval fixed.
         fixed: ContentHash,

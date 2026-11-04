@@ -18,6 +18,38 @@
 //! The draft also keeps the **heads**. An event lists every tip of its target's
 //! stream as the writer saw it; when a draft writes several events to one stream, each
 //! lists the one before it, so a batch is a chain and never a fork.
+//!
+//! ```text
+//!   command (add, tag, approve_cs, ingest, ...)      Workspace, &mut self
+//!      |
+//!      |  load Model; decide; fill a Draft:
+//!      |    events (each lists the tips it saw), texts to store,
+//!      |    machine-check violations of the gate being approved
+//!      v
+//!   +--------------------------- commit -------------------------------+
+//!   | 1. GATE  (nothing written yet; the first objection ends it)      |
+//!   |      a) machine check   any violation          -> CheckFailed    |
+//!   |      b) secret scan     each text to be stored -> SecretFound    |
+//!   |      c) leak lint       each text for the repo store, against    |
+//!   |                         private aliases/titles -> LeakFound      |
+//!   |                                                                  |
+//!   | 2. APPEND  (idempotent: "already there" is success)              |
+//!   |      texts  -> store.put_object   first, so no event dangles     |
+//!   |      events -> store.append       in draft order                 |
+//!   |                                                                  |
+//!   | 3. NOTIFY  (cannot stop or undo anything)                        |
+//!   |      Model::load again, then each subscriber in turn:            |
+//!   |        cache -> map -> [status md] -> [changelog md]             |
+//!   |      a failing subscriber adds a SubscriberWarning               |
+//!   +------------------------------+-----------------------------------+
+//!                                  |
+//!                                  v
+//!                 Committed { events: ids in order, warnings }
+//! ```
+//!
+//! The checks run in the order drawn: the machine check of an approval is looked at
+//! before the texts are scanned. Only texts (the stored objects) are scanned for
+//! secrets and for private names; the fields of an event are not.
 
 use std::collections::{BTreeMap, BTreeSet};
 

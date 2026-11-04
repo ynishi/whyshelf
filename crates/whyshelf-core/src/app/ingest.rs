@@ -28,6 +28,46 @@
 //! file (listed in [`IngestReport::blocked`], and retried by the next ingest, since
 //! its cache row is not updated) without stopping the others. The files that pass are
 //! written together.
+//!
+//! # The read path, first half: from file changes to events
+//!
+//! ```text
+//!   document files (edited by hand)            cache rows from the last run
+//!   docs/finding, docs/spec, docs/design,      path, mtime, size, raw hash
+//!   the watched dirs, every registered path
+//!            \                                      /
+//!             +--- list (path, mtime, size) ------+
+//!                              |  compare stamps
+//!                              v
+//!                    changed files          more than `rebuild_threshold`,
+//!                              |            or `rebuild`?  -> read every file,
+//!                              |                              replace the cache
+//!                              v
+//!                  read + normalize + parse -> Candidate
+//!                              |             (a raw value, or Unparsed + reasons)
+//!      one candidate at a time |
+//!        registered path --> build entity; version differs?  --> Revised (+ text)
+//!                            a Design with a new item number --> Registered (item)
+//!        unregistered    --> text equals a vanished file's    --> Moved
+//!                            last text? otherwise: listed as unregistered
+//!                              |
+//!                  gate this file's part alone (secret scan, leak lint)
+//!                     refused --> `blocked`, the others go on
+//!                              |
+//!                              v
+//!               one draft -> commit (gate, append, notify)      [write path]
+//!                              |
+//!                              v
+//!               cache: rows of the files that passed are written,
+//!               rows of vanished files removed (or the whole cache replaced)
+//!                              |
+//!                              v
+//!               the next Model::load sees the new events and the same files
+//!                                                       [read path, 2nd half]
+//! ```
+//!
+//! The second half, from the events and the files to a state, is
+//! [`Model::load`](super::model::Model::load).
 
 use std::collections::{BTreeMap, BTreeSet};
 
