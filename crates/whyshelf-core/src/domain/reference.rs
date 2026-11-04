@@ -131,6 +131,45 @@ impl FromStr for ProjectName {
     }
 }
 
+/// The identity of a project: a UUID that `whyshelf init` makes and the settings file
+/// keeps.
+///
+/// The name of a project is a natural key: two projects may share it. The private
+/// store of a project is therefore placed by this surrogate as well, and the id
+/// travels with the repository, so every clone and worktree of it finds the same
+/// store. Any UUID is read; `init` makes a version 7.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ProjectId(uuid::Uuid);
+
+impl ProjectId {
+    /// Wrap a UUID.
+    pub fn new(uuid: uuid::Uuid) -> Self {
+        Self(uuid)
+    }
+
+    /// The UUID inside.
+    pub fn as_uuid(&self) -> uuid::Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for ProjectId {
+    /// The hyphenated lowercase form: the only text that reaches a path.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.hyphenated())
+    }
+}
+
+impl FromStr for ProjectId {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        uuid::Uuid::parse_str(s)
+            .map(Self)
+            .map_err(ValueError::ProjectIdNotUuid)
+    }
+}
+
 /// A reference without a mark: an identifier or an alias.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LocalRef {
@@ -543,6 +582,15 @@ mod tests {
 
     use super::*;
     use crate::domain::id::test_support::{did, eid};
+
+    #[test]
+    fn a_project_id_reads_any_uuid_and_prints_the_hyphenated_lowercase_form() {
+        let text = "0192F3A4-5B6C-7D8E-9FA0-B1C2D3E4F506";
+        let id: ProjectId = text.parse().unwrap();
+        assert_eq!(id.to_string(), text.to_ascii_lowercase());
+        assert!("not-a-uuid".parse::<ProjectId>().is_err());
+        assert!("../escape".parse::<ProjectId>().is_err());
+    }
 
     #[test]
     fn each_kind_of_reference_parses_and_prints_back() {

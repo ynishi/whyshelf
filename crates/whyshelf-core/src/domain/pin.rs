@@ -18,6 +18,7 @@ use std::str::FromStr;
 
 use super::canon::{Canon, ToCanon};
 use super::error::ValueError;
+use super::location::CodeLocation;
 use super::nonempty::NonBlank;
 
 fn is_name_char(c: char) -> bool {
@@ -83,6 +84,34 @@ impl FromStr for PinId {
 impl ToCanon for PinId {
     fn to_canon(&self) -> Canon {
         Canon::str(self.0.as_str())
+    }
+}
+
+/// A pin tag found in a test whose name is not a [`PinId`]: `@pin: PIN-foo`.
+///
+/// The scan does not drop it. A tag that was meant as a pin and does not count is the
+/// kind of mistake that makes a check pass for the wrong reason, so it is carried to
+/// the gate, which reports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MalformedPin {
+    location: CodeLocation,
+    text: NonBlank,
+}
+
+impl MalformedPin {
+    /// The tag at a place, with the text it named.
+    pub fn new(location: CodeLocation, text: NonBlank) -> Self {
+        Self { location, text }
+    }
+
+    /// Where the tag was found.
+    pub fn location(&self) -> &CodeLocation {
+        &self.location
+    }
+
+    /// The text it named.
+    pub fn text(&self) -> &NonBlank {
+        &self.text
     }
 }
 

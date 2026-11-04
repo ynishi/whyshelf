@@ -26,6 +26,7 @@ use std::collections::BTreeMap;
 
 use crate::domain::actor::Actor;
 use crate::domain::approval::{Attestation, CmResult, Gate};
+use crate::domain::evaluate::Evaluated;
 use crate::domain::event::{EventId, RecordBody};
 use crate::domain::gate::{
     self, CaInput, Checked, CiInput, CrInput, CsInput, Passed, Violations, ca, ci, cm, cr, cs,
@@ -35,6 +36,7 @@ use crate::domain::id::{DesignId, EntityId, FindingId, SpecId};
 use crate::domain::lint::CheckViolation;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::reference::{ItemRef, Ref};
+use crate::domain::spec::DeclaredPins;
 
 use super::Workspace;
 use super::commit::Committed;
@@ -52,6 +54,15 @@ pub struct CheckReport {
 }
 
 impl CheckReport {
+    /// A report of what a check of `gate` found on `target`; no violation is a pass.
+    pub fn new(gate: Gate, target: EntityId, violations: Vec<CheckViolation>) -> Self {
+        Self {
+            gate,
+            target,
+            violations,
+        }
+    }
+
     /// The gate.
     pub fn gate(&self) -> Gate {
         self.gate
@@ -272,12 +283,17 @@ impl<P: Ports> Workspace<P> {
         let tests = self
             .ports
             .test_run()
-            .run(&revision, self.config.test().command())
+            .run(
+                &revision,
+                self.config.test().command(),
+                self.config.test().timeout(),
+            )
             .await
             .map_err(AppError::port(PortName::TestRun))?;
         let states = model.states();
         let designs: BTreeMap<_, _> = model.designs().iter().map(|(id, ev)| (*id, ev)).collect();
-        let specs: BTreeMap<_, _> = model.specs().iter().map(|(id, ev)| (*id, ev)).collect();
+        // A tag in a test is undeclared when no Spec of the project declares it.
+        let declared = DeclaredPins::of(model.specs().values().filter_map(Evaluated::entity));
         Ok(Prepared {
             gate: Gate::Ca,
             target: id,
@@ -286,7 +302,7 @@ impl<P: Ports> Workspace<P> {
                 item: item.item(),
                 evaluation: item.evaluation(),
                 designs,
-                specs,
+                declared: &declared,
                 states: &states,
                 impl_view: &impl_view,
                 revision,

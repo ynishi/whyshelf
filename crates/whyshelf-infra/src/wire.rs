@@ -103,7 +103,9 @@ pub enum WireError {
     #[error("the event file is not of a known shape")]
     Json(#[source] serde_json::Error),
     /// The file has no `v`, or one this build cannot read.
-    #[error("the event file has format version {found:?}; this build reads version {VERSION}")]
+    #[error(
+        "the event file has format version {found:?}; this build reads version {VERSION} (`whyshelf migrate` counts the versions of every file)"
+    )]
     UnsupportedVersion {
         /// The `v` found, if there was a number.
         found: Option<u64>,
@@ -768,6 +770,19 @@ pub fn encode(event: &Event) -> Result<String, WireError> {
     let mut text = serde_json::to_string_pretty(&EventV1::of(event)).map_err(WireError::Json)?;
     text.push('\n');
     Ok(text)
+}
+
+/// The `v` of an event file, read without reading the rest of the file as an event.
+///
+/// `None` for a file that is not JSON and for one whose `v` is missing or is no
+/// whole number. It is what [`crate::format`] counts: a version that this build cannot
+/// read is still a version, and it is counted as such.
+pub fn version_of(bytes: &[u8]) -> Option<u64> {
+    #[derive(serde::Deserialize)]
+    struct Head {
+        v: Option<u64>,
+    }
+    serde_json::from_slice::<Head>(bytes).ok()?.v
 }
 
 /// Read an event file, choosing the reader by its `v`.

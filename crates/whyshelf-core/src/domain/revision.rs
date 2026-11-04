@@ -24,6 +24,43 @@ use super::canon::{Canon, ToCanon};
 use super::error::ValueError;
 use super::hash::ContentHash;
 
+/// What the version-control side can say of one revision against the baseline.
+///
+/// Three answers, not two: a clone that lacks the baseline ref or the approved commit
+/// (a shallow or single-branch checkout of a CI machine) cannot say "no", and calling
+/// it "no" would show work as pending that may well be integrated. The command goes
+/// on with the question open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum IntegrationFact {
+    /// The revision has reached the baseline.
+    Integrated,
+    /// The revision has not reached the baseline.
+    NotIntegrated,
+    /// It cannot be told here.
+    Unknown {
+        /// Why not.
+        reason: UnknownIntegration,
+    },
+}
+
+/// Why [`IntegrationFact::Unknown`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum UnknownIntegration {
+    /// The baseline is not a revision of this repository (the ref is not fetched).
+    BaselineUnresolved,
+    /// The revision is not in this repository (not fetched, or beyond a shallow cut).
+    RevisionAbsent,
+}
+
+impl fmt::Display for UnknownIntegration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::BaselineUnresolved => "the baseline is not in this clone",
+            Self::RevisionAbsent => "the approved revision is not in this clone",
+        })
+    }
+}
+
 /// An opaque identifier of a revision of the code.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RevisionId(String);

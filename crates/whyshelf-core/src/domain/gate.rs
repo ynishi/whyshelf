@@ -52,7 +52,9 @@
 
 use std::collections::BTreeMap;
 
-use super::approval::{ApprovalSet, Attestation, CmResult, CsFixing, Gate, Pinned, TestOutcome};
+use super::approval::{
+    ApprovalSet, Attestation, CmResult, CsFixing, Gate, Pinned, TestOutcome, TestsRun,
+};
 use super::design::{Design, WorkItem};
 use super::evaluate::{Evaluated, ImplView, ItemEvaluation, ItemKey, States, Subject};
 use super::finding::{EvidenceLabel, Finding, FindingSource};
@@ -60,7 +62,7 @@ use super::id::{DesignId, EntityId, FindingId, SpecId};
 use super::lint::{CheckViolation, UpstreamProblem, upstream_problems};
 use super::nonempty::NonEmptyVec;
 use super::revision::{Revision, RevisionId};
-use super::spec::Spec;
+use super::spec::{DeclaredPins, Spec};
 use super::state::{Approval, Completeness, EntityState, InvalidReason};
 
 /// Proof that a gate's machine check found nothing: the only way to record an
@@ -358,16 +360,16 @@ pub struct CaInput<'a> {
     pub evaluation: &'a ItemEvaluation,
     /// The Designs, as evaluated.
     pub designs: BTreeMap<DesignId, &'a Evaluated<Design>>,
-    /// The Specs, as evaluated.
-    pub specs: BTreeMap<SpecId, &'a Evaluated<Spec>>,
+    /// The pins that any Spec of the project declares.
+    pub declared: &'a DeclaredPins,
     /// The state of every entity, the Design's among them.
     pub states: &'a States<'a>,
-    /// The pins found in the tests at the revision.
+    /// The pins found in the tests at the revision, and the tags that are none.
     pub impl_view: &'a ImplView,
     /// The revision the tests and the pin scan ran at, and that the approval records.
     pub revision: RevisionId,
-    /// What the tests did at that revision.
-    pub tests: TestOutcome,
+    /// What running the tests at that revision came to.
+    pub tests: TestsRun,
 }
 
 /// CA, layer 1: the Design passed CI, is current and can be read in full here; the
@@ -387,7 +389,7 @@ pub mod ca {
             key,
             item,
             designs,
-            specs,
+            declared,
             states,
             impl_view,
             revision,
@@ -412,22 +414,31 @@ pub mod ca {
                 violations.push(CheckViolation::PinMissingInTests { pin: pin.clone() });
             }
         }
-        let declared = design
-            .and_then(|d| specs.get(&d.spec()))
-            .and_then(|evaluated| evaluated.entity());
-        if let Some(spec) = declared {
-            for pin in impl_view.pins_at_revision().keys() {
-                if !spec.pins().contains_key(pin) {
-                    violations.push(CheckViolation::PinUndeclaredInTests { pin: pin.clone() });
-                }
+        for pin in impl_view.pins_at_revision().keys() {
+            if !declared.contains(pin) {
+                violations.push(CheckViolation::PinUndeclaredInTests { pin: pin.clone() });
             }
         }
-        if tests == TestOutcome::Failed {
+        for malformed in impl_view.malformed_pins() {
+            violations.push(CheckViolation::MalformedPin {
+                location: malformed.location().clone(),
+                text: malformed.text().clone(),
+            });
+        }
+        let outcome = match tests {
+            TestsRun::Finished(outcome) => Some(outcome),
+            TestsRun::TimedOut { after } => {
+                violations.push(CheckViolation::TestsTimedOut { after });
+                None
+            }
+        };
+        if outcome == Some(TestOutcome::Failed) {
             violations.push(CheckViolation::TestsFailed);
         }
         settle(
             violations,
             || {
+                let tests = outcome?;
                 design.map(|design| Attestation::Ca {
                     item: Pinned::new(key.id, item.hash(key.design, key.number)),
                     design: Pinned::new(design.id(), *design.design_hash()),
@@ -518,7 +529,9 @@ mod tests {
     use crate::domain::event::{ClassChange, DocKind, Event};
     use crate::domain::finding::test_support::{finding, usage_source};
     use crate::domain::id::test_support::{did, eid, fid, iid, sid};
+    use crate::domain::location::CodeLocation;
     use crate::domain::nonempty::NonBlank;
+    use crate::domain::pin::MalformedPin;
     use crate::domain::spec::test_support::{hyps, pins, spec};
     use crate::domain::state::UnparsedReason;
 
@@ -957,12 +970,16 @@ mod tests {
         )
     }
 
+    fn declared_by(w: &CaWorld) -> DeclaredPins {
+        DeclaredPins::of(w.world.specs.values().filter_map(Evaluated::entity))
+    }
+
     fn run_ca_with(
         w: &CaWorld,
         number: u32,
         item: &WorkItem,
         view: &ImplView,
-        tests: TestOutcome,
+        tests: TestsRun,
     ) -> Checked {
         let states = w.world.states();
         let key = key(number);
@@ -972,7 +989,7 @@ mod tests {
             item,
             evaluation: &evaluation,
             designs: w.world.design_refs(),
-            specs: w.world.spec_refs(),
+            declared: &declared_by(w),
             states: &states,
             impl_view: view,
             revision: RevisionId::from_validated("head".into()).unwrap(),
@@ -982,7 +999,81 @@ mod tests {
 
     fn run_ca(w: &CaWorld, number: u32, pins: &[&str], tests: TestOutcome) -> Checked {
         let it = w.design.items()[&num(number)].clone();
-        run_ca_with(w, number, &it, &view(pins), tests)
+        run_ca_with(w, number, &it, &view(pins), TestsRun::Finished(tests))
+    }
+
+    #[test]
+    fn ca_counts_a_pin_declared_by_any_spec_of_the_project() {
+        // A second Spec declares PIN-OTHER; the tests of the project carry it. The
+        // item of the first Spec must still pass: the tag is declared, by another Spec.
+        let f1 = finding(1, "one");
+        let first = spec(11, &[1], &["PIN-A", "UT-B"]);
+        let second = spec(12, &[1], &["PIN-OTHER"]);
+        let d = design(
+            21,
+            11,
+            vec![(1, item("a", &["PIN-A"])), (2, item("b", &["UT-B"]))],
+        );
+        let events = vec![
+            approve(cr_att(1, f1.hash()), &[]),
+            approve(
+                cs_att(
+                    11,
+                    first.contract_hash(),
+                    first.hyp_hash(),
+                    &[(1, *f1.hash())],
+                ),
+                &[],
+            ),
+            approve(ci_att(21, d.design_hash(), 11, first.contract_hash()), &[]),
+        ];
+        let w = CaWorld {
+            world: World::new(&[&f1], &[&first, &second], &[&d], &events),
+            design: d,
+        };
+        assert!(run_ca(&w, 1, &["PIN-A", "PIN-OTHER"], TestOutcome::Passed).is_ok());
+        assert_eq!(
+            violations(run_ca(
+                &w,
+                1,
+                &["PIN-A", "PIN-NOWHERE"],
+                TestOutcome::Passed
+            )),
+            vec![CheckViolation::PinUndeclaredInTests {
+                pin: "PIN-NOWHERE".parse().unwrap()
+            }]
+        );
+    }
+
+    #[test]
+    fn ca_reports_a_malformed_tag_and_a_timeout_and_records_neither() {
+        let w = ca_world(true);
+        let it = w.design.items()[&num(1)].clone();
+        let at: CodeLocation = "tests/a.rs:9".parse().unwrap();
+        let text = NonBlank::new("PIN-foo").unwrap();
+        let tagged =
+            view(&["PIN-A"]).with_malformed(vec![MalformedPin::new(at.clone(), text.clone())]);
+        assert_eq!(
+            violations(run_ca_with(
+                &w,
+                1,
+                &it,
+                &tagged,
+                TestsRun::Finished(TestOutcome::Passed)
+            )),
+            vec![CheckViolation::MalformedPin { location: at, text }]
+        );
+        let after = std::time::Duration::from_secs(60);
+        assert_eq!(
+            violations(run_ca_with(
+                &w,
+                1,
+                &it,
+                &view(&["PIN-A"]),
+                TestsRun::TimedOut { after }
+            )),
+            vec![CheckViolation::TestsTimedOut { after }]
+        );
     }
 
     #[test]
@@ -1052,7 +1143,7 @@ mod tests {
                 1,
                 &other,
                 &view(&["PIN-A"]),
-                TestOutcome::Passed
+                TestsRun::Finished(TestOutcome::Passed)
             )),
             vec![CheckViolation::ItemNotInDesign]
         );
@@ -1079,11 +1170,11 @@ mod tests {
             item: &w.design.items()[&num(1)],
             evaluation: &evaluation,
             designs: w.world.design_refs(),
-            specs: w.world.spec_refs(),
+            declared: &declared_by(&w),
             states: &states,
             impl_view: &view,
             revision: RevisionId::from_validated("head".into()).unwrap(),
-            tests: TestOutcome::Passed,
+            tests: TestsRun::Finished(TestOutcome::Passed),
         }));
         assert!(
             matches!(&got[..], [CheckViolation::TargetInvalid { reasons }]
@@ -1188,11 +1279,11 @@ mod tests {
                 item: &d.items()[&num(1)],
                 evaluation: &evaluation,
                 designs: designs.iter().map(|(id, ev)| (*id, ev)).collect(),
-                specs: specs.iter().map(|(id, ev)| (*id, ev)).collect(),
+                declared: &DeclaredPins::of(specs.values().filter_map(Evaluated::entity)),
                 states: &states,
                 impl_view: &view,
                 revision: RevisionId::from_validated("head".into()).unwrap(),
-                tests: TestOutcome::Passed,
+                tests: TestsRun::Finished(TestOutcome::Passed),
             })),
             vec![upstream(21, UpstreamProblem::Unresolved)]
         );

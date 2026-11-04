@@ -103,7 +103,9 @@
 //! Each entity has a UUID v7 that never changes ([`id`]). A path is not an identity:
 //! renaming a file or moving it with `mv` keeps its approvals. A human-readable alias
 //! can be added. Classification (tags, kind, owner, alias, path) belongs to the tool
-//! and lives in events, not in files; the tool never rewrites a user's file. Tags are
+//! and lives in events, not in files; the tool never rewrites a user's file. A file's
+//! own classification keys are taken in once, at registration, and compared after
+//! that ([`front`]). Tags are
 //! official (`key:value`, from the project's vocabulary) or extended ([`tag`]).
 //! [`classification::fold`] turns the events into the current classification and
 //! reports conflicts instead of guessing.
@@ -174,6 +176,7 @@
 //! | [`canon`], [`hash`] | canonical encoding and the only place a hash is computed |
 //! | [`id`], [`revision`], [`pin`], [`nonempty`], [`tag`], [`actor`], [`location`], [`mod@reference`] | value objects with checking constructors |
 //! | [`finding`], [`spec`], [`design`] | the three stages with files |
+//! | [`front`] | which key of a front matter is content, classification, another kind's or a mistake |
 //! | [`event`], [`classification`], [`approval`] | the log, its fold, and the set of approvals |
 //! | [`state`], [`evaluate`] | derived state and how it is derived |
 //! | [`gate`], [`next`] | the machine check of each gate and the proof it passed; the next step of an entity |
@@ -191,6 +194,7 @@ pub mod error;
 pub mod evaluate;
 pub mod event;
 pub mod finding;
+pub mod front;
 pub mod gate;
 pub mod hash;
 pub mod id;

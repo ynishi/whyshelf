@@ -9,7 +9,7 @@ use std::num::NonZeroU32;
 use std::str::FromStr;
 
 use super::canon::{Canon, ToCanon};
-use super::error::ValueError;
+use super::error::{GlobProblem, ValueError};
 use super::nonempty::NonBlank;
 
 /// A path relative to the project root, written with `/`.
@@ -58,6 +58,67 @@ impl FromStr for RelPath {
 impl ToCanon for RelPath {
     fn to_canon(&self) -> Canon {
         Canon::str(self.0.as_str())
+    }
+}
+
+/// The files that count as tests: globs relative to the project root, checked.
+///
+/// Which pins are found is decided by where they are written (spec 3.1: only a test
+/// file carries a pin that counts). The set holds the globs as the settings wrote them
+/// (`tests`, `src/**/*_test.go`); matching them against the files of a revision is the
+/// adapter's work, which hands them to the version-control tool. The domain checks
+/// only that a glob names a place inside the project and cannot be taken for an option
+/// or for a magic of the tool.
+///
+/// A language that keeps its tests in the file they test (Rust's `#[cfg(test)] mod
+/// tests`) cannot narrow the set by file: the whole of the scan directories is the set
+/// ([`TestFileSet::whole`]), which is also what a settings file without `files` means.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestFileSet(Vec<String>);
+
+impl TestFileSet {
+    /// A set of globs; an empty list and any glob that breaks a rule are refused.
+    pub fn new(globs: Vec<String>) -> Result<Self, ValueError> {
+        if globs.is_empty() {
+            return Err(ValueError::TestGlob {
+                glob: String::new(),
+                reason: GlobProblem::NoGlobs,
+            });
+        }
+        for glob in &globs {
+            let refuse = |reason| ValueError::TestGlob {
+                glob: glob.clone(),
+                reason,
+            };
+            if glob.trim().is_empty() {
+                return Err(refuse(GlobProblem::Empty));
+            }
+            if glob.starts_with('/') {
+                return Err(refuse(GlobProblem::Absolute));
+            }
+            if glob.starts_with(':') {
+                return Err(refuse(GlobProblem::Magic));
+            }
+            if glob.contains('\\') || glob.chars().any(char::is_control) {
+                return Err(refuse(GlobProblem::BadChar));
+            }
+            if glob.split('/').any(|segment| segment == "..") {
+                return Err(refuse(GlobProblem::Climbs));
+            }
+        }
+        Ok(Self(globs))
+    }
+
+    /// The whole of these directories: every file under them is a test file. `None`
+    /// when there is no directory, which leaves no file.
+    pub fn whole(dirs: &[RelPath]) -> Option<Self> {
+        let globs: Vec<String> = dirs.iter().map(|dir| dir.as_str().to_owned()).collect();
+        Self::new(globs).ok()
+    }
+
+    /// The globs as written.
+    pub fn globs(&self) -> &[String] {
+        &self.0
     }
 }
 
@@ -206,6 +267,39 @@ impl ToCanon for SourceUri {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn globs(texts: &[&str]) -> Result<TestFileSet, ValueError> {
+        TestFileSet::new(texts.iter().map(|t| (*t).to_owned()).collect())
+    }
+
+    #[test]
+    fn a_test_glob_names_a_place_inside_the_project_and_is_no_magic() {
+        assert_eq!(
+            globs(&["tests", "src/**/*_test.go"]).unwrap().globs(),
+            ["tests", "src/**/*_test.go"]
+        );
+        let reason = |texts: &[&str]| match globs(texts) {
+            Err(ValueError::TestGlob { reason, .. }) => reason,
+            other => panic!("expected a glob error, got {other:?}"),
+        };
+        assert_eq!(reason(&[]), GlobProblem::NoGlobs);
+        assert_eq!(reason(&["  "]), GlobProblem::Empty);
+        assert_eq!(reason(&["/etc"]), GlobProblem::Absolute);
+        assert_eq!(reason(&[":(top)src"]), GlobProblem::Magic);
+        assert_eq!(reason(&["src/../.."]), GlobProblem::Climbs);
+        assert_eq!(reason(&["a\\b"]), GlobProblem::BadChar);
+        assert_eq!(reason(&["ok", "line\nbreak"]), GlobProblem::BadChar);
+    }
+
+    #[test]
+    fn the_whole_of_the_scan_directories_is_a_set_of_their_names() {
+        let dirs: Vec<RelPath> = ["src", "tests"]
+            .iter()
+            .map(|d| d.parse().unwrap())
+            .collect();
+        assert_eq!(TestFileSet::whole(&dirs).unwrap().globs(), ["src", "tests"]);
+        assert!(TestFileSet::whole(&[]).is_none());
+    }
 
     #[test]
     fn relative_paths_are_accepted() {

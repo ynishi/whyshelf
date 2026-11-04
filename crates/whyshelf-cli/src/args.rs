@@ -49,7 +49,8 @@ pub struct Cli {
 /// Every command.
 #[derive(Debug, Subcommand)]
 pub enum Sub {
-    /// Write `.whyshelf.toml`, create `.whyshelf/` and keep the cache out of Git.
+    /// Write `.whyshelf.toml` (with a new `project_id`), create `.whyshelf/` and keep
+    /// the cache out of Git.
     Init(InitArgs),
     /// Show the project, the worktree, the current revision and the stores.
     Context,
@@ -112,7 +113,8 @@ pub enum Sub {
     /// Print the JSON Schema of `map.json`.
     #[command(subcommand)]
     Schema(SchemaCommand),
-    /// Bring the files to the newest format (there is one format so far).
+    /// Count the versions of the project's data and say whether this build reads
+    /// them. It only looks: no file is written.
     Migrate,
     /// Serve the commands as tools over standard input and output.
     Mcp,
@@ -125,8 +127,17 @@ pub struct InitArgs {
     #[arg(long)]
     pub project: Option<String>,
     /// The command that runs the project's tests.
-    #[arg(long, value_name = "COMMAND")]
-    pub test_command: String,
+    #[arg(
+        long,
+        value_name = "COMMAND",
+        required_unless_present = "print_project_id"
+    )]
+    pub test_command: Option<String>,
+    /// Print the line `project_id = "..."` with a new id, and do nothing else: no file
+    /// is read or written. For a settings file that lacks one, or one copied from a
+    /// template (the copy carries the template's id).
+    #[arg(long, conflicts_with_all = ["project", "test_command"])]
+    pub print_project_id: bool,
 }
 
 /// Arguments of `add`.
@@ -342,7 +353,7 @@ pub enum Action {
     Init(InitArgs),
     /// `schema map`: needs nothing.
     SchemaMap,
-    /// `migrate`: needs nothing but the version it knows.
+    /// `migrate`: reads the data itself, and opens no workspace.
     Migrate,
     /// `mcp`: serve the commands as tools.
     Mcp,

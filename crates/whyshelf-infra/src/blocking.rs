@@ -26,6 +26,15 @@ pub enum BlockingError {
     /// A directory tree could not be walked.
     #[error("cannot walk a directory tree")]
     Walk(#[source] walkdir::Error),
+    /// A database file could not be opened or read as a cache.
+    #[error("cannot read the database {path}")]
+    Sqlite {
+        /// The file.
+        path: PathBuf,
+        /// SQLite's error.
+        #[source]
+        source: rusqlite::Error,
+    },
     /// A file could not be examined, created or written.
     #[error("cannot use the file {path}")]
     Io {
@@ -35,6 +44,59 @@ pub enum BlockingError {
         #[source]
         source: io::Error,
     },
+}
+
+/// The `schema_version` of a cache database, read without changing anything.
+///
+/// The cache is a WAL database, and a read-only connection to one may still try to
+/// create its `-shm` file; the `immutable=1` URI tells SQLite that nothing changes
+/// the file while it is read, so it neither writes nor locks. `None` when the file is
+/// not there; an error when it is there and cannot be read as a cache. Opening the
+/// cache the normal way would migrate it (and drop it, if it is of another version),
+/// which a check that only looks must not do.
+pub async fn cache_schema_version(path: PathBuf) -> Result<Option<String>, BlockingError> {
+    run(move || {
+        match std::fs::metadata(&path) {
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(source) => return Err(BlockingError::Io { path, source }),
+        }
+        let sqlite = |source: rusqlite::Error| BlockingError::Sqlite {
+            path: path.clone(),
+            source,
+        };
+        // A path is part of a URI here: the characters that end or split one are
+        // written as escapes.
+        let escaped = path
+            .to_string_lossy()
+            .replace('%', "%25")
+            .replace('?', "%3F")
+            .replace('#', "%23");
+        let uri = format!("file:{escaped}?mode=ro&immutable=1");
+        let conn = rusqlite::Connection::open_with_flags(
+            uri,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+        )
+        .map_err(sqlite)?;
+        let found = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'schema_version'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(sqlite);
+        match found {
+            Ok(version) => Ok(Some(version)),
+            // A database with no such row is a database of no version, which is an
+            // answer: the caller counts it as one it cannot read.
+            Err(BlockingError::Sqlite {
+                source: rusqlite::Error::QueryReturnedNoRows,
+                ..
+            }) => Ok(Some(String::new())),
+            Err(other) => Err(other),
+        }
+    })
+    .await
 }
 
 /// Run a blocking job on the runtime's pool for blocking work.

@@ -16,15 +16,18 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use whyshelf_core::app::check::CheckReport;
 use whyshelf_core::app::query::{EntityContent, EntityView, Field, FoundPage, GetResult};
+use whyshelf_core::app::view::ContextLine;
 use whyshelf_core::app::view::{
     AuditReport, Changelog, ContextReport, StatusReport, StatusRow, TraceReport,
 };
 use whyshelf_core::domain::approval::CmResult;
+use whyshelf_core::domain::classification::ClassificationIssue;
 use whyshelf_core::domain::event::{EventBody, StoreKind};
 use whyshelf_core::domain::id::EntityId;
 use whyshelf_core::domain::lint::{CheckViolation, UpstreamProblem};
-use whyshelf_core::domain::revision::Revision;
+use whyshelf_core::domain::revision::{IntegrationFact, Revision};
 use whyshelf_core::domain::state::{Approval, Completeness, EntityState, Integration, Upstream};
+use whyshelf_infra::format::{Census, Found, Projection, Source, Verdict};
 
 use crate::command::Outcome;
 use crate::error::CliError;
@@ -99,9 +102,18 @@ struct Section {
 pub struct Doc {
     sections: Vec<Section>,
     next_cursor: Option<String>,
+    context: Option<ContextLine>,
 }
 
 impl Doc {
+    /// Put the context line first: in a table or Markdown the line itself, in JSON a
+    /// `context` object. The tool server does not use this, since it opens every
+    /// answer with the line already.
+    pub fn with_context(mut self, context: &ContextLine) -> Self {
+        self.context = Some(context.clone());
+        self
+    }
+
     fn table(
         mut self,
         key: &'static str,
@@ -197,6 +209,17 @@ impl Doc {
 
     fn json(&self) -> Result<String, CliError> {
         let mut object = Map::new();
+        if let Some(line) = &self.context {
+            object.insert(
+                "context".to_owned(),
+                json!({
+                    "project": line.project().to_string(),
+                    "worktree": line.worktree().to_string(),
+                    "revision": line.revision().to_string(),
+                    "branch": line.label(),
+                }),
+            );
+        }
         for section in &self.sections {
             object.insert(section.key.to_owned(), section.body.json());
         }
@@ -209,6 +232,9 @@ impl Doc {
     fn text(&self, markdown: bool) -> String {
         let titled = self.sections.len() > 1;
         let mut blocks: Vec<String> = Vec::new();
+        if let Some(line) = &self.context {
+            blocks.push(format!("{line}\n"));
+        }
         for section in &self.sections {
             let mut block = String::new();
             if titled && !section.title.is_empty() {
@@ -366,9 +392,16 @@ pub fn violation_text(violation: &CheckViolation) -> String {
             format!("the item declares {pin} but no test carries it")
         }
         CheckViolation::PinUndeclaredInTests { pin } => {
-            format!("a test carries {pin} but the Spec never declared it")
+            format!("a test carries {pin} but no Spec of the project declares it")
+        }
+        CheckViolation::MalformedPin { location, text } => {
+            format!("{location}: `{}` is not a pin name", text.as_str())
         }
         CheckViolation::TestsFailed => "the tests did not pass".to_owned(),
+        CheckViolation::TestsTimedOut { after } => format!(
+            "the tests did not finish within {}: raise `test.timeout` or make them faster",
+            duration_text(*after)
+        ),
         CheckViolation::ItemNotInDesign => "the Design no longer has this item".to_owned(),
         CheckViolation::MeasurementNotMeasuredData { finding } => {
             format!("{finding} is not a measured_data Finding")
@@ -404,6 +437,37 @@ fn integration_text(integration: &Integration) -> &'static str {
         Integration::Unapproved => "Unapproved",
         Integration::ApprovedPending { .. } => "Pending",
         Integration::Integrated { .. } => "Integrated",
+        Integration::Unknown { .. } => "Unknown",
+    }
+}
+
+/// A time limit the way the settings write it: the largest unit that divides it.
+fn duration_text(span: std::time::Duration) -> String {
+    let seconds = span.as_secs();
+    match seconds {
+        s if s != 0 && s % 3600 == 0 => format!("{}h", s / 3600),
+        s if s != 0 && s % 60 == 0 => format!("{}m", s / 60),
+        s if span.subsec_nanos() == 0 => format!("{s}s"),
+        _ => format!("{}ms", span.as_millis()),
+    }
+}
+
+/// What the status says of a classification problem.
+fn issue_text(issue: &ClassificationIssue) -> String {
+    match issue {
+        ClassificationIssue::FileDiffers { entity, drift } => format!(
+            "{entity}: the file says {} {}, the store has {}; the store is kept (change it with `tag`, or edit the file)",
+            drift.field, drift.file, drift.store
+        ),
+        other => format!("{other:?}"),
+    }
+}
+
+fn integrated_text(fact: IntegrationFact) -> &'static str {
+    match fact {
+        IntegrationFact::Integrated => " (integrated)",
+        IntegrationFact::NotIntegrated => "",
+        IntegrationFact::Unknown { .. } => " (integration unknown here)",
     }
 }
 
@@ -520,7 +584,7 @@ fn status_doc(report: &StatusReport) -> Doc {
         report
             .issues()
             .iter()
-            .map(|i| format!("{} store: {:?}", i.store.as_str(), i.issue)),
+            .map(|i| format!("{} store: {}", i.store.as_str(), issue_text(&i.issue))),
     );
     notes.extend(report.exports().iter().map(|e| {
         format!(
@@ -840,7 +904,7 @@ fn trace_doc(report: &TraceReport) -> Doc {
                         "{} by {}{}",
                         revision_text(&a.revision),
                         a.by,
-                        if a.integrated { " (integrated)" } else { "" }
+                        integrated_text(a.integrated)
                     )
                 })
                 .collect();
@@ -1033,7 +1097,101 @@ pub fn document(outcome: &Outcome, fields: &std::collections::BTreeSet<Field>) -
         Outcome::Rebuilt { revised } => {
             Doc::default().fields("rebuilt", vec![("revised", json!(revised))])
         }
+        Outcome::Migrate(found) => migrate_doc(found),
+        Outcome::Printed(lines) => Doc::default().lines("lines", "", lines.clone()),
     }
+}
+
+/// The versions found, set against the ones this build reads.
+///
+/// The words are the census's: what was found and what is read. Nothing says a format
+/// is "newest", because this build only knows what it reads.
+fn migrate_doc(found: &Census) -> Doc {
+    let reads = |versions: Vec<u32>| {
+        let list: Vec<String> = versions.iter().map(|v| format!("v{v}")).collect();
+        format!("reads: {}", list.join(", "))
+    };
+    let counted = |counts: Option<&std::collections::BTreeMap<Found, usize>>| match counts {
+        Some(counts) if !counts.is_empty() => counts
+            .iter()
+            .map(|(found, count)| format!("{found}: {count}"))
+            .collect::<Vec<_>>()
+            .join("  "),
+        _ => "no file".to_owned(),
+    };
+    let mut rows: Vec<Vec<Cell>> = Vec::new();
+    for source in Source::ALL {
+        if let Some(unplaced) = found.unplaced().iter().find(|u| u.source == source) {
+            rows.push(vec![
+                json!(source.name()),
+                json!(format!(
+                    "not looked at: the place cannot be decided ({})",
+                    unplaced.reason.describe()
+                )),
+                json!(reads(source.reads())),
+                json!(""),
+            ]);
+        } else {
+            rows.push(vec![
+                json!(source.name()),
+                json!(counted(found.sources().get(&source))),
+                json!(reads(source.reads())),
+                json!(""),
+            ]);
+        }
+    }
+    for projection in Projection::ALL {
+        let Some(counts) = found.projections().get(&projection) else {
+            continue;
+        };
+        rows.push(vec![
+            json!(projection.name()),
+            json!(counted(Some(counts))),
+            json!(reads(projection.reads())),
+            json!("derived: `whyshelf rebuild` writes it again"),
+        ]);
+    }
+    let verdict = match found.verdict() {
+        Verdict::Readable => {
+            "readable: every file counted is of a version this build reads".to_owned()
+        }
+        Verdict::Unreadable(groups) => {
+            let list: Vec<String> = groups
+                .iter()
+                .map(|g| format!("{} {} ({} file(s))", g.source.name(), g.found, g.count))
+                .collect();
+            format!("unreadable by this build: {}", list.join("; "))
+        }
+        Verdict::Incomplete {
+            unplaced,
+            unreadable,
+        } => {
+            let list: Vec<String> = unplaced
+                .iter()
+                .map(|u| format!("{} ({})", u.source.name(), u.reason.describe()))
+                .collect();
+            let mut text = format!("incomplete: not looked at: {}", list.join("; "));
+            if !unreadable.is_empty() {
+                let groups: Vec<String> = unreadable
+                    .iter()
+                    .map(|g| format!("{} {} ({} file(s))", g.source.name(), g.found, g.count))
+                    .collect();
+                text.push_str(&format!(
+                    "; unreadable by this build: {}",
+                    groups.join("; ")
+                ));
+            }
+            text
+        }
+    };
+    Doc::default()
+        .table(
+            "versions",
+            "Versions",
+            vec!["WHAT", "FOUND", "BUILD", "NOTE"],
+            rows,
+        )
+        .fields("verdict", vec![("verdict", json!(verdict))])
 }
 
 #[cfg(test)]

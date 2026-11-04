@@ -76,7 +76,8 @@
 //! # Integration and progress
 //!
 //! [`Integration`] says whether the approved revision of an item has reached the
-//! baseline, a fact asked of the revision port. [`ItemProgress`] says which of an
+//! baseline, a fact asked of the revision port (which may answer that it cannot tell,
+//! as a clone without the baseline does: [`Integration::Unknown`]). [`ItemProgress`] says which of an
 //! item's pins the tests at the current revision already carry; an item whose
 //! tests do not yet cover its pins is shown as "in progress", and that is never
 //! Invalid. Only the CA lint stops on it.
@@ -99,6 +100,8 @@
 //! | [`UnparsedReason::KindChanged`] | Invalid | the file is of another kind than the one it was registered as | put the file back, or register the new content as its own entity |
 //! | [`UnparsedReason::RevisionRejected`] | Invalid | a revision the file names is not one the version-control tool knows | name a revision that exists |
 //! | [`UnparsedReason::ExternalRefNotAllowed`] | Invalid | `grounds` or `spec` holds a URL or an `ext:` reference | name an entity of this project |
+//! | [`UnparsedReason::ForeignSection`] | Invalid | a key of another kind of document (a `crux` in a Spec) | take the section out, or register the file as the kind it is |
+//! | [`UnparsedReason::UnknownKey`] | Invalid | a key no kind of document has and that classifies nothing (a typing mistake) | correct the key, or take it out |
 //! | [`UnparsedReason::EmptyGrounds`], [`UnparsedReason::DuplicateGround`] | Invalid | a Spec with no ground, or one Finding twice among them | list each Finding once, and at least one |
 //! | [`InvalidReason::DanglingRef`] | Invalid | an identifier a reference spells (plain, or `private:` where the private store can be read) is not an entity here | bring the entity back, or correct the reference |
 //! | [`InvalidReason::ClassificationConflict`] | Invalid | two branches set the kind or the path differently | set it again (the application's `reclassify`; no command does it), or `whyshelf mv` for the path |
@@ -139,7 +142,7 @@ use super::location::RelPath;
 use super::nonempty::NonEmptyVec;
 use super::pin::PinId;
 use super::reference::Ref;
-use super::revision::RevisionId;
+use super::revision::{RevisionId, UnknownIntegration};
 
 /// Why the text of a file could not become an entity.
 ///
@@ -240,6 +243,30 @@ pub enum UnparsedReason {
         field: String,
         /// The reference as written.
         reference: Ref,
+    },
+    /// The file has a key that belongs to another kind of document than the one it
+    /// is registered as (a Spec with a `crux`).
+    ///
+    /// Fix: take the section out, or register the file as the kind it is.
+    #[error(
+        "the key `{key}` is a part of a {section}, and the file is registered as a {registered}"
+    )]
+    ForeignSection {
+        /// The kind the key belongs to.
+        section: DocKind,
+        /// The kind the file is registered as.
+        registered: DocKind,
+        /// The key.
+        key: String,
+    },
+    /// The file has a key that no kind of document has and that is no classification
+    /// key, which is most often a typing mistake.
+    ///
+    /// Fix: correct the key, or take it out.
+    #[error("the key `{key}` is none that a document has")]
+    UnknownKey {
+        /// The key.
+        key: String,
     },
     /// A Spec was left with no ground.
     ///
@@ -627,6 +654,15 @@ pub enum Integration {
     Integrated {
         /// The approved revision (the base of a patch).
         revision: RevisionId,
+    },
+    /// Approved, and whether the revision reached the baseline cannot be told here
+    /// (the clone lacks the baseline or the commit). Not a failure: the rest of the
+    /// state stands, and a clone that has them says more.
+    Unknown {
+        /// The approved revision (the base of a patch).
+        revision: RevisionId,
+        /// Why it cannot be told.
+        reason: UnknownIntegration,
     },
 }
 

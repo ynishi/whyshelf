@@ -33,7 +33,7 @@ use crate::domain::location::RelPath;
 use crate::domain::next::{CmDue, NextInput, NextStep, next_step};
 use crate::domain::query::Query;
 use crate::domain::reference::{ItemRef, LocalRef, ProjectName, Ref};
-use crate::domain::revision::{Revision, RevisionId};
+use crate::domain::revision::{IntegrationFact, Revision, RevisionId};
 use crate::domain::spec::Spec;
 use crate::domain::state::{EntityState, Integration, ItemProgress, SpecProgress};
 
@@ -550,10 +550,12 @@ impl StatusReport {
         rows.extend(model.conflicted().map(|entry| conflicted_row(model, entry)));
         let mut issues = Vec::new();
         for store in [StoreKind::Repo, StoreKind::Private] {
-            issues.extend(model.issues(store).iter().map(|issue| StoreIssue {
-                store,
-                issue: issue.clone(),
-            }));
+            issues.extend(
+                model
+                    .issues(store)
+                    .into_iter()
+                    .map(|issue| StoreIssue { store, issue }),
+            );
         }
         StatusReport {
             context,
@@ -854,8 +856,8 @@ pub struct ApprovedRevision {
     pub revision: Revision,
     /// Who approved.
     pub by: Actor,
-    /// Whether the revision reached the baseline.
-    pub integrated: bool,
+    /// Whether the revision reached the baseline, or that this clone cannot tell.
+    pub integrated: IntegrationFact,
 }
 
 /// The chain around one entity: everything it stands on and everything that
@@ -1194,7 +1196,7 @@ impl<P: Ports> Workspace<P> {
                             event: r.event(),
                             revision: revision.clone(),
                             by: r.by().clone(),
-                            integrated: model.impl_view().is_integrated(revision.base()),
+                            integrated: model.impl_view().integration_of(revision.base()),
                         }),
                         _ => None,
                     })

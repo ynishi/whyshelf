@@ -55,7 +55,7 @@
 //!   port trait (whyshelf-core)      adapter (whyshelf-infra)
 //!   -------------------------       ----------------------------------------
 //!   RevisionPort                    git::GitRevision       (git processes)
-//!   CodeScanPort                    git::GitCodeScan       (git show, no checkout)
+//!   CodeScanPort                    git::GitCodeScan       (git grep, no checkout)
 //!   TestRunPort                     test_run::GitTestRun   (test command)
 //!   StorePort                       store_fs::FsStore      (events/, objects/)
 //!   CurrentPort                     fs_current::FsCurrent  (document files, read)

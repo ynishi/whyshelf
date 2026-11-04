@@ -164,6 +164,20 @@ pub enum ValueError {
     /// A store name was neither `repo` nor `private`.
     #[error("a store is `repo` or `private`")]
     StoreKind,
+    /// A time limit was zero.
+    #[error("a time limit is longer than zero")]
+    TimeoutZero,
+    /// A project id was not a UUID.
+    #[error("a project id is a UUID")]
+    ProjectIdNotUuid(#[source] uuid::Error),
+    /// A glob of `test.files` was refused.
+    #[error("the test file glob `{glob}` is refused: {reason}")]
+    TestGlob {
+        /// The glob as written.
+        glob: String,
+        /// The rule it breaks.
+        reason: GlobProblem,
+    },
     /// A word of a closed vocabulary was not one of its names.
     #[error("`{found}` is not a {what}")]
     UnknownName {
@@ -172,6 +186,29 @@ pub enum ValueError {
         /// The text found.
         found: String,
     },
+}
+
+/// The rule a glob of `test.files` breaks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum GlobProblem {
+    /// The glob is empty or only white space.
+    #[error("it is empty")]
+    Empty,
+    /// The glob starts with `/` and so names a place outside the project.
+    #[error("it is absolute; globs are relative to the project root")]
+    Absolute,
+    /// The glob climbs out of the project with a `..` segment.
+    #[error("it has a `..` segment")]
+    Climbs,
+    /// The glob starts with `:` and so would be read as a pathspec magic of its own.
+    #[error("it starts with `:`; the magic is added by whyshelf")]
+    Magic,
+    /// The glob has a control character or a backslash.
+    #[error("it has a control character or a backslash")]
+    BadChar,
+    /// The list of globs is empty, which would leave no test file.
+    #[error("the list is empty, which would leave no test file")]
+    NoGlobs,
 }
 
 /// Why an entity could not be built from its parts.

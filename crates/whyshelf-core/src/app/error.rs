@@ -11,6 +11,7 @@ use crate::domain::approval::Gate;
 use crate::domain::classification::ConflictField;
 use crate::domain::error::{EntityError, EventError, ItemRefError, QueryError, ValueError};
 use crate::domain::event::{DocKind, EntityKind, EventId, StoreKind};
+use crate::domain::front::Guess;
 use crate::domain::hash::ContentHash;
 use crate::domain::id::{Alias, EntityId};
 use crate::domain::lint::{CheckViolation, LeakFinding};
@@ -191,11 +192,19 @@ pub enum AppError {
         /// What the file is.
         found: DocKind,
     },
-    /// The file does not parse and no kind was given.
-    #[error("{path} does not parse, so its kind must be given")]
+    /// The keys of the file do not name exactly one kind, and no kind was given.
+    #[error(
+        "{path} {}; give its kind (`--kind finding|spec|design`)",
+        match .guess {
+            Guess::Several => "has keys of more than one kind of document",
+            _ => "has no key that names a kind of document",
+        }
+    )]
     KindUnknown {
         /// The path.
         path: RelPath,
+        /// What the keys said.
+        guess: Guess,
     },
     /// The command needs a document (a file), not an item.
     #[error("{id} is not a document")]

@@ -6,10 +6,12 @@
 //! directories are scanned for tests, how many changed files make a full rebuild
 //! cheaper than a diff, who approves by default.
 
+use std::time::Duration;
+
 use crate::domain::actor::Actor;
 use crate::domain::error::ValueError;
 use crate::domain::event::StoreKind;
-use crate::domain::location::RelPath;
+use crate::domain::location::{RelPath, TestFileSet};
 use crate::domain::nonempty::NonBlank;
 use crate::domain::reference::ProjectName;
 use crate::domain::tag::TagVocabulary;
@@ -104,20 +106,79 @@ impl Paths {
     }
 }
 
+/// How long the test command may run before it is stopped.
+///
+/// Why a type: a zero limit would stop every run at once, and "no limit" is not
+/// offered, since a command that never ends holds the whole check for good.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TestTimeout(Duration);
+
+/// The limit when the settings give none: thirty minutes.
+pub const DEFAULT_TEST_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+impl TestTimeout {
+    /// A limit; zero is refused.
+    pub fn new(limit: Duration) -> Result<Self, ValueError> {
+        if limit.is_zero() {
+            return Err(ValueError::TimeoutZero);
+        }
+        Ok(Self(limit))
+    }
+
+    /// The limit.
+    pub fn get(&self) -> Duration {
+        self.0
+    }
+}
+
+impl Default for TestTimeout {
+    fn default() -> Self {
+        Self(DEFAULT_TEST_TIMEOUT)
+    }
+}
+
 /// How the tests are found and run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestSettings {
     command: TestCommand,
     pin_pattern: PinPattern,
+    files: Option<TestFileSet>,
+    timeout: TestTimeout,
 }
 
 impl TestSettings {
-    /// The command and the pattern of the pin tag.
+    /// The command and the pattern of the pin tag. Every file under the scan
+    /// directories is a test file, and the command may run for
+    /// [`DEFAULT_TEST_TIMEOUT`], until the settings say otherwise.
     pub fn new(command: TestCommand, pin_pattern: PinPattern) -> Self {
         Self {
             command,
             pin_pattern,
+            files: None,
+            timeout: TestTimeout::default(),
         }
+    }
+
+    /// Only the files these globs name are test files (`test.files`).
+    pub fn with_files(mut self, files: TestFileSet) -> Self {
+        self.files = Some(files);
+        self
+    }
+
+    /// The limit on a test run (`test.timeout`).
+    pub fn with_timeout(mut self, timeout: TestTimeout) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// The globs of `test.files`, if the settings gave them.
+    pub fn files(&self) -> Option<&TestFileSet> {
+        self.files.as_ref()
+    }
+
+    /// The limit on a test run.
+    pub fn timeout(&self) -> TestTimeout {
+        self.timeout
     }
 
     /// The command that runs the tests.
@@ -261,6 +322,15 @@ impl Config {
     /// The test settings.
     pub fn test(&self) -> &TestSettings {
         &self.test
+    }
+
+    /// The files that count as tests: `test.files`, else the whole of the scan
+    /// directories. `None` only when there is neither, which leaves no file to scan.
+    pub fn test_files(&self) -> Option<TestFileSet> {
+        self.test
+            .files()
+            .cloned()
+            .or_else(|| TestFileSet::whole(self.paths.scan_dirs()))
     }
 
     /// Where a new document goes by default.

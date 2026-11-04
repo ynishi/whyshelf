@@ -60,11 +60,11 @@
 //! the stream. Tags need no settling: concurrent additions both stay, and a removal
 //! only removes the additions it saw.
 //!
-//! Two things are shared that look separate. The private store is
-//! `<data dir>/<project>`, so every worktree of a project on one machine reads and
-//! writes the same private store, while each has its own repo-store files and its own
-//! cache. And a private store is named by the project's name alone, so two unrelated
-//! projects that use one name on one machine share one too.
+//! One thing is shared that looks separate. The private store is
+//! `<data dir>/<project>-<project_id>`, so every clone and worktree of a project on
+//! one machine reads and writes the same private store, while each has its own
+//! repo-store files and its own cache. The id is in the committed settings, so two
+//! unrelated projects that use one name do not share one.
 //!
 //! # The write path
 //!
@@ -111,10 +111,12 @@
 //! the current revision; the person types no hash. An older one can be named. A dirty
 //! working tree stops the approval ("commit first") and there is no override. The pin
 //! check and the test run use the very revision that is recorded, and the pin check
-//! reads the files under the scan directories (`paths.scan_dirs`; `src` and `tests`
-//! by default) in both directions: a pin the item declares that no file carries, and
-//! a tag in those files that the Spec never declared. The adapter does not tell test
-//! files from other files there: any text file under a scan directory counts.
+//! reads the test files (`test.files`: globs under the scan directories
+//! `paths.scan_dirs`, the whole of them by default) in both directions: a pin the
+//! item declares that no file carries, and a tag in those files that **no Spec of the
+//! project** declared. A tag that is shaped like a pin and is none is a violation of
+//! its own, and a test run that outlasts `test.timeout` is stopped and records
+//! nothing.
 //!
 //! **CM is a record, not a state.** [`record_cm`](Workspace::record_cm) takes a
 //! [`CmInput`](check::CmInput): a pass, a *wiring gap* with a hint at the missing item

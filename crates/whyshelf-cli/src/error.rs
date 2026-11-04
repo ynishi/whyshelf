@@ -14,6 +14,7 @@ use whyshelf_core::app::AppError;
 use whyshelf_core::domain::error::{QueryError, ValueError};
 use whyshelf_infra::OpenError;
 use whyshelf_infra::cache_sqlite::CacheError;
+use whyshelf_infra::format::FormatError;
 
 use crate::render;
 
@@ -55,6 +56,9 @@ pub enum CliError {
     /// The cache could not be closed.
     #[error("cannot close the cache")]
     Close(#[source] CacheError),
+    /// The versions of the data could not be counted.
+    #[error(transparent)]
+    Format(#[from] FormatError),
     /// `init` found the settings file already there.
     #[error("{path} exists already; `init` never overwrites a settings file")]
     SettingsExist {

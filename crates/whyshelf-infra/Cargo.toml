@@ -24,7 +24,7 @@ rusqlite.workspace = true
 jiff.workspace = true
 walkdir.workspace = true
 regex.workspace = true
-tokio = { workspace = true, features = ["process", "fs", "sync", "rt", "time"] }
+tokio = { workspace = true, features = ["process", "fs", "sync", "rt", "time", "io-util"] }
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -17,7 +17,7 @@ use crate::domain::lint::{CheckViolation, UpstreamProblem};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::query::Query;
 use crate::domain::reference::{ItemRef, LocalRef, Ref};
-use crate::domain::revision::{Revision, RevisionId};
+use crate::domain::revision::{IntegrationFact, Revision, RevisionId};
 use crate::domain::state::{
     Approval, BlockReason, Integration, InvalidReason, UnparsedReason, Upstream,
 };
@@ -1090,7 +1090,10 @@ fn views_trace_changelog_audit_and_context() {
     assert_eq!(trace.links().len(), 3);
     let item = trace.nodes().last().expect("an item");
     assert_eq!(item.approved().len(), 1);
-    assert!(!item.approved()[0].integrated);
+    assert_eq!(
+        item.approved()[0].integrated,
+        IntegrationFact::NotIntegrated
+    );
 
     let log = block_on(ws.changelog(&r("finding/slow-login"))).expect("changelog");
     assert!(matches!(
@@ -2101,4 +2104,198 @@ fn a_published_finding_named_by_private_mark_is_found_in_a_clone_and_the_spec_is
         report.violations(),
         [upstream_violation(finding, UpstreamProblem::NotApproved)]
     );
+}
+
+// --- stage 2: pins, classification keys, integration, test runs ---------------
+
+/// The chain approved up to CI, so that only CA is left to try.
+fn ready_for_ca() -> Workspace<FakePorts> {
+    let mut ws = workspace();
+    block_on(ws.approve_cr(&r("finding/slow-login"), None)).expect("cr");
+    block_on(ws.approve_cs(&r("spec/cache-timeout"), None)).expect("cs");
+    block_on(ws.approve_ci(&r("design/cache"), None)).expect("ci");
+    ws
+}
+
+#[test]
+fn a_tag_that_is_no_pin_name_and_a_timed_out_run_stop_ca_and_nothing_is_recorded() {
+    use crate::domain::lint::CheckViolation as V;
+    let ws = ready_for_ca();
+    ws.ports().set_malformed(&[("tests/t.rs", 9, "PIN-foo")]);
+    ws.ports().set_tests_time_out(true);
+    let report = block_on(ws.check_ca(&it("design/cache#1"), None)).expect("check");
+    assert!(report.violations().iter().any(
+        |v| matches!(v, V::MalformedPin { location, .. } if location.to_string() == "tests/t.rs:9")
+    ));
+    let limit = super::config::DEFAULT_TEST_TIMEOUT;
+    assert!(
+        report
+            .violations()
+            .contains(&V::TestsTimedOut { after: limit })
+    );
+
+    let mut ws = ws;
+    let before = ws.ports().events_in(StoreKind::Repo).len();
+    assert!(matches!(
+        block_on(ws.approve_ca(&it("design/cache#1"), None, None)),
+        Err(AppError::CheckFailed { gate: Gate::Ca, .. })
+    ));
+    assert_eq!(ws.ports().events_in(StoreKind::Repo).len(), before);
+
+    // Without the mistakes the same item is approved.
+    ws.ports().set_malformed(&[]);
+    ws.ports().set_tests_time_out(false);
+    block_on(ws.approve_ca(&it("design/cache#1"), None, None)).expect("ca");
+}
+
+#[test]
+fn each_of_two_specs_gets_its_ca_when_the_tests_carry_the_pins_of_both() {
+    let mut ws = workspace();
+    ws.ports().put_spec(
+        "docs/spec/other.md",
+        &["finding/slow-login"],
+        "something else",
+        &["PIN-OTHER"],
+    );
+    ws.ports().put_design(
+        "docs/design/other.md",
+        "spec/other-spec",
+        &[(1, "do the other", &["PIN-OTHER"])],
+    );
+    let opts = |alias: &str| AddOptions::new().with_alias(a(alias));
+    block_on(ws.add(&[path("docs/spec/other.md")], &opts("spec/other-spec"))).expect("add");
+    block_on(ws.add(&[path("docs/design/other.md")], &opts("design/other"))).expect("add");
+    block_on(ws.approve_cr(&r("finding/slow-login"), None)).expect("cr");
+    for spec in ["spec/cache-timeout", "spec/other-spec"] {
+        block_on(ws.approve_cs(&r(spec), None)).expect("cs");
+    }
+    for design in ["design/cache", "design/other"] {
+        block_on(ws.approve_ci(&r(design), None)).expect("ci");
+    }
+    // The tests of the project carry both Specs' pins.
+    ws.ports().set_pins(&["PIN-TTL", "PIN-OTHER"]);
+    for item in ["design/cache#1", "design/other#1"] {
+        block_on(ws.approve_ca(&it(item), None, None)).unwrap_or_else(|e| panic!("{item}: {e:?}"));
+    }
+}
+
+#[test]
+fn a_clone_that_cannot_tell_integration_shows_unknown_and_no_command_stops() {
+    use crate::domain::revision::UnknownIntegration;
+    let mut ws = workspace();
+    approve_chain(&mut ws);
+    ws.ports()
+        .cannot_tell_integration(Some(UnknownIntegration::BaselineUnresolved));
+    let s = status(&ws);
+    assert!(matches!(
+        item_row(&s).integration(),
+        Some(Integration::Unknown {
+            reason: UnknownIntegration::BaselineUnresolved,
+            ..
+        })
+    ));
+    // Nothing is due that depends on the baseline, and the other reads go on.
+    assert!(!matches!(
+        row(&s, "spec/cache-timeout").next(),
+        NextAction::AwaitingCm { .. }
+    ));
+    block_on(ws.ingest()).expect("ingest");
+    block_on(ws.trace(&r("design/cache"))).expect("trace");
+    // Once the clone has the baseline, it is told.
+    ws.ports().cannot_tell_integration(None);
+    ws.ports().integrate("rev-1");
+    assert!(matches!(
+        item_row(&status(&ws)).integration(),
+        Some(Integration::Integrated { .. })
+    ));
+}
+
+fn file_keys(tags: &[&str], owner: &str, alias: &str) -> crate::domain::front::FileClassification {
+    crate::domain::front::FileClassification {
+        tags: Some(tags.iter().map(|t| t.parse().expect("a tag")).collect()),
+        kind: Some(DocKind::Finding),
+        owner: Some(crate::domain::actor::Actor::new(owner).expect("a name")),
+        alias: Some(a(alias)),
+    }
+}
+
+#[test]
+fn front_matter_classification_is_taken_in_at_registration_and_a_later_difference_warns() {
+    use crate::domain::classification::ClassificationIssue;
+    let mut ws = Workspace::new(files(), test_config());
+    ws.ports().set_file_classification(
+        "docs/finding/slow.md",
+        file_keys(&["area:auth"], "bob", "finding/from-file"),
+    );
+    block_on(ws.add(&[path("docs/finding/slow.md")], &AddOptions::new())).expect("add");
+
+    // Taken in once: found by the alias the file gave, tagged, owned.
+    let GetResult::Entity(view) =
+        block_on(ws.get(&Target::Entity(r("finding/from-file")))).expect("get")
+    else {
+        panic!("an entity");
+    };
+    assert_eq!(view.tags().len(), 1);
+    assert_eq!(view.owner().map(|o| o.as_str()), Some("bob"));
+    assert!(
+        status(&ws).issues().is_empty(),
+        "the file and the store agree"
+    );
+
+    // The store is the truth afterwards: a tag taken off there leaves the file saying
+    // something else, which is shown and nothing more.
+    block_on(ws.tag(&r("finding/from-file"), add_tag("-area:auth"))).expect("untag");
+    let s = status(&ws);
+    assert!(matches!(
+        s.issues(),
+        [issue] if matches!(&issue.issue, ClassificationIssue::FileDiffers { drift, .. }
+            if drift.field == crate::domain::front::ClassField::Tags)
+    ));
+    // Ingest does not take the file's tags in a second time.
+    block_on(ws.ingest()).expect("ingest");
+    let GetResult::Entity(view) =
+        block_on(ws.get(&Target::Entity(r("finding/from-file")))).expect("get")
+    else {
+        panic!("an entity");
+    };
+    assert!(view.tags().is_empty());
+}
+
+#[test]
+fn an_alias_or_tag_the_registration_cannot_take_in_is_left_out_and_shown_as_a_difference() {
+    let mut ws = workspace();
+    ws.ports().put_finding("docs/finding/b.md", "Other", "text");
+    ws.ports().set_file_classification(
+        "docs/finding/b.md",
+        file_keys(&["area:nothing"], "bob", "finding/slow-login"),
+    );
+    block_on(ws.add(&[path("docs/finding/b.md")], &AddOptions::new())).expect("add");
+    let s = status(&ws);
+    // The alias is held by another document and the tag is outside the vocabulary:
+    // neither blocks the registration, both are shown.
+    assert_eq!(s.issues().len(), 2);
+}
+
+#[test]
+fn a_file_whose_keys_name_no_single_kind_asks_for_a_kind() {
+    use crate::domain::front::Guess;
+    let mut ws = Workspace::new(files(), test_config());
+    ws.ports().put_broken("docs/odd.md", "text");
+    ws.ports().set_file_guess("docs/odd.md", Guess::Several);
+    let error = block_on(ws.add(&[path("docs/odd.md")], &AddOptions::new())).unwrap_err();
+    assert!(matches!(
+        error,
+        AppError::KindUnknown {
+            guess: Guess::Several,
+            ..
+        }
+    ));
+    assert!(error.to_string().contains("--kind"));
+    assert!(ws.ports().events_in(StoreKind::Repo).is_empty());
+    // With a kind given, the file is registered (as an Invalid document).
+    block_on(ws.add(
+        &[path("docs/odd.md")],
+        &AddOptions::new().with_kind(DocKind::Finding),
+    ))
+    .expect("add");
 }

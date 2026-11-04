@@ -198,7 +198,11 @@ pub fn next_step(
         } => None,
         NextInput::Item { integration, .. } => match integration {
             Integration::ApprovedPending { .. } => Some(NextStep::AwaitIntegration),
-            Integration::Unapproved | Integration::Integrated { .. } => None,
+            // Nothing to do about a baseline this clone cannot see: a clone that has
+            // it says more.
+            Integration::Unapproved
+            | Integration::Integrated { .. }
+            | Integration::Unknown { .. } => None,
         },
     })
 }

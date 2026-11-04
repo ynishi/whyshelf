@@ -43,7 +43,9 @@ const FINDING: &str = "---\nfinding_type: usage_observation\ntitle: \"Login feel
                        evidence: measured\ncontext: \"Cold start, three testers\"\n\
                        reproducibility: reproducible\n---\n\nIt takes eight seconds.\n";
 
-const SETTINGS: &str = "version = 1\nproject = \"demo\"\n\n[test]\ncommand = \"true\"\n\n\
+const SETTINGS: &str = "version = 1\nproject = \"demo\"\n\
+                        project_id = \"0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506\"\n\n\
+                        [test]\ncommand = \"true\"\n\n\
                         [stores]\ndefault = \"repo\"\n\n[tags.official]\narea = [\"auth\", \"build\"]\n";
 
 fn tag(target: &str, change: &str) -> Command {

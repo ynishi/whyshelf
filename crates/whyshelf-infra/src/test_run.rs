@@ -12,9 +12,18 @@
 //!   to remove it is an error that is returned, not swallowed. `open` runs
 //!   `git worktree prune` to clear what a killed run left behind.
 //!
-//! The command's own output is collected and dropped: a tool server speaks on its
-//! standard output, so a test run must never write there. The outcome is the exit
-//! status: zero passes, anything else fails.
+//! The command's own output never reaches ours: a tool server speaks on its standard
+//! output, so a test run must not write there. Both of its streams are read as they
+//! come, and only the last 64 KiB of each is held, so a command that prints for an
+//! hour costs no more memory than one that prints a line.
+//!
+//! **Time limit.** The command is given `test.timeout` (thirty minutes unless the
+//! settings say otherwise). When that is up it is stopped, with the processes it
+//! started (on Unix it leads a process group of its own, which is killed), and the
+//! answer is [`TestsRun::TimedOut`]. A stopped command has no result, so the answer is
+//! no [`TestOutcome`] and nothing can be recorded from it; the CA gate reports it as a
+//! violation. Otherwise the outcome is the exit status: zero passes, anything else
+//! fails.
 //!
 //! ```text
 //!   run(revision, command)
@@ -48,11 +57,13 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
-use tokio::process::Command;
-use whyshelf_core::app::config::TestCommand;
+use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::process::{Child, Command};
+use whyshelf_core::app::config::{TestCommand, TestTimeout};
 use whyshelf_core::app::ports::TestRunPort;
-use whyshelf_core::domain::approval::TestOutcome;
+use whyshelf_core::domain::approval::{TestOutcome, TestsRun};
 use whyshelf_core::domain::revision::RevisionId;
 
 use crate::git::{Git, GitError, full_hash};
@@ -109,7 +120,64 @@ impl GitTestRun {
     }
 }
 
-async fn run_command(dir: &Path, command: &TestCommand) -> Result<TestOutcome, TestRunError> {
+/// How much of a command's output is held: the last of it. The pipes have to be read
+/// or a command that prints enough would wait for ever on a full pipe, and what is
+/// read must not grow with the command.
+const TAIL_LIMIT: usize = 64 * 1024;
+
+/// The last [`TAIL_LIMIT`] bytes that went through.
+#[derive(Debug, Default)]
+struct Tail(Vec<u8>);
+
+impl Tail {
+    fn push(&mut self, chunk: &[u8]) {
+        self.0.extend_from_slice(chunk);
+        if self.0.len() > TAIL_LIMIT {
+            let excess = self.0.len() - TAIL_LIMIT;
+            self.0.drain(..excess);
+        }
+    }
+}
+
+/// Read a pipe to its end, holding its tail.
+async fn drain<R: AsyncRead + Unpin>(mut pipe: R) -> Tail {
+    let mut tail = Tail::default();
+    let mut chunk = vec![0u8; 8192];
+    // A read error ends the stream like its end does: the command's status, not its
+    // output, is the result.
+    while let Ok(read) = pipe.read(&mut chunk).await {
+        if read == 0 {
+            break;
+        }
+        tail.push(&chunk[..read]);
+    }
+    tail
+}
+
+/// Stop a command and what it started. On Unix the command leads a process group of
+/// its own, so a test runner that started children does not leave them running; the
+/// group is killed with the `kill` utility, which needs no C library of ours.
+async fn stop(child: &mut Child) {
+    #[cfg(unix)]
+    if let Some(pid) = child.id() {
+        let group = format!("-{pid}");
+        let _ = Command::new("kill")
+            .args(["-KILL", "--", group.as_str()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await;
+    }
+    let _ = child.start_kill();
+    let _ = child.wait().await;
+}
+
+async fn run_command(
+    dir: &Path,
+    command: &TestCommand,
+    timeout: Duration,
+) -> Result<TestsRun, TestRunError> {
     let mut shell = if cfg!(windows) {
         let mut shell = Command::new("cmd");
         shell.arg("/C");
@@ -119,21 +187,54 @@ async fn run_command(dir: &Path, command: &TestCommand) -> Result<TestOutcome, T
         shell.arg("-c");
         shell
     };
-    let output = shell
+    shell
         .arg(command.as_str())
         .current_dir(dir)
         .stdin(Stdio::null())
-        .output()
-        .await
-        .map_err(|source| TestRunError::Spawn {
-            command: command.as_str().to_owned(),
-            source,
-        })?;
-    Ok(if output.status.success() {
-        TestOutcome::Passed
-    } else {
-        TestOutcome::Failed
-    })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    shell.process_group(0);
+    let spawn_error = |source| TestRunError::Spawn {
+        command: command.as_str().to_owned(),
+        source,
+    };
+    let mut child = shell.spawn().map_err(spawn_error)?;
+    let readers: Vec<_> = [
+        child.stdout.take().map(|pipe| tokio::spawn(drain(pipe))),
+        child.stderr.take().map(|pipe| tokio::spawn(drain(pipe))),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    let waited = tokio::time::timeout(timeout, child.wait()).await;
+    let ran = match waited {
+        Ok(status) => {
+            let status = status.map_err(spawn_error)?;
+            Ok(TestsRun::Finished(if status.success() {
+                TestOutcome::Passed
+            } else {
+                TestOutcome::Failed
+            }))
+        }
+        Err(_) => {
+            stop(&mut child).await;
+            Ok(TestsRun::TimedOut { after: timeout })
+        }
+    };
+    // The command is over; a child it left behind may still hold the pipes, so the
+    // readers get a moment and are then cut off.
+    for mut reader in readers {
+        if tokio::time::timeout(Duration::from_secs(1), &mut reader)
+            .await
+            .is_err()
+        {
+            reader.abort();
+        }
+    }
+    ran
 }
 
 impl TestRunPort for GitTestRun {
@@ -143,11 +244,13 @@ impl TestRunPort for GitTestRun {
         &self,
         revision: &RevisionId,
         command: &TestCommand,
-    ) -> Result<TestOutcome, TestRunError> {
+        timeout: TestTimeout,
+    ) -> Result<TestsRun, TestRunError> {
         let rev = full_hash(revision).map_err(TestRunError::Git)?;
         let head = self.git.head().await.map_err(TestRunError::Git)?;
+        let timeout = timeout.get();
         if head.eq_ignore_ascii_case(rev) && self.git.is_clean().await.map_err(TestRunError::Git)? {
-            return run_command(self.git.root(), command).await;
+            return run_command(self.git.root(), command, timeout).await;
         }
 
         let cache = self.git.root().join(".whyshelf").join("cache");
@@ -171,7 +274,7 @@ impl TestRunPort for GitTestRun {
             .await
             .map_err(TestRunError::Git)?;
 
-        let ran = run_command(&checkout, command).await;
+        let ran = run_command(&checkout, command, timeout).await;
         let removed = self
             .git
             .run([
@@ -189,5 +292,29 @@ impl TestRunPort for GitTestRun {
             }),
             (Ok(outcome), Ok(_)) => Ok(outcome),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_last_of_the_output_is_held() {
+        let mut tail = Tail::default();
+        tail.push(&vec![b'a'; TAIL_LIMIT]);
+        tail.push(b"end");
+        assert_eq!(tail.0.len(), TAIL_LIMIT);
+        assert!(tail.0.ends_with(b"aend"));
+        // A single chunk longer than the limit keeps its last bytes.
+        tail.push(&vec![b'b'; TAIL_LIMIT * 3]);
+        assert_eq!(tail.0, vec![b'b'; TAIL_LIMIT]);
+    }
+
+    #[tokio::test]
+    async fn a_pipe_is_read_to_its_end_holding_its_tail() {
+        let data = vec![b'x'; TAIL_LIMIT * 4 + 5];
+        let tail = drain(data.as_slice()).await;
+        assert_eq!(tail.0.len(), TAIL_LIMIT);
     }
 }

@@ -22,25 +22,26 @@ mod in_memory {
     use std::task::{Context, Poll, Wake, Waker};
 
     use crate::domain::actor::{MeasuredAt, Timestamp};
-    use crate::domain::approval::TestOutcome;
+    use crate::domain::approval::{TestOutcome, TestsRun};
     use crate::domain::design::{ChosenOption, Crux, RejectedOption, WorkItem};
-    use crate::domain::event::{Event, StoreKind};
+    use crate::domain::event::{DocKind, Event, StoreKind};
     use crate::domain::finding::{EvidenceLabel, Reproducibility};
+    use crate::domain::front::{FileClassification, Guess};
     use crate::domain::hash::ContentHash;
     use crate::domain::id::{EntityId, ItemNumber, test_support::eid};
-    use crate::domain::location::{CodeLocation, RelPath};
+    use crate::domain::location::{CodeLocation, RelPath, TestFileSet};
     use crate::domain::nonempty::{NonBlank, NonEmptyVec};
-    use crate::domain::pin::{HypId, Hypothesis, PinContract, PinId};
+    use crate::domain::pin::{HypId, Hypothesis, MalformedPin, PinContract, PinId};
     use crate::domain::reference::{Reach, Ref};
-    use crate::domain::revision::RevisionId;
+    use crate::domain::revision::{IntegrationFact, RevisionId, UnknownIntegration};
     use crate::domain::state::UnparsedReason;
 
-    use crate::app::config::{Config, Paths, PinPattern, TestCommand, TestSettings};
+    use crate::app::config::{Config, Paths, PinPattern, TestCommand, TestSettings, TestTimeout};
     use crate::app::ports::{
         AppendOutcome, CacheEntry, ClockPort, CodeScanPort, CreateOutcome, CurrentPort, ExportDoc,
-        ExportFile, ExportKind, ExportParts, FileStat, IdPort, IndexCachePort, Mtime, Ports,
-        RevisionPort, ScaffoldPort, SecretHit, SecretScanPort, StorePort, Template, TestRunPort,
-        WorktreeRoot,
+        ExportFile, ExportKind, ExportParts, FileStat, IdPort, IndexCachePort, Mtime, PinScan,
+        Ports, RevisionPort, ScaffoldPort, SecretHit, SecretScanPort, StorePort, Template,
+        TestRunPort, WorktreeRoot,
     };
     use crate::app::raw::{
         Candidate, NormalizedText, RawDesign, RawDoc, RawFinding, RawFindingSource, RawRevision,
@@ -81,6 +82,8 @@ mod in_memory {
         text: String,
         mtime: u64,
         parsed: Parsed,
+        classification: FileClassification,
+        guess: Option<Guess>,
     }
 
     #[derive(Debug)]
@@ -95,9 +98,12 @@ mod in_memory {
         revision: RevisionId,
         clean: bool,
         integrated: BTreeSet<RevisionId>,
+        cannot_tell: Option<UnknownIntegration>,
         label: Option<String>,
         pins: BTreeMap<PinId, Vec<CodeLocation>>,
+        malformed: Vec<MalformedPin>,
         tests: TestOutcome,
+        tests_time_out: bool,
         tests_ran_at: Vec<RevisionId>,
         cache: BTreeMap<RelPath, CacheEntry>,
         cache_rebuilds: usize,
@@ -137,9 +143,12 @@ mod in_memory {
                     revision: rev("rev-1"),
                     clean: true,
                     integrated: BTreeSet::new(),
+                    cannot_tell: None,
                     label: Some("main".to_owned()),
                     pins: BTreeMap::new(),
+                    malformed: Vec::new(),
                     tests: TestOutcome::Passed,
+                    tests_time_out: false,
                     tests_ran_at: Vec::new(),
                     cache: BTreeMap::new(),
                     cache_rebuilds: 0,
@@ -163,8 +172,24 @@ mod in_memory {
                     text,
                     mtime,
                     parsed,
+                    classification: FileClassification::default(),
+                    guess: None,
                 },
             );
+        }
+
+        /// What the keys of a file say about its kind, when the file does not parse.
+        pub(crate) fn set_file_guess(&self, at: &str, guess: Guess) {
+            if let Some(file) = self.lock().files.get_mut(&path(at)) {
+                file.guess = Some(guess);
+            }
+        }
+
+        /// Give a file classification keys in its front matter.
+        pub(crate) fn set_file_classification(&self, at: &str, keys: FileClassification) {
+            if let Some(file) = self.lock().files.get_mut(&path(at)) {
+                file.classification = keys;
+            }
         }
 
         /// A Finding that needs no revision (a usage observation).
@@ -320,6 +345,28 @@ mod in_memory {
             self.lock().integrated.insert(rev(id));
         }
 
+        /// A clone that lacks the baseline or the commit: what is not integrated is
+        /// not known to be either.
+        pub(crate) fn cannot_tell_integration(&self, reason: Option<UnknownIntegration>) {
+            self.lock().cannot_tell = reason;
+        }
+
+        pub(crate) fn set_malformed(&self, tags: &[(&str, u32, &str)]) {
+            self.lock().malformed = tags
+                .iter()
+                .map(|(file, line, text)| {
+                    MalformedPin::new(
+                        CodeLocation::new(path(file), *line).expect("a test location"),
+                        nb(text),
+                    )
+                })
+                .collect();
+        }
+
+        pub(crate) fn set_tests_time_out(&self, time_out: bool) {
+            self.lock().tests_time_out = time_out;
+        }
+
         pub(crate) fn set_pins(&self, pins: &[&str]) {
             let mut s = self.lock();
             s.pins = pins
@@ -440,8 +487,15 @@ mod in_memory {
             Ok(self.lock().clean)
         }
 
-        async fn is_integrated(&self, revision: &RevisionId) -> Result<bool, FakeError> {
-            Ok(self.lock().integrated.contains(revision))
+        async fn integration(&self, revision: &RevisionId) -> Result<IntegrationFact, FakeError> {
+            let s = self.lock();
+            Ok(if s.integrated.contains(revision) {
+                IntegrationFact::Integrated
+            } else if let Some(reason) = s.cannot_tell {
+                IntegrationFact::Unknown { reason }
+            } else {
+                IntegrationFact::NotIntegrated
+            })
         }
 
         async fn label(&self) -> Result<Option<String>, FakeError> {
@@ -565,18 +619,28 @@ mod in_memory {
                 .collect())
         }
 
-        async fn read(&self, at: &RelPath) -> Result<Option<Candidate>, FakeError> {
+        async fn read(
+            &self,
+            at: &RelPath,
+            _kind: Option<DocKind>,
+        ) -> Result<Option<Candidate>, FakeError> {
             let s = self.lock();
             Ok(s.files.get(at).map(|file| {
                 let text = NormalizedText::new(file.text.clone());
-                match &file.parsed {
-                    Parsed::Doc(doc) => Candidate::parsed(at.clone(), text, doc.clone()),
+                let candidate = match &file.parsed {
+                    Parsed::Doc(doc) => Candidate::parsed(at.clone(), text, doc.clone())
+                        .with_guess(Guess::One(doc.kind())),
                     Parsed::Broken(reasons) => Candidate::unparsed(
                         at.clone(),
                         text,
                         NonEmptyVec::from_vec(reasons.clone()).expect("a reason"),
                     ),
-                }
+                };
+                let candidate = match file.guess {
+                    Some(guess) => candidate.with_guess(guess),
+                    None => candidate,
+                };
+                candidate.with_classification(file.classification.clone())
             }))
         }
     }
@@ -616,9 +680,14 @@ mod in_memory {
             &self,
             _revision: &RevisionId,
             _scan_dirs: &[RelPath],
+            _files: &TestFileSet,
             _pattern: &PinPattern,
-        ) -> Result<BTreeMap<PinId, Vec<CodeLocation>>, FakeError> {
-            Ok(self.lock().pins.clone())
+        ) -> Result<PinScan, FakeError> {
+            let s = self.lock();
+            Ok(PinScan {
+                pins: s.pins.clone(),
+                malformed: s.malformed.clone(),
+            })
         }
     }
 
@@ -629,10 +698,17 @@ mod in_memory {
             &self,
             revision: &RevisionId,
             _command: &TestCommand,
-        ) -> Result<TestOutcome, FakeError> {
+            timeout: TestTimeout,
+        ) -> Result<TestsRun, FakeError> {
             let mut s = self.lock();
             s.tests_ran_at.push(revision.clone());
-            Ok(s.tests)
+            Ok(if s.tests_time_out {
+                TestsRun::TimedOut {
+                    after: timeout.get(),
+                }
+            } else {
+                TestsRun::Finished(s.tests)
+            })
         }
     }
 

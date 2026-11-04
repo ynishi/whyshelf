@@ -25,6 +25,7 @@ use crate::domain::event::{
     ClassChange, ClassSnapshot, DocKind, DocRegistration, EntityKind, EventBody, Publication,
     RecordBody, Registration, StoreKind, Version,
 };
+use crate::domain::front::{ClassificationImport, Guess, Stored};
 use crate::domain::hash::ContentHash;
 use crate::domain::id::{Alias, EntityId};
 use crate::domain::location::RelPath;
@@ -127,19 +128,31 @@ impl<P: Ports> Workspace<P> {
                 path: candidate.path().clone(),
             });
         }
-        let kind = match (candidate.kind(), options.kind) {
-            (Some(found), Some(requested)) if found != requested => {
+        // A file is read as the kind asked for; the keys still say what it looks like,
+        // and a file that looks like another kind is refused rather than registered
+        // as an Invalid document of the wrong kind. Without a kind asked for, only
+        // keys that name exactly one kind register anything.
+        let kind = match (candidate.guess(), candidate.kind(), options.kind) {
+            (Guess::One(found), _, Some(requested)) if found != requested => {
                 return Err(AppError::KindMismatch {
                     path: candidate.path().clone(),
                     requested,
                     found,
                 });
             }
-            (Some(found), _) => found,
-            (None, Some(requested)) => requested,
-            (None, None) => {
+            (_, Some(found), Some(requested)) if found != requested => {
+                return Err(AppError::KindMismatch {
+                    path: candidate.path().clone(),
+                    requested,
+                    found,
+                });
+            }
+            (_, Some(found), _) => found,
+            (_, None, Some(requested)) => requested,
+            (guess, None, None) => {
                 return Err(AppError::KindUnknown {
                     path: candidate.path().clone(),
+                    guess,
                 });
             }
         };
@@ -154,6 +167,25 @@ impl<P: Ports> Workspace<P> {
                 holder,
             });
         }
+        // What the file's own classification keys say is taken in once, here. What
+        // the options say wins; whatever cannot be taken in (an alias another document
+        // holds, a tag outside the vocabulary) is left out and shows up as a drift.
+        let import = ClassificationImport::of(candidate.classification(), Stored::New { kind });
+        let mut tags = options.tags.clone();
+        if import
+            .tags()
+            .iter()
+            .all(|tag| self.config.vocabulary().admit(tag).is_ok())
+        {
+            tags.extend(import.tags().iter().cloned());
+        }
+        let alias = options.alias.clone().or_else(|| {
+            import
+                .alias()
+                .filter(|alias| model.index().alias_holder(store, alias).is_none())
+                .cloned()
+        });
+        let owner = import.owner().cloned();
         let id = self.new_entity_id().await?;
         let built = build(&self.ports, model.index(), store, id, Some(kind), candidate).await?;
         let version = built.version(candidate.raw_hash());
@@ -164,9 +196,9 @@ impl<P: Ports> Workspace<P> {
             RecordBody::Registered(Registration::Doc(DocRegistration::new(
                 kind,
                 candidate.path().clone(),
-                options.alias.clone(),
-                None,
-                options.tags.clone(),
+                alias,
+                owner,
+                tags,
                 version,
             ))),
         )?;
@@ -219,7 +251,7 @@ impl<P: Ports> Workspace<P> {
             let candidate = self
                 .ports
                 .current()
-                .read(&path)
+                .read(&path, options.kind)
                 .await
                 .map_err(AppError::port(PortName::Current))?
                 .ok_or_else(|| AppError::FileMissing { path: path.clone() })?;
@@ -343,7 +375,7 @@ impl<P: Ports> Workspace<P> {
         let there = self
             .ports
             .current()
-            .read(&new_path)
+            .read(&new_path, None)
             .await
             .map_err(AppError::port(PortName::Current))?;
         if there.is_none() {

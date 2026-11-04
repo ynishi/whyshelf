@@ -9,12 +9,13 @@
 //! The file is committed with the project, so anyone who can change the
 //! repository can change it. It therefore does not say where the private store
 //! is: a path written there could point anywhere in the home directory of whoever
-//! runs whyshelf. The private store is `<data dir>/<project>`, and the data dir
-//! comes from the user's environment only ([`UserDirs`]).
+//! runs whyshelf. The private store is `<data dir>/<project>-<project_id>`, and the
+//! data dir comes from the user's environment only ([`UserDirs`]).
 //!
 //! ```toml
 //! version = 1
 //! project = "demo"
+//! project_id = "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506"   # made by `whyshelf init`; required
 //!
 //! [paths]
 //! finding_dir = "docs/finding"
@@ -25,7 +26,9 @@
 //!
 //! [test]
 //! command = "cargo test"
-//! pin_pattern = '@pin:\s*(PIN-[A-Z0-9_-]+|UT-[A-Z0-9_-]+)'   # group 1 is the pin
+//! pin_pattern = '''@pin:\s*([^\s:"'`)\]}]+)'''   # group 1 is the whole tag; one that is no pin name is reported
+//! files = ["src", "tests"]         # the test files: globs under the scan directories
+//! timeout = "30m"                  # a test run is stopped after this: "90s", "30m", "2h"
 //!
 //! [stores]
 //! default = "private"              # where a new document goes: "private" or "repo"
@@ -48,9 +51,39 @@
 //! name = "alice"                   # the `by` of an approval when none is given
 //! ```
 //!
-//! Every table except `project` and `[test]` may be left out; the values shown
-//! above are the defaults, except `project`, which names the project, and
-//! `test.command`, which has no default because it depends on the language.
+//! Every table except `project`, `project_id` and `[test]` may be left out; the
+//! values shown above are the defaults, except `project`, which names the project,
+//! `project_id`, which identifies it, and `test.command`, which has no default
+//! because it depends on the language. The two other keys of `[test]` are there to
+//! narrow or widen what the defaults do:
+//!
+//! - `test.files` are the globs (Git pathspec globs, relative to the project root,
+//!   `**` crossing directories) of the files whose pin tags count. Left out, every
+//!   file under `paths.scan_dirs` counts, and `whyshelf init` writes the scan
+//!   directories there so that narrowing it is one edit. A pin is looked for in a file
+//!   that is under a scan directory **and** matches a glob. A language that keeps its
+//!   tests in the file they test (Rust's `#[cfg(test)] mod tests`) cannot be narrowed
+//!   by file: leave the whole of the scan directories.
+//! - `test.timeout` is how long the test command may run before it is stopped; a CA
+//!   check whose tests did not finish records nothing (the violation is
+//!   `TestsTimedOut`). Only the last 64 KiB of the command's output is kept in memory.
+//!
+//! # Project identity
+//!
+//! `project` is a name and two projects can share one. `project_id` is a UUID that
+//! `whyshelf init` makes (version 7) and the file keeps, so it travels with the
+//! repository: every clone and worktree of it finds the same private store, and a
+//! different project with the same name does not. Only the UUID's own text ever
+//! reaches a path, so a repository still cannot point the tool at a place of its
+//! choosing.
+//!
+//! The tool never rewrites a settings file. A file without `project_id` is refused
+//! with the line to add ([`ConfigError::MissingProjectId`]); `whyshelf init
+//! --print-project-id` prints such a line, and is what to use after copying the
+//! settings of a template repository, since the copy carries the template's id.
+//! One person adds the line and commits it: if two people add one each and merge, the
+//! private store of the one whose id was dropped stays in a directory that is no
+//! longer looked at, and what was in it is unresolved until the directory is moved.
 //!
 //! # Environment and trust boundary
 //!
@@ -58,8 +91,9 @@
 //!
 //! ```text
 //!   .whyshelf.toml  (committed; whoever can change the repository can change it)
-//!        decides:  project name, document and test directories, the test command,
-//!                  the pin pattern, the baseline ref, the default store of new
+//!        decides:  project name and id, document and test directories, the test
+//!                  command and its time limit, the pin pattern, the test files,
+//!                  the baseline ref, the default store of new
 //!                  documents, the official tag vocabulary, which Markdown
 //!                  files are generated, the ingest threshold, the default
 //!                  approver's name
@@ -75,7 +109,7 @@
 //! | `XDG_DATA_HOME` | when the first is not set: the data dir is `$XDG_DATA_HOME/whyshelf` (an unset, empty or relative value is skipped) |
 //! | `HOME` | when neither of those is usable: the data dir is `$HOME/.local/share/whyshelf` |
 //!
-//! The private store of a project is `<data dir>/<project>`. Nothing is expanded in
+//! The private store of a project is `<data dir>/<project>-<project_id>`. Nothing is expanded in
 //! these values (no `~`, no `$VAR`). If none of the three gives an absolute path the
 //! workspace cannot be opened, even when no document is ever private, because the
 //! location is resolved with the settings. Whyshelf reads no other variable. The
@@ -101,11 +135,23 @@
 //! use std::path::Path;
 //! use whyshelf_infra::config::{ConfigError, UserDirs, parse};
 //!
-//! let text = "version = 1\nproject = \"demo\"\n[test]\ncommand = \"make test\"\n";
+//! let id = "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506";
+//! let text = format!("version = 1\nproject = \"demo\"\nproject_id = \"{id}\"\n[test]\ncommand = \"make test\"\n");
+//! let text = text.as_str();
 //!
-//! // The private store: the data dir of the environment, then the project.
+//! // The private store: the data dir of the environment, then the project and its id.
 //! let dirs = UserDirs::default().with_data_dir("/data");
-//! assert_eq!(parse(text, &dirs).unwrap().private_dir(), Path::new("/data/demo"));
+//! assert_eq!(
+//!     parse(text, &dirs).unwrap().private_dir(),
+//!     Path::new("/data/demo-0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506")
+//! );
+//!
+//! // A file without the id is refused with the line to add; nothing is rewritten.
+//! let without = "version = 1\nproject = \"demo\"\n[test]\ncommand = \"make test\"\n";
+//! let Err(ConfigError::MissingProjectId { suggested }) = parse(without, &dirs) else {
+//!     panic!("the id is required");
+//! };
+//! assert!(format!("project_id = \"{suggested}\"").starts_with("project_id = \""));
 //!
 //! // Without WHYSHELF_DATA_DIR the XDG base directory is next, then HOME.
 //! let dirs = UserDirs::default().with_data_home("/xdg").with_home("/srv/alice");
@@ -125,17 +171,19 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use regex::Regex;
 use serde::Deserialize;
 use whyshelf_core::app::Config;
 use whyshelf_core::app::config::{
-    ExportSettings, IngestSettings, Paths, PinPattern, TestCommand, TestSettings,
+    ExportSettings, IngestSettings, Paths, PinPattern, TestCommand, TestSettings, TestTimeout,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::event::StoreKind;
-use whyshelf_core::domain::location::RelPath;
+use whyshelf_core::domain::location::{RelPath, TestFileSet};
+use whyshelf_core::domain::reference::{ProjectId, ProjectName};
 use whyshelf_core::domain::tag::TagVocabulary;
 
 /// The name of the settings file at the project root.
@@ -145,7 +193,14 @@ pub const FILE_NAME: &str = ".whyshelf.toml";
 pub const SUPPORTED_VERSION: u32 = 1;
 
 /// The pin tag the project scans for unless it says otherwise.
-pub const DEFAULT_PIN_PATTERN: &str = r"@pin:\s*(PIN-[A-Z0-9_-]+|UT-[A-Z0-9_-]+)";
+///
+/// The first group is the **whole token** after `@pin:`: everything up to white space,
+/// a `:` or a closing quote, bracket or parenthesis. It is then checked as a whole
+/// against the shape of a pin name, so a tag that was meant as a pin and is mistyped
+/// is reported with its full text instead of being cut short. A pattern that only
+/// took the characters a pin may have would cut `PIN-V1.99A` at the dot and report an
+/// undeclared `PIN-V1`, a name nobody wrote.
+pub const DEFAULT_PIN_PATTERN: &str = r#"@pin:\s*([^\s:"'`)\]}]+)"#;
 
 /// Why the settings could not be loaded.
 #[derive(Debug, thiserror::Error)]
@@ -189,6 +244,23 @@ pub enum ConfigError {
     /// The pin pattern has no group that captures the pin.
     #[error("`test.pin_pattern` needs a group that captures the pin name")]
     PinPatternGroup,
+    /// `test.timeout` is not a count and a unit.
+    #[error(
+        "`test.timeout` is `{found}`; write a whole number and a unit, such as `90s`, `30m` or `2h`"
+    )]
+    Timeout {
+        /// The text found.
+        found: String,
+    },
+    /// The file has no `project_id`. The tool does not rewrite the file; the line to
+    /// add is in the message, with a new id made just now.
+    #[error(
+        "the settings file has no `project_id`; add this line before the first `[table]` and commit it:\n\nproject_id = \"{suggested}\"\n\n(`whyshelf init --print-project-id` prints such a line. A project's private store is placed by this id, so the id must not change once private documents exist.)"
+    )]
+    MissingProjectId {
+        /// A new id, to be added to the file.
+        suggested: ProjectId,
+    },
     /// The settings file says where the private store is, which only the user's
     /// environment may say.
     #[error(
@@ -277,6 +349,7 @@ impl UserDirs {
 struct FileDto {
     version: u32,
     project: String,
+    project_id: Option<String>,
     #[serde(default)]
     paths: PathsDto,
     test: TestDto,
@@ -303,13 +376,16 @@ struct PathsDto {
     watch_dirs: Vec<String>,
 }
 
+/// The directories scanned for pins when the settings name none.
+pub const DEFAULT_SCAN_DIRS: [&str; 2] = ["src", "tests"];
+
 impl Default for PathsDto {
     fn default() -> Self {
         Self {
             finding_dir: "docs/finding".to_owned(),
             spec_dir: "docs/spec".to_owned(),
             design_dir: "docs/design".to_owned(),
-            scan_dirs: vec!["src".to_owned(), "tests".to_owned()],
+            scan_dirs: DEFAULT_SCAN_DIRS.iter().map(|d| (*d).to_owned()).collect(),
             watch_dirs: vec!["docs".to_owned()],
         }
     }
@@ -320,6 +396,8 @@ impl Default for PathsDto {
 struct TestDto {
     command: String,
     pin_pattern: Option<String>,
+    files: Option<Vec<String>>,
+    timeout: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -391,6 +469,7 @@ struct UserDto {
 #[derive(Debug, Clone)]
 pub struct Settings {
     config: Config,
+    project_id: ProjectId,
     private_dir: PathBuf,
     baseline: String,
 }
@@ -401,7 +480,13 @@ impl Settings {
         &self.config
     }
 
-    /// Where the private store is: `<data dir>/<project>` (see [`UserDirs`]).
+    /// The project's identity.
+    pub fn project_id(&self) -> ProjectId {
+        self.project_id
+    }
+
+    /// Where the private store is: `<data dir>/<project>-<project_id>` (see
+    /// [`UserDirs`]).
     pub fn private_dir(&self) -> &Path {
         &self.private_dir
     }
@@ -432,6 +517,44 @@ fn rel_list(field: &str, texts: &[String]) -> Result<Vec<RelPath>, ConfigError> 
     texts.iter().map(|text| rel(field, text)).collect()
 }
 
+/// Where the private store of a project is: `<data dir>/<project>-<project_id>`.
+///
+/// The one place that says so; `whyshelf migrate` places the store the same way. The
+/// name is for a person reading the directory, the id is what tells two projects of
+/// one name apart, and only the id's own text (hexadecimal and hyphens) is joined.
+pub fn private_dir(
+    dirs: &UserDirs,
+    project: &ProjectName,
+    id: ProjectId,
+) -> Result<PathBuf, ConfigError> {
+    Ok(dirs.data_dir()?.join(format!("{project}-{id}")))
+}
+
+/// A new project id, as `whyshelf init` and the message of a missing one make it.
+pub fn new_project_id() -> ProjectId {
+    ProjectId::new(uuid::Uuid::now_v7())
+}
+
+/// `90s`, `30m`, `2h`: a whole number and one unit.
+fn timeout(text: &str) -> Result<TestTimeout, ConfigError> {
+    let bad = || ConfigError::Timeout {
+        found: text.to_owned(),
+    };
+    let unit = text.chars().last().ok_or_else(bad)?;
+    let scale = match unit {
+        's' => 1,
+        'm' => 60,
+        'h' => 3600,
+        _ => return Err(bad()),
+    };
+    let count: u64 = text[..text.len() - 1].parse().map_err(|_| bad())?;
+    let seconds = count.checked_mul(scale).ok_or_else(bad)?;
+    value(
+        "test.timeout",
+        TestTimeout::new(Duration::from_secs(seconds)),
+    )
+}
+
 /// Read the settings from the text of a settings file; the private store is
 /// placed in the data dir that `dirs` gives.
 pub fn parse(text: &str, dirs: &UserDirs) -> Result<Settings, ConfigError> {
@@ -443,6 +566,14 @@ pub fn parse(text: &str, dirs: &UserDirs) -> Result<Settings, ConfigError> {
         return Err(ConfigError::PrivateInRepo);
     }
     let project = value("project", dto.project.parse())?;
+    let project_id = match &dto.project_id {
+        Some(text) => value("project_id", text.parse::<ProjectId>())?,
+        None => {
+            return Err(ConfigError::MissingProjectId {
+                suggested: new_project_id(),
+            });
+        }
+    };
 
     let paths = Paths::new(
         rel("paths.finding_dir", &dto.paths.finding_dir)?,
@@ -460,10 +591,16 @@ pub fn parse(text: &str, dirs: &UserDirs) -> Result<Settings, ConfigError> {
     if compiled.captures_len() < 2 {
         return Err(ConfigError::PinPatternGroup);
     }
-    let test = TestSettings::new(
+    let mut test = TestSettings::new(
         value("test.command", TestCommand::new(dto.test.command))?,
         value("test.pin_pattern", PinPattern::new(pattern))?,
     );
+    if let Some(globs) = dto.test.files {
+        test = test.with_files(value("test.files", TestFileSet::new(globs))?);
+    }
+    if let Some(limit) = &dto.test.timeout {
+        test = test.with_timeout(timeout(limit)?);
+    }
 
     let default_store =
         dto.stores
@@ -485,10 +622,11 @@ pub fn parse(text: &str, dirs: &UserDirs) -> Result<Settings, ConfigError> {
         config = config.with_user(value("user.name", Actor::new(&user.name))?);
     }
 
-    let private_dir = dirs.data_dir()?.join(config.project().as_str());
+    let private_dir = private_dir(dirs, config.project(), project_id)?;
 
     Ok(Settings {
         config,
+        project_id,
         private_dir,
         baseline: dto.git.baseline,
     })
@@ -507,9 +645,12 @@ pub async fn load(root: &Path, dirs: &UserDirs) -> Result<Settings, ConfigError>
 mod tests {
     use super::*;
 
+    const ID: &str = "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506";
+
     const FULL: &str = r#"
 version = 1
 project = "demo"
+project_id = "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506"
 
 [paths]
 finding_dir = "notes/finding"
@@ -521,6 +662,8 @@ watch_dirs = ["notes"]
 [test]
 command = "make test"
 pin_pattern = '@pin\s+(PIN-[A-Z]+)'
+files = ["src/**/*_test.rs"]
+timeout = "45m"
 
 [stores]
 default = "repo"
@@ -542,11 +685,22 @@ rebuild_threshold = 50
 name = "alice"
 "#;
 
+    /// Parse a text; one that names no `project_id` gets the test one, since most of
+    /// these tests are about something else.
     fn parse_full(text: &str) -> Result<Settings, ConfigError> {
-        parse(text, &UserDirs::default().with_data_dir("/data"))
+        let text = if text.contains("project_id") {
+            text.to_owned()
+        } else {
+            text.replacen(
+                "project = ",
+                &format!("project_id = \"{ID}\"\nproject = "),
+                1,
+            )
+        };
+        parse(&text, &UserDirs::default().with_data_dir("/data"))
     }
 
-    const MINIMAL: &str = "version = 1\nproject = \"demo\"\n[test]\ncommand = \"x\"\n";
+    const MINIMAL: &str = "version = 1\nproject = \"demo\"\nproject_id = \"0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506\"\n[test]\ncommand = \"x\"\n";
 
     #[test]
     fn a_full_file_becomes_a_config_and_adapter_settings() {
@@ -562,7 +716,17 @@ name = "alice"
         assert_eq!(config.ingest().rebuild_threshold(), 50);
         assert_eq!(config.user().map(Actor::as_str), Some("alice"));
         assert_eq!(settings.baseline(), "trunk");
-        assert_eq!(settings.private_dir(), Path::new("/data/demo"));
+        assert_eq!(
+            settings.private_dir(),
+            Path::new("/data/demo-0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506")
+        );
+        assert_eq!(settings.project_id().to_string(), ID);
+        assert_eq!(
+            config.test_files().unwrap().globs(),
+            ["src/**/*_test.rs"],
+            "test.files narrows the test files"
+        );
+        assert_eq!(config.test().timeout().get(), Duration::from_secs(45 * 60));
         let official: Result<_, _> = "area:auth".parse().map(|t| config.vocabulary().admit(&t));
         assert_eq!(official, Ok(Ok(())));
     }
@@ -608,7 +772,7 @@ name = "alice"
         let settings = parse(MINIMAL, &home).unwrap();
         assert_eq!(
             settings.private_dir(),
-            Path::new("/fake-home/.local/share/whyshelf/demo")
+            Path::new("/fake-home/.local/share/whyshelf/demo-0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506")
         );
     }
 
@@ -684,10 +848,97 @@ name = "alice"
             .unwrap();
         let dirs = UserDirs::default().with_data_dir(dir.path().join("data"));
         let settings = load(dir.path(), &dirs).await.unwrap();
-        assert_eq!(settings.private_dir(), dir.path().join("data").join("demo"));
+        assert_eq!(
+            settings.private_dir(),
+            dir.path().join("data").join(format!("demo-{ID}"))
+        );
         assert!(matches!(
             load(&dir.path().join("none"), &dirs).await,
             Err(ConfigError::Read { .. })
         ));
+    }
+
+    #[test]
+    fn a_project_of_the_same_name_with_another_id_has_another_private_store() {
+        let dirs = UserDirs::default().with_data_dir("/data");
+        let other = MINIMAL.replace(ID, "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f507");
+        let (one, two) = (
+            parse(MINIMAL, &dirs).unwrap(),
+            parse(&other, &dirs).unwrap(),
+        );
+        assert_eq!(one.config().project(), two.config().project());
+        assert_ne!(one.private_dir(), two.private_dir());
+        // The same file in another clone or worktree is the same store.
+        assert_eq!(
+            one.private_dir(),
+            parse(MINIMAL, &dirs).unwrap().private_dir()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_settings_file_without_an_id_says_the_line_to_add_and_is_not_touched() {
+        let without = "version = 1\nproject = \"demo\"\n[test]\ncommand = \"x\"\n";
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(FILE_NAME);
+        tokio::fs::write(&file, without).await.unwrap();
+        let dirs = UserDirs::default().with_data_dir("/data");
+        let Err(error) = load(dir.path(), &dirs).await else {
+            panic!("an id is required");
+        };
+        let ConfigError::MissingProjectId { suggested } = &error else {
+            panic!("expected MissingProjectId, got {error:?}");
+        };
+        // The message carries the line, with a UUID v7, ready to paste.
+        let line = format!("project_id = \"{suggested}\"");
+        assert!(error.to_string().contains(&line));
+        assert_eq!(suggested.as_uuid().get_version_num(), 7);
+        let reread: toml::Table = toml::from_str(&line).unwrap();
+        let text = reread["project_id"].as_str().unwrap();
+        assert_eq!(
+            text.parse::<ProjectId>()
+                .unwrap()
+                .as_uuid()
+                .get_version_num(),
+            7
+        );
+        // Not a byte of the file changed.
+        assert_eq!(tokio::fs::read_to_string(&file).await.unwrap(), without);
+    }
+
+    #[test]
+    fn a_project_id_that_is_no_uuid_is_refused_and_a_path_never_reaches_the_store() {
+        for bad in ["../x", "demo", "", "0192f3a4"] {
+            let text = MINIMAL.replace(ID, bad);
+            assert!(
+                matches!(
+                    parse_full(&text),
+                    Err(ConfigError::Value { ref field, .. }) if field == "project_id"
+                ),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_test_files_and_the_time_limit_have_defaults_and_refuse_nonsense() {
+        let settings = parse_full("version = 1\nproject = \"d\"\n[paths]\nscan_dirs = [\"src\", \"tests\"]\n[test]\ncommand = \"x\"\n").unwrap();
+        let config = settings.config();
+        // Left out: the whole of the scan directories, and thirty minutes.
+        assert_eq!(config.test_files().unwrap().globs(), ["src", "tests"]);
+        assert_eq!(config.test().timeout().get(), Duration::from_secs(30 * 60));
+        for bad in ["0s", "30", "m", "1d", "-5m", "1.5h", ""] {
+            let text = format!(
+                "version = 1\nproject = \"d\"\n[test]\ncommand = \"x\"\ntimeout = \"{bad}\"\n"
+            );
+            assert!(parse_full(&text).is_err(), "{bad}");
+        }
+        for bad in ["[]", "[\"/abs\"]", "[\"../up\"]", "[\":(top)x\"]"] {
+            let text =
+                format!("version = 1\nproject = \"d\"\n[test]\ncommand = \"x\"\nfiles = {bad}\n");
+            assert!(
+                matches!(parse_full(&text), Err(ConfigError::Value { .. })),
+                "{bad}"
+            );
+        }
     }
 }

@@ -9,9 +9,16 @@
 //! | is this text a revision (`validate`) | 40 hexadecimal digits, checked without starting a process |
 //! | the revision of the working tree | `rev-parse HEAD` |
 //! | is the tree clean | `status --porcelain`, **leaving out `.whyshelf/`** |
-//! | has a revision reached the baseline | `merge-base --is-ancestor <rev> <baseline>` |
+//! | has a revision reached the baseline | `rev-parse --verify <baseline>^{commit}`, then `merge-base --is-ancestor <rev> <baseline commit>`, and when that fails `rev-parse --verify <rev>^{commit}` to tell a missing commit from a failure |
 //! | the name of the line of work | `rev-parse --abbrev-ref HEAD` (none when detached) |
-//! | the pins in the tests at a revision | `ls-tree -r` and `show <rev>:<path>` |
+//! | the pins in the tests at a revision | one `grep -I -n -z -e '' <rev> -- <pathspecs>` (see [`GitCodeScan`]) |
+//!
+//! **A clone that cannot say is not a failure.** A baseline that names no commit
+//! here, or an approved commit that is not in the clone (a shallow or single-branch
+//! checkout of a CI machine), makes the answer "unknown", with the reason
+//! ([`IntegrationFact::Unknown`]). The baseline text comes from the committed
+//! settings, so it is handed to Git only as a revision (after `--end-of-options`) and
+//! only as a commit (`^{commit}`). Any other failure of `merge-base` is an error.
 //!
 //! **Why `.whyshelf/` does not make the tree dirty.** The tool itself writes
 //! events, objects and generated files there; if those counted, recording one
@@ -24,7 +31,6 @@
 //! however the tree has changed since, and reading Git's object store needs no
 //! checkout.
 
-use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -32,12 +38,13 @@ use std::process::Stdio;
 use regex::Regex;
 use tokio::process::Command;
 use whyshelf_core::app::config::PinPattern;
-use whyshelf_core::app::ports::{CodeScanPort, RevisionPort, WorktreeRoot};
+use whyshelf_core::app::ports::{CodeScanPort, PinScan, RevisionPort, WorktreeRoot};
 use whyshelf_core::app::raw::RawRevision;
 use whyshelf_core::domain::error::ValueError;
-use whyshelf_core::domain::location::{CodeLocation, RelPath};
-use whyshelf_core::domain::pin::PinId;
-use whyshelf_core::domain::revision::RevisionId;
+use whyshelf_core::domain::location::{CodeLocation, RelPath, TestFileSet};
+use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::pin::{MalformedPin, PinId};
+use whyshelf_core::domain::revision::{IntegrationFact, RevisionId, UnknownIntegration};
 
 /// Why a Git question could not be answered.
 #[derive(Debug, thiserror::Error)]
@@ -174,6 +181,31 @@ impl Git {
         }
     }
 
+    /// The commit a revision text names, or `None` when it names no commit here.
+    ///
+    /// The text may come from a committed file (the baseline), so it is handed to Git
+    /// as a revision and nothing else (`--end-of-options`: it cannot be read as an
+    /// option) and only as a commit (`^{commit}`: a tree is not a baseline).
+    /// `rev-parse --verify` answers a text that is no commit of this repository with
+    /// a failure of its own, which is the answer and not an error; only a `git` that
+    /// cannot run is one.
+    pub(crate) async fn commit_of(&self, text: &str) -> Result<Option<String>, GitError> {
+        let spec = format!("{text}^{{commit}}");
+        let args = [
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            "--end-of-options",
+            spec.as_str(),
+        ];
+        let finished = self.finish(args).await?;
+        if finished.code != Some(0) {
+            return Ok(None);
+        }
+        let printed = String::from_utf8_lossy(&finished.stdout).trim().to_owned();
+        Ok(is_full_hash(&printed).then_some(printed))
+    }
+
     /// Whether the working tree has no change outside `.whyshelf/`.
     pub(crate) async fn is_clean(&self) -> Result<bool, GitError> {
         let stdout = self
@@ -262,17 +294,24 @@ impl RevisionPort for GitRevision {
         self.git.is_clean().await
     }
 
-    async fn is_integrated(&self, revision: &RevisionId) -> Result<bool, GitError> {
-        let args = [
-            "merge-base",
-            "--is-ancestor",
-            full_hash(revision)?,
-            self.baseline.as_str(),
-        ];
+    async fn integration(&self, revision: &RevisionId) -> Result<IntegrationFact, GitError> {
+        let rev = full_hash(revision)?;
+        // A clone without the baseline or without the commit cannot say "no". The
+        // baseline is asked for as a commit first; the revision only when `merge-base`
+        // fails, so that what is left of its failures is a failure of the tool.
+        let Some(baseline) = self.git.commit_of(self.baseline.as_str()).await? else {
+            return Ok(IntegrationFact::Unknown {
+                reason: UnknownIntegration::BaselineUnresolved,
+            });
+        };
+        let args = ["merge-base", "--is-ancestor", rev, baseline.as_str()];
         let finished = self.git.finish(args).await?;
         match finished.code {
-            Some(0) => Ok(true),
-            Some(1) => Ok(false),
+            Some(0) => Ok(IntegrationFact::Integrated),
+            Some(1) => Ok(IntegrationFact::NotIntegrated),
+            _ if self.git.commit_of(rev).await?.is_none() => Ok(IntegrationFact::Unknown {
+                reason: UnknownIntegration::RevisionAbsent,
+            }),
             _ => Err(failed(&args, &finished)),
         }
     }
@@ -287,13 +326,26 @@ impl RevisionPort for GitRevision {
     }
 }
 
-/// Finds pins in the files of a revision that sit under the scan directories.
+/// Finds pins in the test files of a revision.
 ///
-/// Every file Git lists there (not a submodule or a link) is read with
-/// `git show`, one process per file, skipped when it is not UTF-8 text or holds a
-/// NUL byte; each line is matched against the pin pattern, and the first group is
-/// the pin. A file is not told from a test: a tag in a comment of a source file
-/// counts as well. The directories are the settings' `paths.scan_dirs`.
+/// **One `git grep` for the whole scan.** `git grep -I -n -z -e '' <revision> --
+/// <pathspecs>` prints every line of every text file the pathspecs name, in the
+/// revision and not in the working tree, and skips binary files itself (`-I`). The
+/// pathspecs are the globs of `test.files`, each as `:(glob)<glob>` and as
+/// `:(glob)<glob>/**` so that a directory name means everything under it. Each line is
+/// then matched against the pin pattern **here**, by the regular-expression engine
+/// that checked the pattern when the settings were read, and the first group is the
+/// pin.
+///
+/// Why the pattern is not given to `git grep`: `-E` is the C library's POSIX dialect,
+/// which differs from place to place (the same `\s` is whitespace on one machine and a
+/// letter on another), so the same settings would find different pins on two
+/// machines. Matching the pattern here means one dialect everywhere, and Git still
+/// does what it is good at: reading the revision's files in one process, with the
+/// pathspec.
+///
+/// A file counts when it is under one of the scan directories **and** a glob names
+/// it. A tag whose name is no pin's is returned as malformed, not dropped.
 #[derive(Debug, Clone)]
 pub struct GitCodeScan {
     git: Git,
@@ -308,16 +360,39 @@ impl GitCodeScan {
     }
 }
 
-/// The paths of the files (not submodules or links) that `ls-tree -z -r` listed.
-fn blob_paths(listing: &[u8]) -> Vec<String> {
-    listing
-        .split(|byte| *byte == 0)
-        .filter_map(|entry| {
-            let entry = std::str::from_utf8(entry).ok()?;
-            let (meta, path) = entry.split_once('\t')?;
-            let mut fields = meta.split(' ');
-            let (_mode, kind) = (fields.next()?, fields.next()?);
-            (kind == "blob").then(|| path.to_owned())
+/// One line of `git grep -n -z`: `<revision>:<path>`, NUL, the line number, NUL, the
+/// line. `None` for anything that is not that shape.
+fn grep_record<'a>(
+    record: &'a [u8],
+    prefix: &str,
+) -> Option<(RelPath, u32, std::borrow::Cow<'a, str>)> {
+    let mut parts = record.splitn(3, |byte| *byte == 0);
+    let (path, number, line) = (parts.next()?, parts.next()?, parts.next()?);
+    let path = std::str::from_utf8(path).ok()?.strip_prefix(prefix)?;
+    let number: u32 = std::str::from_utf8(number).ok()?.parse().ok()?;
+    Some((path.parse().ok()?, number, String::from_utf8_lossy(line)))
+}
+
+/// Whether a path is a scan directory or lies under one.
+fn under(path: &RelPath, dirs: &[RelPath]) -> bool {
+    dirs.iter().any(|dir| {
+        path.as_str() == dir.as_str()
+            || path
+                .as_str()
+                .strip_prefix(dir.as_str())
+                .is_some_and(|rest| rest.starts_with('/'))
+    })
+}
+
+/// The pathspecs that make a glob mean the files it names, and a directory
+/// everything under it.
+fn pathspecs(files: &TestFileSet) -> Vec<String> {
+    files
+        .globs()
+        .iter()
+        .flat_map(|glob| {
+            let glob = glob.trim_end_matches('/');
+            [format!(":(glob){glob}"), format!(":(glob){glob}/**")]
         })
         .collect()
 }
@@ -329,48 +404,53 @@ impl CodeScanPort for GitCodeScan {
         &self,
         revision: &RevisionId,
         scan_dirs: &[RelPath],
+        files: &TestFileSet,
         pattern: &PinPattern,
-    ) -> Result<BTreeMap<PinId, Vec<CodeLocation>>, GitError> {
+    ) -> Result<PinScan, GitError> {
         let rev = full_hash(revision)?;
         let re = Regex::new(pattern.as_str()).map_err(GitError::Pattern)?;
         if re.captures_len() < 2 {
             return Err(GitError::PatternGroup);
         }
-        let mut found: BTreeMap<PinId, Vec<CodeLocation>> = BTreeMap::new();
+        let mut scan = PinScan::default();
         if scan_dirs.is_empty() {
-            return Ok(found);
+            return Ok(scan);
         }
-        let mut args: Vec<&str> = vec!["ls-tree", "-r", "-z", rev, "--"];
-        args.extend(scan_dirs.iter().map(RelPath::as_str));
-        let listing = self.git.run(args).await?;
-        for path in blob_paths(&listing) {
-            let Ok(rel) = path.parse::<RelPath>() else {
+        let mut args: Vec<String> = ["grep", "-I", "-n", "-z", "--no-color", "-e", "", rev, "--"]
+            .iter()
+            .map(|arg| (*arg).to_owned())
+            .collect();
+        args.extend(pathspecs(files));
+        let finished = self.git.finish(&args).await?;
+        match finished.code {
+            Some(0) => {}
+            // Nothing in the revision matches the pathspecs (or the files are empty).
+            Some(1) => return Ok(scan),
+            _ => return Err(failed(&args, &finished)),
+        }
+        let prefix = format!("{rev}:");
+        for record in finished.stdout.split(|byte| *byte == b'\n') {
+            let Some((path, number, line)) = grep_record(record, &prefix) else {
                 continue;
             };
-            let object = format!("{rev}:./{path}");
-            let content = self.git.run(["show", object.as_str()]).await?;
-            let Ok(text) = String::from_utf8(content) else {
-                continue;
-            };
-            if text.contains('\0') {
+            if !under(&path, scan_dirs) {
                 continue;
             }
-            for (index, line) in text.lines().enumerate() {
-                for captures in re.captures_iter(line) {
-                    let Some(pin) = captures
-                        .get(1)
-                        .and_then(|m| m.as_str().parse::<PinId>().ok())
-                    else {
-                        continue;
-                    };
-                    let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
-                    let location =
-                        CodeLocation::new(rel.clone(), line_number).map_err(GitError::Value)?;
-                    found.entry(pin).or_default().push(location);
+            for captures in re.captures_iter(&line) {
+                let Some(named) = captures.get(1) else {
+                    continue;
+                };
+                let location = CodeLocation::new(path.clone(), number).map_err(GitError::Value)?;
+                match named.as_str().parse::<PinId>() {
+                    Ok(pin) => scan.pins.entry(pin).or_default().push(location),
+                    Err(_) => scan.malformed.push(MalformedPin::new(
+                        location,
+                        NonBlank::new(named.as_str()).map_err(GitError::Value)?,
+                    )),
                 }
             }
         }
-        Ok(found)
+        Ok(scan)
     }
 }
 
@@ -389,9 +469,55 @@ mod tests {
     }
 
     #[test]
-    fn the_listing_keeps_files_and_drops_submodules() {
-        let listing = b"100644 blob aaaa\tsrc/a.rs\x00160000 commit bbbb\tvendor/x\x00100755 blob cccc\ttests/b.sh\x00";
-        assert_eq!(blob_paths(listing), ["src/a.rs", "tests/b.sh"]);
+    fn a_grep_record_is_a_path_a_line_number_and_a_line() {
+        let record = b"abc:tests/a.rs\x0012\x00    // @pin: PIN-A";
+        let (path, number, line) = grep_record(record, "abc:").unwrap();
+        assert_eq!(
+            (path.as_str(), number, &*line),
+            ("tests/a.rs", 12, "    // @pin: PIN-A")
+        );
+        // A line may hold anything after the second separator, a NUL included.
+        let (_, _, line) = grep_record(b"abc:a.rs\x001\x00x\x00y", "abc:").unwrap();
+        assert_eq!(&*line, "x\0y");
+        for bad in [
+            &b"abc:a.rs"[..],
+            b"abc:a.rs\x00x\x00l",
+            b"other:a.rs\x001\x00l",
+            b"",
+        ] {
+            assert!(grep_record(bad, "abc:").is_none());
+        }
+    }
+
+    #[test]
+    fn a_file_counts_only_under_a_scan_directory() {
+        let dirs: Vec<RelPath> = ["src", "tests/unit"]
+            .iter()
+            .map(|d| d.parse().unwrap())
+            .collect();
+        let path = |text: &str| text.parse::<RelPath>().unwrap();
+        assert!(under(&path("src/a.rs"), &dirs));
+        assert!(under(&path("tests/unit/deep/b.rs"), &dirs));
+        assert!(
+            !under(&path("srcs/a.rs"), &dirs),
+            "a prefix is not a directory"
+        );
+        assert!(!under(&path("tests/other.rs"), &dirs));
+    }
+
+    #[test]
+    fn a_glob_names_files_and_a_directory_name_names_what_is_under_it() {
+        let files =
+            TestFileSet::new(vec!["tests/".to_owned(), "src/**/*_test.go".to_owned()]).unwrap();
+        assert_eq!(
+            pathspecs(&files),
+            [
+                ":(glob)tests",
+                ":(glob)tests/**",
+                ":(glob)src/**/*_test.go",
+                ":(glob)src/**/*_test.go/**"
+            ]
+        );
     }
 
     #[tokio::test]

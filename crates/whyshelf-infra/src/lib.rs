@@ -25,7 +25,7 @@
 //!     1  canonicalize root ............................. OpenError::Root
 //!     |
 //!     2  config::load: <root>/.whyshelf.toml ........... OpenError::Config
-//!     |    private store = <data dir>/<project>,
+//!     |    private store = <data dir>/<project>-<project_id>,
 //!     |    the data dir from the environment (UserDirs)
 //!     |
 //!     3  git worktree prune ............................ OpenError::Git
@@ -72,8 +72,9 @@
 //! | [`markdown`], [`parse`] | the one text normalization rule; front matter and sections into raw values |
 //! | [`fs_current`], [`scaffold`] | the document files (read) and new files from a template (create, never overwrite) |
 //! | [`wire`] | the version-1 JSON of an event file, and the reader that chooses by `v` |
+//! | [`format`](mod@format) | the versions found in a project's data, counted and set against the ones this build reads (`whyshelf migrate`) |
 //! | [`store_fs`], [`export`], [`map_dto`], [`status_md`] | the repo store and the private store; the generated files, their marker and the JSON Schema of the map |
-//! | [`git`], [`test_run`] | the revision, the baseline and the pins in the tests; the test command at a revision |
+//! | [`git`], [`test_run`] | the revision, the baseline (or that a clone cannot tell) and the pins in the test files; the test command at a revision, with a time limit |
 //! | [`cache_sqlite`] | the file stamps and the full-text index, on `rusqlite-isle` |
 //! | [`secret`], [`clock`], [`id`] | the secret scan, the time (RFC 3339), new UUID v7 identifiers |
 //! | [`blocking`] | the only place with blocking I/O, inside `spawn_blocking` |
@@ -87,6 +88,7 @@ pub mod cache_sqlite;
 pub mod clock;
 pub mod config;
 pub mod export;
+pub mod format;
 pub mod fs_current;
 pub mod git;
 pub mod id;

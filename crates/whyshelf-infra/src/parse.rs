@@ -14,11 +14,26 @@
 //!
 //! A problem in a file is a [`UnparsedReason`], never a panic and never the first
 //! one only: every key that is missing or wrong is reported, so a person fixes
-//! the file in one pass. The kind of file is told by its keys, looked at in this
-//! order: `finding_type` makes a Finding, `grounds` a Spec, `spec` a Design. A key
-//! that is not listed is ignored. That includes the keys of the classification
-//! (`tags`, `owner`, `alias`, ...): they belong to the tool and live in events, so
-//! a file that carries them is read without them and is not warned about.
+//! the file in one pass.
+//!
+//! **A file is read as the kind it is registered as** ([`read`]), whatever else its
+//! keys hold. A file nobody registered yet has no such kind, and [`parse`] tells it by
+//! its keys (`finding_type` makes a Finding, `grounds` a Spec, `spec` a Design) when
+//! they name exactly one; a file whose keys name two or none is not registered on a
+//! guess, and the person is asked for `--kind`.
+//!
+//! **No key is dropped without a word.** Every key of the front matter is one of four
+//! things (see [`whyshelf_core::domain::front`]):
+//!
+//! | the key | is | what happens |
+//! |---|---|---|
+//! | one the kind reads | content | it is read, and it is what the hash covers |
+//! | `tags`, `kind`, `owner`, `alias` | the file's classification | returned with the file; taken in once at registration, then compared with the store and shown as a difference when they disagree. The tool never rewrites the file |
+//! | a key another kind reads (`crux` in a Spec) | a foreign section | `ForeignSection`: the file is Invalid |
+//! | none of the above (`evidance`) | a typing mistake | `UnknownKey`: the file is Invalid |
+//!
+//! Classification keys and the text of sections the kind does not read are not in any
+//! hash, so changing them cannot remove an approval.
 //!
 //! | what is wrong | reported as | the key it names |
 //! |---|---|---|
@@ -26,6 +41,8 @@
 //! | no front matter, YAML that does not parse, or a front matter that is not a mapping | `MalformedFrontmatter` | none; nothing else is read |
 //! | a required key is absent | `MissingField` | the key, such as `context` or `crux.question`; `## Contract` for the section |
 //! | a key is present and refused | `InvalidField` | the key with its position, such as `accept.pins[1].id` or `crux.options[0].reason` |
+//! | a key of another kind, or of none | `ForeignSection`, `UnknownKey` | the key |
+//! | the file is of another kind than the one it is registered as | `KindChanged` | none |
 //! | a reference names nothing, names several, or the wrong kind | `DanglingRef`, `AmbiguousRef`, `WrongKind` | raised by the application after parsing, not here |
 //!
 //! # The keys of a Finding
@@ -150,27 +167,57 @@ use serde_norway::Value;
 use whyshelf_core::app::raw::{
     NormalizedText, RawDesign, RawDoc, RawFinding, RawFindingSource, RawRevision, RawSpec,
 };
-use whyshelf_core::domain::actor::MeasuredAt;
+use whyshelf_core::domain::actor::{Actor, MeasuredAt};
 use whyshelf_core::domain::design::{ChosenOption, Crux, RejectedOption, WorkItem};
 use whyshelf_core::domain::error::ValueError;
+use whyshelf_core::domain::event::DocKind;
 use whyshelf_core::domain::finding::{
     EvidenceLabel, FindingType, MaturityLevel, ObservationMethod, Reproducibility,
 };
-use whyshelf_core::domain::id::ItemNumber;
+use whyshelf_core::domain::front::{FileClassification, Guess, SortedKeys};
+use whyshelf_core::domain::id::{Alias, ItemNumber};
 use whyshelf_core::domain::location::{CodeLocation, SourceUri};
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::pin::{HypId, Hypothesis, PinContract, PinId};
 use whyshelf_core::domain::reference::Ref;
 use whyshelf_core::domain::state::UnparsedReason;
+use whyshelf_core::domain::tag::Tag;
 
 use crate::clock::validate_rfc3339;
 use crate::markdown;
 
-/// Parse a normalized document, or say everything that is wrong with it.
+/// Parse a normalized document of a file that is not registered, or say everything
+/// that is wrong with it. The kind is told by the keys ([`DocKind::guess`]). A file
+/// that is registered is read with [`read`], as the kind it is registered as.
 pub fn parse(text: &NormalizedText) -> Result<RawDoc, NonEmptyVec<UnparsedReason>> {
+    read(text, None).outcome
+}
+
+/// Everything reading one file gave.
+#[derive(Debug)]
+pub struct Read {
+    /// What the keys said about the kind (all that matters for a file not registered).
+    pub guess: Guess,
+    /// The classification keys of the front matter, as written.
+    pub classification: FileClassification,
+    /// The document, or every problem with it.
+    pub outcome: Result<RawDoc, NonEmptyVec<UnparsedReason>>,
+}
+
+/// Read a normalized document as `kind`, or, for a file with no registered kind
+/// (`None`), as the kind its keys name when they name exactly one.
+///
+/// A file registered as one kind is read as that kind whatever else it holds. A key
+/// that another kind reads is a problem of its own (a Spec with a `crux`), and so is a
+/// key no kind reads; none is dropped without a word. The exception is a file whose
+/// one naming key is another kind's (`finding_type` in a registered Spec): it is not
+/// a Spec with extra sections but another document, and says so
+/// ([`UnparsedReason::KindChanged`]).
+pub fn read(text: &NormalizedText, kind: Option<DocKind>) -> Read {
     let mut problems = Problems::default();
-    let doc = parse_into(text.as_str(), &mut problems);
-    match (doc, NonEmptyVec::from_vec(problems.0)) {
+    let mut seen = Seen::default();
+    let doc = read_into(text.as_str(), kind, &mut problems, &mut seen);
+    let outcome = match (doc, NonEmptyVec::from_vec(problems.0)) {
         (Some(doc), Err(_)) => Ok(doc),
         (_, Ok(reasons)) => Err(reasons),
         (None, Err(_)) => Err(NonEmptyVec::new(
@@ -179,10 +226,69 @@ pub fn parse(text: &NormalizedText) -> Result<RawDoc, NonEmptyVec<UnparsedReason
             },
             Vec::new(),
         )),
+    };
+    Read {
+        guess: seen.guess,
+        classification: seen.classification,
+        outcome,
     }
 }
 
-fn parse_into(text: &str, problems: &mut Problems) -> Option<RawDoc> {
+/// What reading found out besides the document.
+#[derive(Default)]
+struct Seen {
+    guess: Guess,
+    classification: FileClassification,
+}
+
+/// The classification keys, as the file writes them.
+#[derive(Deserialize)]
+struct ClassFront {
+    tags: Option<Vec<String>>,
+    kind: Option<String>,
+    owner: Option<String>,
+    alias: Option<String>,
+}
+
+fn classification(front: ClassFront, problems: &mut Problems) -> FileClassification {
+    let tags = front.tags.map(|tags| {
+        problems
+            .parsed_list::<Tag>(Some(tags), "tags")
+            .into_iter()
+            .collect()
+    });
+    let kind = front.kind.and_then(|name| {
+        let kind = DocKind::from_name(&name);
+        if kind.is_none() {
+            problems.invalid("kind", format!("`{name}` is none of finding, spec, design"));
+        }
+        kind
+    });
+    let owner = front.owner.and_then(|name| {
+        Actor::new(&name)
+            .map_err(|error| problems.invalid("owner", error))
+            .ok()
+    });
+    let alias = front.alias.and_then(|alias| {
+        alias
+            .parse::<Alias>()
+            .map_err(|error| problems.invalid("alias", error))
+            .ok()
+    });
+    FileClassification {
+        tags,
+        kind,
+        owner,
+        alias,
+    }
+}
+
+fn read_into(
+    text: &str,
+    registered: Option<DocKind>,
+    problems: &mut Problems,
+    seen: &mut Seen,
+) -> Option<RawDoc> {
     if markdown::conflict_marker(text) {
         problems.0.push(UnparsedReason::MergeConflictMarker);
         return None;
@@ -202,22 +308,61 @@ fn parse_into(text: &str, problems: &mut Problems) -> Option<RawDoc> {
             return None;
         }
     };
-    let Value::Mapping(keys) = probe else {
+    let Value::Mapping(mapping) = probe else {
         problems.malformed("the front matter is not a mapping of keys to values");
         return None;
     };
-    if keys.get("finding_type").is_some() {
-        let front = typed::<FindingFront>(parts.yaml, problems)?;
-        parse_finding(front, parts.body, problems).map(RawDoc::Finding)
-    } else if keys.get("grounds").is_some() {
-        let front = typed::<SpecFront>(parts.yaml, problems)?;
-        parse_spec(front, parts.body, problems).map(RawDoc::Spec)
-    } else if keys.get("spec").is_some() {
-        let front = typed::<DesignFront>(parts.yaml, problems)?;
-        parse_design(front, problems).map(RawDoc::Design)
-    } else {
-        problems.missing("finding_type");
-        None
+    let mut names: Vec<&str> = Vec::new();
+    for key in mapping.keys() {
+        match key.as_str() {
+            Some(name) => names.push(name),
+            None => problems.malformed("a key of the front matter is not text"),
+        }
+    }
+    seen.guess = DocKind::guess(names.iter().copied());
+
+    let kind = match (registered, seen.guess) {
+        (Some(registered), Guess::One(file)) if file != registered => {
+            problems
+                .0
+                .push(UnparsedReason::KindChanged { registered, file });
+            return None;
+        }
+        (Some(registered), _) => registered,
+        (None, Guess::One(kind)) => kind,
+        (None, Guess::Several) => {
+            problems.invalid(
+                "kind",
+                "the keys of the file fit more than one kind of document",
+            );
+            return None;
+        }
+        (None, Guess::None) => {
+            problems.missing("finding_type");
+            return None;
+        }
+    };
+
+    if let Some(front) = typed::<ClassFront>(parts.yaml, problems) {
+        seen.classification = classification(front, problems);
+    }
+    problems
+        .0
+        .extend(SortedKeys::of(kind, names.iter().copied()).reasons(kind));
+
+    match kind {
+        DocKind::Finding => {
+            let front = typed::<FindingFront>(parts.yaml, problems)?;
+            parse_finding(front, parts.body, problems).map(RawDoc::Finding)
+        }
+        DocKind::Spec => {
+            let front = typed::<SpecFront>(parts.yaml, problems)?;
+            parse_spec(front, parts.body, problems).map(RawDoc::Spec)
+        }
+        DocKind::Design => {
+            let front = typed::<DesignFront>(parts.yaml, problems)?;
+            parse_design(front, problems).map(RawDoc::Design)
+        }
     }
 }
 
@@ -705,6 +850,116 @@ mod tests {
             Ok(RawDoc::Finding(finding)) => finding,
             other => panic!("not a Finding: {other:?}"),
         }
+    }
+
+    const FINDING: &str = "finding_type: usage_observation\ntitle: t\nevidence: measured\n\
+                           context: c\nreproducibility: reproducible\n";
+    const SPEC: &str = "grounds: [finding/a]\naccept:\n  pins:\n    - id: PIN-A\n      contract: c\n  hyp:\n    - id: HYP-A\n      metric: m\n      target: t\n";
+    const DESIGN: &str = "spec: spec/a\ncrux:\n  question: q\n  options:\n    - id: opt-a\n      summary: s\n      chosen: true\n      reason: r\n    - id: opt-b\n      summary: s\n      rejected: r\nitems:\n  - number: 1\n    summary: s\n    pins: [PIN-A]\n";
+
+    fn read_as(keys: &str, kind: Option<DocKind>) -> Read {
+        read(
+            &normalize(&format!("---\n{keys}---\n\n## Contract\nc\n")),
+            kind,
+        )
+    }
+
+    fn reasons(read: Read) -> Vec<UnparsedReason> {
+        read.outcome.expect_err("it should not parse").into_vec()
+    }
+
+    #[test]
+    fn a_key_of_another_kind_in_a_registered_file_stops_it_and_a_typing_mistake_too() {
+        // A Spec file with a Design's section: refused, not read as a Spec that
+        // happens to carry a `crux`.
+        let spec_with_crux = format!("{SPEC}crux:\n  question: q\n");
+        assert_eq!(
+            reasons(read_as(&spec_with_crux, Some(DocKind::Spec))),
+            vec![UnparsedReason::ForeignSection {
+                section: DocKind::Design,
+                registered: DocKind::Spec,
+                key: "crux".to_owned()
+            }]
+        );
+        // A key nobody reads is a mistake to be corrected, not a comment.
+        let typo = format!("{FINDING}evidance: measured\n");
+        assert_eq!(
+            reasons(read_as(&typo, Some(DocKind::Finding))),
+            vec![UnparsedReason::UnknownKey {
+                key: "evidance".to_owned()
+            }]
+        );
+        // Every problem is reported together with the others of the file.
+        let both = format!("{SPEC}crux:\n  question: q\ntypo: 1\n");
+        assert_eq!(reasons(read_as(&both, Some(DocKind::Spec))).len(), 2);
+        // The same files with nothing extra read.
+        for (keys, kind) in [
+            (FINDING, DocKind::Finding),
+            (SPEC, DocKind::Spec),
+            (DESIGN, DocKind::Design),
+        ] {
+            let read = read_as(keys, Some(kind));
+            assert_eq!(read.outcome.expect("it reads").kind(), kind, "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_registered_file_is_read_as_its_kind_and_one_that_names_another_kind_says_so() {
+        // `finding_type` in a file registered as a Spec: another document altogether.
+        let swapped = format!("{SPEC}{FINDING}");
+        let read = read_as(&swapped, Some(DocKind::Spec));
+        assert_eq!(read.guess, Guess::Several);
+        let only_finding = read_as(FINDING, Some(DocKind::Spec));
+        assert_eq!(only_finding.guess, Guess::One(DocKind::Finding));
+        assert_eq!(
+            reasons(only_finding),
+            vec![UnparsedReason::KindChanged {
+                registered: DocKind::Spec,
+                file: DocKind::Finding
+            }]
+        );
+    }
+
+    #[test]
+    fn a_file_with_no_registered_kind_is_told_by_its_keys_when_they_say_one_kind() {
+        let read = read_as(SPEC, None);
+        assert_eq!(read.guess, Guess::One(DocKind::Spec));
+        assert_eq!(read.outcome.expect("it reads").kind(), DocKind::Spec);
+        // Two kinds, or none: nothing is registered on a guess.
+        let several = read_as(&format!("{SPEC}{DESIGN}"), None);
+        assert_eq!(several.guess, Guess::Several);
+        assert!(several.outcome.is_err());
+        let none = read_as("title: t\n", None);
+        assert_eq!(none.guess, Guess::None);
+        assert!(none.outcome.is_err());
+    }
+
+    #[test]
+    fn classification_keys_are_returned_and_cannot_change_what_a_hash_covers() {
+        let plain = read_as(SPEC, Some(DocKind::Spec));
+        let with_keys = format!(
+            "{SPEC}tags: [area:auth, scratch]\nkind: spec\nowner: alice\nalias: spec/session\n"
+        );
+        let classified = read_as(&with_keys, Some(DocKind::Spec));
+        let keys = &classified.classification;
+        assert_eq!(keys.tags.as_ref().map(|t| t.len()), Some(2));
+        assert_eq!(keys.kind, Some(DocKind::Spec));
+        assert_eq!(keys.owner.as_ref().map(Actor::as_str), Some("alice"));
+        assert_eq!(
+            keys.alias.as_ref().map(ToString::to_string).as_deref(),
+            Some("spec/session")
+        );
+        assert!(plain.classification.is_empty());
+        // The document is the same value, so it has the same hash: a classification
+        // key never removes an approval.
+        assert_eq!(plain.outcome.unwrap(), classified.outcome.unwrap());
+
+        // A value a type refuses is a problem of the file, not a silent drop.
+        let bad = format!("{SPEC}tags: [NOT A TAG]\nkind: poem\n");
+        let problems = reasons(read_as(&bad, Some(DocKind::Spec)));
+        assert!(matches!(&problems[..],
+            [UnparsedReason::InvalidField { field: tags, .. }, UnparsedReason::InvalidField { field: kind, .. }]
+                if tags == "tags[0]" && kind == "kind"));
     }
 
     #[test]

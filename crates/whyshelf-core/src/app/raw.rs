@@ -26,6 +26,7 @@ use crate::domain::event::DocKind;
 use crate::domain::finding::{
     EvidenceLabel, Finding, FindingSource, MaturityLevel, ObservationMethod, Reproducibility,
 };
+use crate::domain::front::{FileClassification, Guess};
 use crate::domain::hash::ContentHash;
 use crate::domain::id::{DesignId, FindingId, ItemNumber, SpecId};
 use crate::domain::location::{CodeLocation, RelPath, SourceUri};
@@ -343,6 +344,8 @@ pub struct Candidate {
     path: RelPath,
     text: NormalizedText,
     outcome: ParseOutcome,
+    guess: Guess,
+    classification: FileClassification,
 }
 
 impl Candidate {
@@ -352,6 +355,8 @@ impl Candidate {
             path,
             text,
             outcome: ParseOutcome::Parsed(doc),
+            guess: Guess::None,
+            classification: FileClassification::default(),
         }
     }
 
@@ -365,7 +370,33 @@ impl Candidate {
             path,
             text,
             outcome: ParseOutcome::Unparsed(reasons),
+            guess: Guess::None,
+            classification: FileClassification::default(),
         }
+    }
+
+    /// The same candidate with what its keys say about its kind
+    /// ([`DocKind::guess`]), which only a file with no registered kind needs.
+    pub fn with_guess(mut self, guess: Guess) -> Self {
+        self.guess = guess;
+        self
+    }
+
+    /// The same candidate with the classification keys of its front matter.
+    pub fn with_classification(mut self, classification: FileClassification) -> Self {
+        self.classification = classification;
+        self
+    }
+
+    /// What the keys of the file say about its kind.
+    pub fn guess(&self) -> Guess {
+        self.guess
+    }
+
+    /// The classification keys of the front matter (`tags`, `kind`, `owner`,
+    /// `alias`), as the file wrote them.
+    pub fn classification(&self) -> &FileClassification {
+        &self.classification
     }
 
     /// The path.

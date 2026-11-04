@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 use whyshelf_core::app::ports::{CurrentPort, FileStat};
 use whyshelf_core::app::raw::Candidate;
+use whyshelf_core::domain::event::DocKind;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonEmptyVec;
 use whyshelf_core::domain::state::UnparsedReason;
@@ -58,7 +59,11 @@ impl CurrentPort for FsCurrent {
             .map_err(CurrentError::List)
     }
 
-    async fn read(&self, path: &RelPath) -> Result<Option<Candidate>, CurrentError> {
+    async fn read(
+        &self,
+        path: &RelPath,
+        kind: Option<DocKind>,
+    ) -> Result<Option<Candidate>, CurrentError> {
         let bytes = match tokio::fs::read(self.root.join(path.as_str())).await {
             Ok(bytes) => bytes,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -87,10 +92,16 @@ impl CurrentPort for FsCurrent {
                 NonEmptyVec::new(reason, Vec::new()),
             )));
         }
-        Ok(Some(match parse::parse(&normalized) {
+        let read = parse::read(&normalized, kind);
+        let candidate = match read.outcome {
             Ok(doc) => Candidate::parsed(path.clone(), normalized, doc),
             Err(reasons) => Candidate::unparsed(path.clone(), normalized, reasons),
-        }))
+        };
+        Ok(Some(
+            candidate
+                .with_guess(read.guess)
+                .with_classification(read.classification),
+        ))
     }
 }
 
@@ -125,7 +136,7 @@ mod tests {
     async fn a_finding_is_read_normalized_and_parsed() {
         let (_dir, current) = project_with(&[("docs/finding/slow-login.md", FINDING)]).await;
         let candidate = current
-            .read(&rel("docs/finding/slow-login.md"))
+            .read(&rel("docs/finding/slow-login.md"), None)
             .await
             .unwrap()
             .unwrap();
@@ -139,7 +150,11 @@ mod tests {
     #[tokio::test]
     async fn a_file_that_does_not_parse_is_a_candidate_with_reasons() {
         let (_dir, current) = project_with(&[("docs/a.md", "just a note\n")]).await;
-        let candidate = current.read(&rel("docs/a.md")).await.unwrap().unwrap();
+        let candidate = current
+            .read(&rel("docs/a.md"), None)
+            .await
+            .unwrap()
+            .unwrap();
         assert!(matches!(candidate.outcome(), ParseOutcome::Unparsed(_)));
         assert_eq!(candidate.text().as_str(), "just a note\n");
     }
@@ -148,7 +163,11 @@ mod tests {
     async fn a_conflicted_file_is_unparsed_with_the_marker_as_the_reason() {
         let text = "---\nfinding_type: usage_observation\n<<<<<<< HEAD\ntitle: a\n=======\ntitle: b\n>>>>>>> topic\n---\nx\n";
         let (_dir, current) = project_with(&[("docs/a.md", text)]).await;
-        let candidate = current.read(&rel("docs/a.md")).await.unwrap().unwrap();
+        let candidate = current
+            .read(&rel("docs/a.md"), None)
+            .await
+            .unwrap()
+            .unwrap();
         let ParseOutcome::Unparsed(reasons) = candidate.outcome() else {
             panic!("parsed");
         };
@@ -162,14 +181,20 @@ mod tests {
             .await
             .unwrap();
         let current = FsCurrent::new(dir.path().to_path_buf());
-        let candidate = current.read(&rel("a.md")).await.unwrap().unwrap();
+        let candidate = current.read(&rel("a.md"), None).await.unwrap().unwrap();
         assert!(matches!(candidate.outcome(), ParseOutcome::Unparsed(_)));
     }
 
     #[tokio::test]
     async fn a_missing_file_reads_as_none_and_lists_as_nothing() {
         let (_dir, current) = project_with(&[]).await;
-        assert!(current.read(&rel("docs/none.md")).await.unwrap().is_none());
+        assert!(
+            current
+                .read(&rel("docs/none.md"), None)
+                .await
+                .unwrap()
+                .is_none()
+        );
         assert!(current.list(&[rel("docs")]).await.unwrap().is_empty());
     }
 

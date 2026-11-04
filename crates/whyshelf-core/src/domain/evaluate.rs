@@ -113,8 +113,8 @@ use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
 use super::location::{CodeLocation, RelPath};
 use super::nonempty::NonEmptyVec;
-use super::pin::PinId;
-use super::revision::RevisionId;
+use super::pin::{MalformedPin, PinId};
+use super::revision::{IntegrationFact, RevisionId};
 use super::spec::Spec;
 use super::state::{
     Approval, ApprovalProblem, BlockReason, Completeness, EntityState, HealthProblem, Integration,
@@ -300,25 +300,39 @@ pub struct ImplView {
     current_revision: RevisionId,
     workspace_label: Option<String>,
     pins_at_revision: BTreeMap<PinId, Vec<CodeLocation>>,
-    integrated: BTreeSet<RevisionId>,
+    malformed: Vec<MalformedPin>,
+    integrated: BTreeMap<RevisionId, IntegrationFact>,
 }
 
 impl ImplView {
     /// The view: the current revision, a label for display only, the pins found in
-    /// the tests with where they were found, and the approved revisions that have
-    /// reached the baseline.
+    /// the tests with where they were found, and what is known of each approved
+    /// revision against the baseline.
     pub fn new(
         current_revision: RevisionId,
         workspace_label: Option<String>,
         pins_at_revision: BTreeMap<PinId, Vec<CodeLocation>>,
-        integrated: BTreeSet<RevisionId>,
+        integrated: BTreeMap<RevisionId, IntegrationFact>,
     ) -> Self {
         Self {
             current_revision,
             workspace_label,
             pins_at_revision,
+            malformed: Vec::new(),
             integrated,
         }
+    }
+
+    /// The same view with the tags that were found in the tests and are no pin name.
+    pub fn with_malformed(mut self, malformed: Vec<MalformedPin>) -> Self {
+        self.malformed = malformed;
+        self
+    }
+
+    /// The tags found in the tests whose name is not a pin's, in the order found.
+    /// They are not dropped: the CA gate reports each.
+    pub fn malformed_pins(&self) -> &[MalformedPin] {
+        &self.malformed
     }
 
     /// The revision the scan was made at.
@@ -336,9 +350,13 @@ impl ImplView {
         &self.pins_at_revision
     }
 
-    /// Whether a revision has reached the baseline.
-    pub fn is_integrated(&self, revision: &RevisionId) -> bool {
-        self.integrated.contains(revision)
+    /// What is known of a revision against the baseline. A revision nobody asked
+    /// about is not integrated: only the approved revisions are asked.
+    pub fn integration_of(&self, revision: &RevisionId) -> IntegrationFact {
+        self.integrated
+            .get(revision)
+            .copied()
+            .unwrap_or(IntegrationFact::NotIntegrated)
     }
 
     /// Whether a pin was found at least once.
@@ -860,10 +878,24 @@ fn integration_of(
             _ => None,
         })
         .collect();
-    if let Some(done) = revisions.iter().find(|r| impl_view.is_integrated(r)) {
+    // Reached the baseline wins; failing that, an approval that cannot be placed leaves
+    // the question open rather than answering "pending" for it.
+    if let Some(done) = revisions
+        .iter()
+        .find(|r| impl_view.integration_of(r) == IntegrationFact::Integrated)
+    {
         return Integration::Integrated {
             revision: (*done).clone(),
         };
+    }
+    let unknown = revisions
+        .iter()
+        .find_map(|r| match impl_view.integration_of(r) {
+            IntegrationFact::Unknown { reason } => Some(((*r).clone(), reason)),
+            _ => None,
+        });
+    if let Some((revision, reason)) = unknown {
+        return Integration::Unknown { revision, reason };
     }
     match revisions.first() {
         Some(first) => Integration::ApprovedPending {
@@ -976,7 +1008,10 @@ mod tests {
             pins.iter()
                 .map(|p| (p.parse().unwrap(), vec!["src/a.rs:1".parse().unwrap()]))
                 .collect(),
-            integrated.iter().map(|r| rev(r)).collect(),
+            integrated
+                .iter()
+                .map(|r| (rev(r), IntegrationFact::Integrated))
+                .collect(),
         )
     }
 
@@ -1731,6 +1766,72 @@ mod tests {
         assert_eq!(
             done.item.integration(),
             &Integration::Integrated {
+                revision: rev("r1")
+            }
+        );
+    }
+
+    #[test]
+    fn an_approval_that_cannot_be_placed_leaves_the_integration_unknown_not_pending() {
+        use crate::domain::revision::UnknownIntegration;
+        let (f0, s0, d0) = (f("body"), s(), d());
+        let events = approvals(&f0, &s0, &d0);
+        let l = ledger(&events);
+        let ef = Evaluator::finding(&f0, &l, &[]);
+        let es = eval_spec(
+            &s0,
+            &BTreeMap::from([(f0.id(), ef)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
+        let ed = eval_design(
+            &d0,
+            &BTreeMap::from([(s0.id(), es)]),
+            &l,
+            &BTreeSet::new(),
+            &[],
+        );
+        let key = ItemKey {
+            id: crate::domain::id::ItemId::new(eid(I)),
+            design: d0.id(),
+            number: num(1),
+        };
+        let integration = |fact: IntegrationFact| {
+            let view = ImplView::new(
+                rev("head"),
+                None,
+                BTreeMap::new(),
+                BTreeMap::from([(rev("r1"), fact)]),
+            );
+            eval_item(
+                &key,
+                &d0.items()[&num(1)],
+                &BTreeMap::from([(d0.id(), ed.clone())]),
+                &l,
+                &view,
+                &[],
+            )
+            .integration()
+            .clone()
+        };
+        let reason = UnknownIntegration::BaselineUnresolved;
+        assert_eq!(
+            integration(IntegrationFact::Unknown { reason }),
+            Integration::Unknown {
+                revision: rev("r1"),
+                reason
+            }
+        );
+        assert_eq!(
+            integration(IntegrationFact::NotIntegrated),
+            Integration::ApprovedPending {
+                revision: rev("r1")
+            }
+        );
+        assert_eq!(
+            integration(IntegrationFact::Integrated),
+            Integration::Integrated {
                 revision: rev("r1")
             }
         );

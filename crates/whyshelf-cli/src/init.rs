@@ -1,17 +1,26 @@
 //! `whyshelf init`: the files a project needs before anything else.
 //!
 //! It writes a minimal `.whyshelf.toml` (the version, the project's name, the
-//! test command), creates `.whyshelf/`, and makes sure the cache directory is
-//! in `.gitignore`. The cache holds values derived from the worktree it sits in
-//! and is never merged, so it must never be committed. A settings file that
-//! exists is never touched: `init` refuses before it changes anything.
+//! project's identity, the test command and the test files), creates `.whyshelf/`,
+//! and makes sure the cache directory is in `.gitignore`. The cache holds values
+//! derived from the worktree it sits in and is never merged, so it must never be
+//! committed. A settings file that exists is never touched: `init` refuses before it
+//! changes anything.
+//!
+//! The identity is a new UUID version 7 (`project_id`). It is written to the file and
+//! committed with it, so every clone and worktree of the project has the same one,
+//! and it places the project's private store (see `whyshelf_infra::config`). A
+//! settings file copied from a template repository carries the template's id; the
+//! copy's line is replaced by the one `whyshelf init --print-project-id` prints. That
+//! option only prints, so the tool never edits a settings file that exists.
 
 use std::path::{Path, PathBuf};
 
 use tokio::io::AsyncWriteExt;
-use whyshelf_core::domain::reference::ProjectName;
+use whyshelf_core::domain::error::ValueError;
+use whyshelf_core::domain::reference::{ProjectId, ProjectName};
 use whyshelf_infra::REPO_STORE_DIR;
-use whyshelf_infra::config::{FILE_NAME, SUPPORTED_VERSION};
+use whyshelf_infra::config::{DEFAULT_SCAN_DIRS, FILE_NAME, SUPPORTED_VERSION, new_project_id};
 
 use crate::args::InitArgs;
 use crate::error::CliError;
@@ -51,12 +60,31 @@ async fn project_name(root: &Path, given: Option<&str>) -> Result<ProjectName, C
     dir.parse().map_err(|_| CliError::NoProjectName { dir })
 }
 
+/// The line that gives a settings file its identity.
+fn project_id_line(id: ProjectId) -> String {
+    format!("project_id = \"{id}\"")
+}
+
 /// The text of the settings file. A JSON string is a valid TOML basic string, so
 /// the command is quoted by the one function that already knows how.
-fn settings_text(project: &ProjectName, test_command: &str) -> Result<String, CliError> {
+///
+/// `[test] files` is the whole of the scan directories, which is what a file without
+/// it would mean, written out so that narrowing it is one edit.
+fn settings_text(
+    project: &ProjectName,
+    project_id: ProjectId,
+    test_command: &str,
+) -> Result<String, CliError> {
+    let files = serde_json::to_string(&DEFAULT_SCAN_DIRS)?;
     Ok(format!(
-        "version = {SUPPORTED_VERSION}\nproject = {}\n\n[test]\ncommand = {}\n",
+        "version = {SUPPORTED_VERSION}\nproject = {}\n{}\n\n[test]\ncommand = {}\n\
+         # The files whose `@pin:` tags count: globs under paths.scan_dirs. These are the\n\
+         # whole scan directories; to narrow them write globs (\"tests/**/*.rs\"). A language\n\
+         # that keeps its tests in the file they test (Rust's `#[cfg(test)] mod tests`)\n\
+         # cannot be narrowed by file: leave the whole.\n\
+         files = {files}\n",
         serde_json::to_string(&project.to_string())?,
+        project_id_line(project_id),
         serde_json::to_string(test_command)?,
     ))
 }
@@ -94,8 +122,16 @@ async fn ignore_cache(root: &Path) -> Result<bool, CliError> {
     Ok(true)
 }
 
-/// Run `init` in `root`; returns what it did, one line each.
+/// Run `init` in `root`; returns what it did, one line each. With
+/// `--print-project-id` it does nothing and returns the line to put in a settings
+/// file.
 pub async fn init(root: &Path, args: &InitArgs) -> Result<Vec<String>, CliError> {
+    if args.print_project_id {
+        return Ok(vec![project_id_line(new_project_id())]);
+    }
+    let Some(test_command) = &args.test_command else {
+        return Err(CliError::argument("test-command", ValueError::BlankText));
+    };
     let settings: PathBuf = root.join(FILE_NAME);
     if tokio::fs::try_exists(&settings)
         .await
@@ -104,7 +140,8 @@ pub async fn init(root: &Path, args: &InitArgs) -> Result<Vec<String>, CliError>
         return Err(CliError::SettingsExist { path: settings });
     }
     let project = project_name(root, args.project.as_deref()).await?;
-    let text = settings_text(&project, &args.test_command)?;
+    let project_id = new_project_id();
+    let text = settings_text(&project, project_id, test_command)?;
 
     // `create_new` is the operating system's "only if it does not exist", so a
     // settings file that appears meanwhile is not overwritten either.
@@ -133,7 +170,7 @@ pub async fn init(root: &Path, args: &InitArgs) -> Result<Vec<String>, CliError>
         .map_err(io("create", &store))?;
 
     let mut done = vec![
-        format!("created {FILE_NAME} for project `{project}`"),
+        format!("created {FILE_NAME} for project `{project}` ({project_id})"),
         format!("created {REPO_STORE_DIR}/"),
     ];
     if ignore_cache(root).await? {
@@ -149,7 +186,8 @@ mod tests {
     fn args(project: Option<&str>) -> InitArgs {
         InitArgs {
             project: project.map(str::to_owned),
-            test_command: "cargo test".to_owned(),
+            test_command: Some("cargo test".to_owned()),
+            print_project_id: false,
         }
     }
 
@@ -165,10 +203,18 @@ mod tests {
         let settings = tokio::fs::read_to_string(root.join(FILE_NAME))
             .await
             .unwrap();
+        // The file is a settings file this build reads, with an identity of version 7
+        // and the test files written out as the whole of the scan directories.
+        let dirs = whyshelf_infra::config::UserDirs::default().with_data_dir("/data");
+        let read = whyshelf_infra::config::parse(&settings, &dirs).unwrap();
+        assert_eq!(read.project_id().as_uuid().get_version_num(), 7);
         assert_eq!(
-            settings,
-            "version = 1\nproject = \"demo\"\n\n[test]\ncommand = \"cargo test\"\n"
+            read.config().test().files().map(|f| f.globs().to_vec()),
+            Some(vec!["src".to_owned(), "tests".to_owned()])
         );
+        assert_eq!(read.config().test().command().as_str(), "cargo test");
+        assert!(settings.contains("# The files whose `@pin:` tags count"));
+        assert!(settings.contains("cannot be narrowed by file"));
         let store = tokio::fs::metadata(root.join(".whyshelf")).await.unwrap();
         assert!(store.is_dir());
         let ignore = tokio::fs::read_to_string(root.join(".gitignore"))
@@ -216,7 +262,50 @@ mod tests {
     #[tokio::test]
     async fn a_command_with_quotes_stays_one_valid_string() {
         let project: ProjectName = "demo".parse().unwrap();
-        let text = settings_text(&project, "sh -c \"echo ok\"\\n").unwrap();
+        let text = settings_text(&project, new_project_id(), "sh -c \"echo ok\"\\n").unwrap();
         assert!(text.contains(r#"command = "sh -c \"echo ok\"\\n""#));
+    }
+
+    #[tokio::test]
+    async fn print_project_id_prints_a_version_7_line_and_touches_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let existing = "version = 1\nproject = \"demo\"\n[test]\ncommand = \"x\"\n";
+        tokio::fs::write(dir.path().join(FILE_NAME), existing)
+            .await
+            .unwrap();
+        let ask = InitArgs {
+            project: None,
+            test_command: None,
+            print_project_id: true,
+        };
+        let first = init(dir.path(), &ask).await.unwrap();
+        let second = init(dir.path(), &ask).await.unwrap();
+        assert_eq!(first.len(), 1);
+        assert_ne!(first, second, "a new id each time");
+        let id = first[0]
+            .strip_prefix("project_id = \"")
+            .and_then(|rest| rest.strip_suffix('"'))
+            .expect("a project_id line");
+        assert_eq!(
+            id.parse::<ProjectId>().unwrap().as_uuid().get_version_num(),
+            7
+        );
+        // Neither the settings file nor anything else was written.
+        assert_eq!(
+            tokio::fs::read_to_string(dir.path().join(FILE_NAME))
+                .await
+                .unwrap(),
+            existing
+        );
+        assert!(
+            !tokio::fs::try_exists(dir.path().join(".whyshelf"))
+                .await
+                .unwrap()
+        );
+        assert!(
+            !tokio::fs::try_exists(dir.path().join(".gitignore"))
+                .await
+                .unwrap()
+        );
     }
 }

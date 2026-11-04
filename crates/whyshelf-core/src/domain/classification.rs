@@ -62,6 +62,12 @@
 //! owner; `mv` for the path): it lists every tip among its heads, so it is a
 //! descendant of all the writers in conflict.
 //!
+//! **A file that says something else.** The classification keys of a file's front
+//! matter (`tags`, `kind`, `owner`, `alias`) are not part of the fold. They are taken
+//! into the registration once ([`ClassificationImport`](super::front::ClassificationImport)); afterwards a file
+//! that differs from the fold is shown as [`ClassificationIssue::FileDiffers`], and
+//! nothing is changed on either side.
+//!
 //! **Roots from a publication.** A `Published` event carrying a snapshot is a
 //! writer of every value and a mark of every tag in its snapshot. Folding the repo
 //! store alone therefore gives the classification the private store had.
@@ -76,6 +82,7 @@ use super::event::{
     ClassChange, DocKind, Event, EventBody, EventGraph, EventId, Publication, Registration,
     Version, VersionKey,
 };
+use super::front::ClassDrift;
 use super::id::{Alias, DesignId, EntityId, ItemId, ItemNumber};
 use super::location::RelPath;
 use super::nonempty::NonEmptyVec;
@@ -387,6 +394,14 @@ pub enum ClassificationIssue {
     UnregisteredTarget {
         /// The entity.
         entity: EntityId,
+    },
+    /// A classification key in the file says something else than the store has.
+    /// The store is the truth after registration; a person decides which is right.
+    FileDiffers {
+        /// The entity.
+        entity: EntityId,
+        /// The value, and what each side says.
+        drift: ClassDrift,
     },
 }
 

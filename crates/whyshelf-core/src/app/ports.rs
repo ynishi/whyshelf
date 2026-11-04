@@ -17,12 +17,12 @@
 //!
 //! | port | gives the use cases |
 //! |---|---|
-//! | [`RevisionPort`] | the current revision, whether the tree is clean, whether a revision reached the baseline, validation of a revision text |
+//! | [`RevisionPort`] | the current revision, whether the tree is clean, whether a revision reached the baseline (or that this clone cannot tell), validation of a revision text |
 //! | [`StorePort`] | the event log and the stored objects of the repo store and the private store, whether the private store is there, and the generated files |
 //! | [`CurrentPort`] | the document files: a listing with stamps, and one file read and parsed (read only) |
 //! | [`ScaffoldPort`] | creating a new document file from a template, never overwriting |
-//! | [`CodeScanPort`] | the pins found in the scan directories at a given revision |
-//! | [`TestRunPort`] | running the tests at a given revision |
+//! | [`CodeScanPort`] | the pins found in the test files at a given revision, and the tags that are none |
+//! | [`TestRunPort`] | running the tests at a given revision, for a time |
 //! | [`IndexCachePort`] | a cache of file stamps and searchable text (rebuildable, never a source of truth) |
 //! | [`SecretScanPort`] | finding secrets in text before it is written |
 //! | [`ClockPort`], [`IdPort`] | the time and new identifiers, which the domain never makes |
@@ -34,19 +34,19 @@ use std::future::Future;
 use std::num::NonZeroU32;
 
 use crate::domain::actor::Timestamp;
-use crate::domain::approval::TestOutcome;
+use crate::domain::approval::TestsRun;
 use crate::domain::error::ValueError;
-use crate::domain::event::{Event, StoreKind};
+use crate::domain::event::{DocKind, Event, StoreKind};
 use crate::domain::finding::FindingType;
 use crate::domain::hash::ContentHash;
 use crate::domain::id::EntityId;
-use crate::domain::location::{CodeLocation, RelPath};
+use crate::domain::location::{CodeLocation, RelPath, TestFileSet};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
-use crate::domain::pin::PinId;
+use crate::domain::pin::{MalformedPin, PinId};
 use crate::domain::reference::{Reach, Ref};
-use crate::domain::revision::RevisionId;
+use crate::domain::revision::{IntegrationFact, RevisionId};
 
-use super::config::{PinPattern, TestCommand};
+use super::config::{PinPattern, TestCommand, TestTimeout};
 use super::projection::{ChangelogDoc, MapDoc};
 use super::raw::{Candidate, NormalizedText, RawRevision};
 use super::view::StatusReport;
@@ -136,11 +136,15 @@ pub trait RevisionPort: Send + Sync {
     /// Whether the working tree has no uncommitted change.
     fn is_clean(&self) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
-    /// Whether the revision has reached the baseline.
-    fn is_integrated(
+    /// Whether the revision has reached the baseline: yes, no, or that it cannot be
+    /// told here ([`IntegrationFact::Unknown`]: the baseline or the revision is not
+    /// in this clone). A question the clone cannot answer is an answer, not an
+    /// error, so that a shallow or single-branch checkout does not stop every
+    /// command; an error is for a failure of the tool itself.
+    fn integration(
         &self,
         revision: &RevisionId,
-    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<IntegrationFact, Self::Error>> + Send;
 
     /// A name for the current line of work (a branch, say). Display only.
     fn label(&self) -> impl Future<Output = Result<Option<String>, Self::Error>> + Send;
@@ -379,9 +383,16 @@ pub trait CurrentPort: Send + Sync {
     ) -> impl Future<Output = Result<Vec<FileStat>, Self::Error>> + Send;
 
     /// Read and parse one file. `None` when it does not exist.
+    ///
+    /// `kind` is the kind the file is registered as, or that the caller asks it to be
+    /// read as: the file is read as that kind, and a key of another kind is reported
+    /// ([`ForeignSection`](crate::domain::front::ForeignSection)). `None` is for a
+    /// file nobody registered, whose kind is [`DocKind::guess`]ed from its keys and
+    /// left to the caller when the keys do not say.
     fn read(
         &self,
         path: &RelPath,
+        kind: Option<DocKind>,
     ) -> impl Future<Output = Result<Option<Candidate>, Self::Error>> + Send;
 }
 
@@ -431,21 +442,34 @@ pub trait ScaffoldPort: Send + Sync {
     ) -> impl Future<Output = Result<CreateOutcome, Self::Error>> + Send;
 }
 
+/// What a scan of the test files found: the pins, and the tags that are none.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PinScan {
+    /// Each pin, with where it was found.
+    pub pins: BTreeMap<PinId, Vec<CodeLocation>>,
+    /// The tags that were found and whose name is no pin's (`@pin: PIN-foo`), in the
+    /// order found.
+    pub malformed: Vec<MalformedPin>,
+}
+
 /// Finding the pins declared in test files.
 pub trait CodeScanPort: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// The pins in the files under `scan_dirs` at `revision`, with where
-    /// each was found. Reads the revision, not the working tree. Which files in
-    /// those directories are tests is not the port's business; it reports a pin
-    /// wherever the pattern matches.
+    /// The pins in the test files at `revision`, with where each was found. Reads
+    /// the revision, not the working tree.
+    ///
+    /// A file is a test file when it is under one of `scan_dirs` and `files` names it
+    /// (see [`TestFileSet`]). A tag the pattern finds whose name is not a pin's is
+    /// reported in [`PinScan::malformed`], never dropped.
     fn pins_at(
         &self,
         revision: &RevisionId,
         scan_dirs: &[RelPath],
+        files: &TestFileSet,
         pattern: &PinPattern,
-    ) -> impl Future<Output = Result<BTreeMap<PinId, Vec<CodeLocation>>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<PinScan, Self::Error>> + Send;
 }
 
 /// Running the tests.
@@ -454,12 +478,17 @@ pub trait TestRunPort: Send + Sync {
     type Error: Error + Send + Sync + 'static;
 
     /// Run the command at `revision` (in the working tree when it is the
-    /// current clean one, in a temporary checkout otherwise).
+    /// current clean one, in a temporary checkout otherwise), for at most `timeout`.
+    ///
+    /// A command that is still running when the time is up is stopped, and the
+    /// answer is [`TestsRun::TimedOut`], not an error: no result came out, which is a
+    /// fact about the run that the gate reports.
     fn run(
         &self,
         revision: &RevisionId,
         command: &TestCommand,
-    ) -> impl Future<Output = Result<TestOutcome, Self::Error>> + Send;
+        timeout: TestTimeout,
+    ) -> impl Future<Output = Result<TestsRun, Self::Error>> + Send;
 }
 
 /// One file in the cache.

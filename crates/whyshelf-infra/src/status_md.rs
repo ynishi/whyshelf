@@ -52,6 +52,7 @@ fn integration_name(integration: &Integration) -> &'static str {
         Integration::Unapproved => "unapproved",
         Integration::ApprovedPending { .. } => "pending",
         Integration::Integrated { .. } => "integrated",
+        Integration::Unknown { .. } => "unknown",
     }
 }
 

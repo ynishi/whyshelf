@@ -128,7 +128,7 @@ impl<P: Ports> Workspace<P> {
         let candidate = self
             .ports
             .current()
-            .read(&path)
+            .read(&path, Some(kind))
             .await
             .map_err(AppError::port(PortName::Current))?
             .ok_or_else(|| AppError::FileMissing { path: path.clone() })?;

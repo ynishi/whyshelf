@@ -23,7 +23,7 @@
 //!                    [status.md  changelog.md]      (if the settings ask)
 //!                    cache/                          not a store: ignored by Git
 //!
-//!   private store  <data dir>/<project>/            outside the repository, never
+//!   private store  <data dir>/<project>-<project_id>/ outside the repository, never
 //!                    events/  objects/  map.json     committed or published;
 //!                    map.schema.json                 the same shape
 //! ```

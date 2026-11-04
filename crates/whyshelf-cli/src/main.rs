@@ -60,14 +60,23 @@
 //! ```
 //!
 //! **1. `init`.** It writes a minimal `.whyshelf.toml`, creates `.whyshelf/`, and
-//! keeps the cache out of Git. It never overwrites a settings file.
+//! keeps the cache out of Git. It never overwrites a settings file. The file gets a
+//! `project_id`, a new UUID (version 7) that identifies the project: the private
+//! store is placed by it, so commit the file as it is. The test files are written out
+//! as the whole of the scan directories, with a comment on how to narrow them.
 //!
 //! ```text
 //! $ whyshelf init --project demo --test-command "cargo test"
-//! created .whyshelf.toml for project `demo`
+//! created .whyshelf.toml for project `demo` (0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506)
 //! created .whyshelf/
 //! added .whyshelf/cache/ to .gitignore
 //! ```
+//!
+//! A settings file copied from a template repository carries the template's
+//! `project_id`, which would make the two projects share a private store. Replace the
+//! line with the one `whyshelf init --print-project-id` prints (it only prints; no
+//! file is read or written). A settings file with no `project_id` is refused by every
+//! command, with the line to add in the message: the tool never edits your file.
 //!
 //! Then add what the story needs to the settings, and commit. New documents go to
 //! the **private** store unless you say `repo`; this project commits its history, so
@@ -76,9 +85,11 @@
 //! ```toml
 //! version = 1
 //! project = "demo"
+//! project_id = "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506"
 //!
 //! [test]
 //! command = "cargo test"
+//! files = ["src", "tests"]
 //!
 //! [stores]
 //! default = "repo"
@@ -221,17 +232,26 @@
 //!
 //! **8. `status`.** Every entity, both axes of its state, whether the approved
 //! revision reached the baseline branch, how many pins the tests carry, and what to
-//! do next.
+//! do next. It opens with the context line, which says where the tool is pointed
+//! (in JSON it is a `context` object: `project`, `worktree`, `revision`, `branch`).
+//! The status that is exported to a file for the repository leaves the line out: a
+//! worktree's path does not belong in a committed file.
 //!
 //! ```text
 //! $ whyshelf status
-//! ID                        KIND     TITLE                            APPROVAL  UPSTREAM  INTEGRATION  PINS  NEXT
+//! [context: project=demo, worktree=/path/to/project, revision=5d0e83c2a91f7b64e0c3d8a1f2b4c6d7e8f90a1b (feat/session)]
+//!
+//! ID                      KIND     TITLE                            APPROVAL  UPSTREAM  INTEGRATION  PINS  NEXT
 //! finding/login-feels-slow  finding  Login feels slow                 Approved  Ok        -            -     -
 //! spec/session-reuse        spec     -                                Approved  Ok        -            1/1   -
 //! design/session-reuse      design   -                                Approved  Ok        -            -     -
 //! design/session-reuse#1    item     Reuse the session inside the...  Approved  Ok        Pending      1/1   awaiting integration
 //! finding/timeouts          finding  Notes on timeouts                Draft     Ok        -            -     whyshelf check cr finding/timeouts
 //! ```
+//!
+//! A clone that does not have the baseline ref, or the approved commit (a shallow or
+//! single-branch checkout of a CI machine), cannot tell whether it was merged: the
+//! item reads `Unknown`, and no command stops for it.
 //!
 //! After the branch is merged into the baseline (`main`, unless `[git] baseline`
 //! says otherwise) the item reads `Integrated`, and the Spec's next step is the
@@ -259,9 +279,10 @@
 //!
 //! | command | what it does |
 //! |---|---|
-//! | `init --test-command <CMD> [--project <NAME>]` | writes `.whyshelf.toml` and `.whyshelf/`, adds the cache to `.gitignore`; the project name defaults to the directory's name when that is a valid name |
+//! | `init --test-command <CMD> [--project <NAME>]` | writes `.whyshelf.toml` (with a new `project_id` and `[test] files`) and `.whyshelf/`, adds the cache to `.gitignore`; the project name defaults to the directory's name when that is a valid name |
+//! | `init --print-project-id` | prints the line `project_id = "<new UUID v7>"` and nothing else, for a settings file that lacks one or was copied from a template; it reads and writes no file |
 //! | `context` | the project, the worktree, the current revision, the branch, the default store, the number of events in each store |
-//! | `add <PATH>... [--kind finding\|spec\|design] [--tag T]... [--alias A] [--store repo\|private]` | registers files, or every document under a directory; a file already registered is skipped and listed; `--alias` is for one file; official tags must be in the vocabulary |
+//! | `add <PATH>... [--kind finding\|spec\|design] [--tag T]... [--alias A] [--store repo\|private]` | registers files, or every document under a directory; a file already registered is skipped and listed; `--alias` is for one file; official tags must be in the vocabulary. The kind is told by the file's keys when they name one kind; for a file whose keys name several or none, `--kind` is asked for. The classification keys of the file (`tags`, `kind`, `owner`, `alias`) are taken in once, here, and afterwards a difference with the store is shown in `status` |
 //! | `tag <REF> +tag -tag ...` | adds and removes tags (`+area:auth`, `-wip`); never changes an approval |
 //! | `mv <REF> <NEW_PATH>` | records that the document's file is now at `NEW_PATH` (move the file yourself first); the identity and the approvals stay |
 //! | `publish <REF>` | moves a document from the private store to the repo store; refuses text that carries a private alias or title, or the identifier of a private entity not written `private:<id>`; refused while the kind, the path, the version, the owner or the alias of the document was set differently on two branches |
@@ -280,7 +301,7 @@
 //! | `audit [<TERM>...]` | who approved which version at which revision, and when; narrowed by a query |
 //! | `rebuild` | reads every file, replaces the cache, writes the generated files again (after a merge, say) |
 //! | `schema map` | prints the JSON Schema of `map.json` |
-//! | `migrate` | brings the files to the newest format; there is one format, so it says so and does nothing |
+//! | `migrate` | reads the versions of the project's data and sets them against the ones this build reads (below); it only looks and writes nothing, and opens no workspace, so it works on data the other commands cannot read |
 //! | `mcp` | serves the commands as tools over standard input and output (below) |
 //!
 //! **Queries** for `find` and `audit`: terms separated by spaces, all of which must
@@ -326,29 +347,73 @@
 //!
 //! # Exit status
 //!
-//! | status | when |
-//! |---|---|
-//! | 0 | the command did what it was asked, including a `check` that found nothing |
-//! | 1 | a `check` without `--approve` found violations (they are the result: `result` is `failed` in the `check` section on standard output, and the violations follow; an invalid target is one of them); **or** a command failed: the message goes to standard error as `error: ...`, each cause on a `caused by:` line, and for an approval refused by the machine check (a `check cm` too, which always records, and an invalid target is a violation of its gate like of any other) each violation on a `- ` line; this includes a project that cannot be opened, a secret found in text to be stored, an unclean tree at `check ca --approve`, and a failure to close the cache |
-//! | 2 | the command line is not valid: an unknown command or option, a missing argument, a value its type refuses (a malformed reference, tag change, finding type, revision or `--format`), `check cm ... fail-wiring` without `--item-hint`; clap prints the reason to standard error |
+//! Each status says who acts, and on what ([`run`] holds the one table that maps a
+//! result to a status, and a new kind of failure does not build until it has a place
+//! in it).
 //!
-//! A script that must tell "the check found something" from "the tool failed" can
-//! read standard output: only the former prints a `check` section whose `result`
-//! is `failed`, and a failed command prints nothing there. A `find` query
-//! that does not parse and a `--fields` name that does not exist are refused after
-//! the command line has been read, and exit with 1.
+//! | status | means | when |
+//! |---|---|---|
+//! | 0 | success | the command did what it was asked, including a `check` that found nothing and a `migrate` that found every file readable |
+//! | 1 | a check or a gate stopped it; the user clears it in a file, or in the build of whyshelf in use | a `check` without `--approve` found violations (they are the result: `result` is `failed` in the `check` section on standard output, and the violations follow; an invalid target is one of them); an approval refused by the machine check (a `check cm` too, which always records), each violation on a `- ` line of standard error; a secret found in text to be stored; a private name in text for the repo store; an unclean tree at `check ca --approve`; a file of a document gone; a classification two branches set differently, which stops `publish` and `purge` until it is set again; a `migrate` that found files of a version this build does not read, or could not look at a store |
+//! | 2 | the request is wrong; the user corrects the command line, the query or the settings | an unknown command or option, a missing argument, a value its type refuses (a malformed reference, tag change, finding type, revision or `--format`), `check cm ... fail-wiring` without `--item-hint` (clap prints the reason); a `find` query that does not parse and a `--fields` name that does not exist; a name that is not there, names several, or is of the wrong kind; a settings file that is wrong, missing or without `project_id`; a directory that is not a project (so also `migrate` there); a file whose keys name no single kind, added without `--kind` |
+//! | 3 | the run failed; whoever runs it looks at the machine | Git, the disk, the store, the cache or the test run failed (including a test run that could not be started); **a data file of a version this build does not read**, which no command but `migrate` can work on (the message says so); a failure to close the cache; a failure of the tool server |
+//!
+//! The message of a failed command goes to standard error as `error: ...`, each cause
+//! on a `caused by:` line. A script that must tell "the check found something" from
+//! "the tool failed" reads the status: 1 is a result of the check, 3 is a failure.
+//! Standard output has the `check` section only for the former.
 //!
 //! # Environment and files
 //!
 //! | what | meaning |
 //! |---|---|
-//! | `WHYSHELF_DATA_DIR` | where private stores go (`<it>/<project>`); an absolute path |
+//! | `WHYSHELF_DATA_DIR` | where private stores go (`<it>/<project>-<project_id>`); an absolute path |
 //! | `XDG_DATA_HOME`, `HOME` | the fallbacks: `$XDG_DATA_HOME/whyshelf`, then `$HOME/.local/share/whyshelf` |
 //! | `.whyshelf.toml` | the project's settings, committed; it cannot say where the private store is |
 //! | `.whyshelf/` | the repo store: `events/`, `objects/`, `map.json`, `map.schema.json`, and the cache in `cache/` |
 //!
 //! The settings and what each key does are in the documentation of
 //! `whyshelf_infra::config`; the stores in `whyshelf_infra::store_fs`.
+//!
+//! # `whyshelf migrate`
+//!
+//! It counts the versions in the project's data and sets them against the ones this
+//! build reads. It opens no workspace and writes nothing, so it can be run on data the
+//! other commands refuse. Today it only checks; when a format has a second version,
+//! the plan to move the files over will be made from what it finds.
+//!
+//! ```text
+//! $ whyshelf migrate
+//! Versions:
+//! WHAT              FOUND    BUILD      NOTE
+//! settings          v1: 1    reads: v1  -
+//! events (repo)     v1: 42   reads: v1  -
+//! events (private)  v1: 7    reads: v1  -
+//! map               v0: 1    reads: v1  derived: `whyshelf rebuild` writes it again
+//! cache             v1: 1    reads: v1  derived: `whyshelf rebuild` writes it again
+//!
+//! verdict  readable: every file counted is of a version this build reads
+//! ```
+//!
+//! The **sources of truth** decide the verdict: the settings file and the event files
+//! of each store. The map and the cache are derived from them; their versions are
+//! shown and decide nothing, and `whyshelf rebuild` writes them again. A version is
+//! counted as it is found, so a file of a version this build does not read, one with
+//! no version and one that is not JSON are listed with how many (`v2: 3`,
+//! `unknown: 1`), not left out. The verdict is one of:
+//!
+//! - **readable**: every counted file is of a version this build reads, and every
+//!   store was looked at. Exit status 0. A private store that is not there (a clone
+//!   that has none yet) was looked at and holds nothing.
+//! - **unreadable**: some file is of a version this build does not read. Exit status 1.
+//! - **incomplete**: a store was not looked at, because its place cannot be decided:
+//!   the settings file cannot be read as one this build reads, it has no
+//!   `project_id`, or there is no usable data directory. The row says
+//!   `not looked at: the place cannot be decided (why)`; nothing is called readable
+//!   that was not read. Exit status 1.
+//!
+//! A directory without a settings file is not a project, and `migrate` there exits
+//! with 2.
 //!
 //! # The tool server: `whyshelf mcp`
 //!

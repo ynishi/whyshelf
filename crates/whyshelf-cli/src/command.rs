@@ -36,6 +36,8 @@ use whyshelf_core::domain::query::Query;
 use whyshelf_core::domain::reference::{ItemRef, Ref};
 use whyshelf_core::domain::tag::TagChange;
 
+use whyshelf_infra::format::Census;
+
 use crate::error::{CliError, chain};
 
 /// Which gate to run, with what it is run on.
@@ -208,6 +210,12 @@ pub enum Outcome {
         /// How many entities were revised.
         revised: usize,
     },
+    /// The versions of the project's data, counted (`migrate`). It needs no
+    /// workspace, so [`execute`] never makes one.
+    Migrate(Census),
+    /// Lines for standard output, as they are (`init`, `schema map`): nothing in them
+    /// is judged.
+    Printed(Vec<String>),
 }
 
 /// An outcome and the warnings that came with it.

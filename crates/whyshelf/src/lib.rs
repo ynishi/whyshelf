@@ -106,7 +106,9 @@
 //! | subscribers, and why there are no user hooks | [`app::subscriber`] |
 //! | the secret scan | [`infra::secret`]; the leak lint is in [`domain::lint`] |
 //! | Git, revisions, the baseline, pins in code | [`infra::git`] |
-//! | running the tests at a revision | [`infra::test_run`] |
+//! | running the tests at a revision, and the time limit | [`infra::test_run`] |
+//! | which keys of a document's front matter are content, classification, another kind's or a mistake | [`domain::front`], [`infra::parse`] |
+//! | the versions in a project's data, and `migrate` | [`infra::format`] |
 //! | the ports a program can implement | [`app::ports`] |
 //! | **the command line, the walkthrough, the exit status, the tool server** | the crate documentation of `whyshelf-cli` (the `whyshelf` binary; `just rust-doc` builds it as a second step and prints where) |
 //!
@@ -136,7 +138,8 @@
 //! | **ingest** | turning edits of the document files into events (`Revised`, `Moved`, `Registered`) |
 //! | **alias** | a human name for an entity (`spec/cache-timeout`), unique within a store |
 //! | **repo store** | `.whyshelf/` in the project: committed, public as the repository is |
-//! | **private store** | `<data dir>/<project>`: outside the repository, never committed |
+//! | **private store** | `<data dir>/<project>-<project_id>`: outside the repository, never committed |
+//! | **project_id** | the UUID that `whyshelf init` writes into `.whyshelf.toml`; with the name, it places the private store, so another project of the same name has another store |
 //! | **`private:<id>`** | the opaque reference by which a public document names a private entity |
 //! | **content hash, raw hash** | the hash of a document's meaning (what approvals use), and the hash of its normalized text (the key of its stored object) |
 //! | **map** | the generated `map.json`: entities, their relations and tags, no state |
@@ -175,7 +178,7 @@
 //! ```
 //!
 //! The settings are read from `.whyshelf.toml` at the project root (see
-//! [`infra::config`]); the private store is `<data dir>/<project>`, where the
+//! [`infra::config`]); the private store is `<data dir>/<project>-<project_id>`, where the
 //! data dir comes from the user's environment and never from the committed file.
 //!
 //! # Examples
@@ -315,9 +318,16 @@
 //! | cache `schema_version` | the tables change | a cache of another version is dropped and built again |
 //! | hash domain tags `whyshelf/<kind>/v1` | the canonical form of a value or the scope of a hash changes | there is no reader for two generations of hashes: every identifier and approval written under `v1` was computed with it, so a new tag would need a migration of the stored data |
 //!
-//! `whyshelf migrate` is the place for such a migration; with one format it says so
-//! and does nothing. The wire formats, and what a version change does to an event's
-//! identifier (nothing, for `v`; everything, for a hash tag), are in [`infra::wire`].
+//! `whyshelf migrate` is the place for such a migration. Today it reads the versions
+//! that are in the data (the settings file and the event files of both stores are the
+//! sources of truth that decide; the map and the cache are derived and only shown),
+//! counts them, and says which this build reads ([`infra::format`]); it writes
+//! nothing. The wire formats, and what a version change does to an event's identifier
+//! (nothing, for `v`; everything, for a hash tag), are in [`infra::wire`].
+//!
+//! The JSON a command prints may gain fields in a later version (`status` has a
+//! `context` object since it was added); a reader of it ignores the keys it does not
+//! know. The words and columns that are already there do not change meaning.
 //!
 //! # Concurrency and merge
 //!
@@ -345,9 +355,12 @@
 //!   store, and so do the approvals; a clone that has only the repo store sees a
 //!   published entity as a Draft.
 //! - *Private store across machines.* The private store is a directory; moving it
-//!   between machines is not something whyshelf does. It is also named by the
-//!   project's name alone, so two projects that share a name on one machine share a
-//!   store.
+//!   between machines is not something whyshelf does.
+//! - *The project id is added once.* `project_id` is written by one person and
+//!   committed. If two people each add one and the branches merge, only one survives,
+//!   and the private store of the other stays in a directory that is no longer looked
+//!   at: what lived in it reads as unresolved until the directory is renamed to the
+//!   surviving id.
 //! - *No packing of events.* One event is one file, and every command reads all of
 //!   them.
 //! - *Generated Markdown.* `status.md` and `changelog.md`, when enabled, are written
@@ -357,25 +370,33 @@
 //! **Behaviour a user can meet**
 //!
 //! - *Every command loads everything.* Loading the model reads every registered file
-//!   and asks Git for the pins (one `git show` per file under the scan directories)
-//!   and the baseline; a command line command does that at least twice (ingest, then
-//!   the command), a write once more after it writes. The cache is used to find what
-//!   changed and for full-text search, not to avoid the load.
-//! - *The baseline must be reachable.* To decide "integrated", Git is asked about
-//!   every approved revision against the baseline ref. If the ref (`main` by default)
-//!   or an approved commit is not present in the clone (a shallow or single-branch
-//!   CI checkout, say), the command fails with Git's error once an item has a CA
-//!   approval.
+//!   and asks Git for the pins (one `git grep` over the test files) and for the
+//!   baseline (a few Git processes for each approved revision); a command line
+//!   command does that at least twice (ingest, then the command), a write once more
+//!   after it writes. The cache is used to find what changed and for full-text
+//!   search, not to avoid the load.
+//! - *A clone without the baseline cannot say whether an item is integrated.* Git is
+//!   asked about every approved revision against the baseline ref. If the ref (`main`
+//!   by default) or an approved commit is not in the clone (a shallow or
+//!   single-branch CI checkout, say), the item is shown as `Unknown` and no command
+//!   stops; fetch the baseline to learn more.
 //! - *Tests at another revision.* The command is the one in the settings now, run in a fresh
-//!   checkout of tracked files; its output is dropped; there is no time limit.
-//! - *Pins are found by pattern in every text file under the scan directories*, not
-//!   only in test files; a `@pin:` in a source comment counts.
+//!   checkout of tracked files; its output is not kept (only the last 64 KiB is held
+//!   while it runs, so that it cannot fill the memory); it is stopped after
+//!   `test.timeout` (thirty minutes unless set), and a stopped run records nothing.
+//! - *Test files are told by their path, not by what is in them.* `test.files` names
+//!   them by glob under the scan directories, the whole of which is the default. A
+//!   language that keeps its tests in the file they test (Rust's `#[cfg(test)] mod
+//!   tests`) cannot be narrowed by file, so every `@pin:` in such a file counts,
+//!   a comment in the code included.
 //! - *Some things have no command.* Setting the owner or changing the alias of a
 //!   registered document, and purging a stored text, are methods of the library
 //!   ([`app::Workspace::reclassify`], [`app::Workspace::purge`]) and have no
 //!   command or tool.
-//! - *Classification keys in a file* (`tags:`, `owner:` ...) are ignored when the
-//!   file is read, not taken in and not warned about; tags are set with `tag`.
+//! - *Classification keys in a file* (`tags:`, `kind:`, `owner:`, `alias:`) are taken
+//!   in once, when the file is registered. After that the store is the truth: a file
+//!   that says something else is shown in `status` as a difference, and nothing is
+//!   written back to the file or to the store. Tags are changed with `tag`.
 //! - *User hooks do not exist*; only the built-in subscribers run
 //!   ([`app::subscriber`]).
 //! - *One revision kind.* The model has room for a revision that is a patch on a

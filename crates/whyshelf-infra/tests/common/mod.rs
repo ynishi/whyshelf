@@ -76,11 +76,14 @@ impl Project {
         whyshelf_infra::config::UserDirs::default().with_data_dir(self.private.path())
     }
 
-    /// The private store: `<data dir>/<project>`.
+    /// The private store: `<data dir>/<project>-<project_id>`.
     pub fn private(&self) -> PathBuf {
-        self.private.path().join("demo")
+        self.private.path().join(format!("demo-{PROJECT_ID}"))
     }
 }
+
+/// The identity of the fictional project.
+pub const PROJECT_ID: &str = "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506";
 
 /// A Git repository with `.whyshelf.toml` (the new documents go to the repo store),
 /// a `.gitignore` for the cache, and one commit. `extra` is appended to the
@@ -90,7 +93,7 @@ pub async fn project(extra: &str) -> Project {
     let private = tempfile::tempdir().expect("a temporary directory");
     init_repo(dir.path()).await;
     let settings = format!(
-        "version = 1\nproject = \"demo\"\n\n[test]\ncommand = \"true\"\n\n[stores]\ndefault = \"repo\"\n\n[tags.official]\narea = [\"auth\", \"build\"]\n\n{extra}\n"
+        "version = 1\nproject = \"demo\"\nproject_id = \"{PROJECT_ID}\"\n\n[test]\ncommand = \"true\"\n\n[stores]\ndefault = \"repo\"\n\n[tags.official]\narea = [\"auth\", \"build\"]\n\n{extra}\n"
     );
     write(dir.path(), ".whyshelf.toml", &settings).await;
     write(dir.path(), ".gitignore", ".whyshelf/cache/\n").await;

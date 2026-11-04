@@ -22,8 +22,9 @@
 //! type a hash. An older revision can be named explicitly. A dirty working tree
 //! stops the approval ("commit first"); there is no override. The pin check and
 //! the test run use the same revision that is recorded, and the pin check looks
-//! only at the files under the scan directories of the settings (the application
-//! passes the tags it found as an `ImplView`).
+//! only at the test files of the settings (the application passes the tags it found
+//! as an `ImplView`). A test run that does not finish within its time limit has no
+//! outcome ([`TestsRun`]): nothing is approved, and the gate says so.
 //!
 //! # What an approval records: [`Attestation`]
 //!
@@ -91,6 +92,7 @@
 //! private store.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use super::actor::{Actor, Timestamp};
 use super::canon::{Canon, ToCanon};
@@ -194,6 +196,23 @@ pub enum TestOutcome {
     Passed,
     /// The tests failed.
     Failed,
+}
+
+/// What running the tests for a CA approval came to.
+///
+/// A timeout is not a [`TestOutcome`]: the outcome is a fact that gets recorded, and
+/// a command that was stopped before it finished has no result to record. It is a
+/// violation of the gate instead, and nothing is approved. This is why the recorded
+/// outcome, the event format and the hashes did not change with the time limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TestsRun {
+    /// The command finished, and this is its outcome.
+    Finished(TestOutcome),
+    /// The command was still running after this long and was stopped.
+    TimedOut {
+        /// The time limit that applied.
+        after: Duration,
+    },
 }
 
 /// The result recorded by a CM.

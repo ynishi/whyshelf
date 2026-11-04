@@ -225,10 +225,15 @@ impl<P: Ports> Workspace<P> {
 
         let mut candidates: Vec<Candidate> = Vec::new();
         for stat in to_read {
+            // A registered file is read as its kind; a file nobody registered has none.
+            let kind = model
+                .docs()
+                .find(|d| d.path() == stat.path())
+                .map(|d| d.kind());
             if let Some(candidate) = self
                 .ports
                 .current()
-                .read(stat.path())
+                .read(stat.path(), kind)
                 .await
                 .map_err(AppError::port(PortName::Current))?
             {

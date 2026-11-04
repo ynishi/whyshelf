@@ -33,8 +33,10 @@
 //! | `NoHypsDeclared` | CS | the Spec declares no hypothesis | `accept.hyp` is empty | declare at least one `HYP-*` with a metric and a target |
 //! | `PinCoverage` | CI | pin coverage: *issue* | the Design and the Spec disagree about a pin; *issue* is a [`CoverageIssue`] | assign the pin to an item, or declare it in the Spec |
 //! | `PinMissingInTests` | CA | the item declares *pin* but no test carries it | no `@pin: ...` tag for it in the scanned directories, at the revision | add the tag to the test that holds the contract, commit, check again |
-//! | `PinUndeclaredInTests` | CA | a test carries *pin* but the Spec never declared it | a tag in the scanned directories at the revision that the Spec does not list (it counts wherever it is, not only on this item's tests) | declare it in the Spec, or take the tag off the test |
+//! | `PinUndeclaredInTests` | CA | a test carries *pin* but no Spec of the project declares it | a tag in a test file (`test.files`, inside the scan directories) at the revision that no Spec lists ([`DeclaredPins`](super::spec::DeclaredPins)); it counts wherever it is, not only on this item's tests, and whichever Spec declares it | declare it in a Spec, or take the tag off the test |
+//! | `MalformedPin` | CA | *file:line*: `@pin: text` is not a pin name | a pin tag whose name is not `PIN-` or `UT-` followed by capitals, digits, `_` and `-` (`PIN-foo`) | correct the name, or take the tag off |
 //! | `TestsFailed` | CA | the tests did not pass | `test.command` exited with a non-zero status at the revision | make the tests pass at that revision |
+//! | `TestsTimedOut` | CA | the tests did not finish within *time* | `test.command` was still running when `test.timeout` ended and was stopped; no result exists, so nothing is recorded | make the tests faster, or raise `test.timeout` |
 //! | `ItemNotInDesign` | CA | the Design no longer has this item | the Design's item at that number is not the item that was handed to the check (a guard: the application takes the item from the same Design, so it is not expected) | run the command again |
 //! | `MeasurementNotMeasuredData` | CM | *finding* is not a measured_data Finding | a `fail-hyp` names a Finding that does not record a measurement (or that is not there) | name the `measured_data` Finding that records it |
 //! | `CsApprovalNotFound` | CM | no CS approval fixed the hypotheses of this Spec | there is no unrevoked CS approval to compare with | approve the Spec (CS) first |
@@ -75,10 +77,12 @@
 //! event unrelated to the file does not change the file.
 
 use std::num::NonZeroU32;
+use std::time::Duration;
 
 use super::design::CoverageIssue;
 use super::hash::ContentHash;
 use super::id::{Alias, EntityId, FindingId};
+use super::location::CodeLocation;
 use super::nonempty::{NonBlank, NonEmptyVec};
 use super::pin::PinId;
 use super::reference::Ref;
@@ -172,10 +176,27 @@ pub enum CheckViolation {
         /// The tag.
         pin: PinId,
     },
+    /// CA: a tag in a test file is shaped like a pin tag but is not a pin name.
+    ///
+    /// Fix: correct the tag (`PIN-` or `UT-`, then capitals, digits, `_` and `-`), or
+    /// take it off the test.
+    MalformedPin {
+        /// Where the tag was found.
+        location: CodeLocation,
+        /// The text the tag named.
+        text: NonBlank,
+    },
     /// CA: the tests did not pass.
     ///
     /// Fix: make `test.command` pass at the revision.
     TestsFailed,
+    /// CA: the tests did not finish within `test.timeout`, so there is no result.
+    ///
+    /// Fix: make the tests faster, or raise `test.timeout`; then check again.
+    TestsTimedOut {
+        /// How long the command was given.
+        after: Duration,
+    },
     /// CA: the item is not (or no longer) the one the Design has at that number.
     ///
     /// Fix: run the command again.

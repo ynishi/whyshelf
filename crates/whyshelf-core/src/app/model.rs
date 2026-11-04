@@ -15,7 +15,7 @@
 //!
 //! ```text
 //!   repo store events        private store events
-//!   .whyshelf/events/        <data dir>/<project>/events/
+//!   .whyshelf/events/        <data dir>/<project>-<project_id>/events/
 //!            \                    /
 //!             v                  v
 //!   1. Snapshot: each store folded (classification: tags, kind, owner, path,
@@ -29,8 +29,8 @@
 //!        Findings --> Specs --> Designs          (state on two axes + causes)
 //!                              |
 //!   4. the code and the baseline (ports): current revision, pins found in the
-//!      scan directories at that revision, which approved revisions reached
-//!      the baseline  =  ImplView
+//!      test files at that revision, what is known of each approved revision
+//!      against the baseline (reached, not reached, or cannot be told)  =  ImplView
 //!                              |
 //!   5. evaluate each item of each Design that parsed (state, integration,
 //!      pin progress); a number with no registration yet is "pending"
@@ -97,6 +97,7 @@ use crate::domain::evaluate::{
 };
 use crate::domain::event::{DocKind, EntityKind, Event, EventId, StoreKind, Version};
 use crate::domain::finding::Finding;
+use crate::domain::front::{ClassificationImport, Stored};
 use crate::domain::hash::ContentHash;
 use crate::domain::id::{Alias, DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
 use crate::domain::lint::PrivateName;
@@ -112,7 +113,7 @@ use crate::domain::tag::Tag;
 
 use super::config::Config;
 use super::error::AppError;
-use super::ports::{CodeScanPort, CurrentPort, FileStat, Ports, RevisionPort, StorePort};
+use super::ports::{CodeScanPort, CurrentPort, FileStat, PinScan, Ports, RevisionPort, StorePort};
 use super::raw::{Candidate, ParseOutcome, RawDoc};
 
 /// The events and folds of one store.
@@ -918,6 +919,7 @@ pub struct Model {
     stats: BTreeMap<RelPath, FileStat>,
     unregistered: BTreeSet<RelPath>,
     pending_items: BTreeSet<(DesignId, ItemNumber)>,
+    file_drift: Vec<(StoreKind, ClassificationIssue)>,
 }
 
 /// The paths a listing must cover: the watched and document directories and every
@@ -948,15 +950,20 @@ pub(crate) async fn impl_view_at<P: Ports>(
         .label()
         .await
         .map_err(AppError::port(PortName::Revision))?;
-    let pins = ports
-        .code_scan()
-        .pins_at(
-            &revision,
-            config.paths().scan_dirs(),
-            config.test().pin_pattern(),
-        )
-        .await
-        .map_err(AppError::port(PortName::CodeScan))?;
+    // No scan directory and no `test.files` leave no file that could carry a pin.
+    let scan = match config.test_files() {
+        Some(files) => ports
+            .code_scan()
+            .pins_at(
+                &revision,
+                config.paths().scan_dirs(),
+                &files,
+                config.test().pin_pattern(),
+            )
+            .await
+            .map_err(AppError::port(PortName::CodeScan))?,
+        None => PinScan::default(),
+    };
     let approved: BTreeSet<RevisionId> = ledger
         .active()
         .filter_map(|r| match r.attestation() {
@@ -964,18 +971,16 @@ pub(crate) async fn impl_view_at<P: Ports>(
             _ => None,
         })
         .collect();
-    let mut integrated = BTreeSet::new();
+    let mut integrated = BTreeMap::new();
     for candidate in approved {
-        let reached = ports
+        let fact = ports
             .revision()
-            .is_integrated(&candidate)
+            .integration(&candidate)
             .await
             .map_err(AppError::port(PortName::Revision))?;
-        if reached {
-            integrated.insert(candidate);
-        }
+        integrated.insert(candidate, fact);
     }
-    Ok(ImplView::new(revision, label, pins, integrated))
+    Ok(ImplView::new(revision, label, scan.pins, integrated).with_malformed(scan.malformed))
 }
 
 impl Model {
@@ -993,6 +998,7 @@ impl Model {
         }
         let mut loaded: Vec<Loaded> = Vec::new();
         let mut conflicted: BTreeMap<EntityId, ConflictedEntry> = BTreeMap::new();
+        let mut file_drift: Vec<(StoreKind, ClassificationIssue)> = Vec::new();
         for (store, class) in snap.docs() {
             // A kind or a path in conflict: the file is not read (as which kind? at
             // which path?) and the document is held beside the typed entities.
@@ -1013,9 +1019,23 @@ impl Model {
             };
             let candidate = ports
                 .current()
-                .read(path)
+                .read(path, Some(kind))
                 .await
                 .map_err(AppError::port(PortName::Current))?;
+            // What the file's classification keys say against what the store has.
+            if let Some(candidate) = &candidate {
+                let import =
+                    ClassificationImport::of(candidate.classification(), Stored::Registered(class));
+                file_drift.extend(import.drift().iter().map(|drift| {
+                    (
+                        store,
+                        ClassificationIssue::FileDiffers {
+                            entity: class.id(),
+                            drift: drift.clone(),
+                        },
+                    )
+                }));
+            }
             let built = match &candidate {
                 None => None,
                 Some(candidate) => {
@@ -1243,6 +1263,7 @@ impl Model {
             stats,
             unregistered,
             pending_items,
+            file_drift,
         })
     }
 
@@ -1344,9 +1365,23 @@ impl Model {
         self.snap.side(store).view()
     }
 
-    /// Classification problems of a store the status should point at.
-    pub fn issues(&self, store: StoreKind) -> &[ClassificationIssue] {
-        self.snap.side(store).view().issues()
+    /// Classification problems of a store the status should point at: those of the
+    /// fold, then each classification key of a file that says something else than
+    /// the store.
+    pub fn issues(&self, store: StoreKind) -> Vec<ClassificationIssue> {
+        let from_files = self
+            .file_drift
+            .iter()
+            .filter(|(side, _)| *side == store)
+            .map(|(_, issue)| issue.clone());
+        self.snap
+            .side(store)
+            .view()
+            .issues()
+            .iter()
+            .cloned()
+            .chain(from_files)
+            .collect()
     }
 
     /// The store an entity lives in.

@@ -177,6 +177,34 @@ impl Spec {
     }
 }
 
+/// The pins any Spec of the project declares.
+///
+/// A tag in a test is undeclared when **no** Spec declares it. Comparing it with the
+/// pins of the Spec of one item would stop every approval in a project of two Specs,
+/// since the tests of the other Spec carry tags that this one does not list; the
+/// tests of a project are one set, and the declarations of all its Specs are the
+/// other. A Spec that did not parse declares nothing, because there is no Spec to
+/// read it from.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DeclaredPins(BTreeSet<PinId>);
+
+impl DeclaredPins {
+    /// The pins declared by these Specs.
+    pub fn of<'a>(specs: impl IntoIterator<Item = &'a Spec>) -> Self {
+        Self(
+            specs
+                .into_iter()
+                .flat_map(|spec| spec.pins().keys().cloned())
+                .collect(),
+        )
+    }
+
+    /// Whether some Spec declares the pin.
+    pub fn contains(&self, pin: &PinId) -> bool {
+        self.0.contains(pin)
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod test_support {
     use super::*;
