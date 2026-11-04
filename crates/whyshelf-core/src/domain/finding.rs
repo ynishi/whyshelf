@@ -173,7 +173,63 @@ pub enum FindingSource {
     },
 }
 
+/// The kind of a Finding without its metadata.
+///
+/// Why: a new Finding is started from a type name (`finding new --type ..`)
+/// before any of the metadata exists, so the choice needs a value of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FindingType {
+    /// A measurement.
+    MeasuredData,
+    /// What users did and what went wrong.
+    UsageObservation,
+    /// A document from outside.
+    ExternalSource,
+    /// A look at existing code.
+    CodeObservation,
+    /// A limit set from outside the code.
+    DomainConstraint,
+}
+
+impl FindingType {
+    /// Every type, in the order of the table in the module documentation.
+    pub const ALL: [FindingType; 5] = [
+        FindingType::MeasuredData,
+        FindingType::UsageObservation,
+        FindingType::ExternalSource,
+        FindingType::CodeObservation,
+        FindingType::DomainConstraint,
+    ];
+
+    /// The `finding_type` name as written in a file.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::MeasuredData => "measured_data",
+            Self::UsageObservation => "usage_observation",
+            Self::ExternalSource => "external_source",
+            Self::CodeObservation => "code_observation",
+            Self::DomainConstraint => "domain_constraint",
+        }
+    }
+
+    /// The type with this file name; `None` for any other text.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|t| t.name() == name)
+    }
+}
+
 impl FindingSource {
+    /// The type of this variant.
+    pub fn finding_type(&self) -> FindingType {
+        match self {
+            Self::MeasuredData { .. } => FindingType::MeasuredData,
+            Self::UsageObservation { .. } => FindingType::UsageObservation,
+            Self::ExternalSource { .. } => FindingType::ExternalSource,
+            Self::CodeObservation { .. } => FindingType::CodeObservation,
+            Self::DomainConstraint { .. } => FindingType::DomainConstraint,
+        }
+    }
+
     /// The `finding_type` name of this variant, as written in a file.
     pub fn type_name(&self) -> &'static str {
         match self {
