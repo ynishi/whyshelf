@@ -16,3 +16,6 @@ readme = "README.md"
 whyshelf-core = { path = "crates/whyshelf-core", version = "0.1.0" }
 whyshelf-infra = { path = "crates/whyshelf-infra", version = "0.1.0" }
 arch-lint = "0.11"
+thiserror = { version = "2.0", default-features = false, features = ["std"] }
+sha2 = { version = "=0.11.1", default-features = false }
+uuid = { version = "1.29", default-features = false, features = ["std"] }
