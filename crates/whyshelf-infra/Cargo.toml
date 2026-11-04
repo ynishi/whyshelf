@@ -12,3 +12,20 @@ readme.workspace = true
 
 [dependencies]
 whyshelf-core.workspace = true
+thiserror.workspace = true
+uuid = { workspace = true, features = ["v7"] }
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+serde_norway.workspace = true
+toml.workspace = true
+rusqlite-isle.workspace = true
+rusqlite.workspace = true
+jiff.workspace = true
+walkdir.workspace = true
+regex.workspace = true
+tokio = { workspace = true, features = ["process", "fs", "sync", "rt", "time"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }

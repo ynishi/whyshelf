@@ -19,3 +19,16 @@ arch-lint = "0.11"
 thiserror = { version = "2.0", default-features = false, features = ["std"] }
 sha2 = { version = "=0.11.1", default-features = false }
 uuid = { version = "1.29", default-features = false, features = ["std"] }
+serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
+schemars = { version = "1.2", default-features = false, features = ["derive", "std"] }
+serde_norway = "0.9"
+toml = { version = "1.2", default-features = false, features = ["parse", "serde", "std"] }
+# rusqlite-isle does not re-export rusqlite; keep this major.minor equal to the one rusqlite-isle depends on.
+rusqlite-isle = { version = "0.6", default-features = false, features = ["tokio", "bundled"] }
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
+jiff = { version = "0.2", default-features = false, features = ["std"] }
+walkdir = "2.5"
+regex = { version = "1.13", default-features = false, features = ["std", "unicode"] }
+tokio = { version = "1.54", default-features = false }
+tempfile = "3.27"

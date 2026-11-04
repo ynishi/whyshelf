@@ -12,8 +12,11 @@
 preset = "recommended"
 
 [rules.no-sync-io]
-# Blocking I/O is fine in a synchronous program. Turn this on when the code runs on an async runtime.
-enabled = false
+# whyshelf-infra runs on an async runtime (tokio), so blocking I/O there stalls the executor. The rule
+# is a built-in one that looks at every file under the workspace root, not at a scope; the one place
+# where blocking I/O is allowed is named in `exclude_files`: it runs inside `spawn_blocking`.
+enabled = true
+exclude_files = ["crates/whyshelf-infra/src/blocking.rs"]
 
 [[scopes]]
 name = "domain"
@@ -23,8 +26,12 @@ paths = ["crates/whyshelf-core/src/domain/**"]
 name = "app"
 paths = ["crates/whyshelf-core/src/app/**"]
 
-# infra is the crate whyshelf-infra, not a scope here: whyshelf-core has no I/O crate in its
-# [dependencies], so core cannot reach infra. That boundary is kept in Cargo.toml.
+[[scopes]]
+name = "infra"
+paths = ["crates/whyshelf-infra/src/**"]
+
+# The boundary between whyshelf-core and whyshelf-infra is not a scope rule: whyshelf-core has no I/O
+# crate in its [dependencies], so core cannot reach infra. That boundary is kept in Cargo.toml.
 
 # Top layer first. app may use domain, domain uses neither.
 [[layering]]
@@ -44,8 +51,11 @@ deny = [
     "tokio::fs", "tokio::fs::**", "tokio::process", "tokio::process::**", "tokio::net", "tokio::net::**",
     "rand", "rand::**", "git2", "git2::**", "reqwest", "reqwest::**",
     "chrono::Utc::now", "chrono::Local::now",
+    "uuid::Uuid::now_v7", "uuid::Uuid::new_v4",
+    "jiff::Timestamp::now", "jiff::Zoned::now",
+    "serde", "serde::**", "serde_json", "serde_json::**",
 ]
-message = "domain is pure: take I/O, time and randomness as values, or through a port of app implemented in whyshelf-infra."
+message = "domain is pure: take I/O, time and randomness as values, or through a port of app implemented in whyshelf-infra. Wire formats (serde) belong to whyshelf-infra."
 
 [[restrict-use]]
 name = "no-io-in-app"
@@ -59,5 +69,17 @@ deny = [
     "tokio::fs", "tokio::fs::**", "tokio::process", "tokio::process::**", "tokio::net", "tokio::net::**",
     "rand", "rand::**", "git2", "git2::**", "reqwest", "reqwest::**",
     "chrono::Utc::now", "chrono::Local::now",
+    "uuid::Uuid::now_v7", "uuid::Uuid::new_v4",
+    "jiff::Timestamp::now", "jiff::Zoned::now",
+    "serde", "serde::**", "serde_json", "serde_json::**",
 ]
-message = "app reaches the outside world through its ports; implement them in whyshelf-infra."
+message = "app reaches the outside world through its ports; implement them in whyshelf-infra. Wire formats (serde) belong there too."
+
+[[restrict-use]]
+name = "async-infra"
+scope = "infra"
+deny = [
+    "anyhow", "anyhow::**",
+    "std::process::Command",
+]
+message = "infra errors are thiserror enums with the cause kept, and a child process is started with tokio::process."
