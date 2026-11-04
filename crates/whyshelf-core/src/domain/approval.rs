@@ -25,7 +25,10 @@
 //! only at the files under the scan directories of the settings (the application
 //! passes the tags it found as an `ImplView`).
 //!
-//! # What an approval records: [`GateBinding`]
+//! # What an approval records: [`Attestation`]
+//!
+//! The variants of [`Attestation`] are the one statement of this table; a test reads
+//! [`Attestation::target_hash`] and [`Attestation::upstream`] of each gate against it.
 //!
 //! | gate | target `(id, hash)` | upstream recorded | what "Modified" compares |
 //! |---|---|---|---|
@@ -35,7 +38,16 @@
 //! | CA | item, its item hash | the Design, `(id, design_hash)` | the item hash |
 //! | CM | Spec, `hyp_hash` | the event id of the CS approval that fixed that `hyp_hash` | nothing: a CM is a one-time record |
 //!
-//! A CS approval also records the `hyp_hash` it fixed, so a later CM can find it.
+//! A CS approval also records the `hyp_hash` it fixed, so a later CM can find it
+//! ([`ApprovalSet::cs_for_cm`]).
+//!
+//! # An approval can be recorded only through a gate
+//!
+//! Layer 1 of each gate is a function of the [`gate`](super::gate) module that
+//! returns a [`Passed`](super::gate::Passed) or every violation. The `Approved`
+//! event is built from a `Passed` and from nothing else on the writing side: the
+//! recorded body of an event, [`RecordBody`](super::event::RecordBody), has no
+//! `Approved` variant.
 //!
 //! The same, drawn along the chain. Each approval is an event that names its own
 //! target at a hash (`=>`) and the upstream facts it stood on (`->`); a later change
@@ -83,11 +95,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::actor::{Actor, Timestamp};
 use super::canon::{Canon, ToCanon};
 use super::classification::ClassificationView;
-use super::event::{EntityKind, Event, EventBody, EventGraph, EventId};
+use super::event::{DocKind, EntityKind, Event, EventBody, EventGraph, EventId};
 use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, SpecId};
 use super::nonempty::{NonBlank, NonEmptyVec};
 use super::revision::Revision;
+use super::vocabulary::closed_vocabulary;
 
 /// One of the five gates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -128,103 +141,16 @@ impl Gate {
             Self::Ca => EntityKind::Item,
         }
     }
-}
 
-/// Which hash of the target an approval pins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TargetHash {
-    /// A Finding's hash.
-    Finding,
-    /// A Spec's `contract_hash`.
-    Contract,
-    /// A Design's `design_hash`.
-    Design,
-    /// An item's hash.
-    Item,
-    /// A Spec's `hyp_hash`.
-    Hyp,
-}
-
-/// What a gate records about the upstream.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UpstreamBinding {
-    /// Nothing.
-    None,
-    /// Every ground of the Spec, as `(id, hash)`.
-    Grounds,
-    /// The Spec, as `(id, contract_hash)`.
-    SpecContract,
-    /// The Design, as `(id, design_hash)`.
-    Design,
-    /// The identifier of the CS approval event that fixed the hypothesis hash.
-    CsEvent,
-}
-
-/// What the Modified state compares.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModifiedBy {
-    /// The entity is Modified when it has approvals and none is for this hash.
-    Hash(TargetHash),
-    /// The gate is a one-time record and has no Modified state.
-    Never,
-}
-
-/// The fixed correspondence between a gate and the hashes it uses.
-///
-/// A function, not a convention in each caller, so the table in the module
-/// documentation has one implementation and one test.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GateBinding {
-    target: TargetHash,
-    upstream: UpstreamBinding,
-    modified: ModifiedBy,
-}
-
-impl GateBinding {
-    /// The binding of a gate.
-    pub fn of(gate: Gate) -> Self {
-        match gate {
-            Gate::Cr => Self {
-                target: TargetHash::Finding,
-                upstream: UpstreamBinding::None,
-                modified: ModifiedBy::Hash(TargetHash::Finding),
-            },
-            Gate::Cs => Self {
-                target: TargetHash::Contract,
-                upstream: UpstreamBinding::Grounds,
-                modified: ModifiedBy::Hash(TargetHash::Contract),
-            },
-            Gate::Ci => Self {
-                target: TargetHash::Design,
-                upstream: UpstreamBinding::SpecContract,
-                modified: ModifiedBy::Hash(TargetHash::Design),
-            },
-            Gate::Ca => Self {
-                target: TargetHash::Item,
-                upstream: UpstreamBinding::Design,
-                modified: ModifiedBy::Hash(TargetHash::Item),
-            },
-            Gate::Cm => Self {
-                target: TargetHash::Hyp,
-                upstream: UpstreamBinding::CsEvent,
-                modified: ModifiedBy::Never,
-            },
+    /// The gate that approves a document of this kind: the way back from
+    /// [`target_kind`](Self::target_kind). A Spec has two (CS approves its Contract,
+    /// CM records its measurement); the one that approves it is CS.
+    pub fn of_doc(kind: DocKind) -> Gate {
+        match kind {
+            DocKind::Finding => Self::Cr,
+            DocKind::Spec => Self::Cs,
+            DocKind::Design => Self::Ci,
         }
-    }
-
-    /// The hash of the target that the approval pins.
-    pub fn target(&self) -> TargetHash {
-        self.target
-    }
-
-    /// What is recorded about the upstream.
-    pub fn upstream(&self) -> UpstreamBinding {
-        self.upstream
-    }
-
-    /// What the Modified state compares.
-    pub fn modified(&self) -> ModifiedBy {
-        self.modified
     }
 }
 
@@ -289,6 +215,38 @@ pub enum CmResult {
         /// The Finding that records the measurement.
         finding: FindingId,
     },
+}
+
+/// Which of the three results a CM records, without what each carries.
+///
+/// The words of the command line and the tool server: `pass`, `fail-wiring`,
+/// `fail-hyp`. Those two adapters keep their own input shapes (a failure there
+/// carries its flag), and their names are tested against this list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CmResultKind {
+    /// The measurement met the hypotheses.
+    Pass,
+    /// A wiring or implementation gap.
+    FailWiring,
+    /// The hypothesis was wrong.
+    FailHyp,
+}
+
+closed_vocabulary!(CmResultKind, "measurement result", {
+    Pass => "pass",
+    FailWiring => "fail-wiring",
+    FailHyp => "fail-hyp",
+});
+
+impl CmResult {
+    /// Which result this is.
+    pub fn kind(&self) -> CmResultKind {
+        match self {
+            Self::Pass => CmResultKind::Pass,
+            Self::FailWiring { .. } => CmResultKind::FailWiring,
+            Self::FailHyp { .. } => CmResultKind::FailHyp,
+        }
+    }
 }
 
 impl ToCanon for CmResult {
@@ -393,8 +351,9 @@ impl Attestation {
         }
     }
 
-    /// The hash pinned for the entity approved; which hash it is, is
-    /// [`GateBinding::target`].
+    /// The hash pinned for the entity approved: the Finding's hash, the Spec's
+    /// `contract_hash` (CS) or `hyp_hash` (CM), the Design's `design_hash`, the item
+    /// hash (see the table of the module).
     pub fn target_hash(&self) -> &ContentHash {
         match self {
             Self::Cr { finding } => &finding.hash,
@@ -404,7 +363,15 @@ impl Attestation {
         }
     }
 
-    /// The upstream facts recorded, as [`GateBinding::upstream`] describes.
+    /// The revision of the code the approval was made at: only a CA has one.
+    pub fn revision(&self) -> Option<&Revision> {
+        match self {
+            Self::Ca { revision, .. } => Some(revision),
+            Self::Cr { .. } | Self::Cs { .. } | Self::Ci { .. } | Self::Cm { .. } => None,
+        }
+    }
+
+    /// The upstream facts recorded (see the table of the module).
     pub fn upstream(&self) -> Vec<UpstreamRecord> {
         let entity = |id: EntityId, hash: &ContentHash| UpstreamRecord::Entity { id, hash: *hash };
         match self {
@@ -498,6 +465,25 @@ impl ApprovalRecord {
     /// What was approved.
     pub fn attestation(&self) -> &Attestation {
         &self.attestation
+    }
+}
+
+/// A CS approval and the hypothesis hash it fixed: what a CM is set against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CsFixing {
+    event: EventId,
+    hyp: ContentHash,
+}
+
+impl CsFixing {
+    /// The CS approval.
+    pub fn event(&self) -> EventId {
+        self.event
+    }
+
+    /// The `hyp_hash` it fixed.
+    pub fn hyp(&self) -> &ContentHash {
+        &self.hyp
     }
 }
 
@@ -613,6 +599,33 @@ impl ApprovalSet {
     pub fn record(&self, event: &EventId) -> Option<&ApprovalRecord> {
         self.records.iter().find(|r| &r.event == event)
     }
+
+    /// The CS approval a CM is set against: one that fixed `hyp`, the hypothesis
+    /// hash of the Spec today, if there is one, else any (so the check can say the
+    /// hypotheses changed). The smallest event identifier decides among equals.
+    ///
+    /// Asked of the whole set, with the duplicate registrations folded: a CS
+    /// recorded against an identifier that a merge made equal to this Spec's counts.
+    pub fn cs_for_cm(&self, spec: EntityId, hyp: &ContentHash) -> Option<CsFixing> {
+        let subject = self.canonical(spec);
+        let cs: Vec<CsFixing> = self
+            .active()
+            .filter(|r| r.subject() == subject)
+            .filter_map(|r| match r.attestation() {
+                Attestation::Cs { hyp: fixed, .. } => Some(CsFixing {
+                    event: r.event(),
+                    hyp: *fixed,
+                }),
+                _ => None,
+            })
+            .collect();
+        cs.iter()
+            .filter(|fixing| &fixing.hyp == hyp)
+            .map(|fixing| fixing.event)
+            .min()
+            .or_else(|| cs.iter().map(|fixing| fixing.event).min())
+            .and_then(|event| cs.iter().find(|fixing| fixing.event == event).copied())
+    }
 }
 
 #[cfg(test)]
@@ -677,6 +690,16 @@ pub(crate) mod test_support {
         }
     }
 
+    /// A CM that recorded a pass for the hypotheses `hyp` of Spec `s`, against the CS
+    /// approval `cs`.
+    pub(crate) fn cm_pass(s: u128, hyp: &ContentHash, cs: EventId) -> Attestation {
+        Attestation::Cm {
+            spec: Pinned::new(sid(s), *hyp),
+            cs,
+            result: CmResult::Pass,
+        }
+    }
+
     pub(crate) fn approve(attestation: Attestation, heads: &[EventId]) -> Event {
         Event::new(
             attestation.subject(),
@@ -713,38 +736,6 @@ mod tests {
     use crate::domain::event::test_support::{add_tag, register_doc};
     use crate::domain::id::test_support::{eid, fid, sid};
 
-    #[test]
-    fn gate_binding_table_is_exactly_the_documented_one() {
-        use ModifiedBy::{Hash, Never};
-        use TargetHash as T;
-        use UpstreamBinding as U;
-        let expected = [
-            (Gate::Cr, T::Finding, U::None, Hash(T::Finding)),
-            (Gate::Cs, T::Contract, U::Grounds, Hash(T::Contract)),
-            (Gate::Ci, T::Design, U::SpecContract, Hash(T::Design)),
-            (Gate::Ca, T::Item, U::Design, Hash(T::Item)),
-            (Gate::Cm, T::Hyp, U::CsEvent, Never),
-        ];
-        assert_eq!(expected.len(), Gate::ALL.len());
-        for (gate, target, upstream, modified) in expected {
-            let b = GateBinding::of(gate);
-            assert_eq!(b.target(), target, "{gate:?} target");
-            assert_eq!(b.upstream(), upstream, "{gate:?} upstream");
-            assert_eq!(b.modified(), modified, "{gate:?} modified");
-        }
-    }
-
-    #[test]
-    fn modified_compares_the_target_hash_for_every_gate_but_cm() {
-        for gate in Gate::ALL {
-            let b = GateBinding::of(gate);
-            match gate {
-                Gate::Cm => assert_eq!(b.modified(), ModifiedBy::Never),
-                _ => assert_eq!(b.modified(), ModifiedBy::Hash(b.target())),
-            }
-        }
-    }
-
     fn sample(gate: Gate) -> Attestation {
         match gate {
             Gate::Cr => cr(1, &h(1)),
@@ -759,16 +750,37 @@ mod tests {
         }
     }
 
+    /// What the table of the module says an approval records of the upstream.
+    enum Upstreams {
+        None,
+        Grounds,
+        OneEntity,
+        OneEvent,
+    }
+
+    /// The table of the module documentation, row by row: the gate, the hash it pins
+    /// of its target, and what it records of the upstream.
+    fn documented() -> [(Gate, ContentHash, Upstreams); 5] {
+        [
+            (Gate::Cr, h(1), Upstreams::None),
+            (Gate::Cs, h(2), Upstreams::Grounds), // the contract hash, not the hyp hash
+            (Gate::Ci, h(4), Upstreams::OneEntity), // the Spec at its contract hash
+            (Gate::Ca, h(5), Upstreams::OneEntity), // the Design at its design hash
+            (Gate::Cm, h(9), Upstreams::OneEvent), // the hyp hash; the CS event
+        ]
+    }
+
     #[test]
-    fn an_attestation_agrees_with_its_gates_binding() {
-        for gate in Gate::ALL {
+    fn an_attestation_records_what_the_documented_table_says() {
+        assert_eq!(documented().len(), Gate::ALL.len());
+        for (gate, target_hash, upstreams) in documented() {
             let a = sample(gate);
-            let b = GateBinding::of(gate);
             assert_eq!(a.gate(), gate);
+            assert_eq!(a.target_hash(), &target_hash, "{gate:?} target");
             let up = a.upstream();
-            match b.upstream() {
-                UpstreamBinding::None => assert!(up.is_empty()),
-                UpstreamBinding::Grounds => {
+            match upstreams {
+                Upstreams::None => assert!(up.is_empty(), "{gate:?}"),
+                Upstreams::Grounds => {
                     let ids: Vec<_> = up
                         .iter()
                         .map(|u| match u {
@@ -778,10 +790,10 @@ mod tests {
                         .collect();
                     assert_eq!(ids, vec![fid(1).entity(), fid(3).entity()]);
                 }
-                UpstreamBinding::SpecContract | UpstreamBinding::Design => {
+                Upstreams::OneEntity => {
                     assert!(matches!(up.as_slice(), [UpstreamRecord::Entity { .. }]));
                 }
-                UpstreamBinding::CsEvent => {
+                Upstreams::OneEvent => {
                     assert!(matches!(up.as_slice(), [UpstreamRecord::Event(_)]));
                 }
             }
@@ -789,12 +801,18 @@ mod tests {
     }
 
     #[test]
-    fn the_pinned_hash_of_each_variant_is_the_one_the_binding_names() {
-        assert_eq!(sample(Gate::Cr).target_hash(), &h(1));
-        assert_eq!(sample(Gate::Cs).target_hash(), &h(2)); // contract hash, not the hyp hash
-        assert_eq!(sample(Gate::Ci).target_hash(), &h(4));
-        assert_eq!(sample(Gate::Ca).target_hash(), &h(5));
-        assert_eq!(sample(Gate::Cm).target_hash(), &h(9)); // the hyp hash
+    fn only_a_ca_has_a_revision() {
+        for gate in Gate::ALL {
+            assert_eq!(
+                sample(gate).revision().is_some(),
+                gate == Gate::Ca,
+                "{gate:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_subject_of_an_attestation_is_its_target() {
         assert_eq!(
             sample(Gate::Ca).subject(),
             crate::domain::id::test_support::iid(5).entity()
@@ -806,6 +824,36 @@ mod tests {
         assert_eq!(Gate::Cm.target_kind(), EntityKind::Spec);
         assert_eq!(Gate::Cs.target_kind(), EntityKind::Spec);
         assert_eq!(Gate::Ca.target_kind(), EntityKind::Item);
+    }
+
+    #[test]
+    fn a_document_kind_has_the_gate_that_approves_it_and_the_kind_comes_back() {
+        for kind in [DocKind::Finding, DocKind::Spec, DocKind::Design] {
+            assert_eq!(Gate::of_doc(kind).target_kind(), kind.entity_kind());
+        }
+        assert_eq!(Gate::of_doc(DocKind::Spec), Gate::Cs, "not CM");
+    }
+
+    #[test]
+    fn the_measurement_words_read_back_and_cover_every_result() {
+        for kind in CmResultKind::ALL {
+            assert_eq!(kind.name().parse::<CmResultKind>(), Ok(kind));
+        }
+        let results = [
+            CmResult::Pass,
+            CmResult::FailWiring {
+                item_hint: NonBlank::new("x").unwrap(),
+            },
+            CmResult::FailHyp { finding: fid(1) },
+        ];
+        let kinds: Vec<_> = results.iter().map(CmResult::kind).collect();
+        assert_eq!(kinds, CmResultKind::ALL.to_vec());
+        // The hash keeps the same words as literals of its own.
+        for result in &results {
+            let canon = result.to_canon().to_bytes();
+            let text = String::from_utf8(canon).unwrap();
+            assert!(text.contains(result.kind().name()), "{text}");
+        }
     }
 
     #[test]

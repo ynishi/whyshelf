@@ -34,6 +34,12 @@
 //! `evidence` is `measured`, `theoretical` or `estimated`, and a `measured_data`
 //! Finding must say `measured`.
 //!
+//! The words of these keys (the label, the maturity, the method, the
+//! reproducibility) are English, and only English: a value in another language is
+//! refused. Each is a closed set in the domain with `ALL`, `name()` and `FromStr`
+//! ([`EvidenceLabel`], [`MaturityLevel`], [`ObservationMethod`], [`Reproducibility`]),
+//! and the parser reads them from there.
+//!
 //! One complete file for each type:
 //!
 //! ```markdown
@@ -110,6 +116,7 @@ use super::id::FindingId;
 use super::location::{CodeLocation, SourceUri};
 use super::nonempty::NonBlank;
 use super::revision::RevisionId;
+use super::vocabulary::closed_vocabulary;
 
 /// How strongly a statement in a Finding is backed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -122,8 +129,15 @@ pub enum EvidenceLabel {
     Estimated,
 }
 
+closed_vocabulary!(EvidenceLabel, "evidence label", {
+    Measured => "measured",
+    Theoretical => "theoretical",
+    Estimated => "estimated",
+});
+
 impl EvidenceLabel {
-    fn name(self) -> &'static str {
+    /// The literal the hash is computed from. Its own, apart from [`name`](Self::name).
+    fn canon_name(self) -> &'static str {
         match self {
             Self::Measured => "measured",
             Self::Theoretical => "theoretical",
@@ -145,8 +159,16 @@ pub enum MaturityLevel {
     Standard,
 }
 
+closed_vocabulary!(MaturityLevel, "maturity level", {
+    Experimental => "experimental",
+    Emerging => "emerging",
+    Established => "established",
+    Standard => "standard",
+});
+
 impl MaturityLevel {
-    fn name(self) -> &'static str {
+    /// The literal the hash is computed from. Its own, apart from [`name`](Self::name).
+    fn canon_name(self) -> &'static str {
         match self {
             Self::Experimental => "experimental",
             Self::Emerging => "emerging",
@@ -165,8 +187,14 @@ pub enum ObservationMethod {
     Executed,
 }
 
+closed_vocabulary!(ObservationMethod, "observation method", {
+    Read => "read",
+    Executed => "executed",
+});
+
 impl ObservationMethod {
-    fn name(self) -> &'static str {
+    /// The literal the hash is computed from. Its own, apart from [`name`](Self::name).
+    fn canon_name(self) -> &'static str {
         match self {
             Self::Read => "read",
             Self::Executed => "executed",
@@ -183,8 +211,14 @@ pub enum Reproducibility {
     NotReproducible,
 }
 
+closed_vocabulary!(Reproducibility, "reproducibility", {
+    Reproducible => "reproducible",
+    NotReproducible => "not-reproducible",
+});
+
 impl Reproducibility {
-    fn name(self) -> &'static str {
+    /// The literal the hash is computed from. Its own, apart from [`name`](Self::name).
+    fn canon_name(self) -> &'static str {
         match self {
             Self::Reproducible => "reproducible",
             Self::NotReproducible => "not-reproducible",
@@ -333,7 +367,7 @@ impl ToCanon for FindingSource {
             } => Canon::map([
                 type_name,
                 ("context", context.to_canon()),
-                ("reproducibility", Canon::str(reproducibility.name())),
+                ("reproducibility", Canon::str(reproducibility.canon_name())),
             ]),
             Self::ExternalSource {
                 source,
@@ -343,7 +377,7 @@ impl ToCanon for FindingSource {
                 type_name,
                 ("source", source.to_canon()),
                 ("version", version.to_canon()),
-                ("maturity", Canon::str(maturity.name())),
+                ("maturity", Canon::str(maturity.canon_name())),
             ]),
             Self::CodeObservation {
                 location,
@@ -353,7 +387,7 @@ impl ToCanon for FindingSource {
                 type_name,
                 ("location", location.to_canon()),
                 ("revision", revision.to_canon()),
-                ("method", Canon::str(method.name())),
+                ("method", Canon::str(method.canon_name())),
             ]),
             Self::DomainConstraint {
                 authority,
@@ -397,7 +431,7 @@ impl Finding {
             &Canon::map([
                 ("title", title.to_canon()),
                 ("source", source.to_canon()),
-                ("evidence", Canon::str(evidence.name())),
+                ("evidence", Canon::str(evidence.canon_name())),
                 ("body", Canon::str(body.as_str())),
             ]),
         );
@@ -544,6 +578,65 @@ mod tests {
             "text".into(),
         );
         assert_ne!(base.hash(), other_source.hash());
+    }
+
+    #[test]
+    fn every_name_reads_back_to_its_value() {
+        fn round<T: Copy + PartialEq + std::fmt::Debug + std::str::FromStr>(
+            all: &[T],
+            name: fn(T) -> &'static str,
+        ) where
+            T::Err: std::fmt::Debug,
+        {
+            for value in all {
+                assert_eq!(name(*value).parse::<T>().unwrap(), *value);
+            }
+        }
+        round(&EvidenceLabel::ALL, EvidenceLabel::name);
+        round(&MaturityLevel::ALL, MaturityLevel::name);
+        round(&ObservationMethod::ALL, ObservationMethod::name);
+        round(&Reproducibility::ALL, Reproducibility::name);
+        assert_eq!(
+            "実測".parse::<EvidenceLabel>(),
+            Err(crate::domain::error::ValueError::UnknownName {
+                what: "evidence label",
+                found: "実測".to_owned()
+            }),
+            "the names are English only"
+        );
+    }
+
+    /// The hash keeps literals of its own: a word may be renamed for display, and no
+    /// identifier moves. This is the table the hash reads.
+    #[test]
+    fn golden_canon_literals() {
+        for (label, literal) in [
+            (EvidenceLabel::Measured, "measured"),
+            (EvidenceLabel::Theoretical, "theoretical"),
+            (EvidenceLabel::Estimated, "estimated"),
+        ] {
+            assert_eq!(label.canon_name(), literal);
+        }
+        for (level, literal) in [
+            (MaturityLevel::Experimental, "experimental"),
+            (MaturityLevel::Emerging, "emerging"),
+            (MaturityLevel::Established, "established"),
+            (MaturityLevel::Standard, "standard"),
+        ] {
+            assert_eq!(level.canon_name(), literal);
+        }
+        for (method, literal) in [
+            (ObservationMethod::Read, "read"),
+            (ObservationMethod::Executed, "executed"),
+        ] {
+            assert_eq!(method.canon_name(), literal);
+        }
+        for (r, literal) in [
+            (Reproducibility::Reproducible, "reproducible"),
+            (Reproducibility::NotReproducible, "not-reproducible"),
+        ] {
+            assert_eq!(r.canon_name(), literal);
+        }
     }
 
     // Golden vector: fixed Finding, fixed digest.

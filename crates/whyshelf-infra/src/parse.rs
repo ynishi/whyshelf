@@ -26,7 +26,7 @@
 //! | no front matter, YAML that does not parse, or a front matter that is not a mapping | `MalformedFrontmatter` | none; nothing else is read |
 //! | a required key is absent | `MissingField` | the key, such as `context` or `crux.question`; `## Contract` for the section |
 //! | a key is present and refused | `InvalidField` | the key with its position, such as `accept.pins[1].id` or `crux.options[0].reason` |
-//! | a reference names nothing | `UnresolvedRef` | raised by the application after parsing, not here |
+//! | a reference names nothing, names several, or the wrong kind | `DanglingRef`, `AmbiguousRef`, `WrongKind` | raised by the application after parsing, not here |
 //!
 //! # The keys of a Finding
 //!
@@ -41,7 +41,9 @@
 //! | `code_observation` | `ref` (`path:line`), `revision`, `method` (`read` or `executed`) |
 //! | `domain_constraint` | `authority`, `scope`, `review_condition` |
 //!
-//! `evidence` is `measured`, `theoretical` or `estimated`. A `revision` is read here
+//! `evidence` is `measured`, `theoretical` or `estimated`. These words, and the
+//! others of the table, are the names the domain gives them (`ALL` and `name()` of
+//! each type): this module keeps no table of its own, and reads English only. A `revision` is read here
 //! as text only; whether it names a revision is asked of the version-control port
 //! when the entity is built, so a revision that does not exist makes the file
 //! unparsed there.
@@ -420,18 +422,24 @@ fn insert_unique<K: Ord + Display, V>(
 
 // ---- Finding -------------------------------------------------------------
 
+/// The names of a closed vocabulary of the domain, with the values they stand for:
+/// the parser keeps no table of its own, so a word added to the domain is read here
+/// the day it is added.
+fn names<T: Copy>(all: &[T], name: fn(T) -> &'static str) -> Vec<(&'static str, T)> {
+    all.iter().map(|value| (name(*value), *value)).collect()
+}
+
 fn parse_finding(front: FindingFront, body: &str, problems: &mut Problems) -> Option<RawFinding> {
-    let types: Vec<(&str, FindingType)> = FindingType::ALL.iter().map(|t| (t.name(), *t)).collect();
-    let finding_type = problems.name(front.finding_type, "finding_type", &types);
+    let finding_type = problems.name(
+        front.finding_type,
+        "finding_type",
+        &names(&FindingType::ALL, FindingType::name),
+    );
     let title = problems.non_blank(front.title, "title");
     let evidence = problems.name(
         front.evidence,
         "evidence",
-        &[
-            ("measured", EvidenceLabel::Measured),
-            ("theoretical", EvidenceLabel::Theoretical),
-            ("estimated", EvidenceLabel::Estimated),
-        ],
+        &names(&EvidenceLabel::ALL, EvidenceLabel::name),
     );
     let source = match finding_type? {
         FindingType::MeasuredData => {
@@ -464,10 +472,7 @@ fn parse_finding(front: FindingFront, body: &str, problems: &mut Problems) -> Op
             let reproducibility = problems.name(
                 front.reproducibility,
                 "reproducibility",
-                &[
-                    ("reproducible", Reproducibility::Reproducible),
-                    ("not-reproducible", Reproducibility::NotReproducible),
-                ],
+                &names(&Reproducibility::ALL, Reproducibility::name),
             );
             match (context, reproducibility) {
                 (Some(context), Some(reproducibility)) => {
@@ -485,12 +490,7 @@ fn parse_finding(front: FindingFront, body: &str, problems: &mut Problems) -> Op
             let maturity = problems.name(
                 front.maturity,
                 "maturity",
-                &[
-                    ("experimental", MaturityLevel::Experimental),
-                    ("emerging", MaturityLevel::Emerging),
-                    ("established", MaturityLevel::Established),
-                    ("standard", MaturityLevel::Standard),
-                ],
+                &names(&MaturityLevel::ALL, MaturityLevel::name),
             );
             match (source, version, maturity) {
                 (Some(source), Some(version), Some(maturity)) => {
@@ -509,10 +509,7 @@ fn parse_finding(front: FindingFront, body: &str, problems: &mut Problems) -> Op
             let method = problems.name(
                 front.method,
                 "method",
-                &[
-                    ("read", ObservationMethod::Read),
-                    ("executed", ObservationMethod::Executed),
-                ],
+                &names(&ObservationMethod::ALL, ObservationMethod::name),
             );
             match (location, revision, method) {
                 (Some(location), Some(revision), Some(method)) => {
@@ -708,6 +705,45 @@ mod tests {
             Ok(RawDoc::Finding(finding)) => finding,
             other => panic!("not a Finding: {other:?}"),
         }
+    }
+
+    #[test]
+    fn every_word_the_domain_names_is_read_and_only_those() {
+        let usage = |evidence: &str, reproducibility: &str| {
+            format!(
+                "---\nfinding_type: usage_observation\ntitle: t\nevidence: {evidence}\n\
+                 context: c\nreproducibility: {reproducibility}\n---\nbody\n"
+            )
+        };
+        for label in EvidenceLabel::ALL {
+            for state in Reproducibility::ALL {
+                finding_of(&usage(label.name(), state.name()));
+            }
+        }
+        for level in MaturityLevel::ALL {
+            let text = format!(
+                "---\nfinding_type: external_source\ntitle: t\nevidence: theoretical\n\
+                 source: \"https://example.org/s\"\nversion: v\nmaturity: {}\n---\nb\n",
+                level.name()
+            );
+            finding_of(&text);
+        }
+        for method in ObservationMethod::ALL {
+            let text = format!(
+                "---\nfinding_type: code_observation\ntitle: t\nref: \"a.rs:1\"\n\
+                 revision: {REVISION}\nmethod: {}\nevidence: measured\n---\nb\n",
+                method.name()
+            );
+            finding_of(&text);
+        }
+        // English only: the example of the specification in another language is refused,
+        // and the reason names the key and the words that would do.
+        let refused = parse_text(&usage("実測", "reproducible")).expect_err("not a label");
+        assert!(matches!(
+            &refused[..],
+            [UnparsedReason::InvalidField { field, detail }]
+                if field == "evidence" && detail.contains("measured, theoretical, estimated")
+        ));
     }
 
     #[test]

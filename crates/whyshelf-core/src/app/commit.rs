@@ -5,10 +5,17 @@
 //! things in this order:
 //!
 //! 1. **Gate** (can stop the write). The secret scan of every text about to be
-//!    stored; the leak lint of every text going to the repo store, against the
-//!    aliases and titles of the private entities; and the machine check of every
-//!    approval, whose violations the use case passed along. Nothing is written if any
-//!    of them objects.
+//!    stored, and the leak lint of every text going to the repo store: it may carry
+//!    neither the alias or title of a private entity, nor the identifier of one
+//!    unless it is written `private:<id>` (a reference in the front matter and one in
+//!    the body are seen alike, and so are `publish`, `add` and every other path that
+//!    writes a text there). The entities published by the same draft are not
+//!    private to it. Nothing is written if either objects.
+//!
+//!    There is no check of a gate here: an approval cannot be put in a draft except
+//!    from the [`gate::Passed`](crate::domain::gate::Passed) of a gate's check (the
+//!    draft's `push_approval`), so by the time it is in the draft its check has
+//!    passed.
 //! 2. **Append.** Texts first, then events, so no event points at a text that is not
 //!    there. Appending is idempotent: an event or text already present is success.
 //! 3. **Notify** (cannot stop anything). The model is loaded again from the stores
@@ -23,15 +30,15 @@
 //!   command (add, tag, approve_cs, ingest, ...)      Workspace, &mut self
 //!      |
 //!      |  load Model; decide; fill a Draft:
-//!      |    events (each lists the tips it saw), texts to store,
-//!      |    machine-check violations of the gate being approved
+//!      |    events (each lists the tips it saw; an approval only
+//!      |    from a gate's Passed), texts to store
 //!      v
 //!   +--------------------------- commit -------------------------------+
 //!   | 1. GATE  (nothing written yet; the first objection ends it)      |
-//!   |      a) machine check   any violation          -> CheckFailed    |
-//!   |      b) secret scan     each text to be stored -> SecretFound    |
-//!   |      c) leak lint       each text for the repo store, against    |
-//!   |                         private aliases/titles -> LeakFound      |
+//!   |      a) secret scan     each text to be stored -> SecretFound    |
+//!   |      b) leak lint       each text for the repo store, against    |
+//!   |                         private aliases, titles and unmarked     |
+//!   |                         identifiers             -> LeakFound     |
 //!   |                                                                  |
 //!   | 2. APPEND  (idempotent: "already there" is success)              |
 //!   |      texts  -> store.put_object   first, so no event dangles     |
@@ -47,17 +54,16 @@
 //!                 Committed { events: ids in order, warnings }
 //! ```
 //!
-//! The checks run in the order drawn: the machine check of an approval is looked at
-//! before the texts are scanned. Only texts (the stored objects) are scanned for
-//! secrets and for private names; the fields of an event are not.
+//! Only texts (the stored objects) are scanned for secrets and for private names;
+//! the fields of an event are not.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::actor::Timestamp;
-use crate::domain::approval::Gate;
-use crate::domain::event::{Event, EventBody, EventId, StoreKind};
+use crate::domain::actor::{Actor, Timestamp};
+use crate::domain::event::{Event, EventBody, EventId, RecordBody, StoreKind};
+use crate::domain::gate::Passed;
 use crate::domain::id::EntityId;
-use crate::domain::lint::{CheckViolation, leak_lint};
+use crate::domain::lint::leak_lint;
 
 use super::Workspace;
 use super::error::AppError;
@@ -73,7 +79,6 @@ pub(crate) struct Draft {
     tips: BTreeMap<(StoreKind, EntityId), BTreeSet<EventId>>,
     events: Vec<(StoreKind, Event)>,
     objects: Vec<(StoreKind, NormalizedText)>,
-    checks: Vec<(Gate, Vec<CheckViolation>)>,
     publishing: BTreeSet<EntityId>,
 }
 
@@ -84,7 +89,6 @@ impl Draft {
             tips: BTreeMap::new(),
             events: Vec::new(),
             objects: Vec::new(),
-            checks: Vec::new(),
             publishing: BTreeSet::new(),
         }
     }
@@ -94,9 +98,44 @@ impl Draft {
         Draft::new(self.at.clone())
     }
 
-    /// Add an event to `target`'s stream in `store`, listing every tip the model
+    /// Add a record to `target`'s stream in `store`, listing every tip the model
     /// saw, or the previous event of this draft.
+    ///
+    /// Anything but an approval: the body type has no variant for one, so this is
+    /// not a way round a gate (see [`push_approval`](Self::push_approval)).
     pub(crate) fn push(
+        &mut self,
+        model: &Model,
+        store: StoreKind,
+        target: EntityId,
+        body: RecordBody,
+    ) -> Result<EventId, AppError> {
+        self.append(model, store, target, body.into())
+    }
+
+    /// Add an approval to the stream of the entity it is about, in `store`, by `by`.
+    ///
+    /// The one way to record an approval, and it takes the proof that a gate's check
+    /// passed: the attestation is the one the check built.
+    pub(crate) fn push_approval(
+        &mut self,
+        model: &Model,
+        store: StoreKind,
+        passed: &Passed,
+        by: Actor,
+    ) -> Result<EventId, AppError> {
+        self.append(
+            model,
+            store,
+            passed.subject(),
+            EventBody::Approved {
+                by,
+                attestation: passed.attestation().clone(),
+            },
+        )
+    }
+
+    fn append(
         &mut self,
         model: &Model,
         store: StoreKind,
@@ -125,11 +164,6 @@ impl Draft {
         }
     }
 
-    /// Record the machine check of a gate; any violation stops the commit.
-    pub(crate) fn require(&mut self, gate: Gate, violations: Vec<CheckViolation>) {
-        self.checks.push((gate, violations));
-    }
-
     /// Mark an entity as being published by this draft: its own alias and title
     /// are no longer secret.
     pub(crate) fn publishing(&mut self, id: EntityId) {
@@ -148,7 +182,6 @@ impl Draft {
         for (store, text) in other.objects {
             self.object(store, text);
         }
-        self.checks.extend(other.checks);
         self.publishing.extend(other.publishing);
     }
 }
@@ -199,15 +232,8 @@ impl<P: Ports> Workspace<P> {
 
     /// Step 1: may this be written? Nothing is written here.
     pub(crate) async fn gate(&self, model: &Model, draft: &Draft) -> Result<(), AppError> {
-        for (gate, violations) in &draft.checks {
-            if !violations.is_empty() {
-                return Err(AppError::CheckFailed {
-                    gate: *gate,
-                    violations: violations.clone(),
-                });
-            }
-        }
         let names = model.private_names(&draft.publishing);
+        let ids = model.private_ids(&draft.publishing);
         for (store, text) in &draft.objects {
             let hits = self
                 .ports
@@ -219,7 +245,7 @@ impl<P: Ports> Workspace<P> {
                 return Err(AppError::SecretFound { hits });
             }
             if *store == StoreKind::Repo {
-                let findings = leak_lint(text.as_str(), &names);
+                let findings = leak_lint(text.as_str(), &names, &ids);
                 if !findings.is_empty() {
                     return Err(AppError::LeakFound { findings });
                 }

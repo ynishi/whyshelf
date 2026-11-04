@@ -93,8 +93,15 @@
 //! | [`UnparsedReason::MalformedFrontmatter`] | Invalid | no `---` pair, YAML that does not read, or not a mapping | repair the front matter |
 //! | [`UnparsedReason::MissingField`] | Invalid | a required key or section is absent | add it |
 //! | [`UnparsedReason::InvalidField`] | Invalid | a key holds a value its type refuses | correct the value (the reason names the key and why) |
-//! | [`UnparsedReason::UnresolvedRef`] | Invalid | a reference in `grounds` or `spec` names nothing (an alias, an identifier, or a `private:` id where the private store can be read), or an alias names several | register the target, correct the reference, or give the alias to one entity |
-//! | [`InvalidReason::DanglingRef`] | Invalid | the identifier a reference stands for is not an entity here, though the store that would hold it can be read | bring the entity back, or correct the reference |
+//! | [`UnparsedReason::DanglingRef`] | Invalid | an alias in `grounds` or `spec` names nothing, so there is no identifier to keep | register the target, or correct the alias |
+//! | [`UnparsedReason::AmbiguousRef`] | Invalid | an alias in `grounds` or `spec` names several entities | give the alias to one entity, or name the entity by its identifier |
+//! | [`UnparsedReason::WrongKind`] | Invalid | a reference in `grounds` or `spec` names an entity of another kind | name an entity of the kind the key takes |
+//! | [`UnparsedReason::KindChanged`] | Invalid | the file is of another kind than the one it was registered as | put the file back, or register the new content as its own entity |
+//! | [`UnparsedReason::RevisionRejected`] | Invalid | a revision the file names is not one the version-control tool knows | name a revision that exists |
+//! | [`UnparsedReason::ExternalRefNotAllowed`] | Invalid | `grounds` or `spec` holds a URL or an `ext:` reference | name an entity of this project |
+//! | [`UnparsedReason::EmptyGrounds`], [`UnparsedReason::DuplicateGround`] | Invalid | a Spec with no ground, or one Finding twice among them | list each Finding once, and at least one |
+//! | [`InvalidReason::DanglingRef`] | Invalid | an identifier a reference spells (plain, or `private:` where the private store can be read) is not an entity here | bring the entity back, or correct the reference |
+//! | [`InvalidReason::ClassificationConflict`] | Invalid | two branches set the kind or the path differently | set it again (the application's `reclassify`; no command does it), or `whyshelf mv` for the path |
 //! | [`InvalidReason::PinCoverage`] | Invalid | the Design and its Spec disagree about a pin | assign each declared pin to an item; assign no undeclared one |
 //! | [`InvalidReason::PathCollision`] | Invalid | two entities sit at one path | move one with `whyshelf mv` |
 //! | [`InvalidReason::AliasCollision`] | Invalid | two entities have one alias | one of them must take another alias (the application's `reclassify` does it; no command does) |
@@ -113,14 +120,19 @@
 //! `NEXT` column ("approve upstream *x* first"). A Partial entity keeps its own chain
 //! inside [`Completeness`], so a reason is never lost to one that outranks it.
 //!
-//! Which upstream problem to show first, when several apply, is decided in one place:
+//! What one upstream says about itself to the entity that stands on it is
+//! [`UpstreamFacts`], the one mapping from the upstream's state; its three facts
+//! (approval, health, completeness) hold together and none hides another. Which
+//! upstream problem to show first, when several apply, is decided in one place:
 //! `upstream_problems` of the lint module, which the gates and the `NEXT` column both
-//! call.
+//! call, over those facts.
 
 use std::collections::BTreeSet;
 use std::fmt;
 
+use super::classification::ConflictField;
 use super::design::CoverageIssue;
+use super::event::{DocKind, EntityKind};
 use super::hash::ContentHash;
 use super::id::{Alias, EntityId};
 use super::location::RelPath;
@@ -167,13 +179,80 @@ pub enum UnparsedReason {
         /// What was wrong, free text.
         detail: String,
     },
-    /// An alias or reference in the file names nothing.
+    /// An alias in the file names no entity, so there is no identifier to keep.
     ///
-    /// Fix: register the entity it should name, or correct the reference.
+    /// A reference that spells an identifier is not this: the identifier is
+    /// available, so the entity is built and is Invalid with
+    /// [`InvalidReason::DanglingRef`] if nothing holds it.
+    ///
+    /// Fix: register the entity the alias should name, or correct the alias.
     #[error("the reference `{reference}` names nothing")]
-    UnresolvedRef {
-        /// The reference that could not be resolved.
+    DanglingRef {
+        /// The alias that could not be resolved.
         reference: Ref,
+    },
+    /// An alias in the file names several entities, so which one is meant is not
+    /// known.
+    ///
+    /// Fix: give the alias to one entity, or name the entity by its identifier.
+    #[error("the alias `{reference}` names several entities")]
+    AmbiguousRef {
+        /// The alias that names several.
+        reference: Ref,
+    },
+    /// A reference names an entity of another kind than the key wants.
+    ///
+    /// Fix: name an entity of the kind the key takes.
+    #[error("`{reference}` is a {}, not a {}", .found.name(), .expected.name())]
+    WrongKind {
+        /// The reference as written.
+        reference: Ref,
+        /// The kind the key takes.
+        expected: EntityKind,
+        /// The kind of the entity it names.
+        found: EntityKind,
+    },
+    /// The file is of another kind than the one it was registered as.
+    ///
+    /// Fix: put the file back, or register the new content as its own entity.
+    #[error("registered as a {registered}, the file is a {file}")]
+    KindChanged {
+        /// The kind it was registered as.
+        registered: DocKind,
+        /// The kind the file is now.
+        file: DocKind,
+    },
+    /// A revision the file names is not one the version-control tool knows.
+    ///
+    /// Fix: name a revision that exists.
+    #[error("`{text}` is not a revision")]
+    RevisionRejected {
+        /// The text as written.
+        text: String,
+    },
+    /// A key holds a reference to another project or to a URL, which could never
+    /// be approved here.
+    ///
+    /// Fix: name an entity of this project.
+    #[error("the key `{field}` cannot hold `{reference}`: it is not an entity of this project")]
+    ExternalRefNotAllowed {
+        /// The key.
+        field: String,
+        /// The reference as written.
+        reference: Ref,
+    },
+    /// A Spec was left with no ground.
+    ///
+    /// Fix: name at least one Finding.
+    #[error("the Spec has no ground")]
+    EmptyGrounds,
+    /// Two grounds of a Spec are the same Finding.
+    ///
+    /// Fix: list each Finding once.
+    #[error("the Finding {finding} is listed twice among the grounds")]
+    DuplicateGround {
+        /// The repeated Finding.
+        finding: EntityId,
     },
 }
 
@@ -214,6 +293,17 @@ pub enum InvalidReason {
     AliasCollision {
         /// The shared alias.
         alias: Alias,
+    },
+    /// Two branches set the kind or the path differently, so which it is cannot be
+    /// told and the file cannot be read.
+    ///
+    /// Fix: set the value again (the application's `reclassify` for a kind; no
+    /// command does it) or `whyshelf mv` for a path: the new event lists both
+    /// branches among its heads and settles the value.
+    #[error("the {field} was set differently on two branches")]
+    ClassificationConflict {
+        /// The value in conflict: the kind or the path.
+        field: ConflictField,
     },
 }
 
@@ -313,6 +403,87 @@ pub enum Upstream {
     Stale(NonEmptyVec<StaleReason>),
     /// Something upstream is not approved or not valid.
     Blocked(NonEmptyVec<BlockReason>),
+}
+
+/// What is wrong with an upstream on the approval axis, as the entity that stands
+/// on it sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalProblem {
+    /// The upstream is Invalid.
+    Invalid,
+    /// The upstream has no approval for its current content (a Draft, or a Modified
+    /// one that does not explain this entity's staleness).
+    NotApproved,
+}
+
+/// What is wrong with an upstream on the upstream axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HealthProblem {
+    /// The upstream is itself Stale.
+    Stale,
+    /// The upstream is itself Blocked.
+    Blocked,
+}
+
+/// What one upstream says about itself to the entity that stands on it: the one
+/// mapping from an upstream's state to facts.
+///
+/// The three facts hold at the same time and none hides another: an upstream can
+/// be Approved, Stale and Partial at once. The mapping is here and nowhere else;
+/// the evaluator turns `approval` and `health` into its block and stale reasons,
+/// the completeness stays a fact of its own ([`Completeness`]), and the order in
+/// which problems are shown first is the lint module's
+/// (`upstream_problems`), applied over the facts of each upstream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UpstreamFacts {
+    approval: Option<ApprovalProblem>,
+    health: Option<HealthProblem>,
+    partial: bool,
+}
+
+impl UpstreamFacts {
+    /// The facts of the upstream whose state is `up`.
+    ///
+    /// `target_approved` says whether the entity that stands on it holds an
+    /// approval for its current content, and `changed` whether this upstream's hash
+    /// today is not the one that approval recorded. An approved entity whose
+    /// upstream was edited since is Stale because of it; that upstream being
+    /// Modified is then the reason itself, and not a second reason for a block.
+    pub fn of(up: &EntityState, target_approved: bool, changed: bool) -> Self {
+        let approval = match up.approval() {
+            Approval::Invalid(_) => Some(ApprovalProblem::Invalid),
+            Approval::Draft => Some(ApprovalProblem::NotApproved),
+            Approval::Modified { .. } if !(target_approved && changed) => {
+                Some(ApprovalProblem::NotApproved)
+            }
+            Approval::Modified { .. } | Approval::Approved => None,
+        };
+        let health = match up.upstream() {
+            Upstream::Ok => None,
+            Upstream::Stale(_) => Some(HealthProblem::Stale),
+            Upstream::Blocked(_) => Some(HealthProblem::Blocked),
+        };
+        Self {
+            approval,
+            health,
+            partial: up.completeness().is_partial(),
+        }
+    }
+
+    /// The problem on the approval axis, if any.
+    pub fn approval(&self) -> Option<ApprovalProblem> {
+        self.approval
+    }
+
+    /// The problem on the upstream axis, if any.
+    pub fn health(&self) -> Option<HealthProblem> {
+        self.health
+    }
+
+    /// Whether the upstream, or something it stands on, cannot be read here.
+    pub fn is_partial(&self) -> bool {
+        self.partial
+    }
 }
 
 /// An entity that cannot be read here, and the way to it.
@@ -491,6 +662,35 @@ impl ItemProgress {
     }
 }
 
+/// Which of a Spec's declared pins the tests at the current revision carry: the
+/// same shape as [`ItemProgress`], for the Spec as a whole.
+///
+/// It is a count to show, never a validity: a Spec whose pins are not all in the
+/// tests yet is not Invalid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpecProgress {
+    found: BTreeSet<PinId>,
+    declared: BTreeSet<PinId>,
+}
+
+impl SpecProgress {
+    /// Progress from the declared pins found in tests and the pins the Spec
+    /// declares.
+    pub fn new(found: BTreeSet<PinId>, declared: BTreeSet<PinId>) -> Self {
+        Self { found, declared }
+    }
+
+    /// The pins found in the tests.
+    pub fn found(&self) -> &BTreeSet<PinId> {
+        &self.found
+    }
+
+    /// The pins the Spec declares.
+    pub fn declared(&self) -> &BTreeSet<PinId> {
+        &self.declared
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,6 +713,246 @@ mod tests {
         );
         assert!(ItemProgress::new(pins(&["PIN-C"]), declared).is_implementing());
         assert!(!ItemProgress::new(pins(&[]), pins(&[])).is_implementing());
+    }
+
+    fn invalid() -> Approval {
+        Approval::Invalid(NonEmptyVec::new(
+            InvalidReason::DanglingRef { upstream: eid(9) },
+            vec![],
+        ))
+    }
+
+    fn modified() -> Approval {
+        Approval::Modified {
+            approved: ContentHash::raw(b"old"),
+        }
+    }
+
+    fn stale() -> Upstream {
+        Upstream::Stale(NonEmptyVec::new(
+            StaleReason::UpstreamStale { upstream: eid(9) },
+            vec![],
+        ))
+    }
+
+    fn blocked() -> Upstream {
+        Upstream::Blocked(NonEmptyVec::new(
+            BlockReason::UpstreamBlocked { upstream: eid(9) },
+            vec![],
+        ))
+    }
+
+    fn partial() -> Completeness {
+        Completeness::from_reasons(BTreeSet::from([UnresolvedReason::new(eid(5), eid(5))]))
+    }
+
+    /// The table: an upstream's state, whether the target is approved, whether this
+    /// upstream changed since, and the facts.
+    #[test]
+    fn upstream_facts_of_is_this_table() {
+        use ApprovalProblem::{Invalid as Bad, NotApproved};
+        use HealthProblem::{Blocked, Stale};
+        #[allow(clippy::type_complexity)]
+        let rows: Vec<(
+            Approval,
+            Upstream,
+            Completeness,
+            bool,
+            bool,
+            Option<ApprovalProblem>,
+            Option<HealthProblem>,
+            bool,
+        )> = vec![
+            // approval axis alone
+            (
+                invalid(),
+                Upstream::Ok,
+                Completeness::Complete,
+                false,
+                false,
+                Some(Bad),
+                None,
+                false,
+            ),
+            (
+                Approval::Draft,
+                Upstream::Ok,
+                Completeness::Complete,
+                false,
+                false,
+                Some(NotApproved),
+                None,
+                false,
+            ),
+            (
+                Approval::Approved,
+                Upstream::Ok,
+                Completeness::Complete,
+                false,
+                false,
+                None,
+                None,
+                false,
+            ),
+            (
+                modified(),
+                Upstream::Ok,
+                Completeness::Complete,
+                false,
+                false,
+                Some(NotApproved),
+                None,
+                false,
+            ),
+            // an approved target and a Modified upstream that changed since: the
+            // change is the target's staleness, not a second reason
+            (
+                modified(),
+                Upstream::Ok,
+                Completeness::Complete,
+                true,
+                true,
+                None,
+                None,
+                false,
+            ),
+            (
+                modified(),
+                Upstream::Ok,
+                Completeness::Complete,
+                true,
+                false,
+                Some(NotApproved),
+                None,
+                false,
+            ),
+            (
+                modified(),
+                Upstream::Ok,
+                Completeness::Complete,
+                false,
+                true,
+                Some(NotApproved),
+                None,
+                false,
+            ),
+            // upstream axis alone
+            (
+                Approval::Approved,
+                stale(),
+                Completeness::Complete,
+                false,
+                false,
+                None,
+                Some(Stale),
+                false,
+            ),
+            (
+                Approval::Approved,
+                blocked(),
+                Completeness::Complete,
+                false,
+                false,
+                None,
+                Some(Blocked),
+                false,
+            ),
+            // together: nothing hides anything
+            (
+                Approval::Approved,
+                stale(),
+                partial(),
+                true,
+                false,
+                None,
+                Some(Stale),
+                true,
+            ),
+            (
+                Approval::Draft,
+                blocked(),
+                partial(),
+                false,
+                false,
+                Some(NotApproved),
+                Some(Blocked),
+                true,
+            ),
+            (
+                invalid(),
+                blocked(),
+                Completeness::Complete,
+                false,
+                false,
+                Some(Bad),
+                Some(Blocked),
+                false,
+            ),
+            // completeness alone
+            (
+                Approval::Approved,
+                Upstream::Ok,
+                partial(),
+                false,
+                false,
+                None,
+                None,
+                true,
+            ),
+        ];
+        for (
+            approval,
+            upstream,
+            completeness,
+            approved,
+            changed,
+            want_approval,
+            want_health,
+            want_partial,
+        ) in rows
+        {
+            let state = EntityState::new(approval.clone(), upstream.clone(), completeness);
+            let facts = UpstreamFacts::of(&state, approved, changed);
+            let context =
+                format!("{approval:?} / {upstream:?} / approved={approved} changed={changed}");
+            assert_eq!(facts.approval(), want_approval, "{context}");
+            assert_eq!(facts.health(), want_health, "{context}");
+            assert_eq!(facts.is_partial(), want_partial, "{context}");
+        }
+    }
+
+    /// The three facts are read from three different axes of the state, so any
+    /// combination of the axes gives the combination of the facts.
+    #[test]
+    fn upstream_facts_are_independent_of_each_other() {
+        for approval in [invalid(), Approval::Draft, Approval::Approved, modified()] {
+            for upstream in [Upstream::Ok, stale(), blocked()] {
+                for completeness in [Completeness::Complete, partial()] {
+                    let all = UpstreamFacts::of(
+                        &EntityState::new(approval.clone(), upstream.clone(), completeness.clone()),
+                        false,
+                        false,
+                    );
+                    let approval_only = UpstreamFacts::of(
+                        &EntityState::new(approval.clone(), Upstream::Ok, Completeness::Complete),
+                        false,
+                        false,
+                    );
+                    let health_only = UpstreamFacts::of(
+                        &EntityState::new(
+                            Approval::Approved,
+                            upstream.clone(),
+                            Completeness::Complete,
+                        ),
+                        false,
+                        false,
+                    );
+                    assert_eq!(all.approval(), approval_only.approval());
+                    assert_eq!(all.health(), health_only.health());
+                    assert_eq!(all.is_partial(), completeness.is_partial());
+                }
+            }
+        }
     }
 
     #[test]

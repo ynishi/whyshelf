@@ -9,6 +9,7 @@ use std::num::ParseIntError;
 use thiserror::Error;
 
 use super::id::EntityId;
+use super::query::StateFilter;
 
 /// Why a text could not become a value object.
 ///
@@ -163,6 +164,14 @@ pub enum ValueError {
     /// A store name was neither `repo` nor `private`.
     #[error("a store is `repo` or `private`")]
     StoreKind,
+    /// A word of a closed vocabulary was not one of its names.
+    #[error("`{found}` is not a {what}")]
+    UnknownName {
+        /// What the word should have named, such as "maturity level".
+        what: &'static str,
+        /// The text found.
+        found: String,
+    },
 }
 
 /// Why an entity could not be built from its parts.
@@ -252,9 +261,7 @@ pub enum QueryError {
         found: String,
     },
     /// The value of `state:` was not a state.
-    #[error(
-        "`state:` takes invalid, draft, approved, modified, ok, stale, blocked or unresolved, found `{found}`"
-    )]
+    #[error("`state:` takes {}, found `{found}`", StateFilter::words())]
     BadState {
         /// The value found.
         found: String,

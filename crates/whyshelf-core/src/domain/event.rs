@@ -197,6 +197,36 @@ impl StoreKind {
             Self::Private => "private",
         }
     }
+
+    /// Whether a document in this store can see an entity in `target`: the repo
+    /// store cannot see the private store, and the private store sees both.
+    ///
+    /// The one statement of which store sees which; the index of references, the
+    /// map and the scaffold ask this and keep no copy.
+    pub fn sees(self, target: StoreKind) -> bool {
+        !matches!((self, target), (Self::Repo, Self::Private))
+    }
+
+    /// The mark a reference from a document in this store to an entity in `target`
+    /// carries: the repo store reaches the private store only by the opaque
+    /// `private:` identifier, and everything else is written plain.
+    pub fn mark_for(self, target: StoreKind) -> RefMark {
+        if self.sees(target) {
+            RefMark::Unmarked
+        } else {
+            RefMark::Private
+        }
+    }
+}
+
+/// The mark of a reference to an entity of the project (see
+/// [`StoreKind::mark_for`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefMark {
+    /// Written by alias or identifier, no mark.
+    Unmarked,
+    /// Written `private:<id>`, by the opaque identifier alone.
+    Private,
 }
 
 impl FromStr for StoreKind {
@@ -637,6 +667,87 @@ impl EventBody {
             Self::Published(Publication::Incoming { from, snapshot }) => {
                 Canon::map([("from", from.to_canon()), ("snapshot", snapshot.to_canon())])
             }
+        }
+    }
+}
+
+/// What a writer may record: every [`EventBody`] but `Approved`.
+///
+/// The reading side (the storage adapter that rebuilds events from files) needs
+/// `Approved` and keeps using [`EventBody`]. The writing side does not: an approval
+/// is built from a [`Passed`](super::gate::Passed) and from nothing else, so the
+/// type a use case hands to the draft has no variant for it, and no use case can
+/// record an approval that a gate did not let through.
+///
+/// ```compile_fail
+/// use whyshelf_core::domain::event::RecordBody;
+///
+/// // There is no such variant: an approval is recorded from a gate's `Passed`.
+/// fn forged(by: whyshelf_core::domain::actor::Actor, attestation: whyshelf_core::domain::approval::Attestation) -> RecordBody {
+///     RecordBody::Approved { by, attestation }
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecordBody {
+    /// An entity comes into being.
+    Registered(Registration),
+    /// The content changed.
+    Revised {
+        /// The version before.
+        old: Version,
+        /// The version after.
+        new: Version,
+    },
+    /// The classification changed.
+    Reclassified {
+        /// The edits, applied in order.
+        changes: NonEmptyVec<ClassChange>,
+    },
+    /// The path changed.
+    Moved {
+        /// The path before.
+        old: RelPath,
+        /// The path after.
+        new: RelPath,
+    },
+    /// An earlier approval is withdrawn.
+    Revoked {
+        /// The `Approved` event withdrawn.
+        revokes: EventId,
+        /// Why, free text.
+        reason: NonBlank,
+        /// Who withdrew it, as declared.
+        by: Actor,
+    },
+    /// A stored object was deleted.
+    Purged {
+        /// The raw hash whose object was deleted.
+        raw: ContentHash,
+        /// Why, free text.
+        reason: NonBlank,
+    },
+    /// An entity crossed from one store to the other.
+    Published(Publication),
+}
+
+impl From<RecordBody> for EventBody {
+    fn from(body: RecordBody) -> Self {
+        match body {
+            RecordBody::Registered(registration) => Self::Registered(registration),
+            RecordBody::Revised { old, new } => Self::Revised { old, new },
+            RecordBody::Reclassified { changes } => Self::Reclassified { changes },
+            RecordBody::Moved { old, new } => Self::Moved { old, new },
+            RecordBody::Revoked {
+                revokes,
+                reason,
+                by,
+            } => Self::Revoked {
+                revokes,
+                reason,
+                by,
+            },
+            RecordBody::Purged { raw, reason } => Self::Purged { raw, reason },
+            RecordBody::Published(publication) => Self::Published(publication),
         }
     }
 }
@@ -1087,6 +1198,44 @@ mod tests {
         for bad in ["", "Repo", "public", " private"] {
             assert_eq!(bad.parse::<StoreKind>(), Err(ValueError::StoreKind));
         }
+    }
+
+    /// Which store sees which, and the mark a reference between them carries: the
+    /// one table every reader of it asks.
+    #[test]
+    fn what_a_store_sees_and_the_mark_a_reference_carries() {
+        use StoreKind::{Private, Repo};
+        for (from, to, sees, mark) in [
+            (Repo, Repo, true, RefMark::Unmarked),
+            (Repo, Private, false, RefMark::Private),
+            (Private, Repo, true, RefMark::Unmarked),
+            (Private, Private, true, RefMark::Unmarked),
+        ] {
+            assert_eq!(from.sees(to), sees, "{from:?} sees {to:?}");
+            assert_eq!(from.mark_for(to), mark, "{from:?} to {to:?}");
+        }
+    }
+
+    /// A body that can be recorded becomes the body of an event with the same
+    /// content, and the event it makes is the one that the same `EventBody` makes.
+    #[test]
+    fn a_recorded_body_becomes_the_event_body_of_the_same_content() {
+        let moved = RecordBody::Moved {
+            old: path("docs/spec/a.md"),
+            new: path("docs/spec/b.md"),
+        };
+        assert_eq!(
+            EventBody::from(moved),
+            EventBody::Moved {
+                old: path("docs/spec/a.md"),
+                new: path("docs/spec/b.md"),
+            }
+        );
+        let purged = RecordBody::Purged {
+            raw: ContentHash::raw(b"x"),
+            reason: NonBlank::new("a secret").unwrap(),
+        };
+        assert_eq!(EventBody::from(purged).kind_name(), "Purged");
     }
 
     // Golden vector: the canonical bytes of a store, which the event hash covers.

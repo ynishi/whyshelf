@@ -54,14 +54,25 @@
 //! graph of a store is its own (a publication starts a new root in the repo
 //! store). An entity belongs to one *home* store: the repo store if it appears
 //! there, else the private store. References are resolved by the rules of the
-//! domain ([`EntityRef::resolve`]); the index only answers its questions: a
-//! reference without a mark stays in the entity's own store (a private entity may
-//! also name a public one), `private:<id>` is looked up by its identifier in either
-//! store, and whether the private store is there at all is asked of the store port
-//! once per load. A `private:` identifier that nothing holds, where the private store
-//! is not there, leaves the entity that names it *partial*, not invalid.
+//! domain ([`EntityRef::resolve`](crate::domain::reference::EntityRef::resolve)),
+//! and what a resolution comes to for the entity that holds the reference is the
+//! domain's too ([`reference::bind`](crate::domain::reference::bind)); the index only answers
+//! the questions: a reference without a mark is looked up where the store of its
+//! document sees (the rule is [`StoreKind::sees`]: a public document sees only the
+//! repo store, a private one both), `private:<id>` is looked up by its identifier in
+//! either store, and whether the private store is there at all is asked of the store
+//! port once per load. A `private:` identifier that nothing holds, where the private
+//! store is not there, leaves the entity that names it *partial*, not invalid. An
+//! identifier that the document cannot see anything under makes it Invalid
+//! (dangling), even though the model holds an entity of that identifier.
 //! Approvals are read from both stores together, because an entity that was
 //! published keeps its earlier approvals in the private store.
+//!
+//! A document whose kind or path two branches wrote differently is held beside the
+//! typed entities, not among them ([`ConflictedEntry`]): Invalid, its file unread,
+//! and read like any invalid upstream by what stands on it. The state of an upstream
+//! is read from [`Model::states`], which has every entity's, such a document's among
+//! them.
 //!
 //! # Building entities from raw files
 //!
@@ -76,11 +87,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::domain::actor::Actor;
 use crate::domain::approval::{ApprovalSet, Attestation};
 use crate::domain::classification::{
-    ClassificationIssue, ClassificationView, DocClass, ItemClass, Merged, fold,
+    ClassificationIssue, ClassificationView, ConflictedDoc, DocClass, ItemClass, Merged, fold,
 };
 use crate::domain::design::{Design, WorkItem};
+use crate::domain::error::EntityError;
 use crate::domain::evaluate::{
-    Cause, Evaluated, Evaluator, ImplView, ItemEvaluation, ItemKey, Unparsed,
+    Cause, Evaluated, Evaluator, ImplView, ItemEvaluation, ItemKey, States, Unparsed, Written,
+    states_of,
 };
 use crate::domain::event::{DocKind, EntityKind, Event, EventId, StoreKind, Version};
 use crate::domain::finding::Finding;
@@ -90,7 +103,7 @@ use crate::domain::lint::PrivateName;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::reference::{
-    Directory, EntityRef, ItemRef, LocalRef, Lookup, Reach, Ref, Resolution,
+    Bound, ById, Directory, ItemRef, LocalRef, Located, Lookup, Reach, Ref, Resolution, bind,
 };
 use crate::domain::revision::RevisionId;
 use crate::domain::spec::Spec;
@@ -101,18 +114,6 @@ use super::config::Config;
 use super::error::AppError;
 use super::ports::{CodeScanPort, CurrentPort, FileStat, Ports, RevisionPort, StorePort};
 use super::raw::{Candidate, ParseOutcome, RawDoc};
-
-/// The first value of a field, whether the tips agree or not.
-///
-/// Where the tips disagree the classification reports the conflict; commands that
-/// must act on the entity meanwhile take the smallest value, so the choice is the
-/// same for every reader.
-pub(crate) fn pick<T: Ord>(merged: &Merged<T>) -> Option<&T> {
-    match merged {
-        Merged::Agreed(value) => Some(value),
-        Merged::Conflict(set) => set.iter().next(),
-    }
-}
 
 /// The events and folds of one store.
 #[derive(Debug)]
@@ -278,6 +279,16 @@ pub(crate) struct Found {
     pub(crate) store: StoreKind,
 }
 
+impl Located for Found {
+    fn id(&self) -> EntityId {
+        self.id
+    }
+
+    fn kind(&self) -> EntityKind {
+        self.kind
+    }
+}
+
 /// Where a reference is read from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Scope {
@@ -296,6 +307,9 @@ pub(crate) enum Scope {
 #[derive(Debug)]
 pub(crate) struct Index {
     entries: BTreeMap<EntityId, Found>,
+    /// The documents whose kind or path is in conflict, and the store of each: an
+    /// identifier that is there and names no entity of a kind.
+    conflicted: BTreeMap<EntityId, StoreKind>,
     aliases: BTreeMap<StoreKind, BTreeMap<Alias, BTreeSet<EntityId>>>,
     canonical: BTreeMap<EntityId, EntityId>,
     reach: Reach,
@@ -312,7 +326,7 @@ impl Directory<Found> for Scoped<'_> {
         self.index.lookup(self.scope, reference)
     }
 
-    fn by_id(&self, id: EntityId) -> Option<Found> {
+    fn by_id(&self, id: EntityId) -> ById<Found> {
         self.index.by_id(id)
     }
 
@@ -325,6 +339,7 @@ impl Index {
     pub(crate) fn from_snapshot(snap: &Snapshot) -> Self {
         let mut index = Index {
             entries: BTreeMap::new(),
+            conflicted: BTreeMap::new(),
             aliases: BTreeMap::new(),
             canonical: BTreeMap::new(),
             reach: snap.reach(),
@@ -335,18 +350,9 @@ impl Index {
                 .extend(snap.side(store).view.alias_map().clone());
         }
         for (store, class) in snap.docs() {
-            let Some(kind) = pick(class.kind()) else {
-                continue;
-            };
-            index.entries.insert(
-                class.id(),
-                Found {
-                    id: class.id(),
-                    kind: kind.entity_kind(),
-                    store,
-                },
-            );
-            if let Some(Some(alias)) = pick(class.alias()) {
+            // An alias that two branches set differently is not used to find the
+            // entity: which it is, is not known.
+            if let Some(Some(alias)) = class.alias().agreed() {
                 index
                     .aliases
                     .entry(store)
@@ -354,6 +360,21 @@ impl Index {
                     .entry(alias.clone())
                     .or_default()
                     .insert(class.id());
+            }
+            match (ConflictedDoc::of(class), class.kind().known()) {
+                (None, Some(kind)) => {
+                    index.entries.insert(
+                        class.id(),
+                        Found {
+                            id: class.id(),
+                            kind: kind.entity_kind(),
+                            store,
+                        },
+                    );
+                }
+                _ => {
+                    index.conflicted.insert(class.id(), store);
+                }
             }
         }
         for (store, class) in snap.items() {
@@ -369,11 +390,12 @@ impl Index {
         index
     }
 
+    /// Whether a reference read from `scope` can see an entity in `store`: what a
+    /// document of a store sees is the store's own rule.
     fn visible(scope: Scope, store: StoreKind) -> bool {
         match scope {
             Scope::Everywhere => true,
-            Scope::Doc(StoreKind::Repo) => store == StoreKind::Repo,
-            Scope::Doc(StoreKind::Private) => true,
+            Scope::Doc(from) => from.sees(store),
         }
     }
 
@@ -382,15 +404,19 @@ impl Index {
         Scoped { index: self, scope }
     }
 
+    /// What is under an identifier that is a document or an item, as seen from
+    /// `scope`.
+    fn at(&self, scope: Scope, id: EntityId) -> Lookup<Found> {
+        match (self.entries.get(&id), self.conflicted.get(&id)) {
+            (Some(found), _) if Self::visible(scope, found.store) => Lookup::Found(*found),
+            (_, Some(store)) if Self::visible(scope, *store) => Lookup::Conflicted(id),
+            _ => Lookup::Missing,
+        }
+    }
+
     fn lookup(&self, scope: Scope, reference: &LocalRef) -> Lookup<Found> {
         match reference {
-            LocalRef::Id(id) => {
-                let id = self.canonical.get(id).copied().unwrap_or(*id);
-                match self.entries.get(&id) {
-                    Some(found) if Self::visible(scope, found.store) => Lookup::Found(*found),
-                    _ => Lookup::Missing,
-                }
-            }
+            LocalRef::Id(id) => self.at(scope, self.canonical.get(id).copied().unwrap_or(*id)),
             LocalRef::Alias(alias) => {
                 let mut hits: BTreeSet<EntityId> = BTreeSet::new();
                 for (store, by_alias) in &self.aliases {
@@ -404,11 +430,7 @@ impl Index {
                 let mut it = hits.into_iter();
                 match (it.next(), it.next()) {
                     (None, _) => Lookup::Missing,
-                    (Some(id), None) => self
-                        .entries
-                        .get(&id)
-                        .copied()
-                        .map_or(Lookup::Missing, Lookup::Found),
+                    (Some(id), None) => self.at(scope, id),
                     (Some(_), Some(_)) => Lookup::Ambiguous,
                 }
             }
@@ -419,9 +441,13 @@ impl Index {
     /// identifiers a merge made equal. A publication moves an entity to the repo
     /// store and a file keeps writing `private:<id>`, so the store is no part of
     /// the question.
-    fn by_id(&self, id: EntityId) -> Option<Found> {
+    fn by_id(&self, id: EntityId) -> ById<Found> {
         let id = self.canonical.get(&id).copied().unwrap_or(id);
-        self.entries.get(&id).copied()
+        match (self.entries.get(&id), self.conflicted.contains_key(&id)) {
+            (Some(found), _) => ById::Found(*found),
+            (None, true) => ById::Conflicted(id),
+            (None, false) => ById::Missing,
+        }
     }
 
     /// Who holds the alias in a store.
@@ -435,15 +461,17 @@ impl Index {
 
 /// The result of building an entity from a file.
 ///
-/// A Spec and a Design carry, beside the entity, the upstream identifiers the file
-/// wrote with a mark into a store this environment cannot read: the entity holds
-/// the identifier, and this is the fact about how it was written that the
-/// evaluator needs and the entity must not hold (it would reach the hashes).
+/// A Spec and a Design carry, beside the entity, what the file wrote about its
+/// upstream identifiers that the entity cannot hold: with a mark into a store this
+/// environment cannot read, or under an identifier the document can see nothing
+/// under. The entity holds the identifier, and this is the fact about how it was
+/// written that the evaluator needs and the entity must not hold (it would reach the
+/// hashes).
 #[derive(Debug, Clone)]
 pub(crate) enum Built {
     Finding(Finding),
-    Spec(Spec, BTreeSet<EntityId>),
-    Design(Design, BTreeSet<EntityId>),
+    Spec(Spec, Written),
+    Design(Design, Written),
     Unparsed(Unparsed),
 }
 
@@ -469,58 +497,14 @@ impl Built {
     }
 }
 
-fn invalid_field(field: &str, detail: impl Into<String>) -> UnparsedReason {
-    UnparsedReason::InvalidField {
-        field: field.to_owned(),
-        detail: detail.into(),
-    }
-}
-
-/// Where a reference in a field came to.
-enum Reached {
-    /// An entity of the kind the field wants.
-    Entity(EntityId),
-    /// An identifier written with a mark into a store this environment cannot
-    /// read: kept as written, and told apart so the entity that holds it is
-    /// partial and not invalid.
-    Unreadable(EntityId),
-}
-
-fn resolve_to(
-    directory: &Scoped<'_>,
-    reference: &Ref,
-    field: &str,
-    expected: EntityKind,
-) -> Result<Reached, UnparsedReason> {
-    // A URL names no entity, and an `ext:` reference could never be approved
-    // anywhere (see the module documentation of `reference`).
-    let entity = reference
-        .as_entity()
-        .filter(|entity| !matches!(entity, EntityRef::External { .. }))
-        .ok_or_else(|| {
-            invalid_field(
-                field,
-                "an external reference cannot stand for an entity of this project",
-            )
-        })?;
-    match entity.resolve(directory) {
-        Resolution::Found(found) if found.kind == expected => Ok(Reached::Entity(found.id)),
-        Resolution::Found(found) => Err(invalid_field(
-            field,
-            format!(
-                "`{reference}` is a {}, not a {}",
-                found.kind.name(),
-                expected.name()
-            ),
-        )),
-        Resolution::Unresolved => entity.spelled_id().map(Reached::Unreadable).ok_or_else(|| {
-            UnparsedReason::UnresolvedRef {
-                reference: reference.clone(),
-            }
-        }),
-        Resolution::Dangling | Resolution::Ambiguous => Err(UnparsedReason::UnresolvedRef {
-            reference: reference.clone(),
-        }),
+/// What a reference in a key comes to, in the scope of the document that wrote it.
+///
+/// Which lookup is made is the index's; what the answer comes to for the holder is
+/// the domain's ([`bind`]).
+fn bound(directory: &Scoped<'_>, reference: &Ref, field: &str, expected: EntityKind) -> Bound {
+    match reference.entity_of(field) {
+        Ok(entity) => bind(entity.resolve(directory), &entity, expected),
+        Err(refused) => Bound::Unparsed(refused),
     }
 }
 
@@ -552,10 +536,10 @@ pub(crate) async fn build<P: Ports>(
     if let Some(expected) = expected
         && doc.kind() != expected
     {
-        return unparsed(vec![invalid_field(
-            "kind",
-            format!("registered as a {expected}, the file is a {}", doc.kind()),
-        )]);
+        return unparsed(vec![UnparsedReason::KindChanged {
+            registered: expected,
+            file: doc.kind(),
+        }]);
     }
     match doc.clone() {
         RawDoc::Finding(raw) => {
@@ -570,10 +554,9 @@ pub(crate) async fn build<P: Ports>(
                     match checked {
                         Some(revision) => Some(revision),
                         None => {
-                            return unparsed(vec![invalid_field(
-                                "revision",
-                                format!("`{text}` is not a revision"),
-                            )]);
+                            return unparsed(vec![UnparsedReason::RevisionRejected {
+                                text: text.as_str().to_owned(),
+                            }]);
                         }
                     }
                 }
@@ -586,42 +569,63 @@ pub(crate) async fn build<P: Ports>(
         RawDoc::Spec(raw) => {
             let directory = index.seen_from(Scope::Doc(store));
             let mut grounds = Vec::new();
-            let mut unresolved = BTreeSet::new();
+            let mut written = Written::default();
             let mut reasons = Vec::new();
             for reference in raw.grounds().iter() {
-                match resolve_to(&directory, reference, "grounds", EntityKind::Finding) {
-                    Ok(Reached::Entity(found)) => grounds.push(FindingId::new(found)),
-                    Ok(Reached::Unreadable(unreadable)) => {
-                        unresolved.insert(unreadable);
+                // An identifier is available in each case but the last: the Spec is
+                // built with it, and the evaluator judges what stands behind it. No
+                // ground is dropped, which would change the hash in silence.
+                match bound(&directory, reference, "grounds", EntityKind::Finding) {
+                    Bound::Id(found) | Bound::Conflicted(found) => {
+                        grounds.push(FindingId::new(found));
+                    }
+                    Bound::Dangling(found) => {
+                        written.dangling.insert(found);
+                        grounds.push(FindingId::new(found));
+                    }
+                    Bound::Unresolved(unreadable) => {
+                        written.unresolved.insert(unreadable);
                         grounds.push(FindingId::new(unreadable));
                     }
-                    Err(reason) => reasons.push(reason),
+                    Bound::Unparsed(reason) => reasons.push(reason),
                 }
             }
             if !reasons.is_empty() {
                 return unparsed(reasons);
             }
-            let grounds = NonEmptyVec::from_vec(grounds)?;
+            let Ok(grounds) = NonEmptyVec::from_vec(grounds) else {
+                return unparsed(vec![UnparsedReason::EmptyGrounds]);
+            };
             match raw.build(SpecId::new(id), grounds) {
-                Ok(spec) => Ok(Built::Spec(spec, unresolved)),
-                Err(error) => unparsed(vec![invalid_field("grounds", error.to_string())]),
+                Ok(spec) => Ok(Built::Spec(spec, written)),
+                Err(EntityError::DuplicateGround { finding }) => {
+                    unparsed(vec![UnparsedReason::DuplicateGround { finding }])
+                }
+                Err(other) => unparsed(vec![UnparsedReason::InvalidField {
+                    field: "grounds".to_owned(),
+                    detail: other.to_string(),
+                }]),
             }
         }
         RawDoc::Design(raw) => {
             let directory = index.seen_from(Scope::Doc(store));
-            match resolve_to(&directory, raw.spec(), "spec", EntityKind::Spec) {
-                Ok(reached) => {
-                    let (spec, unresolved) = match reached {
-                        Reached::Entity(spec) => (spec, BTreeSet::new()),
-                        Reached::Unreadable(spec) => (spec, BTreeSet::from([spec])),
-                    };
-                    Ok(Built::Design(
-                        raw.build(DesignId::new(id), SpecId::new(spec)),
-                        unresolved,
-                    ))
+            let mut written = Written::default();
+            let spec = match bound(&directory, raw.spec(), "spec", EntityKind::Spec) {
+                Bound::Id(spec) | Bound::Conflicted(spec) => spec,
+                Bound::Dangling(spec) => {
+                    written.dangling.insert(spec);
+                    spec
                 }
-                Err(reason) => unparsed(vec![reason]),
-            }
+                Bound::Unresolved(spec) => {
+                    written.unresolved.insert(spec);
+                    spec
+                }
+                Bound::Unparsed(reason) => return unparsed(vec![reason]),
+            };
+            Ok(Built::Design(
+                raw.build(DesignId::new(id), SpecId::new(spec)),
+                written,
+            ))
         }
     }
 }
@@ -736,8 +740,48 @@ pub struct DocEntry {
     owner: Option<Actor>,
     tags: BTreeSet<Tag>,
     tips: BTreeSet<EventId>,
-    recorded: Version,
+    recorded: Option<Version>,
     present: Option<Present>,
+}
+
+/// A document whose kind or path was set differently on two branches: what is known
+/// of it, beside the [`ConflictedDoc`] that decides its state.
+///
+/// It is not a [`DocEntry`]: there is no kind to read its file as, or no one path to
+/// read it at, and so no file is read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConflictedEntry {
+    doc: ConflictedDoc,
+    store: StoreKind,
+    alias: Option<Alias>,
+    path: Option<RelPath>,
+}
+
+impl ConflictedEntry {
+    /// The document and its state.
+    pub fn doc(&self) -> &ConflictedDoc {
+        &self.doc
+    }
+
+    /// The identifier.
+    pub fn id(&self) -> EntityId {
+        self.doc.id()
+    }
+
+    /// The store it lives in.
+    pub fn store(&self) -> StoreKind {
+        self.store
+    }
+
+    /// Its alias, when the branches agree on one.
+    pub fn alias(&self) -> Option<&Alias> {
+        self.alias.as_ref()
+    }
+
+    /// Its path, when the branches agree on one.
+    pub fn path(&self) -> Option<&RelPath> {
+        self.path.as_ref()
+    }
 }
 
 impl DocEntry {
@@ -781,9 +825,9 @@ impl DocEntry {
         &self.tips
     }
 
-    /// The version the log records.
-    pub fn recorded(&self) -> &Version {
-        &self.recorded
+    /// The version the log records; none while two branches disagree about it.
+    pub fn recorded(&self) -> Option<&Version> {
+        self.recorded.as_ref()
     }
 
     /// The file as it is now; `None` when the file is missing.
@@ -843,12 +887,29 @@ impl ItemEntry {
     }
 }
 
+/// What a reference written by a person names.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Resolved<'m> {
+    /// An entity of a kind.
+    Entity {
+        /// The identifier.
+        id: EntityId,
+        /// The kind.
+        kind: EntityKind,
+        /// The store it lives in.
+        store: StoreKind,
+    },
+    /// A document whose kind or path is in conflict.
+    Conflicted(&'m ConflictedEntry),
+}
+
 /// A snapshot of the project at one moment. See the module documentation.
 #[derive(Debug)]
 pub struct Model {
     snap: Snapshot,
     index: Index,
     docs: BTreeMap<EntityId, DocEntry>,
+    conflicted: BTreeMap<EntityId, ConflictedEntry>,
     items: BTreeMap<EntityId, ItemEntry>,
     findings: BTreeMap<FindingId, Evaluated<Finding>>,
     specs: BTreeMap<SpecId, Evaluated<Spec>>,
@@ -931,12 +992,23 @@ impl Model {
             built: Option<(Built, ContentHash)>,
         }
         let mut loaded: Vec<Loaded> = Vec::new();
+        let mut conflicted: BTreeMap<EntityId, ConflictedEntry> = BTreeMap::new();
         for (store, class) in snap.docs() {
-            let (Some(kind), Some(path), Some(version)) = (
-                pick(class.kind()),
-                pick(class.path()),
-                pick(class.version()),
-            ) else {
+            // A kind or a path in conflict: the file is not read (as which kind? at
+            // which path?) and the document is held beside the typed entities.
+            if let Some(doc) = ConflictedDoc::of(class) {
+                conflicted.insert(
+                    class.id(),
+                    ConflictedEntry {
+                        doc,
+                        store,
+                        alias: class.alias().agreed().cloned().flatten(),
+                        path: class.path().agreed().cloned(),
+                    },
+                );
+                continue;
+            }
+            let (Some(kind), Some(path)) = (class.kind().known(), class.path().agreed()) else {
                 continue;
             };
             let candidate = ports
@@ -948,31 +1020,37 @@ impl Model {
                 None => None,
                 Some(candidate) => {
                     let built =
-                        build(ports, &index, store, class.id(), Some(*kind), candidate).await?;
+                        build(ports, &index, store, class.id(), Some(kind), candidate).await?;
                     Some((built, candidate.raw_hash()))
                 }
             };
             loaded.push(Loaded {
                 entry: DocEntry {
                     id: class.id(),
-                    kind: *kind,
+                    kind,
                     store,
                     path: path.clone(),
-                    alias: pick(class.alias()).cloned().flatten(),
-                    owner: pick(class.owner()).cloned().flatten(),
+                    // A value two branches set differently is reported as an issue
+                    // and not used: no alias to find it by, no owner.
+                    alias: class.alias().agreed().cloned().flatten(),
+                    owner: class.owner().agreed().cloned().flatten(),
                     tags: class.tags().clone(),
                     tips: class.tips().clone(),
-                    recorded: version.clone(),
+                    recorded: class.version().agreed().cloned(),
                     present: None,
                 },
                 built,
             });
         }
 
-        // Stage 2: evaluate upstream to downstream.
+        // Stage 2: evaluate upstream to downstream. The state of what an entity
+        // stands on is read from the state of every entity, the documents in conflict
+        // among them.
         let external = |store: StoreKind, id: EntityId| -> Vec<InvalidReason> {
             snap.side(store).view().invalid_reasons(id)
         };
+        let conflicted_docs = || conflicted.values().map(ConflictedEntry::doc);
+        let (no_specs, no_designs) = (BTreeMap::new(), BTreeMap::new());
         let mut findings: BTreeMap<FindingId, Evaluated<Finding>> = BTreeMap::new();
         for l in &loaded {
             let id = l.entry.id;
@@ -993,17 +1071,19 @@ impl Model {
             }
         }
         let mut specs: BTreeMap<SpecId, Evaluated<Spec>> = BTreeMap::new();
+        let states = states_of(&findings, &no_specs, &no_designs, conflicted_docs());
         for l in &loaded {
             let id = l.entry.id;
             match &l.built {
-                Some((Built::Spec(s, unresolved), _)) => {
+                Some((Built::Spec(s, written), _)) => {
                     specs.insert(
                         s.id(),
                         Evaluator::spec(
                             s,
                             &findings,
+                            &states,
                             &ledger,
-                            unresolved,
+                            written,
                             &external(l.entry.store, id),
                         ),
                     );
@@ -1018,17 +1098,19 @@ impl Model {
             }
         }
         let mut designs: BTreeMap<DesignId, Evaluated<Design>> = BTreeMap::new();
+        let states = states_of(&findings, &specs, &no_designs, conflicted_docs());
         for l in &loaded {
             let id = l.entry.id;
             match &l.built {
-                Some((Built::Design(d, unresolved), _)) => {
+                Some((Built::Design(d, written), _)) => {
                     designs.insert(
                         d.id(),
                         Evaluator::design(
                             d,
                             &specs,
+                            &states,
                             &ledger,
-                            unresolved,
+                            written,
                             &external(l.entry.store, id),
                         ),
                     );
@@ -1054,6 +1136,7 @@ impl Model {
         // Items of the Designs that parsed.
         let mut items: BTreeMap<EntityId, ItemEntry> = BTreeMap::new();
         let mut pending_items = BTreeSet::new();
+        let states = states_of(&findings, &specs, &designs, conflicted_docs());
         for l in &loaded {
             let Some((Built::Design(design, _), _)) = &l.built else {
                 continue;
@@ -1073,6 +1156,7 @@ impl Model {
                     &key,
                     item,
                     &designs,
+                    &states,
                     &ledger,
                     &impl_view,
                     &external(l.entry.store, item_id.entity()),
@@ -1150,6 +1234,7 @@ impl Model {
             snap,
             index,
             docs,
+            conflicted,
             items,
             findings,
             specs,
@@ -1170,6 +1255,27 @@ impl Model {
     pub fn doc(&self, id: EntityId) -> Option<&DocEntry> {
         let id = self.canonical(id);
         self.docs.get(&id)
+    }
+
+    /// The documents whose kind or path is in conflict, by identifier.
+    pub fn conflicted(&self) -> impl Iterator<Item = &ConflictedEntry> {
+        self.conflicted.values()
+    }
+
+    /// One document in conflict, by any of its identifiers.
+    pub fn conflicted_doc(&self, id: EntityId) -> Option<&ConflictedEntry> {
+        self.conflicted.get(&self.canonical(id))
+    }
+
+    /// The state of every entity that has one, whatever its kind: where the state of
+    /// an upstream is read.
+    pub fn states(&self) -> States<'_> {
+        states_of(
+            &self.findings,
+            &self.specs,
+            &self.designs,
+            self.conflicted.values().map(ConflictedEntry::doc),
+        )
     }
 
     /// The work items, by identifier.
@@ -1282,7 +1388,43 @@ impl Model {
                 out.push(PrivateName::Title(f.title().clone()));
             }
         }
+        for doc in self.conflicted.values() {
+            if doc.store == StoreKind::Private
+                && !except.contains(&doc.id())
+                && let Some(alias) = &doc.alias
+            {
+                out.push(PrivateName::Alias(alias.clone()));
+            }
+        }
         out
+    }
+
+    /// The identifiers of the private documents, which a text for the repo store may
+    /// name only as `private:<id>`, leaving out those in `except` (being published).
+    pub fn private_ids(&self, except: &BTreeSet<EntityId>) -> Vec<EntityId> {
+        self.snap
+            .docs()
+            .into_iter()
+            .filter(|(store, _)| *store == StoreKind::Private)
+            .map(|(_, class)| class.id())
+            .filter(|id| !except.contains(id))
+            .collect()
+    }
+
+    /// Whether the classification of a document can be relied on: an error naming
+    /// the first value two branches set differently.
+    ///
+    /// `publish` copies the classification into the repo store and `purge` reads the
+    /// versions, so neither goes on over a value they cannot know.
+    pub fn settled(&self, id: EntityId) -> Result<(), AppError> {
+        let id = self.canonical(id);
+        let class = [StoreKind::Repo, StoreKind::Private]
+            .into_iter()
+            .find_map(|store| self.snap.side(store).view().doc(id));
+        match class.and_then(DocClass::conflict) {
+            Some(field) => Err(AppError::ClassificationConflict { id, field }),
+            None => Ok(()),
+        }
     }
 
     /// Resolve a reference written by a person to an entity of this project.
@@ -1291,12 +1433,38 @@ impl Model {
     /// found is [`AppError::NotFound`] (dangling), [`AppError::Ambiguous`], or
     /// [`AppError::Unresolved`] when the store it points into cannot be read in
     /// this environment; a URL names no entity ([`AppError::NotLocal`]).
+    ///
+    /// A document whose kind or path is in conflict names no entity of a kind, and
+    /// is [`AppError::ClassificationConflict`]; the writes that settle the conflict
+    /// (`reclassify`, `mv`) ask `locate` instead, which answers with it.
     pub fn resolve(&self, reference: &Ref) -> Result<(EntityId, EntityKind, StoreKind), AppError> {
+        match self.locate(reference)? {
+            Resolved::Entity { id, kind, store } => Ok((id, kind, store)),
+            Resolved::Conflicted(entry) => Err(AppError::ClassificationConflict {
+                id: entry.id(),
+                field: entry.doc().field(),
+            }),
+        }
+    }
+
+    /// Resolve a reference to what it names, a document in conflict included.
+    pub(crate) fn locate(&self, reference: &Ref) -> Result<Resolved<'_>, AppError> {
         let entity = reference.as_entity().ok_or_else(|| AppError::NotLocal {
             reference: reference.clone(),
         })?;
         match entity.resolve(&self.index.seen_from(Scope::Everywhere)) {
-            Resolution::Found(found) => Ok((found.id, found.kind, found.store)),
+            Resolution::Found(found) => Ok(Resolved::Entity {
+                id: found.id,
+                kind: found.kind,
+                store: found.store,
+            }),
+            Resolution::Conflicted(id) => self
+                .conflicted
+                .get(&id)
+                .map(Resolved::Conflicted)
+                .ok_or_else(|| AppError::NotFound {
+                    reference: reference.clone(),
+                }),
             Resolution::Dangling => Err(AppError::NotFound {
                 reference: reference.clone(),
             }),
@@ -1310,16 +1478,32 @@ impl Model {
     }
 
     /// Resolve a reference that must name an entity of this kind.
+    ///
+    /// A document in conflict over its kind is taken as the kind asked for when the
+    /// kind is among those written: the gate then stops on it as an Invalid target,
+    /// instead of this refusing it as another command's business.
     pub fn resolve_as(&self, reference: &Ref, expected: EntityKind) -> Result<EntityId, AppError> {
-        let (id, kind, _) = self.resolve(reference)?;
-        if kind == expected {
-            Ok(id)
-        } else {
-            Err(AppError::WrongKind {
+        match self.locate(reference)? {
+            Resolved::Entity { id, kind, .. } if kind == expected => Ok(id),
+            Resolved::Entity { kind, .. } => Err(AppError::WrongKind {
                 reference: reference.clone(),
                 expected,
                 found: kind,
-            })
+            }),
+            Resolved::Conflicted(entry) => {
+                let kinds = entry.doc().kinds();
+                match kinds.iter().find(|kind| kind.entity_kind() == expected) {
+                    Some(_) => Ok(entry.id()),
+                    None => Err(AppError::WrongKind {
+                        reference: reference.clone(),
+                        expected,
+                        found: kinds
+                            .iter()
+                            .next()
+                            .map_or(expected, |kind| kind.entity_kind()),
+                    }),
+                }
+            }
         }
     }
 

@@ -8,15 +8,14 @@
 use thiserror::Error;
 
 use crate::domain::approval::Gate;
+use crate::domain::classification::ConflictField;
 use crate::domain::error::{EntityError, EventError, ItemRefError, QueryError, ValueError};
 use crate::domain::event::{DocKind, EntityKind, EventId, StoreKind};
 use crate::domain::hash::ContentHash;
 use crate::domain::id::{Alias, EntityId};
 use crate::domain::lint::{CheckViolation, LeakFinding};
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::reference::{ItemRef, Ref};
-use crate::domain::state::InvalidReason;
 use crate::domain::tag::VocabularyError;
 
 use super::ports::{PortName, SecretHit};
@@ -97,19 +96,16 @@ pub enum AppError {
         /// The reference as given.
         reference: Ref,
     },
-    /// The file of the target did not parse, so there is nothing to approve.
-    #[error("the file of {id} did not parse")]
-    TargetUnparsed {
-        /// The target.
+    /// A value of the classification that the operation relies on was set
+    /// differently on two branches.
+    ///
+    /// Fix: set it again (`reclassify`; `mv` for the path): the new event settles it.
+    #[error("the {field} of {id} was set differently on two branches")]
+    ClassificationConflict {
+        /// The entity.
         id: EntityId,
-    },
-    /// The target is Invalid, so nothing can be recorded for it.
-    #[error("{id} is invalid")]
-    TargetInvalid {
-        /// The target.
-        id: EntityId,
-        /// Why.
-        reasons: NonEmptyVec<InvalidReason>,
+        /// The value in conflict.
+        field: ConflictField,
     },
     /// The target file is missing.
     #[error("the file of {id} is missing")]
@@ -144,8 +140,9 @@ pub enum AppError {
         /// Where, without the secret itself.
         hits: Vec<SecretHit>,
     },
-    /// A public text carries the alias or title of a private entity.
-    #[error("a text for the repo store carries the name of a private entity")]
+    /// A public text carries the alias or title of a private entity, or its
+    /// identifier without the `private:` mark.
+    #[error("a text for the repo store names a private entity")]
     LeakFound {
         /// Each name found and where.
         findings: Vec<LeakFinding>,
@@ -249,12 +246,6 @@ pub enum AppError {
     /// A title gives no usable file name.
     #[error("the title gives no file name; give an alias")]
     NoSlug,
-    /// A CM `fail-hyp` names a Finding that is not a measurement.
-    #[error("{finding} is not a measured_data finding")]
-    CmFindingNotMeasured {
-        /// The Finding.
-        finding: EntityId,
-    },
 }
 
 impl AppError {

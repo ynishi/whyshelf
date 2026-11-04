@@ -738,3 +738,47 @@ pub async fn serve<P: Ports + 'static>(workspace: Workspace<P>) -> Result<(), Cl
     task.await.map_err(|e| CliError::Server(Box::new(e)))?;
     outcome
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use whyshelf_core::domain::approval::{CmResultKind, Gate as DomainGate};
+
+    use super::*;
+
+    /// The names a tool-input enum offers, as its JSON schema lists them.
+    fn schema_names<T: JsonSchema>() -> BTreeSet<String> {
+        let schema = serde_json::to_value(schemars::schema_for!(T)).expect("a schema");
+        schema["oneOf"]
+            .as_array()
+            .expect("an enum of names")
+            .iter()
+            .map(|variant| variant["const"].as_str().expect("a name").to_owned())
+            .collect()
+    }
+
+    /// The tool server's input shapes are its own (they stay an anti-corruption
+    /// layer), but the words are the domain's: the sets are the same.
+    #[test]
+    fn the_names_of_a_measurement_are_the_domains() {
+        let domain: BTreeSet<String> = CmResultKind::ALL
+            .iter()
+            .map(|kind| kind.name().to_owned())
+            .collect();
+        assert_eq!(schema_names::<Measured>(), domain);
+        for name in &domain {
+            serde_json::from_value::<Measured>(serde_json::Value::String(name.clone()))
+                .expect("the domain's name is read");
+        }
+    }
+
+    #[test]
+    fn the_names_of_the_gates_are_the_domains_in_lower_case() {
+        let domain: BTreeSet<String> = DomainGate::ALL
+            .iter()
+            .map(|gate| gate.name().to_ascii_lowercase())
+            .collect();
+        assert_eq!(schema_names::<Gate>(), domain);
+    }
+}

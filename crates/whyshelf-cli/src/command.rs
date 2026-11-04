@@ -24,11 +24,9 @@ use whyshelf_core::app::query::{Field, FoundPage, GetResult, PageRequest, Target
 use whyshelf_core::app::raw::RawRevision;
 use whyshelf_core::app::register::{AddOptions, Added};
 use whyshelf_core::app::scaffold::Scaffolded;
-use whyshelf_core::app::view::{
-    AuditReport, Changelog, ContextLine, ContextReport, StatusReport, TraceReport,
-};
+use whyshelf_core::app::view::{AuditReport, Changelog, ContextReport, StatusReport, TraceReport};
 use whyshelf_core::domain::actor::Actor;
-use whyshelf_core::domain::approval::Gate;
+use whyshelf_core::domain::approval::{Attestation, Gate};
 use whyshelf_core::domain::event::EventId;
 use whyshelf_core::domain::finding::FindingType;
 use whyshelf_core::domain::id::Alias;
@@ -189,8 +187,9 @@ pub enum Outcome {
         gate: Gate,
         /// The event recorded.
         event: EventId,
-        /// Where the tool was pointed when it was recorded.
-        context: ContextLine,
+        /// What was recorded: for a CA, the revision it was made at, which is not
+        /// necessarily the one the working tree is at now.
+        attestation: Attestation,
     },
     /// One entity.
     Got(GetResult),
@@ -342,18 +341,16 @@ fn scaffolded(scaffolded: Scaffolded, warnings: &mut Vec<String>) -> Result<Outc
     Ok(Outcome::Scaffolded(scaffolded))
 }
 
-async fn approved<P: Ports>(
-    ws: &Workspace<P>,
+fn approved(
     gate: Gate,
     approved: Approved,
     warnings: &mut Vec<String>,
 ) -> Result<Outcome, CliError> {
     committed_warnings(approved.committed(), warnings);
-    let context = ws.context().await?.line().clone();
     Ok(Outcome::Approved {
         gate,
         event: approved.event(),
-        context,
+        attestation: approved.attestation().clone(),
     })
 }
 
@@ -373,23 +370,23 @@ async fn check<P: Ports>(
         )),
         (CheckTarget::Cr(r), true) => {
             let done = ws.approve_cr(&r, by).await?;
-            approved(ws, Gate::Cr, done, warnings).await
+            approved(Gate::Cr, done, warnings)
         }
         (CheckTarget::Cs(r), true) => {
             let done = ws.approve_cs(&r, by).await?;
-            approved(ws, Gate::Cs, done, warnings).await
+            approved(Gate::Cs, done, warnings)
         }
         (CheckTarget::Ci(r), true) => {
             let done = ws.approve_ci(&r, by).await?;
-            approved(ws, Gate::Ci, done, warnings).await
+            approved(Gate::Ci, done, warnings)
         }
         (CheckTarget::Ca { item, revision }, true) => {
             let done = ws.approve_ca(&item, revision.as_ref(), by).await?;
-            approved(ws, Gate::Ca, done, warnings).await
+            approved(Gate::Ca, done, warnings)
         }
         (CheckTarget::Cm { spec, result }, _) => {
             let done = ws.record_cm(&spec, &result, by).await?;
-            approved(ws, Gate::Cm, done, warnings).await
+            approved(Gate::Cm, done, warnings)
         }
     }
 }

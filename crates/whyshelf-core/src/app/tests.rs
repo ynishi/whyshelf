@@ -7,16 +7,17 @@ use std::collections::BTreeSet;
 
 use crate::domain::actor::Actor;
 use crate::domain::approval::{Gate, TestOutcome};
-use crate::domain::classification::fold;
+use crate::domain::classification::{ConflictField, fold};
 use crate::domain::event::{
-    ClassChange, EntityKind, Event, EventBody, Registration, StoreKind, Version,
+    ClassChange, DocKind, EntityKind, Event, EventBody, Registration, StoreKind, Version,
 };
 use crate::domain::finding::FindingType;
-use crate::domain::id::{Alias, EntityId, test_support::eid};
+use crate::domain::id::{Alias, DesignId, EntityId, FindingId, SpecId, test_support::eid};
 use crate::domain::lint::{CheckViolation, UpstreamProblem};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::query::Query;
-use crate::domain::reference::{ItemRef, Ref};
+use crate::domain::reference::{ItemRef, LocalRef, Ref};
+use crate::domain::revision::{Revision, RevisionId};
 use crate::domain::state::{
     Approval, BlockReason, Integration, InvalidReason, UnparsedReason, Upstream,
 };
@@ -32,7 +33,7 @@ use super::ports::{ExportKind, StorePort};
 use super::projection::MapDoc;
 use super::query::{Field, GetResult, PageLimit, PageRequest, Target};
 use super::register::AddOptions;
-use super::view::{ExportProblem, NextAction, StatusReport, StatusRow};
+use super::view::{ExportProblem, NextAction, RowKind, StatusReport, StatusRow};
 
 fn r(text: &str) -> Ref {
     text.parse().expect("a test reference")
@@ -107,7 +108,7 @@ fn item_row(report: &StatusReport) -> &StatusRow {
     report
         .rows()
         .iter()
-        .find(|r| r.kind() == EntityKind::Item)
+        .find(|r| r.kind().entity() == Some(EntityKind::Item))
         .expect("an item row")
 }
 
@@ -358,7 +359,14 @@ fn ca_can_name_an_older_revision_and_records_that_one() {
     block_on(ws.approve_ci(&r("design/cache"), None)).expect("ci");
     ws.ports().set_revision("rev-2");
     let older = super::raw::RawRevision::new("rev-1").expect("revision");
-    block_on(ws.approve_ca(&it("design/cache#1"), Some(&older), None)).expect("ca");
+    let approved = block_on(ws.approve_ca(&it("design/cache#1"), Some(&older), None)).expect("ca");
+    // What the approval hands back is what it recorded: the older revision, not the
+    // one the working tree is at (a caller shows this, not the current one).
+    let rev_1 = RevisionId::from_validated("rev-1".to_owned()).expect("a revision");
+    assert_eq!(
+        approved.attestation().revision(),
+        Some(&Revision::Commit(rev_1))
+    );
     // The tests ran at the revision that was recorded, not the current one.
     let ran: Vec<String> = ws
         .ports()
@@ -403,7 +411,14 @@ fn cm_needs_the_cs_approval_and_a_measured_finding_for_fail_hyp() {
         },
         None,
     ));
-    assert!(matches!(wrong, Err(AppError::CmFindingNotMeasured { .. })));
+    let finding = id_of(&ws, "finding/slow-login");
+    assert!(matches!(
+        wrong,
+        Err(AppError::CheckFailed { gate: Gate::Cm, ref violations })
+            if violations == &[CheckViolation::MeasurementNotMeasuredData {
+                finding: FindingId::new(finding)
+            }]
+    ));
 
     ws.ports()
         .put_measured("docs/finding/measured.md", "Cache run", "rev-1");
@@ -658,7 +673,7 @@ fn a_new_item_number_in_a_design_is_registered_with_a_new_identifier() {
     let item = |s: &StatusReport| {
         s.rows()
             .iter()
-            .filter(|r| r.kind() == EntityKind::Item)
+            .filter(|r| r.kind().entity() == Some(EntityKind::Item))
             .count()
     };
     assert_eq!(item(&status(&ws)), 1);
@@ -1434,18 +1449,23 @@ fn the_same_id_written_without_the_mark_stays_dangling() {
     let mut ws = Workspace::new(FakePorts::new(), test_config());
     ws.ports()
         .put_finding("docs/finding/slow.md", "Slow login", "p95 is 4s");
+    ws.ports().put_finding("docs/finding/open.md", "Open", "x");
     add_to(
         &mut ws,
         "docs/finding/slow.md",
         "finding/slow-login",
         StoreKind::Private,
     );
+    add_to(
+        &mut ws,
+        "docs/finding/open.md",
+        "finding/open",
+        StoreKind::Repo,
+    );
     let finding = id_of(&ws, "finding/slow-login");
-    // No mark: a public document sees only the repo store, with or without the
-    // private store being there.
     ws.ports().put_spec(
         "docs/spec/cache.md",
-        &[&finding.to_string()],
+        &["finding/open"],
         "cache the token",
         &["PIN-TTL"],
     );
@@ -1454,6 +1474,16 @@ fn the_same_id_written_without_the_mark_stays_dangling() {
         "docs/spec/cache.md",
         "spec/cache-timeout",
         StoreKind::Repo,
+    );
+    // A hand edit, not written through the tool: the file now names the private
+    // Finding by its bare identifier. No mark: a public document sees only the repo
+    // store, with or without the private store being there. (The tool itself refuses
+    // to write such a text to the repo store; see the leak tests.)
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &[&finding.to_string()],
+        "cache the token",
+        &["PIN-TTL"],
     );
     for clone in [false, true] {
         if clone {
@@ -1464,10 +1494,14 @@ fn the_same_id_written_without_the_mark_stays_dangling() {
         let Approval::Invalid(reasons) = approval_of(spec) else {
             panic!("dangling is Invalid, clone={clone}");
         };
-        assert!(reasons.iter().any(|r| matches!(
-            r,
-            InvalidReason::Unparsed(UnparsedReason::UnresolvedRef { .. })
-        )));
+        // An identifier is there, so the Spec is built and is Invalid for the
+        // reference that names nothing it can see (not unparsed).
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r == &InvalidReason::DanglingRef { upstream: finding }),
+            "clone={clone}: {reasons:?}"
+        );
         assert!(unreadable(spec).is_empty(), "never partial, clone={clone}");
     }
 }
@@ -1532,6 +1566,517 @@ fn resolving_a_private_reference_in_a_clone_is_unresolved_not_missing() {
         block_on(ws.get(&Target::Entity(reference))).expect("get"),
         GetResult::Unresolved(Ref::Private(_))
     ));
+}
+
+// --- a text for the repo store names a private entity only by its mark -----------
+
+/// A private Finding, and the workspace it is in.
+fn private_finding_world() -> (Workspace<FakePorts>, EntityId) {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports()
+        .put_finding("docs/finding/slow.md", "Slow login", "p95 is 4s");
+    add_to(
+        &mut ws,
+        "docs/finding/slow.md",
+        "finding/slow-login",
+        StoreKind::Private,
+    );
+    let finding = id_of(&ws, "finding/slow-login");
+    (ws, finding)
+}
+
+fn unmarked(finding: EntityId) -> Ref {
+    Ref::Local(LocalRef::Id(finding))
+}
+
+#[test]
+fn a_document_that_names_a_private_entity_without_the_mark_cannot_be_added_to_the_repo_store() {
+    let (mut ws, finding) = private_finding_world();
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &[&finding.to_string()],
+        "cache the token",
+        &["PIN-TTL"],
+    );
+    let options = AddOptions::new()
+        .with_alias(a("spec/cache-timeout"))
+        .with_store(StoreKind::Repo);
+    let before = repo_and_private_events(&ws);
+    let refused = block_on(ws.add(&[path("docs/spec/cache.md")], &options));
+    let Err(AppError::LeakFound { findings }) = refused else {
+        panic!("expected the leak lint to object, found {refused:?}");
+    };
+    assert_eq!(
+        findings
+            .iter()
+            .map(|f| f.unmarked_reference().cloned())
+            .collect::<Vec<_>>(),
+        [Some(unmarked(finding))]
+    );
+    assert_eq!(repo_and_private_events(&ws), before, "nothing was written");
+
+    // The opaque identifier is how a public document names a private entity.
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &[&format!("private:{finding}")],
+        "cache the token",
+        &["PIN-TTL"],
+    );
+    block_on(ws.add(&[path("docs/spec/cache.md")], &options)).expect("add with the mark");
+}
+
+#[test]
+fn publish_needs_the_mark_on_a_private_reference_and_goes_on_with_it() {
+    let config = test_config().with_default_store(StoreKind::Private);
+    let mut ws = Workspace::new(FakePorts::new(), config);
+    ws.ports()
+        .put_finding("docs/finding/slow.md", "Slow login", "p95 is 4s");
+    block_on(ws.add(
+        &[path("docs/finding/slow.md")],
+        &AddOptions::new().with_alias(a("finding/slow-login")),
+    ))
+    .expect("add");
+    let finding = id_of(&ws, "finding/slow-login");
+    // Private to private, the bare identifier is fine.
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &[&finding.to_string()],
+        "cache the token",
+        &["PIN-TTL"],
+    );
+    block_on(ws.add(
+        &[path("docs/spec/cache.md")],
+        &AddOptions::new().with_alias(a("spec/cache-timeout")),
+    ))
+    .expect("add");
+
+    // Published, it would be the repo store's text: the bare identifier is stopped.
+    let refused = block_on(ws.publish(&r("spec/cache-timeout")));
+    let Err(AppError::LeakFound { findings }) = refused else {
+        panic!("expected the leak lint to object, found {refused:?}");
+    };
+    assert_eq!(findings.len(), 1);
+    assert!(ws.ports().events_in(StoreKind::Repo).is_empty());
+
+    // Written with the mark, recorded, it can go.
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &[&format!("private:{finding}")],
+        "cache the token",
+        &["PIN-TTL"],
+    );
+    block_on(ws.ingest()).expect("ingest");
+    block_on(ws.publish(&r("spec/cache-timeout"))).expect("publish with the mark");
+}
+
+#[test]
+fn a_scaffold_in_the_repo_store_names_a_private_upstream_the_way_the_domain_says() {
+    let (mut ws, finding) = private_finding_world();
+    // The new file is public (the default store), the Finding is private: the mark
+    // is asked of the store rule, and a file written that way passes the gate.
+    assert_eq!(
+        StoreKind::Repo.mark_for(StoreKind::Private),
+        crate::domain::event::RefMark::Private
+    );
+    block_on(ws.spec_new(a("spec/cache-timeout"), &r("finding/slow-login"))).expect("spec new");
+    let s = status(&ws);
+    let spec = row(&s, "spec/cache-timeout");
+    // The Spec is built on the Finding (its template does not parse as a Spec yet, but
+    // the reference it names is the mark and not a name that leaks).
+    assert!(
+        !matches!(
+            approval_of(spec),
+            Approval::Invalid(reasons) if reasons.iter().any(|reason| matches!(
+                reason,
+                InvalidReason::DanglingRef { upstream } if *upstream == finding
+            ))
+        ),
+        "the Finding is found by its opaque identifier"
+    );
+}
+
+// --- the reasons a reference can come to ---------------------------------------
+
+#[test]
+fn an_alias_that_names_nothing_or_several_is_unparsed_and_a_bare_identifier_is_dangling() {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports()
+        .put_spec("docs/spec/a.md", &["finding/nothing"], "c", &["PIN-A"]);
+    add_to(&mut ws, "docs/spec/a.md", "spec/a", StoreKind::Repo);
+    let nothing = eid(999);
+    ws.ports()
+        .put_spec("docs/spec/b.md", &[&nothing.to_string()], "c", &["PIN-A"]);
+    add_to(&mut ws, "docs/spec/b.md", "spec/b", StoreKind::Repo);
+
+    // An alias that names nothing has no identifier to keep: the file does not build.
+    let s = status(&ws);
+    let Approval::Invalid(reasons) = approval_of(row(&s, "spec/a")) else {
+        panic!("expected Invalid");
+    };
+    assert_eq!(
+        reasons.iter().collect::<Vec<_>>(),
+        [&InvalidReason::Unparsed(UnparsedReason::DanglingRef {
+            reference: r("finding/nothing")
+        })]
+    );
+    // An identifier is kept: the Spec is built and the evaluator finds nothing under it.
+    let Approval::Invalid(reasons) = approval_of(row(&s, "spec/b")) else {
+        panic!("expected Invalid");
+    };
+    assert_eq!(
+        reasons.iter().collect::<Vec<_>>(),
+        [&InvalidReason::DanglingRef { upstream: nothing }]
+    );
+}
+
+#[test]
+fn an_alias_held_in_each_store_is_ambiguous_for_a_private_document() {
+    let config = test_config().with_default_store(StoreKind::Private);
+    let mut ws = Workspace::new(FakePorts::new(), config);
+    ws.ports().put_finding("docs/finding/one.md", "One", "x");
+    ws.ports().put_finding("docs/finding/two.md", "Two", "y");
+    add_to(
+        &mut ws,
+        "docs/finding/one.md",
+        "finding/dup",
+        StoreKind::Private,
+    );
+    add_to(
+        &mut ws,
+        "docs/finding/two.md",
+        "finding/dup",
+        StoreKind::Repo,
+    );
+    ws.ports()
+        .put_spec("docs/spec/a.md", &["finding/dup"], "c", &["PIN-A"]);
+    add_to(&mut ws, "docs/spec/a.md", "spec/a", StoreKind::Private);
+    let s = status(&ws);
+    let Approval::Invalid(reasons) = approval_of(row(&s, "spec/a")) else {
+        panic!("expected Invalid");
+    };
+    assert_eq!(
+        reasons.iter().collect::<Vec<_>>(),
+        [&InvalidReason::Unparsed(UnparsedReason::AmbiguousRef {
+            reference: r("finding/dup")
+        })]
+    );
+}
+
+#[test]
+fn a_reference_to_an_entity_of_another_kind_is_told_with_both_kinds() {
+    let mut ws = workspace();
+    ws.ports().put_spec(
+        "docs/spec/cache.md",
+        &["design/cache"],
+        "cache the token",
+        &["PIN-TTL"],
+    );
+    block_on(ws.ingest()).expect("ingest");
+    let s = status(&ws);
+    let Approval::Invalid(reasons) = approval_of(row(&s, "spec/cache-timeout")) else {
+        panic!("expected Invalid");
+    };
+    assert_eq!(
+        reasons.iter().collect::<Vec<_>>(),
+        [&InvalidReason::Unparsed(UnparsedReason::WrongKind {
+            reference: r("design/cache"),
+            expected: EntityKind::Finding,
+            found: EntityKind::Design,
+        })]
+    );
+}
+
+// --- Invalid is a violation of every gate --------------------------------------
+
+#[test]
+fn an_invalid_spec_gets_a_violation_at_cs_and_at_cm_and_nothing_is_written() {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    let nothing = eid(999);
+    ws.ports()
+        .put_spec("docs/spec/b.md", &[&nothing.to_string()], "c", &["PIN-A"]);
+    add_to(&mut ws, "docs/spec/b.md", "spec/b", StoreKind::Repo);
+    let dangling = InvalidReason::DanglingRef { upstream: nothing };
+    let invalid_target = |violations: &[CheckViolation]| matches!(violations, [CheckViolation::TargetInvalid { reasons }] if reasons.first() == &dangling);
+
+    let before = repo_and_private_events(&ws);
+    // The machine layer says it as a violation, not as an error.
+    let report = block_on(ws.check_cs(&r("spec/b"))).expect("a report");
+    assert!(
+        invalid_target(report.violations()),
+        "{:?}",
+        report.violations()
+    );
+    // The measurement is a gate too: it records nothing over an Invalid Spec.
+    let refused = block_on(ws.record_cm(&r("spec/b"), &CmInput::Pass, None));
+    let Err(AppError::CheckFailed {
+        gate: Gate::Cm,
+        violations,
+    }) = refused
+    else {
+        panic!("expected a refused CM, found {refused:?}");
+    };
+    assert!(invalid_target(&violations), "{violations:?}");
+    let refused = block_on(ws.approve_cs(&r("spec/b"), None));
+    assert!(matches!(
+        refused,
+        Err(AppError::CheckFailed { gate: Gate::Cs, .. })
+    ));
+    assert_eq!(repo_and_private_events(&ws), before, "nothing was recorded");
+}
+
+#[test]
+fn the_cs_a_measurement_is_set_against_may_have_been_recorded_before_two_registrations_merged() {
+    let mut ws = workspace();
+    approve_chain(&mut ws);
+    let spec = id_of(&ws, "spec/cache-timeout");
+    // A branch registered the same Spec file again under another identifier; the
+    // merge keeps the smaller one as the Spec, and CS approvals recorded against the
+    // other still count for it.
+    let events = ws.ports().events_in(StoreKind::Repo);
+    let registration = events
+        .iter()
+        .find(|e| e.target() == spec && matches!(e.body(), EventBody::Registered(_)))
+        .expect("the registration");
+    let EventBody::Registered(Registration::Doc(doc)) = registration.body() else {
+        panic!("a document registration");
+    };
+    let survivor = eid(0);
+    let twin = Event::new(
+        survivor,
+        BTreeSet::new(),
+        registration.at().clone(),
+        EventBody::Registered(Registration::Doc(doc.clone())),
+    )
+    .expect("event");
+    block_on(StorePort::append(ws.ports(), StoreKind::Repo, &twin)).expect("append");
+    // The smaller identifier survives, and the Spec's approvals are asked for it.
+    let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
+    assert_eq!(model.canonical(spec), survivor);
+    block_on(ws.record_cm(&r("spec/cache-timeout"), &CmInput::Pass, None)).expect("cm");
+}
+
+// --- a document two branches made of different kinds --------------------------
+
+/// Two branches each add an event to the stream from the tips both saw.
+fn fork(ws: &Workspace<FakePorts>, id: EntityId, bodies: [EventBody; 2]) {
+    let tips = block_on(Model::load(ws.ports(), ws.config()))
+        .expect("model")
+        .tips_in(StoreKind::Repo, id);
+    let at = ws.ports().events_in(StoreKind::Repo)[0].at().clone();
+    for body in bodies {
+        let event = Event::new(id, tips.clone(), at.clone(), body).expect("event");
+        block_on(StorePort::append(ws.ports(), StoreKind::Repo, &event)).expect("append");
+    }
+}
+
+fn set_kind(kind: DocKind) -> EventBody {
+    EventBody::Reclassified {
+        changes: NonEmptyVec::new(ClassChange::SetKind(kind), Vec::new()),
+    }
+}
+
+#[test]
+fn a_kind_set_differently_on_two_branches_is_invalid_of_no_kind_and_blocks_what_stands_on_it() {
+    let mut ws = workspace();
+    let finding = id_of(&ws, "finding/slow-login");
+    fork(
+        &ws,
+        finding,
+        [set_kind(DocKind::Spec), set_kind(DocKind::Design)],
+    );
+    let kinds = BTreeSet::from([DocKind::Spec, DocKind::Design]);
+
+    let s = status(&ws);
+    let conflicted = row(&s, "finding/slow-login");
+    assert_eq!(conflicted.kind(), &RowKind::Conflict(kinds));
+    assert!(matches!(
+        approval_of(conflicted),
+        Approval::Invalid(reasons) if reasons.first()
+            == &InvalidReason::ClassificationConflict { field: ConflictField::Kind }
+    ));
+    assert!(s.issues().iter().any(|issue| matches!(
+        &issue.issue,
+        crate::domain::classification::ClassificationIssue::Conflict {
+            field: ConflictField::Kind,
+            ..
+        }
+    )));
+    // It is made into an entity of neither kind.
+    let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
+    assert!(!model.findings().contains_key(&FindingId::new(finding)));
+    assert!(!model.specs().contains_key(&SpecId::new(finding)));
+    assert!(!model.designs().contains_key(&DesignId::new(finding)));
+
+    // What stands on it is Blocked by an invalid upstream, and the gate says so.
+    let spec = row(&s, "spec/cache-timeout");
+    assert!(matches!(
+        upstream_of(spec),
+        Upstream::Blocked(reasons)
+            if reasons.first() == &BlockReason::UpstreamInvalid { upstream: finding }
+    ));
+    let report = block_on(ws.check_cs(&r("spec/cache-timeout"))).expect("check");
+    assert_eq!(
+        report.violations(),
+        [upstream_violation(finding, UpstreamProblem::Invalid)]
+    );
+    assert!(matches!(
+        block_on(ws.approve_cs(&r("spec/cache-timeout"), None)),
+        Err(AppError::CheckFailed { gate: Gate::Cs, .. })
+    ));
+    // The document itself is a violation of the gate for a kind it might be.
+    let report = block_on(ws.check_cs(&r("finding/slow-login"))).expect("check");
+    assert!(matches!(
+        report.violations(),
+        [CheckViolation::TargetInvalid { reasons }]
+            if reasons.first() == &InvalidReason::ClassificationConflict { field: ConflictField::Kind }
+    ));
+
+    // Setting the kind again settles it: the new event lists both branches.
+    block_on(ws.reclassify(
+        &r("finding/slow-login"),
+        NonEmptyVec::new(ClassChange::SetKind(DocKind::Finding), Vec::new()),
+    ))
+    .expect("settle");
+    let s = status(&ws);
+    let settled = row(&s, "finding/slow-login");
+    assert_eq!(settled.kind(), &RowKind::Entity(EntityKind::Finding));
+    assert!(matches!(approval_of(settled), Approval::Draft));
+    assert!(s.issues().is_empty());
+}
+
+#[test]
+fn publish_purge_and_the_other_reads_of_a_conflicted_classification_are_stopped() {
+    let config = test_config().with_default_store(StoreKind::Private);
+    let mut ws = Workspace::new(files(), config);
+    register_chain(&mut ws);
+    let finding = id_of(&ws, "finding/slow-login");
+    let events = ws.ports().events_in(StoreKind::Private);
+    let tips = block_on(Model::load(ws.ports(), ws.config()))
+        .expect("model")
+        .tips_in(StoreKind::Private, finding);
+    for kind in [DocKind::Spec, DocKind::Design] {
+        let event = Event::new(
+            finding,
+            tips.clone(),
+            events[0].at().clone(),
+            set_kind(kind),
+        )
+        .expect("event");
+        block_on(StorePort::append(ws.ports(), StoreKind::Private, &event)).expect("append");
+    }
+    let before = repo_and_private_events(&ws);
+    let stopped = |result: Result<_, AppError>| {
+        matches!(
+            result,
+            Err(AppError::ClassificationConflict {
+                field: ConflictField::Kind,
+                ..
+            })
+        )
+    };
+    assert!(stopped(
+        block_on(ws.publish(&r("finding/slow-login"))).map(|_| ())
+    ));
+    let raw = events
+        .iter()
+        .find_map(|e| match e.body() {
+            EventBody::Registered(Registration::Doc(d)) if e.target() == finding => {
+                Some(*d.first().raw())
+            }
+            _ => None,
+        })
+        .expect("a version");
+    assert!(stopped(
+        block_on(ws.purge(&r("finding/slow-login"), raw, why("a secret"))).map(|_| ())
+    ));
+    assert_eq!(repo_and_private_events(&ws), before, "nothing was written");
+}
+
+#[test]
+fn a_path_set_differently_on_two_branches_is_invalid_and_a_move_settles_it() {
+    let mut ws = workspace();
+    let finding = id_of(&ws, "finding/slow-login");
+    let old = path("docs/finding/slow.md");
+    let moved_to = |to: &str| EventBody::Moved {
+        old: old.clone(),
+        new: path(to),
+    };
+    fork(
+        &ws,
+        finding,
+        [moved_to("docs/finding/a.md"), moved_to("docs/finding/b.md")],
+    );
+    let s = status(&ws);
+    let conflicted = row(&s, "finding/slow-login");
+    assert_eq!(
+        conflicted.kind(),
+        &RowKind::Conflict(BTreeSet::from([DocKind::Finding]))
+    );
+    assert!(matches!(
+        approval_of(conflicted),
+        Approval::Invalid(reasons) if reasons.first()
+            == &InvalidReason::ClassificationConflict { field: ConflictField::Path }
+    ));
+    // The file is not read: which one it is, is not known.
+    let spec = row(&s, "spec/cache-timeout");
+    assert!(matches!(upstream_of(spec), Upstream::Blocked(_)));
+
+    ws.ports()
+        .put_finding("docs/finding/a.md", "Slow login", "p95 is 4s");
+    block_on(ws.mv(&r("finding/slow-login"), path("docs/finding/a.md"))).expect("mv settles");
+    let s = status(&ws);
+    assert_eq!(
+        row(&s, "finding/slow-login").kind(),
+        &RowKind::Entity(EntityKind::Finding)
+    );
+}
+
+#[test]
+fn an_alias_set_differently_on_two_branches_is_an_issue_and_finds_nothing() {
+    let ws = workspace();
+    let spec = id_of(&ws, "spec/cache-timeout");
+    let set_alias = |alias: &str| EventBody::Reclassified {
+        changes: NonEmptyVec::new(ClassChange::SetAlias(a(alias)), Vec::new()),
+    };
+    fork(&ws, spec, [set_alias("spec/one"), set_alias("spec/two")]);
+    let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
+    for alias in ["spec/one", "spec/two", "spec/cache-timeout"] {
+        assert!(
+            matches!(model.resolve(&r(alias)), Err(AppError::NotFound { .. })),
+            "{alias} finds nothing"
+        );
+    }
+    assert!(model.doc(spec).expect("the document").alias().is_none());
+    assert!(model.issues(StoreKind::Repo).iter().any(|issue| matches!(
+        issue,
+        crate::domain::classification::ClassificationIssue::Conflict {
+            field: ConflictField::Alias,
+            ..
+        }
+    )));
+}
+
+// --- the next step of an item names the item -----------------------------------
+
+#[test]
+fn the_next_step_of_an_item_names_the_item_by_its_parts() {
+    let mut ws = workspace();
+    block_on(ws.approve_cr(&r("finding/slow-login"), None)).expect("cr");
+    block_on(ws.approve_cs(&r("spec/cache-timeout"), None)).expect("cs");
+    block_on(ws.approve_ci(&r("design/cache"), None)).expect("ci");
+    let s = status(&ws);
+    assert_eq!(
+        item_row(&s).next(),
+        &NextAction::Approve {
+            gate: Gate::Ca,
+            target: Target::Item(it("design/cache#1")),
+        }
+    );
+    // Its text is `<ref>#<n>`.
+    assert_eq!(
+        item_row(&s).next().to_string(),
+        "whyshelf check ca design/cache#1"
+    );
 }
 
 #[test]

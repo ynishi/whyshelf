@@ -20,9 +20,10 @@
 
 use std::collections::BTreeSet;
 
+use crate::domain::classification::{ConflictField, Merged};
 use crate::domain::event::{
     ClassChange, ClassSnapshot, DocKind, DocRegistration, EntityKind, EventBody, Publication,
-    Registration, StoreKind, Version,
+    RecordBody, Registration, StoreKind, Version,
 };
 use crate::domain::hash::ContentHash;
 use crate::domain::id::{Alias, EntityId};
@@ -34,7 +35,7 @@ use crate::domain::tag::{Tag, TagChange};
 use super::Workspace;
 use super::commit::{Committed, Draft};
 use super::error::AppError;
-use super::model::{Built, Model, build};
+use super::model::{Built, Model, Resolved, build};
 use super::ports::{CurrentPort, IdPort, PortName, Ports, StorePort};
 use super::raw::Candidate;
 
@@ -160,7 +161,7 @@ impl<P: Ports> Workspace<P> {
             model,
             store,
             id,
-            EventBody::Registered(Registration::Doc(DocRegistration::new(
+            RecordBody::Registered(Registration::Doc(DocRegistration::new(
                 kind,
                 candidate.path().clone(),
                 options.alias.clone(),
@@ -177,7 +178,7 @@ impl<P: Ports> Workspace<P> {
                     model,
                     store,
                     item,
-                    EventBody::Registered(Registration::Item {
+                    RecordBody::Registered(Registration::Item {
                         design: design.id(),
                         number: *number,
                     }),
@@ -246,10 +247,17 @@ impl<P: Ports> Workspace<P> {
         changes: NonEmptyVec<ClassChange>,
     ) -> Result<Committed, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        let (id, kind, store) = model.resolve(target)?;
-        if kind == EntityKind::Item {
-            return Err(AppError::NotADocument { id });
-        }
+        // A document in conflict can be reclassified: that is how a conflict over the
+        // kind is settled.
+        let (id, store) = match model.locate(target)? {
+            Resolved::Entity { id, kind, store } => {
+                if kind == EntityKind::Item {
+                    return Err(AppError::NotADocument { id });
+                }
+                (id, store)
+            }
+            Resolved::Conflicted(entry) => (entry.id(), entry.store()),
+        };
         for change in changes.iter() {
             match change {
                 ClassChange::Tag(TagChange::Add(tag)) => {
@@ -269,7 +277,7 @@ impl<P: Ports> Workspace<P> {
             }
         }
         let mut draft = self.draft().await?;
-        draft.push(&model, store, id, EventBody::Reclassified { changes })?;
+        draft.push(&model, store, id, RecordBody::Reclassified { changes })?;
         self.commit(&model, draft).await
     }
 
@@ -290,20 +298,43 @@ impl<P: Ports> Workspace<P> {
 
     /// Record that a document is now at another path. The file must already be
     /// there: the tool does not move files.
+    ///
+    /// A path that two branches set differently is settled by this: the move lists
+    /// both among its heads. Any other conflict of the classification is refused.
     pub async fn mv(&mut self, target: &Ref, new_path: RelPath) -> Result<Committed, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        let (id, kind, store) = model.resolve(target)?;
-        if kind == EntityKind::Item {
-            return Err(AppError::NotADocument { id });
-        }
-        let doc = model.doc(id).ok_or(AppError::NotADocument { id })?;
-        if doc.path() == &new_path {
-            return Ok(Committed::nothing());
-        }
-        if let Some(holder) = model
-            .docs()
-            .find(|d| d.path() == &new_path && d.id() != doc.id())
-        {
+        let (id, store, old) = match model.locate(target)? {
+            Resolved::Entity { id, kind, store } => {
+                if kind == EntityKind::Item {
+                    return Err(AppError::NotADocument { id });
+                }
+                let doc = model.doc(id).ok_or(AppError::NotADocument { id })?;
+                if doc.path() == &new_path {
+                    return Ok(Committed::nothing());
+                }
+                (doc.id(), store, doc.path().clone())
+            }
+            Resolved::Conflicted(entry) if entry.doc().field() == ConflictField::Path => {
+                // The event names the path it moves from, and there are several: it
+                // names one of them (the smallest). Which, decides nothing.
+                let old = model
+                    .view(entry.store())
+                    .doc(entry.id())
+                    .and_then(|class| match class.path() {
+                        Merged::Conflict(paths) => paths.iter().next().cloned(),
+                        Merged::Agreed(path) => Some(path.clone()),
+                    })
+                    .ok_or(AppError::NotADocument { id: entry.id() })?;
+                (entry.id(), entry.store(), old)
+            }
+            Resolved::Conflicted(entry) => {
+                return Err(AppError::ClassificationConflict {
+                    id: entry.id(),
+                    field: entry.doc().field(),
+                });
+            }
+        };
+        if let Some(holder) = model.docs().find(|d| d.path() == &new_path && d.id() != id) {
             return Err(AppError::PathOccupied {
                 path: new_path,
                 holder: holder.id(),
@@ -319,15 +350,7 @@ impl<P: Ports> Workspace<P> {
             return Err(AppError::FileMissing { path: new_path });
         }
         let mut draft = self.draft().await?;
-        draft.push(
-            &model,
-            store,
-            doc.id(),
-            EventBody::Moved {
-                old: doc.path().clone(),
-                new: new_path,
-            },
-        )?;
+        draft.push(&model, store, id, RecordBody::Moved { old, new: new_path })?;
         self.commit(&model, draft).await
     }
 
@@ -345,8 +368,17 @@ impl<P: Ports> Workspace<P> {
         if store == StoreKind::Repo {
             return Err(AppError::AlreadyPublished { id });
         }
+        // The classification is copied into the repo store: a value two branches set
+        // differently cannot be, and is not guessed.
+        model.settled(id)?;
         let doc = model.doc(id).ok_or(AppError::NotADocument { id })?;
-        let version = doc.recorded().clone();
+        let version = doc
+            .recorded()
+            .cloned()
+            .ok_or(AppError::ClassificationConflict {
+                id,
+                field: ConflictField::Version,
+            })?;
         let text = self
             .ports
             .store()
@@ -372,7 +404,7 @@ impl<P: Ports> Workspace<P> {
             &model,
             StoreKind::Private,
             doc.id(),
-            EventBody::Published(Publication::Outgoing {
+            RecordBody::Published(Publication::Outgoing {
                 to: StoreKind::Repo,
             }),
         )?;
@@ -380,7 +412,7 @@ impl<P: Ports> Workspace<P> {
             &model,
             StoreKind::Repo,
             doc.id(),
-            EventBody::Published(Publication::Incoming {
+            RecordBody::Published(Publication::Incoming {
                 from: StoreKind::Private,
                 snapshot,
             }),
@@ -395,7 +427,7 @@ impl<P: Ports> Workspace<P> {
                 &model,
                 StoreKind::Repo,
                 item.key().id.entity(),
-                EventBody::Registered(Registration::Item {
+                RecordBody::Registered(Registration::Item {
                     design: item.key().design,
                     number: item.key().number,
                 }),
@@ -418,6 +450,7 @@ impl<P: Ports> Workspace<P> {
             return Err(AppError::NotADocument { id });
         }
         let id = model.canonical(id);
+        model.settled(id)?;
         let mentions = |v: &Version| v.raw() == &raw;
         let is_version = [StoreKind::Private, StoreKind::Repo].into_iter().any(|s| {
             model
@@ -437,7 +470,7 @@ impl<P: Ports> Workspace<P> {
             return Err(AppError::NotAVersion { id, raw });
         }
         let mut draft = self.draft().await?;
-        draft.push(&model, store, id, EventBody::Purged { raw, reason })?;
+        draft.push(&model, store, id, RecordBody::Purged { raw, reason })?;
         let committed = self.commit(&model, draft).await?;
         for scope in [StoreKind::Private, StoreKind::Repo] {
             self.ports

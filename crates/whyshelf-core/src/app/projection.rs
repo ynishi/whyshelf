@@ -30,7 +30,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::event::{EntityKind, StoreKind};
+use crate::domain::event::{EntityKind, RefMark, StoreKind};
 use crate::domain::id::{Alias, EntityId};
 use crate::domain::location::RelPath;
 use crate::domain::reference::Ref;
@@ -154,10 +154,12 @@ impl MapDoc {
 
     /// Derive the map of the entities that live in `scope`.
     pub fn build(model: &Model, scope: StoreKind) -> MapDoc {
-        // A reference stays plain if the target lives in this store, or if this is
-        // the private store (private to public is free). Otherwise it is opaque.
+        // A reference stays plain unless the store of the map cannot see the target
+        // (the domain's rule, `StoreKind::mark_for`): then it is opaque.
         let plain = |target: EntityId| {
-            scope == StoreKind::Private || model.home(target) == Some(StoreKind::Repo)
+            // What the map cannot place is treated as private: opaque is the safe side.
+            let home = model.home(target).unwrap_or(StoreKind::Private);
+            scope.mark_for(home) == RefMark::Unmarked
         };
         let mut entities = BTreeMap::new();
         for doc in model.docs().filter(|d| d.store() == scope) {

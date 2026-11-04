@@ -71,7 +71,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::event::{EventBody, Registration};
+use crate::domain::event::{RecordBody, Registration};
 use crate::domain::id::EntityId;
 use crate::domain::location::RelPath;
 
@@ -264,14 +264,17 @@ impl<P: Ports> Workspace<P> {
                     .await?;
                     body = Content::from(&built).search_text();
                     let new_version = built.version(candidate.raw_hash());
-                    let recorded = doc.recorded().clone();
-                    if new_version != recorded {
+                    // While two branches disagree about the recorded version there is
+                    // no single old one: the event names the new one twice and heals
+                    // the fork by listing every tip.
+                    let recorded = doc.recorded().cloned();
+                    if recorded.as_ref() != Some(&new_version) {
                         part.push(
                             &model,
                             doc.store(),
                             doc.id(),
-                            EventBody::Revised {
-                                old: recorded,
+                            RecordBody::Revised {
+                                old: recorded.unwrap_or_else(|| new_version.clone()),
                                 new: new_version,
                             },
                         )?;
@@ -287,7 +290,7 @@ impl<P: Ports> Workspace<P> {
                                     &model,
                                     doc.store(),
                                     item,
-                                    EventBody::Registered(Registration::Item {
+                                    RecordBody::Registered(Registration::Item {
                                         design: design.id(),
                                         number: *number,
                                     }),
@@ -302,7 +305,7 @@ impl<P: Ports> Workspace<P> {
                     let raw = candidate.raw_hash();
                     let renamed = vanished.iter().find(|d| {
                         !claimed.contains(&d.id())
-                            && d.recorded().raw() == &raw
+                            && d.recorded().is_some_and(|v| v.raw() == &raw)
                             && candidate.kind().is_none_or(|k| k == d.kind())
                     });
                     if let Some(doc) = renamed {
@@ -311,7 +314,7 @@ impl<P: Ports> Workspace<P> {
                             &model,
                             doc.store(),
                             doc.id(),
-                            EventBody::Moved {
+                            RecordBody::Moved {
                                 old: doc.path().clone(),
                                 new: candidate.path().clone(),
                             },

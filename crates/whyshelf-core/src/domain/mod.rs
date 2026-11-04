@@ -45,12 +45,13 @@
 //!
 //! # Gates: a machine layer and a human layer
 //!
-//! Each stage has a CHECK gate. Layer 1 is a machine check of form ([`lint`]):
+//! Each stage has a CHECK gate. Layer 1 is a machine check of form ([`gate`]; the
+//! violations are in [`lint`]):
 //! links resolve, upstream is approved and current, pins match in both directions,
 //! tests pass. Layer 2 is a judgement of meaning by a person, recorded as an
-//! `Approved` event ([`approval`]); it can be recorded only when layer 1 passes. The
-//! machine never judges whether a claim is well founded, and the person is not
-//! asked to count links.
+//! `Approved` event ([`approval`]); it can be recorded only from the proof that layer 1
+//! passed ([`gate::Passed`], which only a gate's check makes). The machine never judges
+//! whether a claim is well founded, and the person is not asked to count links.
 //!
 //! | gate | about | approved by |
 //! |---|---|---|
@@ -130,9 +131,12 @@
 //! the same store, `private:<id>` in the private store, `ext:<project>/<id>` in another
 //! project, a URL outside. A `private:` or `ext:` reference into a store that cannot
 //! be read here (a CI machine, a public clone) is shown as unresolved, never as an
-//! error; one into a store that can be read, and names nothing, is dangling. A public
-//! document may point at a private entity only by its opaque identifier; copying its
-//! alias or title is stopped by the leak lint ([`lint::leak_lint`]).
+//! error; one into a store that can be read, and names nothing, is dangling. What a
+//! reference comes to for the entity that holds it is decided in one place
+//! ([`reference::bind`]). A public document may point at a private entity only by its
+//! opaque identifier, written `private:<id>` ([`event::StoreKind::mark_for`]); copying
+//! its alias or title, or writing its identifier without the mark, is stopped by the
+//! leak lint ([`lint::leak_lint`]).
 //!
 //! # Versions of code
 //!
@@ -156,7 +160,11 @@
 //!   revision "reached the baseline" is asked of the revision adapter; how it follows a
 //!   rewritten history is its decision.
 //! - **Conflicts are reported, not merged.** When two branches set a value differently,
-//!   the fold lists the conflict and a person settles it with `tag` or `mv`.
+//!   the fold lists the conflict, nobody chooses a side, and a person settles it by
+//!   setting the value again (`mv` for the path). A kind or a path in conflict makes
+//!   the document Invalid and leaves it out of the typed entities (see
+//!   [`classification`]); `publish` and `purge` are refused while one of the values
+//!   they rely on is in conflict.
 //! - **Time is for display.** Event order is the graph, never the timestamp.
 //!
 //! # Where to look
@@ -168,8 +176,11 @@
 //! | [`finding`], [`spec`], [`design`] | the three stages with files |
 //! | [`event`], [`classification`], [`approval`] | the log, its fold, and the set of approvals |
 //! | [`state`], [`evaluate`] | derived state and how it is derived |
-//! | [`lint`], [`query`] | machine checks, the leak lint, drift of generated files, the `find` language |
+//! | [`gate`], [`next`] | the machine check of each gate and the proof it passed; the next step of an entity |
+//! | [`lint`], [`query`] | the violations and the order of upstream problems, the leak lint, drift of generated files, the `find` language |
 //! | [`error`] | one enum per kind of failure |
+
+mod vocabulary;
 
 pub mod actor;
 pub mod approval;
@@ -180,10 +191,12 @@ pub mod error;
 pub mod evaluate;
 pub mod event;
 pub mod finding;
+pub mod gate;
 pub mod hash;
 pub mod id;
 pub mod lint;
 pub mod location;
+pub mod next;
 pub mod nonempty;
 pub mod pin;
 pub mod query;

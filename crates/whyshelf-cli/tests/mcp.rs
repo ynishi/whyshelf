@@ -186,7 +186,7 @@ async fn the_tools_are_the_commands_and_every_answer_opens_with_the_context() {
         )
         .await;
     assert!(!error, "{text}");
-    assert!(text.contains("CR at"), "{text}");
+    assert!(text.contains("**recorded**: CR"), "{text}");
 
     // The same change is visible to the command line.
     let status = repo.json(&["status"]).await;

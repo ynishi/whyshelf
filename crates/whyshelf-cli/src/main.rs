@@ -138,20 +138,29 @@
 //! result  passed
 //!
 //! $ whyshelf check cr finding/login-feels-slow --approve
-//! recorded  CR at 9f2c71b0e4d85a36c1f0b7a2d3e4f5061728394a (feat/session)
+//! recorded  CR
 //! event     sha256:4be0...
 //! ```
+//!
+//! `recorded` says what the approval recorded, and nothing about where your working
+//! tree is: only a CA records a revision (step 7), and it shows that one.
 //!
 //! **5. `spec new`, `check cs`.** A Spec stands on at least one Finding and says what
 //! must hold. It declares the pins that bind it (a pin is carried later by a test)
 //! and the hypotheses to measure. The template has the grounds filled in; the rest is
 //! yours. Until `## Contract` is written the file is invalid, and the gate refuses it
-//! (`status` and `get` say why):
+//! with a violation, like any other (so the exit status is the one of a check that
+//! found something; `status` and `get` say why too):
 //!
 //! ```text
 //! $ whyshelf spec new spec/session-reuse --from finding/login-feels-slow
 //! $ whyshelf check cs spec/session-reuse
-//! error: 0192e3a6-1c2d-7e4f-8a90-b1c2d3e4f506 is invalid
+//! gate    CS
+//! target  0192e3a6-1c2d-7e4f-8a90-b1c2d3e4f506
+//! result  failed
+//!
+//! Violations
+//! the target is invalid: the file did not parse: the key `## Contract` is missing
 //! ```
 //!
 //! ```markdown
@@ -255,7 +264,7 @@
 //! | `add <PATH>... [--kind finding\|spec\|design] [--tag T]... [--alias A] [--store repo\|private]` | registers files, or every document under a directory; a file already registered is skipped and listed; `--alias` is for one file; official tags must be in the vocabulary |
 //! | `tag <REF> +tag -tag ...` | adds and removes tags (`+area:auth`, `-wip`); never changes an approval |
 //! | `mv <REF> <NEW_PATH>` | records that the document's file is now at `NEW_PATH` (move the file yourself first); the identity and the approvals stay |
-//! | `publish <REF>` | moves a document from the private store to the repo store; refuses text that carries a private alias or title |
+//! | `publish <REF>` | moves a document from the private store to the repo store; refuses text that carries a private alias or title, or the identifier of a private entity not written `private:<id>`; refused while the kind, the path, the version, the owner or the alias of the document was set differently on two branches |
 //! | `finding new --type <T> --title <TITLE> [--alias A]` | a Finding file from a template, registered; `T` is `measured_data`, `usage_observation`, `external_source`, `code_observation` or `domain_constraint`; the alias defaults to `finding/` and the title as a slug |
 //! | `spec new <ALIAS> --from <FINDING_REF>` | a Spec file from a template, registered |
 //! | `design new <ALIAS> --spec <SPEC_REF>` | a Design file from a template, registered |
@@ -320,7 +329,7 @@
 //! | status | when |
 //! |---|---|
 //! | 0 | the command did what it was asked, including a `check` that found nothing |
-//! | 1 | a `check` without `--approve` found violations (they are the result: `result` is `failed` in the `check` section on standard output, and the violations follow); **or** a command failed: the message goes to standard error as `error: ...`, each cause on a `caused by:` line, and for an approval refused by the machine check each violation on a `- ` line; this includes a project that cannot be opened, a secret found in text to be stored, an unclean tree at `check ca --approve`, and a failure to close the cache |
+//! | 1 | a `check` without `--approve` found violations (they are the result: `result` is `failed` in the `check` section on standard output, and the violations follow; an invalid target is one of them); **or** a command failed: the message goes to standard error as `error: ...`, each cause on a `caused by:` line, and for an approval refused by the machine check (a `check cm` too, which always records, and an invalid target is a violation of its gate like of any other) each violation on a `- ` line; this includes a project that cannot be opened, a secret found in text to be stored, an unclean tree at `check ca --approve`, and a failure to close the cache |
 //! | 2 | the command line is not valid: an unknown command or option, a missing argument, a value its type refuses (a malformed reference, tag change, finding type, revision or `--format`), `check cm ... fail-wiring` without `--item-hint`; clap prints the reason to standard error |
 //!
 //! A script that must tell "the check found something" from "the tool failed" can

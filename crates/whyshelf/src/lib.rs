@@ -64,9 +64,9 @@
 //! Each stage has a gate with two layers. The machine layer looks at form
 //! (references resolve, the upstream is approved and current, every pin is
 //! carried by a test and no test carries an undeclared one, the tests pass) and
-//! reports every violation, not the first. The human layer records a judgement
-//! of meaning as an approval, and can be recorded only when the machine layer
-//! finds nothing. The gates are CR (a Finding), CS (a Spec), CI (a Design), CA (an
+//! reports every violation, not the first (an Invalid target among them). The human
+//! layer records a judgement of meaning as an approval, and can be recorded only
+//! from the proof that the machine layer found nothing ([`domain::gate`]). The gates are CR (a Finding), CS (a Spec), CI (a Design), CA (an
 //! item, at one revision of the code, with a clean working tree) and CM (what a
 //! measurement showed against the hypotheses fixed before it, a record rather
 //! than a state). The violations a gate can report, with how to clear each, are
@@ -92,7 +92,9 @@
 //! | events, the stream graph, how an identifier is made | [`domain::event`] |
 //! | tags, kind, owner, path, alias: the fold and its conflicts | [`domain::classification`], [`domain::tag`] |
 //! | approvals and what each gate records | [`domain::approval`], [`app::check`] |
+//! | the machine check of each gate and the proof that it passed | [`domain::gate`] |
 //! | derived state, causes of Stale and Blocked, what cannot be read here | [`domain::state`], [`domain::evaluate`] |
+//! | the next step of an entity, and when a measurement is due | [`domain::next`] |
 //! | check violations and how to clear them | [`domain::lint`] |
 //! | reasons for Invalid, Stale, Blocked, partial and unparsed files | [`domain::state`] |
 //! | the `find` query language | [`domain::query`], [`app::query`] |
@@ -211,21 +213,26 @@
 //!
 //! The domain is plain values and runs anywhere. The leak lint, for example, finds
 //! the alias of a private entity in a text that is about to be public, as a whole
-//! token only:
+//! token only, and the identifier of one that is not written `private:<id>`:
 //!
 //! ```
-//! use whyshelf::domain::id::Alias;
+//! use whyshelf::domain::id::{Alias, EntityId};
 //! use whyshelf::domain::lint::{PrivateName, leak_lint};
 //!
 //! let alias: Alias = "spec/payment-limits".parse().unwrap();
 //! let names = [PrivateName::Alias(alias)];
 //!
 //! // `spec/payment-limits-v2` is another name, so it is not a leak ...
-//! assert!(leak_lint("builds on spec/payment-limits-v2", &names).is_empty());
+//! assert!(leak_lint("builds on spec/payment-limits-v2", &names, &[]).is_empty());
 //! // ... and the name itself, on line 1, is.
-//! let found = leak_lint("builds on spec/payment-limits.\nsee below", &names);
+//! let found = leak_lint("builds on spec/payment-limits.\nsee below", &names, &[]);
 //! assert_eq!(found.len(), 1);
 //! assert_eq!(found[0].line(), 1);
+//!
+//! // An identifier is how a public text may name a private entity, with its mark.
+//! let id: EntityId = "01912345-6789-7abc-8def-0123456789ab".parse().unwrap();
+//! assert!(leak_lint(&format!("stands on private:{id}"), &[], &[id]).is_empty());
+//! assert_eq!(leak_lint(&format!("stands on {id}"), &[], &[id]).len(), 1);
 //! ```
 //!
 //! So is the `find` query language, which is parsed into terms without touching any
@@ -282,9 +289,12 @@
 //!   fact takes.
 //! - **The leak lint** stops a text bound for the repo store that carries the alias
 //!   or the title of a private entity (ASCII case-insensitively; an alias as a whole
-//!   token). It lets `private:<id>` through, which is the point. It checks the texts
-//!   being stored, not the files of the repository in general, and it cannot know a
-//!   private fact that is not an alias or a title.
+//!   token), or the identifier of one without its mark: a reference in the front
+//!   matter and one in the body are seen alike, and every path that writes a text to
+//!   the repo store (`add`, `publish`, ingest, a scaffold) goes through it. It lets
+//!   `private:<id>` through, which is the point. It checks the texts being stored,
+//!   not the files of the repository in general, and it cannot know a private fact
+//!   that is not an alias, a title or an identifier.
 //! - **Approvers are names, not identities.** `by` is the name given or `user.name`;
 //!   nothing authenticates it, and nothing checks that the implementer and the
 //!   approver are different people.

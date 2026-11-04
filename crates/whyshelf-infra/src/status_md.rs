@@ -14,7 +14,8 @@ use std::fmt::Write;
 use whyshelf_core::app::projection::ChangelogDoc;
 use whyshelf_core::app::view::{StatusReport, StatusRow};
 use whyshelf_core::domain::event::{Event, EventBody};
-use whyshelf_core::domain::state::{Approval, EntityState, Integration, Upstream};
+use whyshelf_core::domain::query::StateFilter;
+use whyshelf_core::domain::state::{EntityState, Integration};
 
 /// A table cell: no pipe, no line break.
 fn cell(text: &str) -> String {
@@ -34,29 +35,13 @@ fn name_of(row: &StatusRow) -> String {
     }
 }
 
-fn approval_name(approval: &Approval) -> &'static str {
-    match approval {
-        Approval::Invalid(_) => "invalid",
-        Approval::Draft => "draft",
-        Approval::Approved => "approved",
-        Approval::Modified { .. } => "modified",
-    }
-}
-
-fn upstream_name(upstream: &Upstream) -> &'static str {
-    match upstream {
-        Upstream::Ok => "ok",
-        Upstream::Stale(_) => "stale",
-        Upstream::Blocked(_) => "blocked",
-    }
-}
-
 /// The upstream cell: the axis, and "unresolved" beside it when something the
-/// entity stands on cannot be read where the report was made.
+/// entity stands on cannot be read where the report was made. The words are the
+/// domain's ([`StateFilter`]).
 fn upstream_cell(state: &EntityState) -> String {
-    let axis = upstream_name(state.upstream());
+    let axis = StateFilter::upstream(state.upstream()).name();
     if state.completeness().is_partial() {
-        format!("{axis}, unresolved")
+        format!("{axis}, {}", StateFilter::Unresolved.name())
     } else {
         axis.to_owned()
     }
@@ -78,7 +63,10 @@ pub fn render_status(report: &StatusReport) -> String {
     out.push_str("|---|---|---|---|---|---|---|\n");
     for row in report.rows() {
         let (approval, upstream) = row.state().map_or(("missing", "-".to_owned()), |state| {
-            (approval_name(state.approval()), upstream_cell(state))
+            (
+                StateFilter::approval(state.approval()).name(),
+                upstream_cell(state),
+            )
         });
         let integration = row.integration().map_or("-", integration_name);
         let pins = row.pins().map_or_else(

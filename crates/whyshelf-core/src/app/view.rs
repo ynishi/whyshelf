@@ -12,8 +12,11 @@
 //! | [`ContextLine`] | `[context: project=.., worktree=.., revision=..]`, the first line of every answer of a tool server, so a caller cannot confuse the target |
 //!
 //! The next command is a typed [`NextAction`], never a sentence built from state:
-//! the caller prints it, a tool server returns it, and the rules for choosing it live
-//! in one function.
+//! the caller prints it, a tool server returns it. The step itself, and the order in
+//! which the reasons for waiting are looked at, are the domain's
+//! ([`next_step`]); this layer only says it in its own
+//! words. A row of the status is an entity of a kind, or a document whose kind two
+//! branches made different ([`RowKind`]), which is Invalid for it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -21,21 +24,23 @@ use std::fmt;
 use crate::domain::actor::{Actor, Timestamp};
 use crate::domain::approval::{ApprovalRecord, Attestation, CmResult, Gate, TestOutcome};
 use crate::domain::classification::ClassificationIssue;
-use crate::domain::evaluate::Cause;
+use crate::domain::evaluate::{Cause, States};
 use crate::domain::event::{DocKind, EntityKind, Event, EventId, StoreKind};
 use crate::domain::hash::ContentHash;
 use crate::domain::id::{Alias, DesignId, EntityId, ItemNumber};
-use crate::domain::lint::{ExportDrift, UpstreamProblem, export_drift, upstream_problems};
+use crate::domain::lint::{ExportDrift, export_drift, upstream_problems};
 use crate::domain::location::RelPath;
+use crate::domain::next::{CmDue, NextInput, NextStep, next_step};
 use crate::domain::query::Query;
 use crate::domain::reference::{ItemRef, LocalRef, ProjectName, Ref};
 use crate::domain::revision::{Revision, RevisionId};
-use crate::domain::state::{Approval, EntityState, Integration, Upstream};
+use crate::domain::spec::Spec;
+use crate::domain::state::{EntityState, Integration, ItemProgress, SpecProgress};
 
 use super::Workspace;
 use super::config::Config;
 use super::error::AppError;
-use super::model::{Content, DocEntry, ItemEntry, Model, Present};
+use super::model::{ConflictedEntry, Content, DocEntry, ItemEntry, Model};
 use super::ports::{
     ExportDoc, ExportFile, ExportKind, PortName, Ports, RevisionPort, StorePort, WorktreeRoot,
 };
@@ -146,23 +151,25 @@ impl ContextReport {
 
 /// The reference to print for an entity: its alias if it has one, else its
 /// identifier.
-pub(crate) fn ref_of(id: EntityId, alias: Option<&Alias>) -> Ref {
-    Ref::Local(match alias {
+pub(crate) fn ref_of(id: EntityId, alias: Option<&Alias>) -> LocalRef {
+    match alias {
         Some(alias) => LocalRef::Alias(alias.clone()),
         None => LocalRef::Id(id),
-    })
+    }
 }
 
 fn ref_of_doc(doc: &DocEntry) -> Ref {
-    ref_of(doc.id(), doc.alias())
+    Ref::Local(ref_of(doc.id(), doc.alias()))
 }
 
-fn gate_of(kind: DocKind) -> Gate {
-    match kind {
-        DocKind::Finding => Gate::Cr,
-        DocKind::Spec => Gate::Cs,
-        DocKind::Design => Gate::Ci,
-    }
+/// What a step upstream is called: the alias of the document if it has one, else its
+/// identifier (a document in conflict is named like any other).
+fn ref_to(model: &Model, id: EntityId) -> Ref {
+    let alias = model
+        .doc(id)
+        .and_then(DocEntry::alias)
+        .or_else(|| model.conflicted_doc(id).and_then(ConflictedEntry::alias));
+    Ref::Local(ref_of(id, alias))
 }
 
 /// The command to run next for an entity.
@@ -255,11 +262,46 @@ impl PinTally {
     }
 }
 
+/// What a row of the status is of: an entity of a kind, or a document that two
+/// branches made of different kinds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowKind {
+    /// An entity of this kind.
+    Entity(EntityKind),
+    /// A document whose kind is in conflict: the kinds it was written as, none of
+    /// them chosen. A document whose path is in conflict is its one kind.
+    Conflict(BTreeSet<DocKind>),
+}
+
+impl RowKind {
+    /// The kind, when it is one.
+    pub fn entity(&self) -> Option<EntityKind> {
+        match self {
+            Self::Entity(kind) => Some(*kind),
+            Self::Conflict(kinds) => match kinds.iter().collect::<Vec<_>>()[..] {
+                [only] => Some(only.entity_kind()),
+                _ => None,
+            },
+        }
+    }
+
+    /// The name to show: the kind, or `conflict:` and the kinds in play.
+    pub fn name(&self) -> String {
+        match self {
+            Self::Entity(kind) => kind.name().to_owned(),
+            Self::Conflict(kinds) => {
+                let names: Vec<String> = kinds.iter().map(ToString::to_string).collect();
+                format!("conflict:{}", names.join("|"))
+            }
+        }
+    }
+}
+
 /// One entity in the status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusRow {
     id: EntityId,
-    kind: EntityKind,
+    kind: RowKind,
     store: StoreKind,
     alias: Option<Alias>,
     path: Option<RelPath>,
@@ -280,8 +322,8 @@ impl StatusRow {
     }
 
     /// The kind.
-    pub fn kind(&self) -> EntityKind {
-        self.kind
+    pub fn kind(&self) -> &RowKind {
+        &self.kind
     }
 
     /// The store it lives in.
@@ -483,25 +525,29 @@ impl StatusReport {
         docs.sort_by(|a, b| {
             (a.kind(), a.alias(), a.path(), a.id()).cmp(&(b.kind(), b.alias(), b.path(), b.id()))
         });
+        let states = model.states();
         let mut rows = Vec::new();
         let mut missing = Vec::new();
         let mut changed = Vec::new();
         for doc in docs {
             if doc.present().is_none() {
                 missing.push(doc.path().clone());
-            } else if doc.present().map(|p| p.raw()) != Some(doc.recorded().raw()) {
+            } else if let (Some(present), Some(recorded)) = (doc.present(), doc.recorded())
+                && present.raw() != recorded.raw()
+            {
                 changed.push(doc.path().clone());
             }
-            rows.push(doc_row(model, doc));
+            rows.push(doc_row(model, &states, doc));
             if let Some(Content::Design(design)) = doc.present().map(|p| p.content()) {
                 let mut items: Vec<&ItemEntry> = model
                     .items()
                     .filter(|i| i.key().design == design.id())
                     .collect();
                 items.sort_by_key(|i| i.key().number);
-                rows.extend(items.into_iter().map(|i| item_row(model, doc, i)));
+                rows.extend(items.into_iter().map(|i| item_row(model, &states, doc, i)));
             }
         }
+        rows.extend(model.conflicted().map(|entry| conflicted_row(model, entry)));
         let mut issues = Vec::new();
         for store in [StoreKind::Repo, StoreKind::Private] {
             issues.extend(model.issues(store).iter().map(|issue| StoreIssue {
@@ -526,20 +572,35 @@ impl StatusReport {
     }
 }
 
-fn pin_tally(model: &Model, spec: &crate::domain::spec::Spec) -> PinTally {
+/// How many of the Spec's declared pins the tests carry. The count is the domain's
+/// ([`SpecProgress`]); the pins found are the model's.
+fn spec_progress(model: &Model, spec: &Spec) -> SpecProgress {
+    let declared: BTreeSet<_> = spec.pins().keys().cloned().collect();
+    let found = declared
+        .iter()
+        .filter(|pin| model.impl_view().has_pin(pin))
+        .cloned()
+        .collect();
+    SpecProgress::new(found, declared)
+}
+
+fn item_tally(progress: &ItemProgress) -> PinTally {
     PinTally {
-        found: spec
-            .pins()
-            .keys()
-            .filter(|p| model.impl_view().has_pin(p))
-            .count(),
-        declared: spec.pins().len(),
+        found: progress.found().len(),
+        declared: progress.declared().len(),
     }
 }
 
-/// Whether every item of every Design of the Spec is integrated, and there is at
-/// least one, and no measurement was recorded for the current hypotheses.
-fn awaits_cm(model: &Model, spec: &crate::domain::spec::Spec) -> bool {
+fn spec_tally(progress: &SpecProgress) -> PinTally {
+    PinTally {
+        found: progress.found().len(),
+        declared: progress.declared().len(),
+    }
+}
+
+/// Whether the Spec is waiting for its measurement: the items of every Design of the
+/// Spec are the model's to collect, the rule is [`CmDue`]'s.
+fn cm_due(model: &Model, spec: &Spec) -> CmDue {
     let designs: BTreeSet<DesignId> = model
         .docs()
         .filter_map(|d| match d.present().map(|p| p.content()) {
@@ -547,115 +608,114 @@ fn awaits_cm(model: &Model, spec: &crate::domain::spec::Spec) -> bool {
             _ => None,
         })
         .collect();
-    let items: Vec<&ItemEntry> = model
-        .items()
-        .filter(|i| designs.contains(&i.key().design))
-        .collect();
-    let all_integrated = !items.is_empty()
-        && items
-            .iter()
-            .all(|i| matches!(i.evaluation().integration(), Integration::Integrated { .. }));
-    let measured = model.ledger().active().any(|r| {
-        matches!(r.attestation(), Attestation::Cm { spec: s, .. }
-            if s.id() == &spec.id() && s.hash() == spec.hyp_hash())
-    });
-    all_integrated && !measured
+    CmDue::of(
+        model
+            .items()
+            .filter(|i| designs.contains(&i.key().design))
+            .map(|i| i.evaluation().integration()),
+        model.ledger(),
+        spec,
+    )
 }
 
-/// The upstreams of a document as the status looks at them: the identifier and the
-/// state of what the model has, `None` for what it has not.
+/// The upstreams of an entity as the status looks at them: the identifier and the
+/// state of what has one, `None` for what has none. The state is read from the state
+/// of every entity, so a document in conflict is read like any other.
 fn upstream_states<'m>(
-    model: &'m Model,
+    states: &States<'m>,
     ids: &[EntityId],
 ) -> Vec<(EntityId, Option<&'m EntityState>)> {
     ids.iter()
-        .map(|id| {
-            let state = model
-                .doc(*id)
-                .and_then(DocEntry::present)
-                .map(Present::state);
-            (*id, state)
-        })
+        .map(|id| (*id, states.get(id).copied()))
         .collect()
 }
 
-/// What the upstream asks for first, if it asks for anything.
-///
-/// Which upstream problem comes first is the domain's to say
-/// ([`upstream_problems`]); this only turns the first into a command. A Blocked
-/// entity names the root of the chain through that upstream, not the root of some
-/// other upstream's chain. An upstream that is Modified or Stale leaves the entity
-/// itself to be approved again.
-fn upstream_action(
-    model: &Model,
-    state: &EntityState,
-    causes: &[Cause],
-    upstreams: &[(EntityId, Option<&EntityState>)],
-) -> Option<NextAction> {
-    let (upstream, problem) = upstream_problems(state.completeness(), upstreams)
-        .into_iter()
-        .next()?;
-    if problem == UpstreamProblem::Unresolved {
-        return Some(NextAction::OpenWithPrivateStore);
-    }
-    if !matches!(state.upstream(), Upstream::Blocked(_)) {
-        return None;
-    }
-    let root = causes.iter().find(|c| c.through() == upstream)?.via();
-    Some(NextAction::ApproveUpstream {
-        upstream: ref_of_doc(model.doc(root)?),
-    })
+/// What a next step is asked about: the entity's own state and causes, the
+/// identifiers it stands on, and what its kind adds.
+struct Asked<'a> {
+    state: &'a EntityState,
+    causes: &'a [Cause],
+    upstreams: &'a [EntityId],
+    input: NextInput<'a>,
 }
 
-fn next_from_state(
+/// The next step of an entity, in the words of this layer. The step is the domain's
+/// ([`next_step`]); the problems of the upstreams it reads are in the order of
+/// [`upstream_problems`].
+fn next_action(
     model: &Model,
-    gate: Gate,
+    states: &States<'_>,
+    asked: Asked<'_>,
     target: Target,
-    state: &EntityState,
-    causes: &[Cause],
-    upstreams: &[(EntityId, Option<&EntityState>)],
-) -> Option<NextAction> {
-    let from_upstream = upstream_action(model, state, causes, upstreams);
-    match (state.approval(), state.upstream()) {
-        (Approval::Invalid(_), _) => Some(NextAction::FixFile),
-        _ if from_upstream.is_some() => from_upstream,
-        // Blocked by something no document of the model names: nothing to point at.
-        (_, Upstream::Blocked(_)) => None,
-        (Approval::Modified { .. }, _) | (_, Upstream::Stale(_)) => {
-            Some(NextAction::Reapprove { gate, target })
-        }
-        (Approval::Draft, _) => Some(NextAction::Approve { gate, target }),
-        (Approval::Approved, Upstream::Ok) => None,
+    own: &Ref,
+) -> NextAction {
+    let problems = upstream_problems(
+        asked.state.completeness(),
+        &upstream_states(states, asked.upstreams),
+    );
+    action_of(
+        model,
+        next_step(asked.state, asked.causes, &problems, asked.input),
+        target,
+        own,
+    )
+}
+
+/// A step in the words of this layer: `target` is what a gate is run on, `own` what
+/// the entity is called.
+fn action_of(model: &Model, step: Option<NextStep>, target: Target, own: &Ref) -> NextAction {
+    match step {
+        None => NextAction::None,
+        Some(NextStep::Fix) => NextAction::FixFile,
+        Some(NextStep::OpenWithPrivateStore) => NextAction::OpenWithPrivateStore,
+        Some(NextStep::ApproveUpstream { root }) => NextAction::ApproveUpstream {
+            upstream: ref_to(model, root),
+        },
+        Some(NextStep::Reapprove(gate)) => NextAction::Reapprove { gate, target },
+        Some(NextStep::Approve(gate)) => NextAction::Approve { gate, target },
+        Some(NextStep::Implement) => NextAction::Implement,
+        Some(NextStep::Measure) => NextAction::AwaitingCm {
+            target: own.clone(),
+        },
+        Some(NextStep::AwaitIntegration) => NextAction::AwaitIntegration,
     }
 }
 
-fn doc_row(model: &Model, doc: &DocEntry) -> StatusRow {
-    let target = Target::Entity(ref_of_doc(doc));
+fn doc_row(model: &Model, states: &States<'_>, doc: &DocEntry) -> StatusRow {
+    let own = ref_of_doc(doc);
     let present = doc.present();
     let next = match present {
         None => NextAction::RestoreFile,
-        Some(p) => next_from_state(
-            model,
-            gate_of(doc.kind()),
-            target,
-            p.state(),
-            p.causes(),
-            &upstream_states(model, &p.content().upstream()),
-        )
-        .unwrap_or_else(|| match p.content() {
-            Content::Spec(spec) if awaits_cm(model, spec) => NextAction::AwaitingCm {
-                target: ref_of_doc(doc),
-            },
-            _ => NextAction::None,
-        }),
+        Some(p) => {
+            let input = match p.content() {
+                Content::Spec(spec) => NextInput::Spec {
+                    cm_due: cm_due(model, spec),
+                },
+                _ => NextInput::Doc {
+                    gate: Gate::of_doc(doc.kind()),
+                },
+            };
+            next_action(
+                model,
+                states,
+                Asked {
+                    state: p.state(),
+                    causes: p.causes(),
+                    upstreams: &p.content().upstream(),
+                    input,
+                },
+                Target::Entity(own.clone()),
+                &own,
+            )
+        }
     };
     let pins = match present.map(|p| p.content()) {
-        Some(Content::Spec(spec)) => Some(pin_tally(model, spec)),
+        Some(Content::Spec(spec)) => Some(spec_tally(&spec_progress(model, spec))),
         _ => None,
     };
     StatusRow {
         id: doc.id(),
-        kind: doc.kind().entity_kind(),
+        kind: RowKind::Entity(doc.kind().entity_kind()),
         store: doc.store(),
         alias: doc.alias().cloned(),
         path: Some(doc.path().clone()),
@@ -670,34 +730,29 @@ fn doc_row(model: &Model, doc: &DocEntry) -> StatusRow {
     }
 }
 
-fn item_row(model: &Model, design: &DocEntry, item: &ItemEntry) -> StatusRow {
+fn item_row(model: &Model, states: &States<'_>, design: &DocEntry, item: &ItemEntry) -> StatusRow {
     let key = item.key();
     let evaluation = item.evaluation();
-    let design_ref = ref_of_doc(design);
-    let target = format!("{design_ref}{}", key.number)
-        .parse::<ItemRef>()
-        .map(Target::Item)
-        .unwrap_or_else(|_| Target::Entity(design_ref.clone()));
+    let target = ItemRef::new(ref_of(design.id(), design.alias()), key.number);
     let progress = evaluation.progress();
-    let next = next_from_state(
+    let next = next_action(
         model,
-        Gate::Ca,
-        target,
-        evaluation.state(),
-        evaluation.causes(),
-        &upstream_states(model, &[design.id()]),
-    )
-    .map(|action| match action {
-        NextAction::Approve { .. } if progress.is_implementing() => NextAction::Implement,
-        other => other,
-    })
-    .unwrap_or_else(|| match evaluation.integration() {
-        Integration::ApprovedPending { .. } => NextAction::AwaitIntegration,
-        _ => NextAction::None,
-    });
+        states,
+        Asked {
+            state: evaluation.state(),
+            causes: evaluation.causes(),
+            upstreams: &[design.id()],
+            input: NextInput::Item {
+                progress,
+                integration: evaluation.integration(),
+            },
+        },
+        Target::Item(target),
+        &ref_of_doc(design),
+    );
     StatusRow {
         id: key.id.entity(),
-        kind: EntityKind::Item,
+        kind: RowKind::Entity(EntityKind::Item),
         store: item.store(),
         alias: None,
         path: None,
@@ -706,12 +761,38 @@ fn item_row(model: &Model, design: &DocEntry, item: &ItemEntry) -> StatusRow {
         label: Some(item.item().summary().as_str().to_owned()),
         state: Some(evaluation.state().clone()),
         integration: Some(evaluation.integration().clone()),
-        pins: Some(PinTally {
-            found: progress.found().len(),
-            declared: progress.declared().len(),
-        }),
+        pins: Some(item_tally(progress)),
         implementing: progress.is_implementing(),
         next,
+    }
+}
+
+/// The row of a document whose kind or path is in conflict: Invalid for it, and its
+/// file is to be fixed (by setting the value again), like any Invalid one.
+fn conflicted_row(model: &Model, entry: &ConflictedEntry) -> StatusRow {
+    let doc = entry.doc();
+    // An Invalid state asks for a fix whichever gate it is asked of.
+    let gate = doc
+        .kinds()
+        .iter()
+        .next()
+        .map_or(Gate::Cr, |kind| Gate::of_doc(*kind));
+    let step = next_step(doc.state(), &[], &[], NextInput::Doc { gate });
+    let own = Ref::Local(ref_of(entry.id(), entry.alias()));
+    StatusRow {
+        id: entry.id(),
+        kind: RowKind::Conflict(doc.kinds().clone()),
+        store: entry.store(),
+        alias: entry.alias().cloned(),
+        path: entry.path().cloned(),
+        number: None,
+        parent: None,
+        label: None,
+        state: Some(doc.state().clone()),
+        integration: None,
+        pins: None,
+        implementing: false,
+        next: action_of(model, step, Target::Entity(own.clone()), &own),
     }
 }
 

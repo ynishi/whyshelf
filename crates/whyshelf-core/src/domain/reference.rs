@@ -18,8 +18,8 @@
 //!
 //! | reference | looked up as | result |
 //! |---|---|---|
-//! | no mark | [`Directory::local`] | found / **dangling** (nothing has that name) / **ambiguous** (several do) |
-//! | `private:<id>` | [`Directory::by_id`] first, in whichever store holds the id | found |
+//! | no mark | [`Directory::local`] | found / **dangling** (nothing has that name) / **ambiguous** (several do) / **conflicted** (the one that has it is a document whose kind or path is in conflict) |
+//! | `private:<id>` | [`Directory::by_id`] first, in whichever store holds the id | found / **conflicted** |
 //! | `private:<id>`, not found, the private store can be read | nothing more is asked | **dangling** (a mistyped id) |
 //! | `private:<id>`, not found, the private store cannot be read | nothing more is asked | **unresolved** |
 //! | `ext:<project>/<id-or-alias>` | nothing is asked: there is no way to another project | **unresolved** |
@@ -31,6 +31,29 @@
 //! error: a public clone must stay usable although it cannot see the private store.
 //! Whether the private store can be read is a fact about the environment, [`Reach`],
 //! which the application asks of its store port; the rule above only reads it.
+//! Conflicted is a document that exists and whose state is Invalid for the
+//! conflict, so the entity that stands on it is Blocked, like on any invalid one.
+//!
+//! # From a resolution to what the holder keeps: [`bind`]
+//!
+//! A key that holds a reference (`grounds`, `spec`) keeps what the resolution comes
+//! to, and [`bind`] is the one function that says what. The line between the rows is
+//! whether an identifier is available: with one the holder is built and the
+//! evaluator judges it; without one there is nothing to hold.
+//!
+//! | resolution | written as | [`Bound`] | the holder |
+//! |---|---|---|---|
+//! | found, the kind wanted | any | `Id(id)` | built |
+//! | found, another kind | any | `Unparsed(WrongKind)` | not built: Invalid |
+//! | conflicted | any | `Conflicted(id)` | built; Blocked by the upstream's state |
+//! | unresolved | `private:<id>` | `Unresolved(id)` | built; Partial |
+//! | unresolved | `ext:` (refused before, see below) | `Unparsed(DanglingRef)` | not built: Invalid |
+//! | dangling | an identifier, with or without `private:` | `Dangling(id)` | built; Invalid ([`InvalidReason::DanglingRef`](super::state::InvalidReason::DanglingRef)) |
+//! | dangling | an alias | `Unparsed(DanglingRef)` | not built: Invalid |
+//! | ambiguous | an alias | `Unparsed(AmbiguousRef)` | not built: Invalid |
+//!
+//! A URL and an `ext:` reference in `grounds` or `spec` are refused before a
+//! lookup ([`Ref::entity_of`]), as `ExternalRefNotAllowed`.
 //!
 //! # Decided
 //!
@@ -71,8 +94,10 @@ use std::str::FromStr;
 
 use super::canon::{Canon, ToCanon};
 use super::error::{ItemRefError, ValueError};
+use super::event::EntityKind;
 use super::id::{Alias, DesignId, EntityId, ItemNumber};
 use super::location::Uri;
+use super::state::UnparsedReason;
 
 /// The name of another project in an `ext:` reference.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -236,6 +261,22 @@ pub enum Lookup<T> {
     Missing,
     /// Several have: an alias held by an entity in each store.
     Ambiguous,
+    /// Exactly one entity has that name or identifier, and it is a document whose
+    /// kind or path two branches wrote differently: its identifier is known and
+    /// nothing more.
+    Conflicted(EntityId),
+}
+
+/// What a lookup of an identifier found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ById<T> {
+    /// The entity.
+    Found(T),
+    /// No entity has that identifier.
+    Missing,
+    /// The entity is a document in conflict over its kind or its path (see
+    /// [`Lookup::Conflicted`]).
+    Conflicted(EntityId),
 }
 
 /// Whether the private store can be read in this environment.
@@ -261,7 +302,7 @@ pub trait Directory<T> {
     /// Look an entity up by its identifier, in whichever store holds it (an
     /// identifier names the same entity in both stores, after a publication for
     /// one), following the identifiers that a merge made equal.
-    fn by_id(&self, id: EntityId) -> Option<T>;
+    fn by_id(&self, id: EntityId) -> ById<T>;
 
     /// Whether the private store can be read here.
     fn private_reach(&self) -> Reach;
@@ -296,6 +337,9 @@ pub enum Resolution<T> {
     /// A `private:` or `ext:` reference whose store cannot be read here. Shown,
     /// not an error.
     Unresolved,
+    /// The reference names an entity that is a document in conflict over its kind
+    /// or its path. The identifier is known; what the entity is, is not.
+    Conflicted(EntityId),
 }
 
 impl EntityRef {
@@ -311,15 +355,29 @@ impl EntityRef {
                 Lookup::Found(found) => Resolution::Found(found),
                 Lookup::Missing => Resolution::Dangling,
                 Lookup::Ambiguous => Resolution::Ambiguous,
+                Lookup::Conflicted(id) => Resolution::Conflicted(id),
             },
             Self::Private(id) => match directory.by_id(*id) {
-                Some(found) => Resolution::Found(found),
-                None => match directory.private_reach() {
+                ById::Found(found) => Resolution::Found(found),
+                ById::Conflicted(id) => Resolution::Conflicted(id),
+                ById::Missing => match directory.private_reach() {
                     Reach::Available => Resolution::Dangling,
                     Reach::Absent => Resolution::Unresolved,
                 },
             },
             Self::External { .. } => Resolution::Unresolved,
+        }
+    }
+
+    /// The reference as it was written.
+    pub fn to_ref(&self) -> Ref {
+        match self {
+            Self::Local(local) => Ref::Local(local.clone()),
+            Self::Private(id) => Ref::Private(*id),
+            Self::External { project, target } => Ref::External {
+                project: project.clone(),
+                target: target.clone(),
+            },
         }
     }
 
@@ -334,6 +392,94 @@ impl EntityRef {
     }
 }
 
+impl Ref {
+    /// The reference as one that may stand for an entity of this project in the key
+    /// `field` (`grounds`, `spec`): a URL and an `ext:` reference may not.
+    ///
+    /// An entity that stands on another project's entity could not be approved in
+    /// any environment, because nothing reads the hash of an entity of another
+    /// project; so the file is refused, not shown as unresolved.
+    pub fn entity_of(&self, field: &str) -> Result<EntityRef, UnparsedReason> {
+        self.as_entity()
+            .filter(|entity| !matches!(entity, EntityRef::External { .. }))
+            .ok_or_else(|| UnparsedReason::ExternalRefNotAllowed {
+                field: field.to_owned(),
+                reference: self.clone(),
+            })
+    }
+}
+
+/// What a directory found, as far as the domain needs it: which entity, and of
+/// which kind.
+pub trait Located {
+    /// The identifier of the entity found.
+    fn id(&self) -> EntityId;
+
+    /// Its kind.
+    fn kind(&self) -> EntityKind;
+}
+
+/// What a reference in a key comes to, for the entity that holds it.
+///
+/// The boundary is whether an identifier is available. With one, the holder is built
+/// holding the identifier (an `Id`, `Unresolved`, `Dangling` or `Conflicted` upstream)
+/// and the evaluator judges it; without one, there is nothing to hold, the file
+/// cannot become an entity, and it is `Unparsed` with the reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Bound {
+    /// The reference names this entity, of the kind the key wants.
+    Id(EntityId),
+    /// The identifier is spelled, and its store cannot be read here: the holder is
+    /// built and is Partial.
+    Unresolved(EntityId),
+    /// The identifier is spelled, and the store that would hold it can be read, and
+    /// nothing does: the holder is built and the evaluator makes it Invalid
+    /// ([`InvalidReason::DanglingRef`](super::state::InvalidReason::DanglingRef)).
+    Dangling(EntityId),
+    /// The identifier is known and the entity is a document in conflict: the holder
+    /// is built, and reads the entity's state (Invalid) like any upstream's.
+    Conflicted(EntityId),
+    /// No identifier is available, or the entity is of the wrong kind: the holder
+    /// cannot be built.
+    Unparsed(UnparsedReason),
+}
+
+/// The one place a resolution becomes a value to hold: see [`Bound`].
+///
+/// `written` is the reference as the file wrote it, and `expected` the kind the key
+/// wants (the kind check is here and nowhere else).
+pub fn bind<T: Located>(
+    resolution: Resolution<T>,
+    written: &EntityRef,
+    expected: EntityKind,
+) -> Bound {
+    let reference = || written.to_ref();
+    match resolution {
+        Resolution::Found(found) if found.kind() == expected => Bound::Id(found.id()),
+        Resolution::Found(found) => Bound::Unparsed(UnparsedReason::WrongKind {
+            reference: reference(),
+            expected,
+            found: found.kind(),
+        }),
+        Resolution::Conflicted(id) => Bound::Conflicted(id),
+        Resolution::Unresolved => match written.spelled_id() {
+            Some(id) => Bound::Unresolved(id),
+            None => Bound::Unparsed(UnparsedReason::DanglingRef {
+                reference: reference(),
+            }),
+        },
+        Resolution::Dangling => match written.spelled_id() {
+            Some(id) => Bound::Dangling(id),
+            None => Bound::Unparsed(UnparsedReason::DanglingRef {
+                reference: reference(),
+            }),
+        },
+        Resolution::Ambiguous => Bound::Unparsed(UnparsedReason::AmbiguousRef {
+            reference: reference(),
+        }),
+    }
+}
+
 /// A reference to a work item: `<ref>#<number>`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ItemRef {
@@ -342,6 +488,12 @@ pub struct ItemRef {
 }
 
 impl ItemRef {
+    /// The reference of item `number` of the Design (or the Spec) named `base`,
+    /// from its parts: no text to print and parse again.
+    pub fn new(base: LocalRef, number: ItemNumber) -> Self {
+        Self { base, number }
+    }
+
     /// The Design (or the Spec) the number is counted in.
     pub fn base(&self) -> &LocalRef {
         &self.base
@@ -461,13 +613,17 @@ mod tests {
     /// A directory with fixed answers that counts how often it was asked.
     struct Fixed {
         local: Lookup<u8>,
-        by_id: Option<u8>,
+        by_id: ById<u8>,
         reach: Reach,
         asked: Cell<u32>,
     }
 
     impl Fixed {
         fn new(local: Lookup<u8>, by_id: Option<u8>, reach: Reach) -> Self {
+            Self::with_by_id(local, by_id.map_or(ById::Missing, ById::Found), reach)
+        }
+
+        fn with_by_id(local: Lookup<u8>, by_id: ById<u8>, reach: Reach) -> Self {
             Self {
                 local,
                 by_id,
@@ -483,9 +639,9 @@ mod tests {
             self.local.clone()
         }
 
-        fn by_id(&self, _: EntityId) -> Option<u8> {
+        fn by_id(&self, _: EntityId) -> ById<u8> {
             self.asked.set(self.asked.get() + 1);
-            self.by_id
+            self.by_id.clone()
         }
 
         fn private_reach(&self) -> Reach {
@@ -502,12 +658,13 @@ mod tests {
     }
 
     #[test]
-    fn a_reference_without_a_mark_is_found_dangling_or_ambiguous() {
+    fn a_reference_without_a_mark_is_found_dangling_ambiguous_or_conflicted() {
         let local = entity("spec/a");
         for (lookup, expected) in [
             (Lookup::Found(7), Resolution::Found(7)),
             (Lookup::Missing, Resolution::Dangling),
             (Lookup::Ambiguous, Resolution::Ambiguous),
+            (Lookup::Conflicted(eid(4)), Resolution::Conflicted(eid(4))),
         ] {
             // Whether the private store can be read does not matter to it.
             for reach in [Reach::Available, Reach::Absent] {
@@ -524,6 +681,191 @@ mod tests {
             let directory = Fixed::new(Lookup::Missing, Some(9), reach);
             assert_eq!(private.resolve(&directory), Resolution::Found(9));
         }
+    }
+
+    #[test]
+    fn a_private_id_held_by_a_document_in_conflict_is_conflicted_in_either_reach() {
+        let private = entity(&format!("private:{}", eid(1)));
+        for reach in [Reach::Available, Reach::Absent] {
+            let directory = Fixed::with_by_id(Lookup::Missing, ById::Conflicted(eid(1)), reach);
+            assert_eq!(private.resolve(&directory), Resolution::Conflicted(eid(1)));
+        }
+    }
+
+    /// A found entity of a kind.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct Hit(u128, EntityKind);
+
+    impl Located for Hit {
+        fn id(&self) -> EntityId {
+            eid(self.0)
+        }
+
+        fn kind(&self) -> EntityKind {
+            self.1
+        }
+    }
+
+    /// The table of the module, one row per resolution and way of writing it.
+    #[test]
+    fn bind_is_the_documented_table() {
+        let alias = entity("spec/a");
+        let plain_id = entity(&eid(3).to_string());
+        let private = entity(&format!("private:{}", eid(3)));
+        let external = entity("ext:p/a");
+        let dangling = |text: &str| UnparsedReason::DanglingRef {
+            reference: text.parse().unwrap(),
+        };
+        let found = |kind| Resolution::Found(Hit(3, kind));
+        let spec = EntityKind::Spec;
+
+        // Found, the kind wanted: the identifier, however it was written.
+        for written in [&alias, &plain_id, &private] {
+            assert_eq!(bind(found(spec), written, spec), Bound::Id(eid(3)));
+        }
+        // Found, another kind: the file is refused, naming both kinds.
+        assert_eq!(
+            bind(found(EntityKind::Finding), &alias, spec),
+            Bound::Unparsed(UnparsedReason::WrongKind {
+                reference: "spec/a".parse().unwrap(),
+                expected: spec,
+                found: EntityKind::Finding,
+            })
+        );
+        // Conflicted: the identifier is known, whatever it was written as.
+        assert_eq!(
+            bind(Resolution::<Hit>::Conflicted(eid(5)), &alias, spec),
+            Bound::Conflicted(eid(5))
+        );
+        // Unresolved: an identifier is spelled only by `private:`.
+        assert_eq!(
+            bind(Resolution::<Hit>::Unresolved, &private, spec),
+            Bound::Unresolved(eid(3))
+        );
+        assert_eq!(
+            bind(Resolution::<Hit>::Unresolved, &external, spec),
+            Bound::Unparsed(dangling("ext:p/a"))
+        );
+        // Dangling: an identifier is kept, with or without the mark; an alias is not.
+        for written in [&plain_id, &private] {
+            assert_eq!(
+                bind(Resolution::<Hit>::Dangling, written, spec),
+                Bound::Dangling(eid(3))
+            );
+        }
+        assert_eq!(
+            bind(Resolution::<Hit>::Dangling, &alias, spec),
+            Bound::Unparsed(dangling("spec/a"))
+        );
+        // Ambiguous: no identifier to keep.
+        assert_eq!(
+            bind(Resolution::<Hit>::Ambiguous, &alias, spec),
+            Bound::Unparsed(UnparsedReason::AmbiguousRef {
+                reference: "spec/a".parse().unwrap()
+            })
+        );
+    }
+
+    /// Every row of `bind` follows from a row of `resolve`: the two tables read
+    /// side by side.
+    #[test]
+    fn a_lookup_goes_through_resolve_and_bind_to_what_the_holder_keeps() {
+        let spec = EntityKind::Spec;
+        let id = eid(3);
+        let hit = Hit(3, spec);
+        let cases = [
+            // (written, local lookup, by id, reach) -> bound
+            (
+                id.to_string(),
+                Lookup::Found(hit),
+                ById::Missing,
+                Reach::Available,
+                Bound::Id(id),
+            ),
+            (
+                id.to_string(),
+                Lookup::Missing,
+                ById::Missing,
+                Reach::Absent,
+                Bound::Dangling(id),
+            ),
+            (
+                format!("private:{id}"),
+                Lookup::Missing,
+                ById::Missing,
+                Reach::Available,
+                Bound::Dangling(id),
+            ),
+            (
+                format!("private:{id}"),
+                Lookup::Missing,
+                ById::Missing,
+                Reach::Absent,
+                Bound::Unresolved(id),
+            ),
+            (
+                format!("private:{id}"),
+                Lookup::Missing,
+                ById::Found(hit),
+                Reach::Absent,
+                Bound::Id(id),
+            ),
+            (
+                id.to_string(),
+                Lookup::Conflicted(id),
+                ById::Missing,
+                Reach::Available,
+                Bound::Conflicted(id),
+            ),
+        ];
+        for (text, local, by_id, reach, expected) in cases {
+            let written = entity(&text);
+            let directory = FixedHit {
+                local,
+                by_id,
+                reach,
+            };
+            assert_eq!(
+                bind(written.resolve(&directory), &written, spec),
+                expected,
+                "{text}"
+            );
+        }
+    }
+
+    struct FixedHit {
+        local: Lookup<Hit>,
+        by_id: ById<Hit>,
+        reach: Reach,
+    }
+
+    impl Directory<Hit> for FixedHit {
+        fn local(&self, _: &LocalRef) -> Lookup<Hit> {
+            self.local.clone()
+        }
+
+        fn by_id(&self, _: EntityId) -> ById<Hit> {
+            self.by_id.clone()
+        }
+
+        fn private_reach(&self) -> Reach {
+            self.reach
+        }
+    }
+
+    #[test]
+    fn an_external_reference_or_a_url_is_refused_for_a_key_before_any_lookup() {
+        for text in ["ext:p/a", "https://x.org/a"] {
+            let reference: Ref = text.parse().unwrap();
+            assert_eq!(
+                reference.entity_of("grounds"),
+                Err(UnparsedReason::ExternalRefNotAllowed {
+                    field: "grounds".into(),
+                    reference
+                })
+            );
+        }
+        assert!("spec/a".parse::<Ref>().unwrap().entity_of("spec").is_ok());
     }
 
     #[test]
@@ -577,6 +919,21 @@ mod tests {
             "design/a#0".parse::<ItemRef>(),
             Err(ItemRefError::Number(_))
         ));
+    }
+
+    #[test]
+    fn an_item_reference_from_its_parts_prints_and_parses_back_to_itself() {
+        let number = ItemNumber::new(3).unwrap();
+        for base in [
+            LocalRef::Alias("design/cache".parse().unwrap()),
+            LocalRef::Id(eid(7)),
+        ] {
+            let made = ItemRef::new(base.clone(), number);
+            assert_eq!(made.to_string(), format!("{base}#3"));
+            assert_eq!(made.to_string().parse::<ItemRef>(), Ok(made.clone()));
+            assert_eq!(made.base(), &base);
+            assert_eq!(made.number(), number);
+        }
     }
 
     #[test]

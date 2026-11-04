@@ -3,21 +3,17 @@
 //! Each gate has two calls. `check_*` is the machine layer: it reads, runs what must
 //! be run (the tests, for CA), and returns every violation it finds in a
 //! [`CheckReport`]. `approve_*` is the human layer: it runs the same check and, only
-//! when nothing is found, records an `Approved` event. The gate in
-//! [`commit`](super::commit) refuses the event again if the check had found anything,
-//! so no path records an approval over a violation.
+//! when nothing is found, records an `Approved` event.
 //!
-//! What an approval pins, and what it records of the upstream, is fixed by
-//! [`GateBinding`](crate::domain::approval::GateBinding) in the domain; this module
-//! only gathers the hashes it names.
+//! The check itself is the domain's ([`gate`]): this module collects what the check
+//! reads from the model and the ports into the gate's input, and calls it. What the
+//! check returns when nothing is found, a [`Passed`], is the only thing an approval
+//! can be recorded from, so no path records an approval over a violation. Which hash
+//! an approval pins, and what it records of the upstream, is the attestation the
+//! check builds (see [`approval`](crate::domain::approval)).
 //!
-//! | gate | the attestation records |
-//! |---|---|
-//! | CR | the Finding at its hash |
-//! | CS | the Spec at its contract hash, the hypothesis hash it fixes, every ground at the hash it has |
-//! | CI | the Design at its hash, the Spec at its contract hash |
-//! | CA | the item at its hash, the Design at its hash, the revision, the outcome of the tests |
-//! | CM | the Spec at its hypothesis hash, the CS approval that fixed it, the result |
+//! An Invalid target is a violation of every gate (the measurement included), shown
+//! like any other and with the same exit status; it is not an error of the tool.
 //!
 //! Two rules are worth stating again here:
 //!
@@ -26,20 +22,19 @@
 //! - CM's failure is a choice of two (see [`CmInput`]), and each carries what the
 //!   follow-up needs, so a failure cannot be recorded without saying which kind.
 
+use std::collections::BTreeMap;
+
 use crate::domain::actor::Actor;
-use crate::domain::approval::{Attestation, CmResult, Gate, Pinned};
-use crate::domain::evaluate::Evaluated;
-use crate::domain::event::{EntityKind, EventBody, EventId};
-use crate::domain::finding::FindingSource;
-use crate::domain::id::{DesignId, EntityId, FindingId, SpecId};
-use crate::domain::lint::{
-    CheckViolation, UpstreamProblem, check_ca, check_ci, check_cm, check_cr, check_cs,
+use crate::domain::approval::{Attestation, CmResult, Gate};
+use crate::domain::event::{EventId, RecordBody};
+use crate::domain::gate::{
+    self, CaInput, Checked, CiInput, CrInput, CsInput, Passed, Violations, ca, ci, cm, cr, cs,
+    invalid_target,
 };
-use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::id::{DesignId, EntityId, FindingId, SpecId};
+use crate::domain::lint::CheckViolation;
+use crate::domain::nonempty::NonBlank;
 use crate::domain::reference::{ItemRef, Ref};
-use crate::domain::revision::Revision;
-use crate::domain::spec::Spec;
-use crate::domain::state::Approval;
 
 use super::Workspace;
 use super::commit::Committed;
@@ -82,6 +77,7 @@ impl CheckReport {
 #[derive(Debug)]
 pub struct Approved {
     event: EventId,
+    attestation: Attestation,
     committed: Committed,
 }
 
@@ -89,6 +85,12 @@ impl Approved {
     /// The `Approved` event, which `revoke` takes.
     pub fn event(&self) -> EventId {
         self.event
+    }
+
+    /// What was recorded: the entity, the hashes, and for a CA the revision. This,
+    /// and not the revision the working tree is at now, is what the approval says.
+    pub fn attestation(&self) -> &Attestation {
+        &self.attestation
     }
 
     /// The write and its subscribers' warnings.
@@ -119,209 +121,119 @@ pub enum CmInput {
     },
 }
 
-/// A check and, when it passed, the attestation it would record.
-struct Checked {
+/// A check of a gate: which, on what, and what it came to.
+struct Prepared {
     gate: Gate,
     target: EntityId,
-    violations: Vec<CheckViolation>,
-    attestation: Option<Attestation>,
+    checked: Checked,
 }
 
-impl Checked {
+impl Prepared {
     fn report(&self) -> CheckReport {
         CheckReport {
             gate: self.gate,
             target: self.target,
-            violations: self.violations.clone(),
+            violations: match &self.checked {
+                Ok(_) => Vec::new(),
+                Err(violations) => violations.clone().into_vec(),
+            },
         }
     }
 }
 
-fn ensure_valid(id: EntityId, approval: &Approval) -> Result<(), AppError> {
-    match approval {
-        Approval::Invalid(reasons) => Err(AppError::TargetInvalid {
-            id,
-            reasons: reasons.clone(),
+/// What the check of a target that has no evaluation is: the target is a document in
+/// conflict, which is Invalid, or its file is missing.
+fn without_evaluation(model: &Model, gate: Gate, id: EntityId) -> Result<Prepared, AppError> {
+    match model
+        .conflicted_doc(id)
+        .and_then(|entry| invalid_target(entry.doc().state()))
+    {
+        Some(violations) => Ok(Prepared {
+            gate,
+            target: id,
+            checked: Err(violations),
         }),
-        _ => Ok(()),
+        None => Err(AppError::TargetFileMissing { id }),
     }
 }
 
-fn prepare_cr(model: &Model, target: &Ref) -> Result<Checked, AppError> {
-    let id = model.resolve_as(target, EntityKind::Finding)?;
-    let ev = model
-        .findings()
-        .get(&FindingId::new(id))
-        .ok_or(AppError::TargetFileMissing { id })?;
-    ensure_valid(id, ev.state().approval())?;
-    let finding = ev.entity().ok_or(AppError::TargetUnparsed { id })?;
-    let violations = check_cr(finding);
-    let attestation = violations.is_empty().then(|| Attestation::Cr {
-        finding: Pinned::new(finding.id(), *finding.hash()),
-    });
-    Ok(Checked {
-        gate: Gate::Cr,
+fn prepare_cr(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
+    let gate = Gate::Cr;
+    let id = model.resolve_as(target, gate.target_kind())?;
+    let Some(finding) = model.findings().get(&FindingId::new(id)) else {
+        return without_evaluation(model, gate, id);
+    };
+    Ok(Prepared {
+        gate,
         target: id,
-        violations,
-        attestation,
+        checked: cr::check(CrInput { finding }),
     })
 }
 
-/// The grounds of a Spec at the hashes they have, or the grounds that cannot be
-/// pinned (not there, or not parsed).
-fn pin_grounds(
-    model: &Model,
-    spec: &Spec,
-) -> Result<NonEmptyVec<Pinned<FindingId>>, Vec<EntityId>> {
-    let mut pinned = Vec::new();
-    let mut absent = Vec::new();
-    for ground in spec.grounds().iter() {
-        match model.findings().get(ground).and_then(Evaluated::entity) {
-            Some(finding) => pinned.push(Pinned::new(*ground, *finding.hash())),
-            None => absent.push(ground.entity()),
-        }
-    }
-    match (absent.is_empty(), NonEmptyVec::from_vec(pinned)) {
-        (true, Ok(pinned)) => Ok(pinned),
-        _ => Err(absent),
-    }
-}
-
-fn prepare_cs(model: &Model, target: &Ref) -> Result<Checked, AppError> {
-    let id = model.resolve_as(target, EntityKind::Spec)?;
-    let ev = model
-        .specs()
-        .get(&SpecId::new(id))
-        .ok_or(AppError::TargetFileMissing { id })?;
-    ensure_valid(id, ev.state().approval())?;
-    let spec = ev.entity().ok_or(AppError::TargetUnparsed { id })?;
-    let mut violations = check_cs(spec, ev.state(), model.findings());
-    let pinned = pin_grounds(model, spec);
-    if let Err(absent) = &pinned {
-        // An attestation names every ground at its hash. A ground that cannot be
-        // pinned is a violation, never a ground left out.
-        for upstream in absent {
-            let known = violations.iter().any(
-                |v| matches!(v, CheckViolation::Upstream { upstream: u, .. } if u == upstream),
-            );
-            if !known {
-                violations.push(CheckViolation::Upstream {
-                    upstream: *upstream,
-                    problem: UpstreamProblem::Missing,
-                });
-            }
-        }
-    }
-    let attestation = match pinned {
-        Ok(grounds) if violations.is_empty() => Some(Attestation::Cs {
-            spec: Pinned::new(spec.id(), *spec.contract_hash()),
-            hyp: *spec.hyp_hash(),
-            grounds,
+fn prepare_cs(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
+    let gate = Gate::Cs;
+    let id = model.resolve_as(target, gate.target_kind())?;
+    let Some(spec) = model.specs().get(&SpecId::new(id)) else {
+        return without_evaluation(model, gate, id);
+    };
+    let states = model.states();
+    Ok(Prepared {
+        gate,
+        target: id,
+        checked: cs::check(CsInput {
+            spec,
+            grounds: model.findings().iter().map(|(id, ev)| (*id, ev)).collect(),
+            states: &states,
         }),
-        _ => None,
-    };
-    Ok(Checked {
-        gate: Gate::Cs,
-        target: id,
-        violations,
-        attestation,
     })
 }
 
-fn prepare_ci(model: &Model, target: &Ref) -> Result<Checked, AppError> {
-    let id = model.resolve_as(target, EntityKind::Design)?;
-    let ev = model
-        .designs()
-        .get(&DesignId::new(id))
-        .ok_or(AppError::TargetFileMissing { id })?;
-    ensure_valid(id, ev.state().approval())?;
-    let design = ev.entity().ok_or(AppError::TargetUnparsed { id })?;
-    let violations = check_ci(design, ev.state(), model.specs());
-    let attestation = if violations.is_empty() {
-        model
-            .specs()
-            .get(&design.spec())
-            .and_then(|ev| ev.entity())
-            .map(|spec| Attestation::Ci {
-                design: Pinned::new(design.id(), *design.design_hash()),
-                spec: Pinned::new(spec.id(), *spec.contract_hash()),
-            })
-    } else {
-        None
+fn prepare_ci(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
+    let gate = Gate::Ci;
+    let id = model.resolve_as(target, gate.target_kind())?;
+    let Some(design) = model.designs().get(&DesignId::new(id)) else {
+        return without_evaluation(model, gate, id);
     };
-    Ok(Checked {
-        gate: Gate::Ci,
+    let states = model.states();
+    Ok(Prepared {
+        gate,
         target: id,
-        violations,
-        attestation,
+        checked: ci::check(CiInput {
+            design,
+            specs: model.specs().iter().map(|(id, ev)| (*id, ev)).collect(),
+            states: &states,
+        }),
     })
 }
 
-/// The CS approval that fixed the hypotheses of the Spec: one that fixed the
-/// current hash if there is one, else any (so the check can say the hypotheses
-/// changed). The smallest event identifier decides among equals.
-fn cs_approval_for(model: &Model, spec: &Spec) -> Option<EventId> {
-    let subject = model.canonical(spec.id().entity());
-    let cs: Vec<(EventId, bool)> = model
-        .ledger()
-        .active()
-        .filter(|r| r.subject() == subject)
-        .filter_map(|r| match r.attestation() {
-            Attestation::Cs { hyp, .. } => Some((r.event(), hyp == spec.hyp_hash())),
-            _ => None,
-        })
-        .collect();
-    cs.iter()
-        .filter(|(_, fixed_current)| *fixed_current)
-        .map(|(e, _)| *e)
-        .min()
-        .or_else(|| cs.iter().map(|(e, _)| *e).min())
-}
-
-fn prepare_cm(model: &Model, target: &Ref, input: &CmInput) -> Result<Checked, AppError> {
-    let id = model.resolve_as(target, EntityKind::Spec)?;
-    let ev = model
-        .specs()
-        .get(&SpecId::new(id))
-        .ok_or(AppError::TargetFileMissing { id })?;
-    let spec = ev.entity().ok_or(AppError::TargetUnparsed { id })?;
+fn prepare_cm(model: &Model, target: &Ref, input: &CmInput) -> Result<Prepared, AppError> {
+    let gate = Gate::Cm;
+    let id = model.resolve_as(target, gate.target_kind())?;
+    let Some(spec) = model.specs().get(&SpecId::new(id)) else {
+        return without_evaluation(model, gate, id);
+    };
     let result = match input {
         CmInput::Pass => CmResult::Pass,
         CmInput::FailWiring { item_hint } => CmResult::FailWiring {
             item_hint: item_hint.clone(),
         },
-        CmInput::FailHyp { finding } => {
-            let fid = model.resolve_as(finding, EntityKind::Finding)?;
-            let measured = model
-                .findings()
-                .get(&FindingId::new(fid))
-                .and_then(|ev| ev.entity())
-                .is_some_and(|f| matches!(f.source(), FindingSource::MeasuredData { .. }));
-            if !measured {
-                return Err(AppError::CmFindingNotMeasured { finding: fid });
-            }
-            CmResult::FailHyp {
-                finding: FindingId::new(fid),
-            }
-        }
+        CmInput::FailHyp { finding } => CmResult::FailHyp {
+            finding: FindingId::new(model.resolve_as(finding, Gate::Cr.target_kind())?),
+        },
     };
-    let (violations, attestation) = match cs_approval_for(model, spec) {
-        None => (vec![CheckViolation::CsApprovalNotFound], None),
-        Some(cs) => {
-            let violations = check_cm(spec, &cs, model.ledger());
-            let attestation = violations.is_empty().then(|| Attestation::Cm {
-                spec: Pinned::new(spec.id(), *spec.hyp_hash()),
-                cs,
-                result,
-            });
-            (violations, attestation)
-        }
+    let hyp_finding = match &result {
+        CmResult::FailHyp { finding } => model.findings().get(finding),
+        CmResult::Pass | CmResult::FailWiring { .. } => None,
     };
-    Ok(Checked {
-        gate: Gate::Cm,
+    Ok(Prepared {
+        gate,
         target: id,
-        violations,
-        attestation,
+        checked: cm::check(gate::CmInput {
+            spec,
+            ledger: model.ledger(),
+            result,
+            hyp_finding,
+        }),
     })
 }
 
@@ -331,13 +243,12 @@ impl<P: Ports> Workspace<P> {
         model: &Model,
         target: &ItemRef,
         revision: Option<&RawRevision>,
-    ) -> Result<Checked, AppError> {
+    ) -> Result<Prepared, AppError> {
         let item_id = model.resolve_item(target)?;
         let id = item_id.entity();
         let item = model.item(item_id).ok_or(AppError::ItemNotFound {
             item: target.clone(),
         })?;
-        ensure_valid(id, item.evaluation().state().approval())?;
         let revision = match revision {
             None => self
                 .ports
@@ -364,34 +275,23 @@ impl<P: Ports> Workspace<P> {
             .run(&revision, self.config.test().command())
             .await
             .map_err(AppError::port(PortName::TestRun))?;
-        let key = item.key();
-        let violations = check_ca(
-            key,
-            item.item(),
-            model.designs(),
-            model.specs(),
-            &impl_view,
-            tests,
-        );
-        let attestation = if violations.is_empty() {
-            model
-                .designs()
-                .get(&key.design)
-                .and_then(|ev| ev.entity())
-                .map(|design| Attestation::Ca {
-                    item: Pinned::new(key.id, *item.hash()),
-                    design: Pinned::new(design.id(), *design.design_hash()),
-                    revision: Revision::Commit(revision),
-                    tests,
-                })
-        } else {
-            None
-        };
-        Ok(Checked {
+        let states = model.states();
+        let designs: BTreeMap<_, _> = model.designs().iter().map(|(id, ev)| (*id, ev)).collect();
+        let specs: BTreeMap<_, _> = model.specs().iter().map(|(id, ev)| (*id, ev)).collect();
+        Ok(Prepared {
             gate: Gate::Ca,
             target: id,
-            violations,
-            attestation,
+            checked: ca::check(CaInput {
+                key: item.key(),
+                item: item.item(),
+                evaluation: item.evaluation(),
+                designs,
+                specs,
+                states: &states,
+                impl_view: &impl_view,
+                revision,
+                tests,
+            }),
         })
     }
 
@@ -399,33 +299,27 @@ impl<P: Ports> Workspace<P> {
     async fn approve_checked(
         &self,
         model: &Model,
-        checked: Checked,
+        prepared: Prepared,
         by: Option<Actor>,
     ) -> Result<Approved, AppError> {
         let by = by
             .or_else(|| self.config.user().cloned())
             .ok_or(AppError::NoActor)?;
-        let mut draft = self.draft().await?;
-        draft.require(checked.gate, checked.violations);
-        let Some(attestation) = checked.attestation else {
-            // No attestation means the check found something; the gate says what.
-            self.gate(model, &draft).await?;
-            return Err(AppError::CheckFailed {
-                gate: checked.gate,
-                violations: Vec::new(),
-            });
+        let passed: Passed = match prepared.checked {
+            Ok(passed) => passed,
+            Err(violations) => return Err(check_failed(prepared.gate, violations)),
         };
-        let store = model.home(checked.target).ok_or(AppError::NotFound {
-            reference: Ref::Local(crate::domain::reference::LocalRef::Id(checked.target)),
+        let store = model.home(prepared.target).ok_or(AppError::NotFound {
+            reference: Ref::Local(crate::domain::reference::LocalRef::Id(prepared.target)),
         })?;
-        let event = draft.push(
-            model,
-            store,
-            checked.target,
-            EventBody::Approved { by, attestation },
-        )?;
+        let mut draft = self.draft().await?;
+        let event = draft.push_approval(model, store, &passed, by)?;
         let committed = self.commit(model, draft).await?;
-        Ok(Approved { event, committed })
+        Ok(Approved {
+            event,
+            attestation: passed.attestation().clone(),
+            committed,
+        })
     }
 
     /// CR, machine layer.
@@ -441,8 +335,8 @@ impl<P: Ports> Workspace<P> {
         by: Option<Actor>,
     ) -> Result<Approved, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        let checked = prepare_cr(&model, finding)?;
-        self.approve_checked(&model, checked, by).await
+        let prepared = prepare_cr(&model, finding)?;
+        self.approve_checked(&model, prepared, by).await
     }
 
     /// CS, machine layer.
@@ -458,8 +352,8 @@ impl<P: Ports> Workspace<P> {
         by: Option<Actor>,
     ) -> Result<Approved, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        let checked = prepare_cs(&model, spec)?;
-        self.approve_checked(&model, checked, by).await
+        let prepared = prepare_cs(&model, spec)?;
+        self.approve_checked(&model, prepared, by).await
     }
 
     /// CI, machine layer.
@@ -475,8 +369,8 @@ impl<P: Ports> Workspace<P> {
         by: Option<Actor>,
     ) -> Result<Approved, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        let checked = prepare_ci(&model, design)?;
-        self.approve_checked(&model, checked, by).await
+        let prepared = prepare_ci(&model, design)?;
+        self.approve_checked(&model, prepared, by).await
     }
 
     /// CA, machine layer: the pins in both directions and the tests, at the
@@ -509,8 +403,8 @@ impl<P: Ports> Workspace<P> {
             return Err(AppError::DirtyWorktree);
         }
         let model = Model::load(&self.ports, &self.config).await?;
-        let checked = self.prepare_ca(&model, item, revision).await?;
-        self.approve_checked(&model, checked, by).await
+        let prepared = self.prepare_ca(&model, item, revision).await?;
+        self.approve_checked(&model, prepared, by).await
     }
 
     /// CM: record what a measurement showed, against the hypotheses the CS
@@ -522,8 +416,8 @@ impl<P: Ports> Workspace<P> {
         by: Option<Actor>,
     ) -> Result<Approved, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        let checked = prepare_cm(&model, spec, result)?;
-        self.approve_checked(&model, checked, by).await
+        let prepared = prepare_cm(&model, spec, result)?;
+        self.approve_checked(&model, prepared, by).await
     }
 
     /// Withdraw an approval, with the reason. The approval stays in the log; the
@@ -555,12 +449,19 @@ impl<P: Ports> Workspace<P> {
             &model,
             store,
             record.subject(),
-            EventBody::Revoked {
+            RecordBody::Revoked {
                 revokes: approval,
                 reason,
                 by,
             },
         )?;
         self.commit(&model, draft).await
+    }
+}
+
+fn check_failed(gate: Gate, violations: Violations) -> AppError {
+    AppError::CheckFailed {
+        gate,
+        violations: violations.into_vec(),
     }
 }

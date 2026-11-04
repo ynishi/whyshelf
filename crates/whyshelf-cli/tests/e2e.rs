@@ -84,7 +84,11 @@ async fn from_init_to_an_approved_item_and_a_status() {
         .run(&["check", "cr", "finding/login-feels-slow", "--approve"])
         .await
         .ok();
-    assert!(approved.stdout.contains("CR at"), "{}", approved.stdout);
+    // A CR records no revision, so the line names the gate and nothing about where
+    // the working tree is.
+    assert!(approved.stdout.contains("recorded"), "{}", approved.stdout);
+    assert!(approved.stdout.contains("CR"), "{}", approved.stdout);
+    assert!(!approved.stdout.contains("CR at"), "{}", approved.stdout);
 
     // CS: a template is not a Spec yet, so the gate refuses it; filled in, it passes.
     repo.run(&[
@@ -100,7 +104,9 @@ async fn from_init_to_an_approved_item_and_a_status() {
         .run(&["check", "cs", "spec/session-reuse"])
         .await
         .failed();
-    assert!(refused.stderr.contains("invalid"), "{}", refused.stderr);
+    // An Invalid target is a violation like the others: on standard output, with
+    // the exit status of a refused gate.
+    assert!(refused.stdout.contains("invalid"), "{}", refused.stdout);
     repo.write("docs/spec/session-reuse.md", SPEC).await;
     repo.run(&["check", "cs", "spec/session-reuse"]).await.ok();
     repo.run(&["check", "cs", "spec/session-reuse", "--approve"])
@@ -201,7 +207,8 @@ async fn from_init_to_an_approved_item_and_a_status() {
         .run(&["check", "cm", "spec/session-reuse", "pass"])
         .await
         .ok();
-    assert!(cm.stdout.contains("CM at"), "{}", cm.stdout);
+    assert!(cm.stdout.contains("CM"), "{}", cm.stdout);
+    assert!(!cm.stdout.contains("CM at"), "{}", cm.stdout);
     let wiring = repo
         .run(&["check", "cm", "spec/session-reuse", "fail-wiring"])
         .await

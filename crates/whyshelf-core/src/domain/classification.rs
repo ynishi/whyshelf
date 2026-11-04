@@ -43,6 +43,25 @@
 //! (for example `tag` or `mv`) lists every tip of the stream among its heads, so it
 //! is a descendant of all the conflicting writers and the conflict is gone.
 //!
+//! # What a conflict does
+//!
+//! A conflict is reported and never resolved by choosing a side: no reader takes the
+//! smallest value, so every reader sees the same thing.
+//!
+//! | value in conflict | the entity | shown as |
+//! |---|---|---|
+//! | kind | not made into an entity of either kind; held as a [`ConflictedDoc`], Invalid, its file unread | a row with the kinds in play; the entities that stand on it are Blocked |
+//! | path | likewise a [`ConflictedDoc`]: which file to read is not known | the same, and the paths in the issue list |
+//! | alias | the alias is not used to find it | an issue |
+//! | owner | the entity has no owner for the evaluation | an issue |
+//! | version | the recorded text is not known, so the entity is not "changed since ingest" | an issue |
+//!
+//! `publish` and `purge` need values they can rely on and are refused while one of
+//! the kind, the path or the version is in conflict. What settles a conflict is a
+//! write that sets that value again (`reclassify` for the kind, the alias or the
+//! owner; `mv` for the path): it lists every tip among its heads, so it is a
+//! descendant of all the writers in conflict.
+//!
 //! **Roots from a publication.** A `Published` event carrying a snapshot is a
 //! writer of every value and a mark of every tag in its snapshot. Folding the repo
 //! store alone therefore gives the classification the private store had.
@@ -50,15 +69,17 @@
 //! **Absent ancestors.** A head that is not among the events is ignored.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use super::actor::Actor;
 use super::event::{
-    ClassChange, DocKind, EntityKind, Event, EventBody, EventGraph, EventId, Publication,
-    Registration, Version, VersionKey,
+    ClassChange, DocKind, Event, EventBody, EventGraph, EventId, Publication, Registration,
+    Version, VersionKey,
 };
 use super::id::{Alias, DesignId, EntityId, ItemId, ItemNumber};
 use super::location::RelPath;
-use super::state::InvalidReason;
+use super::nonempty::NonEmptyVec;
+use super::state::{Approval, Completeness, EntityState, InvalidReason, Upstream};
 use super::tag::{Tag, TagChange};
 
 /// The value of a field after folding, which is either agreed or in conflict.
@@ -80,8 +101,50 @@ impl<T: Ord> Merged<T> {
     }
 
     /// Whether the tips disagree.
-    pub fn is_conflict(&self) -> bool {
+    pub(crate) fn is_conflict(&self) -> bool {
         matches!(self, Self::Conflict(_))
+    }
+}
+
+/// What the kind of a document is after folding: one kind, or the several that
+/// two branches wrote.
+///
+/// The kind decides which map an entity is evaluated in and which file format its
+/// file is read as. With two kinds there is no such map, so a document in conflict
+/// is evaluated as a [`ConflictedDoc`] and is never made into an entity of either
+/// kind: no guess, and no choice that depends on who reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KindState {
+    /// One kind among the tips.
+    Known(DocKind),
+    /// Two or more kinds among the tips.
+    Conflict(BTreeSet<DocKind>),
+}
+
+impl KindState {
+    /// The kind, when there is only one.
+    pub fn known(&self) -> Option<DocKind> {
+        match self {
+            Self::Known(kind) => Some(*kind),
+            Self::Conflict(_) => None,
+        }
+    }
+
+    /// The kinds in play: the one, or all those in conflict.
+    pub fn kinds(&self) -> BTreeSet<DocKind> {
+        match self {
+            Self::Known(kind) => BTreeSet::from([*kind]),
+            Self::Conflict(kinds) => kinds.clone(),
+        }
+    }
+}
+
+impl From<Merged<DocKind>> for KindState {
+    fn from(merged: Merged<DocKind>) -> Self {
+        match merged {
+            Merged::Agreed(kind) => Self::Known(kind),
+            Merged::Conflict(kinds) => Self::Conflict(kinds),
+        }
     }
 }
 
@@ -89,7 +152,7 @@ impl<T: Ord> Merged<T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocClass {
     id: EntityId,
-    kind: Merged<DocKind>,
+    kind: KindState,
     path: Merged<RelPath>,
     alias: Merged<Option<Alias>>,
     owner: Merged<Option<Actor>>,
@@ -106,7 +169,7 @@ impl DocClass {
     }
 
     /// The kind.
-    pub fn kind(&self) -> &Merged<DocKind> {
+    pub fn kind(&self) -> &KindState {
         &self.kind
     }
 
@@ -143,6 +206,23 @@ impl DocClass {
     /// The identifiers folded into this one.
     pub fn duplicates(&self) -> &BTreeSet<EntityId> {
         &self.duplicates
+    }
+
+    /// The first value in conflict, if any: the kind, the path, the version, the
+    /// owner, the alias, in that order.
+    ///
+    /// An operation that relies on the classification (publishing copies it, purging
+    /// reads the versions) is refused while this is `Some`.
+    pub fn conflict(&self) -> Option<ConflictField> {
+        [
+            (self.kind.known().is_none(), ConflictField::Kind),
+            (self.path.is_conflict(), ConflictField::Path),
+            (self.version.is_conflict(), ConflictField::Version),
+            (self.owner.is_conflict(), ConflictField::Owner),
+            (self.alias.is_conflict(), ConflictField::Alias),
+        ]
+        .into_iter()
+        .find_map(|(in_conflict, field)| in_conflict.then_some(field))
     }
 }
 
@@ -192,6 +272,84 @@ pub enum ConflictField {
     Owner,
     /// The alias.
     Alias,
+    /// The recorded version of the text.
+    Version,
+    /// The path.
+    Path,
+}
+
+impl fmt::Display for ConflictField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Kind => "kind",
+            Self::Owner => "owner",
+            Self::Alias => "alias",
+            Self::Version => "version",
+            Self::Path => "path",
+        })
+    }
+}
+
+/// A document whose kind or path two branches wrote differently.
+///
+/// It is held beside the typed maps of Findings, Specs and Designs, never in one of
+/// them, because there is no kind (or no path to read) to make an entity of. It
+/// has a state of its own, Invalid for the conflict, and an entity that stands on
+/// it reads that state like any other upstream's: it is Blocked, and a gate
+/// stops on it. Its file is not read: which file, or which format, is not known.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConflictedDoc {
+    id: EntityId,
+    field: ConflictField,
+    kinds: BTreeSet<DocKind>,
+    state: EntityState,
+}
+
+impl ConflictedDoc {
+    /// The document, if its kind or its path is in conflict (the kind first).
+    pub fn of(class: &DocClass) -> Option<Self> {
+        let (field, kinds) = match (&class.kind, &class.path) {
+            (KindState::Conflict(kinds), _) => (ConflictField::Kind, kinds.clone()),
+            (KindState::Known(kind), Merged::Conflict(_)) => {
+                (ConflictField::Path, BTreeSet::from([*kind]))
+            }
+            (KindState::Known(_), Merged::Agreed(_)) => return None,
+        };
+        Some(Self {
+            id: class.id,
+            field,
+            kinds,
+            state: EntityState::new(
+                Approval::Invalid(NonEmptyVec::new(
+                    InvalidReason::ClassificationConflict { field },
+                    Vec::new(),
+                )),
+                Upstream::Ok,
+                Completeness::Complete,
+            ),
+        })
+    }
+
+    /// The identifier.
+    pub fn id(&self) -> EntityId {
+        self.id
+    }
+
+    /// The value in conflict.
+    pub fn field(&self) -> ConflictField {
+        self.field
+    }
+
+    /// The kinds it might be: all those written for a kind conflict, the one kind
+    /// for a path conflict.
+    pub fn kinds(&self) -> &BTreeSet<DocKind> {
+        &self.kinds
+    }
+
+    /// The state: Invalid, with the conflict as the reason.
+    pub fn state(&self) -> &EntityState {
+        &self.state
+    }
 }
 
 /// A thing the status should point at.
@@ -314,16 +472,6 @@ impl ClassificationView {
                 _ => None,
             })
             .collect()
-    }
-
-    /// The kind of entity an identifier names in this view.
-    pub fn kind_of(&self, id: EntityId) -> Option<EntityKind> {
-        let id = self.canonical(id);
-        if self.items.contains_key(&id) {
-            return Some(EntityKind::Item);
-        }
-        let doc = self.docs.get(&id)?;
-        doc.kind.agreed().map(|k| k.entity_kind())
     }
 }
 
@@ -461,6 +609,7 @@ pub fn fold(events: &[Event]) -> ClassificationView {
                 .push(ClassificationIssue::UnregisteredTarget { entity: id });
             continue;
         };
+        let kind = KindState::from(kind);
         let tags = w
             .marks
             .iter()
@@ -567,10 +716,16 @@ fn find_issues(docs: &BTreeMap<EntityId, DocClass>) -> Vec<ClassificationIssue> 
     let mut by_path: BTreeMap<&RelPath, BTreeSet<EntityId>> = BTreeMap::new();
     let mut by_alias: BTreeMap<&Alias, BTreeSet<EntityId>> = BTreeMap::new();
     for (id, doc) in docs {
-        if doc.kind.is_conflict() {
+        if doc.kind.known().is_none() {
             issues.push(ClassificationIssue::Conflict {
                 entity: *id,
                 field: ConflictField::Kind,
+            });
+        }
+        if doc.version.is_conflict() {
+            issues.push(ClassificationIssue::Conflict {
+                entity: *id,
+                field: ConflictField::Version,
             });
         }
         if doc.owner.is_conflict() {
@@ -892,7 +1047,58 @@ mod tests {
             entity: eid(1),
             field: ConflictField::Alias
         }));
-        assert!(view.doc(eid(1)).unwrap().kind().is_conflict());
+        assert!(view.doc(eid(1)).unwrap().kind().known().is_none());
+    }
+
+    #[test]
+    fn a_kind_in_conflict_is_a_conflicted_doc_invalid_for_the_kind_and_of_no_kind() {
+        let r = root(1);
+        let k1 = reclassify(1, &[r.id()], vec![ClassChange::SetKind(DocKind::Finding)]);
+        let k2 = reclassify(1, &[r.id()], vec![ClassChange::SetKind(DocKind::Design)]);
+        let view = fold(&[r, k1, k2]);
+        let class = view.doc(eid(1)).unwrap();
+        assert_eq!(
+            class.kind(),
+            &KindState::Conflict(BTreeSet::from([DocKind::Finding, DocKind::Design]))
+        );
+        let conflicted = ConflictedDoc::of(class).expect("a conflict");
+        assert_eq!(conflicted.field(), ConflictField::Kind);
+        assert_eq!(
+            conflicted.kinds(),
+            &BTreeSet::from([DocKind::Finding, DocKind::Design]),
+            "neither kind is chosen"
+        );
+        assert!(matches!(
+            conflicted.state().approval(),
+            Approval::Invalid(reasons) if reasons.first()
+                == &InvalidReason::ClassificationConflict { field: ConflictField::Kind }
+        ));
+        assert!(matches!(conflicted.state().upstream(), Upstream::Ok));
+    }
+
+    #[test]
+    fn a_path_in_conflict_is_a_conflicted_doc_of_the_one_kind_and_agreement_is_not() {
+        let r = root(1);
+        let m1 = moved(1, &[r.id()], P, "docs/spec/b.md");
+        let m2 = moved(1, &[r.id()], P, "docs/spec/c.md");
+        let view = fold(&[r.clone(), m1, m2]);
+        let conflicted = ConflictedDoc::of(view.doc(eid(1)).unwrap()).expect("a conflict");
+        assert_eq!(conflicted.field(), ConflictField::Path);
+        assert_eq!(conflicted.kinds(), &BTreeSet::from([DocKind::Spec]));
+        assert_eq!(ConflictedDoc::of(fold(&[r]).doc(eid(1)).unwrap()), None);
+    }
+
+    #[test]
+    fn a_version_in_conflict_is_an_issue_and_not_a_conflicted_doc() {
+        let r = root(1);
+        let v1 = revised(1, &[r.id()], 1, 2);
+        let v2 = revised(1, &[r.id()], 1, 3);
+        let view = fold(&[r, v1, v2]);
+        assert!(view.issues().contains(&ClassificationIssue::Conflict {
+            entity: eid(1),
+            field: ConflictField::Version
+        }));
+        assert_eq!(ConflictedDoc::of(view.doc(eid(1)).unwrap()), None);
     }
 
     #[test]
@@ -1087,7 +1293,7 @@ mod tests {
             Some(ItemId::new(eid(5)))
         );
         assert_eq!(view.canonical(eid(7)), eid(5));
-        assert_eq!(view.kind_of(eid(7)), Some(EntityKind::Item));
+        assert!(view.item(eid(7)).is_some());
         assert_eq!(
             view.item(eid(7)).unwrap().duplicates(),
             &BTreeSet::from([eid(7)])
@@ -1111,7 +1317,7 @@ mod tests {
         let p = private.doc(eid(1)).unwrap();
 
         let snapshot = ClassSnapshot::new(
-            p.kind().agreed().copied().unwrap(),
+            p.kind().known().unwrap(),
             p.path().agreed().cloned().unwrap(),
             p.alias().agreed().cloned().unwrap(),
             p.owner().agreed().cloned().unwrap(),
@@ -1166,14 +1372,6 @@ mod tests {
             (b.kind(), b.path(), b.alias(), b.owner(), b.tags()),
             (a.kind(), a.path(), a.alias(), a.owner(), a.tags())
         );
-    }
-
-    #[test]
-    fn kind_of_answers_for_docs_and_nothing_else() {
-        let r = root(1);
-        let view = fold(&[r]);
-        assert_eq!(view.kind_of(eid(1)), Some(EntityKind::Spec));
-        assert_eq!(view.kind_of(eid(2)), None);
     }
 
     #[test]

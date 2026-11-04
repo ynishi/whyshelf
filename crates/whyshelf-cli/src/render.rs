@@ -341,13 +341,16 @@ fn pipe_table(out: &mut String, columns: &[&str], grid: &[Vec<String>]) {
 /// Spell the machine check's finding in a sentence.
 pub fn violation_text(violation: &CheckViolation) -> String {
     match violation {
+        CheckViolation::TargetInvalid { reasons } => {
+            let why: Vec<String> = reasons.iter().map(ToString::to_string).collect();
+            format!("the target is invalid: {}", why.join("; "))
+        }
         CheckViolation::EmptyBody => "the Finding has no body".to_owned(),
         CheckViolation::MeasuredDataNotLabelledMeasured => {
             "a measured_data Finding must be labelled `evidence: measured`".to_owned()
         }
         CheckViolation::Upstream { upstream, problem } => {
             let why = match problem {
-                UpstreamProblem::Missing => "it does not exist",
                 UpstreamProblem::Invalid => "it is invalid",
                 UpstreamProblem::Unresolved => "it cannot be read here",
                 UpstreamProblem::NotApproved => "it is not approved",
@@ -367,6 +370,9 @@ pub fn violation_text(violation: &CheckViolation) -> String {
         }
         CheckViolation::TestsFailed => "the tests did not pass".to_owned(),
         CheckViolation::ItemNotInDesign => "the Design no longer has this item".to_owned(),
+        CheckViolation::MeasurementNotMeasuredData { finding } => {
+            format!("{finding} is not a measured_data Finding")
+        }
         CheckViolation::CsApprovalNotFound => {
             "no CS approval fixed the hypotheses of this Spec".to_owned()
         }
@@ -1002,16 +1008,18 @@ pub fn document(outcome: &Outcome, fields: &std::collections::BTreeSet<Field>) -
         Outcome::Approved {
             gate,
             event,
-            context,
+            attestation,
         } => {
-            let at = match context.label() {
-                Some(label) => format!("{} ({label})", context.revision()),
-                None => context.revision().to_string(),
+            // What was recorded, not where the working tree is now: only a CA
+            // records a revision, and it may be an older one than the current.
+            let recorded = match attestation.revision() {
+                Some(revision) => format!("{} at {}", gate.name(), revision_text(revision)),
+                None => gate.name().to_owned(),
             };
             Doc::default().fields(
                 "approved",
                 vec![
-                    ("recorded", json!(format!("{} at {at}", gate.name()))),
+                    ("recorded", json!(recorded)),
                     ("event", json!(event.to_string())),
                 ],
             )
@@ -1084,6 +1092,62 @@ mod tests {
             lines[0].contains(&format!("through {}", id(3))),
             "{lines:?}"
         );
+    }
+
+    /// A CA approval can name an older revision. What is shown is the revision it
+    /// recorded, whatever the working tree is at now; a gate with no revision shows
+    /// none.
+    #[test]
+    fn an_approval_shows_the_revision_it_recorded() {
+        use whyshelf_core::domain::approval::{Attestation, Gate, Pinned, TestOutcome};
+        use whyshelf_core::domain::event::EventId;
+        use whyshelf_core::domain::hash::ContentHash;
+        use whyshelf_core::domain::id::{DesignId, ItemId};
+        use whyshelf_core::domain::revision::RevisionId;
+
+        let old = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+        let hash = ContentHash::raw(b"x");
+        let ca = Attestation::Ca {
+            item: Pinned::new(ItemId::new(id(1)), hash),
+            design: Pinned::new(DesignId::new(id(2)), hash),
+            revision: Revision::Commit(RevisionId::from_validated(old.to_owned()).unwrap()),
+            tests: TestOutcome::Passed,
+        };
+        let event: EventId = format!("sha256:{}", "0".repeat(64)).parse().unwrap();
+        let shown = |gate, attestation| {
+            let outcome = Outcome::Approved {
+                gate,
+                event,
+                attestation,
+            };
+            document(&outcome, &BTreeSet::new())
+                .render(Format::Json)
+                .expect("a document")
+        };
+        let ca_text = shown(Gate::Ca, ca);
+        assert!(ca_text.contains(&format!("CA at {old}")), "{ca_text}");
+        let cr = Attestation::Cr {
+            finding: Pinned::new(
+                whyshelf_core::domain::id::FindingId::new(id(3)),
+                ContentHash::raw(b"y"),
+            ),
+        };
+        let cr_text = shown(Gate::Cr, cr);
+        assert!(
+            cr_text.contains("CR") && !cr_text.contains(" at "),
+            "{cr_text}"
+        );
+    }
+
+    #[test]
+    fn an_invalid_target_is_told_with_its_reasons() {
+        use whyshelf_core::domain::state::InvalidReason;
+
+        let text = violation_text(&CheckViolation::TargetInvalid {
+            reasons: NonEmptyVec::new(InvalidReason::DanglingRef { upstream: id(1) }, vec![]),
+        });
+        assert!(text.starts_with("the target is invalid: "), "{text}");
+        assert!(text.contains(&id(1).to_string()), "{text}");
     }
 
     #[test]

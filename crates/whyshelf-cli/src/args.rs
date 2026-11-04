@@ -548,6 +548,23 @@ mod tests {
         ));
     }
 
+    /// The command line keeps its own input shape for a measurement (a failure
+    /// carries its flag, as a subcommand), but the words are the domain's.
+    #[test]
+    fn the_subcommands_of_a_measurement_are_the_domains_names() {
+        use std::collections::BTreeSet;
+
+        use whyshelf_core::domain::approval::CmResultKind;
+
+        let command = <CmResult as Subcommand>::augment_subcommands(clap::Command::new("cm"));
+        let offered: BTreeSet<&str> = command
+            .get_subcommands()
+            .map(clap::Command::get_name)
+            .collect();
+        let domain: BTreeSet<&str> = CmResultKind::ALL.iter().map(|kind| kind.name()).collect();
+        assert_eq!(offered, domain);
+    }
+
     #[test]
     fn the_format_is_a_choice() {
         assert_eq!(parse(&["status", "--format", "json"]).format, Format::Json);

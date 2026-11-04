@@ -32,6 +32,7 @@ use super::nonempty::NonBlank;
 use super::reference::LocalRef;
 use super::state::{Approval, EntityState, Upstream};
 use super::tag::{Tag, query_tag};
+use super::vocabulary::closed_vocabulary;
 
 /// One value of the state axes, as `state:` names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -54,32 +55,55 @@ pub enum StateFilter {
     Unresolved,
 }
 
+closed_vocabulary!(StateFilter, "state", {
+    Invalid => "invalid",
+    Draft => "draft",
+    Approved => "approved",
+    Modified => "modified",
+    Ok => "ok",
+    Stale => "stale",
+    Blocked => "blocked",
+    Unresolved => "unresolved",
+});
+
 impl StateFilter {
-    fn parse(text: &str) -> Option<Self> {
-        match text.to_ascii_lowercase().as_str() {
-            "invalid" => Some(Self::Invalid),
-            "draft" => Some(Self::Draft),
-            "approved" => Some(Self::Approved),
-            "modified" => Some(Self::Modified),
-            "ok" => Some(Self::Ok),
-            "stale" => Some(Self::Stale),
-            "blocked" => Some(Self::Blocked),
-            "unresolved" => Some(Self::Unresolved),
-            _ => None,
+    /// The value an approval axis stands at. The one table of these words, for the
+    /// query and for every adapter that prints a state.
+    pub fn approval(approval: &Approval) -> Self {
+        match approval {
+            Approval::Invalid(_) => Self::Invalid,
+            Approval::Draft => Self::Draft,
+            Approval::Approved => Self::Approved,
+            Approval::Modified { .. } => Self::Modified,
+        }
+    }
+
+    /// The value an upstream axis stands at.
+    pub fn upstream(upstream: &Upstream) -> Self {
+        match upstream {
+            Upstream::Ok => Self::Ok,
+            Upstream::Stale(_) => Self::Stale,
+            Upstream::Blocked(_) => Self::Blocked,
         }
     }
 
     /// Whether a state has this value on the axis the value belongs to.
     pub fn matches(self, state: &EntityState) -> bool {
         match self {
-            Self::Invalid => matches!(state.approval(), Approval::Invalid(_)),
-            Self::Draft => matches!(state.approval(), Approval::Draft),
-            Self::Approved => matches!(state.approval(), Approval::Approved),
-            Self::Modified => matches!(state.approval(), Approval::Modified { .. }),
-            Self::Ok => matches!(state.upstream(), Upstream::Ok),
-            Self::Stale => matches!(state.upstream(), Upstream::Stale(_)),
-            Self::Blocked => matches!(state.upstream(), Upstream::Blocked(_)),
+            Self::Invalid | Self::Draft | Self::Approved | Self::Modified => {
+                Self::approval(state.approval()) == self
+            }
+            Self::Ok | Self::Stale | Self::Blocked => Self::upstream(state.upstream()) == self,
             Self::Unresolved => state.completeness().is_partial(),
+        }
+    }
+
+    /// The names, for a message: `invalid, draft, ... or unresolved`.
+    pub fn words() -> String {
+        let names: Vec<&str> = Self::ALL.iter().map(|state| state.name()).collect();
+        match names.split_last() {
+            Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+            None => String::new(),
         }
     }
 }
@@ -220,9 +244,11 @@ fn keyed_term(key: &str, value: &str) -> Result<Term, QueryError> {
                 found: value.to_owned(),
             }),
         },
-        "state" => StateFilter::parse(value)
+        "state" => value
+            .to_ascii_lowercase()
+            .parse::<StateFilter>()
             .map(Term::State)
-            .ok_or_else(|| QueryError::BadState {
+            .map_err(|_| QueryError::BadState {
                 found: value.to_owned(),
             }),
         "owner" => Actor::new(value)
@@ -370,6 +396,22 @@ mod tests {
         ] {
             assert_eq!(parse(&format!("kind:{name}")), vec![Term::Kind(kind)]);
         }
+    }
+
+    #[test]
+    fn the_state_words_are_one_closed_set_that_reads_back() {
+        for state in StateFilter::ALL {
+            assert_eq!(state.name().parse::<StateFilter>(), Ok(state));
+        }
+        assert_eq!(StateFilter::ALL.len(), 8);
+        assert_eq!(
+            StateFilter::words(),
+            "invalid, draft, approved, modified, ok, stale, blocked or unresolved"
+        );
+        assert!(
+            "Draft".parse::<StateFilter>().is_err(),
+            "the query lowers the case"
+        );
     }
 
     #[test]

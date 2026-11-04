@@ -12,9 +12,10 @@
 //! `<spec_dir>/cache-timeout.md`) or, for a Finding without an alias, from the title.
 //! Where the new document lives follows the project's default store; a public file
 //! that stands on a private entity is written with the opaque `private:<id>`, so the
-//! leak lint has nothing to object to.
+//! leak lint has nothing to object to. Which mark a reference carries is the
+//! domain's ([`StoreKind::mark_for`]): this writes what it says.
 
-use crate::domain::event::{DocKind, EntityKind, StoreKind};
+use crate::domain::event::{DocKind, EntityKind, RefMark, StoreKind};
 use crate::domain::finding::FindingType;
 use crate::domain::id::{Alias, EntityId};
 use crate::domain::location::RelPath;
@@ -90,11 +91,17 @@ impl<P: Ports> Workspace<P> {
     /// How the new file names an existing entity: by alias, or by the opaque
     /// identifier when a public file names a private entity.
     fn written_ref(model: &Model, upstream: EntityId, new_store: StoreKind) -> Ref {
-        if new_store == StoreKind::Repo && model.home(upstream) == Some(StoreKind::Private) {
-            return Ref::Private(upstream);
+        let mark = model
+            .home(upstream)
+            .map(|home| new_store.mark_for(home))
+            .unwrap_or(RefMark::Unmarked);
+        match mark {
+            RefMark::Private => Ref::Private(upstream),
+            RefMark::Unmarked => {
+                let alias = model.doc(upstream).and_then(|d| d.alias());
+                Ref::Local(ref_of(upstream, alias))
+            }
         }
-        let alias = model.doc(upstream).and_then(|d| d.alias());
-        ref_of(upstream, alias)
     }
 
     async fn scaffold(

@@ -7,6 +7,13 @@
 //! [`EntityState`] and a chain of [`Cause`]s that says where a Stale or Blocked came
 //! from.
 //!
+//! The state of an upstream is read from [`States`], one map of every entity's state
+//! whatever its kind, and not from the typed map: a document whose kind is in conflict
+//! (see `ConflictedDoc` of the classification) has a state and no typed evaluation,
+//! and the entities that stand on it must read it. The typed maps give what only their
+//! kind has: the entity (for its hash, and for the pin coverage of a Design) and the
+//! causes.
+//!
 //! ```text
 //!   events (ledger of approvals)     files, built into entities
 //!              \                        /
@@ -98,7 +105,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::approval::{ApprovalSet, Attestation, Gate, UpstreamRecord};
+use super::classification::ConflictedDoc;
 use super::design::{Design, WorkItem};
+use super::event::DocKind;
 use super::finding::Finding;
 use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
@@ -108,8 +117,9 @@ use super::pin::PinId;
 use super::revision::RevisionId;
 use super::spec::Spec;
 use super::state::{
-    Approval, BlockReason, Completeness, EntityState, Integration, InvalidReason, ItemProgress,
-    StaleReason, UnparsedReason, UnresolvedReason, Upstream,
+    Approval, ApprovalProblem, BlockReason, Completeness, EntityState, HealthProblem, Integration,
+    InvalidReason, ItemProgress, StaleReason, UnparsedReason, UnresolvedReason, Upstream,
+    UpstreamFacts,
 };
 
 /// A file that could not become an entity.
@@ -195,6 +205,16 @@ impl Cause {
             ..self.clone()
         }
     }
+
+    /// A link made by hand, for the tests of what reads a chain of causes.
+    #[cfg(test)]
+    pub(crate) fn for_test(via: EntityId, through: EntityId) -> Self {
+        Self {
+            via,
+            through,
+            reason: CauseReason::Blocked(BlockReason::UpstreamUnapproved { upstream: via }),
+        }
+    }
 }
 
 /// An entity, or the file that failed to become one.
@@ -237,6 +257,11 @@ impl<T> Evaluated<T> {
             ),
             causes: Vec::new(),
         }
+    }
+
+    /// What was evaluated: the entity, or the file that failed to become one.
+    pub fn subject(&self) -> &Subject<T> {
+        &self.subject
     }
 
     /// The parsed entity, if it parsed.
@@ -366,24 +391,71 @@ impl ItemEvaluation {
     }
 }
 
+/// An upstream as the entity that stands on it looks at it.
+///
+/// Its state is read from the map of every entity's state, whatever the kind, so an
+/// upstream that has no typed evaluation (a document in conflict over its kind) is
+/// read like any other. Its causes and its hash come from the typed evaluation when
+/// there is one; the one without has neither.
 struct UpView<'a> {
     id: EntityId,
-    approval: &'a Approval,
-    upstream: &'a Upstream,
+    state: &'a EntityState,
     causes: &'a [Cause],
     hash: Option<&'a ContentHash>,
 }
 
-impl<'a, T> From<(EntityId, &'a Evaluated<T>, Option<&'a ContentHash>)> for UpView<'a> {
-    fn from((id, ev, hash): (EntityId, &'a Evaluated<T>, Option<&'a ContentHash>)) -> Self {
+impl<'a> UpView<'a> {
+    fn new<T>(
+        id: EntityId,
+        state: &'a EntityState,
+        typed: Option<&'a Evaluated<T>>,
+        hash_of: fn(&T) -> &ContentHash,
+    ) -> Self {
         Self {
             id,
-            approval: ev.state.approval(),
-            upstream: ev.state.upstream(),
-            causes: &ev.causes,
-            hash,
+            state,
+            causes: typed.map_or(&[], Evaluated::causes),
+            hash: typed.and_then(Evaluated::entity).map(hash_of),
         }
     }
+}
+
+/// How a file wrote the upstream identifiers it holds that no state can answer for.
+///
+/// What an entity holds is the identifier alone (the mark it was written with is a
+/// fact about the file, and stays out of every hash), so the evaluator is told the
+/// two facts about how it was written that it could not know: the identifier of a
+/// store this environment cannot read, and the identifier that the document, where
+/// it stands, can see nothing under.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Written {
+    /// Written with a mark that points into a store that cannot be read here.
+    pub unresolved: BTreeSet<EntityId>,
+    /// Written as an identifier that nothing visible from the document holds.
+    pub dangling: BTreeSet<EntityId>,
+}
+
+/// The state of every entity that has one, whatever its kind, keyed by identifier.
+///
+/// This is what an entity reads its upstream's state from. Findings, Specs, Designs
+/// and the documents in conflict all have a place in it; the typed maps of
+/// evaluations keep what only their kind has (the entity, the causes).
+pub type States<'a> = BTreeMap<EntityId, &'a EntityState>;
+
+/// The [`States`] of what has been evaluated so far: the Findings, Specs and Designs,
+/// and the documents in conflict. Items are not in it: nothing stands on an item.
+pub fn states_of<'a>(
+    findings: &'a BTreeMap<FindingId, Evaluated<Finding>>,
+    specs: &'a BTreeMap<SpecId, Evaluated<Spec>>,
+    designs: &'a BTreeMap<DesignId, Evaluated<Design>>,
+    conflicted: impl IntoIterator<Item = &'a ConflictedDoc>,
+) -> States<'a> {
+    let mut states = States::new();
+    states.extend(findings.iter().map(|(id, ev)| (id.entity(), ev.state())));
+    states.extend(specs.iter().map(|(id, ev)| (id.entity(), ev.state())));
+    states.extend(designs.iter().map(|(id, ev)| (id.entity(), ev.state())));
+    states.extend(conflicted.into_iter().map(|doc| (doc.id(), doc.state())));
+    states
 }
 
 struct Basis<'a> {
@@ -514,6 +586,13 @@ fn hash_staleness(
     first_failure.unwrap_or_default()
 }
 
+/// The two axes of an entity from its upstreams.
+///
+/// What an upstream asks of the entity is [`UpstreamFacts`]; this only turns the
+/// facts into reasons. An upstream that has a problem on the approval axis is
+/// reported by it alone (the entity cannot be approved until that is repaired,
+/// whatever the upstream's own health). The completeness fact is not mapped here:
+/// it stays a fact of its own (see [`Gaps`]).
 fn assess(
     basis: Option<Basis<'_>>,
     ups: &[UpView<'_>],
@@ -531,28 +610,26 @@ fn assess(
         }
     }
     for up in ups {
-        let blocked_by_approval = match up.approval {
-            Approval::Invalid(_) => Some(BlockReason::UpstreamInvalid { upstream: up.id }),
-            Approval::Draft => Some(BlockReason::UpstreamUnapproved { upstream: up.id }),
-            Approval::Modified { .. } if !(approved && changed.contains(&up.id)) => {
-                Some(BlockReason::UpstreamUnapproved { upstream: up.id })
-            }
-            Approval::Modified { .. } | Approval::Approved => None,
-        };
-        if let Some(reason) = blocked_by_approval {
+        let facts = UpstreamFacts::of(up.state, approved, changed.contains(&up.id));
+        let upstream = up.id;
+        if let Some(problem) = facts.approval() {
+            let reason = match problem {
+                ApprovalProblem::Invalid => BlockReason::UpstreamInvalid { upstream },
+                ApprovalProblem::NotApproved => BlockReason::UpstreamUnapproved { upstream },
+            };
             health.block(up, reason, true);
             continue;
         }
-        match up.upstream {
-            Upstream::Ok => {}
-            Upstream::Blocked(_) => {
-                health.block(up, BlockReason::UpstreamBlocked { upstream: up.id }, true);
+        match facts.health() {
+            None => {}
+            Some(HealthProblem::Blocked) => {
+                health.block(up, BlockReason::UpstreamBlocked { upstream }, true);
             }
-            Upstream::Stale(_) if approved => {
-                health.stale(up, StaleReason::UpstreamStale { upstream: up.id }, true);
+            Some(HealthProblem::Stale) if approved => {
+                health.stale(up, StaleReason::UpstreamStale { upstream }, true);
             }
-            Upstream::Stale(_) => {
-                health.block(up, BlockReason::UpstreamStale { upstream: up.id }, true);
+            Some(HealthProblem::Stale) => {
+                health.block(up, BlockReason::UpstreamStale { upstream }, true);
             }
         }
     }
@@ -605,7 +682,7 @@ impl Evaluator {
         external: &[InvalidReason],
     ) -> Evaluated<Finding> {
         let approval = own_approval(
-            Gate::Cr,
+            Gate::of_doc(DocKind::Finding),
             f.id().entity(),
             f.hash(),
             ledger,
@@ -620,15 +697,24 @@ impl Evaluator {
 
     /// Evaluate a Spec against its evaluated grounds.
     ///
+    /// The state of each ground is read from `states`, which holds every entity
+    /// whatever its kind, a document in conflict among them; `findings` holds the
+    /// causes and the hash of those that are Findings.
+    ///
     /// `unresolved` are the grounds the Spec wrote with a mark that points into a
-    /// store this environment cannot read. A ground missing from `findings` makes
-    /// the Spec Partial when it is in that set, and Invalid (dangling) when it is
-    /// not.
+    /// store this environment cannot read. `dangling` are those it wrote that the
+    /// document could not see anything under, where it stands (a plain identifier of
+    /// an entity in the private store, written in a public document, is under no
+    /// name it can use). A ground with no state makes the Spec Partial when it is
+    /// in `unresolved`, and a ground in `dangling` or with no state otherwise makes
+    /// it Invalid (dangling): whatever `states` holds under the identifier, the
+    /// document has no right to read.
     pub fn spec(
         s: &Spec,
         findings: &BTreeMap<FindingId, Evaluated<Finding>>,
+        states: &States<'_>,
         ledger: &ApprovalSet,
-        unresolved: &BTreeSet<EntityId>,
+        written: &Written,
         external: &[InvalidReason],
     ) -> Evaluated<Spec> {
         let mut invalid = external.to_vec();
@@ -636,18 +722,19 @@ impl Evaluator {
         let mut ups = Vec::new();
         for ground in s.grounds().iter() {
             let id = ground.entity();
-            match findings.get(ground) {
-                None if unresolved.contains(&id) => gaps.unreadable(id),
-                None => invalid.push(InvalidReason::DanglingRef { upstream: id }),
-                Some(ev) => {
-                    gaps.inherit(id, ev.state());
-                    ups.push(UpView::from((id, ev, ev.entity().map(Finding::hash))));
+            match states.get(&id) {
+                Some(state) if !written.dangling.contains(&id) => {
+                    gaps.inherit(id, state);
+                    ups.push(UpView::new(id, state, findings.get(ground), Finding::hash));
                 }
+                None if written.unresolved.contains(&id) => gaps.unreadable(id),
+                _ => invalid.push(InvalidReason::DanglingRef { upstream: id }),
             }
         }
+        let gate = Gate::of_doc(DocKind::Spec);
         let subject = s.id().entity();
-        let approval = own_approval(Gate::Cs, subject, s.contract_hash(), ledger, invalid);
-        let basis = basis_if_approved(&approval, Gate::Cs, subject, s.contract_hash());
+        let approval = own_approval(gate, subject, s.contract_hash(), ledger, invalid);
+        let basis = basis_if_approved(&approval, gate, subject, s.contract_hash());
         let (upstream, causes) = assess(basis, &ups, ledger);
         Evaluated {
             subject: Subject::Parsed(s.clone()),
@@ -658,44 +745,46 @@ impl Evaluator {
 
     /// Evaluate a Design against its evaluated Spec.
     ///
-    /// `unresolved` holds the Spec when the Design wrote it with a mark that points
-    /// into a store this environment cannot read. A Spec missing from `specs`
-    /// makes the Design Partial when it is in that set, and Invalid (dangling)
-    /// when it is not. When the Spec parsed, its pins are checked against the
+    /// The Spec's state is read from `states` (see [`Evaluator::spec`]), and its
+    /// entity, causes and hash from `specs`. `written` says how the Design wrote the
+    /// Spec when that is not a plain name that resolved: with a mark that points
+    /// into a store this environment cannot read (the Design is then Partial), or
+    /// under an identifier it cannot see anything under (Invalid, dangling), as for
+    /// a Spec's grounds. A Spec with no state otherwise makes the Design Invalid
+    /// (dangling) too. When the Spec parsed, its pins are checked against the
     /// Design's assignment and every mismatch is an Invalid reason.
     pub fn design(
         d: &Design,
         specs: &BTreeMap<SpecId, Evaluated<Spec>>,
+        states: &States<'_>,
         ledger: &ApprovalSet,
-        unresolved: &BTreeSet<EntityId>,
+        written: &Written,
         external: &[InvalidReason],
     ) -> Evaluated<Design> {
         let mut invalid = external.to_vec();
         let mut gaps = Gaps::default();
         let mut ups = Vec::new();
         let spec_id = d.spec().entity();
-        match specs.get(&d.spec()) {
-            None if unresolved.contains(&spec_id) => gaps.unreadable(spec_id),
-            None => invalid.push(InvalidReason::DanglingRef { upstream: spec_id }),
-            Some(ev) => {
-                if let Some(spec) = ev.entity() {
+        let typed = specs.get(&d.spec());
+        match states.get(&spec_id) {
+            Some(state) if !written.dangling.contains(&spec_id) => {
+                if let Some(spec) = typed.and_then(Evaluated::entity) {
                     invalid.extend(
                         d.check_pin_coverage(spec)
                             .into_iter()
                             .map(InvalidReason::PinCoverage),
                     );
                 }
-                gaps.inherit(spec_id, ev.state());
-                ups.push(UpView::from((
-                    spec_id,
-                    ev,
-                    ev.entity().map(Spec::contract_hash),
-                )));
+                gaps.inherit(spec_id, state);
+                ups.push(UpView::new(spec_id, state, typed, Spec::contract_hash));
             }
+            None if written.unresolved.contains(&spec_id) => gaps.unreadable(spec_id),
+            _ => invalid.push(InvalidReason::DanglingRef { upstream: spec_id }),
         }
+        let gate = Gate::of_doc(DocKind::Design);
         let subject = d.id().entity();
-        let approval = own_approval(Gate::Ci, subject, d.design_hash(), ledger, invalid);
-        let basis = basis_if_approved(&approval, Gate::Ci, subject, d.design_hash());
+        let approval = own_approval(gate, subject, d.design_hash(), ledger, invalid);
+        let basis = basis_if_approved(&approval, gate, subject, d.design_hash());
         let (upstream, causes) = assess(basis, &ups, ledger);
         Evaluated {
             subject: Subject::Parsed(d.clone()),
@@ -710,6 +799,7 @@ impl Evaluator {
         key: &ItemKey,
         item: &WorkItem,
         designs: &BTreeMap<DesignId, Evaluated<Design>>,
+        states: &States<'_>,
         ledger: &ApprovalSet,
         impl_view: &ImplView,
         external: &[InvalidReason],
@@ -717,17 +807,19 @@ impl Evaluator {
         let mut invalid = external.to_vec();
         let mut gaps = Gaps::default();
         let mut ups = Vec::new();
-        match designs.get(&key.design) {
+        let design_id = key.design.entity();
+        match states.get(&design_id) {
             None => invalid.push(InvalidReason::DanglingRef {
-                upstream: key.design.entity(),
+                upstream: design_id,
             }),
-            Some(ev) => {
-                gaps.inherit(key.design.entity(), ev.state());
-                ups.push(UpView::from((
-                    key.design.entity(),
-                    ev,
-                    ev.entity().map(Design::design_hash),
-                )));
+            Some(state) => {
+                gaps.inherit(design_id, state);
+                ups.push(UpView::new(
+                    design_id,
+                    state,
+                    designs.get(&key.design),
+                    Design::design_hash,
+                ));
             }
         }
         let hash = item.hash(key.design, key.number);
@@ -782,7 +874,18 @@ fn integration_of(
 }
 
 #[cfg(test)]
+pub(crate) mod test_support {
+    use super::*;
+
+    // Empty maps that live long enough to be borrowed into a `States`.
+    pub(crate) static NO_FINDINGS: BTreeMap<FindingId, Evaluated<Finding>> = BTreeMap::new();
+    pub(crate) static NO_SPECS: BTreeMap<SpecId, Evaluated<Spec>> = BTreeMap::new();
+    pub(crate) static NO_DESIGNS: BTreeMap<DesignId, Evaluated<Design>> = BTreeMap::new();
+}
+
+#[cfg(test)]
 mod tests {
+    use super::test_support::{NO_DESIGNS, NO_FINDINGS, NO_SPECS};
     use super::*;
     use crate::domain::approval::test_support::{approve, ca, ci, cr, cs, revoke};
     use crate::domain::classification::fold;
@@ -791,6 +894,50 @@ mod tests {
     use crate::domain::finding::test_support::finding;
     use crate::domain::id::test_support::{did, eid, fid, iid, sid};
     use crate::domain::spec::test_support::spec;
+
+    // The evaluators read the state of an upstream from the map of every entity's
+    // state. These take the typed maps the tests build and make that map of them.
+    fn eval_spec(
+        s: &Spec,
+        findings: &BTreeMap<FindingId, Evaluated<Finding>>,
+        ledger: &ApprovalSet,
+        unresolved: &BTreeSet<EntityId>,
+        external: &[InvalidReason],
+    ) -> Evaluated<Spec> {
+        let states = states_of(findings, &NO_SPECS, &NO_DESIGNS, []);
+        let written = Written {
+            unresolved: unresolved.clone(),
+            dangling: BTreeSet::new(),
+        };
+        Evaluator::spec(s, findings, &states, ledger, &written, external)
+    }
+
+    fn eval_design(
+        d: &Design,
+        specs: &BTreeMap<SpecId, Evaluated<Spec>>,
+        ledger: &ApprovalSet,
+        unresolved: &BTreeSet<EntityId>,
+        external: &[InvalidReason],
+    ) -> Evaluated<Design> {
+        let states = states_of(&NO_FINDINGS, specs, &NO_DESIGNS, []);
+        let written = Written {
+            unresolved: unresolved.clone(),
+            dangling: BTreeSet::new(),
+        };
+        Evaluator::design(d, specs, &states, ledger, &written, external)
+    }
+
+    fn eval_item(
+        key: &ItemKey,
+        item: &WorkItem,
+        designs: &BTreeMap<DesignId, Evaluated<Design>>,
+        ledger: &ApprovalSet,
+        impl_view: &ImplView,
+        external: &[InvalidReason],
+    ) -> ItemEvaluation {
+        let states = states_of(&NO_FINDINGS, &NO_SPECS, designs, []);
+        Evaluator::item(key, item, designs, &states, ledger, impl_view, external)
+    }
 
     // The chain used throughout: finding 1 <- spec 11 <- design 21 <- item 31.
     const F: u128 = 1;
@@ -850,14 +997,14 @@ mod tests {
     ) -> Evaluated4 {
         let l = ledger(events);
         let ef = Evaluator::finding(finding_, &l, &[]);
-        let es = Evaluator::spec(
+        let es = eval_spec(
             spec_,
             &BTreeMap::from([(finding_.id(), ef.clone())]),
             &l,
             &BTreeSet::new(),
             &[],
         );
-        let ed = Evaluator::design(
+        let ed = eval_design(
             design_,
             &BTreeMap::from([(spec_.id(), es.clone())]),
             &l,
@@ -869,7 +1016,7 @@ mod tests {
             design: design_.id(),
             number: num(1),
         };
-        let it = Evaluator::item(
+        let it = eval_item(
             &key,
             &design_.items()[&num(1)],
             &BTreeMap::from([(design_.id(), ed.clone())]),
@@ -1090,7 +1237,7 @@ mod tests {
     #[test]
     fn a_ground_missing_from_the_map_is_dangling_and_invalid() {
         let l = ledger(&[]);
-        let r = Evaluator::spec(&s(), &BTreeMap::new(), &l, &BTreeSet::new(), &[]);
+        let r = eval_spec(&s(), &BTreeMap::new(), &l, &BTreeSet::new(), &[]);
         let Approval::Invalid(reasons) = r.state().approval() else {
             panic!("expected Invalid");
         };
@@ -1098,6 +1245,30 @@ mod tests {
             reasons.iter().collect::<Vec<_>>(),
             vec![&InvalidReason::DanglingRef { upstream: eid(F) }]
         );
+    }
+
+    #[test]
+    fn a_ground_written_under_an_identifier_the_document_cannot_see_is_dangling_though_the_model_holds_it()
+     {
+        let l = ledger(&[]);
+        let findings = BTreeMap::from([(fid(F), Evaluator::finding(&f("body"), &l, &[]))]);
+        let states = states_of(&findings, &NO_SPECS, &NO_DESIGNS, []);
+        let written = Written {
+            dangling: BTreeSet::from([eid(F)]),
+            ..Written::default()
+        };
+        let r = Evaluator::spec(&s(), &findings, &states, &l, &written, &[]);
+        let Approval::Invalid(reasons) = r.state().approval() else {
+            panic!("expected Invalid");
+        };
+        assert_eq!(
+            reasons.iter().collect::<Vec<_>>(),
+            vec![&InvalidReason::DanglingRef { upstream: eid(F) }]
+        );
+        assert!(!r.state().completeness().is_partial());
+        // Without that fact the same model gives a Spec on an upstream that is there.
+        let r = Evaluator::spec(&s(), &findings, &states, &l, &Written::default(), &[]);
+        assert_eq!(r.state().approval(), &Approval::Draft);
     }
 
     #[test]
@@ -1111,7 +1282,7 @@ mod tests {
         let ef: Evaluated<Finding> = Evaluated::from_unparsed(unparsed, &[]);
         assert!(matches!(ef.state().approval(), Approval::Invalid(_)));
         assert!(ef.entity().is_none() && ef.unparsed().is_some());
-        let r = Evaluator::spec(
+        let r = eval_spec(
             &s(),
             &BTreeMap::from([(fid(F), ef)]),
             &l,
@@ -1122,6 +1293,62 @@ mod tests {
         assert_eq!(
             blocked_reasons(r.state().upstream()),
             vec![BlockReason::UpstreamInvalid { upstream: eid(F) }]
+        );
+    }
+
+    /// A document whose kind two branches wrote differently, standing where the
+    /// Finding of the chain should be.
+    fn conflicted_finding() -> ConflictedDoc {
+        use crate::domain::event::test_support::{reclassify, register_doc};
+        use crate::domain::event::{ClassChange, DocKind};
+        let reg = register_doc(F, DocKind::Finding, "docs/finding/a.md", None, 1);
+        let k1 = reclassify(F, &[reg.id()], vec![ClassChange::SetKind(DocKind::Finding)]);
+        let k2 = reclassify(F, &[reg.id()], vec![ClassChange::SetKind(DocKind::Spec)]);
+        let view = fold(&[reg, k1, k2]);
+        ConflictedDoc::of(view.doc(eid(F)).unwrap()).expect("a conflict")
+    }
+
+    #[test]
+    fn a_ground_that_is_a_document_in_conflict_blocks_the_spec_as_invalid() {
+        let l = ledger(&[]);
+        let conflicted = conflicted_finding();
+        let states = states_of(&NO_FINDINGS, &NO_SPECS, &NO_DESIGNS, [&conflicted]);
+        let r = Evaluator::spec(&s(), &NO_FINDINGS, &states, &l, &Written::default(), &[]);
+        // The identifier is known, so the Spec is not Invalid for a dangling reference;
+        // the ground's state is read like any invalid upstream's.
+        assert_eq!(r.state().approval(), &Approval::Draft);
+        assert_eq!(
+            blocked_reasons(r.state().upstream()),
+            vec![BlockReason::UpstreamInvalid { upstream: eid(F) }]
+        );
+        assert!(!r.state().completeness().is_partial());
+    }
+
+    #[test]
+    fn a_design_and_an_item_on_a_spec_that_stands_on_a_document_in_conflict_are_blocked() {
+        let (f0, s0, d0) = (f("body"), s(), d());
+        let conflicted = conflicted_finding();
+        let l = ledger(&approvals(&f0, &s0, &d0));
+        let states = states_of(&NO_FINDINGS, &NO_SPECS, &NO_DESIGNS, [&conflicted]);
+        let es = Evaluator::spec(&s0, &NO_FINDINGS, &states, &l, &Written::default(), &[]);
+        // Approved at its own hash, and blocked: the ground cannot be depended on.
+        assert_eq!(es.state().approval(), &Approval::Approved);
+        assert_eq!(
+            blocked_reasons(es.state().upstream()),
+            vec![BlockReason::UpstreamInvalid { upstream: eid(F) }]
+        );
+        let specs = BTreeMap::from([(s0.id(), es)]);
+        let states = states_of(&NO_FINDINGS, &specs, &NO_DESIGNS, [&conflicted]);
+        let ed = Evaluator::design(&d0, &specs, &states, &l, &Written::default(), &[]);
+        assert_eq!(
+            blocked_reasons(ed.state().upstream()),
+            vec![BlockReason::UpstreamBlocked { upstream: eid(S) }]
+        );
+        let causes: Vec<EntityId> = ed.causes().iter().map(Cause::via).collect();
+        assert_eq!(
+            causes,
+            vec![eid(F), eid(S)],
+            "the root is the document in conflict"
         );
     }
 
@@ -1156,7 +1383,7 @@ mod tests {
         let r = Evaluator::finding(&f("b"), &l, &external);
         assert!(matches!(r.state().approval(), Approval::Invalid(_)));
         // And an invalid finding blocks the spec above it.
-        let es = Evaluator::spec(
+        let es = eval_spec(
             &s(),
             &BTreeMap::from([(fid(F), r)]),
             &l,
@@ -1172,7 +1399,7 @@ mod tests {
     #[test]
     fn a_design_whose_spec_is_missing_is_dangling() {
         let l = ledger(&[]);
-        let r = Evaluator::design(&d(), &BTreeMap::new(), &l, &BTreeSet::new(), &[]);
+        let r = eval_design(&d(), &BTreeMap::new(), &l, &BTreeSet::new(), &[]);
         assert!(matches!(r.state().approval(), Approval::Invalid(_)));
     }
 
@@ -1181,7 +1408,7 @@ mod tests {
         let (f0, s0) = (f("body"), s());
         let l = ledger(&approvals(&f0, &s0, &d()));
         let ef = Evaluator::finding(&f0, &l, &[]);
-        let es = Evaluator::spec(
+        let es = eval_spec(
             &s0,
             &BTreeMap::from([(fid(F), ef)]),
             &l,
@@ -1190,7 +1417,7 @@ mod tests {
         );
         // PIN-A is assigned; UT-B is left out; PIN-Z is not declared.
         let bad = design(D, S, vec![(1, item("do a", &["PIN-A", "PIN-Z"]))]);
-        let r = Evaluator::design(
+        let r = eval_design(
             &bad,
             &BTreeMap::from([(sid(S), es)]),
             &l,
@@ -1211,7 +1438,7 @@ mod tests {
             design: did(D),
             number: num(1),
         };
-        let r = Evaluator::item(
+        let r = eval_item(
             &key,
             &item("x", &["PIN-A"]),
             &BTreeMap::new(),
@@ -1236,7 +1463,7 @@ mod tests {
             ContentHash::raw(b"x"),
         );
         let es: Evaluated<Spec> = Evaluated::from_unparsed(unparsed, &[]);
-        let r = Evaluator::design(
+        let r = eval_design(
             &d(),
             &BTreeMap::from([(sid(S), es)]),
             &l,
@@ -1273,7 +1500,7 @@ mod tests {
     #[test]
     fn a_ground_written_with_a_mark_into_an_unreadable_store_makes_the_spec_partial() {
         let l = ledger(&[]);
-        let r = Evaluator::spec(&s(), &BTreeMap::new(), &l, &only(&[F]), &[]);
+        let r = eval_spec(&s(), &BTreeMap::new(), &l, &only(&[F]), &[]);
         assert_eq!(
             r.state().approval(),
             &Approval::Draft,
@@ -1287,7 +1514,7 @@ mod tests {
     fn a_ground_that_is_not_marked_unresolved_stays_dangling() {
         let l = ledger(&[]);
         // Another identifier is marked, not this one.
-        let r = Evaluator::spec(&s(), &BTreeMap::new(), &l, &only(&[F2]), &[]);
+        let r = eval_spec(&s(), &BTreeMap::new(), &l, &only(&[F2]), &[]);
         assert!(matches!(r.state().approval(), Approval::Invalid(_)));
         assert!(!r.state().completeness().is_partial());
     }
@@ -1309,7 +1536,7 @@ mod tests {
     #[test]
     fn a_design_marks_its_spec_unresolved_the_same_way() {
         let l = ledger(&[]);
-        let r = Evaluator::design(&d(), &BTreeMap::new(), &l, &only(&[S]), &[]);
+        let r = eval_design(&d(), &BTreeMap::new(), &l, &only(&[S]), &[]);
         assert_eq!(r.state().approval(), &Approval::Draft);
         assert_eq!(reasons_of(r.state()), vec![(eid(S), eid(S))]);
     }
@@ -1317,8 +1544,8 @@ mod tests {
     #[test]
     fn partial_passes_down_keeping_the_root_and_naming_the_upstream() {
         let l = ledger(&[]);
-        let es = Evaluator::spec(&s(), &BTreeMap::new(), &l, &only(&[F]), &[]);
-        let ed = Evaluator::design(
+        let es = eval_spec(&s(), &BTreeMap::new(), &l, &only(&[F]), &[]);
+        let ed = eval_design(
             &d(),
             &BTreeMap::from([(sid(S), es)]),
             &l,
@@ -1331,7 +1558,7 @@ mod tests {
             design: did(D),
             number: num(1),
         };
-        let it = Evaluator::item(
+        let it = eval_item(
             &key,
             &d().items()[&num(1)],
             &BTreeMap::from([(did(D), ed)]),
@@ -1388,7 +1615,7 @@ mod tests {
         let l = ledger(&events);
         let edited = f("body, corrected");
         let ef = Evaluator::finding(&edited, &l, &[]);
-        let es = Evaluator::spec(&s0, &BTreeMap::from([(fid(F), ef)]), &l, &only(&[F2]), &[]);
+        let es = eval_spec(&s0, &BTreeMap::from([(fid(F), ef)]), &l, &only(&[F2]), &[]);
         assert_eq!(es.state().approval(), &Approval::Approved);
         assert_eq!(
             stale_reasons(es.state().upstream()),
@@ -1400,7 +1627,7 @@ mod tests {
         );
         assert_eq!(reasons_of(es.state()), vec![(eid(F2), eid(F2))]);
         // The Design under it is Stale by inheritance and Partial by inheritance.
-        let ed = Evaluator::design(
+        let ed = eval_design(
             &d0,
             &BTreeMap::from([(sid(S), es)]),
             &l,
@@ -1416,7 +1643,7 @@ mod tests {
         let l = ledger(&[]);
         // F is a Draft (blocks); F2 cannot be read.
         let ef = Evaluator::finding(&f("body"), &l, &[]);
-        let es = Evaluator::spec(
+        let es = eval_spec(
             &s2(),
             &BTreeMap::from([(fid(F), ef)]),
             &l,
@@ -1437,7 +1664,7 @@ mod tests {
         let (f1, f2) = (f("one"), finding(F2, "two"));
         let e1 = Evaluator::finding(&f1, &l, &[]);
         let e2 = Evaluator::finding(&f2, &l, &[]);
-        let es = Evaluator::spec(
+        let es = eval_spec(
             &s2(),
             &BTreeMap::from([(fid(F), e1), (fid(F2), e2)]),
             &l,
@@ -1451,7 +1678,7 @@ mod tests {
             "a link knows the upstream it is reached by"
         );
         // And one level down the same links are seen through the Spec.
-        let ed = Evaluator::design(
+        let ed = eval_design(
             &d(),
             &BTreeMap::from([(sid(S), es)]),
             &l,
