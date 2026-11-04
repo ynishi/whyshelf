@@ -1,0 +1,16 @@
+[package]
+name = "whyshelf-core"
+description = "Core (SDK) of whyshelf: Ground specs in findings: hash-pinned Finding -> Spec -> Design -> Impl with event-sourced approvals"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+arch-lint.workspace = true

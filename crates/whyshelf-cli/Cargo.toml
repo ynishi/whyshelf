@@ -1,0 +1,19 @@
+[package]
+name = "whyshelf-cli"
+description = "Command-line interface of whyshelf: Ground specs in findings: hash-pinned Finding -> Spec -> Design -> Impl with event-sourced approvals"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+
+[[bin]]
+name = "whyshelf"
+path = "src/main.rs"
+
+[dependencies]
+whyshelf-core.workspace = true
+whyshelf-infra.workspace = true

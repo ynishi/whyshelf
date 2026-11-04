@@ -1,0 +1,20 @@
+[package]
+name = "whyshelf"
+description = "Ground specs in findings: hash-pinned Finding -> Spec -> Design -> Impl with event-sourced approvals"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+
+[dependencies]
+whyshelf-core.workspace = true
+whyshelf-infra = { workspace = true, optional = true }
+
+[features]
+default = ["infra"]
+# The adapters (Git, file system, SQLite, clock). Off for a caller that brings its own.
+infra = ["dep:whyshelf-infra"]

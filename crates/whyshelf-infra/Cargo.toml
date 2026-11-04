@@ -1,0 +1,14 @@
+[package]
+name = "whyshelf-infra"
+description = "Adapters of whyshelf: Git, file system, SQLite and clock implementations of the whyshelf-core ports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+
+[dependencies]
+whyshelf-core.workspace = true

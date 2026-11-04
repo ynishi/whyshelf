@@ -1,0 +1,63 @@
+#:schema https://raw.githubusercontent.com/ynishi/arch-lint/v0.11.0/schema/arch-lint.schema.json
+#
+# Architecture rules, run by `cargo test` (crates/whyshelf-core/tests/architecture.rs).
+# When a review catches a structural mistake, add the rule here so it is never caught by hand again.
+# A layer that does not fit is deleted together with its scope below.
+#
+# Scope paths are relative to this file's directory (the workspace root). `crate::`, `self::` and
+# `super::` in a member crate resolve against that crate's `src/` (arch-lint 0.10+), so one file
+# here covers every crate under crates/. References across crates (`use other_crate::..`) are not
+# followed: a rule between crates is a `[dependencies]` decision, not an arch-lint one.
+
+preset = "recommended"
+
+[rules.no-sync-io]
+# Blocking I/O is fine in a synchronous program. Turn this on when the code runs on an async runtime.
+enabled = false
+
+[[scopes]]
+name = "domain"
+paths = ["crates/whyshelf-core/src/domain/**"]
+
+[[scopes]]
+name = "app"
+paths = ["crates/whyshelf-core/src/app/**"]
+
+# infra is the crate whyshelf-infra, not a scope here: whyshelf-core has no I/O crate in its
+# [dependencies], so core cannot reach infra. That boundary is kept in Cargo.toml.
+
+# Top layer first. app may use domain, domain uses neither.
+[[layering]]
+name = "core-layers"
+order = ["app", "domain"]
+message = "core depends inward only: app -> domain."
+
+[[restrict-use]]
+name = "pure-domain"
+scope = "domain"
+deny = [
+    "std::fs", "std::fs::**",
+    "std::process", "std::process::**",
+    "std::env", "std::env::**",
+    "std::net", "std::net::**",
+    "std::time::SystemTime", "std::time::Instant",
+    "tokio::fs", "tokio::fs::**", "tokio::process", "tokio::process::**", "tokio::net", "tokio::net::**",
+    "rand", "rand::**", "git2", "git2::**", "reqwest", "reqwest::**",
+    "chrono::Utc::now", "chrono::Local::now",
+]
+message = "domain is pure: take I/O, time and randomness as values, or through a port of app implemented in whyshelf-infra."
+
+[[restrict-use]]
+name = "no-io-in-app"
+scope = "app"
+deny = [
+    "std::fs", "std::fs::**",
+    "std::process", "std::process::**",
+    "std::env", "std::env::**",
+    "std::net", "std::net::**",
+    "std::time::SystemTime", "std::time::Instant",
+    "tokio::fs", "tokio::fs::**", "tokio::process", "tokio::process::**", "tokio::net", "tokio::net::**",
+    "rand", "rand::**", "git2", "git2::**", "reqwest", "reqwest::**",
+    "chrono::Utc::now", "chrono::Local::now",
+]
+message = "app reaches the outside world through its ports; implement them in whyshelf-infra."
