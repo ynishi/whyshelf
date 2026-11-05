@@ -482,6 +482,25 @@ impl<P: Ports> Workspace<P> {
         }
     }
 
+    /// Every path whose text has the words. The port answers at most the limit it is
+    /// given, so an answer that fills the limit may be cut: ask again for more until
+    /// one falls short. Cutting it silently would make `total` wrong.
+    async fn every_hit(&self, text: &NonBlank) -> Result<BTreeSet<RelPath>, AppError> {
+        let mut limit = 1000;
+        loop {
+            let hits = self
+                .ports
+                .cache()
+                .search_fts(text, limit)
+                .await
+                .map_err(AppError::port(PortName::IndexCache))?;
+            if hits.len() < limit {
+                return Ok(hits.into_iter().collect());
+            }
+            limit = limit.saturating_mul(4);
+        }
+    }
+
     /// The identifiers the query selects.
     pub(crate) async fn matching_ids(
         &self,
@@ -492,13 +511,7 @@ impl<P: Ports> Workspace<P> {
         let mut text_paths: BTreeMap<usize, BTreeSet<RelPath>> = BTreeMap::new();
         for (at, term) in query.terms().iter().enumerate() {
             if let Term::Text(text) = term {
-                let hits = self
-                    .ports
-                    .cache()
-                    .search_fts(text, 1000)
-                    .await
-                    .map_err(AppError::port(PortName::IndexCache))?;
-                text_paths.insert(at, hits.into_iter().collect());
+                text_paths.insert(at, self.every_hit(text).await?);
             }
         }
         let all = rows(model);

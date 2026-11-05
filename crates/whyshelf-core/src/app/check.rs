@@ -41,7 +41,7 @@ use crate::domain::spec::DeclaredPins;
 use super::Workspace;
 use super::commit::Committed;
 use super::error::AppError;
-use super::model::{Model, impl_view_at};
+use super::model::{Model, current_revision, impl_view_at};
 use super::ports::{PortName, Ports, RevisionPort, TestRunPort};
 use super::raw::RawRevision;
 
@@ -261,12 +261,7 @@ impl<P: Ports> Workspace<P> {
             item: target.clone(),
         })?;
         let revision = match revision {
-            None => self
-                .ports
-                .revision()
-                .current()
-                .await
-                .map_err(AppError::port(PortName::Revision))?,
+            None => current_revision(&self.ports).await?,
             Some(text) => self
                 .ports
                 .revision()

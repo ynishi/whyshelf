@@ -60,16 +60,21 @@
 //! ```
 //!
 //! **1. `init`.** It writes a minimal `.whyshelf.toml`, creates `.whyshelf/`, and
-//! keeps the cache out of Git. It never overwrites a settings file. The file gets a
+//! keeps the cache out of Git and the stored objects from being rewritten by it
+//! (`.gitattributes`). It never overwrites a settings file. The file gets a
 //! `project_id`, a new UUID (version 7) that identifies the project: the private
 //! store is placed by it, so commit the file as it is. The test files are written out
 //! as the whole of the scan directories, with a comment on how to narrow them.
+//! Every other command stands on a revision, so a repository with no commit yet
+//! needs one first: commit what `init` wrote, or the command stops with that said
+//! (exit status 2).
 //!
 //! ```text
 //! $ whyshelf init --project demo --test-command "cargo test"
 //! created .whyshelf.toml for project `demo` (0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506)
 //! created .whyshelf/
 //! added .whyshelf/cache/ to .gitignore
+//! added .whyshelf/** -text to .gitattributes
 //! ```
 //!
 //! A settings file copied from a template repository carries the template's
@@ -279,7 +284,7 @@
 //!
 //! | command | what it does |
 //! |---|---|
-//! | `init --test-command <CMD> [--project <NAME>]` | writes `.whyshelf.toml` (with a new `project_id` and `[test] files`) and `.whyshelf/`, adds the cache to `.gitignore`; the project name defaults to the directory's name when that is a valid name |
+//! | `init --test-command <CMD> [--project <NAME>]` | writes `.whyshelf.toml` (with a new `project_id` and `[test] files`) and `.whyshelf/`, adds the cache to `.gitignore` and `.whyshelf/** -text` to `.gitattributes`; the project name defaults to the directory's name when that is a valid name |
 //! | `init --print-project-id` | prints the line `project_id = "<new UUID v7>"` and nothing else, for a settings file that lacks one or was copied from a template; it reads and writes no file |
 //! | `context` | the project, the worktree, the current revision, the branch, the default store, the number of events in each store |
 //! | `add <PATH>... [--kind finding\|spec\|design] [--tag T]... [--alias A] [--store repo\|private]` | registers files, or every document under a directory; a file already registered is skipped and listed; `--alias` is for one file; official tags must be in the vocabulary. The kind is told by the file's keys when they name one kind; for a file whose keys name several or none, `--kind` is asked for. The classification keys of the file (`tags`, `kind`, `owner`, `alias`) are taken in once, here, and afterwards a difference with the store is shown in `status` |

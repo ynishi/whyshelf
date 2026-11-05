@@ -40,7 +40,7 @@ use crate::domain::state::{EntityState, Integration, ItemProgress, SpecProgress}
 use super::Workspace;
 use super::config::Config;
 use super::error::AppError;
-use super::model::{ConflictedEntry, Content, DocEntry, ItemEntry, Model};
+use super::model::{ConflictedEntry, Content, DocEntry, ItemEntry, Model, current_revision};
 use super::ports::{
     ExportDoc, ExportFile, ExportKind, PortName, Ports, RevisionPort, StorePort, WorktreeRoot,
 };
@@ -97,11 +97,7 @@ pub(crate) async fn context_line<P: Ports>(
     ports: &P,
     config: &Config,
 ) -> Result<ContextLine, AppError> {
-    let revision = ports
-        .revision()
-        .current()
-        .await
-        .map_err(AppError::port(PortName::Revision))?;
+    let revision = current_revision(ports).await?;
     let worktree = ports
         .revision()
         .worktree()

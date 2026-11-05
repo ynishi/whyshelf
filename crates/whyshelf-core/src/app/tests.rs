@@ -889,6 +889,26 @@ fn find_filters_by_classification_state_relation_and_text_and_pages() {
 }
 
 #[test]
+fn a_text_search_that_matches_more_files_than_one_port_call_gives_still_counts_them_all() {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    let paths: Vec<_> = (0..1100)
+        .map(|n| {
+            let at = format!("docs/finding/f{n}.md");
+            ws.ports()
+                .put_finding(&at, &format!("Finding {n}"), &format!("common words {n}"));
+            path(&at)
+        })
+        .collect();
+    block_on(ws.add(&paths, &AddOptions::new())).expect("add");
+    let page = block_on(ws.find(
+        &Query::parse("common").expect("query"),
+        &PageRequest::default(),
+    ))
+    .expect("find");
+    assert_eq!(page.total(), 1100);
+}
+
+#[test]
 fn publish_checks_the_leak_lint_and_the_repo_store_folds_alone_to_the_same_classification() {
     let config = test_config().with_default_store(StoreKind::Private);
     let mut ws = Workspace::new(files(), config);
@@ -932,6 +952,37 @@ fn publish_checks_the_leak_lint_and_the_repo_store_folds_alone_to_the_same_class
         panic!("an entity");
     };
     assert_eq!(view.store(), StoreKind::Repo);
+}
+
+#[test]
+fn publish_refuses_an_alias_the_repo_store_already_holds() {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports().put_finding("docs/finding/a.md", "First", "one");
+    ws.ports().put_finding("docs/finding/b.md", "Second", "two");
+    add_to(
+        &mut ws,
+        "docs/finding/a.md",
+        "finding/x",
+        StoreKind::Private,
+    );
+    add_to(&mut ws, "docs/finding/b.md", "finding/x", StoreKind::Repo);
+    let registered = |store: StoreKind| {
+        ws.ports()
+            .events_in(store)
+            .iter()
+            .find_map(|e| {
+                matches!(e.body(), EventBody::Registered(Registration::Doc(_))).then(|| e.target())
+            })
+            .expect("a registration")
+    };
+    let (held, mine) = (registered(StoreKind::Repo), registered(StoreKind::Private));
+
+    let refused = block_on(ws.publish(&Ref::Private(mine)));
+    assert!(
+        matches!(refused, Err(AppError::AliasTaken { holder, .. }) if holder == held),
+        "{refused:?}"
+    );
+    assert_eq!(ws.ports().events_in(StoreKind::Repo).len(), 1);
 }
 
 #[test]
@@ -1020,6 +1071,42 @@ fn scaffolds_create_and_register_with_an_alias() {
 }
 
 #[test]
+fn a_scaffold_that_the_gate_refuses_leaves_no_file_and_can_be_run_again() {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    ws.ports()
+        .put_finding("docs/finding/secret.md", "Secret plan", "x");
+    add_to(
+        &mut ws,
+        "docs/finding/secret.md",
+        "finding/secret",
+        StoreKind::Private,
+    );
+
+    // The public file would carry the title of a private Finding.
+    let refused = block_on(ws.finding_new(
+        FindingType::UsageObservation,
+        why("Secret plan B"),
+        Some(a("finding/b")),
+    ));
+    assert!(
+        matches!(refused, Err(AppError::LeakFound { .. })),
+        "{refused:?}"
+    );
+    assert!(
+        !ws.ports().has_file("docs/finding/b.md"),
+        "the file this call made is taken away again"
+    );
+
+    let again = block_on(ws.finding_new(
+        FindingType::UsageObservation,
+        why("Quiet plan B"),
+        Some(a("finding/b")),
+    ));
+    assert!(again.is_ok(), "{again:?}");
+    assert!(ws.ports().has_file("docs/finding/b.md"));
+}
+
+#[test]
 fn mv_records_a_move_and_refuses_an_occupied_or_missing_path() {
     let mut ws = workspace();
     assert!(matches!(
@@ -1068,6 +1155,58 @@ fn purge_deletes_the_text_but_not_the_history() {
     assert!(matches!(
         block_on(ws.purge(&r("finding/slow-login"), other, why("x"))),
         Err(AppError::NotAVersion { .. })
+    ));
+}
+
+#[test]
+fn purging_a_text_two_documents_share_records_it_for_both_and_neither_reads_as_missing() {
+    let config = test_config().with_default_store(StoreKind::Private);
+    let mut ws = Workspace::new(FakePorts::new(), config);
+    // Two documents with the very same text are stored once, under one raw hash.
+    ws.ports().put_finding("docs/finding/a.md", "Same", "words");
+    ws.ports().put_finding("docs/finding/b.md", "Same", "words");
+    add_to(
+        &mut ws,
+        "docs/finding/a.md",
+        "finding/a",
+        StoreKind::Private,
+    );
+    add_to(
+        &mut ws,
+        "docs/finding/b.md",
+        "finding/b",
+        StoreKind::Private,
+    );
+    let raw = ws
+        .ports()
+        .events_in(StoreKind::Private)
+        .iter()
+        .find_map(|e| match e.body() {
+            EventBody::Registered(Registration::Doc(d)) => Some(*d.first().raw()),
+            _ => None,
+        })
+        .expect("a registration");
+    assert_eq!(ws.ports().object_count(StoreKind::Private), 1);
+
+    block_on(ws.purge(&r("finding/a"), raw, why("secret slipped"))).expect("purge");
+
+    let purged: BTreeSet<EntityId> = ws
+        .ports()
+        .events_in(StoreKind::Private)
+        .iter()
+        .filter(|e| matches!(e.body(), EventBody::Purged { .. }))
+        .map(|e| e.target())
+        .collect();
+    assert_eq!(
+        purged,
+        BTreeSet::from([id_of(&ws, "finding/a"), id_of(&ws, "finding/b")]),
+        "the text left the store for both, and both say so"
+    );
+    assert_eq!(ws.ports().object_count(StoreKind::Private), 0);
+    // The other document's read of that text says it was purged.
+    assert!(matches!(
+        block_on(ws.publish(&r("finding/b"))),
+        Err(AppError::ObjectPurged { .. })
     ));
 }
 
@@ -2034,6 +2173,86 @@ fn a_path_set_differently_on_two_branches_is_invalid_and_a_move_settles_it() {
     );
 }
 
+/// A workspace with a Finding at `docs/finding/slow.md` whose kind two branches set
+/// differently, and a second Finding at `docs/finding/lonely.md`.
+fn conflicted_and_lonely() -> (Workspace<FakePorts>, EntityId) {
+    let mut ws = workspace();
+    ws.ports()
+        .put_finding("docs/finding/lonely.md", "Lonely", "nobody cites me");
+    block_on(ws.add(
+        &[path("docs/finding/lonely.md")],
+        &AddOptions::new().with_alias(a("finding/lonely")),
+    ))
+    .expect("add");
+    let finding = id_of(&ws, "finding/slow-login");
+    fork(
+        &ws,
+        finding,
+        [set_kind(DocKind::Finding), set_kind(DocKind::Spec)],
+    );
+    (ws, finding)
+}
+
+#[test]
+fn a_path_held_by_a_document_in_conflict_is_taken_for_add_and_mv() {
+    let (mut ws, held) = conflicted_and_lonely();
+
+    // A second registration at the same path is not made.
+    let added = block_on(ws.add(&[path("docs/finding/slow.md")], &AddOptions::new())).expect("add");
+    assert!(added.registered().is_empty(), "{:?}", added.registered());
+    assert_eq!(added.skipped(), [path("docs/finding/slow.md")]);
+
+    // Nor does a move take it.
+    let refused = block_on(ws.mv(&r("finding/lonely"), path("docs/finding/slow.md")));
+    assert!(
+        matches!(refused, Err(AppError::PathOccupied { holder, .. }) if holder == held),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn every_path_a_document_in_conflict_may_be_at_is_taken() {
+    let mut ws = workspace();
+    ws.ports()
+        .put_finding("docs/finding/lonely.md", "Lonely", "nobody cites me");
+    block_on(ws.add(
+        &[path("docs/finding/lonely.md")],
+        &AddOptions::new().with_alias(a("finding/lonely")),
+    ))
+    .expect("add");
+    let finding = id_of(&ws, "finding/slow-login");
+    let old = path("docs/finding/slow.md");
+    let moved_to = |to: &str| EventBody::Moved {
+        old: old.clone(),
+        new: path(to),
+    };
+    fork(
+        &ws,
+        finding,
+        [moved_to("docs/finding/a.md"), moved_to("docs/finding/b.md")],
+    );
+    ws.ports()
+        .put_finding("docs/finding/a.md", "Slow login", "p95 is 4s");
+    let refused = block_on(ws.mv(&r("finding/lonely"), path("docs/finding/a.md")));
+    assert!(
+        matches!(refused, Err(AppError::PathOccupied { holder, .. }) if holder == finding),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn a_file_at_the_path_of_a_document_in_conflict_is_not_a_move_of_another() {
+    let (mut ws, _) = conflicted_and_lonely();
+    // `lonely` vanishes, and a file with its very text appears where the document in
+    // conflict is: that is not where `lonely` went.
+    ws.ports().remove_file("docs/finding/lonely.md");
+    ws.ports()
+        .put_finding("docs/finding/slow.md", "Lonely", "nobody cites me");
+    let report = block_on(ws.ingest()).expect("ingest");
+    assert!(report.moved().is_empty(), "{:?}", report.moved());
+    assert_eq!(report.missing(), [path("docs/finding/lonely.md")]);
+}
+
 #[test]
 fn an_alias_set_differently_on_two_branches_is_an_issue_and_finds_nothing() {
     let ws = workspace();
@@ -2274,6 +2493,36 @@ fn an_alias_or_tag_the_registration_cannot_take_in_is_left_out_and_shown_as_a_di
     // The alias is held by another document and the tag is outside the vocabulary:
     // neither blocks the registration, both are shown.
     assert_eq!(s.issues().len(), 2);
+}
+
+#[test]
+fn two_files_of_one_add_cannot_both_take_the_alias_their_keys_say() {
+    let mut ws = Workspace::new(FakePorts::new(), test_config());
+    for (file, title) in [
+        ("docs/finding/a.md", "First"),
+        ("docs/finding/b.md", "Second"),
+    ] {
+        ws.ports().put_finding(file, title, "text");
+        ws.ports()
+            .set_file_classification(file, file_keys(&[], "bob", "finding/x"));
+    }
+    block_on(ws.add(
+        &[path("docs/finding/a.md"), path("docs/finding/b.md")],
+        &AddOptions::new(),
+    ))
+    .expect("add");
+    // Only one holds the alias; the other left it out and shows it as a difference.
+    let holders = ws
+        .ports()
+        .events_in(StoreKind::Repo)
+        .iter()
+        .filter(|e| {
+            matches!(e.body(), EventBody::Registered(Registration::Doc(d))
+                if d.alias().is_some_and(|alias| alias.as_str() == "finding/x"))
+        })
+        .count();
+    assert_eq!(holders, 1);
+    assert_eq!(status(&ws).issues().len(), 1);
 }
 
 #[test]

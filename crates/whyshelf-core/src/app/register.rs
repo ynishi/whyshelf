@@ -12,8 +12,8 @@
 //! | [`add`](Workspace::add) | `Registered` with a new identifier, and a `Registered` for each item number of a Design; the text is stored as an object |
 //! | [`tag`](Workspace::tag), [`reclassify`](Workspace::reclassify) | `Reclassified`: tags, kind, owner, alias. Official tags must be in the project's vocabulary; an alias must be free in the store. Never affects an approval |
 //! | [`mv`](Workspace::mv) | `Moved`: the file is already at the new path (the tool does not move files); the identifier is unchanged |
-//! | [`publish`](Workspace::publish) | `Published` in each store: an ordinary event in the private store and a root with a snapshot of the classification in the repo store, so the repo store alone folds to the same classification. The latest text goes to the repo store, past versions stay private |
-//! | [`purge`](Workspace::purge) | `Purged`: a stored text is deleted (a secret slipped through), the history is not |
+//! | [`publish`](Workspace::publish) | `Published` in each store: an ordinary event in the private store and a root with a snapshot of the classification in the repo store, so the repo store alone folds to the same classification. The latest text goes to the repo store, past versions stay private. The alias must be free in the repo store |
+//! | [`purge`](Workspace::purge) | `Purged`, for every entity whose history names the text: a stored text is deleted (a secret slipped through), the history is not |
 //!
 //! Where a new document goes is decided by where it is put: the project's default
 //! store, or the caller's choice, never by a flag inside the document.
@@ -22,8 +22,8 @@ use std::collections::BTreeSet;
 
 use crate::domain::classification::{ConflictField, Merged};
 use crate::domain::event::{
-    ClassChange, ClassSnapshot, DocKind, DocRegistration, EntityKind, EventBody, Publication,
-    RecordBody, Registration, StoreKind, Version,
+    ClassChange, ClassSnapshot, DocKind, DocRegistration, EntityKind, Publication, RecordBody,
+    Registration, StoreKind,
 };
 use crate::domain::front::{ClassificationImport, Guess, Stored};
 use crate::domain::hash::ContentHash;
@@ -123,7 +123,7 @@ impl<P: Ports> Workspace<P> {
         options: &AddOptions,
         store: StoreKind,
     ) -> Result<EntityId, AppError> {
-        if model.docs().any(|d| d.path() == candidate.path()) {
+        if model.path_holder(candidate.path()).is_some() {
             return Err(AppError::AlreadyRegistered {
                 path: candidate.path().clone(),
             });
@@ -159,8 +159,14 @@ impl<P: Ports> Workspace<P> {
         for tag in &options.tags {
             self.config.vocabulary().admit(tag)?;
         }
+        let held = |alias: &Alias| {
+            model
+                .index()
+                .alias_holder(store, alias)
+                .or_else(|| draft.alias_holder(store, alias))
+        };
         if let Some(alias) = &options.alias
-            && let Some(holder) = model.index().alias_holder(store, alias)
+            && let Some(holder) = held(alias)
         {
             return Err(AppError::AliasTaken {
                 alias: alias.clone(),
@@ -182,7 +188,7 @@ impl<P: Ports> Workspace<P> {
         let alias = options.alias.clone().or_else(|| {
             import
                 .alias()
-                .filter(|alias| model.index().alias_holder(store, alias).is_none())
+                .filter(|alias| held(alias).is_none())
                 .cloned()
         });
         let owner = import.owner().cloned();
@@ -224,7 +230,9 @@ impl<P: Ports> Workspace<P> {
     ///
     /// A file that is registered already is skipped and reported. All files of
     /// the call are written together or not at all: a secret in one of them stops
-    /// the call.
+    /// the call. An alias a file's own keys name is taken in unless another
+    /// document holds it, or a file registered earlier in the same call does; then it
+    /// is left out and shown as a difference.
     pub async fn add(
         &mut self,
         paths: &[RelPath],
@@ -241,7 +249,7 @@ impl<P: Ports> Workspace<P> {
         let (known, fresh): (Vec<_>, Vec<_>) = listed
             .into_iter()
             .map(|s| s.path().clone())
-            .partition(|p| model.docs().any(|d| d.path() == p));
+            .partition(|p| model.path_holder(p).is_some());
         if options.alias.is_some() && fresh.len() > 1 {
             return Err(AppError::AliasForSeveralFiles { count: fresh.len() });
         }
@@ -366,10 +374,12 @@ impl<P: Ports> Workspace<P> {
                 });
             }
         };
-        if let Some(holder) = model.docs().find(|d| d.path() == &new_path && d.id() != id) {
+        if let Some(holder) = model.path_holder(&new_path)
+            && holder != id
+        {
             return Err(AppError::PathOccupied {
                 path: new_path,
-                holder: holder.id(),
+                holder,
             });
         }
         let there = self
@@ -390,7 +400,8 @@ impl<P: Ports> Workspace<P> {
     ///
     /// The latest recorded text goes to the repo store and passes the leak lint
     /// there: a text that still carries the alias or title of a private entity is
-    /// refused, and the document must name it as `private:<id>` instead.
+    /// refused, and the document must name it as `private:<id>` instead. The
+    /// document's alias must be free in the repo store ([`AppError::AliasTaken`]).
     pub async fn publish(&mut self, target: &Ref) -> Result<Committed, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
         let (id, kind, store) = model.resolve(target)?;
@@ -404,6 +415,17 @@ impl<P: Ports> Workspace<P> {
         // differently cannot be, and is not guessed.
         model.settled(id)?;
         let doc = model.doc(id).ok_or(AppError::NotADocument { id })?;
+        // The snapshot's alias becomes the entity's alias in the repo store, where it
+        // must be free, as it must be when it is set anywhere else.
+        if let Some(alias) = doc.alias()
+            && let Some(holder) = model.index().alias_holder(StoreKind::Repo, alias)
+            && holder != doc.id()
+        {
+            return Err(AppError::AliasTaken {
+                alias: alias.clone(),
+                holder,
+            });
+        }
         let version = doc
             .recorded()
             .cloned()
@@ -417,9 +439,19 @@ impl<P: Ports> Workspace<P> {
             .get_object(StoreKind::Private, version.raw())
             .await
             .map_err(AppError::port(PortName::Store))?
-            .ok_or(AppError::ObjectMissing {
-                raw: *version.raw(),
-                store: StoreKind::Private,
+            .ok_or_else(|| {
+                // A text deleted on purpose is told apart from one that is lost.
+                if model.purged(id, version.raw()) {
+                    AppError::ObjectPurged {
+                        id,
+                        raw: *version.raw(),
+                    }
+                } else {
+                    AppError::ObjectMissing {
+                        raw: *version.raw(),
+                        store: StoreKind::Private,
+                    }
+                }
             })?;
         let snapshot = ClassSnapshot::new(
             doc.kind(),
@@ -470,6 +502,12 @@ impl<P: Ports> Workspace<P> {
 
     /// Delete a stored text (after a secret slipped through) and record that
     /// it was deleted. The history of the entity stays; only the text goes.
+    ///
+    /// Objects are keyed by the raw hash, so one text may be a version of several
+    /// entities (two files with the same content). The text leaves both stores
+    /// whichever entity was named, and a `Purged` is recorded for every entity, in
+    /// either store, whose history names that raw hash: none is left with a version
+    /// that is missing without a word about it.
     pub async fn purge(
         &mut self,
         target: &Ref,
@@ -483,26 +521,31 @@ impl<P: Ports> Workspace<P> {
         }
         let id = model.canonical(id);
         model.settled(id)?;
-        let mentions = |v: &Version| v.raw() == &raw;
-        let is_version = [StoreKind::Private, StoreKind::Repo].into_iter().any(|s| {
-            model
-                .events(s)
-                .iter()
-                .filter(|e| model.canonical(e.target()) == id)
-                .any(|e| match e.body() {
-                    EventBody::Registered(Registration::Doc(d)) => mentions(d.first()),
-                    EventBody::Revised { old, new } => mentions(old) || mentions(new),
-                    EventBody::Published(Publication::Incoming { snapshot, .. }) => {
-                        mentions(snapshot.version())
-                    }
-                    _ => false,
-                })
-        });
-        if !is_version {
+        // The object is keyed by the raw hash and shared by every entity whose
+        // history names it, so the deletion is recorded for each of them, in the
+        // store each lives in: none is left pointing at a text that is gone with no
+        // word about it.
+        let naming = model.naming(&raw);
+        if !naming.contains(&id) {
             return Err(AppError::NotAVersion { id, raw });
         }
         let mut draft = self.draft().await?;
-        draft.push(&model, store, id, RecordBody::Purged { raw, reason })?;
+        for other in naming {
+            let home = if other == id {
+                store
+            } else {
+                model.home(other).unwrap_or(store)
+            };
+            draft.push(
+                &model,
+                home,
+                other,
+                RecordBody::Purged {
+                    raw,
+                    reason: reason.clone(),
+                },
+            )?;
+        }
         let committed = self.commit(&model, draft).await?;
         for scope in [StoreKind::Private, StoreKind::Repo] {
             self.ports

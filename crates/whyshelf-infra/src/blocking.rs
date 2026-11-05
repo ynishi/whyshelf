@@ -215,6 +215,30 @@ pub async fn create_new_file(path: PathBuf, bytes: Vec<u8>) -> Result<bool, Bloc
     .await
 }
 
+/// Remove a file only if its content is exactly `bytes`: the undo of
+/// [`create_new_file`] that cannot take away what somebody wrote since.
+///
+/// Returns whether the file was removed (a file that is gone or has other content
+/// is left alone).
+pub async fn remove_file_if_content(path: PathBuf, bytes: Vec<u8>) -> Result<bool, BlockingError> {
+    run(move || {
+        let io_error = |source| BlockingError::Io {
+            path: path.clone(),
+            source,
+        };
+        match std::fs::read(&path) {
+            Ok(found) if found == bytes => {
+                std::fs::remove_file(&path).map_err(io_error)?;
+                Ok(true)
+            }
+            Ok(_) => Ok(false),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(io_error(error)),
+        }
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

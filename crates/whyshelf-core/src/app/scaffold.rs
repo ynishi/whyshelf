@@ -6,7 +6,9 @@
 //! classification and lives in events. The file will often not parse yet (a
 //! template asks for values only a person can give); that is allowed: it is
 //! registered as a version that does not parse, shown as Invalid, and becomes valid
-//! when it is filled in and ingested.
+//! when it is filled in and ingested. If registering the new file fails (the gate
+//! refuses its text, say), the file is taken away again, as long as it is still
+//! exactly what was written, and the call can be run again.
 //!
 //! The file name comes from the alias (`spec/cache-timeout` becomes
 //! `<spec_dir>/cache-timeout.md`) or, for a Finding without an alias, from the title.
@@ -125,10 +127,41 @@ impl<P: Ports> Workspace<P> {
         if outcome == CreateOutcome::AlreadyExists {
             return Err(AppError::PathExists { path });
         }
+        // The file is this call's from here on. If registering it fails, it goes
+        // again (when nobody changed it meanwhile), so the next attempt does not stop
+        // on a path occupied by a file no document was ever registered for. The
+        // failure that is reported is the first one; a file that cannot be taken
+        // away is left, and says so by being there.
+        let registered = self
+            .register_created(model, kind, &alias, &path, store)
+            .await;
+        match registered {
+            Ok((id, committed)) => Ok(Scaffolded {
+                id,
+                path,
+                alias,
+                committed,
+            }),
+            Err(error) => {
+                let _ = self.ports.scaffold().remove_created(&path, &template).await;
+                Err(error)
+            }
+        }
+    }
+
+    /// Read the file just created and register it with its alias.
+    async fn register_created(
+        &self,
+        model: &Model,
+        kind: DocKind,
+        alias: &Alias,
+        path: &RelPath,
+        store: StoreKind,
+    ) -> Result<(EntityId, Committed), AppError> {
         let candidate = self
             .ports
             .current()
-            .read(&path, Some(kind))
+            .read(path, Some(kind))
             .await
             .map_err(AppError::port(PortName::Current))?
             .ok_or_else(|| AppError::FileMissing { path: path.clone() })?;
@@ -141,12 +174,7 @@ impl<P: Ports> Workspace<P> {
             .register_candidate(model, &mut draft, &candidate, &options, store)
             .await?;
         let committed = self.commit(model, draft).await?;
-        Ok(Scaffolded {
-            id,
-            path,
-            alias,
-            committed,
-        })
+        Ok((id, committed))
     }
 
     /// Start a Finding of a type, with a title. The alias defaults to

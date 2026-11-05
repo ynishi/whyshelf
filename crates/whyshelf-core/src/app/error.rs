@@ -238,6 +238,25 @@ pub enum AppError {
         /// The store.
         store: StoreKind,
     },
+    /// A stored object was deleted on purpose (`purge`), and the entity's history
+    /// says so. Unlike [`AppError::ObjectMissing`] this is no damage.
+    ///
+    /// Fix: change the file and ingest it, so the entity has a current version again.
+    #[error("the text {raw} of {id} was purged")]
+    ObjectPurged {
+        /// The entity.
+        id: EntityId,
+        /// The key.
+        raw: ContentHash,
+    },
+    /// The repository has no commit yet, so there is no revision to stand on.
+    ///
+    /// Fix: make the first commit (`.whyshelf.toml` and the files `init` wrote are a
+    /// good one).
+    #[error(
+        "the repository has no commit yet: make one first (git commit), then run the command again"
+    )]
+    NoCommit,
     /// The hash is not a version of the entity.
     #[error("{raw} is not a version of {id}")]
     NotAVersion {

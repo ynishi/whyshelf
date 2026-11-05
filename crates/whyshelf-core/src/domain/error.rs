@@ -33,6 +33,10 @@ pub enum ValueError {
     /// An identifier text was not a UUID.
     #[error("an entity id is a UUID")]
     IdNotUuid(#[source] uuid::Error),
+    /// An identifier text was a UUID, but not in the one form an identifier is
+    /// written in: lowercase, with hyphens.
+    #[error("an entity id is written as a lowercase hyphenated UUID")]
+    IdNotCanonical,
     /// An identifier was a UUID of another version than 7.
     #[error("an entity id is a UUID v7, found version {version}")]
     IdNotV7 {

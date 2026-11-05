@@ -308,8 +308,10 @@ impl<P: Ports> Workspace<P> {
                 None => {
                     // 2. A new path whose text is a vanished file's last text.
                     let raw = candidate.raw_hash();
+                    // A path a document in conflict holds is not a new path.
+                    let free = model.path_holder(candidate.path()).is_none();
                     let renamed = vanished.iter().find(|d| {
-                        !claimed.contains(&d.id())
+                        free && !claimed.contains(&d.id())
                             && d.recorded().is_some_and(|v| v.raw() == &raw)
                             && candidate.kind().is_none_or(|k| k == d.kind())
                     });

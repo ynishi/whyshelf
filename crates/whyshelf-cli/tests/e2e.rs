@@ -760,3 +760,22 @@ async fn the_status_exported_to_a_file_does_not_carry_the_context_line() {
         "{exported}"
     );
 }
+
+#[tokio::test]
+async fn before_the_first_commit_a_command_says_a_commit_is_needed_and_is_a_usage_error() {
+    let repo = Repo::new().await;
+    repo.run(&["init", "--project", "demo", "--test-command", "true"])
+        .await
+        .ok();
+    let status = repo.run(&["status"]).await.failed();
+    assert_eq!(status.code, Some(2), "{}", status.stderr);
+    assert!(
+        status.stderr.contains("no commit"),
+        "the message says what is missing: {}",
+        status.stderr
+    );
+
+    // With one commit, the same command runs.
+    repo.commit_all("Start").await;
+    repo.run(&["status"]).await.ok();
+}

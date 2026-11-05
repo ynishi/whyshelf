@@ -7,7 +7,7 @@
 //! | question | git |
 //! |---|---|
 //! | is this text a revision (`validate`) | 40 hexadecimal digits, checked without starting a process |
-//! | the revision of the working tree | `rev-parse HEAD` |
+//! | the revision of the working tree | `rev-parse --verify --quiet HEAD`; before the first commit it answers none, which is no failure |
 //! | is the tree clean | `status --porcelain`, **leaving out `.whyshelf/`** |
 //! | has a revision reached the baseline | `rev-parse --verify <baseline>^{commit}`, then `merge-base --is-ancestor <rev> <baseline commit>`, and when that fails `rev-parse --verify <rev>^{commit}` to tell a missing commit from a failure |
 //! | the name of the line of work | `rev-parse --abbrev-ref HEAD` (none when detached) |
@@ -181,6 +181,28 @@ impl Git {
         }
     }
 
+    /// The revision `HEAD` names, or `None` before the first commit (an unborn
+    /// `HEAD`). `rev-parse --verify --quiet` answers that case with exit status 1 and
+    /// nothing printed; any other failure (not a repository, say) is an error.
+    pub(crate) async fn head_if_born(&self) -> Result<Option<String>, GitError> {
+        let args = ["rev-parse", "--verify", "--quiet", "HEAD"];
+        let finished = self.finish(args).await?;
+        match finished.code {
+            Some(0) => {
+                let head = String::from_utf8_lossy(&finished.stdout).trim().to_owned();
+                if is_full_hash(&head) {
+                    Ok(Some(head))
+                } else {
+                    Err(GitError::Unexpected {
+                        command: describe(&args),
+                    })
+                }
+            }
+            Some(1) if finished.stderr.is_empty() => Ok(None),
+            _ => Err(failed(&args, &finished)),
+        }
+    }
+
     /// The commit a revision text names, or `None` when it names no commit here.
     ///
     /// The text may come from a committed file (the baseline), so it is handed to Git
@@ -286,8 +308,13 @@ impl RevisionPort for GitRevision {
             .map_err(GitError::Value)
     }
 
-    async fn current(&self) -> Result<RevisionId, GitError> {
-        RevisionId::from_validated(self.git.head().await?).map_err(GitError::Value)
+    async fn current(&self) -> Result<Option<RevisionId>, GitError> {
+        match self.git.head_if_born().await? {
+            Some(head) => RevisionId::from_validated(head)
+                .map(Some)
+                .map_err(GitError::Value),
+            None => Ok(None),
+        }
     }
 
     async fn is_clean(&self) -> Result<bool, GitError> {

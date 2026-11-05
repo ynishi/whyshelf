@@ -38,7 +38,7 @@ async fn the_current_revision_and_the_branch_are_the_repositorys() {
     let dir = repo().await;
     let head = git(dir.path(), &["rev-parse", "HEAD"]).await;
     let port = revision_port(dir.path());
-    assert_eq!(port.current().await.unwrap().as_str(), head);
+    assert_eq!(port.current().await.unwrap().unwrap().as_str(), head);
     assert_eq!(port.label().await.unwrap().as_deref(), Some("main"));
     assert_eq!(
         port.worktree().await.unwrap().as_str(),
@@ -51,6 +51,18 @@ async fn the_current_revision_and_the_branch_are_the_repositorys() {
         None,
         "a detached head has no name"
     );
+}
+
+#[tokio::test]
+async fn before_the_first_commit_there_is_no_current_revision_and_that_is_no_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    init_repo(dir.path()).await;
+    let port = revision_port(dir.path());
+    assert_eq!(port.current().await.unwrap(), None);
+
+    // A directory that is no repository is still a failure.
+    let outside = tempfile::tempdir().unwrap();
+    assert!(revision_port(outside.path()).current().await.is_err());
 }
 
 #[tokio::test]
@@ -561,6 +573,29 @@ async fn tests_run_in_the_working_tree_at_head_and_in_a_checkout_at_an_older_rev
         leftovers.iter().all(|name| !name.starts_with("rev-")),
         "{leftovers:?}"
     );
+}
+
+#[tokio::test]
+async fn a_project_in_a_subdirectory_is_tested_in_the_same_subdirectory_of_the_checkout() {
+    let dir = repo().await;
+    write(dir.path(), "tools/app/old.txt", "old\n").await;
+    let first = commit_all(dir.path(), "Old state").await;
+    git(dir.path(), &["rm", "-q", "tools/app/old.txt"]).await;
+    write(dir.path(), "tools/app/new.txt", "new\n").await;
+    commit_all(dir.path(), "New state").await;
+
+    // The project root is not the top of the repository.
+    let runner = GitTestRun::new(dir.path().join("tools").join("app"));
+    let ran = runner
+        .run(
+            &rev(&first),
+            &command("test -f old.txt && test ! -f new.txt && test ! -f README.md"),
+            limit(60),
+        )
+        .await
+        .unwrap();
+    assert_eq!(finished(ran), TestOutcome::Passed);
+    assert_eq!(worktrees(dir.path()).await, 1);
 }
 
 #[tokio::test]

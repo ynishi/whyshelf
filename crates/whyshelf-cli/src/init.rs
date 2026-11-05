@@ -4,7 +4,12 @@
 //! project's identity, the test command and the test files), creates `.whyshelf/`,
 //! and makes sure the cache directory is in `.gitignore`. The cache holds values
 //! derived from the worktree it sits in and is never merged, so it must never be
-//! committed. A settings file that exists is never touched: `init` refuses before it
+//! committed. It also makes sure `.gitattributes` says `.whyshelf/** -text`, so that
+//! `core.autocrlf` cannot rewrite the stored objects, which are named by the hash of
+//! their bytes. Both files are appended to once and their other lines are never
+//! rewritten. `init` makes no commit: every other command stands on a revision, so
+//! in a repository with no commit yet the first one has to be made (the files `init`
+//! wrote are a fine one) before they run. A settings file that exists is never touched: `init` refuses before it
 //! changes anything.
 //!
 //! The identity is a new UUID version 7 (`project_id`). It is written to the file and
@@ -27,6 +32,9 @@ use crate::error::CliError;
 
 /// The line `init` keeps in `.gitignore`.
 const CACHE_IGNORE: &str = ".whyshelf/cache/";
+
+/// The line `init` keeps in `.gitattributes`: the store's files are bytes, never text.
+const STORE_ATTRIBUTES: &str = ".whyshelf/** -text";
 
 /// The ways a person may already have written the cache's line.
 const CACHE_IGNORE_SPELLINGS: [&str; 4] = [
@@ -89,19 +97,23 @@ fn settings_text(
     ))
 }
 
-/// Append the cache line to `.gitignore` unless it is there. Returns whether the
-/// file was changed.
-async fn ignore_cache(root: &Path) -> Result<bool, CliError> {
-    let path = root.join(".gitignore");
+/// Append `line` to the file `name` of the project root unless a line of it already
+/// says it (`says`). The file is created if it is not there; the lines that are there
+/// are never rewritten, and a last line without a newline gets one first. Returns
+/// whether the file was changed.
+async fn ensure_line(
+    root: &Path,
+    name: &str,
+    line: &str,
+    says: impl Fn(&str) -> bool,
+) -> Result<bool, CliError> {
+    let path = root.join(name);
     let existing = match tokio::fs::read_to_string(&path).await {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(e) => return Err(io("read", &path)(e)),
     };
-    if existing
-        .lines()
-        .any(|line| CACHE_IGNORE_SPELLINGS.contains(&line.trim()))
-    {
+    if existing.lines().any(says) {
         return Ok(false);
     }
     let mut file = tokio::fs::OpenOptions::new()
@@ -115,11 +127,33 @@ async fn ignore_cache(root: &Path) -> Result<bool, CliError> {
     } else {
         "\n"
     };
-    file.write_all(format!("{separator}{CACHE_IGNORE}\n").as_bytes())
+    file.write_all(format!("{separator}{line}\n").as_bytes())
         .await
         .map_err(io("write", &path))?;
     file.flush().await.map_err(io("write", &path))?;
     Ok(true)
+}
+
+/// Keep the cache out of Git.
+async fn ignore_cache(root: &Path) -> Result<bool, CliError> {
+    ensure_line(root, ".gitignore", CACHE_IGNORE, |line| {
+        CACHE_IGNORE_SPELLINGS.contains(&line.trim())
+    })
+    .await
+}
+
+/// Keep Git from rewriting the stored objects. A stored text is addressed by the
+/// hash of its bytes, so `core.autocrlf` (or a `text` attribute) turning line endings
+/// on checkout would leave an object that no longer matches its name.
+async fn keep_store_bytes(root: &Path) -> Result<bool, CliError> {
+    ensure_line(root, ".gitattributes", STORE_ATTRIBUTES, |line| {
+        let mut words = line.split_whitespace();
+        matches!(
+            (words.next(), words.next(), words.next()),
+            (Some(".whyshelf/**" | "/.whyshelf/**"), Some("-text"), None)
+        )
+    })
+    .await
 }
 
 /// Run `init` in `root`; returns what it did, one line each. With
@@ -175,6 +209,9 @@ pub async fn init(root: &Path, args: &InitArgs) -> Result<Vec<String>, CliError>
     ];
     if ignore_cache(root).await? {
         done.push(format!("added {CACHE_IGNORE} to .gitignore"));
+    }
+    if keep_store_bytes(root).await? {
+        done.push(format!("added {STORE_ATTRIBUTES} to .gitattributes"));
     }
     Ok(done)
 }
@@ -239,6 +276,43 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(ignore.matches(".whyshelf/cache/").count(), 1);
+    }
+
+    #[tokio::test]
+    async fn init_keeps_git_from_rewriting_the_store_and_leaves_other_lines_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // Somebody's attributes, without a final newline.
+        tokio::fs::write(root.join(".gitattributes"), "*.png binary\n*.sh eol=lf")
+            .await
+            .unwrap();
+
+        let done = init(root, &args(Some("demo"))).await.unwrap();
+        let attributes = tokio::fs::read_to_string(root.join(".gitattributes"))
+            .await
+            .unwrap();
+        assert_eq!(
+            attributes,
+            "*.png binary\n*.sh eol=lf\n.whyshelf/** -text\n"
+        );
+        assert!(done.iter().any(|line| line.contains(".gitattributes")));
+
+        // Not added a second time, however the line is spaced.
+        tokio::fs::remove_file(root.join(FILE_NAME)).await.unwrap();
+        tokio::fs::write(
+            root.join(".gitattributes"),
+            "*.png binary\n.whyshelf/**   -text\n",
+        )
+        .await
+        .unwrap();
+        let done = init(root, &args(Some("demo"))).await.unwrap();
+        assert_eq!(
+            tokio::fs::read_to_string(root.join(".gitattributes"))
+                .await
+                .unwrap(),
+            "*.png binary\n.whyshelf/**   -text\n"
+        );
+        assert!(!done.iter().any(|line| line.contains(".gitattributes")));
     }
 
     #[tokio::test]

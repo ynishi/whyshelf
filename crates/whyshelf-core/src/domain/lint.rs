@@ -345,8 +345,13 @@ fn line_of(haystack: &str, at: usize) -> Option<NonZeroU32> {
 /// `private_ids` their identifiers.
 ///
 /// Matching is ASCII case-insensitive. An alias counts only as a whole token, so
-/// `spec/auth` is not found inside `spec/auth-v2`. A title is found anywhere,
-/// across line breaks too. Text that is not ASCII is compared exactly. An
+/// `spec/auth` is not found inside `spec/auth-v2`. A title is found across line
+/// breaks too, and where it begins (ends) with an ASCII letter or digit it is a word
+/// there: it is not found when the character just before (after) it is an ASCII
+/// letter or digit, so the title `Cache` does not block `cached`. A title that begins
+/// (ends) with anything else, as a script written without word spacing does, is found
+/// by plain substring at that end, and so is a title that stands next to such text
+/// (`Cacheの設計`). Text that is not ASCII is compared exactly. An
 /// identifier counts when it is not written `private:<id>`: that is the only way a
 /// public text may name a private entity, and the one mark is
 /// [`StoreKind::mark_for`](super::event::StoreKind::mark_for). The text is the whole
@@ -367,7 +372,21 @@ pub fn leak_lint(
         if needle.is_empty() {
             continue;
         }
+        // A title that starts (ends) in an ASCII letter or digit is a word at that end:
+        // the character beside it must not continue the word. One that starts (ends)
+        // in anything else, a script written without word spacing for one, is found
+        // by plain substring at that end.
+        let word_start = !whole_token && needle.starts_with(|c: char| c.is_ascii_alphanumeric());
+        let word_end = !whole_token && needle.ends_with(|c: char| c.is_ascii_alphanumeric());
         for (at, _) in haystack.match_indices(&needle) {
+            if word_start && haystack[..at].ends_with(|c: char| c.is_ascii_alphanumeric()) {
+                continue;
+            }
+            if word_end
+                && haystack[at + needle.len()..].starts_with(|c: char| c.is_ascii_alphanumeric())
+            {
+                continue;
+            }
             if whole_token {
                 let before = haystack[..at].chars().next_back();
                 let mut rest = haystack[at + needle.len()..].chars();
@@ -683,6 +702,35 @@ mod tests {
             leak_lint(split, &[title("Quarterly Pricing\nExperiment")], &[]).len(),
             1
         );
+    }
+
+    #[test]
+    fn a_title_that_starts_or_ends_in_a_letter_is_a_whole_word() {
+        let lint = |text: &str| leak_lint(text, &[title("Cache")], &[]).len();
+        assert_eq!(lint("the cache, and Cache."), 2);
+        assert_eq!(lint("(CACHE)"), 1);
+        assert_eq!(lint("cached values and precache and cache2"), 0);
+        // A neighbour that is not an ASCII letter or digit does not extend the word, so a
+        // title next to text in a script without word spacing is found.
+        assert_eq!(lint("Cacheの設計"), 1);
+        assert_eq!(lint("設計Cache"), 1);
+        // Only the side that starts (ends) in a letter or digit is bounded.
+        let both = |text: &str| leak_lint(text, &[title("-cache-")], &[]).len();
+        assert_eq!(both("a-cache-b"), 1);
+    }
+
+    #[test]
+    fn a_title_in_a_script_without_word_spacing_is_found_as_a_substring() {
+        let lint = |text: &str| leak_lint(text, &[title("認証キャッシュ")], &[]).len();
+        assert_eq!(lint("これは認証キャッシュの話"), 1);
+        assert_eq!(lint("認証キャッシュ"), 1);
+        let mixed = |text: &str| leak_lint(text, &[title("キャッシュ設計 v2")], &[]).len();
+        assert_eq!(
+            mixed("あのキャッシュ設計 v2です"),
+            1,
+            "the title ends in a digit, and a CJK character is no part of a word"
+        );
+        assert_eq!(mixed("キャッシュ設計 v22"), 0);
     }
 
     #[test]

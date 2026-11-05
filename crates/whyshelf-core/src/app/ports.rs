@@ -130,8 +130,11 @@ pub trait RevisionPort: Send + Sync {
         text: &RawRevision,
     ) -> impl Future<Output = Result<Option<RevisionId>, Self::Error>> + Send;
 
-    /// The revision of the working tree (the tip it stands on).
-    fn current(&self) -> impl Future<Output = Result<RevisionId, Self::Error>> + Send;
+    /// The revision of the working tree (the tip it stands on); `None` before the
+    /// first commit, when there is no tip yet. That is a state of the repository, not
+    /// a failure of the port: the use cases say a commit is needed
+    /// ([`AppError::NoCommit`](super::error::AppError::NoCommit)).
+    fn current(&self) -> impl Future<Output = Result<Option<RevisionId>, Self::Error>> + Send;
 
     /// Whether the working tree has no uncommitted change.
     fn is_clean(&self) -> impl Future<Output = Result<bool, Self::Error>> + Send;
@@ -440,6 +443,18 @@ pub trait ScaffoldPort: Send + Sync {
         path: &RelPath,
         template: &Template,
     ) -> impl Future<Output = Result<CreateOutcome, Self::Error>> + Send;
+
+    /// Take away a file this process created from `template`, if it is still exactly
+    /// what was written; a file that is gone or has other content is left alone.
+    /// Says whether the file was removed.
+    ///
+    /// The undo of [`create_new`](Self::create_new) for a use case that fails after
+    /// it, so a failed scaffold leaves no file the next attempt would stop on.
+    fn remove_created(
+        &self,
+        path: &RelPath,
+        template: &Template,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 }
 
 /// What a scan of the test files found: the pins, and the tags that are none.

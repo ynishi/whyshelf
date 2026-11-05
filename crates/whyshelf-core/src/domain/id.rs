@@ -59,8 +59,17 @@ impl fmt::Debug for EntityId {
 impl FromStr for EntityId {
     type Err = ValueError;
 
+    /// Only the form [`Display`](fmt::Display) writes: lowercase and hyphenated.
+    ///
+    /// A UUID has several spellings (without hyphens, in braces, as a URN, in
+    /// capitals) and the parser of the `uuid` crate takes them all. An identifier
+    /// has one, because the leak lint looks for that one in a public text: a private
+    /// entity named in another spelling would pass it.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let uuid = Uuid::parse_str(s).map_err(ValueError::IdNotUuid)?;
+        if s != uuid.hyphenated().to_string() {
+            return Err(ValueError::IdNotCanonical);
+        }
         Self::new(uuid)
     }
 }
@@ -279,6 +288,31 @@ mod tests {
             "not-a-uuid".parse::<EntityId>(),
             Err(ValueError::IdNotUuid(_))
         ));
+    }
+
+    #[test]
+    fn an_entity_id_is_read_only_in_its_one_written_form() {
+        let id = eid(42);
+        let hyphenated = id.to_string();
+        let simple = hyphenated.replace('-', "");
+        for other in [
+            simple.clone(),
+            hyphenated.to_uppercase(),
+            format!("{{{hyphenated}}}"),
+            format!("urn:uuid:{hyphenated}"),
+        ] {
+            assert_eq!(
+                other.parse::<EntityId>(),
+                Err(ValueError::IdNotCanonical),
+                "{other}"
+            );
+        }
+        // A text that is no UUID at all stays what it was.
+        assert!(matches!(
+            "42".parse::<EntityId>(),
+            Err(ValueError::IdNotUuid(_))
+        ));
+        assert_eq!(hyphenated.parse::<EntityId>(), Ok(id));
     }
 
     #[test]

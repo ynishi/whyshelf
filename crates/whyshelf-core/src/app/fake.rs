@@ -89,6 +89,8 @@ mod in_memory {
     #[derive(Debug)]
     struct State {
         files: BTreeMap<RelPath, FakeFile>,
+        /// The text of each file a scaffold created, as it wrote it.
+        created: BTreeMap<RelPath, String>,
         stamp: u64,
         events: BTreeMap<StoreKind, Vec<Event>>,
         objects: BTreeMap<(StoreKind, ContentHash), NormalizedText>,
@@ -134,6 +136,7 @@ mod in_memory {
             Self {
                 state: Mutex::new(State {
                     files: BTreeMap::new(),
+                    created: BTreeMap::new(),
                     stamp: 0,
                     events: BTreeMap::new(),
                     objects: BTreeMap::new(),
@@ -479,8 +482,8 @@ mod in_memory {
                 .then(|| rev(text.as_str())))
         }
 
-        async fn current(&self) -> Result<RevisionId, FakeError> {
-            Ok(self.lock().revision.clone())
+        async fn current(&self) -> Result<Option<RevisionId>, FakeError> {
+            Ok(Some(self.lock().revision.clone()))
         }
 
         async fn is_clean(&self) -> Result<bool, FakeError> {
@@ -669,7 +672,27 @@ mod in_memory {
                     self.put_design(at.as_str(), &spec.to_string(), &[]);
                 }
             }
+            let mut s = self.lock();
+            let text = s.files.get(at).map(|f| f.text.clone()).unwrap_or_default();
+            s.created.insert(at.clone(), text);
             Ok(CreateOutcome::Created)
+        }
+
+        async fn remove_created(
+            &self,
+            at: &RelPath,
+            _template: &Template,
+        ) -> Result<bool, FakeError> {
+            let mut s = self.lock();
+            let untouched = match (s.created.get(at), s.files.get(at)) {
+                (Some(wrote), Some(file)) => *wrote == file.text,
+                _ => false,
+            };
+            if untouched {
+                s.files.remove(at);
+                s.created.remove(at);
+            }
+            Ok(untouched)
         }
     }
 

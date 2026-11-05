@@ -95,7 +95,9 @@ use crate::domain::evaluate::{
     Cause, Evaluated, Evaluator, ImplView, ItemEvaluation, ItemKey, States, Unparsed, Written,
     states_of,
 };
-use crate::domain::event::{DocKind, EntityKind, Event, EventId, StoreKind, Version};
+use crate::domain::event::{
+    DocKind, EntityKind, Event, EventBody, EventId, Publication, Registration, StoreKind, Version,
+};
 use crate::domain::finding::Finding;
 use crate::domain::front::{ClassificationImport, Stored};
 use crate::domain::hash::ContentHash;
@@ -113,7 +115,9 @@ use crate::domain::tag::Tag;
 
 use super::config::Config;
 use super::error::AppError;
-use super::ports::{CodeScanPort, CurrentPort, FileStat, PinScan, Ports, RevisionPort, StorePort};
+use super::ports::{
+    CodeScanPort, CurrentPort, FileStat, PinScan, PortName, Ports, RevisionPort, StorePort,
+};
 use super::raw::{Candidate, ParseOutcome, RawDoc};
 
 /// The events and folds of one store.
@@ -937,6 +941,17 @@ pub(crate) fn listing_roots(
     roots.into_iter().collect()
 }
 
+/// The revision the working tree stands on: the one place a missing first commit
+/// becomes [`AppError::NoCommit`].
+pub(crate) async fn current_revision<P: Ports>(ports: &P) -> Result<RevisionId, AppError> {
+    ports
+        .revision()
+        .current()
+        .await
+        .map_err(AppError::port(PortName::Revision))?
+        .ok_or(AppError::NoCommit)
+}
+
 /// What the code and the baseline say, for evaluating items.
 pub(crate) async fn impl_view_at<P: Ports>(
     ports: &P,
@@ -1146,11 +1161,7 @@ impl Model {
         }
 
         // The code and the baseline.
-        let revision = ports
-            .revision()
-            .current()
-            .await
-            .map_err(AppError::port(PortName::Revision))?;
+        let revision = current_revision(ports).await?;
         let impl_view = impl_view_at(ports, config, revision, &ledger).await?;
 
         // Items of the Designs that parsed.
@@ -1276,6 +1287,21 @@ impl Model {
     pub fn doc(&self, id: EntityId) -> Option<&DocEntry> {
         let id = self.canonical(id);
         self.docs.get(&id)
+    }
+
+    /// The document that holds a path, a document in conflict included: one whose kind
+    /// is in conflict is at its path, and one whose path is in conflict may be at any
+    /// of the paths written, so all of them are held. [`docs`](Self::docs) leaves such
+    /// documents out, and so is no way to ask whether a path is free.
+    pub fn path_holder(&self, path: &RelPath) -> Option<EntityId> {
+        self.snap
+            .docs()
+            .into_iter()
+            .find(|(_, class)| match class.path() {
+                Merged::Agreed(held) => held == path,
+                Merged::Conflict(held) => held.contains(path),
+            })
+            .map(|(_, class)| class.id())
     }
 
     /// The documents whose kind or path is in conflict, by identifier.
@@ -1460,6 +1486,41 @@ impl Model {
             Some(field) => Err(AppError::ClassificationConflict { id, field }),
             None => Ok(()),
         }
+    }
+
+    /// The entities, in either store, whose version history names the text `raw`.
+    ///
+    /// Objects are keyed by the raw hash of the text and shared: two documents with
+    /// the same text name the same object, so deleting it concerns every one of them
+    /// (see `purge`).
+    pub fn naming(&self, raw: &ContentHash) -> BTreeSet<EntityId> {
+        let mentions = |v: &Version| v.raw() == raw;
+        [StoreKind::Private, StoreKind::Repo]
+            .into_iter()
+            .flat_map(|store| self.events(store))
+            .filter(|e| match e.body() {
+                EventBody::Registered(Registration::Doc(d)) => mentions(d.first()),
+                EventBody::Revised { old, new } => mentions(old) || mentions(new),
+                EventBody::Published(Publication::Incoming { snapshot, .. }) => {
+                    mentions(snapshot.version())
+                }
+                _ => false,
+            })
+            .map(|e| self.canonical(e.target()))
+            .collect()
+    }
+
+    /// Whether the text `raw` of an entity was purged: its history says so, in either
+    /// store.
+    pub fn purged(&self, id: EntityId, raw: &ContentHash) -> bool {
+        let id = self.canonical(id);
+        [StoreKind::Private, StoreKind::Repo]
+            .into_iter()
+            .flat_map(|store| self.events(store))
+            .any(|e| {
+                self.canonical(e.target()) == id
+                    && matches!(e.body(), EventBody::Purged { raw: gone, .. } if gone == raw)
+            })
     }
 
     /// Resolve a reference written by a person to an entity of this project.

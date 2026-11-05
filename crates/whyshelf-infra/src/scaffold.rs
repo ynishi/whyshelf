@@ -138,6 +138,22 @@ impl ScaffoldPort for FsScaffold {
             CreateOutcome::AlreadyExists
         })
     }
+
+    async fn remove_created(
+        &self,
+        path: &RelPath,
+        template: &Template,
+    ) -> Result<bool, ScaffoldError> {
+        blocking::remove_file_if_content(
+            self.root.join(path.as_str()),
+            render(template).into_bytes(),
+        )
+        .await
+        .map_err(|source| ScaffoldError {
+            path: path.clone(),
+            source,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -226,5 +242,29 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(after, "mine\n");
+    }
+
+    #[tokio::test]
+    async fn only_a_file_still_exactly_the_template_is_taken_away() {
+        let dir = tempfile::tempdir().unwrap();
+        let scaffold = FsScaffold::new(dir.path().to_path_buf());
+        let path: RelPath = "docs/finding/slow-login.md".parse().unwrap();
+        let on_disk = dir.path().join(path.as_str());
+        let template = finding_template(FindingType::UsageObservation);
+
+        scaffold.create_new(&path, &template).await.unwrap();
+        assert!(scaffold.remove_created(&path, &template).await.unwrap());
+        assert!(!on_disk.exists());
+        // Nothing there: nothing to take away.
+        assert!(!scaffold.remove_created(&path, &template).await.unwrap());
+
+        // Somebody filled it in since: it is theirs now.
+        scaffold.create_new(&path, &template).await.unwrap();
+        tokio::fs::write(&on_disk, "filled in\n").await.unwrap();
+        assert!(!scaffold.remove_created(&path, &template).await.unwrap());
+        assert_eq!(
+            tokio::fs::read_to_string(&on_disk).await.unwrap(),
+            "filled in\n"
+        );
     }
 }

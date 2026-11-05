@@ -60,9 +60,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::actor::{Actor, Timestamp};
-use crate::domain::event::{Event, EventBody, EventId, RecordBody, StoreKind};
+use crate::domain::event::{Event, EventBody, EventId, RecordBody, Registration, StoreKind};
 use crate::domain::gate::Passed;
-use crate::domain::id::EntityId;
+use crate::domain::id::{Alias, EntityId};
 use crate::domain::lint::leak_lint;
 
 use super::Workspace;
@@ -151,6 +151,20 @@ impl Draft {
         self.tips.insert((store, target), BTreeSet::from([id]));
         self.events.push((store, event));
         Ok(id)
+    }
+
+    /// Who registered `alias` in `store` in this draft: an alias taken earlier in the
+    /// same write is held as much as one the model already has.
+    pub(crate) fn alias_holder(&self, store: StoreKind, alias: &Alias) -> Option<EntityId> {
+        self.events
+            .iter()
+            .filter(|(s, _)| *s == store)
+            .find_map(|(_, event)| match event.body() {
+                EventBody::Registered(Registration::Doc(doc)) if doc.alias() == Some(alias) => {
+                    Some(event.target())
+                }
+                _ => None,
+            })
     }
 
     /// Add a text to store under its `raw` hash.

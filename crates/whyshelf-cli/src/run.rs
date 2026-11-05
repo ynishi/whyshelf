@@ -15,7 +15,7 @@
 //! |---|---|---|
 //! | 0 | success | nothing |
 //! | 1 | a check or a gate stopped it | the user, on a file, or the build of whyshelf in use |
-//! | 2 | the request is wrong | the user, on the command line, the query or the settings |
+//! | 2 | the request is wrong | the user, on the command line, the query or the settings, or by making the first commit when the repository has none (`AppError::NoCommit`) |
 //! | 3 | the run failed | whoever runs it, on the machine: git, the disk, the cache, a test run |
 //!
 //! The arms of the `match`es below name every variant, with no catch-all, so a new
@@ -132,7 +132,8 @@ impl ExitStatus {
             | AppError::DirtyWorktree
             | AppError::SecretFound { .. }
             | AppError::LeakFound { .. }
-            | AppError::ClassificationConflict { .. } => Self::Refused,
+            | AppError::ClassificationConflict { .. }
+            | AppError::ObjectPurged { .. } => Self::Refused,
             // The request names something that is not there, is not one thing, is of
             // another kind, or is refused as written.
             AppError::Value(_)
@@ -160,6 +161,7 @@ impl ExitStatus {
             | AppError::AlreadyRevoked { .. }
             | AppError::AlreadyPublished { .. }
             | AppError::NotAVersion { .. }
+            | AppError::NoCommit
             | AppError::PathExists { .. }
             | AppError::NoSlug => Self::Usage,
             // A port failed (a store that cannot be read, Git, the cache, a test run),

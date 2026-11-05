@@ -10,7 +10,9 @@
 //!   other run uses, even for the same revision at the same time. The checkout is
 //!   removed with `git worktree remove --force` when the command ends, and a failure
 //!   to remove it is an error that is returned, not swallowed. `open` runs
-//!   `git worktree prune` to clear what a killed run left behind.
+//!   `git worktree prune` to clear what a killed run left behind. When the project
+//!   root is a directory inside the repository (`git rev-parse --show-prefix`), the
+//!   command runs in that same directory of the checkout, not at its top.
 //!
 //! The command's own output never reaches ours: a tool server speaks on its standard
 //! output, so a test run must not write there. Both of its streams are read as they
@@ -274,7 +276,12 @@ impl TestRunPort for GitTestRun {
             .await
             .map_err(TestRunError::Git)?;
 
-        let ran = run_command(&checkout, command, timeout).await;
+        // The checkout is the whole repository; the project may be a directory in it,
+        // and its tests run in that same directory, as they do in the working tree.
+        let ran = match self.git.line(["rev-parse", "--show-prefix"]).await {
+            Ok(prefix) => run_command(&checkout.join(prefix), command, timeout).await,
+            Err(error) => Err(TestRunError::Git(error)),
+        };
         let removed = self
             .git
             .run([
