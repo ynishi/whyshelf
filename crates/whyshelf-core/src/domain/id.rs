@@ -104,6 +104,15 @@ macro_rules! typed_id {
             }
         }
 
+        impl FromStr for $name {
+            type Err = ValueError;
+
+            /// Only the form [`Display`](fmt::Display) writes, as for [`EntityId`].
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                s.parse::<EntityId>().map(Self)
+            }
+        }
+
         impl From<$name> for EntityId {
             fn from(id: $name) -> Self {
                 id.0
@@ -135,6 +144,10 @@ typed_id!(
 );
 typed_id!(
     /// The identifier of a work item, stable across revisions of its Design.
+    ///
+    /// A Design file may write it as the `id:` of an item; the item then keeps its
+    /// identity when it is renumbered. An item with no `id:` has the identifier a
+    /// registration event gave it, or none.
     ItemId
 );
 typed_id!(
@@ -149,10 +162,12 @@ typed_id!(
 
 /// The number of a work item inside its Design, starting at 1.
 ///
-/// Displayed as `#1`. The number is the key of the item map of a Design; the
-/// [`ItemId`] that goes with a `(Design, number)` pair is recorded by the
-/// registration event, so a number keeps the same identifier when the Design is
-/// revised.
+/// Displayed as `#1`. The number is the human-facing key of an item and the key of
+/// the item map of a Design. It is part of no hash: renumbering items changes
+/// neither the hash of an item nor that of the Design, as retagging does not. The
+/// identity of an item is its [`ItemId`], which a Design file writes as the `id:` of
+/// the item; for an item with none, the registration event records the identifier
+/// that goes with a `(Design, number)` pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ItemNumber(NonZeroU32);
 
@@ -326,6 +341,20 @@ mod tests {
             Err(ValueError::IdNotUuid(_))
         ));
         assert_eq!(hyphenated.parse::<EntityId>(), Ok(id));
+    }
+
+    #[test]
+    fn a_typed_id_is_read_in_the_one_form_it_is_written() {
+        let id = iid(0xabc);
+        assert_eq!(id.to_string().parse::<ItemId>(), Ok(id));
+        assert_eq!(
+            id.to_string().to_uppercase().parse::<ItemId>(),
+            Err(ValueError::IdNotCanonical)
+        );
+        assert!(matches!(
+            "nonsense".parse::<ItemId>(),
+            Err(ValueError::IdNotUuid(_))
+        ));
     }
 
     #[test]

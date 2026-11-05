@@ -13,10 +13,11 @@
 //! hash covers its reserved keys and body but not its classification (tags);
 //! a Spec's `contract_hash` covers grounds, the accepted pins and hypotheses and
 //! the Contract section; its `hyp_hash` covers the hypotheses only; a Design's
-//! hash covers its spec reference, its Crux and its items; an item's hash covers
-//! its design, number, summary and assigned pins. Supplementary sections and
-//! classification are never hashed, so correcting a typo in a note or retagging
-//! does not remove an approval.
+//! hash covers its spec reference, its Crux and its items taken as a set; an item's
+//! hash covers its design, summary and assigned pins. Supplementary sections,
+//! classification and the numbers and ids of items are never hashed, so correcting
+//! a typo in a note, retagging or renumbering the items does not remove an
+//! approval.
 //!
 //! Four further kinds hash bytes rather than a [`Canon`]:
 //! `raw` is the hash of an entity's normalized source text (the key of the

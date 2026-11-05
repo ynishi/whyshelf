@@ -27,10 +27,12 @@
 //!       summary: "Keep it on the server only"
 //!       rejected: "Every start would need a round trip"
 //! items:
-//!   - number: 1                       # the key of the item; stable across edits
+//!   - id: 0192f3a4-5b6c-7d8e-8f90-123456789abc   # the identity of the item (a UUID v7)
+//!     number: 1                       # the human-facing key; it may be changed freely
 //!     summary: "Reuse the session inside the window"
 //!     pins: [PIN-LOGIN-CACHE]         # every pin of the Spec is assigned to some item
-//!   - number: 2
+//!   - id: 0192f3a4-5b6c-7d8e-8f90-123456789abd
+//!     number: 2
 //!     summary: "Drop the session when it expires"
 //!     pins: [UT-LOGIN-EXPIRY]
 //! ---
@@ -54,23 +56,46 @@
 //! # Items
 //!
 //! An item ([`WorkItem`]) is the smallest unit of implementation. Items sit in a
-//! `BTreeMap<ItemNumber, WorkItem>`: the number is the key and is not repeated in
-//! the value. The [`ItemId`](super::id::ItemId) belonging to a `(Design, number)`
-//! pair is recorded by a registration event, which is why an item keeps its
-//! identity when the Design is revised. An item whose number leaves the Design is
-//! "gone": it drops out of the cache while its events stay in the log.
+//! `BTreeMap<ItemNumber, WorkItem>`: the number is the human-facing key and is not
+//! repeated in the value. The identity of an item is its
+//! [`ItemId`], which the file writes as the `id:` of the item
+//! and which does not change when the item is renumbered or the Design is revised.
+//! An item written without an `id:` has none in the file; for it the registration
+//! event records the identifier that goes with a `(Design, number)` pair. An item
+//! whose number leaves the Design is "gone": it drops out of the cache
+//! while its events stay in the log.
 //!
 //! Every PIN and UT the Spec declared must be assigned to some item, and no item
 //! may be assigned a tag the Spec did not declare: [`Design::check_pin_coverage`]
 //! checks both directions. Gate CI and the evaluation of a Design both call it.
 //!
+//! # Items that cannot be trusted
+//!
+//! [`Design::item_issues`] lists, for the identity of the items, what a Design
+//! file taken as a document of the corpus cannot stand on. The rule is here and only
+//! here; the corpus attaches each issue to the document as a reason.
+//!
+//! | situation | reported as |
+//! |---|---|
+//! | an item has no `id:` | [`ItemIssue::UnidentifiedItem`] |
+//! | two items of one Design have one `id:` | [`ItemIssue::DuplicateItemId`] |
+//! | an item has the `id:` of its own Design | [`ItemIssue::ItemIdIsDesignId`] |
+//! | two items of one Design have one number | not representable here: the number is the key of the map, so the file reader refuses the file with `UnparsedReason::DuplicateItemNumber` |
+//!
 //! # Hashes
 //!
 //! `design_hash` covers the Spec reference, the Crux and the items. The Design
 //! Notes section and the classification are outside it. The hash of one item
-//! covers the Design identifier, the number, the summary and the assigned pins
+//! covers the Design identifier, the summary and the assigned pins
 //! ([`Design::item_hash`]); gate CA approves that hash and records the
 //! Design's hash as its upstream.
+//!
+//! The number of an item is in neither hash, and neither is its `id:`. Renumbering
+//! items, or writing their `id:` into a file, does not change a hash, so an approval
+//! stays. For the Design hash this means the items are taken as a set: the hash does
+//! not depend on which number or which position an item has, only on what the items
+//! say. Two items that say the same thing have one item hash, and both count in the
+//! Design hash: adding a copy of an item changes it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -79,7 +104,7 @@ use std::str::FromStr;
 use super::canon::{Canon, ToCanon};
 use super::error::{EntityError, ValueError};
 use super::hash::{ContentHash, HashKind};
-use super::id::{DesignId, ItemNumber, SpecId};
+use super::id::{DesignId, ItemId, ItemNumber, SpecId};
 use super::nonempty::{NonBlank, NonEmptyVec};
 use super::pin::PinId;
 use super::spec::Spec;
@@ -270,21 +295,53 @@ impl ToCanon for Crux {
 
 /// The smallest unit of implementation.
 ///
-/// It has no number and no identifier of its own: the number is the key of the
-/// Design's map and the identifier is recorded by the registration event.
+/// It has no number of its own: the number is the key of the Design's map. It
+/// carries the identifier its file wrote as `id:`, if the file wrote one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkItem {
+    id: Option<ItemId>,
     summary: NonBlank,
     assigned_pins: BTreeSet<PinId>,
 }
 
 impl WorkItem {
-    /// An item from its summary and the PINs and UT tags it is responsible for.
+    /// An item from its summary and the PINs and UT tags it is responsible for,
+    /// with no identifier written in the file.
     pub fn new(summary: NonBlank, assigned_pins: BTreeSet<PinId>) -> Self {
         Self {
+            id: None,
             summary,
             assigned_pins,
         }
+    }
+
+    /// The same item with the identifier its file wrote as `id:`.
+    ///
+    /// The identifier is no part of the item's hash: writing it into a file that
+    /// had none leaves every hash as it was.
+    #[must_use]
+    pub fn with_id(mut self, id: ItemId) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    /// The identifier the file wrote as `id:`; `None` for an item written without
+    /// one.
+    pub fn id(&self) -> Option<ItemId> {
+        self.id
+    }
+
+    /// The entries of the canonical form of what the item says: the summary and the
+    /// assigned pins, and nothing about where it sits or how it is named. Both the
+    /// item hash and the Design hash are made of these.
+    fn content_entries(&self) -> [(&'static str, Canon); 2] {
+        [
+            ("summary", self.summary.to_canon()),
+            (
+                "pins",
+                Canon::list(self.assigned_pins.iter().map(ToCanon::to_canon)),
+            ),
+        ]
     }
 
     /// What the item does.
@@ -297,25 +354,64 @@ impl WorkItem {
         &self.assigned_pins
     }
 
-    /// The hash gate CA approves, for this item as number `number` of `design`.
+    /// The hash gate CA approves, for this item as an item of `design`.
     ///
-    /// Covers the Design identifier, the number, the summary and the assigned
-    /// pins. The number and Design are part of it because the same words under
-    /// another number are another item.
-    pub fn hash(&self, design: DesignId, number: ItemNumber) -> ContentHash {
+    /// Covers the Design identifier, the summary and the assigned pins. The Design
+    /// is part of it because the same words in another Design are another item.
+    /// Neither the number nor the `id:` is: the number is a name that may be
+    /// changed, as a classification is, and the identity is what an approval is
+    /// kept under, not what it is about.
+    pub fn hash(&self, design: DesignId) -> ContentHash {
         ContentHash::of(
             HashKind::Item,
-            &Canon::map([
-                ("design", design.to_canon()),
-                ("number", number.to_canon()),
-                ("summary", self.summary.to_canon()),
-                (
-                    "pins",
-                    Canon::list(self.assigned_pins.iter().map(ToCanon::to_canon)),
-                ),
-            ]),
+            &Canon::map(
+                std::iter::once(("design", design.to_canon())).chain(self.content_entries()),
+            ),
         )
     }
+}
+
+/// A fault in the identity of the items of a Design.
+///
+/// Each is a fact about the Design file as a document; none says which item is
+/// right. They are found by [`Design::item_issues`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ItemIssue {
+    /// An item has no `id:`: it was added by hand.
+    ///
+    /// Fix: write an `id:` (a UUID v7) into the item; importing does it.
+    #[error("the item {number} has no `id:`")]
+    UnidentifiedItem {
+        /// The number of the item.
+        number: ItemNumber,
+    },
+    /// Two or more items of one Design carry the same `id:`.
+    ///
+    /// Fix: give all but one a new `id:`, or remove the copies.
+    #[error("the items {} carry one id {id}", join_numbers(.numbers))]
+    DuplicateItemId {
+        /// The shared identifier.
+        id: ItemId,
+        /// The numbers of the items that carry it, in order; at least two.
+        numbers: NonEmptyVec<ItemNumber>,
+    },
+    /// An item carries the `id:` of its own Design: identities are one namespace.
+    ///
+    /// Fix: give the item a new `id:`.
+    #[error("the item {number} carries the id of its own Design")]
+    ItemIdIsDesignId {
+        /// The number of the item.
+        number: ItemNumber,
+    },
+}
+
+/// The numbers of the items an issue names, as `#1, #3`.
+fn join_numbers(numbers: &NonEmptyVec<ItemNumber>) -> String {
+    numbers
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// A mismatch between a Spec's declared pins and a Design's assignment.
@@ -354,23 +450,17 @@ impl Design {
         crux: Crux,
         items: BTreeMap<ItemNumber, WorkItem>,
     ) -> Self {
-        let items_canon = Canon::Map(
-            items
-                .iter()
-                .map(|(number, item)| {
-                    (
-                        number.get().to_string(),
-                        Canon::map([
-                            ("summary", item.summary.to_canon()),
-                            (
-                                "pins",
-                                Canon::list(item.assigned_pins.iter().map(ToCanon::to_canon)),
-                            ),
-                        ]),
-                    )
-                })
-                .collect(),
-        );
+        // The items are a set: sorted by their bytes, so that neither the number nor
+        // the position of an item (which follows the number) is in the hash.
+        let mut item_forms: Vec<(Vec<u8>, Canon)> = items
+            .values()
+            .map(|item| {
+                let form = Canon::map(item.content_entries());
+                (form.to_bytes(), form)
+            })
+            .collect();
+        item_forms.sort_by(|a, b| a.0.cmp(&b.0));
+        let items_canon = Canon::list(item_forms.into_iter().map(|(_, form)| form));
         let design_hash = ContentHash::of(
             HashKind::Design,
             &Canon::map([
@@ -416,9 +506,38 @@ impl Design {
     /// The hash of one item, which gate CA approves; `None` when the number is
     /// not in this Design.
     pub fn item_hash(&self, number: ItemNumber) -> Option<ContentHash> {
-        self.items
-            .get(&number)
-            .map(|item| item.hash(self.id, number))
+        self.items.get(&number).map(|item| item.hash(self.id))
+    }
+
+    /// What a Design file taken as a document cannot stand on in the identity of its
+    /// items: every item with no `id:`, and every `id:` that more than one item
+    /// carries. Empty when each item has an identity of its own.
+    ///
+    /// The old pipeline, which gives an item its identifier by a registration event,
+    /// does not ask: an item with no `id:` is fine there. The items with no `id:`
+    /// come first, by number; then the shared identifiers, by identifier.
+    pub fn item_issues(&self) -> Vec<ItemIssue> {
+        let mut issues = Vec::new();
+        let mut carriers: BTreeMap<ItemId, Vec<ItemNumber>> = BTreeMap::new();
+        for (number, item) in &self.items {
+            match item.id {
+                Some(id) => {
+                    if id.entity() == self.id.entity() {
+                        issues.push(ItemIssue::ItemIdIsDesignId { number: *number });
+                    }
+                    carriers.entry(id).or_default().push(*number);
+                }
+                None => issues.push(ItemIssue::UnidentifiedItem { number: *number }),
+            }
+        }
+        for (id, numbers) in carriers {
+            if numbers.len() > 1
+                && let Ok(numbers) = NonEmptyVec::from_vec(numbers)
+            {
+                issues.push(ItemIssue::DuplicateItemId { id, numbers });
+            }
+        }
+        issues
     }
 
     /// Check the assignment of pins against the Spec in both directions.
@@ -487,6 +606,11 @@ pub(crate) mod test_support {
         )
     }
 
+    /// An item that carries the `id:` built from `id_n`.
+    pub(crate) fn identified(id_n: u128, summary: &str, pins: &[&str]) -> WorkItem {
+        item(summary, pins).with_id(crate::domain::id::test_support::iid(id_n))
+    }
+
     pub(crate) fn design(n: u128, spec: u128, items: Vec<(u32, WorkItem)>) -> Design {
         Design::new(
             did(n),
@@ -501,6 +625,7 @@ pub(crate) mod test_support {
 mod tests {
     use super::test_support::*;
     use super::*;
+    use crate::domain::id::test_support::iid;
     use crate::domain::spec::test_support::spec;
 
     #[test]
@@ -577,23 +702,64 @@ mod tests {
         );
         assert_ne!(
             base.design_hash(),
-            design(10, 1, vec![(2, item("x", &["PIN-A"]))]).design_hash()
+            design(10, 1, vec![(1, item("x", &["PIN-B"]))]).design_hash()
         );
+        // Another item added: a different set of items.
         assert_ne!(
             base.design_hash(),
-            design(10, 1, vec![(1, item("x", &["PIN-B"]))]).design_hash()
+            design(
+                10,
+                1,
+                vec![(1, item("x", &["PIN-A"])), (2, item("x", &["PIN-A"]))]
+            )
+            .design_hash()
         );
     }
 
     #[test]
-    fn item_hash_covers_design_number_summary_and_pins() {
+    fn renumbering_items_keeps_the_item_hash_and_the_design_hash() {
+        let before = design(
+            10,
+            1,
+            vec![(1, item("a", &["PIN-A"])), (2, item("b", &["PIN-B"]))],
+        );
+        // One item takes another number.
+        let moved = design(
+            10,
+            1,
+            vec![(1, item("a", &["PIN-A"])), (7, item("b", &["PIN-B"]))],
+        );
+        assert_eq!(before.design_hash(), moved.design_hash());
+        assert_eq!(before.item_hash(num(2)), moved.item_hash(num(7)));
+        assert_eq!(before.item_hash(num(1)), moved.item_hash(num(1)));
+        // The two items swap their numbers, so each sits where the other was.
+        let swapped = design(
+            10,
+            1,
+            vec![(1, item("b", &["PIN-B"])), (2, item("a", &["PIN-A"]))],
+        );
+        assert_eq!(before.design_hash(), swapped.design_hash());
+        assert_eq!(before.item_hash(num(1)), swapped.item_hash(num(2)));
+        assert_eq!(before.item_hash(num(2)), swapped.item_hash(num(1)));
+    }
+
+    #[test]
+    fn writing_the_item_ids_into_a_design_changes_no_hash() {
+        let bare = design(10, 1, vec![(1, item("a", &["PIN-A"]))]);
+        let identified = design(10, 1, vec![(1, identified(5, "a", &["PIN-A"]))]);
+        assert_eq!(bare.design_hash(), identified.design_hash());
+        assert_eq!(bare.item_hash(num(1)), identified.item_hash(num(1)));
+    }
+
+    #[test]
+    fn item_hash_covers_design_summary_and_pins_not_the_number() {
         let d = design(
             10,
             1,
             vec![(1, item("x", &["PIN-A"])), (2, item("x", &["PIN-A"]))],
         );
-        // Same summary and pins under another number: different hash.
-        assert_ne!(d.item_hash(num(1)), d.item_hash(num(2)));
+        // Same summary and pins under another number: the same hash.
+        assert_eq!(d.item_hash(num(1)), d.item_hash(num(2)));
         // Another design, same number, summary and pins: different hash.
         let other = design(11, 1, vec![(1, item("x", &["PIN-A"]))]);
         assert_ne!(d.item_hash(num(1)), other.item_hash(num(1)));
@@ -605,6 +771,111 @@ mod tests {
         );
         assert_eq!(d.item_hash(num(1)), changed.item_hash(num(1)));
         assert_eq!(d.item_hash(num(9)), None);
+    }
+
+    #[test]
+    fn an_item_keeps_the_id_its_file_wrote() {
+        assert_eq!(item("a", &[]).id(), None);
+        assert_eq!(identified(5, "a", &[]).id(), Some(iid(5)));
+    }
+
+    #[test]
+    fn items_that_each_carry_an_id_have_no_issue() {
+        let d = design(
+            10,
+            1,
+            vec![
+                (1, identified(1, "a", &["PIN-A"])),
+                (2, identified(2, "a", &["PIN-A"])),
+            ],
+        );
+        assert_eq!(d.item_issues(), vec![]);
+    }
+
+    #[test]
+    fn an_item_without_an_id_is_unidentified() {
+        let d = design(
+            10,
+            1,
+            vec![
+                (1, identified(1, "a", &[])),
+                (2, item("b", &[])),
+                (4, item("c", &[])),
+            ],
+        );
+        assert_eq!(
+            d.item_issues(),
+            vec![
+                ItemIssue::UnidentifiedItem { number: num(2) },
+                ItemIssue::UnidentifiedItem { number: num(4) },
+            ]
+        );
+    }
+
+    #[test]
+    fn items_sharing_an_id_are_named_with_their_numbers() {
+        let d = design(
+            10,
+            1,
+            vec![
+                (1, identified(7, "a", &[])),
+                (2, identified(8, "b", &[])),
+                (3, identified(7, "c", &[])),
+                (5, identified(7, "d", &[])),
+            ],
+        );
+        assert_eq!(
+            d.item_issues(),
+            vec![ItemIssue::DuplicateItemId {
+                id: iid(7),
+                numbers: NonEmptyVec::new(num(1), vec![num(3), num(5)]),
+            }]
+        );
+    }
+
+    #[test]
+    fn unidentified_and_duplicated_items_are_both_reported() {
+        let d = design(
+            10,
+            1,
+            vec![
+                (1, identified(7, "a", &[])),
+                (2, identified(7, "b", &[])),
+                (3, item("c", &[])),
+            ],
+        );
+        let issues = d.item_issues();
+        assert_eq!(issues.len(), 2);
+        assert!(issues.contains(&ItemIssue::UnidentifiedItem { number: num(3) }));
+    }
+
+    #[test]
+    fn an_item_with_the_id_of_its_own_design_is_reported() {
+        let d = design(
+            10,
+            1,
+            vec![(1, identified(10, "a", &[])), (2, identified(8, "b", &[]))],
+        );
+        assert_eq!(
+            d.item_issues(),
+            vec![ItemIssue::ItemIdIsDesignId { number: num(1) }]
+        );
+    }
+
+    #[test]
+    fn an_issue_says_what_is_wrong() {
+        assert_eq!(
+            ItemIssue::UnidentifiedItem { number: num(2) }.to_string(),
+            "the item #2 has no `id:`"
+        );
+        assert_eq!(
+            ItemIssue::DuplicateItemId {
+                id: iid(7),
+                numbers: NonEmptyVec::new(num(1), vec![num(3)]),
+            }
+            .to_string(),
+            format!("the items #1, #3 carry one id {}", iid(7))
+        );
     }
 
     // Golden vectors: fixed Design and item, fixed digests.
@@ -623,7 +894,7 @@ mod tests {
         );
         assert_eq!(
             d.design_hash().to_string(),
-            "sha256:c38d065cb8584b5c8a3b09b18bce438fb6c009cc7d85f9cc4ddeec3be355065d"
+            "sha256:7c2185da3e0b737c1fc6d7a4052d1e2707230cc126e4f6901ea3edd322c34497"
         );
     }
 
@@ -642,7 +913,7 @@ mod tests {
         );
         assert_eq!(
             d.item_hash(num(1)).unwrap().to_string(),
-            "sha256:6f46cf41eff221739308ba82b48cf23b6d42d976520eba3e8ea44a6a40b9e4d9"
+            "sha256:3c9c1ecad56feb81d3eb72fb4d00c4503038b1e7bbb810fa50cfe80af1a21294"
         );
     }
 }

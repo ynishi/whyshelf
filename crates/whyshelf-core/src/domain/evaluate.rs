@@ -840,7 +840,7 @@ impl Evaluator {
                 ));
             }
         }
-        let hash = item.hash(key.design, key.number);
+        let hash = item.hash(key.design);
         let subject = key.id.entity();
         let approval = own_approval(Gate::Ca, subject, &hash, ledger, invalid);
         let basis = basis_if_approved(&approval, Gate::Ca, subject, &hash);

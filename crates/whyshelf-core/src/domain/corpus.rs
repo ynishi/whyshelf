@@ -55,6 +55,18 @@
 //! | two or more files with one id | [`Invalidity::DuplicateId`], naming the others |
 //! | two documents (different ids) with one alias | [`Invalidity::DuplicateAlias`], naming the others |
 //! | a private document in a place Git tracks or does not ignore (`git add -A` would publish it) | [`Invalidity::PrivateExposed`] |
+//! | a Design with an item that has no `id:`, or two items that share one | [`Invalidity::Item`], one for each [`ItemIssue`] ([`Design::item_issues`]) |
+//! | a Design with an item whose `id:` is the Design's own | [`Invalidity::Item`] with [`ItemIssue::ItemIdIsDesignId`] |
+//! | an item `id:` that is the item `id:` of an item of another Design, or the `id:` of another document | [`Invalidity::DuplicateItemIdAcross`], naming the other files |
+//!
+//! Identities are one namespace across the corpus: a document id and an item id are
+//! both entity ids, and none may be claimed twice by different documents. Two items
+//! of one Design are [`ItemIssue::DuplicateItemId`]'s business, and files that share
+//! a document id are `DuplicateId`'s, so neither is reported again. The private copy
+//! of a publication cut short is not a second document and never counts.
+//!
+//! Two items of one Design with one number are not among these: the Design is not
+//! built from such a file, so the file is [`Reading::Unparsed`].
 //!
 //! Where Git cannot say what a place is ([`Knowable::Unknown`], as outside a work
 //! tree), a private document is not made invalid; the corpus lists a [`Notice`]
@@ -96,7 +108,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use super::actor::Actor;
-use super::design::Design;
+use super::design::{Design, ItemIssue};
 use super::error::DocumentError;
 use super::event::DocKind;
 use super::finding::Finding;
@@ -412,6 +424,25 @@ pub enum Invalidity {
     PrivateExposed {
         /// What Git makes of the place.
         place: GitPlace,
+    },
+    /// The identity of the items of a Design cannot be trusted: an item has no
+    /// `id:`, or two items share one.
+    ///
+    /// The rule is [`Design::item_issues`]; the Design has one reason per issue.
+    /// Fix: as the issue says.
+    #[error("{0}")]
+    Item(ItemIssue),
+    /// An item `id:` is also the item `id:` of an item of another Design, or the
+    /// `id:` of another document.
+    ///
+    /// Fix: give one of the claimants a new id.
+    #[error("the id {id} is also claimed by {} files of other documents", .others.len())]
+    DuplicateItemIdAcross {
+        /// The id claimed more than once.
+        id: EntityId,
+        /// The files of the other documents that claim it (as an item id or as
+        /// their own id).
+        others: NonEmptyVec<Location>,
     },
 }
 
@@ -799,6 +830,7 @@ impl Corpus {
         });
 
         Self::mark_duplicate_aliases(&mut pending);
+        Self::mark_duplicate_item_ids_across(&mut pending);
         publishing.sort_by_key(|form| form.id);
 
         // Exposure is per file: the files that are not documents are checked too.
@@ -844,7 +876,12 @@ impl Corpus {
         }
     }
 
-    fn pending((facts, document): File, reasons: Vec<Invalidity>) -> Pending {
+    /// A file on its way to the corpus, with the reasons it has so far and those of
+    /// the document's own content: the faults of the identity of a Design's items.
+    fn pending((facts, document): File, mut reasons: Vec<Invalidity>) -> Pending {
+        if let Entity::Design(design) = document.entity() {
+            reasons.extend(design.item_issues().into_iter().map(Invalidity::Item));
+        }
         Pending {
             facts,
             document,
@@ -874,6 +911,48 @@ impl Corpus {
                         alias: alias.clone(),
                         others,
                     });
+                }
+            }
+        }
+    }
+
+    /// An id claimed by different documents, at least one of them as an item id, is a
+    /// fault of every claimant. `pending` holds one file per publication, so the
+    /// private copy of a cut-short publication never claims anything.
+    fn mark_duplicate_item_ids_across(pending: &mut [Pending]) {
+        // Each claim is (file index, the claimant's document id); `pending` is sorted,
+        // so walking it in order keeps every list ordered.
+        let mut claims: BTreeMap<EntityId, Vec<(usize, DocId)>> = BTreeMap::new();
+        for (index, file) in pending.iter().enumerate() {
+            let doc = file.document.id();
+            claims.entry(doc.entity()).or_default().push((index, doc));
+            if let Entity::Design(design) = file.document.entity() {
+                let ids: BTreeSet<EntityId> = design
+                    .items()
+                    .values()
+                    .filter_map(|item| item.id())
+                    .map(|id| id.entity())
+                    .collect();
+                for id in ids {
+                    claims.entry(id).or_default().push((index, doc));
+                }
+            }
+        }
+        for (id, claimants) in claims {
+            for &(index, doc) in &claimants {
+                let others: BTreeSet<usize> = claimants
+                    .iter()
+                    .filter(|(_, other)| *other != doc)
+                    .map(|&(other, _)| other)
+                    .collect();
+                let locations = others
+                    .into_iter()
+                    .map(|other| pending[other].facts.location.clone())
+                    .collect();
+                if let Some(others) = non_empty(locations) {
+                    pending[index]
+                        .reasons
+                        .push(Invalidity::DuplicateItemIdAcross { id, others });
                 }
             }
         }
@@ -940,7 +1019,9 @@ impl Corpus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::id::test_support::{docid, fid, sid};
+    use crate::domain::design::WorkItem;
+    use crate::domain::design::test_support::{design as design_of, identified, item, num};
+    use crate::domain::id::test_support::{docid, fid, iid, sid};
     use crate::domain::nonempty::NonBlank;
 
     fn rel(path: &str) -> RelPath {
@@ -1435,6 +1516,193 @@ mod tests {
         assert!(corpus.by_id(&docid(2)).is_empty());
         assert!(corpus.by_alias(&"nothing".parse().unwrap()).is_empty());
         assert!(corpus.publishing_of(&docid(1)).is_none());
+    }
+
+    fn design_reading(n: u128, items: Vec<(u32, WorkItem)>) -> Reading {
+        let design = design_of(10 + n, 1, items);
+        let header = Header::new(docid(10 + n), DocKind::Design, None, BTreeSet::new(), None);
+        Reading::Document(Document::new(header, Entity::Design(design)).unwrap())
+    }
+
+    #[test]
+    fn a_design_whose_items_each_carry_an_id_is_valid() {
+        let corpus = Corpus::build(
+            [(
+                public("d.md", b"d"),
+                design_reading(
+                    1,
+                    vec![(1, identified(1, "a", &[])), (2, identified(2, "b", &[]))],
+                ),
+            )],
+            &none(),
+        );
+        assert!(corpus.by_id(&docid(11))[0].standing().is_valid());
+    }
+
+    #[test]
+    fn a_design_with_an_unidentified_item_is_invalid() {
+        let corpus = Corpus::build(
+            [(
+                public("d.md", b"d"),
+                design_reading(1, vec![(1, identified(1, "a", &[])), (3, item("b", &[]))]),
+            )],
+            &none(),
+        );
+        let files = corpus.by_id(&docid(11));
+        assert_eq!(
+            reasons_of(&files[0]),
+            vec![Invalidity::Item(ItemIssue::UnidentifiedItem {
+                number: num(3)
+            })]
+        );
+    }
+
+    #[test]
+    fn a_design_with_one_item_id_twice_is_invalid() {
+        let corpus = Corpus::build(
+            [(
+                public("d.md", b"d"),
+                design_reading(
+                    1,
+                    vec![(1, identified(4, "a", &[])), (2, identified(4, "b", &[]))],
+                ),
+            )],
+            &none(),
+        );
+        let files = corpus.by_id(&docid(11));
+        assert_eq!(
+            reasons_of(&files[0]),
+            vec![Invalidity::Item(ItemIssue::DuplicateItemId {
+                id: iid(4),
+                numbers: NonEmptyVec::new(num(1), vec![num(2)]),
+            })]
+        );
+    }
+
+    #[test]
+    fn the_faults_of_the_items_come_with_the_other_reasons() {
+        let corpus = Corpus::build(
+            [
+                (
+                    public("a.md", b"one"),
+                    design_reading(1, vec![(1, item("a", &[]))]),
+                ),
+                (
+                    public("b.md", b"two"),
+                    design_reading(1, vec![(1, item("a", &[]))]),
+                ),
+            ],
+            &none(),
+        );
+        for file in corpus.by_id(&docid(11)) {
+            let reasons = reasons_of(file);
+            assert_eq!(reasons.len(), 2, "{reasons:?}");
+            assert!(matches!(reasons[0], Invalidity::DuplicateId { .. }));
+            assert!(matches!(reasons[1], Invalidity::Item(_)));
+        }
+    }
+
+    #[test]
+    fn an_item_id_shared_by_two_designs_makes_both_invalid() {
+        let corpus = Corpus::build(
+            [
+                (
+                    public("a.md", b"a"),
+                    design_reading(1, vec![(1, identified(5, "a", &[]))]),
+                ),
+                (
+                    public("b.md", b"b"),
+                    design_reading(2, vec![(1, identified(5, "b", &[]))]),
+                ),
+            ],
+            &none(),
+        );
+        for (n, other) in [(11, "b.md"), (12, "a.md")] {
+            let reasons = reasons_of(&corpus.by_id(&docid(n))[0]);
+            let [Invalidity::DuplicateItemIdAcross { id, others }] = reasons.as_slice() else {
+                panic!("expected one across-duplicate, got {reasons:?}");
+            };
+            assert_eq!(*id, iid(5).entity());
+            assert_eq!(paths(others), vec![other]);
+        }
+    }
+
+    #[test]
+    fn an_item_id_equal_to_a_document_id_makes_both_invalid() {
+        let corpus = Corpus::build(
+            [
+                (
+                    public("d.md", b"d"),
+                    design_reading(1, vec![(1, identified(7, "a", &[]))]),
+                ),
+                (public("s.md", b"s"), doc(7)),
+            ],
+            &none(),
+        );
+        for (n, other) in [(11, "s.md"), (7, "d.md")] {
+            let reasons = reasons_of(&corpus.by_id(&docid(n))[0]);
+            let [Invalidity::DuplicateItemIdAcross { others, .. }] = reasons.as_slice() else {
+                panic!("expected one across-duplicate, got {reasons:?}");
+            };
+            assert_eq!(paths(others), vec![other]);
+        }
+    }
+
+    #[test]
+    fn an_item_id_equal_to_its_own_designs_id_is_only_the_item_issue() {
+        let corpus = Corpus::build(
+            [(
+                public("d.md", b"d"),
+                design_reading(1, vec![(1, identified(11, "a", &[]))]),
+            )],
+            &none(),
+        );
+        let reasons = reasons_of(&corpus.by_id(&docid(11))[0]);
+        assert!(matches!(
+            reasons.as_slice(),
+            [Invalidity::Item(ItemIssue::ItemIdIsDesignId { .. })]
+        ));
+    }
+
+    #[test]
+    fn an_item_id_twice_in_one_design_is_only_the_item_issue() {
+        let corpus = Corpus::build(
+            [(
+                public("d.md", b"d"),
+                design_reading(
+                    1,
+                    vec![(1, identified(4, "a", &[])), (2, identified(4, "b", &[]))],
+                ),
+            )],
+            &none(),
+        );
+        let reasons = reasons_of(&corpus.by_id(&docid(11))[0]);
+        assert!(matches!(
+            reasons.as_slice(),
+            [Invalidity::Item(ItemIssue::DuplicateItemId { .. })]
+        ));
+    }
+
+    #[test]
+    fn the_private_copy_of_a_publication_is_not_a_second_design() {
+        let reading = || design_reading(1, vec![(1, identified(5, "a", &[]))]);
+        for published in [none(), BTreeSet::from([docid(11)])] {
+            let corpus = Corpus::build(
+                [
+                    (public("d.md", b"d"), reading()),
+                    (private("p.md", b"d", safe()), reading()),
+                ],
+                &published,
+            );
+            assert_eq!(corpus.publishing().len(), 1);
+            assert!(corpus.by_id(&docid(11))[0].standing().is_valid());
+        }
+    }
+
+    #[test]
+    fn a_spec_has_no_item_faults() {
+        let corpus = Corpus::build([(public("a.md", b"a"), doc(1))], &none());
+        assert!(corpus.by_id(&docid(1))[0].standing().is_valid());
     }
 
     #[test]

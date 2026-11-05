@@ -1236,7 +1236,7 @@ impl Model {
                         key,
                         store: l.entry.store,
                         item: item.clone(),
-                        hash: item.hash(design.id(), *number),
+                        hash: item.hash(design.id()),
                         tips: snap.tips_in(l.entry.store, item_id.entity()),
                         evaluation,
                     },

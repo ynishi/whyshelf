@@ -440,7 +440,7 @@ pub mod ca {
             || {
                 let tests = outcome?;
                 design.map(|design| Attestation::Ca {
-                    item: Pinned::new(key.id, item.hash(key.design, key.number)),
+                    item: Pinned::new(key.id, item.hash(key.design)),
                     design: Pinned::new(design.id(), *design.design_hash()),
                     revision: Revision::Commit(revision),
                     tests,

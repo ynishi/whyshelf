@@ -90,7 +90,7 @@
 //! let spec = "---\ngrounds:\n  - finding/slow-login\n  - finding/session-dropped\naccept:\n  pins:\n    - id: PIN-LOGIN-CACHE\n      contract: \"The session is reused for five minutes\"\n    - id: UT-LOGIN-EXPIRY\n      contract: \"An expired session is not reused\"\n  hyp:\n    - id: HYP-FASTER-LOGIN\n      metric: \"median login time\"\n      target: \"under 2 s\"\n---\n\n## Contract\nA session younger than five minutes is reused.\n\n## Design Notes\nFree notes.\n";
 //! assert_eq!(parse(&normalize(spec)).unwrap().kind(), DocKind::Spec);
 //!
-//! let design = "---\nspec: spec/session-reuse\ncrux:\n  question: \"Where is the session kept?\"\n  options:\n    - id: opt-memory\n      summary: \"Keep it in memory\"\n      chosen: true\n      reason: \"No new storage to secure\"\n    - id: opt-disk\n      summary: \"Keep it on disk\"\n      rejected: \"A file to protect and to clean up\"\n    - id: opt-server\n      summary: \"Keep it on the server only\"\n      rejected: \"Every start would need a round trip\"\nitems:\n  - number: 1\n    summary: \"Reuse the session inside the window\"\n    pins: [PIN-LOGIN-CACHE]\n  - number: 2\n    summary: \"Drop the session when it expires\"\n    pins: [UT-LOGIN-EXPIRY]\n---\n\n## Design Notes\nFree notes.\n";
+//! let design = "---\nspec: spec/session-reuse\ncrux:\n  question: \"Where is the session kept?\"\n  options:\n    - id: opt-memory\n      summary: \"Keep it in memory\"\n      chosen: true\n      reason: \"No new storage to secure\"\n    - id: opt-disk\n      summary: \"Keep it on disk\"\n      rejected: \"A file to protect and to clean up\"\n    - id: opt-server\n      summary: \"Keep it on the server only\"\n      rejected: \"Every start would need a round trip\"\nitems:\n  - id: 0192f3a4-5b6c-7d8e-8f90-123456789abc\n    number: 1\n    summary: \"Reuse the session inside the window\"\n    pins: [PIN-LOGIN-CACHE]\n  - id: 0192f3a4-5b6c-7d8e-8f90-123456789abd\n    number: 2\n    summary: \"Drop the session when it expires\"\n    pins: [UT-LOGIN-EXPIRY]\n---\n\n## Design Notes\nFree notes.\n";
 //! assert_eq!(parse(&normalize(design)).unwrap().kind(), DocKind::Design);
 //!
 //! // Every problem is reported, not the first: two keys are missing here.
@@ -150,13 +150,22 @@
 //!       summary: "Keep it on disk"
 //!       rejected: "A file to protect and to clean up"
 //! items:
-//!   - number: 1
+//!   - id: 0192f3a4-5b6c-7d8e-8f90-123456789abc   # optional here; see below
+//!     number: 1
 //!     summary: "Reuse the session inside the window"
 //!     pins: [PIN-LOGIN-CACHE]
 //! ```
 //!
 //! Exactly one option is `chosen` (with a `reason`) and at least one is
 //! `rejected` (with its reason).
+//!
+//! The `id:` of an item is its identity (a UUID v7, in the one form a UUID is
+//! written in). Reading it is optional: an item with no `id:` reads, and the rule
+//! that a Design of the corpus needs one is the domain's
+//! ([`whyshelf_core::domain::design::Design::item_issues`]). One that is written
+//! and is no identifier is an `InvalidField` (`items[0].id`). Two items with one
+//! number are a `DuplicateItemNumber`, since the number is what the items are
+//! keyed by.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
@@ -175,7 +184,7 @@ use whyshelf_core::domain::finding::{
     EvidenceLabel, FindingType, MaturityLevel, ObservationMethod, Reproducibility,
 };
 use whyshelf_core::domain::front::{FileClassification, Guess, SortedKeys};
-use whyshelf_core::domain::id::{Alias, ItemNumber};
+use whyshelf_core::domain::id::{Alias, ItemId, ItemNumber};
 use whyshelf_core::domain::location::{CodeLocation, SourceUri};
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::pin::{HypId, Hypothesis, PinContract, PinId};
@@ -450,6 +459,7 @@ struct OptionFront {
 
 #[derive(Deserialize)]
 struct ItemFront {
+    id: Option<String>,
     number: Option<String>,
     summary: Option<String>,
     pins: Option<Vec<String>>,
@@ -752,6 +762,7 @@ fn parse_design(front: DesignFront, problems: &mut Problems) -> Option<RawDesign
     let spec = problems.parsed::<Ref>(front.spec, "spec");
     let crux = parse_crux(front.crux, problems);
     let mut items: BTreeMap<ItemNumber, WorkItem> = BTreeMap::new();
+    let mut repeated: BTreeSet<ItemNumber> = BTreeSet::new();
     for (index, item) in front.items.unwrap_or_default().into_iter().enumerate() {
         let at = format!("items[{index}]");
         let number = problems.parsed::<ItemNumber>(item.number, &format!("{at}.number"));
@@ -760,14 +771,23 @@ fn parse_design(front: DesignFront, problems: &mut Problems) -> Option<RawDesign
             .parsed_list::<PinId>(item.pins, &format!("{at}.pins"))
             .into_iter()
             .collect();
+        // The `id:` is optional here: whether an item needs one is the rule of the
+        // corpus, not of reading. One that is written must be an identifier.
+        let id = item
+            .id
+            .and_then(|text| problems.parsed::<ItemId>(Some(text), &format!("{at}.id")));
         if let (Some(number), Some(summary)) = (number, summary) {
-            insert_unique(
-                &mut items,
-                number,
-                WorkItem::new(summary, pins),
-                "items",
-                problems,
-            );
+            let work = WorkItem::new(summary, pins);
+            let work = match id {
+                Some(id) => work.with_id(id),
+                None => work,
+            };
+            // One reason per repeated number, however often it repeats.
+            if items.insert(number, work).is_some() && repeated.insert(number) {
+                problems
+                    .0
+                    .push(UnparsedReason::DuplicateItemNumber { number });
+            }
         }
     }
     Some(RawDesign::new(spec?, crux?, items))
@@ -839,6 +859,8 @@ fn parse_crux(front: Option<CruxFront>, problems: &mut Problems) -> Option<Crux>
 mod tests {
     use super::*;
     use crate::markdown::normalize;
+    use whyshelf_core::domain::design::{Design, ItemIssue};
+    use whyshelf_core::domain::id::{DesignId, SpecId};
 
     const REVISION: &str = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
 
@@ -1170,6 +1192,109 @@ mod tests {
             panic!("not a Design");
         };
         assert_eq!(design.spec().to_string(), "spec/session-reuse");
+    }
+
+    const ITEM_ID: &str = "0192f3a4-5b6c-7d8e-8f90-123456789abc";
+
+    fn design_with_items(items: &str) -> String {
+        format!(
+            "---\nspec: spec/session-reuse\ncrux:\n  question: q\n  options:\n{GOOD_OPTIONS}items:\n{items}---\n"
+        )
+    }
+
+    /// The Design a text builds, with fixed identifiers.
+    fn built(text: &str) -> Result<Design, Vec<UnparsedReason>> {
+        let id = |text: &str| text.parse::<whyshelf_core::domain::id::EntityId>().unwrap();
+        match parse_text(text)? {
+            RawDoc::Design(design) => Ok(design.build(
+                DesignId::new(id("0192f3a4-5b6c-7d8e-8f90-0000000000d1")),
+                SpecId::new(id("0192f3a4-5b6c-7d8e-8f90-0000000000a1")),
+            )),
+            other => panic!("not a Design: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_item_may_carry_the_id_its_file_wrote() {
+        let design = built(&design_with_items(&format!(
+            "  - id: {ITEM_ID}\n    number: 1\n    summary: s\n    pins: [PIN-A]\n  - number: 2\n    summary: t\n    pins: []\n"
+        )))
+        .expect("it reads");
+        let number = |n: u32| ItemNumber::new(n).unwrap();
+        assert_eq!(
+            design.items()[&number(1)].id(),
+            Some(ItemId::new(ITEM_ID.parse().unwrap()))
+        );
+        // An item with no `id:` reads; that it needs one is the corpus's rule.
+        assert_eq!(design.items()[&number(2)].id(), None);
+        assert_eq!(
+            design.item_issues(),
+            vec![ItemIssue::UnidentifiedItem { number: number(2) }]
+        );
+    }
+
+    #[test]
+    fn the_id_of_an_item_is_hashed_by_nothing() {
+        let with_id = built(&design_with_items(&format!(
+            "  - id: {ITEM_ID}\n    number: 1\n    summary: s\n    pins: [PIN-A]\n"
+        )))
+        .unwrap();
+        let without = built(&design_with_items(
+            "  - number: 1\n    summary: s\n    pins: [PIN-A]\n",
+        ))
+        .unwrap();
+        assert_eq!(with_id.design_hash(), without.design_hash());
+    }
+
+    #[test]
+    fn renumbering_the_items_of_a_file_changes_no_hash() {
+        let one_two = "  - number: 1\n    summary: s\n    pins: [PIN-A]\n  - number: 2\n    summary: t\n    pins: []\n";
+        let three_nine = "  - number: 9\n    summary: t\n    pins: []\n  - number: 3\n    summary: s\n    pins: [PIN-A]\n";
+        assert_eq!(
+            built(&design_with_items(one_two)).unwrap().design_hash(),
+            built(&design_with_items(three_nine)).unwrap().design_hash()
+        );
+    }
+
+    #[test]
+    fn an_item_id_that_is_no_identifier_is_refused_where_it_is() {
+        for bad in ["nonsense", "0192F3A4-5B6C-7D8E-8F90-123456789ABC"] {
+            let reasons = built(&design_with_items(&format!(
+                "  - id: {bad}\n    number: 1\n    summary: s\n    pins: []\n"
+            )))
+            .unwrap_err();
+            assert!(
+                reasons.iter().any(|r| matches!(
+                    r, UnparsedReason::InvalidField { field, .. } if field == "items[0].id"
+                )),
+                "{bad}: {reasons:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn two_items_with_one_number_are_a_typed_reason() {
+        let reasons = built(&design_with_items(
+            "  - number: 4\n    summary: s\n    pins: []\n  - number: 4\n    summary: t\n    pins: []\n",
+        ))
+        .unwrap_err();
+        assert_eq!(
+            reasons,
+            vec![UnparsedReason::DuplicateItemNumber {
+                number: ItemNumber::new(4).unwrap()
+            }]
+        );
+        // A number three times is still one reason.
+        let thrice = built(&design_with_items(
+            "  - number: 4\n    summary: s\n    pins: []\n  - number: 4\n    summary: t\n    pins: []\n  - number: 4\n    summary: u\n    pins: []\n",
+        ))
+        .unwrap_err();
+        assert_eq!(
+            thrice,
+            vec![UnparsedReason::DuplicateItemNumber {
+                number: ItemNumber::new(4).unwrap()
+            }]
+        );
     }
 
     #[test]

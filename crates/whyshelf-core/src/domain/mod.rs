@@ -90,10 +90,11 @@
 //! | Finding | type, metadata, title, evidence label, body | tags, owner, path |
 //! | Spec `contract_hash` | grounds, pins, hypotheses, Contract | supplementary sections, tags |
 //! | Spec `hyp_hash` | hypotheses only | everything else |
-//! | Design | Spec reference, Crux, items | Design Notes, tags |
-//! | item | Design, number, summary, assigned pins | other items |
+//! | Design | Spec reference, Crux, the items as a set (summary, assigned pins) | Design Notes, tags, item numbers and ids |
+//! | item | Design, summary, assigned pins | item number and id, other items |
 //!
-//! Correcting a typo in a note, or retagging, cannot remove an approval. Text is
+//! Correcting a typo in a note, retagging, or renumbering the items cannot remove an
+//! approval: an item number is a name for people, as a tag is. Text is
 //! normalized once, by the adapter that reads a file (line breaks to LF, trailing
 //! spaces and tabs removed, the file ends in exactly one LF), before the domain
 //! sees it.

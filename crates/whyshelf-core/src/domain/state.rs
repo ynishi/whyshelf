@@ -105,6 +105,7 @@
 //! | [`UnparsedReason::KindUnknown`] | Invalid | neither the `kind:` key nor the place of the file says what kind of document it is | write `kind:` in the front matter |
 //! | [`UnparsedReason::KindDisagrees`] | Invalid | the `kind:` key and the place of the file name different kinds | make them agree |
 //! | [`UnparsedReason::EmptyGrounds`], [`UnparsedReason::DuplicateGround`] | Invalid | a Spec with no ground, or one Finding twice among them | list each Finding once, and at least one |
+//! | [`UnparsedReason::DuplicateItemNumber`] | Invalid | two items of a Design have one number | give each item a number of its own |
 //! | [`InvalidReason::DanglingRef`] | Invalid | an identifier a reference spells (plain, or `private:` where the private store can be read) is not an entity here | bring the entity back, or correct the reference |
 //! | [`InvalidReason::ClassificationConflict`] | Invalid | two branches set the kind or the path differently | set it again (the application's `reclassify`; no command does it), or `whyshelf mv` for the path |
 //! | [`InvalidReason::PinCoverage`] | Invalid | the Design and its Spec disagree about a pin | assign each declared pin to an item; assign no undeclared one |
@@ -139,7 +140,7 @@ use super::classification::ConflictField;
 use super::design::CoverageIssue;
 use super::event::{DocKind, EntityKind};
 use super::hash::ContentHash;
-use super::id::{Alias, EntityId};
+use super::id::{Alias, EntityId, ItemNumber};
 use super::location::RelPath;
 use super::nonempty::NonEmptyVec;
 use super::pin::PinId;
@@ -301,6 +302,15 @@ pub enum UnparsedReason {
     DuplicateGround {
         /// The repeated Finding.
         finding: EntityId,
+    },
+    /// Two items of a Design carry the same number.
+    ///
+    /// The number is the key of the items of a Design, so a Design cannot be built
+    /// from such a file. Fix: give each item a number of its own.
+    #[error("the item {number} appears twice")]
+    DuplicateItemNumber {
+        /// The repeated number.
+        number: ItemNumber,
     },
 }
 
