@@ -34,6 +34,36 @@
 //! | CA | [`CaInput`] | the Design's state; the pins in the tests, in both directions; the tests | the item at its hash, the Design at its hash, the revision, the outcome |
 //! | CM | [`CmInput`] | the CS approval that fixed the hypotheses; the Finding of a `fail-hyp` | the Spec at its hypothesis hash, that CS approval, the result |
 //!
+//! # What a gate asks of the entity itself
+//!
+//! What the content of the target must have (a body, the pins and hypotheses a
+//! [`GatePolicy`] demands) is decided once, here, by [`body_lack`], [`pins_lack`] and
+//! [`hypotheses_lack`]. Each answers `None` when the entity has it, and otherwise how
+//! the gate takes the lack: [`LackNeed::Required`] where it refuses,
+//! [`LackNeed::Informational`] where the policy lets it pass. The gates raise their
+//! violations from the answer, and the readiness of an entity
+//! ([`corpus_eval`](super::corpus_eval)) reports the same lacks from the same answer,
+//! so what a gate refuses on and what is said to be lacking cannot differ.
+//!
+//! # Run on the corpus: `check_in`
+//!
+//! [`cs::check_in`], [`ci::check_in`] and [`ca::check_in`] are the same checks over
+//! the states that [`corpus_eval`](super::corpus_eval) gives, with an
+//! [`UpstreamPins`] saying which upstreams are private documents and which keys the
+//! person has. They differ from `check` in what they do with an upstream they pin
+//! (CS: each ground; CI: the Spec; CA: the Design), and in nothing else:
+//!
+//! | the upstream | `check` | `check_in` |
+//! |---|---|---|
+//! | public | pinned at its hash | the same |
+//! | private, a key is current | pinned at its hash | pinned by a keyed pin ([`keyring`](super::keyring)) |
+//! | private, no key | pinned at its hash | [`CheckViolation::UpstreamUnverifiable`] |
+//! | cannot be read here | [`UpstreamProblem::Unresolved`] | [`CheckViolation::UpstreamUnverifiable`] |
+//! | there, and it is Partial (it cannot read something further up) | [`UpstreamProblem::Unresolved`] | no violation; the entity is Partial |
+//!
+//! So a gate stops on the pin it checks itself and on nothing it cannot see past it.
+//! CM reads the approvals of a Spec and has no `check_in`.
+//!
 //! # An Invalid target is a violation
 //!
 //! In every gate (the measurement included) an entity that is Invalid yields one
@@ -44,13 +74,13 @@
 //!
 //! # What stops on an upstream
 //!
-//! An upstream is judged by [`upstream_problems`], which holds the one order in
+//! An upstream is judged by [`upstream_problems`](super::lint::upstream_problems), which holds the one order in
 //! which its problems are shown; the gate turns each into a
 //! [`CheckViolation::Upstream`]. An upstream that is a document in conflict over its
 //! kind is Invalid like any other, so a Spec that takes it as a ground is stopped at
 //! CS.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::approval::{
     ApprovalSet, Attestation, CmResult, CsFixing, Gate, GateBasis, Pinned, TestOutcome, TestsRun,
@@ -58,13 +88,15 @@ use super::approval::{
 use super::design::{Design, WorkItem};
 use super::evaluate::{Evaluated, ImplView, ItemEvaluation, ItemKey, States, Subject};
 use super::finding::{EvidenceLabel, Finding, FindingSource};
+use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, SpecId};
-use super::lint::{CheckViolation, UpstreamProblem, upstream_problems};
+use super::keyring::{PinKeyring, UpstreamHash};
+use super::lint::{CheckViolation, UpstreamProblem, UpstreamReach, upstream_problems_reaching};
 use super::nonempty::NonEmptyVec;
 use super::policy::GatePolicy;
 use super::revision::{Revision, RevisionId};
 use super::spec::{DeclaredPins, Spec};
-use super::state::{Approval, Completeness, EntityState, InvalidReason};
+use super::state::{Approval, Completeness, EntityState, InvalidReason, LackNeed};
 
 /// Proof that a gate's machine check found nothing: the only way to record an
 /// approval.
@@ -138,14 +170,78 @@ fn one(violation: CheckViolation) -> Violations {
     NonEmptyVec::new(violation, Vec::new())
 }
 
+/// The upstreams that are private documents and the keys a person has: what a gate
+/// run on the corpus needs to pin an upstream.
+///
+/// Passed to the `check_in` of [`cs`], [`ci`] and [`ca`]. Those differ from `check`
+/// in two ways, and only these:
+///
+/// - an upstream that is a private document is pinned by a keyed pin under the
+///   current key (see [`keyring`](super::keyring)), and a private upstream with no
+///   key cannot be pinned;
+/// - the gate stops only on the pin it checks itself, so an upstream that is there
+///   and Partial (it cannot read something further up) does not stop it, and the
+///   violation for an upstream that cannot be read or pinned is
+///   [`CheckViolation::UpstreamUnverifiable`].
+#[derive(Debug, Clone, Copy)]
+pub struct UpstreamPins<'a> {
+    private: &'a BTreeSet<EntityId>,
+    keyring: &'a PinKeyring,
+}
+
+impl<'a> UpstreamPins<'a> {
+    /// The upstreams in `private` are private documents; `keyring` is the person's.
+    pub fn new(private: &'a BTreeSet<EntityId>, keyring: &'a PinKeyring) -> Self {
+        Self { private, keyring }
+    }
+}
+
+/// How a check reads its upstreams: whole, as the event-log pipeline does, or the
+/// pin it checks itself, as the corpus pipeline does.
+#[derive(Clone, Copy)]
+enum Mode<'a> {
+    Whole,
+    Direct(UpstreamPins<'a>),
+}
+
+impl Mode<'_> {
+    fn reach(self) -> UpstreamReach {
+        match self {
+            Self::Whole => UpstreamReach::Whole,
+            Self::Direct(_) => UpstreamReach::Direct,
+        }
+    }
+
+    /// The pin of an upstream at `hash`; `None` when it cannot be pinned (private,
+    /// and no key).
+    fn pin(self, upstream: EntityId, hash: &ContentHash) -> Option<UpstreamHash> {
+        match self {
+            Self::Whole => Some(UpstreamHash::Plain(*hash)),
+            // `NoKey` is the one refusal; the caller reports it as unverifiable.
+            Self::Direct(pins) => pins
+                .keyring
+                .pin_upstream(pins.private.contains(&upstream), upstream, hash)
+                .ok(),
+        }
+    }
+
+    /// The violation of an upstream with this problem.
+    fn violation(self, upstream: EntityId, problem: UpstreamProblem) -> CheckViolation {
+        match (self, problem) {
+            (Self::Direct(_), UpstreamProblem::Unresolved) => {
+                CheckViolation::UpstreamUnverifiable { upstream }
+            }
+            _ => CheckViolation::Upstream { upstream, problem },
+        }
+    }
+}
+
 /// The reason an upstream could not be pinned although it raised no problem: the
-/// application did not hand over what the check needs. It is shown as an upstream
-/// that cannot be read, which stops the approval.
-fn unpinnable(upstream: EntityId) -> Violations {
-    one(CheckViolation::Upstream {
-        upstream,
-        problem: UpstreamProblem::Unresolved,
-    })
+/// application did not hand over what the check needs, or the upstream is private
+/// and there is no key. It is shown as an upstream that cannot be read (or
+/// verified), which stops the approval.
+fn unpinnable(mode: Mode<'_>, upstream: EntityId) -> Violations {
+    one(mode.violation(upstream, UpstreamProblem::Unresolved))
 }
 
 /// The violation of an Invalid state, if the state is Invalid: the one rule that
@@ -190,17 +286,73 @@ fn target<T>(evaluated: &Evaluated<T>) -> Result<&T, Violations> {
 /// One violation for each upstream that is not ready, in the order of
 /// [`upstream_problems`].
 fn upstream_violations(
+    mode: Mode<'_>,
     target: &Completeness,
     upstreams: &[(EntityId, Option<&EntityState>)],
 ) -> Vec<CheckViolation> {
-    upstream_problems(target, upstreams)
+    upstream_problems_reaching(target, upstreams, mode.reach())
         .into_iter()
-        .map(|(upstream, problem)| CheckViolation::Upstream { upstream, problem })
+        .map(|(upstream, problem)| mode.violation(upstream, problem))
         .collect()
+}
+
+/// Whether a violation is about this upstream.
+fn is_about(violation: &CheckViolation, id: EntityId) -> bool {
+    matches!(
+        violation,
+        CheckViolation::Upstream { upstream, .. }
+            | CheckViolation::UpstreamUnverifiable { upstream } if *upstream == id
+    )
 }
 
 fn state_of<'a>(states: &States<'a>, id: EntityId) -> Option<&'a EntityState> {
     states.get(&id).copied()
+}
+
+// ---- what a gate asks of the entity itself -------------------------------
+//
+// The gates and the readiness of an entity (see
+// [`corpus_eval`](super::corpus_eval)) ask the same questions of its own content, so
+// the rules are written here once. Each answers `None` when the entity has what the
+// gate looks for, and otherwise how the gate takes its absence:
+// [`LackNeed::Required`] when it refuses, [`LackNeed::Informational`] when the
+// project's [`GatePolicy`] lets it pass.
+
+/// How CS takes an absence the policy may allow.
+fn demanded(by_policy: bool) -> LackNeed {
+    if by_policy {
+        LackNeed::Required
+    } else {
+        LackNeed::Informational
+    }
+}
+
+/// CR: the Finding has nothing under its front matter. Always refused.
+pub fn body_lack(finding: &Finding) -> Option<LackNeed> {
+    finding
+        .body()
+        .trim()
+        .is_empty()
+        .then_some(LackNeed::Required)
+}
+
+/// CS: the Spec declares no pin. Refused when the policy demands pins.
+pub fn pins_lack(spec: &Spec, policy: GatePolicy) -> Option<LackNeed> {
+    spec.pins()
+        .is_empty()
+        .then(|| demanded(policy.cs_requires_pins()))
+}
+
+/// CS: the Spec declares no hypothesis. Refused when the policy demands them.
+pub fn hypotheses_lack(spec: &Spec, policy: GatePolicy) -> Option<LackNeed> {
+    spec.hyps()
+        .is_empty()
+        .then(|| demanded(policy.cs_requires_hypotheses()))
+}
+
+/// Whether the gate refuses on a lack.
+fn refuses(lack: Option<LackNeed>) -> bool {
+    lack == Some(LackNeed::Required)
 }
 
 /// What CR reads: the Finding as it was evaluated.
@@ -219,7 +371,7 @@ pub mod cr {
     pub fn check(input: CrInput<'_>) -> Checked {
         let finding = target(input.finding)?;
         let mut violations = Vec::new();
-        if finding.body().trim().is_empty() {
+        if refuses(body_lack(finding)) {
             violations.push(CheckViolation::EmptyBody);
         }
         if matches!(finding.source(), FindingSource::MeasuredData { .. })
@@ -235,7 +387,7 @@ pub mod cr {
                 })
             },
             Gate::Cr,
-            || unpinnable(finding.id().entity()),
+            || unpinnable(Mode::Whole, finding.id().entity()),
         )
     }
 }
@@ -266,17 +418,29 @@ pub mod cs {
     /// that declares none of either and passes under a relaxed policy is recorded
     /// with that policy.
     pub fn check(input: CsInput<'_>) -> Checked {
+        run(input, Mode::Whole)
+    }
+
+    /// The check run on the corpus: each ground is pinned by the pin `pins` says
+    /// (keyed, for a private ground), and a ground that cannot be read or pinned is
+    /// [`CheckViolation::UpstreamUnverifiable`]. See [`UpstreamPins`].
+    pub fn check_in(input: CsInput<'_>, pins: UpstreamPins<'_>) -> Checked {
+        run(input, Mode::Direct(pins))
+    }
+
+    fn run(input: CsInput<'_>, mode: Mode<'_>) -> Checked {
         let spec = target(input.spec)?;
         let upstreams: Vec<_> = spec
             .grounds()
             .iter()
             .map(|ground| (ground.entity(), state_of(input.states, ground.entity())))
             .collect();
-        let mut violations = upstream_violations(input.spec.state().completeness(), &upstreams);
-        if input.policy.cs_requires_pins() && spec.pins().is_empty() {
+        let mut violations =
+            upstream_violations(mode, input.spec.state().completeness(), &upstreams);
+        if refuses(pins_lack(spec, input.policy)) {
             violations.push(CheckViolation::NoPinsDeclared);
         }
-        if input.policy.cs_requires_hypotheses() && spec.hyps().is_empty() {
+        if refuses(hypotheses_lack(spec, input.policy)) {
             violations.push(CheckViolation::NoHypsDeclared);
         }
         // An attestation names every ground at its hash. A ground that cannot be
@@ -286,19 +450,17 @@ pub mod cs {
                 .grounds
                 .get(ground)
                 .and_then(|evaluated| evaluated.entity())
-                .map(|finding| Pinned::new(*ground, *finding.hash()))
+                .and_then(|finding| {
+                    mode.pin(ground.entity(), finding.hash())
+                        .map(|hash| Pinned::new(*ground, hash))
+                })
         };
         let head = pin(spec.grounds().first());
         let tail: Option<Vec<_>> = spec.grounds().iter().skip(1).map(pin).collect();
         for ground in spec.grounds().iter() {
-            let known = violations.iter().any(
-                |v| matches!(v, CheckViolation::Upstream { upstream, .. } if *upstream == ground.entity()),
-            );
+            let known = violations.iter().any(|v| is_about(v, ground.entity()));
             if !known && pin(ground).is_none() {
-                violations.push(CheckViolation::Upstream {
-                    upstream: ground.entity(),
-                    problem: UpstreamProblem::Unresolved,
-                });
+                violations.push(mode.violation(ground.entity(), UpstreamProblem::Unresolved));
             }
         }
         settle(
@@ -313,7 +475,7 @@ pub mod cs {
                 _ => None,
             },
             Gate::Cs,
-            || unpinnable(spec.id().entity()),
+            || unpinnable(mode, spec.id().entity()),
         )
     }
 }
@@ -342,9 +504,23 @@ pub mod ci {
     /// That the Crux gives a reason for each rejected option is held by its type, so
     /// there is nothing to check for it here.
     pub fn check(input: CiInput<'_>) -> Checked {
+        run(input, Mode::Whole)
+    }
+
+    /// The check run on the corpus: the Spec is pinned by the pin `pins` says (keyed,
+    /// for a private Spec). Only the Spec's own pin stops the gate: a Spec that is
+    /// approved and Partial (something under it is out of reach) does not, and a
+    /// Spec that cannot be read or pinned is
+    /// [`CheckViolation::UpstreamUnverifiable`]. See [`UpstreamPins`].
+    pub fn check_in(input: CiInput<'_>, pins: UpstreamPins<'_>) -> Checked {
+        run(input, Mode::Direct(pins))
+    }
+
+    fn run(input: CiInput<'_>, mode: Mode<'_>) -> Checked {
         let design = target(input.design)?;
         let spec_id = design.spec().entity();
         let mut violations = upstream_violations(
+            mode,
             input.design.state().completeness(),
             &[(spec_id, state_of(input.states, spec_id))],
         );
@@ -353,6 +529,13 @@ pub mod ci {
             .get(&design.spec())
             .and_then(|evaluated| evaluated.entity());
         if let Some(spec) = spec {
+            // A Spec that is there and cannot be pinned (private, no key) says so
+            // whatever else is wrong, as a ground does at CS.
+            if !violations.iter().any(|v| is_about(v, spec_id))
+                && mode.pin(spec_id, spec.contract_hash()).is_none()
+            {
+                violations.push(mode.violation(spec_id, UpstreamProblem::Unresolved));
+            }
             violations.extend(
                 design
                     .check_pin_coverage(spec)
@@ -363,13 +546,15 @@ pub mod ci {
         settle(
             violations,
             || {
-                spec.map(|spec| Attestation::Ci {
+                let spec = spec?;
+                let pin = mode.pin(spec_id, spec.contract_hash())?;
+                Some(Attestation::Ci {
                     design: Pinned::new(design.id(), *design.design_hash()),
-                    spec: Pinned::new(spec.id(), *spec.contract_hash()),
+                    spec: Pinned::new(spec.id(), pin),
                 })
             },
             Gate::Ci,
-            || unpinnable(spec_id),
+            || unpinnable(mode, spec_id),
         )
     }
 }
@@ -407,6 +592,18 @@ pub mod ca {
     /// violation, for the same reason as at CI. An item is named by its number inside
     /// its Design, never by a mark, so it has nothing of its own that cannot be read.
     pub fn check(input: CaInput<'_>) -> Checked {
+        run(input, Mode::Whole)
+    }
+
+    /// The check run on the corpus: the Design is pinned by the pin `pins` says
+    /// (keyed, for a private Design). Only the Design's own pin stops the gate: a
+    /// Design that is approved and Partial does not, and a Design that cannot be read
+    /// or pinned is [`CheckViolation::UpstreamUnverifiable`]. See [`UpstreamPins`].
+    pub fn check_in(input: CaInput<'_>, pins: UpstreamPins<'_>) -> Checked {
+        run(input, Mode::Direct(pins))
+    }
+
+    fn run(input: CaInput<'_>, mode: Mode<'_>) -> Checked {
         if let Some(violations) = invalid_target(input.evaluation.state()) {
             return Err(violations);
         }
@@ -423,12 +620,21 @@ pub mod ca {
         } = input;
         let design_id = key.design.entity();
         let mut violations = upstream_violations(
+            mode,
             &Completeness::Complete,
             &[(design_id, state_of(states, design_id))],
         );
         let design = designs
             .get(&key.design)
             .and_then(|evaluated| evaluated.entity());
+        // A Design that is there and cannot be pinned (private, no key) says so
+        // whatever else is wrong, as a ground does at CS.
+        if let Some(design) = design
+            && !violations.iter().any(|v| is_about(v, design_id))
+            && mode.pin(design_id, design.design_hash()).is_none()
+        {
+            violations.push(mode.violation(design_id, UpstreamProblem::Unresolved));
+        }
         if let Some(design) = design
             && design.items().get(&key.number) != Some(item)
         {
@@ -464,15 +670,17 @@ pub mod ca {
             violations,
             || {
                 let tests = outcome?;
-                design.map(|design| Attestation::Ca {
+                let design = design?;
+                let pin = mode.pin(design_id, design.design_hash())?;
+                Some(Attestation::Ca {
                     item: Pinned::new(key.id, item.hash(key.design)),
-                    design: Pinned::new(design.id(), *design.design_hash()),
+                    design: Pinned::new(design.id(), pin),
                     revision: Revision::Commit(revision),
                     tests,
                 })
             },
             Gate::Ca,
-            || unpinnable(design_id),
+            || unpinnable(mode, design_id),
         )
     }
 }
@@ -532,7 +740,7 @@ pub mod cm {
                 })
             },
             Gate::Cm,
-            || unpinnable(spec.id().entity()),
+            || unpinnable(Mode::Whole, spec.id().entity()),
         )
     }
 }
@@ -1224,7 +1432,7 @@ mod tests {
         };
         assert_eq!(item.id(), &iid(31));
         assert_eq!(item.hash(), &w.design.item_hash(num(1)).unwrap());
-        assert_eq!(design.hash(), w.design.design_hash());
+        assert_eq!(design.pin().plain(), Some(w.design.design_hash()));
         assert_eq!(
             revision,
             &Revision::Commit(RevisionId::from_validated("head".into()).unwrap())
@@ -1663,5 +1871,74 @@ mod tests {
         for p in [&cr, &cm] {
             assert_eq!(p.attestation().gate(), p.gate());
         }
+    }
+
+    /// What a gate refuses on and what is said to be lacking are one answer.
+    #[test]
+    fn what_the_gates_ask_of_the_entity_is_answered_once() {
+        use LackNeed::{Informational, Required};
+        let strict = GatePolicy::default();
+        let relaxed = GatePolicy::new(false, false);
+
+        assert_eq!(body_lack(&finding(1, "text")), None);
+        for blank in ["", "  \n\t\n"] {
+            assert_eq!(body_lack(&finding(1, blank)), Some(Required), "{blank:?}");
+        }
+
+        let bare = Spec::new(
+            sid(11),
+            NonEmptyVec::new(fid(1), Vec::new()),
+            NonBlank::new("the contract").unwrap(),
+            pins(&[]),
+            hyps(&[]),
+        )
+        .unwrap();
+        let full = spec(11, &[1], &["PIN-A"]);
+        assert_eq!(pins_lack(&full, strict), None);
+        assert_eq!(hypotheses_lack(&full, relaxed), None);
+        assert_eq!(pins_lack(&bare, strict), Some(Required));
+        assert_eq!(pins_lack(&bare, relaxed), Some(Informational));
+        assert_eq!(hypotheses_lack(&bare, strict), Some(Required));
+        assert_eq!(hypotheses_lack(&bare, relaxed), Some(Informational));
+        // The policy decides each one on its own.
+        let only_pins = GatePolicy::new(true, false);
+        assert_eq!(pins_lack(&bare, only_pins), Some(Required));
+        assert_eq!(hypotheses_lack(&bare, only_pins), Some(Informational));
+
+        // And the gate refuses exactly where the answer is Required. (The ground is
+        // in a store out of reach, which is a violation of its own and not Invalid.)
+        let written = Written {
+            unresolved: BTreeSet::from([eid(1)]),
+            ..Written::default()
+        };
+        let bare_evaluated = Evaluator::spec(
+            &bare,
+            &NO_FINDINGS,
+            &states_of(&NO_FINDINGS, &NO_SPECS, &NO_DESIGNS, []),
+            &ApprovalSet::default(),
+            &written,
+            &[],
+        );
+        let violations = |policy| -> Vec<CheckViolation> {
+            match cs::check(CsInput {
+                spec: &bare_evaluated,
+                grounds: BTreeMap::new(),
+                states: &states_of(&NO_FINDINGS, &NO_SPECS, &NO_DESIGNS, []),
+                policy,
+            }) {
+                Ok(_) => Vec::new(),
+                Err(violations) => violations.into_vec(),
+            }
+        };
+        let refused = |policy| {
+            let found = violations(policy);
+            (
+                found.contains(&CheckViolation::NoPinsDeclared),
+                found.contains(&CheckViolation::NoHypsDeclared),
+            )
+        };
+        assert_eq!(refused(strict), (true, true));
+        assert_eq!(refused(only_pins), (true, false));
+        assert_eq!(refused(relaxed), (false, false));
     }
 }

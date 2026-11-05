@@ -25,7 +25,10 @@
 //! a conflict marker is never parsed further: it is recorded as it is and shown
 //! as invalid until a person resolves it.
 
+use std::collections::BTreeSet;
+
 use whyshelf_core::app::raw::NormalizedText;
+use whyshelf_core::domain::id::DocId;
 
 /// Normalize a text by the rule in the module documentation.
 pub fn normalize(text: &str) -> NormalizedText {
@@ -85,6 +88,42 @@ pub fn split_front_matter(text: &str) -> Result<FrontMatter<'_>, FrontMatterErro
         offset += line.len();
     }
     Err(FrontMatterError::Unclosed)
+}
+
+/// The `id:` a document shows in its front matter, found by looking at its lines and
+/// at nothing else: for a file that could not be read, so that whose it is can still
+/// be told.
+///
+/// The front matter is read as far as it goes: the lines after an opening `---` on
+/// the first line, up to the closing `---` or the end of the text. A line is the key
+/// when it starts with `id:` at the left margin (a nested `id:` is another key's). The
+/// value is the one form an identifier is written in (a UUID v7, lowercase and
+/// hyphenated), and may be quoted or followed by a ` #` comment. A line whose value
+/// is none is passed over.
+///
+/// `None` when no line gives one, and also when the lines give two different ones: a
+/// merge conflict that left both sides of the `id:` does not say which is the
+/// document's, and one is not picked.
+pub fn seen_id(text: &str) -> Option<DocId> {
+    let mut lines = text.lines();
+    if lines.next() != Some("---") {
+        return None;
+    }
+    let mut found: BTreeSet<DocId> = BTreeSet::new();
+    for line in lines.take_while(|line| *line != "---") {
+        let Some(value) = line.strip_prefix("id:") else {
+            continue;
+        };
+        let value = value.split(" #").next().unwrap_or(value).trim();
+        if let Ok(id) = value.trim_matches(['"', '\'']).parse::<DocId>() {
+            found.insert(id);
+        }
+    }
+    let mut ids = found.into_iter();
+    match (ids.next(), ids.next()) {
+        (Some(id), None) => Some(id),
+        _ => None,
+    }
 }
 
 /// The text of the section under `## <heading>`, up to the next `## ` heading,
@@ -209,6 +248,53 @@ mod tests {
             section(body, "Contract"),
             Some("```\n## not a heading\n```\nafter")
         );
+    }
+
+    const ID_A: &str = "0192f3a4-5b6c-7d8e-8f90-123456789abc";
+    const ID_B: &str = "0192f3a4-5b6c-7d8e-8f90-123456789abd";
+
+    fn id(text: &str) -> DocId {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn an_id_is_seen_in_a_front_matter_that_does_not_read() {
+        // Broken YAML below the id, an unclosed block, a conflict marker: the line is
+        // still there.
+        for text in [
+            format!("---\nid: {ID_A}\ntitle: [unclosed\n---\nbody\n"),
+            format!("---\nid: {ID_A}\ntitle: x\n"),
+            format!(
+                "---\nfinding_type: x\n<<<<<<< HEAD\nid: {ID_A}\n=======\nid: {ID_A}\n>>>>>>> topic\n---\n"
+            ),
+            format!("---\nid: \"{ID_A}\"\n---\n"),
+            format!("---\nid: '{ID_A}'\n---\n"),
+            format!("---\nid: {ID_A}   # the identity\n---\n"),
+        ] {
+            assert_eq!(seen_id(&text), Some(id(ID_A)), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn no_id_is_seen_where_none_is_written_or_the_lines_do_not_say_which() {
+        for text in [
+            // no front matter at all, or the block is not at the top
+            format!("id: {ID_A}\n"),
+            format!("text\n---\nid: {ID_A}\n---\n"),
+            // an id of another place: nested, in the body, or of another key
+            format!("---\nitems:\n  - id: {ID_A}\n---\n"),
+            format!("---\ntitle: x\n---\nid: {ID_A}\n"),
+            format!("---\nidentifier: {ID_A}\n---\n"),
+            // not the one form an identifier is written in
+            "---\nid: 0192F3A4-5B6C-7D8E-8F90-123456789ABC\n---\n".to_owned(),
+            "---\nid: not-an-id\n---\n".to_owned(),
+            // a v4 UUID is no identifier
+            "---\nid: 6ba7b810-9dad-41d1-80b4-00c04fd430c8\n---\n".to_owned(),
+            // both sides of a conflict, with two identities: one is not picked
+            format!("---\n<<<<<<< HEAD\nid: {ID_A}\n=======\nid: {ID_B}\n>>>>>>> topic\n---\n"),
+        ] {
+            assert_eq!(seen_id(&text), None, "{text:?}");
+        }
     }
 
     #[test]

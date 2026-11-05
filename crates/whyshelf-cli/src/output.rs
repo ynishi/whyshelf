@@ -1898,6 +1898,9 @@ pub fn violation_text(violation: &CheckViolation) -> String {
             };
             format!("upstream {upstream} is not ready: {why}")
         }
+        CheckViolation::UpstreamUnverifiable { upstream } => {
+            format!("the pin of upstream {upstream} cannot be verified here")
+        }
         CheckViolation::NoPinsDeclared => "the Spec declares no pin".to_owned(),
         CheckViolation::NoHypsDeclared => "the Spec declares no hypothesis".to_owned(),
         CheckViolation::PinCoverage(issue) => format!("pin coverage: {issue:?}"),
@@ -2090,7 +2093,7 @@ mod tests {
         let hash = ContentHash::raw(b"x");
         let ca = Attestation::Ca {
             item: Pinned::new(ItemId::new(id(1)), hash),
-            design: Pinned::new(DesignId::new(id(2)), hash),
+            design: Pinned::new(DesignId::new(id(2)), hash.into()),
             revision: Revision::Commit(RevisionId::from_validated(old.to_owned()).unwrap()),
             tests: TestOutcome::Passed,
         };

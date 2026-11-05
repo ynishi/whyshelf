@@ -331,6 +331,27 @@ impl JudgementKind {
         }
     }
 
+    /// The upstream facts an approval or an adoption pinned, as recorded; empty for
+    /// the kinds that pin nothing.
+    pub(super) fn upstream_pins(&self) -> Vec<UpstreamRecord> {
+        match self {
+            Self::Approve { passed, .. } => passed.attestation().upstream(),
+            Self::Adopt { adoptable, .. } => adoptable
+                .attestation()
+                .upstream()
+                .iter()
+                .map(|pinned| UpstreamRecord::Entity {
+                    id: *pinned.id(),
+                    hash: pinned.pin().clone(),
+                })
+                .collect(),
+            Self::Revoke { .. }
+            | Self::Retire { .. }
+            | Self::Published { .. }
+            | Self::Purge { .. } => Vec::new(),
+        }
+    }
+
     /// The document an approval, an adoption or a retirement belongs to: the target
     /// itself for a document, and for an item the Design the record pins. `None` for
     /// a retirement of an item (it pins no Design) and for the kinds a publication
@@ -745,7 +766,7 @@ pub(crate) mod test_support {
         Passed::for_test(Attestation::Cs {
             spec: Pinned::new(sid(n), hash_of(contract)),
             hyp: hash_of(hyp),
-            grounds: NonEmptyVec::new(Pinned::new(fid(1), hash_of("ground")), Vec::new()),
+            grounds: NonEmptyVec::new(Pinned::new(fid(1), hash_of("ground").into()), Vec::new()),
             policy,
         })
     }
@@ -768,7 +789,7 @@ pub(crate) mod test_support {
         use crate::domain::revision::{Revision, RevisionId};
         Passed::for_test(Attestation::Ca {
             item: Pinned::new(iid(n), hash_of(tag)),
-            design: Pinned::new(did(21), hash_of("design")),
+            design: Pinned::new(did(21), hash_of("design").into()),
             revision: Revision::Commit(RevisionId::from_validated("a1".into()).unwrap()),
             tests: TestOutcome::Passed,
         })
@@ -822,7 +843,7 @@ pub(crate) mod test_support {
             Self::make(Visibility::Private, None, GitPlace::Tracked, entity)
         }
 
-        fn reading(self) -> (FileFacts, Reading) {
+        pub(crate) fn reading(self) -> (FileFacts, Reading) {
             let header = Header::new(
                 self.entity.id(),
                 self.entity.kind(),

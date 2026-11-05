@@ -683,6 +683,7 @@ mod in_memory {
                         at.clone(),
                         text,
                         NonEmptyVec::from_vec(reasons.clone()).expect("a reason"),
+                        None,
                     ),
                 };
                 let candidate = match file.guess {

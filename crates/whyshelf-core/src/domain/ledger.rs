@@ -690,6 +690,26 @@ impl Ledgers {
         })
     }
 
+    /// Every document and item that a record which counts is about, on either side.
+    ///
+    /// This is where the presence of something whose file is gone starts: a target
+    /// no record counts for is not known here, and has no presence to tell (an inert
+    /// record in the public ledger names one that the public side does not know).
+    pub fn targets(&self) -> BTreeSet<Target> {
+        [Visibility::Public, Visibility::Private]
+            .into_iter()
+            .flat_map(|side| {
+                self.sides
+                    .iter()
+                    .filter(move |(_, sides)| sides.on(side))
+                    .filter_map(move |(id, _)| {
+                        self.record(id)
+                            .and_then(|record| self.subject_of(record, side))
+                    })
+            })
+            .collect()
+    }
+
     /// What a record is about; for a revocation, what the first record it names that
     /// counts on `side` is about.
     fn subject_of(&self, record: &Judgement, side: Visibility) -> Option<Target> {
@@ -1553,6 +1573,7 @@ mod tests {
             gate: Gate::Cr,
             target: Target::Doc(docid(1)),
             source,
+            keyring: &crate::domain::keyring::PinKeyring::empty(),
         })
         .unwrap()
     }

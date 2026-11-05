@@ -39,6 +39,11 @@
 //! | CA | item, its item hash | the Design, `(id, design_hash)` | the item hash |
 //! | CM | Spec, `hyp_hash` | the event id of the CS approval that fixed that `hyp_hash` | nothing: a CM is a one-time record |
 //!
+//! The upstream column holds a hash, or, when the upstream is a private document, a
+//! [`KeyedPin`](super::keyring::KeyedPin) in its place ([`UpstreamHash`]): the hash of
+//! a private text is not written where others can read it. A plain pin has the
+//! canonical form a hash always had.
+//!
 //! A CS approval also records the `hyp_hash` it fixed, so a later CM can find it
 //! ([`ApprovalSet::cs_for_cm`]), and the [`GatePolicy`] it passed under, so that an
 //! approval made while the project demanded less is told from one made under the
@@ -108,6 +113,7 @@ use super::classification::ClassificationView;
 use super::event::{DocKind, EntityKind, Event, EventBody, EventGraph, EventId};
 use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, SpecId};
+use super::keyring::UpstreamHash;
 use super::nonempty::{NonBlank, NonEmptyVec};
 use super::policy::GatePolicy;
 use super::revision::Revision;
@@ -189,15 +195,19 @@ impl Gate {
 ///
 /// Appears in approval events only. An entity never holds the hash of its
 /// upstream: the approval does.
+///
+/// The target of an approval is pinned at its [`ContentHash`]. An upstream is pinned
+/// at an [`UpstreamHash`], which is a [`KeyedPin`](super::keyring::KeyedPin) when the
+/// upstream is private; that is the second type parameter.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Pinned<I> {
+pub struct Pinned<I, H = ContentHash> {
     id: I,
-    hash: ContentHash,
+    hash: H,
 }
 
-impl<I> Pinned<I> {
+impl<I, H> Pinned<I, H> {
     /// An identifier pinned at a hash.
-    pub fn new(id: I, hash: ContentHash) -> Self {
+    pub fn new(id: I, hash: H) -> Self {
         Self { id, hash }
     }
 
@@ -206,13 +216,20 @@ impl<I> Pinned<I> {
         &self.id
     }
 
+    /// What it was pinned at.
+    pub fn pin(&self) -> &H {
+        &self.hash
+    }
+}
+
+impl<I> Pinned<I, ContentHash> {
     /// The hash.
     pub fn hash(&self) -> &ContentHash {
         &self.hash
     }
 }
 
-impl<I: ToCanon> ToCanon for Pinned<I> {
+impl<I: ToCanon, H: ToCanon> ToCanon for Pinned<I, H> {
     fn to_canon(&self) -> Canon {
         Canon::map([("id", self.id.to_canon()), ("hash", self.hash.to_canon())])
     }
@@ -320,8 +337,8 @@ pub enum UpstreamRecord {
     Entity {
         /// The upstream entity.
         id: EntityId,
-        /// Its hash when the approval was made.
-        hash: ContentHash,
+        /// Its hash when the approval was made, plain or keyed.
+        hash: UpstreamHash,
     },
     /// An earlier approval event (for a CM, the CS that fixed the hypothesis).
     Event(EventId),
@@ -345,8 +362,8 @@ pub enum Attestation {
         spec: Pinned<SpecId>,
         /// The `hyp_hash` fixed by this approval.
         hyp: ContentHash,
-        /// Every ground, at the hash it had.
-        grounds: NonEmptyVec<Pinned<FindingId>>,
+        /// Every ground, at the hash it had (keyed, for a private ground).
+        grounds: NonEmptyVec<Pinned<FindingId, UpstreamHash>>,
         /// What the check demanded when it let the Spec through.
         policy: GatePolicy,
     },
@@ -354,15 +371,15 @@ pub enum Attestation {
     Ci {
         /// The Design at its `design_hash`.
         design: Pinned<DesignId>,
-        /// The Spec at the `contract_hash` it had.
-        spec: Pinned<SpecId>,
+        /// The Spec at the `contract_hash` it had (keyed, for a private Spec).
+        spec: Pinned<SpecId, UpstreamHash>,
     },
     /// An item passed CA.
     Ca {
         /// The item at its item hash.
         item: Pinned<ItemId>,
-        /// The Design at the `design_hash` it had.
-        design: Pinned<DesignId>,
+        /// The Design at the `design_hash` it had (keyed, for a private Design).
+        design: Pinned<DesignId, UpstreamHash>,
         /// The revision of the code that was checked.
         revision: Revision,
         /// The outcome of the tests at that revision.
@@ -434,7 +451,10 @@ impl Attestation {
 
     /// The upstream facts recorded (see the table of the module).
     pub fn upstream(&self) -> Vec<UpstreamRecord> {
-        let entity = |id: EntityId, hash: &ContentHash| UpstreamRecord::Entity { id, hash: *hash };
+        let entity = |id: EntityId, hash: &UpstreamHash| UpstreamRecord::Entity {
+            id,
+            hash: hash.clone(),
+        };
         match self {
             Self::Cr { .. } => Vec::new(),
             Self::Cs { grounds, .. } => grounds
@@ -730,7 +750,9 @@ pub(crate) mod test_support {
         hyp: &ContentHash,
         grounds: &[(u128, ContentHash)],
     ) -> Attestation {
-        let mut it = grounds.iter().map(|(f, g)| Pinned::new(fid(*f), *g));
+        let mut it = grounds
+            .iter()
+            .map(|(f, g)| Pinned::new(fid(*f), UpstreamHash::from(*g)));
         let head = it.next().unwrap();
         Attestation::Cs {
             spec: Pinned::new(sid(s), *hash),
@@ -743,7 +765,7 @@ pub(crate) mod test_support {
     pub(crate) fn ci(d: u128, hash: &ContentHash, s: u128, spec_hash: &ContentHash) -> Attestation {
         Attestation::Ci {
             design: Pinned::new(did(d), *hash),
-            spec: Pinned::new(sid(s), *spec_hash),
+            spec: Pinned::new(sid(s), (*spec_hash).into()),
         }
     }
 
@@ -756,7 +778,7 @@ pub(crate) mod test_support {
     ) -> Attestation {
         Attestation::Ca {
             item: Pinned::new(iid(i), *hash),
-            design: Pinned::new(did(d), *design_hash),
+            design: Pinned::new(did(d), (*design_hash).into()),
             revision: rev(revision),
             tests: TestOutcome::Passed,
         }

@@ -45,6 +45,12 @@
 //! | the file is of another kind than the one it is registered as | `KindChanged` | none |
 //! | a reference names nothing, names several, or the wrong kind | `DanglingRef`, `AmbiguousRef`, `WrongKind` | raised by the application after parsing, not here |
 //!
+//! A file that does not read at all still gives away its `id:` when it can be seen:
+//! the adapter that reads the file takes the one `id:` a scan of the lines of the front
+//! matter finds ([`markdown::seen_id`]; two different ones are none) and puts it in the
+//! unparsed outcome only. It is a sighting, not a reading: the file is no document for
+//! it, but a document judged under that id is not taken for one whose file is gone.
+//!
 //! # The keys of a Finding
 //!
 //! Every Finding has `finding_type`, `title` and `evidence`; the rest depends on the

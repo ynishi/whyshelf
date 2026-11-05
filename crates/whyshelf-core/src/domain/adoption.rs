@@ -57,6 +57,7 @@ use super::event::EntityKind;
 use super::hash::ContentHash;
 use super::id::{DocId, EntityId, ItemId};
 use super::judgement::Target;
+use super::keyring::{NoKey, PinKeyring, UpstreamHash};
 use super::location::SourceUri;
 
 /// What an adopted approval says: the target at its hash, and the upstream pinned.
@@ -68,7 +69,7 @@ pub struct AdoptedAttestation {
     gate: Gate,
     subject: EntityId,
     hash: ContentHash,
-    upstream: Vec<Pinned<EntityId>>,
+    upstream: Vec<Pinned<EntityId, UpstreamHash>>,
 }
 
 impl AdoptedAttestation {
@@ -87,8 +88,9 @@ impl AdoptedAttestation {
         &self.hash
     }
 
-    /// The upstream facts pinned, in the order the gate pins them.
-    pub fn upstream(&self) -> &[Pinned<EntityId>] {
+    /// The upstream facts pinned, in the order the gate pins them. An upstream that
+    /// is a private document is pinned by a keyed pin.
+    pub fn upstream(&self) -> &[Pinned<EntityId, UpstreamHash>] {
         &self.upstream
     }
 }
@@ -147,6 +149,9 @@ pub struct AdoptionInput<'a> {
     pub target: Target,
     /// Where the decision came from: an address, or a citation in free text.
     pub source: &'a str,
+    /// The keys of the person adopting: an upstream that is a private document is
+    /// pinned under the current one, and refused if there is none.
+    pub keyring: &'a PinKeyring,
 }
 
 /// The one document that carries `id`, if exactly one file does.
@@ -163,10 +168,26 @@ fn sole_file(corpus: &Corpus, id: DocId) -> Result<&CorpusDocument, AdoptionRefu
 }
 
 /// The entity of the one file that carries `id`, for an upstream to pin.
-fn upstream_entity(corpus: &Corpus, id: EntityId) -> Result<&Entity, AdoptionRefusal> {
+fn upstream_file(corpus: &Corpus, id: EntityId) -> Result<&CorpusDocument, AdoptionRefusal> {
     match corpus.by_id(&DocId::new(id)) {
-        [file] => Ok(file.document().entity()),
+        [file] => Ok(file),
         _ => Err(AdoptionRefusal::UpstreamUnavailable { upstream: id }),
+    }
+}
+
+/// The pin of an upstream at `hash`: the hash if the document is public, a keyed
+/// pin under the current key if it is private ([`Corpus::is_private`], which counts
+/// a publication not recorded yet as private), and a refusal if it is private and
+/// there is no key.
+fn pin_upstream(
+    corpus: &Corpus,
+    id: EntityId,
+    hash: &ContentHash,
+    keyring: &PinKeyring,
+) -> Result<Pinned<EntityId, UpstreamHash>, AdoptionRefusal> {
+    match keyring.pin_upstream(corpus.is_private(&DocId::new(id)), id, hash) {
+        Ok(pin) => Ok(Pinned::new(id, pin)),
+        Err(NoKey) => Err(AdoptionRefusal::UpstreamNeedsKey { upstream: id }),
     }
 }
 
@@ -185,6 +206,7 @@ pub fn check(input: AdoptionInput<'_>) -> Result<Adoptable, AdoptionRefusal> {
         gate,
         target,
         source,
+        keyring,
     } = input;
     if gate == Gate::Cm {
         return Err(AdoptionRefusal::GateNotAdoptable { gate });
@@ -210,25 +232,28 @@ pub fn check(input: AdoptionInput<'_>) -> Result<Adoptable, AdoptionRefusal> {
                     let grounds = spec
                         .grounds()
                         .iter()
-                        .map(|ground| match upstream_entity(corpus, ground.entity())? {
-                            Entity::Finding(found) => {
-                                Ok(Pinned::new(ground.entity(), *found.hash()))
+                        .map(|ground| {
+                            let id = ground.entity();
+                            let file = upstream_file(corpus, id)?;
+                            match file.document().entity() {
+                                Entity::Finding(found) => {
+                                    pin_upstream(corpus, id, found.hash(), keyring)
+                                }
+                                _ => Err(AdoptionRefusal::UpstreamUnavailable { upstream: id }),
                             }
-                            _ => Err(AdoptionRefusal::UpstreamUnavailable {
-                                upstream: ground.entity(),
-                            }),
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                     (*spec.contract_hash(), grounds)
                 }
                 Entity::Design(design) => {
                     let spec = design.spec().entity();
-                    let Entity::Spec(found) = upstream_entity(corpus, spec)? else {
+                    let file = upstream_file(corpus, spec)?;
+                    let Entity::Spec(found) = file.document().entity() else {
                         return Err(AdoptionRefusal::UpstreamUnavailable { upstream: spec });
                     };
                     (
                         *design.design_hash(),
-                        vec![Pinned::new(spec, *found.contract_hash())],
+                        vec![pin_upstream(corpus, spec, found.contract_hash(), keyring)?],
                     )
                 }
             }
@@ -250,7 +275,15 @@ pub fn check(input: AdoptionInput<'_>) -> Result<Adoptable, AdoptionRefusal> {
                 .item_hash(*number)
                 .ok_or(AdoptionRefusal::TargetUnknown { target })?;
             let design_id = design.id().entity();
-            (hash, vec![Pinned::new(design_id, *design.design_hash())])
+            (
+                hash,
+                vec![pin_upstream(
+                    corpus,
+                    design_id,
+                    design.design_hash(),
+                    keyring,
+                )?],
+            )
         }
     };
     Ok(Adoptable {
@@ -318,13 +351,28 @@ mod tests {
         target: Target,
         source: &str,
     ) -> Result<Adoptable, AdoptionRefusal> {
+        run_with(files, gate, target, source, &PinKeyring::empty())
+    }
+
+    fn run_with(
+        files: Vec<Filed>,
+        gate: Gate,
+        target: Target,
+        source: &str,
+        keyring: &PinKeyring,
+    ) -> Result<Adoptable, AdoptionRefusal> {
         let corpus = corpus_of(files);
         check(AdoptionInput {
             corpus: &corpus,
             gate,
             target,
             source,
+            keyring,
         })
+    }
+
+    fn plain(id: u128, hash: &ContentHash) -> Pinned<EntityId, UpstreamHash> {
+        Pinned::new(eid(id), UpstreamHash::from(*hash))
     }
 
     #[test]
@@ -352,24 +400,72 @@ mod tests {
 
         let cs = run(chain(), Gate::Cs, Target::Doc(docid(11)), "frozen ledger").unwrap();
         assert_eq!(cs.attestation().hash(), s.contract_hash());
-        assert_eq!(
-            cs.attestation().upstream(),
-            [Pinned::new(eid(1), *f.hash())]
-        );
+        assert_eq!(cs.attestation().upstream(), [plain(1, f.hash())]);
 
         let ci = run(chain(), Gate::Ci, Target::Doc(docid(21)), "frozen ledger").unwrap();
         assert_eq!(ci.attestation().hash(), d.design_hash());
-        assert_eq!(
-            ci.attestation().upstream(),
-            [Pinned::new(eid(11), *s.contract_hash())]
-        );
+        assert_eq!(ci.attestation().upstream(), [plain(11, s.contract_hash())]);
 
         let ca = run(chain(), Gate::Ca, Target::Item(iid(31)), "pr 12").unwrap();
         assert_eq!(ca.attestation().subject(), eid(31));
         assert_eq!(ca.attestation().hash(), &d.item_hash(num(1)).unwrap());
+        assert_eq!(ca.attestation().upstream(), [plain(21, d.design_hash())]);
+    }
+
+    /// The chain of `chain()` with Finding 1 in the private root.
+    #[test]
+    fn a_ground_in_a_publication_not_recorded_yet_is_pinned_as_private() {
+        // The public copy is there, `Published` is not: the Finding is still private,
+        // and its hash must not be written plain (an abort would leave it public).
+        let mut files = chain();
+        files.push(Filed::private(Entity::Finding(finding(
+            1,
+            "Login takes 8 s.",
+        ))));
         assert_eq!(
-            ca.attestation().upstream(),
-            [Pinned::new(eid(21), *d.design_hash())]
+            run(files, Gate::Cs, Target::Doc(docid(11)), "frozen ledger"),
+            Err(AdoptionRefusal::UpstreamNeedsKey { upstream: eid(1) })
+        );
+    }
+
+    fn private_ground() -> Vec<Filed> {
+        let mut files = chain();
+        files[0] = Filed::private(Entity::Finding(finding(1, "Login takes 8 s.")));
+        files
+    }
+
+    #[test]
+    fn a_private_ground_is_pinned_by_a_keyed_pin_and_never_by_its_hash() {
+        use crate::domain::hash::PinKey;
+        let f = finding(1, "Login takes 8 s.");
+        let ring = PinKeyring::new("k1".parse().unwrap(), PinKey::new(&[3; 32]).unwrap());
+        let cs = run_with(
+            private_ground(),
+            Gate::Cs,
+            Target::Doc(docid(11)),
+            "frozen ledger",
+            &ring,
+        )
+        .unwrap();
+        let [pinned] = cs.attestation().upstream() else {
+            panic!("one ground");
+        };
+        assert_eq!(pinned.pin().plain(), None);
+        assert_eq!(pinned.pin().keyed(), ring.pin(eid(1), f.hash()).as_ref());
+        let written = String::from_utf8(cs.to_canon().to_bytes()).unwrap();
+        assert!(!written.contains(&f.hash().hex()));
+    }
+
+    #[test]
+    fn a_private_ground_with_no_key_is_refused_rather_than_pinned_plain() {
+        assert_eq!(
+            run(
+                private_ground(),
+                Gate::Cs,
+                Target::Doc(docid(11)),
+                "frozen ledger"
+            ),
+            Err(AdoptionRefusal::UpstreamNeedsKey { upstream: eid(1) })
         );
     }
 
@@ -480,12 +576,24 @@ mod tests {
     }
 
     #[test]
-    fn an_item_of_a_private_design_is_adopted_like_any_other() {
+    fn an_item_of_a_private_design_is_adopted_with_the_design_pinned_by_key() {
+        use crate::domain::hash::PinKey;
         let d = design(21, 11, vec![(1, identified(31, "cache", &["PIN-A"]))]);
-        let files = vec![
-            Filed::public(Entity::Spec(spec(11, &[1], &["PIN-A"]))),
-            Filed::private(Entity::Design(d)),
-        ];
-        assert!(run(files, Gate::Ca, Target::Item(iid(31)), "x").is_ok());
+        let files = || {
+            vec![
+                Filed::public(Entity::Spec(spec(11, &[1], &["PIN-A"]))),
+                Filed::private(Entity::Design(d.clone())),
+            ]
+        };
+        let ring = PinKeyring::new("k1".parse().unwrap(), PinKey::new(&[3; 32]).unwrap());
+        let adopted = run_with(files(), Gate::Ca, Target::Item(iid(31)), "x", &ring).unwrap();
+        assert_eq!(
+            adopted.attestation().upstream()[0].pin().keyed(),
+            ring.pin(eid(21), d.design_hash()).as_ref()
+        );
+        assert_eq!(
+            run(files(), Gate::Ca, Target::Item(iid(31)), "x"),
+            Err(AdoptionRefusal::UpstreamNeedsKey { upstream: eid(21) })
+        );
     }
 }

@@ -5,7 +5,7 @@
 //!
 //! ```text
 //!   Invalid                                       -> Fix
-//!   the first upstream problem
+//!   the first upstream problem that can be acted on
 //!     Unresolved (a store this environment
 //!     cannot read, further up)                    -> OpenWithPrivateStore
 //!     any, while the entity is Blocked            -> ApproveUpstream (the root of that chain)
@@ -14,6 +14,8 @@
 //!   Draft                                         -> Approve (an item whose tests do
 //!                                                    not carry its pins yet: Implement)
 //!   Approved and current
+//!     a pin of its own made under a key
+//!     this environment lacks                      -> Reapprove
 //!     a Spec whose items are all integrated
 //!     and whose hypotheses nobody measured        -> Measure
 //!     an item approved at a revision that has
@@ -22,8 +24,18 @@
 //!
 //! The problems of the upstreams are given, already ordered, by
 //! [`upstream_problems`](super::lint::upstream_problems): this module reads the
-//! first and keeps no order of its own for them. A command line, a tool server or a
-//! report turns a [`NextStep`] into its own words; the rule is not theirs.
+//! first it can act on and keeps no order of its own for them. A command line, a tool
+//! server or a report turns a [`NextStep`] into its own words; the rule is not theirs.
+//!
+//! # A store out of reach, and a key that is missing
+//!
+//! Both leave an entity Partial ([`UnresolvedCause`]), and the remedies differ. A
+//! store out of reach asks to open the project where it is, before every other step.
+//! A key that is missing is no store: the upstream is there to be read, and what
+//! cannot be compared is the pin an approval of the entity holds. That entity
+//! approves again (the gate pins under a key this environment has); an entity that
+//! only inherits the reason through an upstream has no step for it, and its other
+//! problems are looked at as usual.
 //!
 //! # When a measurement is due
 //!
@@ -38,7 +50,7 @@ use super::evaluate::Cause;
 use super::id::EntityId;
 use super::lint::UpstreamProblem;
 use super::spec::Spec;
-use super::state::{Approval, EntityState, Integration, ItemProgress, Upstream};
+use super::state::{Approval, EntityState, Integration, ItemProgress, UnresolvedCause, Upstream};
 
 /// Whether a Spec is waiting for its measurement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,13 +146,42 @@ pub enum NextStep {
     AwaitIntegration,
 }
 
+/// Whether what the entity cannot read through `upstream` is in a store out of
+/// reach, so that nothing can be done until the project is opened where it is.
+///
+/// A key that is lacking is not that: the upstream is there and can be read. The
+/// state names the reasons; when it names none for this upstream (the caller knows
+/// of a problem the completeness does not carry), the store is what is assumed.
+fn behind_a_store(state: &EntityState, upstream: EntityId) -> bool {
+    let mut reasons = state
+        .completeness()
+        .reasons()
+        .filter(|reason| reason.upstream() == upstream)
+        .peekable();
+    reasons.peek().is_none() || reasons.any(|reason| reason.cause() == &UnresolvedCause::Store)
+}
+
+/// Whether the entity's own approval pinned an upstream by a key that is not here.
+/// Approving again pins it under a key that is; an entity that only inherits such a
+/// reason from an upstream has no such step of its own.
+fn holds_a_pin_without_its_key(state: &EntityState) -> bool {
+    state.completeness().reasons().any(|reason| {
+        reason.is_direct() && matches!(reason.cause(), UnresolvedCause::KeyMissing { .. })
+    })
+}
+
 /// The upstream step, if the upstream asks for one.
+///
+/// The first problem that something can be done about is the one: an upstream that
+/// is partial only because an entity above it lacks a key is that entity's business.
 fn from_upstream(
     state: &EntityState,
     causes: &[Cause],
     problems: &[(EntityId, UpstreamProblem)],
 ) -> Option<NextStep> {
-    let (upstream, problem) = problems.first()?;
+    let (upstream, problem) = problems.iter().find(|(upstream, problem)| {
+        *problem != UpstreamProblem::Unresolved || behind_a_store(state, *upstream)
+    })?;
     if *problem == UpstreamProblem::Unresolved {
         return Some(NextStep::OpenWithPrivateStore);
     }
@@ -176,7 +217,11 @@ fn from_state(
             NextInput::Item { progress, .. } if progress.is_implementing() => NextStep::Implement,
             _ => NextStep::Approve(gate),
         }),
-        (Approval::Approved, Upstream::Ok) => None,
+        // Approved and current, but a pin of its own cannot be compared here for want
+        // of a key: approving again pins it under one this environment has.
+        (Approval::Approved, Upstream::Ok) => {
+            holds_a_pin_without_its_key(state).then_some(NextStep::Reapprove(gate))
+        }
     }
 }
 
@@ -543,6 +588,96 @@ mod tests {
                     cm_due: CmDue::NotDue
                 }
             ),
+            Some(NextStep::OpenWithPrivateStore)
+        );
+    }
+
+    // --- a key that is missing is not a store that cannot be read --------------
+
+    fn lacking_key(upstream: u128) -> UnresolvedReason {
+        UnresolvedReason::key_missing(eid(upstream), "k1".parse().unwrap())
+    }
+
+    fn partial_by(
+        approval: Approval,
+        upstream: Upstream,
+        reasons: impl IntoIterator<Item = UnresolvedReason>,
+    ) -> EntityState {
+        EntityState::new(
+            approval,
+            upstream,
+            Completeness::from_reasons(reasons.into_iter().collect()),
+        )
+    }
+
+    const SPEC: NextInput<'static> = NextInput::Spec {
+        cm_due: CmDue::NotDue,
+    };
+
+    #[test]
+    fn a_pin_of_its_own_whose_key_is_missing_asks_to_approve_again_not_to_open_a_store() {
+        // The upstream is there and read (it raises no problem); only the key lacks.
+        let approved = partial_by(Approval::Approved, Upstream::Ok, [lacking_key(5)]);
+        assert_eq!(
+            next_step(&approved, &[], &[], SPEC),
+            Some(NextStep::Reapprove(Gate::Cs))
+        );
+        assert_eq!(
+            next_step(&approved, &[], &[], DOC),
+            Some(NextStep::Reapprove(Gate::Cr))
+        );
+        // The same entity with a store out of reach instead is still asked to open it.
+        let in_a_store = partial_by(
+            Approval::Approved,
+            Upstream::Ok,
+            [UnresolvedReason::new(eid(5), eid(5))],
+        );
+        assert_eq!(
+            next_step(
+                &in_a_store,
+                &[],
+                &[(eid(5), UpstreamProblem::Unresolved)],
+                SPEC
+            ),
+            Some(NextStep::OpenWithPrivateStore)
+        );
+        assert_eq!(next_step(&in_a_store, &[], &[], SPEC), None);
+    }
+
+    #[test]
+    fn a_missing_key_further_up_is_not_a_step_of_the_entity_that_inherits_it() {
+        // Design on a Spec whose approval lacks the key of its ground: the Design is
+        // Partial through the Spec, and it has nothing to do about it.
+        let inherited = lacking_key(5).reached_through(eid(2));
+        let design = partial_by(Approval::Approved, Upstream::Ok, [inherited.clone()]);
+        let problems = [(eid(2), UpstreamProblem::Unresolved)];
+        assert_eq!(next_step(&design, &[], &problems, DOC), None);
+
+        // What else it waits for is still said: the first problem that can be acted on.
+        let causes = [Cause::for_test(eid(7), eid(3))];
+        let problems = [
+            (eid(2), UpstreamProblem::Unresolved),
+            (eid(3), UpstreamProblem::NotApproved),
+        ];
+        let waiting = partial_by(Approval::Draft, blocked(), [inherited]);
+        assert_eq!(
+            next_step(&waiting, &causes, &problems, DOC),
+            Some(NextStep::ApproveUpstream { root: eid(7) })
+        );
+    }
+
+    #[test]
+    fn a_store_out_of_reach_behind_a_key_that_is_missing_still_asks_to_open_the_store() {
+        let both = partial_by(
+            Approval::Approved,
+            Upstream::Ok,
+            [
+                lacking_key(5).reached_through(eid(2)),
+                UnresolvedReason::new(eid(6), eid(2)),
+            ],
+        );
+        assert_eq!(
+            next_step(&both, &[], &[(eid(2), UpstreamProblem::Unresolved)], DOC),
             Some(NextStep::OpenWithPrivateStore)
         );
     }

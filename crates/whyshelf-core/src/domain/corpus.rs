@@ -31,11 +31,18 @@
 //! |---|---|---|
 //! | [`Reading::Document`] | a document with an `id:` | a [`CorpusDocument`], valid or not |
 //! | [`Reading::Unidentified`] | a file of a known (or guessable) kind with no `id:` | an [`ImportCandidate`]; it is not a document |
-//! | [`Reading::Unparsed`] | a file that cannot be read | an [`UnparsedFile`] with its reasons |
+//! | [`Reading::Unparsed`] | a file that cannot be read | an [`UnparsedFile`] with its reasons, and the `id:` it writes if that could still be seen |
 //!
 //! A file with no `id:` is never made a document by guessing one for it; an
 //! identity written in the file is the only one that survives a rename together with
 //! an edit.
+//!
+//! A file that cannot be read may still show its `id:` (a merge-conflict marker in
+//! the body, or in a value of the front matter, leaves the line `id: ...` as it was).
+//! The adapter then hands it over beside the reasons, so that a document judged under
+//! that id is told apart from one whose file is gone: the first is here and cannot be
+//! trusted, the second is missing. This module only carries the id; it is not a
+//! document, and it is not made one.
 //!
 //! # Merging is Git's job
 //!
@@ -389,7 +396,13 @@ pub enum Reading {
     },
     /// The file cannot be read as a document, for these reasons (a merge-conflict
     /// marker is one).
-    Unparsed(NonEmptyVec<UnparsedReason>),
+    Unparsed {
+        /// The `id:` of the file, when the adapter could still see it though the
+        /// file as a whole could not be read. `None` when it could not.
+        id: Option<DocId>,
+        /// Why the file cannot be read.
+        reasons: NonEmptyVec<UnparsedReason>,
+    },
 }
 
 /// Why a document cannot be trusted as it stands.
@@ -526,9 +539,14 @@ impl ImportCandidate {
 }
 
 /// A file that could not be read, with the reasons.
+///
+/// The `id:` it carries may still have been seen. A document judged under that id is
+/// then not gone: its file is here and cannot be trusted, which is not what a missing
+/// file is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnparsedFile {
     facts: FileFacts,
+    id: Option<DocId>,
     reasons: NonEmptyVec<UnparsedReason>,
 }
 
@@ -536,6 +554,11 @@ impl UnparsedFile {
     /// The facts about the file.
     pub fn facts(&self) -> &FileFacts {
         &self.facts
+    }
+
+    /// The identity the file writes as `id:`, if it could still be seen.
+    pub fn id(&self) -> Option<DocId> {
+        self.id
     }
 
     /// Why it could not be read.
@@ -764,7 +787,9 @@ impl Corpus {
                         .push((facts, document));
                 }
                 Reading::Unidentified { kind } => candidates.push(ImportCandidate { facts, kind }),
-                Reading::Unparsed(reasons) => unparsed.push(UnparsedFile { facts, reasons }),
+                Reading::Unparsed { id, reasons } => {
+                    unparsed.push(UnparsedFile { facts, id, reasons });
+                }
             }
         }
         candidates.sort_by(|a, b| a.facts.location.cmp(&b.facts.location));
@@ -1000,6 +1025,20 @@ impl Corpus {
     /// The cut-short publication of this document, if there is one.
     pub fn publishing_of(&self, id: &DocId) -> Option<&PublishInProgress> {
         self.publishing.iter().find(|form| form.id == *id)
+    }
+
+    /// Whether the document is private as an upstream, so that a pin of it is keyed:
+    /// a file of it is in the private root, or it is in a publication that is not
+    /// recorded yet ([`PublishForm::FileCopied`]). Until `Published` is written the
+    /// document is still private, although the file this corpus reads is the public
+    /// one.
+    pub fn is_private(&self, id: &DocId) -> bool {
+        self.by_id(id)
+            .iter()
+            .any(|file| file.location().visibility() == Visibility::Private)
+            || self
+                .publishing_of(id)
+                .is_some_and(|form| form.form() == PublishForm::FileCopied)
     }
 
     /// Every private file Git would publish, ordered by location: the documents
@@ -1348,11 +1387,9 @@ mod tests {
 
     #[test]
     fn a_private_file_that_is_not_a_document_is_still_exposed() {
-        let unparsed = || {
-            Reading::Unparsed(NonEmptyVec::new(
-                UnparsedReason::MergeConflictMarker,
-                Vec::new(),
-            ))
+        let unparsed = || Reading::Unparsed {
+            id: None,
+            reasons: NonEmptyVec::new(UnparsedReason::MergeConflictMarker, Vec::new()),
         };
         for place in [GitPlace::Untracked, GitPlace::Tracked] {
             let git = Knowable::Known(place);
@@ -1485,13 +1522,34 @@ mod tests {
         let corpus = Corpus::build(
             [(
                 public("x.md", b"<<<<<<<"),
-                Reading::Unparsed(reasons.clone()),
+                Reading::Unparsed {
+                    id: None,
+                    reasons: reasons.clone(),
+                },
             )],
             &none(),
         );
         assert!(corpus.documents().is_empty());
         assert_eq!(corpus.unparsed().len(), 1);
         assert_eq!(corpus.unparsed()[0].reasons(), &reasons);
+        assert_eq!(corpus.unparsed()[0].id(), None);
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_read_keeps_the_id_it_still_shows_and_is_no_document() {
+        let reasons = NonEmptyVec::new(UnparsedReason::MergeConflictMarker, Vec::new());
+        let corpus = Corpus::build(
+            [(
+                public("x.md", b"<<<<<<<"),
+                Reading::Unparsed {
+                    id: Some(docid(1)),
+                    reasons,
+                },
+            )],
+            &none(),
+        );
+        assert_eq!(corpus.unparsed()[0].id(), Some(docid(1)));
+        assert!(corpus.by_id(&docid(1)).is_empty(), "not a document");
     }
 
     #[test]

@@ -65,6 +65,37 @@
 //! [`Completeness`] is independent of both axes: any cell of the matrix can also be
 //! Partial, and a Partial entity keeps every other fact it has.
 //!
+//! # Beside the state: presence, readiness, basis
+//!
+//! Three more facts are read from the files and the ledgers
+//! ([`corpus_eval`](super::corpus_eval)); none is a value of an axis.
+//!
+//! | fact | values | meaning |
+//! |---|---|---|
+//! | [`Presence`] | Present / Missing / Retired | whether the file of something judged is there. A document that is gone has no content, so no state; `Missing` is shown, `Retired` (an unrevoked retirement, while the file is absent) is not |
+//! | [`Readiness`] | a list of [`Lack`]s | what the next gate needs that the entity lacks, each [`Required`](LackNeed::Required) (the gate refuses) or [`Informational`](LackNeed::Informational) (it does not, or it has passed) |
+//! | basis | per approval | what an approval stands on: a gate's machine check (for CS, the policy it passed under) or an earlier decision taken in |
+//!
+//! Readiness is kept apart from [`Completeness`] because they answer different
+//! questions. Completeness: can everything this stands on be read here? Readiness:
+//! has this itself got what the next gate asks for? A Spec with no pin is Complete and
+//! not ready; a Spec whose private ground is out of reach is ready and Partial.
+//!
+//! | [`LackField`] | lacking | Required while |
+//! |---|---|---|
+//! | `Body` | a Finding with nothing under its front matter | CR has not passed |
+//! | `Pins` | a Spec that declares no pin | CS has not passed and the policy demands pins |
+//! | `Hypotheses` | a Spec that declares no hypothesis | CS has not passed and the policy demands them |
+//! | `Items` | a Design with no item (never Required: CI passes, but CA has nothing to approve) | |
+//! | `PlainPin` | an approval holds a keyed pin of an upstream that is public now | always: approving again pins it plain |
+//!
+//! A Spec that passed CS under a relaxed policy with no pin still shows `Pins`, as
+//! Informational: the approval stands, and CI and CA then have nothing to compare.
+//!
+//! The kind of the thing judged is one more cause of Invalid. A judgement made of a
+//! Spec, under an identifier whose file is a Finding now, is
+//! [`InvalidReason::KindChanged`].
+//!
 //! # Stale
 //!
 //! The approval event of an entity records the hashes of its upstream at approval
@@ -106,6 +137,8 @@
 //! | [`UnparsedReason::KindDisagrees`] | Invalid | the `kind:` key and the place of the file name different kinds | make them agree |
 //! | [`UnparsedReason::EmptyGrounds`], [`UnparsedReason::DuplicateGround`] | Invalid | a Spec with no ground, or one Finding twice among them | list each Finding once, and at least one |
 //! | [`UnparsedReason::DuplicateItemNumber`] | Invalid | two items of a Design have one number | give each item a number of its own |
+//! | [`InvalidReason::Corpus`] | Invalid | the files of the project taken together cannot be trusted for this document (a shared id or alias, a private document Git would publish, items whose identities clash) | as the [`Invalidity`] says |
+//! | [`InvalidReason::KindChanged`] | Invalid | a judgement was made of one kind of thing under this identifier, and the file there is another kind now | put the file back, or register the new content under an identifier of its own |
 //! | [`InvalidReason::DanglingRef`] | Invalid | an identifier a reference spells (plain, or `private:` where the private store can be read) is not an entity here | bring the entity back, or correct the reference |
 //! | [`InvalidReason::ClassificationConflict`] | Invalid | two branches set the kind or the path differently | set it again (the application's `reclassify`; no command does it), or `whyshelf mv` for the path |
 //! | [`InvalidReason::PinCoverage`] | Invalid | the Design and its Spec disagree about a pin | assign each declared pin to an item; assign no undeclared one |
@@ -118,7 +151,8 @@
 //! | [`BlockReason::UpstreamUnapproved`] | Blocked | the upstream is a Draft, or was edited after it was approved | approve the upstream |
 //! | [`BlockReason::UpstreamStale`] | Blocked | the upstream is stale and this entity has no approval to be stale against | clear the upstream, then approve this entity |
 //! | [`BlockReason::UpstreamBlocked`] | Blocked | the upstream is itself blocked | follow the chain up (the causes of the view name it) |
-//! | [`UnresolvedReason`] | Partial | an entity it stands on, directly or further up, is in a store that cannot be read here (a `private:` reference in a clone that has no private store) | open the project where that store is; approving needs it too |
+//! | [`UnresolvedReason`] with [`UnresolvedCause::Store`] | Partial | an entity it stands on, directly or further up, is in a store that cannot be read here (a `private:` reference in a clone that has no private store) | open the project where that store is; approving needs it too, for the pin the gate itself checks |
+//! | [`UnresolvedReason`] with [`UnresolvedCause::KeyMissing`] | Partial | an approval of this entity pinned an upstream by a key this environment lacks, so whether the upstream changed cannot be told (the upstream itself can be read) | have the key, or approve this entity again, which pins under a key this environment has; an entity further down that merely inherits the reason has nothing to do about it |
 //!
 //! When the cause is not the direct upstream but something further up, the evaluation
 //! also keeps the chain of causes, root first (see `evaluate`). A library caller reads
@@ -137,10 +171,12 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use super::classification::ConflictField;
+use super::corpus::Invalidity;
 use super::design::CoverageIssue;
 use super::event::{DocKind, EntityKind};
 use super::hash::ContentHash;
 use super::id::{Alias, EntityId, ItemNumber};
+use super::keyring::{Kid, UpstreamHash};
 use super::location::RelPath;
 use super::nonempty::NonEmptyVec;
 use super::pin::PinId;
@@ -363,6 +399,25 @@ pub enum InvalidReason {
         /// The value in conflict: the kind or the path.
         field: ConflictField,
     },
+    /// The files of the project taken together cannot be trusted for this document:
+    /// a shared id or alias, a private document Git would publish, or items whose
+    /// identities clash ([`Invalidity`] says which).
+    ///
+    /// Fix: as the [`Invalidity`] says.
+    #[error("{0}")]
+    Corpus(Box<Invalidity>),
+    /// A judgement was made of one kind of thing under this identifier, and the file
+    /// there is another kind now.
+    ///
+    /// Fix: put the file back as it was, or register the new content under an
+    /// identifier of its own.
+    #[error("judged as a {}, and it is a {} now", .was.name(), .now.name())]
+    KindChanged {
+        /// The kind the judgement was about.
+        was: EntityKind,
+        /// The kind the file is now.
+        now: EntityKind,
+    },
 }
 
 /// Why an approved entity is Stale.
@@ -375,8 +430,8 @@ pub enum StaleReason {
     UpstreamChanged {
         /// The upstream entity.
         upstream: EntityId,
-        /// The hash the approval recorded.
-        recorded: ContentHash,
+        /// The hash the approval recorded, plain or keyed.
+        recorded: UpstreamHash,
         /// The hash today.
         current: ContentHash,
     },
@@ -544,22 +599,68 @@ impl UpstreamFacts {
     }
 }
 
-/// An entity that cannot be read here, and the way to it.
+/// Why an entity cannot be read here: two things with two remedies, kept apart.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum UnresolvedCause {
+    /// It is in a store this environment cannot read (a `private:` reference in a
+    /// clone that has no private store).
+    ///
+    /// Fix: open the project where that store is.
+    Store,
+    /// It is there, and an approval of the entity that holds the reason pinned it by
+    /// a key that is not in this environment's keyring, so whether it changed cannot
+    /// be told.
+    ///
+    /// Fix: have the key, or approve that entity again, which pins the upstream under
+    /// a key this environment has.
+    KeyMissing {
+        /// The key the pin was made under.
+        kid: Kid,
+    },
+}
+
+/// An entity that cannot be read here, the way to it, and why.
 ///
 /// `root` is the entity that cannot be read in this environment; `upstream` is the
 /// direct upstream of the holder through which it is reached, equal to `root` when
 /// the holder names it directly. The same shape as the link of a chain of causes
-/// (`StaleReason::UpstreamStale`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// (`StaleReason::UpstreamStale`). The [`UnresolvedCause`] is kept down the chain: an
+/// entity on a Partial upstream says what the upstream's reason was.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UnresolvedReason {
     root: EntityId,
     upstream: EntityId,
+    cause: UnresolvedCause,
 }
 
 impl UnresolvedReason {
-    /// The entity that cannot be read, reached through this direct upstream.
+    /// The entity in a store that cannot be read, reached through this direct
+    /// upstream.
     pub fn new(root: EntityId, upstream: EntityId) -> Self {
-        Self { root, upstream }
+        Self {
+            root,
+            upstream,
+            cause: UnresolvedCause::Store,
+        }
+    }
+
+    /// An upstream of the holder whose pin, in an approval of the holder, was made
+    /// under the key `kid`, which this environment lacks.
+    pub fn key_missing(upstream: EntityId, kid: Kid) -> Self {
+        Self {
+            root: upstream,
+            upstream,
+            cause: UnresolvedCause::KeyMissing { kid },
+        }
+    }
+
+    /// The same reason, seen from the entity one step down, which reaches the root
+    /// through `upstream`.
+    pub(crate) fn reached_through(&self, upstream: EntityId) -> Self {
+        Self {
+            upstream,
+            ..self.clone()
+        }
     }
 
     /// The entity that cannot be read here.
@@ -571,18 +672,33 @@ impl UnresolvedReason {
     pub fn upstream(&self) -> EntityId {
         self.upstream
     }
+
+    /// Why it cannot be read.
+    pub fn cause(&self) -> &UnresolvedCause {
+        &self.cause
+    }
+
+    /// Whether the holder names the root itself, and no entity in between: for a
+    /// missing key, whether the pin is the holder's own.
+    pub fn is_direct(&self) -> bool {
+        self.root == self.upstream
+    }
 }
 
 impl fmt::Display for UnresolvedReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.root == self.upstream {
-            write!(f, "{} cannot be read here", self.root)
-        } else {
-            write!(
+        match &self.cause {
+            UnresolvedCause::Store => write!(f, "{} cannot be read here", self.root)?,
+            UnresolvedCause::KeyMissing { kid } => write!(
                 f,
-                "{} cannot be read here (reached through {})",
-                self.root, self.upstream
-            )
+                "{} was pinned under the key `{kid}`, which is not here",
+                self.root
+            )?,
+        }
+        if self.is_direct() {
+            Ok(())
+        } else {
+            write!(f, " (reached through {})", self.upstream)
         }
     }
 }
@@ -668,6 +784,110 @@ impl EntityState {
     /// Whether everything it stands on can be read here.
     pub fn completeness(&self) -> &Completeness {
         &self.completeness
+    }
+}
+
+/// Whether the file of a document, or the Design that holds an item, is there.
+///
+/// A fact of its own, beside the two axes: a document that is gone has no content
+/// to be Invalid or Modified in, so it has no [`EntityState`] either. The rule that
+/// decides it (which records count, and what a retirement does) is the one stated
+/// under "Presence" in the documentation of [`ledger`](super::ledger), and
+/// [`corpus_eval`](super::corpus_eval) applies it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Presence {
+    /// The file is there.
+    Present,
+    /// The file is gone, and the thing has judgements that count: shown, never
+    /// dropped without a word.
+    ///
+    /// Fix: bring the file back, or retire it (`Retire`).
+    Missing,
+    /// The file is gone and a retirement says that is meant. Nothing is shown.
+    Retired,
+}
+
+/// What a lack concerns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LackField {
+    /// A Finding with nothing under the front matter.
+    Body,
+    /// A Spec that declares no pin.
+    Pins,
+    /// A Spec that declares no hypothesis.
+    Hypotheses,
+    /// A Design that has no item, so there is nothing for CA to approve.
+    Items,
+    /// An approval pinned this upstream by a keyed pin and the upstream is public
+    /// now: the keyed pin cannot be compared in an environment without the key.
+    /// Approving again pins it plain.
+    PlainPin {
+        /// The upstream that is public now.
+        upstream: EntityId,
+    },
+}
+
+/// Whether a lack stops the next gate or only says something.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LackNeed {
+    /// The next gate refuses until it is made good.
+    Required,
+    /// The next gate does not refuse (the project's policy allows it, or the gate has
+    /// passed already), and the lack is worth knowing.
+    Informational,
+}
+
+/// One thing the next gate needs that the entity does not have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Lack {
+    field: LackField,
+    need: LackNeed,
+}
+
+impl Lack {
+    /// A lack of `field`, of the given weight.
+    pub fn new(field: LackField, need: LackNeed) -> Self {
+        Self { field, need }
+    }
+
+    /// What is lacking.
+    pub fn field(&self) -> LackField {
+        self.field
+    }
+
+    /// Whether it stops the next gate.
+    pub fn need(&self) -> LackNeed {
+        self.need
+    }
+}
+
+/// What the entity needs before the next gate, kept apart from [`Completeness`].
+///
+/// Completeness is about what the entity stands on and whether it can be read here.
+/// Readiness is about the entity's own content and its own pins: a Spec with no pin
+/// is complete (everything it stands on is readable) and not ready (CS asks for one,
+/// by default).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Readiness {
+    lacks: Vec<Lack>,
+}
+
+impl Readiness {
+    /// A readiness from its lacks, in a fixed order.
+    pub fn new(mut lacks: Vec<Lack>) -> Self {
+        lacks.sort();
+        lacks.dedup();
+        Self { lacks }
+    }
+
+    /// Every lack.
+    pub fn lacks(&self) -> &[Lack] {
+        &self.lacks
+    }
+
+    /// Whether nothing the next gate refuses on is lacking.
+    pub fn is_ready(&self) -> bool {
+        !self.lacks.iter().any(|l| l.need == LackNeed::Required)
     }
 }
 
@@ -1026,7 +1246,7 @@ mod tests {
     fn completeness_keeps_each_root_and_upstream_pair_once() {
         let direct = UnresolvedReason::new(eid(1), eid(1));
         let through = UnresolvedReason::new(eid(1), eid(2));
-        let partial = Completeness::from_reasons(BTreeSet::from([direct, through, direct]));
+        let partial = Completeness::from_reasons(BTreeSet::from([direct.clone(), through, direct]));
         assert!(partial.is_partial());
         assert_eq!(partial.reasons().count(), 2);
         assert!(partial.names_upstream(eid(1)));
@@ -1050,6 +1270,26 @@ mod tests {
         assert!(direct.contains(&eid(1).to_string()) && !direct.contains("through"));
         assert!(through.contains(&eid(1).to_string()));
         assert!(through.contains(&format!("through {}", eid(2))));
+    }
+
+    #[test]
+    fn a_missing_key_is_a_reason_of_its_own_and_is_told_apart_from_a_store() {
+        let kid: Kid = "k1".parse().unwrap();
+        let store = UnresolvedReason::new(eid(1), eid(1));
+        let key = UnresolvedReason::key_missing(eid(1), kid.clone());
+        assert_eq!(store.cause(), &UnresolvedCause::Store);
+        assert_eq!(key.cause(), &UnresolvedCause::KeyMissing { kid });
+        assert_ne!(store, key);
+        assert!(key.is_direct());
+        // Both are kept: a set tells them apart, though root and upstream agree.
+        let partial = Completeness::from_reasons(BTreeSet::from([store, key.clone()]));
+        assert_eq!(partial.reasons().count(), 2);
+        // Reaching it through another upstream keeps what it is.
+        let through = key.reached_through(eid(2));
+        assert_eq!(through.cause(), key.cause());
+        assert!(!through.is_direct());
+        assert!(key.to_string().contains("`k1`"));
+        assert!(through.to_string().contains(&format!("through {}", eid(2))));
     }
 
     #[test]

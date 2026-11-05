@@ -10,7 +10,9 @@
 //! entity from it (see `Workspace` for how the id and the hash come about).
 //!
 //! A file that does not parse at all is a [`Candidate`] with the reasons; it is
-//! stored as a version of its own (a raw hash only) and evaluated as Invalid.
+//! stored as a version of its own (a raw hash only) and evaluated as Invalid. The
+//! adapter may add the `id:` it could still see in such a file
+//! ([`ParseOutcome::Unparsed`]).
 //!
 //! The adapter, not the application, normalizes text (line breaks to LF, trailing
 //! spaces and tabs removed, the file ends in exactly one LF); the
@@ -28,7 +30,7 @@ use crate::domain::finding::{
 };
 use crate::domain::front::{FileClassification, Guess};
 use crate::domain::hash::ContentHash;
-use crate::domain::id::{DesignId, FindingId, ItemNumber, SpecId};
+use crate::domain::id::{DesignId, DocId, FindingId, ItemNumber, SpecId};
 use crate::domain::location::{CodeLocation, RelPath, SourceUri};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::pin::{HypId, Hypothesis, PinContract, PinId};
@@ -330,8 +332,18 @@ impl RawDoc {
 pub enum ParseOutcome {
     /// The file parsed.
     Parsed(RawDoc),
-    /// The file did not parse; each problem found.
-    Unparsed(NonEmptyVec<UnparsedReason>),
+    /// The file did not parse.
+    Unparsed {
+        /// Each problem found.
+        reasons: NonEmptyVec<UnparsedReason>,
+        /// The `id:` of the front matter, when a minimal scan of its lines still
+        /// found one, and only one.
+        ///
+        /// It is a sighting and not a reading: nothing else of the file is trusted,
+        /// and the file is no document for it. It lets a document that was judged
+        /// under that identity be told from one whose file is gone.
+        seen_id: Option<DocId>,
+    },
 }
 
 /// A file read by the adapter: where it is, its normalized text, and what
@@ -360,16 +372,18 @@ impl Candidate {
         }
     }
 
-    /// A file that did not parse.
+    /// A file that did not parse, with the `id:` the adapter could still see in it
+    /// (see [`ParseOutcome::Unparsed`]).
     pub fn unparsed(
         path: RelPath,
         text: NormalizedText,
         reasons: NonEmptyVec<UnparsedReason>,
+        seen_id: Option<DocId>,
     ) -> Self {
         Self {
             path,
             text,
-            outcome: ParseOutcome::Unparsed(reasons),
+            outcome: ParseOutcome::Unparsed { reasons, seen_id },
             guess: Guess::None,
             classification: FileClassification::default(),
         }
@@ -423,7 +437,7 @@ impl Candidate {
     pub fn kind(&self) -> Option<DocKind> {
         match &self.outcome {
             ParseOutcome::Parsed(doc) => Some(doc.kind()),
-            ParseOutcome::Unparsed(_) => None,
+            ParseOutcome::Unparsed { .. } => None,
         }
     }
 }

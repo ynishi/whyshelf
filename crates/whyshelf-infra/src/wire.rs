@@ -28,6 +28,12 @@
 //! [`decode`], converting into the same domain [`Recorded`]; an old file stays
 //! readable without being rewritten.
 //!
+//! A pin may carry a `kid`, the key a keyed pin was made under, on the pin of an
+//! upstream only (the grounds of CS, the Spec of CI, the Design of CA). On the pin of
+//! the entity the gate is run on (and on the Finding of CR, the Spec of CM) it is
+//! refused with [`WireError::KidOnTargetPin`]; it is not dropped, since the file would
+//! then read as other than it says.
+//!
 //! The `id` stored in the file is a check, not a source: the event is rebuilt
 //! from its content with the domain's constructor, and a file whose stored `id`
 //! differs from the one computed is refused ([`WireError::IdMismatch`]) because it
@@ -91,6 +97,7 @@ use whyshelf_core::domain::event::{
 };
 use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::id::{Alias, DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
+use whyshelf_core::domain::keyring::{KeyedPin, UpstreamHash};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::policy::GatePolicy;
@@ -130,6 +137,16 @@ pub enum WireError {
         field: &'static str,
         /// The text found.
         found: String,
+    },
+    /// A pin of the entity a gate is run on carries a `kid`. Only the pin of an
+    /// upstream can be keyed; on the target it is not a thing this version writes,
+    /// and dropping it would read a file as other than it says.
+    #[error(
+        "the field `{field}` of the event file names a key (`kid`), which only the pin of an upstream may"
+    )]
+    KidOnTargetPin {
+        /// The key of the pin that carries the `kid`.
+        field: &'static str,
     },
     /// The fields do not make an event.
     #[error("the event file does not describe an event")]
@@ -271,7 +288,12 @@ struct SnapshotV1 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct PinnedV1 {
     id: String,
+    /// The hash; for a keyed pin (`kid` is there), the MAC.
     hash: String,
+    /// The key a keyed pin was made under. Absent for a plain pin, so a file that
+    /// pins nothing private has the bytes it always had.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kid: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -365,6 +387,19 @@ fn pinned_dto<I: ToString>(pinned: &Pinned<I>) -> PinnedV1 {
     PinnedV1 {
         id: pinned.id().to_string(),
         hash: pinned.hash().to_string(),
+        kid: None,
+    }
+}
+
+fn upstream_dto<I: ToString>(pinned: &Pinned<I, UpstreamHash>) -> PinnedV1 {
+    let (hash, kid) = match pinned.pin() {
+        UpstreamHash::Plain(hash) => (hash.to_string(), None),
+        UpstreamHash::Keyed(pin) => (pin.mac().to_string(), Some(pin.kid().to_string())),
+    };
+    PinnedV1 {
+        id: pinned.id().to_string(),
+        hash,
+        kid,
     }
 }
 
@@ -423,12 +458,12 @@ fn attestation_dto(attestation: &Attestation) -> AttestationV1 {
         } => AttestationV1::Cs {
             spec: pinned_dto(spec),
             hyp: hyp.to_string(),
-            grounds: grounds.iter().map(pinned_dto).collect(),
+            grounds: grounds.iter().map(upstream_dto).collect(),
             policy: gate_policy_dto(*policy),
         },
         Attestation::Ci { design, spec } => AttestationV1::Ci {
             design: pinned_dto(design),
-            spec: pinned_dto(spec),
+            spec: upstream_dto(spec),
         },
         Attestation::Ca {
             item,
@@ -437,7 +472,7 @@ fn attestation_dto(attestation: &Attestation) -> AttestationV1 {
             tests,
         } => AttestationV1::Ca {
             item: pinned_dto(item),
-            design: pinned_dto(design),
+            design: upstream_dto(design),
             revision: match revision {
                 Revision::Commit(id) => RevisionV1::Commit { id: id.to_string() },
                 Revision::Patch { base, patch } => RevisionV1::Patch {
@@ -598,10 +633,28 @@ fn pinned_from<I>(
     dto: &PinnedV1,
     wrap: fn(EntityId) -> I,
 ) -> Result<Pinned<I>, WireError> {
+    if dto.kid.is_some() {
+        return Err(WireError::KidOnTargetPin { field: name });
+    }
     Ok(Pinned::new(
         wrap(entity(name, &dto.id)?),
         hash(name, &dto.hash)?,
     ))
+}
+
+fn upstream_from<I>(
+    name: &'static str,
+    dto: &PinnedV1,
+    wrap: fn(EntityId) -> I,
+) -> Result<Pinned<I, UpstreamHash>, WireError> {
+    let pin = match &dto.kid {
+        None => UpstreamHash::Plain(hash(name, &dto.hash)?),
+        Some(kid) => UpstreamHash::Keyed(KeyedPin::new(
+            parse_field("kid", kid)?,
+            parse_field(name, &dto.hash)?,
+        )),
+    };
+    Ok(Pinned::new(wrap(entity(name, &dto.id)?), pin))
 }
 
 /// The store a wire name stands for: the inverse of `store_name`, with the same
@@ -657,7 +710,7 @@ fn attestation_from(dto: &AttestationV1) -> Result<Attestation, WireError> {
         } => {
             let grounds = grounds
                 .iter()
-                .map(|g| pinned_from("grounds", g, FindingId::new))
+                .map(|g| upstream_from("grounds", g, FindingId::new))
                 .collect::<Result<Vec<_>, _>>()?;
             Attestation::Cs {
                 spec: pinned_from("spec", spec, SpecId::new)?,
@@ -668,7 +721,7 @@ fn attestation_from(dto: &AttestationV1) -> Result<Attestation, WireError> {
         }
         AttestationV1::Ci { design, spec } => Attestation::Ci {
             design: pinned_from("design", design, DesignId::new)?,
-            spec: pinned_from("spec", spec, SpecId::new)?,
+            spec: upstream_from("spec", spec, SpecId::new)?,
         },
         AttestationV1::Ca {
             item,
@@ -677,7 +730,7 @@ fn attestation_from(dto: &AttestationV1) -> Result<Attestation, WireError> {
             tests,
         } => Attestation::Ca {
             item: pinned_from("item", item, ItemId::new)?,
-            design: pinned_from("design", design, DesignId::new)?,
+            design: upstream_from("design", design, DesignId::new)?,
             revision: match revision {
                 RevisionV1::Commit { id } => Revision::Commit(revision_id("revision", id)?),
                 RevisionV1::Patch { base, patch } => Revision::Patch {
@@ -880,6 +933,18 @@ mod tests {
         Pinned::new(wrap(eid(n)), h(text))
     }
 
+    fn upstream<I>(wrap: fn(EntityId) -> I, n: u128, text: &str) -> Pinned<I, UpstreamHash> {
+        Pinned::new(wrap(eid(n)), UpstreamHash::Plain(h(text)))
+    }
+
+    fn keyed<I>(wrap: fn(EntityId) -> I, n: u128, text: &str) -> Pinned<I, UpstreamHash> {
+        use whyshelf_core::domain::hash::PinKey;
+        use whyshelf_core::domain::keyring::PinKeyring;
+        let ring = PinKeyring::new("k1".parse().unwrap(), PinKey::new(&[5; 32]).unwrap());
+        let pin = ring.pin(eid(n), &h(text)).unwrap();
+        Pinned::new(wrap(eid(n)), UpstreamHash::Keyed(pin))
+    }
+
     fn alice() -> Actor {
         Actor::new("alice").unwrap()
     }
@@ -967,30 +1032,30 @@ mod tests {
                 spec: pinned(SpecId::new, 6, "s"),
                 hyp: h("hyp"),
                 grounds: NonEmptyVec::new(
-                    pinned(FindingId::new, 5, "f"),
-                    vec![pinned(FindingId::new, 7, "g")],
+                    upstream(FindingId::new, 5, "f"),
+                    vec![keyed(FindingId::new, 7, "g")],
                 ),
                 policy: GatePolicy::default(),
             },
             Attestation::Cs {
                 spec: pinned(SpecId::new, 6, "s"),
                 hyp: h("hyp"),
-                grounds: NonEmptyVec::new(pinned(FindingId::new, 5, "f"), vec![]),
+                grounds: NonEmptyVec::new(upstream(FindingId::new, 5, "f"), vec![]),
                 policy: GatePolicy::new(false, true),
             },
             Attestation::Ci {
                 design: pinned(DesignId::new, 8, "d"),
-                spec: pinned(SpecId::new, 6, "s"),
+                spec: keyed(SpecId::new, 6, "s"),
             },
             Attestation::Ca {
                 item: pinned(ItemId::new, 9, "i"),
-                design: pinned(DesignId::new, 8, "d"),
+                design: upstream(DesignId::new, 8, "d"),
                 revision: Revision::Commit(commit.clone()),
                 tests: TestOutcome::Passed,
             },
             Attestation::Ca {
                 item: pinned(ItemId::new, 9, "i"),
-                design: pinned(DesignId::new, 8, "d"),
+                design: keyed(DesignId::new, 8, "d"),
                 revision: Revision::Patch {
                     base: commit,
                     patch: h("patch"),
@@ -1270,5 +1335,38 @@ mod tests {
             panic!("accepted");
         };
         assert_eq!(field, "old");
+    }
+
+    /// The pin of the entity a gate is run on is plain. A `kid` there is refused where
+    /// it is, not dropped: the file would otherwise read as other than it says.
+    #[test]
+    fn a_kid_on_a_target_pin_is_refused_not_dropped() {
+        // The target of each gate, and the key of its pin in the file.
+        type IsGate = fn(&Attestation) -> bool;
+        let targets: [(IsGate, &str); 4] = [
+            (|a| matches!(a, Attestation::Cr { .. }), "finding"),
+            (|a| matches!(a, Attestation::Cs { .. }), "spec"),
+            (|a| matches!(a, Attestation::Ci { .. }), "design"),
+            (|a| matches!(a, Attestation::Ca { .. }), "item"),
+        ];
+        for (is_gate, name) in targets {
+            let event = every_event()
+                .into_iter()
+                .find(|e| {
+                    matches!(
+                        e.body(),
+                        EventBody::Approved { attestation, .. } if is_gate(attestation)
+                    )
+                })
+                .unwrap();
+            let mut file: serde_json::Value =
+                serde_json::from_str(&encode(&event, &at()).unwrap()).unwrap();
+            file["attestation"][name]["kid"] = serde_json::json!("k1");
+            let Err(WireError::KidOnTargetPin { field }) = decode(file.to_string().as_bytes())
+            else {
+                panic!("a kid on the {name} pin was accepted");
+            };
+            assert_eq!(field, name);
+        }
     }
 }

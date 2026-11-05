@@ -95,6 +95,26 @@
 //! only if none of them recorded the upstream as it is today. Two worktrees may have
 //! approved the same content at different times and either one suffices.
 //!
+//! An approval may have pinned a private upstream by a keyed pin
+//! ([`keyring`](super::keyring)), which can be compared only with the key. Each
+//! approval then holds (every upstream is as recorded), is refuted (some upstream
+//! differs) or is undetermined (none differs, and some pin has no key here). The
+//! entity is Current if one holds; failing that, Unverifiable if one is undetermined,
+//! and only if every approval is refuted is it Stale. Unverifiable is not Stale: the
+//! entity is Partial, with the upstream as the root of what it cannot read. The
+//! reason is [`UnresolvedCause::KeyMissing`](super::state::UnresolvedCause::KeyMissing),
+//! naming the key, and not the cause of an upstream in a store out of reach, since
+//! the upstream is there to be read and what is lacking is the key.
+//!
+//! # The store of approvals
+//!
+//! What the rules ask of the approvals is the trait [`ApprovalView`]: whether
+//! `(gate, subject, hash)` is approved, the hash an earlier approval was at, what
+//! each approval recorded of its upstreams, which identifier survives a merge, and
+//! the keys. The event log answers it through [`ApprovalSet`]; the judgements of the
+//! ledgers answer it in [`corpus_eval`](super::corpus_eval). The rules are written
+//! once, here.
+//!
 //! # Inputs from the application
 //!
 //! The application resolves aliases to identifiers and parses files before calling
@@ -111,6 +131,7 @@ use super::event::DocKind;
 use super::finding::Finding;
 use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
+use super::keyring::{Kid, PinKeyring, PinMatch};
 use super::location::{CodeLocation, RelPath};
 use super::nonempty::NonEmptyVec;
 use super::pin::{MalformedPin, PinId};
@@ -548,8 +569,19 @@ impl Gaps {
             state
                 .completeness()
                 .reasons()
-                .map(|reason| UnresolvedReason::new(reason.root(), upstream)),
+                .map(|reason| reason.reached_through(upstream)),
         );
+    }
+
+    /// `pins` are upstreams that are there, which an approval of this entity pinned by
+    /// a keyed pin whose key is not in the keyring: the state of each cannot be
+    /// compared with the approval here. They are not unreadable (a store out of
+    /// reach); what is missing is the key, and the reason says which.
+    fn unverifiable(&mut self, pins: &BTreeSet<(EntityId, Kid)>) {
+        for (upstream, kid) in pins {
+            self.0
+                .insert(UnresolvedReason::key_missing(*upstream, kid.clone()));
+        }
     }
 
     fn finish(self) -> Completeness {
@@ -557,51 +589,158 @@ impl Gaps {
     }
 }
 
+/// What the evaluator asks of the store of approvals.
+///
+/// The trait is the evaluator's own (the consumer defines it): the old event log
+/// answers through [`ApprovalSet`], the ledgers of judgements through
+/// [`corpus_eval`](super::corpus_eval). The rules of Approved, Modified and Stale
+/// are written once, over these five questions.
+pub trait ApprovalView {
+    /// Whether `(gate, subject, hash)` has an approval that stands.
+    fn is_approved_at(&self, gate: Gate, subject: EntityId, hash: &ContentHash) -> bool;
+
+    /// The hash an approval of `gate` for `subject` that stands is at, when none is at
+    /// the hash today. Which one, when there are several, is for display only: the
+    /// hash a Modified entity says it was approved at.
+    fn latest_approved(&self, gate: Gate, subject: EntityId) -> Option<ContentHash>;
+
+    /// The upstream facts each approval at exactly `(gate, subject, hash)` that stands
+    /// recorded: one list per approval.
+    fn recorded_upstreams(
+        &self,
+        gate: Gate,
+        subject: EntityId,
+        hash: &ContentHash,
+    ) -> Vec<Vec<UpstreamRecord>>;
+
+    /// The surviving identifier of an entity (itself unless a merge made it equal to
+    /// another).
+    fn canonical_of(&self, id: EntityId) -> EntityId;
+
+    /// The keys the keyed pins of the approvals are compared under.
+    fn keyring(&self) -> &PinKeyring;
+}
+
+static NO_KEYS: PinKeyring = PinKeyring::empty();
+
+impl ApprovalView for ApprovalSet {
+    fn is_approved_at(&self, gate: Gate, subject: EntityId, hash: &ContentHash) -> bool {
+        self.is_approved(gate, subject, hash)
+    }
+
+    fn latest_approved(&self, gate: Gate, subject: EntityId) -> Option<ContentHash> {
+        self.latest_hash(gate, subject).copied()
+    }
+
+    fn recorded_upstreams(
+        &self,
+        gate: Gate,
+        subject: EntityId,
+        hash: &ContentHash,
+    ) -> Vec<Vec<UpstreamRecord>> {
+        self.matching(gate, subject, hash)
+            .map(|record| record.attestation().upstream())
+            .collect()
+    }
+
+    fn canonical_of(&self, id: EntityId) -> EntityId {
+        self.canonical(id)
+    }
+
+    /// The event log never made a keyed pin, so it has no keys.
+    fn keyring(&self) -> &PinKeyring {
+        &NO_KEYS
+    }
+}
+
+/// What the approvals of an entity at its current hash say about its upstreams today.
+enum Staleness {
+    /// Some approval recorded every upstream as it is (or there is no upstream to
+    /// compare).
+    Current,
+    /// Every approval recorded some upstream otherwise; the reasons are those of the
+    /// first approval.
+    Stale(Vec<(EntityId, StaleReason)>),
+    /// No approval is refuted, and some cannot be checked: a keyed pin whose key is
+    /// not in the keyring. Not stale, since nothing says it changed; the upstreams
+    /// whose pins cannot be checked are what the entity cannot read here, each with
+    /// the key that is lacking.
+    Unverifiable(BTreeSet<(EntityId, Kid)>),
+}
+
 /// The hash-level staleness of an approved entity: for each upstream, whether
 /// some matching approval recorded it as it is today.
+///
+/// An approval holds if every upstream it recorded is as it is, is refuted if some
+/// upstream differs (or was not recorded), and is undetermined if none differs and
+/// some pin cannot be compared. The entity is Stale only when every approval is
+/// refuted; one that holds makes it Current, and failing that an undetermined one
+/// leaves it Unverifiable.
 fn hash_staleness(
     basis: &Basis<'_>,
     ups: &[UpView<'_>],
-    ledger: &ApprovalSet,
-) -> Vec<(EntityId, StaleReason)> {
+    ledger: &(impl ApprovalView + ?Sized),
+) -> Staleness {
     let currents: Vec<(EntityId, &ContentHash)> = ups
         .iter()
         .filter_map(|u| u.hash.map(|h| (u.id, h)))
         .collect();
     let mut first_failure: Option<Vec<(EntityId, StaleReason)>> = None;
-    for record in ledger.matching(basis.gate, basis.subject, basis.hash) {
-        let recorded = record.attestation().upstream();
-        let reasons: Vec<(EntityId, StaleReason)> = currents
-            .iter()
-            .filter_map(|(id, current)| {
-                let at_approval = recorded.iter().find_map(|r| match r {
-                    UpstreamRecord::Entity { id: rid, hash }
-                        if ledger.canonical(*rid) == ledger.canonical(*id) =>
-                    {
-                        Some(hash)
+    let mut undetermined: BTreeSet<(EntityId, Kid)> = BTreeSet::new();
+    for recorded in ledger.recorded_upstreams(basis.gate, basis.subject, basis.hash) {
+        let mut reasons: Vec<(EntityId, StaleReason)> = Vec::new();
+        let mut unknown: BTreeSet<(EntityId, Kid)> = BTreeSet::new();
+        for (id, current) in &currents {
+            let at_approval = recorded.iter().find_map(|r| match r {
+                UpstreamRecord::Entity { id: rid, hash }
+                    if ledger.canonical_of(*rid) == ledger.canonical_of(*id) =>
+                {
+                    Some((*rid, hash))
+                }
+                _ => None,
+            });
+            match at_approval {
+                None => reasons.push((*id, StaleReason::UpstreamNotRecorded { upstream: *id })),
+                // A keyed pin was made over the identifier the approval recorded.
+                Some((rid, pin)) => match pin.check(rid, current, ledger.keyring()) {
+                    PinMatch::Same => {}
+                    PinMatch::Unknown { kid } => {
+                        unknown.insert((*id, kid));
                     }
-                    _ => None,
-                });
-                match at_approval {
-                    Some(h) if h == *current => None,
-                    Some(h) => Some((
+                    PinMatch::Differs => reasons.push((
                         *id,
                         StaleReason::UpstreamChanged {
                             upstream: *id,
-                            recorded: *h,
+                            recorded: pin.clone(),
                             current: **current,
                         },
                     )),
-                    None => Some((*id, StaleReason::UpstreamNotRecorded { upstream: *id })),
-                }
-            })
-            .collect();
-        if reasons.is_empty() {
-            return Vec::new();
+                },
+            }
         }
-        first_failure.get_or_insert(reasons);
+        if reasons.is_empty() && unknown.is_empty() {
+            return Staleness::Current;
+        }
+        if reasons.is_empty() {
+            undetermined.extend(unknown);
+        } else {
+            first_failure.get_or_insert(reasons);
+        }
     }
-    first_failure.unwrap_or_default()
+    if undetermined.is_empty() {
+        Staleness::Stale(first_failure.unwrap_or_default())
+    } else {
+        Staleness::Unverifiable(undetermined)
+    }
+}
+
+/// What the upstream axis of an entity came to, with what could not be checked.
+struct Assessment {
+    upstream: Upstream,
+    causes: Vec<Cause>,
+    /// The upstreams whose recorded pins cannot be compared here, with the key each
+    /// was pinned under.
+    unverifiable: BTreeSet<(EntityId, Kid)>,
 }
 
 /// The two axes of an entity from its upstreams.
@@ -610,21 +749,29 @@ fn hash_staleness(
 /// facts into reasons. An upstream that has a problem on the approval axis is
 /// reported by it alone (the entity cannot be approved until that is repaired,
 /// whatever the upstream's own health). The completeness fact is not mapped here:
-/// it stays a fact of its own (see [`Gaps`]).
+/// it stays a fact of its own (see [`Gaps`]), and the upstreams whose pins cannot
+/// be compared are handed back for the caller to put there.
 fn assess(
     basis: Option<Basis<'_>>,
     ups: &[UpView<'_>],
-    ledger: &ApprovalSet,
-) -> (Upstream, Vec<Cause>) {
+    ledger: &(impl ApprovalView + ?Sized),
+) -> Assessment {
     let mut health = Health::default();
     let mut changed: BTreeSet<EntityId> = BTreeSet::new();
+    let mut unverifiable = BTreeSet::new();
     let approved = basis.is_some();
     if let Some(basis) = &basis {
-        for (id, reason) in hash_staleness(basis, ups, ledger) {
-            changed.insert(id);
-            if let Some(up) = ups.iter().find(|u| u.id == id) {
-                health.stale(up, reason, false);
+        match hash_staleness(basis, ups, ledger) {
+            Staleness::Current => {}
+            Staleness::Stale(reasons) => {
+                for (id, reason) in reasons {
+                    changed.insert(id);
+                    if let Some(up) = ups.iter().find(|u| u.id == id) {
+                        health.stale(up, reason, false);
+                    }
+                }
             }
+            Staleness::Unverifiable(ids) => unverifiable = ids,
         }
     }
     for up in ups {
@@ -651,25 +798,28 @@ fn assess(
             }
         }
     }
-    health.finish()
+    let (upstream, causes) = health.finish();
+    Assessment {
+        upstream,
+        causes,
+        unverifiable,
+    }
 }
 
 fn own_approval(
     gate: Gate,
     subject: EntityId,
     hash: &ContentHash,
-    ledger: &ApprovalSet,
+    ledger: &(impl ApprovalView + ?Sized),
     invalid: Vec<InvalidReason>,
 ) -> Approval {
     if let Ok(reasons) = NonEmptyVec::from_vec(invalid) {
         return Approval::Invalid(reasons);
     }
-    if ledger.is_approved(gate, subject, hash) {
+    if ledger.is_approved_at(gate, subject, hash) {
         Approval::Approved
-    } else if let Some(approved) = ledger.latest_hash(gate, subject) {
-        Approval::Modified {
-            approved: *approved,
-        }
+    } else if let Some(approved) = ledger.latest_approved(gate, subject) {
+        Approval::Modified { approved }
     } else {
         Approval::Draft
     }
@@ -696,7 +846,7 @@ impl Evaluator {
     /// (a path or alias collision).
     pub fn finding(
         f: &Finding,
-        ledger: &ApprovalSet,
+        ledger: &(impl ApprovalView + ?Sized),
         external: &[InvalidReason],
     ) -> Evaluated<Finding> {
         let approval = own_approval(
@@ -731,7 +881,7 @@ impl Evaluator {
         s: &Spec,
         findings: &BTreeMap<FindingId, Evaluated<Finding>>,
         states: &States<'_>,
-        ledger: &ApprovalSet,
+        ledger: &(impl ApprovalView + ?Sized),
         written: &Written,
         external: &[InvalidReason],
     ) -> Evaluated<Spec> {
@@ -753,11 +903,12 @@ impl Evaluator {
         let subject = s.id().entity();
         let approval = own_approval(gate, subject, s.contract_hash(), ledger, invalid);
         let basis = basis_if_approved(&approval, gate, subject, s.contract_hash());
-        let (upstream, causes) = assess(basis, &ups, ledger);
+        let assessed = assess(basis, &ups, ledger);
+        gaps.unverifiable(&assessed.unverifiable);
         Evaluated {
             subject: Subject::Parsed(s.clone()),
-            state: EntityState::new(approval, upstream, gaps.finish()),
-            causes,
+            state: EntityState::new(approval, assessed.upstream, gaps.finish()),
+            causes: assessed.causes,
         }
     }
 
@@ -775,7 +926,7 @@ impl Evaluator {
         d: &Design,
         specs: &BTreeMap<SpecId, Evaluated<Spec>>,
         states: &States<'_>,
-        ledger: &ApprovalSet,
+        ledger: &(impl ApprovalView + ?Sized),
         written: &Written,
         external: &[InvalidReason],
     ) -> Evaluated<Design> {
@@ -803,11 +954,12 @@ impl Evaluator {
         let subject = d.id().entity();
         let approval = own_approval(gate, subject, d.design_hash(), ledger, invalid);
         let basis = basis_if_approved(&approval, gate, subject, d.design_hash());
-        let (upstream, causes) = assess(basis, &ups, ledger);
+        let assessed = assess(basis, &ups, ledger);
+        gaps.unverifiable(&assessed.unverifiable);
         Evaluated {
             subject: Subject::Parsed(d.clone()),
-            state: EntityState::new(approval, upstream, gaps.finish()),
-            causes,
+            state: EntityState::new(approval, assessed.upstream, gaps.finish()),
+            causes: assessed.causes,
         }
     }
 
@@ -822,6 +974,39 @@ impl Evaluator {
         impl_view: &ImplView,
         external: &[InvalidReason],
     ) -> ItemEvaluation {
+        let (state, causes) = Self::item_state(key, item, designs, states, ledger, external);
+        let hash = item.hash(key.design);
+        let subject = key.id.entity();
+        let integration = if matches!(state.approval(), Approval::Approved) {
+            integration_of(subject, &hash, ledger, impl_view)
+        } else {
+            Integration::Unapproved
+        };
+        let declared = item.assigned_pins().clone();
+        let found = declared
+            .iter()
+            .filter(|pin| impl_view.has_pin(pin))
+            .cloned()
+            .collect();
+        ItemEvaluation {
+            state,
+            causes,
+            integration,
+            progress: ItemProgress::new(found, declared),
+        }
+    }
+
+    /// The state of a work item and the causes of it, without its integration and
+    /// progress: the part of [`Evaluator::item`] that reads only the approvals and
+    /// the Design.
+    pub fn item_state(
+        key: &ItemKey,
+        item: &WorkItem,
+        designs: &BTreeMap<DesignId, Evaluated<Design>>,
+        states: &States<'_>,
+        ledger: &(impl ApprovalView + ?Sized),
+        external: &[InvalidReason],
+    ) -> (EntityState, Vec<Cause>) {
         let mut invalid = external.to_vec();
         let mut gaps = Gaps::default();
         let mut ups = Vec::new();
@@ -844,24 +1029,12 @@ impl Evaluator {
         let subject = key.id.entity();
         let approval = own_approval(Gate::Ca, subject, &hash, ledger, invalid);
         let basis = basis_if_approved(&approval, Gate::Ca, subject, &hash);
-        let (upstream, causes) = assess(basis, &ups, ledger);
-        let integration = if matches!(approval, Approval::Approved) {
-            integration_of(subject, &hash, ledger, impl_view)
-        } else {
-            Integration::Unapproved
-        };
-        let declared = item.assigned_pins().clone();
-        let found = declared
-            .iter()
-            .filter(|pin| impl_view.has_pin(pin))
-            .cloned()
-            .collect();
-        ItemEvaluation {
-            state: EntityState::new(approval, upstream, gaps.finish()),
-            causes,
-            integration,
-            progress: ItemProgress::new(found, declared),
-        }
+        let assessed = assess(basis, &ups, ledger);
+        gaps.unverifiable(&assessed.unverifiable);
+        (
+            EntityState::new(approval, assessed.upstream, gaps.finish()),
+            assessed.causes,
+        )
     }
 }
 
@@ -1173,7 +1346,7 @@ mod tests {
             stale_reasons(r.spec.state().upstream()),
             vec![StaleReason::UpstreamChanged {
                 upstream: eid(F),
-                recorded: *f0.hash(),
+                recorded: (*f0.hash()).into(),
                 current: *edited.hash(),
             }]
         );
@@ -1656,7 +1829,7 @@ mod tests {
             stale_reasons(es.state().upstream()),
             vec![StaleReason::UpstreamChanged {
                 upstream: eid(F),
-                recorded: *f0.hash(),
+                recorded: (*f0.hash()).into(),
                 current: *edited.hash(),
             }]
         );
@@ -1855,7 +2028,7 @@ mod tests {
         events.push(approve(
             Attestation::Ca {
                 item: Pinned::new(iid(I), d0.item_hash(num(1)).unwrap()),
-                design: Pinned::new(did(D), *d0.design_hash()),
+                design: Pinned::new(did(D), (*d0.design_hash()).into()),
                 revision: Revision::Patch {
                     base: rev("b1"),
                     patch: ContentHash::raw(b"diff"),

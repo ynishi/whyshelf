@@ -99,16 +99,21 @@ impl CurrentPort for FsCurrent {
             let reason = UnparsedReason::MalformedFrontmatter {
                 detail: "the file is not valid UTF-8".to_owned(),
             };
+            let seen_id = markdown::seen_id(normalized.as_str());
             return Ok(Some(Candidate::unparsed(
                 path.clone(),
                 normalized,
                 NonEmptyVec::new(reason, Vec::new()),
+                seen_id,
             )));
         }
         let read = parse::read_in(&normalized, kind, &self.vocabulary);
         let candidate = match read.outcome {
             Ok(doc) => Candidate::parsed(path.clone(), normalized, doc),
-            Err(reasons) => Candidate::unparsed(path.clone(), normalized, reasons),
+            Err(reasons) => {
+                let seen_id = markdown::seen_id(normalized.as_str());
+                Candidate::unparsed(path.clone(), normalized, reasons, seen_id)
+            }
         };
         Ok(Some(
             candidate
@@ -168,7 +173,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert!(matches!(candidate.outcome(), ParseOutcome::Unparsed(_)));
+        assert!(matches!(candidate.outcome(), ParseOutcome::Unparsed { .. }));
         assert_eq!(candidate.text().as_str(), "just a note\n");
     }
 
@@ -181,10 +186,37 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let ParseOutcome::Unparsed(reasons) = candidate.outcome() else {
+        let ParseOutcome::Unparsed { reasons, seen_id } = candidate.outcome() else {
             panic!("parsed");
         };
         assert_eq!(reasons.first(), &UnparsedReason::MergeConflictMarker);
+        assert_eq!(*seen_id, None, "it writes no id:");
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_file_still_gives_the_id_it_shows() {
+        let id = "0192f3a4-5b6c-7d8e-8f90-123456789abc";
+        let conflicted = format!(
+            "---\nid: {id}\nfinding_type: usage_observation\n<<<<<<< HEAD\ntitle: a\n=======\ntitle: b\n>>>>>>> topic\n---\nx\n"
+        );
+        let broken = format!("---\nid: {id}\ntitle: [unclosed\n---\nx\n");
+        let (_dir, current) =
+            project_with(&[("docs/a.md", &conflicted), ("docs/b.md", &broken)]).await;
+        for name in ["docs/a.md", "docs/b.md"] {
+            let candidate = current.read(&rel(name), None).await.unwrap().unwrap();
+            let ParseOutcome::Unparsed { seen_id, .. } = candidate.outcome() else {
+                panic!("{name} parsed");
+            };
+            assert_eq!(*seen_id, Some(id.parse().unwrap()), "{name}");
+        }
+        // A file that reads gives none: its identity is not this adapter's to say.
+        let (_dir, current) = project_with(&[("docs/finding/slow-login.md", FINDING)]).await;
+        let read = current
+            .read(&rel("docs/finding/slow-login.md"), None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(read.outcome(), ParseOutcome::Parsed(_)));
     }
 
     #[tokio::test]
@@ -195,7 +227,7 @@ mod tests {
             .unwrap();
         let current = FsCurrent::new(dir.path().to_path_buf());
         let candidate = current.read(&rel("a.md"), None).await.unwrap().unwrap();
-        assert!(matches!(candidate.outcome(), ParseOutcome::Unparsed(_)));
+        assert!(matches!(candidate.outcome(), ParseOutcome::Unparsed { .. }));
     }
 
     #[tokio::test]

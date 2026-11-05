@@ -73,6 +73,23 @@
 //! pins the tests carry). See [`state`] for the meanings and [`evaluate`] for how
 //! they are derived, upstream to downstream, with the causes passed down.
 //!
+//! The same states are also read straight from the files and the judgements
+//! ([`corpus_eval`]): one rule for each axis, asked of the ledgers instead of the
+//! event log. There the state has company. A [`Presence`](state::Presence) says
+//! whether the file of a judged document or item is there, gone (Missing) or
+//! gone and retired. A [`Readiness`](state::Readiness) lists what the next gate
+//! needs that the entity lacks (no pin, no hypothesis), apart from completeness. An
+//! approval shows what it stands on, a gate's check or an earlier decision taken
+//! in. A judgement of one kind of thing under the identifier of another makes the
+//! file Invalid ([`state::InvalidReason::KindChanged`]).
+//!
+//! A pin of a private upstream is a keyed pin ([`keyring`]) and not its hash: the
+//! hash of a private text is not written where others read. An entity whose
+//! approval pinned an upstream by a key this environment lacks is not Stale for it;
+//! it is Partial. A gate run on the corpus stops only on the pin it checks itself
+//! ([`lint::CheckViolation::UpstreamUnverifiable`]), so a colleague without the
+//! private store can approve what stands on a public Spec.
+//!
 //! "Is this approved?" is asked of the whole set of events: an approval exists and
 //! no revocation names it. It is never "does it match the latest approval", so two
 //! worktrees that approve different versions of the same entity do not undo each
@@ -182,7 +199,7 @@
 //!
 //! | module | holds |
 //! |---|---|
-//! | [`canon`], [`hash`] | canonical encoding and the only place a hash is computed |
+//! | [`canon`], [`hash`] | canonical encoding and the only place a hash (or a keyed hash) is computed |
 //! | [`id`], [`revision`], [`pin`], [`nonempty`], [`tag`], [`actor`], [`location`], [`mod@reference`] | value objects with checking constructors |
 //! | [`knowable`] | a fact that may be impossible to tell in this environment |
 //! | [`corpus`] | the document files of a project taken together: duplicate ids and aliases, a private document Git would publish, a publication cut short, files with no `id:` |
@@ -191,6 +208,8 @@
 //! | [`event`], [`classification`], [`approval`] | the log, its fold, and the set of approvals |
 //! | [`judgement`], [`ledger`], [`judge`], [`adoption`] | the judgements people made as an append-only set that merges by union (concurrent approvals survive a revocation that did not see them; the objects are a set that can delete), who made them, and taking an earlier decision in as an approval |
 //! | [`state`], [`evaluate`] | derived state and how it is derived |
+//! | [`corpus_eval`] | the state of every document and item read from the files and the ledgers: presence, readiness, the basis of each approval |
+//! | [`keyring`] | keys for the pins of private upstreams, and the keyed pins they make (the HMAC itself is in [`hash`]) |
 //! | [`policy`] | what a project decides for itself: what CS demands of a Spec ([`policy::GatePolicy`], recorded in the approval it lets through) and the pin prefixes and spellings ([`policy::PinVocabulary`]) |
 //! | [`gate`], [`next`] | the machine check of each gate and the proof it passed; the next step of an entity |
 //! | [`lint`], [`query`] | the violations and the order of upstream problems, the leak lint, drift of generated files, the `find` language |
@@ -204,6 +223,7 @@ pub mod approval;
 pub mod canon;
 pub mod classification;
 pub mod corpus;
+pub mod corpus_eval;
 pub mod design;
 pub mod error;
 pub mod evaluate;
@@ -215,6 +235,7 @@ pub mod hash;
 pub mod id;
 pub mod judge;
 pub mod judgement;
+pub mod keyring;
 pub mod knowable;
 pub mod ledger;
 pub mod lint;

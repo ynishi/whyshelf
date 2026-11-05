@@ -572,7 +572,9 @@ pub(crate) async fn build<P: Ports>(
         )))
     };
     let doc = match candidate.outcome() {
-        ParseOutcome::Unparsed(reasons) => return unparsed(reasons.iter().cloned().collect()),
+        ParseOutcome::Unparsed { reasons, .. } => {
+            return unparsed(reasons.iter().cloned().collect());
+        }
         ParseOutcome::Parsed(doc) => doc,
     };
     if let Some(expected) = expected

@@ -29,6 +29,7 @@
 //! | `EmptyBody` | CR | the Finding has no body | nothing is written under the front matter | write what was seen and how it is known |
 //! | `MeasuredDataNotLabelledMeasured` | CR | a measured_data Finding must be labelled `evidence: measured` | a measurement carries a weaker label | set `evidence: measured`, or change `finding_type` if it was not measured |
 //! | `Upstream` | CS, CI, CA | upstream *x* is not ready: *why* | an entity this one stands on cannot be depended on yet; *why* is an [`UpstreamProblem`] (next table) | clear the problem upstream first, nearest to the Finding first |
+//! | `UpstreamUnverifiable` | CS, CI, CA (on the corpus) | the pin of upstream *x* cannot be verified here | the upstream this gate itself pins (CS: each ground; CI: the Spec; CA: the Design) is out of reach, or is private and there is no key to pin it under; what is unreadable further up does not stop the gate (the entity is Partial) | open the project where the upstream and the key are, and check there |
 //! | `NoPinsDeclared` | CS | the Spec declares no pin | `accept.pins` is empty, and the [`GatePolicy`](super::policy::GatePolicy) requires pins (it does by default) | declare at least one `PIN-*` or `UT-*` with its contract sentence |
 //! | `NoHypsDeclared` | CS | the Spec declares no hypothesis | `accept.hyp` is empty, and the policy requires hypotheses (it does by default) | declare at least one `HYP-*` with a metric and a target |
 //! | `PinCoverage` | CI | pin coverage: *issue* | the Design and the Spec disagree about a pin; *issue* is a [`CoverageIssue`] | assign the pin to an item, or declare it in the Spec |
@@ -149,6 +150,19 @@ pub enum CheckViolation {
         /// What is wrong with it.
         problem: UpstreamProblem,
     },
+    /// CS, CI, CA, run on the corpus: the pin this gate itself checks cannot be
+    /// verified here (CS: a ground; CI: the Spec's `contract_hash`; CA: the Design's
+    /// `design_hash`). The upstream is out of reach, or it is private and there is
+    /// no key to pin it under.
+    ///
+    /// Only that pin stops the gate: what is unreadable further up leaves the
+    /// entity Partial and does not appear here.
+    ///
+    /// Fix: open the project where the upstream (or the key) is, and check there.
+    UpstreamUnverifiable {
+        /// The upstream whose pin cannot be verified.
+        upstream: EntityId,
+    },
     /// CS: the Spec declares no PIN or unit-test tag, and the policy requires one.
     ///
     /// Fix: declare at least one under `accept.pins`.
@@ -227,8 +241,15 @@ pub enum CheckViolation {
 
 /// The one problem of an upstream that is there, the first that applies: the order
 /// is the whole rule, over the facts the upstream states about itself.
-fn problem_of(facts: UpstreamFacts) -> Option<UpstreamProblem> {
-    match (facts.approval(), facts.is_partial(), facts.health()) {
+///
+/// `partial_counts` says whether an upstream that cannot read something of its own
+/// is a problem for the one standing on it (see [`UpstreamReach`]).
+fn problem_of(facts: UpstreamFacts, partial_counts: bool) -> Option<UpstreamProblem> {
+    match (
+        facts.approval(),
+        facts.is_partial() && partial_counts,
+        facts.health(),
+    ) {
         (Some(ApprovalProblem::Invalid), _, _) => Some(UpstreamProblem::Invalid),
         (_, true, _) => Some(UpstreamProblem::Unresolved),
         (Some(ApprovalProblem::NotApproved), false, _) => Some(UpstreamProblem::NotApproved),
@@ -259,13 +280,45 @@ pub fn upstream_problems(
     target: &Completeness,
     upstreams: &[(EntityId, Option<&EntityState>)],
 ) -> Vec<(EntityId, UpstreamProblem)> {
+    upstream_problems_reaching(target, upstreams, UpstreamReach::Whole)
+}
+
+/// How far up a gate looks for what it cannot read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpstreamReach {
+    /// Everything above the target: an upstream that is itself Partial is
+    /// `Unresolved`, so a gate stops on whatever cannot be read anywhere up the
+    /// chain.
+    Whole,
+    /// Only the pin the gate itself checks: an upstream that cannot be read at all
+    /// (the target wrote it with a mark into a store that is not here) is
+    /// `Unresolved`, and one that is there but Partial is not. What is out of reach
+    /// further up stays visible as the target's own completeness; it does not stop
+    /// the gate.
+    Direct,
+}
+
+/// [`upstream_problems`] over the reach asked for.
+///
+/// With [`UpstreamReach::Whole`] it is [`upstream_problems`]. With [`UpstreamReach::Direct`] the same
+/// order and the same facts apply, except that an upstream that is there and Partial
+/// raises no `Unresolved`: the problems that are left (Invalid, NotApproved, Stale,
+/// Blocked) are found as before.
+pub fn upstream_problems_reaching(
+    target: &Completeness,
+    upstreams: &[(EntityId, Option<&EntityState>)],
+    reach: UpstreamReach,
+) -> Vec<(EntityId, UpstreamProblem)> {
     let mut out: Vec<(EntityId, UpstreamProblem)> = upstreams
         .iter()
         .filter_map(|(id, found)| {
             let problem = match found {
                 None if target.names_upstream(*id) => Some(UpstreamProblem::Unresolved),
                 None => None,
-                Some(state) => problem_of(UpstreamFacts::of(state, false, false)),
+                Some(state) => problem_of(
+                    UpstreamFacts::of(state, false, false),
+                    reach == UpstreamReach::Whole,
+                ),
             };
             problem.map(|problem| (*id, problem))
         })

@@ -35,6 +35,21 @@ pub enum ValueError {
     /// A hash digest held a character that is not lowercase hex.
     #[error("a content hash digest is lowercase hex")]
     HashNotLowerHex,
+    /// A pin key has too few bytes to be a key.
+    #[error("a pin key has at least 16 bytes, found {len}")]
+    PinKeyTooShort {
+        /// Number of bytes found.
+        len: usize,
+    },
+    /// A key id is empty, too long, or holds a character outside `a-z 0-9 . _ -`.
+    #[error("a key id is 1 to 64 characters of lowercase letters, digits and `. _ -`")]
+    KidBadShape,
+    /// A keyring lists one key id twice.
+    #[error("the key id `{kid}` is in the keyring twice")]
+    KidDuplicate {
+        /// The key id.
+        kid: String,
+    },
     /// The digest of a record was not 16 lowercase hex characters.
     #[error("the digest of a record is 16 lowercase hex characters")]
     RecordDigestShape,
@@ -563,6 +578,13 @@ pub enum AdoptionRefusal {
     /// gate stands on.
     #[error("the upstream {upstream} cannot be pinned")]
     UpstreamUnavailable {
+        /// The upstream.
+        upstream: EntityId,
+    },
+    /// An upstream the approval would pin is private, and there is no key to pin it
+    /// under: its hash must not be written plain.
+    #[error("the upstream {upstream} is private and there is no key to pin it under")]
+    UpstreamNeedsKey {
         /// The upstream.
         upstream: EntityId,
     },
