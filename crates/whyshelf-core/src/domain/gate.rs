@@ -94,6 +94,18 @@ impl Passed {
     }
 }
 
+#[cfg(test)]
+impl Passed {
+    /// A proof made without a check, for the tests of the modules that consume one.
+    /// It exists only in a test build, so the rule above holds for the library.
+    pub(crate) fn for_test(attestation: Attestation) -> Self {
+        Self {
+            gate: attestation.gate(),
+            attestation,
+        }
+    }
+}
+
 /// Every violation a check found: at least one, or it would have passed.
 pub type Violations = NonEmptyVec<CheckViolation>;
 

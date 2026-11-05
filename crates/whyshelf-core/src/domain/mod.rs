@@ -142,6 +142,13 @@
 //! its alias or title, or writing its identifier without the mark, is stopped by the
 //! leak lint ([`lint::leak_lint`]).
 //!
+//! # Merging judgements
+//!
+//! Git merges the documents. The judgements that people made live in two ledgers
+//! (public and private), each an append-only set that merges by union, whose
+//! object files are a set that can also delete. The declaration, and what follows
+//! from it for revocation, retirement and publication, is in [`ledger`].
+//!
 //! # Versions of code
 //!
 //! The model speaks of a revision, of being integrated into a baseline, and of the
@@ -182,6 +189,7 @@
 //! | [`finding`], [`spec`], [`design`] | the three stages with files |
 //! | [`front`] | which key of a front matter is content, classification, another kind's or a mistake |
 //! | [`event`], [`classification`], [`approval`] | the log, its fold, and the set of approvals |
+//! | [`judgement`], [`ledger`], [`judge`], [`adoption`] | the judgements people made as an append-only set that merges by union (concurrent approvals survive a revocation that did not see them; the objects are a set that can delete), who made them, and taking an earlier decision in as an approval |
 //! | [`state`], [`evaluate`] | derived state and how it is derived |
 //! | [`gate`], [`next`] | the machine check of each gate and the proof it passed; the next step of an entity |
 //! | [`lint`], [`query`] | the violations and the order of upstream problems, the leak lint, drift of generated files, the `find` language |
@@ -190,6 +198,7 @@
 mod vocabulary;
 
 pub mod actor;
+pub mod adoption;
 pub mod approval;
 pub mod canon;
 pub mod classification;
@@ -203,7 +212,10 @@ pub mod front;
 pub mod gate;
 pub mod hash;
 pub mod id;
+pub mod judge;
+pub mod judgement;
 pub mod knowable;
+pub mod ledger;
 pub mod lint;
 pub mod location;
 pub mod next;

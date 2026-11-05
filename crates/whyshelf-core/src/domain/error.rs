@@ -8,8 +8,12 @@ use std::num::ParseIntError;
 
 use thiserror::Error;
 
+use super::approval::Gate;
 use super::event::{DocKind, EventId};
+use super::hash::ContentHash;
 use super::id::{DocId, EntityId};
+use super::judge::Judge;
+use super::judgement::{JudgementId, Target};
 use super::query::StateFilter;
 
 /// Why a text could not become a value object.
@@ -364,5 +368,171 @@ pub enum QueryError {
         /// The cause.
         #[source]
         source: ValueError,
+    },
+}
+
+/// Why a name, a mail or a tool name of a [`Judge`] could not be built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum JudgeError {
+    /// A name was empty.
+    #[error("a judge's name is empty")]
+    NameEmpty,
+    /// A name held a control character or was too long.
+    #[error("a judge's name is one short line")]
+    NameBadShape,
+    /// A mail address was not `local@domain`.
+    #[error("a mail address is `local@domain`, with no white space")]
+    EmailBadShape,
+    /// The name of a tool was empty.
+    #[error("a tool's name is empty")]
+    ToolEmpty,
+    /// The name of a tool held a control character or was too long.
+    #[error("a tool's name is one short line")]
+    ToolBadShape,
+}
+
+/// Why a judgement could not be built, or could not be given a ledger.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum JudgementError {
+    /// The object kept with an approval is not of the version the approval is about.
+    #[error("the object is of {object}, and the approval is about {target}")]
+    ObjectNotOfTarget {
+        /// The content hash the object was given for.
+        object: ContentHash,
+        /// The hash the approval pins.
+        target: ContentHash,
+    },
+    /// A retirement was asked for a document or item whose file is there.
+    #[error("{target} is present; only what is missing can be retired")]
+    TargetPresent {
+        /// What was to be retired.
+        target: Target,
+    },
+    /// A publication named a record the public ledger does not hold.
+    #[error("the record {record} is not in the public ledger")]
+    RecordNotInPublicLedger {
+        /// The record.
+        record: JudgementId,
+    },
+    /// A publication named a record that is not an approval, an adoption or a
+    /// retirement of the document published or of one of its items.
+    #[error("the record {record} is not an approval, adoption or retirement of {doc} or its items")]
+    RecordNotOfDoc {
+        /// The record.
+        record: JudgementId,
+        /// The document published.
+        doc: DocId,
+    },
+    /// A publication named a record that a standing revocation takes away.
+    #[error("the record {record} is revoked; a publication does not carry it")]
+    RecordRevoked {
+        /// The record.
+        record: JudgementId,
+    },
+    /// Neither the files nor either ledger know what the judgement is about.
+    #[error("nothing is known of {target}: no file, and no record in either ledger")]
+    UnknownTarget {
+        /// What the judgement is about.
+        target: Target,
+    },
+    /// The files that carry the target sit under both roots, so the ledger is not
+    /// settled.
+    #[error("{target} sits under both roots; the ledger is not settled")]
+    AmbiguousTarget {
+        /// What the judgement is about.
+        target: Target,
+    },
+    /// A revocation named a record that is in neither ledger.
+    #[error("the record {record} is in neither ledger")]
+    UnknownRecord {
+        /// The record.
+        record: JudgementId,
+    },
+    /// A revocation named a record that is not an approval, an adoption or a
+    /// retirement.
+    #[error("the record {record} cannot be revoked")]
+    NotRevocable {
+        /// The record.
+        record: JudgementId,
+    },
+    /// A revocation named records about different things, which no single ledger
+    /// holds.
+    #[error("the records revoked are about more than one thing")]
+    RevokeSpansTargets,
+}
+
+/// Why a revocation could not be built.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum RevokeError {
+    /// The attestation or retirement named has no record that is visible and not
+    /// revoked, by the one named.
+    #[error("nothing to revoke: no visible, unrevoked record matches")]
+    NothingToRevoke,
+    /// A record named is in neither ledger.
+    #[error("the record {record} is in neither ledger")]
+    UnknownRecord {
+        /// The record.
+        record: JudgementId,
+    },
+    /// A record named is not an approval, an adoption or a retirement. A revocation,
+    /// a purge and a publication stand; an approval is made again, an object is put
+    /// again.
+    #[error("the record {record} cannot be revoked")]
+    NotRevocable {
+        /// The record.
+        record: JudgementId,
+    },
+    /// A record named is revoked already.
+    #[error("the record {record} is revoked already")]
+    AlreadyRevoked {
+        /// The record.
+        record: JudgementId,
+    },
+    /// A record is another judge's, and the revocation was not forced.
+    #[error("the record is {owner}'s; revoking it takes force")]
+    RevokeOthers {
+        /// Whose record it is.
+        owner: Judge,
+    },
+}
+
+/// Why a past decision could not be taken in as an approval.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum AdoptionRefusal {
+    /// The gate records a measurement, which is not taken in.
+    #[error("{} records a measurement; a measurement is not adopted", gate.name())]
+    GateNotAdoptable {
+        /// The gate.
+        gate: Gate,
+    },
+    /// The source was empty.
+    #[error("an adoption names where the decision came from")]
+    SourceEmpty(#[source] ValueError),
+    /// The target is in no file of the corpus.
+    #[error("{target} is not in the corpus")]
+    TargetUnknown {
+        /// What was to be adopted.
+        target: Target,
+    },
+    /// The target is in the corpus and cannot be trusted.
+    #[error("{target} is invalid as it stands")]
+    TargetInvalid {
+        /// What was to be adopted.
+        target: Target,
+    },
+    /// The gate does not approve the kind of the target.
+    #[error("{} does not approve {target}", gate.name())]
+    GateTargetMismatch {
+        /// The gate.
+        gate: Gate,
+        /// What was to be adopted.
+        target: Target,
+    },
+    /// An upstream the approval would pin is not there to pin, or is not what the
+    /// gate stands on.
+    #[error("the upstream {upstream} cannot be pinned")]
+    UpstreamUnavailable {
+        /// The upstream.
+        upstream: EntityId,
     },
 }
