@@ -827,6 +827,7 @@ pub(crate) mod test_support {
             design: Pinned::new(did(21), hash_of("design").into()),
             revision: Revision::Commit(RevisionId::from_validated("a1".into()).unwrap()),
             tests: TestOutcome::Passed,
+            fingerprint: None,
         })
     }
 

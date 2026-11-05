@@ -55,6 +55,7 @@ use sha2::{Digest, Sha256};
 use super::canon::Canon;
 use super::error::ValueError;
 use super::id::EntityId;
+use super::location::RelPath;
 
 const SCHEME: &str = "sha256:";
 
@@ -88,6 +89,8 @@ pub enum HashKind {
     PinMac,
     /// What a publication will do: see [`PlanDigest`](super::publication::PlanDigest).
     Plan,
+    /// One hunk of a change: see [`HunkId`].
+    Hunk,
 }
 
 impl HashKind {
@@ -107,6 +110,7 @@ impl HashKind {
             Self::Bytes => "bytes",
             Self::PinMac => "pin-mac",
             Self::Plan => "plan",
+            Self::Hunk => "hunk",
         }
     }
 
@@ -259,6 +263,80 @@ bytes_hash!(
     [u8]
 );
 
+/// The identity of one hunk of a change, independent of where in the file it sits
+/// and of how the lines are spaced (`hunk` tag).
+///
+/// A hunk here is one piece of a diff cut with no lines of context: a run of lines
+/// taken out and a run of lines put in, in one file. Its identity is the hash of
+/// the path and of those two runs. The line numbers are left out, so the hunk is the
+/// same one when the lines around it move; each line is read with its white space
+/// collapsed (runs of white space become one space, the ends are trimmed) and a
+/// line with nothing else on it is dropped, so re-indenting or changing the
+/// spacing of a line does not make it another hunk.
+///
+/// Why it is here and not with the code that cuts a diff: it is a hash, and the
+/// rule for what a hash covers is written where every hash is computed. Cutting
+/// the diff is an adapter's work; what to do with the pieces is
+/// [`integration`](super::integration).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HunkId(ContentHash);
+
+impl HunkId {
+    /// The identity of the hunk of `path` that takes out `removed` and puts in
+    /// `added` (one text per line, without its line break).
+    pub fn of(path: &RelPath, removed: &[&str], added: &[&str]) -> Self {
+        let lines = |lines: &[&str]| {
+            Canon::list(
+                lines
+                    .iter()
+                    .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+                    .filter(|line| !line.is_empty())
+                    .map(Canon::Str),
+            )
+        };
+        Self(ContentHash::of(
+            HashKind::Hunk,
+            &Canon::map([
+                ("path", Canon::str(path.as_str())),
+                ("removed", lines(removed)),
+                ("added", lines(added)),
+            ]),
+        ))
+    }
+
+    /// The 64 lowercase hex characters of the digest.
+    pub fn hex(&self) -> String {
+        self.0.hex()
+    }
+}
+
+impl fmt::Display for HunkId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for HunkId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HunkId({})", self.0)
+    }
+}
+
+impl FromStr for HunkId {
+    type Err = ValueError;
+
+    /// Only the form [`Display`](fmt::Display) writes.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<ContentHash>().map(Self)
+    }
+}
+
+impl super::canon::ToCanon for HunkId {
+    fn to_canon(&self) -> Canon {
+        self.0.to_canon()
+    }
+}
+
 const SHA256_BLOCK: usize = 64;
 
 /// The fewest bytes a [`PinKey`] may have. A shorter key is a mistake (a password
@@ -407,6 +485,55 @@ mod tests {
     #[test]
     fn raw_and_export_are_separated() {
         assert_ne!(ContentHash::raw(b"x"), ContentHash::export(b"x"));
+    }
+
+    fn path(text: &str) -> RelPath {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn a_hunk_id_has_its_own_tag_and_round_trips() {
+        assert_eq!(HashKind::Hunk.tag(), b"whyshelf/hunk/v1\0");
+        let id = HunkId::of(&path("src/a.rs"), &["old"], &["new"]);
+        assert_eq!(id.to_string().parse::<HunkId>().unwrap(), id);
+        assert_eq!(id.hex().len(), 64);
+    }
+
+    #[test]
+    fn a_hunk_id_is_made_of_the_path_and_the_lines_and_no_position() {
+        let base = HunkId::of(&path("src/a.rs"), &["let a = 1;"], &["let a = 2;"]);
+        assert_ne!(
+            base,
+            HunkId::of(&path("src/b.rs"), &["let a = 1;"], &["let a = 2;"]),
+            "another file"
+        );
+        assert_ne!(
+            base,
+            HunkId::of(&path("src/a.rs"), &["let a = 1;"], &["let a = 3;"]),
+            "other lines put in"
+        );
+        assert_ne!(
+            base,
+            HunkId::of(&path("src/a.rs"), &["let a = 2;"], &["let a = 1;"]),
+            "the two runs are not interchangeable"
+        );
+    }
+
+    #[test]
+    fn a_hunk_id_ignores_how_the_lines_are_spaced() {
+        let base = HunkId::of(&path("src/a.rs"), &["let a = 1;"], &["let a = 2;"]);
+        let spaced = HunkId::of(
+            &path("src/a.rs"),
+            &["    let   a =\t1;  "],
+            &["\tlet a = 2;", "   "],
+        );
+        assert_eq!(base, spaced);
+        // The spacing inside a line is one space or none, not nothing: two words do
+        // not become one.
+        assert_ne!(
+            HunkId::of(&path("src/a.rs"), &[], &["a b"]),
+            HunkId::of(&path("src/a.rs"), &[], &["ab"])
+        );
     }
 
     #[test]

@@ -917,6 +917,16 @@ pub enum Integration {
     },
 }
 
+impl Integration {
+    /// Whether the approved revision has reached the baseline: the fact
+    /// [`CmDue`](super::next::CmDue) is made from, which the type of the
+    /// [`integration`](super::integration) module (that also tells a squash merge)
+    /// gives as well.
+    pub fn is_integrated(&self) -> bool {
+        matches!(self, Self::Integrated { .. })
+    }
+}
+
 /// Which of an item's pins the tests at the current revision carry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemProgress {

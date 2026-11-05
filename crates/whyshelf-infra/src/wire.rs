@@ -95,11 +95,12 @@ use whyshelf_core::domain::event::{
     ClassChange, ClassSnapshot, DocKind, DocRegistration, Event, EventBody, EventId, Publication,
     Recorded, Registration, StoreKind, Version,
 };
-use whyshelf_core::domain::hash::ContentHash;
+use whyshelf_core::domain::hash::{ContentHash, HunkId};
 use whyshelf_core::domain::id::{Alias, DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
+use whyshelf_core::domain::integration::{ChangeFingerprint, HunkScheme};
 use whyshelf_core::domain::keyring::{KeyedPin, UpstreamHash};
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
+use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec};
 use whyshelf_core::domain::policy::GatePolicy;
 use whyshelf_core::domain::revision::{Revision, RevisionId};
 use whyshelf_core::domain::tag::{Tag, TagChange};
@@ -317,6 +318,11 @@ enum AttestationV1 {
         design: PinnedV1,
         revision: RevisionV1,
         tests: TestsV1,
+        /// The hunks of the approved change. Absent when the approval records none,
+        /// so a CA written before fingerprints were recorded has the bytes it
+        /// always had. Boxed, as in the domain, so the other gates stay small.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        change: Option<Box<FingerprintV1>>,
     },
     #[serde(rename = "CM")]
     Cm {
@@ -353,6 +359,19 @@ impl Default for GatePolicyV1 {
 enum RevisionV1 {
     Commit { id: String },
     Patch { base: String, patch: String },
+}
+
+/// The fingerprint of the change a CA approved (`ChangeFingerprint`). It is in the
+/// identifier of the approval, so it is written whole; a scheme this build does not
+/// know is read into `HunkScheme::Unknown` by its name, not refused and not read as
+/// another, so that the identifier is still the one the file names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FingerprintV1 {
+    base: RevisionV1,
+    baseline: RevisionV1,
+    hunks: Vec<String>,
+    strong: bool,
+    scheme: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -445,6 +464,30 @@ fn gate_policy_dto(policy: GatePolicy) -> GatePolicyV1 {
     }
 }
 
+fn revision_dto(revision: &Revision) -> RevisionV1 {
+    match revision {
+        Revision::Commit(id) => RevisionV1::Commit { id: id.to_string() },
+        Revision::Patch { base, patch } => RevisionV1::Patch {
+            base: base.to_string(),
+            patch: patch.to_string(),
+        },
+    }
+}
+
+fn fingerprint_dto(fingerprint: &ChangeFingerprint) -> FingerprintV1 {
+    FingerprintV1 {
+        base: revision_dto(fingerprint.base()),
+        baseline: revision_dto(fingerprint.baseline_at_approval()),
+        hunks: fingerprint
+            .hunks()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        strong: fingerprint.is_strong(),
+        scheme: fingerprint.scheme().name().to_owned(),
+    }
+}
+
 fn attestation_dto(attestation: &Attestation) -> AttestationV1 {
     match attestation {
         Attestation::Cr { finding } => AttestationV1::Cr {
@@ -470,20 +513,18 @@ fn attestation_dto(attestation: &Attestation) -> AttestationV1 {
             design,
             revision,
             tests,
+            fingerprint,
         } => AttestationV1::Ca {
             item: pinned_dto(item),
             design: upstream_dto(design),
-            revision: match revision {
-                Revision::Commit(id) => RevisionV1::Commit { id: id.to_string() },
-                Revision::Patch { base, patch } => RevisionV1::Patch {
-                    base: base.to_string(),
-                    patch: patch.to_string(),
-                },
-            },
+            revision: revision_dto(revision),
             tests: match tests {
                 TestOutcome::Passed => TestsV1::Passed,
                 TestOutcome::Failed => TestsV1::Failed,
             },
+            change: fingerprint
+                .as_ref()
+                .map(|fingerprint| Box::new(fingerprint_dto(fingerprint))),
         },
         Attestation::Cm { spec, cs, result } => AttestationV1::Cm {
             spec: pinned_dto(spec),
@@ -697,6 +738,33 @@ fn revision_id(name: &'static str, text: &str) -> Result<RevisionId, WireError> 
     field(name, RevisionId::from_validated(text.to_owned()))
 }
 
+fn revision_from(name: &'static str, dto: &RevisionV1) -> Result<Revision, WireError> {
+    Ok(match dto {
+        RevisionV1::Commit { id } => Revision::Commit(revision_id(name, id)?),
+        RevisionV1::Patch { base, patch } => Revision::Patch {
+            base: revision_id(name, base)?,
+            patch: hash("patch", patch)?,
+        },
+    })
+}
+
+fn fingerprint_from(dto: &FingerprintV1) -> Result<ChangeFingerprint, WireError> {
+    let hunks = parse_list::<HunkId>("change.hunks", &dto.hunks)?
+        .into_iter()
+        .collect();
+    // A scheme this build does not know is kept by its name, not refused: the file
+    // stays readable and the identifier of the approval, which hashes the name, stays
+    // what it was. Only a name that is not the shape of a name is an error.
+    let scheme = field("change.scheme", HunkScheme::from_name(&dto.scheme))?;
+    Ok(ChangeFingerprint::new(
+        revision_from("change.base", &dto.base)?,
+        revision_from("change.baseline", &dto.baseline)?,
+        field("change.hunks", NonEmptySet::from_set(hunks))?,
+        dto.strong,
+        scheme,
+    ))
+}
+
 fn attestation_from(dto: &AttestationV1) -> Result<Attestation, WireError> {
     Ok(match dto {
         AttestationV1::Cr { finding } => Attestation::Cr {
@@ -728,20 +796,16 @@ fn attestation_from(dto: &AttestationV1) -> Result<Attestation, WireError> {
             design,
             revision,
             tests,
+            change,
         } => Attestation::Ca {
             item: pinned_from("item", item, ItemId::new)?,
             design: upstream_from("design", design, DesignId::new)?,
-            revision: match revision {
-                RevisionV1::Commit { id } => Revision::Commit(revision_id("revision", id)?),
-                RevisionV1::Patch { base, patch } => Revision::Patch {
-                    base: revision_id("revision", base)?,
-                    patch: hash("patch", patch)?,
-                },
-            },
+            revision: revision_from("revision", revision)?,
             tests: match tests {
                 TestsV1::Passed => TestOutcome::Passed,
                 TestsV1::Failed => TestOutcome::Failed,
             },
+            fingerprint: change.as_deref().map(fingerprint_from).transpose()?,
         },
         AttestationV1::Cm { spec, cs, result } => Attestation::Cm {
             spec: pinned_from("spec", spec, SpecId::new)?,
@@ -945,6 +1009,30 @@ mod tests {
         Pinned::new(wrap(eid(n)), UpstreamHash::Keyed(pin))
     }
 
+    /// A fingerprint of two hunks, one strong, made from a base that is a commit and a
+    /// baseline tip that is a patch, so every part of it is written.
+    fn fingerprint() -> ChangeFingerprint {
+        use whyshelf_core::domain::integration::Hunk;
+        let commit = |text: &str| RevisionId::from_validated(text.repeat(20)).unwrap();
+        ChangeFingerprint::of_hunks(
+            Revision::Commit(commit("b0")),
+            Revision::Patch {
+                base: commit("b1"),
+                patch: h("tip"),
+            },
+            &[
+                Hunk::new(path("src/a.rs"), vec![], vec!["}".to_owned()]),
+                Hunk::new(
+                    path("src/a.rs"),
+                    vec!["let timeout = 10;".to_owned()],
+                    vec!["let timeout = Duration::from_secs(30);".to_owned()],
+                ),
+            ],
+            HunkScheme::CURRENT,
+        )
+        .unwrap()
+    }
+
     fn alice() -> Actor {
         Actor::new("alice").unwrap()
     }
@@ -1052,6 +1140,7 @@ mod tests {
                 design: upstream(DesignId::new, 8, "d"),
                 revision: Revision::Commit(commit.clone()),
                 tests: TestOutcome::Passed,
+                fingerprint: None,
             },
             Attestation::Ca {
                 item: pinned(ItemId::new, 9, "i"),
@@ -1061,6 +1150,14 @@ mod tests {
                     patch: h("patch"),
                 },
                 tests: TestOutcome::Failed,
+                fingerprint: None,
+            },
+            Attestation::Ca {
+                item: pinned(ItemId::new, 9, "i"),
+                design: upstream(DesignId::new, 8, "d"),
+                revision: Revision::Commit(RevisionId::from_validated("c3".repeat(20)).unwrap()),
+                tests: TestOutcome::Passed,
+                fingerprint: Some(fingerprint()),
             },
             Attestation::Cm {
                 spec: pinned(SpecId::new, 6, "hyp"),
@@ -1250,6 +1347,149 @@ mod tests {
             decode(edited.to_string().as_bytes()),
             Err(WireError::IdMismatch { .. })
         ));
+    }
+
+    /// The fingerprint of a CA is written, not dropped: it is in the identifier, and a
+    /// file without it would read as another approval.
+    #[test]
+    fn a_ca_writes_its_fingerprint_and_one_without_it_has_the_bytes_it_had() {
+        let ca_files: Vec<(Event, serde_json::Value)> = every_event()
+            .into_iter()
+            .filter(|e| {
+                matches!(
+                    e.body(),
+                    EventBody::Approved {
+                        attestation: Attestation::Ca { .. },
+                        ..
+                    }
+                )
+            })
+            .map(|e| {
+                let file = serde_json::from_str(&encode(&e, &at()).unwrap()).unwrap();
+                (e, file)
+            })
+            .collect();
+        let [(_, plain), (_, patch), (with, file)] = ca_files.as_slice() else {
+            panic!("every_event has three CA approvals");
+        };
+        assert!(plain["attestation"].get("change").is_none());
+        assert!(patch["attestation"].get("change").is_none());
+
+        let change = &file["attestation"]["change"];
+        assert_eq!(change["scheme"], "hunks-v1");
+        assert_eq!(change["strong"], true);
+        assert_eq!(change["base"]["form"], "commit");
+        assert_eq!(change["baseline"]["form"], "patch");
+        assert_eq!(change["hunks"].as_array().unwrap().len(), 2);
+        let back = decode(file.to_string().as_bytes()).unwrap();
+        assert_eq!(back.event(), with);
+        let EventBody::Approved { attestation, .. } = back.event().body() else {
+            panic!("an approval");
+        };
+        assert_eq!(attestation.fingerprint(), Some(&fingerprint()));
+
+        // Taken out, the file names an approval its content no longer gives.
+        let mut stripped = file.clone();
+        stripped["attestation"]
+            .as_object_mut()
+            .unwrap()
+            .remove("change");
+        assert!(matches!(
+            decode(stripped.to_string().as_bytes()),
+            Err(WireError::IdMismatch { .. })
+        ));
+        // A name that is not the shape of a name is refused.
+        let mut shapeless = file.clone();
+        shapeless["attestation"]["change"]["scheme"] = serde_json::json!("Hunks V9");
+        assert!(matches!(
+            decode(shapeless.to_string().as_bytes()),
+            Err(WireError::Field {
+                field: "change.scheme",
+                ..
+            })
+        ));
+        // A change of no hunk is no fingerprint.
+        let mut empty = file.clone();
+        empty["attestation"]["change"]["hunks"] = serde_json::json!([]);
+        assert!(matches!(
+            decode(empty.to_string().as_bytes()),
+            Err(WireError::Field {
+                field: "change.hunks",
+                ..
+            })
+        ));
+    }
+
+    /// A fingerprint made under a scheme this build does not have is read back whole,
+    /// under the same identifier, and what it says of the landing is that it cannot be
+    /// told: the file is not refused, and the approval is not read as another.
+    #[test]
+    fn a_fingerprint_of_an_unknown_scheme_round_trips_with_the_same_id_and_is_unknown() {
+        use whyshelf_core::domain::integration::{
+            ApprovedChange, BaselineFacts, Integration, UnknownWhy,
+        };
+        use whyshelf_core::domain::knowable::Knowable;
+
+        let known = fingerprint();
+        let future = ChangeFingerprint::new(
+            known.base().clone(),
+            known.baseline_at_approval().clone(),
+            known.hunks().clone(),
+            known.is_strong(),
+            HunkScheme::from_name("hunks-v9").unwrap(),
+        );
+        let approved = |fingerprint: ChangeFingerprint| {
+            let attestation = Attestation::Ca {
+                item: pinned(ItemId::new, 9, "i"),
+                design: upstream(DesignId::new, 8, "d"),
+                revision: Revision::Commit(RevisionId::from_validated("c3".repeat(20)).unwrap()),
+                tests: TestOutcome::Passed,
+                fingerprint: Some(fingerprint),
+            };
+            Event::new(
+                attestation.subject(),
+                BTreeSet::new(),
+                EventBody::Approved {
+                    by: alice(),
+                    attestation,
+                },
+            )
+            .unwrap()
+        };
+        let event = approved(future);
+        assert_ne!(
+            event.id(),
+            approved(known).id(),
+            "the scheme is in the identifier"
+        );
+
+        let file: serde_json::Value =
+            serde_json::from_str(&encode(&event, &at()).unwrap()).unwrap();
+        assert_eq!(file["attestation"]["change"]["scheme"], "hunks-v9");
+        let back = decode(file.to_string().as_bytes()).expect("an unknown scheme is not refused");
+        assert_eq!(back.event(), &event);
+        assert_eq!(back.event().id(), event.id());
+        let EventBody::Approved { attestation, .. } = back.event().body() else {
+            panic!("an approval");
+        };
+        let fingerprint = attestation.fingerprint().expect("a fingerprint");
+        assert_eq!(fingerprint.scheme().name(), "hunks-v9");
+        assert!(!fingerprint.scheme().is_known());
+
+        // Its landing cannot be told, whatever the port says of the hunks.
+        let verdict = Integration::decide([ApprovedChange::checked(
+            Revision::Commit(RevisionId::from_validated("c3".repeat(20)).unwrap()),
+            Some(fingerprint.clone()),
+            BaselineFacts::new(Knowable::Known(false), Knowable::Known(true)),
+            UnknownWhy::Shallow,
+        )]);
+        assert_eq!(
+            verdict,
+            Integration::Unknown {
+                approved: Revision::Commit(RevisionId::from_validated("c3".repeat(20)).unwrap()),
+                why: UnknownWhy::FingerprintVersion
+            }
+        );
     }
 
     /// Golden: the store names a stored `Published` event carries. They are

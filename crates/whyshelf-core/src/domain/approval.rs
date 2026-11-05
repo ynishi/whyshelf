@@ -44,6 +44,13 @@
 //! a private text is not written where others can read it. A plain pin has the
 //! canonical form a hash always had.
 //!
+//! A CA approval may also record the hunks of the change it approved
+//! ([`ChangeFingerprint`]), so that the change can be found in the baseline after
+//! the approved commit is gone. It is in the canonical form when there is one and
+//! left out when there is none, so an approval written before it existed has the
+//! identity it had and reads as "no fingerprint"; it is not what "Modified"
+//! compares.
+//!
 //! A CS approval also records the `hyp_hash` it fixed, so a later CM can find it
 //! ([`ApprovalSet::cs_for_cm`]), and the [`GatePolicy`] it passed under, so that an
 //! approval made while the project demanded less is told from one made under the
@@ -113,6 +120,7 @@ use super::classification::ClassificationView;
 use super::event::{DocKind, EntityKind, Event, EventBody, EventGraph, EventId};
 use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, SpecId};
+use super::integration::ChangeFingerprint;
 use super::keyring::UpstreamHash;
 use super::nonempty::{NonBlank, NonEmptyVec};
 use super::policy::GatePolicy;
@@ -384,6 +392,11 @@ pub enum Attestation {
         revision: Revision,
         /// The outcome of the tests at that revision.
         tests: TestOutcome,
+        /// The change that was approved, as hunks, so that it can be found in the
+        /// baseline after the approved commit is gone (a squash). None for an
+        /// approval written before this was recorded, and it reads as "no
+        /// fingerprint", not as an error; see [`integration`](super::integration).
+        fingerprint: Option<ChangeFingerprint>,
     },
     /// A measurement was read.
     Cm {
@@ -449,6 +462,15 @@ impl Attestation {
         }
     }
 
+    /// The fingerprint of the approved change: only a CA can have one, and one
+    /// written before fingerprints were recorded has none.
+    pub fn fingerprint(&self) -> Option<&ChangeFingerprint> {
+        match self {
+            Self::Ca { fingerprint, .. } => fingerprint.as_ref(),
+            Self::Cr { .. } | Self::Cs { .. } | Self::Ci { .. } | Self::Cm { .. } => None,
+        }
+    }
+
     /// The upstream facts recorded (see the table of the module).
     pub fn upstream(&self) -> Vec<UpstreamRecord> {
         let entity = |id: EntityId, hash: &UpstreamHash| UpstreamRecord::Entity {
@@ -506,19 +528,33 @@ impl ToCanon for Attestation {
                 design,
                 revision,
                 tests,
-            } => Canon::map([
-                gate,
-                ("target", item.to_canon()),
-                ("design", design.to_canon()),
-                ("revision", revision.to_canon()),
-                (
-                    "tests",
-                    Canon::str(match tests {
-                        TestOutcome::Passed => "passed",
-                        TestOutcome::Failed => "failed",
-                    }),
-                ),
-            ]),
+                fingerprint,
+            } => {
+                // Left out when there is none, like the default policy of a CS, so
+                // a CA written before fingerprints were recorded has the canonical
+                // form (and the identity) it had, and a fingerprint is never the
+                // same record as none.
+                let change = fingerprint
+                    .as_ref()
+                    .map(|fingerprint| ("change", fingerprint.to_canon()));
+                Canon::map(
+                    [
+                        gate,
+                        ("target", item.to_canon()),
+                        ("design", design.to_canon()),
+                        ("revision", revision.to_canon()),
+                        (
+                            "tests",
+                            Canon::str(match tests {
+                                TestOutcome::Passed => "passed",
+                                TestOutcome::Failed => "failed",
+                            }),
+                        ),
+                    ]
+                    .into_iter()
+                    .chain(change),
+                )
+            }
             Self::Cm { spec, cs, result } => Canon::map([
                 gate,
                 ("target", spec.to_canon()),
@@ -781,6 +817,7 @@ pub(crate) mod test_support {
             design: Pinned::new(did(d), (*design_hash).into()),
             revision: rev(revision),
             tests: TestOutcome::Passed,
+            fingerprint: None,
         }
     }
 
@@ -947,6 +984,76 @@ mod tests {
                 "{gate:?}"
             );
         }
+    }
+
+    /// A CA at the revision `r1`, with a fingerprint of one hunk if `change` is
+    /// given.
+    fn ca_with(change: Option<&str>) -> Attestation {
+        use crate::domain::integration::{ChangeFingerprint, Hunk, HunkScheme};
+        let fingerprint = change.map(|line| {
+            ChangeFingerprint::of_hunks(
+                rev("base"),
+                rev("tip"),
+                &[Hunk::new(
+                    "src/a.rs".parse().unwrap(),
+                    vec![],
+                    vec![line.to_owned()],
+                )],
+                HunkScheme::CURRENT,
+            )
+            .unwrap()
+        });
+        match ca(5, &h(5), 4, &h(4), "r1") {
+            Attestation::Ca {
+                item,
+                design,
+                revision,
+                tests,
+                ..
+            } => Attestation::Ca {
+                item,
+                design,
+                revision,
+                tests,
+                fingerprint,
+            },
+            other => other,
+        }
+    }
+
+    #[test]
+    fn a_ca_may_record_the_change_it_approved_and_one_that_does_not_reads_as_none() {
+        assert!(ca_with(None).fingerprint().is_none());
+        assert!(ca_with(Some("let timeout = 30;")).fingerprint().is_some());
+        for gate in Gate::ALL {
+            if gate != Gate::Ca {
+                assert!(sample(gate).fingerprint().is_none(), "{gate:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_fingerprint_is_in_the_canonical_form_and_none_leaves_it_as_it_was() {
+        // The form of a CA that records none is the one it had before the field
+        // existed, so an approval written then still verifies.
+        let none = ca_with(None).to_canon();
+        let Canon::Map(entries) = &none else {
+            panic!("a map");
+        };
+        assert!(!entries.contains_key("change"));
+        assert_eq!(
+            entries.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["design", "gate", "revision", "target", "tests"]
+        );
+
+        let with = ca_with(Some("let timeout = 30;")).to_canon();
+        let Canon::Map(entries) = &with else {
+            panic!("a map");
+        };
+        assert!(entries.contains_key("change"));
+        assert_ne!(none, with);
+        assert_ne!(with, ca_with(Some("let timeout = 60;")).to_canon());
+        assert_eq!(with, ca_with(Some("let timeout = 30;")).to_canon());
     }
 
     #[test]

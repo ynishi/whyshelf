@@ -180,6 +180,21 @@
 //! constructs it. A CA approval records the current revision by itself and refuses a
 //! dirty working tree.
 //!
+//! Whether an approved change has landed is not only a question of ancestry, since a
+//! squash leaves no ancestor to find. A CA approval can also record the hunks of its
+//! change ([`integration::ChangeFingerprint`]), and a change has landed when its
+//! revision is an ancestor of the baseline or when its hunks are all in the
+//! baseline's history. The verdict ([`integration::Integration`]) is a rule over
+//! facts that an adapter supplies ([`integration::BaselineFacts`]); it knows no Git.
+//!
+//! # The next step
+//!
+//! What waits on a person is a step with a target, an action, what it needs, and room
+//! for a choice between two ([`plan_next`]). The order in which the reasons for
+//! waiting are looked at is written once, in [`next`], and [`plan_next`] translates
+//! it. An action that takes an earlier decision in without a gate is never offered
+//! to whoever follows the next step.
+//!
 //! # Known limitations
 //!
 //! - **Published entities look Draft in a public clone.** Approvals stay in the
@@ -220,7 +235,9 @@
 //! | [`publication`] | what publishing a document would do: the plan with its steps, the records and versions it copies and the ones it leaves, the leak check, the cut-short forms, and the digest a person confirms ([`publication::plan_publication`]) |
 //! | [`keyring`] | keys for the pins of private upstreams, and the keyed pins they make (the HMAC itself is in [`hash`]) |
 //! | [`policy`] | what a project decides for itself: what CS demands of a Spec ([`policy::GatePolicy`], recorded in the approval it lets through) and the pin prefixes and spellings ([`policy::PinVocabulary`]) |
-//! | [`gate`], [`next`] | the machine check of each gate and the proof it passed; the next step of an entity |
+//! | [`gate`], [`next`] | the machine check of each gate and the proof it passed; the order of the reasons an entity waits on a person |
+//! | [`plan_next`] | the next step as a value: an action on a target with what it needs, a choice between two, advice about the environment, or a wait; from the state, its readiness, the files to import and the publications cut short |
+//! | [`integration`] | whether an item's approved change has reached the baseline, by ancestry or by the hunks recorded at approval (`ChangeFingerprint`, `HunkScheme`, the weak-hunk rule), from facts an adapter supplies |
 //! | [`lint`], [`query`] | the violations and the order of upstream problems, the leak lint, drift of generated files, the `find` language |
 //! | [`error`] | one enum per kind of failure |
 
@@ -243,6 +260,7 @@ pub mod front;
 pub mod gate;
 pub mod hash;
 pub mod id;
+pub mod integration;
 pub mod judge;
 pub mod judgement;
 pub mod keyring;
@@ -254,6 +272,7 @@ pub mod naming;
 pub mod next;
 pub mod nonempty;
 pub mod pin;
+pub mod plan_next;
 pub mod policy;
 pub mod publication;
 pub mod query;

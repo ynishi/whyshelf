@@ -249,9 +249,13 @@ impl Crosses for Attestation {
                 design,
                 revision,
                 tests: _,
+                fingerprint,
             } => {
                 design.pin().cross_into(out);
                 revision.cross_into(out);
+                if let Some(fingerprint) = fingerprint {
+                    fingerprint.cross_into(out);
+                }
             }
             Self::Cm {
                 spec: _,

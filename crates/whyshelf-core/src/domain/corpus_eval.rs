@@ -896,6 +896,7 @@ mod tests {
                 design: Pinned::new(self.d.id(), (*self.d.design_hash()).into()),
                 revision: Revision::Commit(RevisionId::from_validated("a1".into()).unwrap()),
                 tests: TestOutcome::Passed,
+                fingerprint: None,
             }
         }
 

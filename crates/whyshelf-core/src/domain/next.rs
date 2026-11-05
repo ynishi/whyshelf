@@ -64,16 +64,15 @@ pub enum CmDue {
 impl CmDue {
     /// Whether the Spec's measurement is due.
     ///
-    /// `items` are the integration states of the items of every Design of the
-    /// Spec. The hash of the hypotheses is the Spec's own.
-    pub fn of<'a>(
-        items: impl IntoIterator<Item = &'a Integration>,
-        ledger: &ApprovalSet,
-        spec: &Spec,
-    ) -> Self {
+    /// `items` say, for each item of every Design of the Spec, whether its approved
+    /// change has reached the baseline. It is a plain fact so that every model of
+    /// landing feeds the one rule: [`Integration::is_integrated`] of this module's
+    /// model, [`integration::Integration::is_integrated`](super::integration::Integration::is_integrated)
+    /// of the one that also tells a squash merge. The hash of the hypotheses is the
+    /// Spec's own.
+    pub fn of(items: impl IntoIterator<Item = bool>, ledger: &ApprovalSet, spec: &Spec) -> Self {
         let mut items = items.into_iter().peekable();
-        let all_integrated = items.peek().is_some()
-            && items.all(|integration| matches!(integration, Integration::Integrated { .. }));
+        let all_integrated = items.peek().is_some() && items.all(|integrated| integrated);
         let measured = ledger
             .matching(Gate::Cm, spec.id().entity(), spec.hyp_hash())
             .next()
@@ -199,13 +198,19 @@ fn from_upstream(
 
 /// The step the state asks for, before what an approved entity may still be
 /// waiting for.
-fn from_state(
+///
+/// This is the one place the order of the reasons for waiting is written: the
+/// derived [`plan_next`](super::plan_next) reads it too, and keeps no order of its
+/// own for these steps. `implementing` says that the entity is an item whose tests
+/// do not carry all its pins, which is what makes a Draft item "implement" and not
+/// "approve".
+pub(crate) fn state_step(
     state: &EntityState,
     causes: &[Cause],
     problems: &[(EntityId, UpstreamProblem)],
-    input: &NextInput<'_>,
+    gate: Gate,
+    implementing: bool,
 ) -> Option<NextStep> {
-    let gate = input.gate();
     let upstream = from_upstream(state, causes, problems);
     match (state.approval(), state.upstream()) {
         (Approval::Invalid(_), _) => Some(NextStep::Fix),
@@ -213,9 +218,10 @@ fn from_state(
         // Blocked by something no entity of the model names: nothing to point at.
         (_, Upstream::Blocked(_)) => None,
         (Approval::Modified { .. }, _) | (_, Upstream::Stale(_)) => Some(NextStep::Reapprove(gate)),
-        (Approval::Draft, _) => Some(match input {
-            NextInput::Item { progress, .. } if progress.is_implementing() => NextStep::Implement,
-            _ => NextStep::Approve(gate),
+        (Approval::Draft, _) => Some(if implementing {
+            NextStep::Implement
+        } else {
+            NextStep::Approve(gate)
         }),
         // Approved and current, but a pin of its own cannot be compared here for want
         // of a key: approving again pins it under one this environment has.
@@ -223,6 +229,20 @@ fn from_state(
             holds_a_pin_without_its_key(state).then_some(NextStep::Reapprove(gate))
         }
     }
+}
+
+/// Whether the entity is approved and current, which is the only state in which what
+/// it may still wait for (a measurement, the baseline) is looked at once
+/// [`state_step`] has no step for it.
+///
+/// When [`state_step`] gives none, the entity is either that or Blocked by something
+/// no entity names; the second has nothing to point at, and nothing after it is
+/// asked.
+pub(crate) fn is_current(state: &EntityState) -> bool {
+    matches!(
+        (state.approval(), state.upstream()),
+        (Approval::Approved, Upstream::Ok)
+    )
 }
 
 /// What an entity waits for, if it waits for anything.
@@ -235,7 +255,15 @@ pub fn next_step(
     problems: &[(EntityId, UpstreamProblem)],
     input: NextInput<'_>,
 ) -> Option<NextStep> {
-    from_state(state, causes, problems, &input).or(match input {
+    let implementing =
+        matches!(&input, NextInput::Item { progress, .. } if progress.is_implementing());
+    if let Some(step) = state_step(state, causes, problems, input.gate(), implementing) {
+        return Some(step);
+    }
+    if !is_current(state) {
+        return None;
+    }
+    match input {
         NextInput::Doc { .. } => None,
         NextInput::Spec { cm_due: CmDue::Due } => Some(NextStep::Measure),
         NextInput::Spec {
@@ -249,7 +277,7 @@ pub fn next_step(
             | Integration::Integrated { .. }
             | Integration::Unknown { .. } => None,
         },
-    })
+    }
 }
 
 #[cfg(test)]
@@ -366,6 +394,21 @@ mod tests {
             next_step(&state(Approval::Draft, blocked()), &[], &[], DOC),
             None
         );
+        // Nor is what an approved and current entity may wait for asked of it.
+        let progress = ItemProgress::new(pins(&["PIN-A"]), pins(&["PIN-A"]));
+        let pending = Integration::ApprovedPending { revision: rev() };
+        for input in [
+            NextInput::Spec { cm_due: CmDue::Due },
+            NextInput::Item {
+                progress: &progress,
+                integration: &pending,
+            },
+        ] {
+            assert_eq!(
+                next_step(&state(Approval::Approved, blocked()), &[], &[], input),
+                None
+            );
+        }
     }
 
     #[test]
@@ -500,24 +543,29 @@ mod tests {
         Integration::ApprovedPending { revision: rev() }
     }
 
+    /// The fact `CmDue` is made from, of each state.
+    fn done(states: &[Integration]) -> Vec<bool> {
+        states.iter().map(Integration::is_integrated).collect()
+    }
+
     #[test]
     fn a_measurement_is_due_when_every_item_is_integrated_and_none_was_recorded() {
         let s = spec(11, &[1], &["PIN-A"]);
         let none = ApprovalSet::default();
         assert_eq!(
-            CmDue::of(&[integrated(), integrated()], &none, &s),
+            CmDue::of(done(&[integrated(), integrated()]), &none, &s),
             CmDue::Due
         );
         assert_eq!(
-            CmDue::of(&[integrated(), pending()], &none, &s),
+            CmDue::of(done(&[integrated(), pending()]), &none, &s),
             CmDue::NotDue
         );
         assert_eq!(
-            CmDue::of(&[integrated(), Integration::Unapproved], &none, &s),
+            CmDue::of(done(&[integrated(), Integration::Unapproved]), &none, &s),
             CmDue::NotDue
         );
         assert_eq!(
-            CmDue::of(&[], &none, &s),
+            CmDue::of(done(&[]), &none, &s),
             CmDue::NotDue,
             "no item, nothing to wait for"
         );
@@ -536,10 +584,10 @@ mod tests {
             &[],
         );
         let before = ledger(std::slice::from_ref(&a_cs));
-        assert_eq!(CmDue::of(&[integrated()], &before, &s), CmDue::Due);
+        assert_eq!(CmDue::of([true], &before, &s), CmDue::Due);
         let recorded = approve(cm_pass(11, s.hyp_hash(), a_cs.id()), &[]);
         let after = ledger(&[a_cs.clone(), recorded]);
-        assert_eq!(CmDue::of(&[integrated()], &after, &s), CmDue::NotDue);
+        assert_eq!(CmDue::of([true], &after, &s), CmDue::NotDue);
     }
 
     /// A measurement recorded against the duplicate identifier of a Spec that two
@@ -557,7 +605,7 @@ mod tests {
         let recorded = approve(cm_pass(2, s.hyp_hash(), a_cs.id()), &[a_cs.id()]);
         let l = ledger(&[first, second, a_cs, recorded]);
         assert_eq!(l.canonical(sid(2).entity()), sid(1).entity());
-        assert_eq!(CmDue::of(&[integrated()], &l, &s), CmDue::NotDue);
+        assert_eq!(CmDue::of([true], &l, &s), CmDue::NotDue);
     }
 
     #[test]
@@ -571,7 +619,7 @@ mod tests {
         let other_hash = ContentHash::raw(b"other hypotheses");
         let recorded = approve(cm_pass(11, &other_hash, a_cs.id()), &[]);
         let l = ledger(&[a_cs, recorded]);
-        assert_eq!(CmDue::of(&[integrated()], &l, &s), CmDue::Due);
+        assert_eq!(CmDue::of([true], &l, &s), CmDue::Due);
     }
 
     #[test]

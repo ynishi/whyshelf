@@ -50,6 +50,10 @@ pub enum ValueError {
     /// A key id is empty, too long, or holds a character outside `a-z 0-9 . _ -`.
     #[error("a key id is 1 to 64 characters of lowercase letters, digits and `. _ -`")]
     KidBadShape,
+    /// A hunk scheme name is empty, too long, or holds a character outside
+    /// `a-z 0-9 . _ -`.
+    #[error("a hunk scheme name is 1 to 64 characters of lowercase letters, digits and `. _ -`")]
+    SchemeNameBadShape,
     /// A keyring lists one key id twice.
     #[error("the key id `{kid}` is in the keyring twice")]
     KidDuplicate {
@@ -531,6 +535,24 @@ pub enum EventError {
     RecordsDiffer {
         /// The identifier both records carry.
         id: EventId,
+    },
+}
+
+/// Why the fingerprint of a change could not be built.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum FingerprintError {
+    /// The change has no hunk, so there is nothing to find again in the baseline.
+    ///
+    /// An approval of an item whose change is empty has no fingerprint; it is
+    /// recorded without one, and its landing is told by the ancestry alone.
+    #[error("a change with no hunk has no fingerprint")]
+    NoHunks,
+    /// The scheme is one this build does not have, so it cannot cut a change into
+    /// hunks. A fingerprint under such a scheme can only be read back, never made.
+    #[error("this build cannot cut a change into hunks under the scheme `{scheme}`")]
+    UnknownScheme {
+        /// The name of the scheme.
+        scheme: String,
     },
 }
 

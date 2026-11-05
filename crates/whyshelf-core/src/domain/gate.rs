@@ -689,6 +689,7 @@ pub mod ca {
                     design: Pinned::new(design.id(), pin),
                     revision: Revision::Commit(revision),
                     tests,
+                    fingerprint: None,
                 })
             },
             Gate::Ca,
@@ -1438,6 +1439,7 @@ mod tests {
             design,
             revision,
             tests,
+            ..
         } = passed.attestation()
         else {
             panic!("a CA attestation");

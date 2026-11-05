@@ -2096,6 +2096,7 @@ mod tests {
             design: Pinned::new(DesignId::new(id(2)), hash.into()),
             revision: Revision::Commit(RevisionId::from_validated(old.to_owned()).unwrap()),
             tests: TestOutcome::Passed,
+            fingerprint: None,
         };
         let event: EventId = format!("sha256:{}", "0".repeat(64)).parse().unwrap();
         let shown = |gate, attestation| {

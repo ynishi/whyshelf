@@ -2034,6 +2034,7 @@ mod tests {
                     patch: ContentHash::raw(b"diff"),
                 },
                 tests: TestOutcome::Passed,
+                fingerprint: None,
             },
             &[],
         ));

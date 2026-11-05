@@ -673,7 +673,7 @@ fn cm_due(model: &Model, spec: &Spec) -> CmDue {
         model
             .items()
             .filter(|i| designs.contains(&i.key().design))
-            .map(|i| i.evaluation().integration()),
+            .map(|i| i.evaluation().integration().is_integrated()),
         model.ledger(),
         spec,
     )
