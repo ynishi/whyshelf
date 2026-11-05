@@ -123,8 +123,10 @@ pub enum AppError {
         /// Everything the check found.
         violations: Vec<CheckViolation>,
     },
-    /// The working tree has uncommitted changes.
-    #[error("the working tree is not clean: commit first")]
+    /// The working tree has uncommitted changes. The message is the corpus model's
+    /// refusal ([`Refusal::DirtyTree`](super::outcome::Refusal::DirtyTree)), said
+    /// once.
+    #[error("{}", super::outcome::Refusal::DirtyTree)]
     DirtyWorktree,
     /// The revision adapter did not accept a revision identifier.
     #[error("`{text}` is not a revision")]

@@ -646,6 +646,15 @@ pub enum JudgementError {
         /// The hash the approval pins.
         target: ContentHash,
     },
+    /// The object kept with an approval or an adoption is not the text its check
+    /// read.
+    #[error("the object is the text {object}, and the check read {checked}")]
+    ObjectNotChecked {
+        /// The text hash the object was given for.
+        object: TextHash,
+        /// The hash of the text the check read.
+        checked: TextHash,
+    },
     /// A retirement was asked for a document or item whose file is there.
     #[error("{target} is present; only what is missing can be retired")]
     TargetPresent {

@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::domain::actor::MeasuredAt;
+use crate::domain::corpus::Reading;
 use crate::domain::design::{Crux, Design, WorkItem};
 use crate::domain::error::{EntityError, ValueError};
 use crate::domain::event::DocKind;
@@ -29,7 +30,7 @@ use crate::domain::finding::{
     EvidenceLabel, Finding, FindingSource, MaturityLevel, ObservationMethod, Reproducibility,
 };
 use crate::domain::front::{FileClassification, Guess};
-use crate::domain::hash::ContentHash;
+use crate::domain::hash::{ContentHash, TextHash};
 use crate::domain::id::{DesignId, DocId, FindingId, ItemNumber, SpecId};
 use crate::domain::location::{CodeLocation, RelPath, SourceUri};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
@@ -91,6 +92,49 @@ impl NormalizedText {
     /// The `raw` hash: the key of the stored object.
     pub fn raw_hash(&self) -> ContentHash {
         ContentHash::raw(self.0.as_bytes())
+    }
+
+    /// The [`TextHash`]: the key of the object of this version in the corpus
+    /// model, and what a gate is told it read.
+    pub fn text_hash(&self) -> TextHash {
+        TextHash::of(&self.0)
+    }
+}
+
+/// One file as a [`DocumentSource`](super::ports::DocumentSource) read it: what
+/// reading it gave, and its text.
+///
+/// The [`Reading`] is the typed value the adapter made of the Markdown and the front
+/// matter (a document, a file with no `id:`, or one that cannot be read); the
+/// [`NormalizedText`] is the same file's text after the adapter's normalization, which
+/// is what an object keeps and what a [`TextHash`] is
+/// computed from. The two come from one read of one file, so they cannot describe
+/// different versions of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawDocument {
+    reading: Reading,
+    text: NormalizedText,
+}
+
+impl RawDocument {
+    /// The reading of a file and its normalized text.
+    pub fn new(reading: Reading, text: NormalizedText) -> Self {
+        Self { reading, text }
+    }
+
+    /// What reading the file gave.
+    pub fn reading(&self) -> &Reading {
+        &self.reading
+    }
+
+    /// The normalized text.
+    pub fn text(&self) -> &NormalizedText {
+        &self.text
+    }
+
+    /// The reading and the text apart.
+    pub fn into_parts(self) -> (Reading, NormalizedText) {
+        (self.reading, self.text)
     }
 }
 
@@ -426,6 +470,11 @@ impl Candidate {
     /// The `raw` hash of the text.
     pub fn raw_hash(&self) -> ContentHash {
         self.text.raw_hash()
+    }
+
+    /// The [`TextHash`] of the text.
+    pub fn text_hash(&self) -> TextHash {
+        self.text.text_hash()
     }
 
     /// What parsing gave.

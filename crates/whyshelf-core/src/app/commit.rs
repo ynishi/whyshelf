@@ -59,8 +59,42 @@
 //!
 //! Only texts (the stored objects) are scanned for secrets and for private names;
 //! the fields of an event are not.
+//!
+//! # Evidence for the ledgers
+//!
+//! A judgement reaches a ledger, and a text reaches an object store, only through
+//! values that this module's children make and nothing else can:
+//!
+//! ```text
+//!   text + judgement --scan--> Scanned --ObjectStore::put--> Put::Stored --> StoredObject
+//!                      |                                      Put::Purged --> Refusal::ObjectPurged
+//!                      +-- a secret: Refusal::Secret
+//!
+//!   judgement + StoredObject ----------------> Recordable --> LedgerStore::append
+//!   judgement (revoke, retire, purge, published) ----------^
+//!   judgement read from the private ledger + plan ---------^   (a publication's copy)
+//!
+//!   ConfirmPort::ask --Confirmed::Yes--> HumanConfirmation   (a plan's digest)
+//! ```
+//!
+//! [`record`] holds the chain of the first three lines, [`confirm`] the confirmation.
+//! They are children of this module, and each constructor is
+//! `pub(in crate::app::commit)`, so the only code that can make an evidence value is
+//! this module and its children: a use case, an adapter or a library user can call
+//! the steps (which do the checking) and cannot skip them. A step that stops says why
+//! as a [`Stop`].
+
+pub mod confirm;
+pub mod record;
+
+// The file name ends in `_tests` so that the architecture lint reads it as test code.
+#[cfg(test)]
+#[path = "commit/fixture_tests.rs"]
+pub(crate) mod fixtures;
 
 use std::collections::{BTreeMap, BTreeSet};
+
+use thiserror::Error;
 
 use crate::domain::actor::{Actor, Timestamp};
 use crate::domain::event::{Event, EventBody, EventId, RecordBody, Registration, StoreKind};
@@ -68,12 +102,29 @@ use crate::domain::gate::Passed;
 use crate::domain::id::{Alias, EntityId};
 use crate::domain::lint::leak_lint;
 
+use self::record::ChainError;
 use super::Workspace;
 use super::error::AppError;
 use super::model::Model;
+use super::outcome::Refusal;
 use super::ports::{ClockPort, PortName, Ports, SecretScanPort, StorePort};
 use super::raw::NormalizedText;
 use super::subscriber::{Subscriber, SubscriberError, SubscriberWarning};
+
+/// Why a step of the evidence chain did not give its evidence.
+#[derive(Debug, Error)]
+pub enum Stop {
+    /// A precondition does not hold; the use case reports it as an outcome.
+    #[error(transparent)]
+    Refused(#[from] Refusal),
+    /// A port failed.
+    #[error(transparent)]
+    Port(#[from] AppError),
+    /// The parts handed to a step do not belong together: a mistake in the code that
+    /// called it, not something the person did.
+    #[error(transparent)]
+    Broken(#[from] ChainError),
+}
 
 /// What a write use case wants recorded, before the gate has looked at it.
 ///

@@ -818,6 +818,7 @@ mod tests {
     use crate::domain::gate::{CaInput, Checked, CiInput, CsInput, Passed, ca, ci, cs};
     use crate::domain::hash::BytesHash;
     use crate::domain::hash::PinKey;
+    use crate::domain::hash::TextHash;
     use crate::domain::id::test_support::{did, docid, eid, fid, iid, sid};
     use crate::domain::judge::test_support::judge;
     use crate::domain::judgement::test_support::{Filed, approve, corpus_of, jid, ts, why};
@@ -1790,6 +1791,7 @@ mod tests {
         let states = new.states();
         cs::check_in(
             CsInput {
+                text: TextHash::of("the file as read\n"),
                 spec: &new.specs()[&c.s.id()],
                 grounds: new.findings().iter().map(|(id, e)| (*id, e)).collect(),
                 states: &states,
@@ -1924,6 +1926,7 @@ mod tests {
     fn run_ci(new: &CorpusEvaluation, c: &Chain, keys: &PinKeyring, strict: bool) -> Checked {
         let states = new.states();
         let input = CiInput {
+            text: TextHash::of("the file as read\n"),
             design: &new.designs()[&c.d.id()],
             specs: new.specs().iter().map(|(id, e)| (*id, e)).collect(),
             states: &states,
@@ -2054,6 +2057,7 @@ mod tests {
             );
             ca::check_in(
                 CaInput {
+                    text: TextHash::of("the file as read\n"),
                     key: &key,
                     item: work,
                     evaluation: &evaluation,

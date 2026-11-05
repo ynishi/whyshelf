@@ -8,6 +8,16 @@
 //! it owns the ports, the [`Config`] and the built-in subscribers, and each use
 //! case is one of its methods.
 //!
+//! # What a use case of the corpus gives back
+//!
+//! The use cases that work on the document files and the ledgers do not fail with an
+//! error when the answer is "no": they give an [`Outcome`] (done, the violations a
+//! gate found, a [`Refusal`], or nothing found for a name), and one table decides the
+//! exit of a surface from it ([`outcome::exit_class`]). What they write passes
+//! through evidence that only the write path can make ([`commit::record`],
+//! [`commit::confirm`]), and what they need from the outside is the ports bundled in
+//! [`CorpusPorts`].
+//!
 //! # Reading and writing
 //!
 //! A use case that **writes** takes `&mut self`; one that **reads** takes
@@ -195,6 +205,7 @@ pub mod config;
 pub mod error;
 pub mod ingest;
 pub mod model;
+pub mod outcome;
 pub mod ports;
 pub mod projection;
 pub mod query;
@@ -212,7 +223,8 @@ mod tests;
 
 pub use config::Config;
 pub use error::AppError;
-pub use ports::Ports;
+pub use outcome::{ExitClass, Outcome, Refusal};
+pub use ports::{CorpusPorts, Ports};
 pub use subscriber::{CacheUpdater, MapExporter, SubscriberError, SubscriberWarning};
 
 use subscriber::Builtin;

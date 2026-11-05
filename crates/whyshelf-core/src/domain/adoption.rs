@@ -8,11 +8,12 @@
 //!
 //! ```compile_fail,E0451
 //! use whyshelf_core::domain::adoption::{Adoptable, AdoptedAttestation};
+//! use whyshelf_core::domain::hash::TextHash;
 //! use whyshelf_core::domain::location::SourceUri;
 //!
 //! // `Adoptable` has private fields: only `adoption::check` can make one.
-//! fn forged(attestation: AdoptedAttestation, source: SourceUri) -> Adoptable {
-//!     Adoptable { attestation, source }
+//! fn forged(attestation: AdoptedAttestation, source: SourceUri, text: TextHash) -> Adoptable {
+//!     Adoptable { attestation, source, text }
 //! }
 //! ```
 //!
@@ -29,6 +30,12 @@
 //!
 //! The hash the adoption pins is the target's own, taken from the corpus, so it
 //! cannot disagree with the file.
+//!
+//! The input also carries the [`TextHash`] of the file the target was read from (for
+//! an item, the Design's file), and the [`Adoptable`] keeps it
+//! ([`Adoptable::text`]), as a [`Passed`](super::gate::Passed) keeps the text its gate
+//! read: the object the adoption keeps must be that text. It is evidence, not part of
+//! the attestation or of the canonical form.
 //!
 //! # What an adoption records
 //!
@@ -55,7 +62,7 @@ use super::canon::{Canon, ToCanon};
 use super::corpus::{Corpus, CorpusDocument, Entity};
 use super::error::AdoptionRefusal;
 use super::event::EntityKind;
-use super::hash::ContentHash;
+use super::hash::{ContentHash, TextHash};
 use super::id::{DocId, EntityId, ItemId};
 use super::judgement::Target;
 use super::keyring::{NoKey, PinKeyring, UpstreamHash};
@@ -116,6 +123,7 @@ impl ToCanon for AdoptedAttestation {
 pub struct Adoptable {
     attestation: AdoptedAttestation,
     source: SourceUri,
+    text: TextHash,
 }
 
 impl Adoptable {
@@ -127,6 +135,12 @@ impl Adoptable {
     /// Where the decision came from.
     pub fn source(&self) -> &SourceUri {
         &self.source
+    }
+
+    /// The hash of the normalized text of the version the check read: the text the
+    /// adoption keeps as its object. Evidence, not part of the canonical form.
+    pub fn text(&self) -> &TextHash {
+        &self.text
     }
 }
 
@@ -159,6 +173,7 @@ impl Crosses for Adoptable {
         let Self {
             attestation,
             source,
+            text: _,
         } = self;
         attestation.cross_into(out);
         source.cross_into(out);
@@ -179,6 +194,9 @@ pub struct AdoptionInput<'a> {
     /// The keys of the person adopting: an upstream that is a private document is
     /// pinned under the current one, and refused if there is none.
     pub keyring: &'a PinKeyring,
+    /// The hash of the normalized text of the target's file (for an item, its
+    /// Design's) as it was read: the version checked, which the [`Adoptable`] keeps.
+    pub text: TextHash,
 }
 
 /// The one document that carries `id`, if exactly one file does.
@@ -234,6 +252,7 @@ pub fn check(input: AdoptionInput<'_>) -> Result<Adoptable, AdoptionRefusal> {
         target,
         source,
         keyring,
+        text,
     } = input;
     if gate == Gate::Cm {
         return Err(AdoptionRefusal::GateNotAdoptable { gate });
@@ -321,6 +340,7 @@ pub fn check(input: AdoptionInput<'_>) -> Result<Adoptable, AdoptionRefusal> {
             upstream,
         },
         source,
+        text,
     })
 }
 
@@ -395,7 +415,31 @@ mod tests {
             target,
             source,
             keyring,
+            text: read_text(),
         })
+    }
+
+    /// The text of the target's file as the tests read it.
+    fn read_text() -> TextHash {
+        TextHash::of("the file as read\n")
+    }
+
+    #[test]
+    fn an_adoption_keeps_the_text_it_read_beside_its_attestation() {
+        let finding = finding(1, "Login takes 8 s.");
+        let adoptable = run(
+            vec![Filed::public(Entity::Finding(finding.clone()))],
+            Gate::Cr,
+            Target::Doc(docid(1)),
+            "https://tracker.example/issues/7",
+        )
+        .expect("an adoption");
+        assert_eq!(adoptable.text(), &read_text());
+        assert_eq!(adoptable.attestation().hash(), finding.hash());
+        // The text is evidence: the canonical form is the attestation and the source.
+        let canon = adoptable.to_canon().to_bytes();
+        let text = read_text().to_string();
+        assert!(!String::from_utf8_lossy(&canon).contains(&text));
     }
 
     fn plain(id: u128, hash: &ContentHash) -> Pinned<EntityId, UpstreamHash> {

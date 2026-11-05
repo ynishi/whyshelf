@@ -32,6 +32,7 @@ use crate::domain::gate::{
     self, CaInput, Checked, CiInput, CrInput, CsInput, Passed, Violations, ca, ci, cm, cr, cs,
     invalid_target,
 };
+use crate::domain::hash::TextHash;
 use crate::domain::id::{DesignId, EntityId, FindingId, SpecId};
 use crate::domain::lint::CheckViolation;
 use crate::domain::nonempty::NonBlank;
@@ -42,7 +43,7 @@ use crate::domain::spec::DeclaredPins;
 use super::Workspace;
 use super::commit::Committed;
 use super::error::AppError;
-use super::model::{Model, current_revision, impl_view_at};
+use super::model::{DocEntry, Model, current_revision, impl_view_at};
 use super::ports::{PortName, Ports, RevisionPort, TestRunPort};
 use super::raw::RawRevision;
 
@@ -169,6 +170,16 @@ fn without_evaluation(model: &Model, gate: Gate, id: EntityId) -> Result<Prepare
     }
 }
 
+/// The hash of the text of `id`'s file as the model read it: what the gate is told it
+/// checked. A file that was not read is missing.
+fn read_text(model: &Model, id: EntityId) -> Result<TextHash, AppError> {
+    model
+        .doc(id)
+        .and_then(DocEntry::text)
+        .copied()
+        .ok_or(AppError::TargetFileMissing { id })
+}
+
 fn prepare_cr(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
     let gate = Gate::Cr;
     let id = model.resolve_as(target, gate.target_kind())?;
@@ -178,7 +189,10 @@ fn prepare_cr(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
     Ok(Prepared {
         gate,
         target: id,
-        checked: cr::check(CrInput { finding }),
+        checked: cr::check(CrInput {
+            finding,
+            text: read_text(model, id)?,
+        }),
     })
 }
 
@@ -197,6 +211,7 @@ fn prepare_cs(model: &Model, target: &Ref, policy: GatePolicy) -> Result<Prepare
             grounds: model.findings().iter().map(|(id, ev)| (*id, ev)).collect(),
             states: &states,
             policy,
+            text: read_text(model, id)?,
         }),
     })
 }
@@ -215,6 +230,7 @@ fn prepare_ci(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
             design,
             specs: model.specs().iter().map(|(id, ev)| (*id, ev)).collect(),
             states: &states,
+            text: read_text(model, id)?,
         }),
     })
 }
@@ -246,6 +262,7 @@ fn prepare_cm(model: &Model, target: &Ref, input: &CmInput) -> Result<Prepared, 
             ledger: model.ledger(),
             result,
             hyp_finding,
+            text: read_text(model, id)?,
         }),
     })
 }
@@ -291,6 +308,8 @@ impl<P: Ports> Workspace<P> {
         let designs: BTreeMap<_, _> = model.designs().iter().map(|(id, ev)| (*id, ev)).collect();
         // A tag in a test is undeclared when no Spec of the project declares it.
         let declared = DeclaredPins::of(model.specs().values().filter_map(Evaluated::entity));
+        // The item is read from its Design's file.
+        let text = read_text(model, item.key().design.entity())?;
         Ok(Prepared {
             gate: Gate::Ca,
             target: id,
@@ -304,6 +323,7 @@ impl<P: Ports> Workspace<P> {
                 impl_view: &impl_view,
                 revision,
                 tests,
+                text,
             }),
         })
     }

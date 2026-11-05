@@ -471,6 +471,28 @@ pub(super) struct Pinning<'a> {
     pub(super) basis: Basis,
 }
 
+/// That an object is of the version pinned (`target`) and of the text the check read
+/// (`checked`).
+fn object_of_version(
+    object: &ObjectKey,
+    target: &ContentHash,
+    checked: &TextHash,
+) -> Result<(), JudgementError> {
+    if object.content() != target {
+        return Err(JudgementError::ObjectNotOfTarget {
+            object: *object.content(),
+            target: *target,
+        });
+    }
+    if object.text() != checked {
+        return Err(JudgementError::ObjectNotChecked {
+            object: *object.text(),
+            checked: *checked,
+        });
+    }
+    Ok(())
+}
+
 /// One decision, as an immutable record. See the module documentation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Judgement {
@@ -502,8 +524,9 @@ impl Judgement {
 
     /// An approval, from the proof that the gate passed.
     ///
-    /// The object must be of the version the approval pins: its `content` is the
-    /// attestation's hash.
+    /// The object must be of the version the approval pins and the gate read: its
+    /// `content` is the attestation's hash, and its `text` the hash of the text the
+    /// check read ([`Passed::text`]).
     pub fn approve(
         id: JudgementId,
         at: Timestamp,
@@ -512,13 +535,7 @@ impl Judgement {
         passed: Passed,
         object: ObjectKey,
     ) -> Result<Self, JudgementError> {
-        let target = *passed.attestation().target_hash();
-        if *object.content() != target {
-            return Err(JudgementError::ObjectNotOfTarget {
-                object: *object.content(),
-                target,
-            });
-        }
+        object_of_version(&object, passed.attestation().target_hash(), passed.text())?;
         Ok(Self::assemble(
             id,
             at,
@@ -530,7 +547,8 @@ impl Judgement {
 
     /// An adoption, from the proof that the adoption was checked.
     ///
-    /// The object must be of the version the adoption pins.
+    /// The object must be of the version the adoption pins and its check read, as
+    /// for [`approve`](Self::approve).
     pub fn adopt(
         id: JudgementId,
         at: Timestamp,
@@ -539,13 +557,7 @@ impl Judgement {
         adoptable: Adoptable,
         object: ObjectKey,
     ) -> Result<Self, JudgementError> {
-        let target = *adoptable.attestation().hash();
-        if *object.content() != target {
-            return Err(JudgementError::ObjectNotOfTarget {
-                object: *object.content(),
-                target,
-            });
-        }
+        object_of_version(&object, adoptable.attestation().hash(), adoptable.text())?;
         Ok(Self::assemble(
             id,
             at,
@@ -689,6 +701,91 @@ impl Judgement {
     /// Two records of one identifier are one record exactly when these are equal.
     pub fn canonical_bytes(&self) -> Vec<u8> {
         self.to_canon().to_bytes()
+    }
+
+    /// The record as one of the two views that tell whether it keeps an object.
+    ///
+    /// The one place that decides it, by the kind: an approval and an adoption keep
+    /// an object ([`ObjectJudgement`]); the other kinds keep none
+    /// ([`PlainJudgement`]). What depends on the answer takes the view, so it does
+    /// not check at run time.
+    pub fn split(self) -> Split {
+        let kept = match &self.kind {
+            JudgementKind::Approve { passed, object } => Some((*object, *passed.text())),
+            JudgementKind::Adopt { adoptable, object } => Some((*object, *adoptable.text())),
+            JudgementKind::Revoke { .. }
+            | JudgementKind::Retire { .. }
+            | JudgementKind::Published { .. }
+            | JudgementKind::Purge { .. } => None,
+        };
+        match kept {
+            Some((object, checked)) => Split::WithObject(ObjectJudgement {
+                judgement: self,
+                object,
+                checked,
+            }),
+            None => Split::Plain(PlainJudgement { judgement: self }),
+        }
+    }
+}
+
+/// A judgement by whether it keeps an object; see [`Judgement::split`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Split {
+    /// An approval or an adoption.
+    WithObject(ObjectJudgement),
+    /// A revocation, a retirement, a purge or a publication.
+    Plain(PlainJudgement),
+}
+
+/// An approval or an adoption: a judgement that keeps an object. Made by
+/// [`Judgement::split`] and nothing else.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectJudgement {
+    judgement: Judgement,
+    object: ObjectKey,
+    checked: TextHash,
+}
+
+impl ObjectJudgement {
+    /// The judgement.
+    pub fn judgement(&self) -> &Judgement {
+        &self.judgement
+    }
+
+    /// The judgement, given up.
+    pub fn into_judgement(self) -> Judgement {
+        self.judgement
+    }
+
+    /// The version it keeps an object for.
+    pub fn object(&self) -> &ObjectKey {
+        &self.object
+    }
+
+    /// The hash of the text the gate (or the adoption's check) read; the object's
+    /// `text` is the same hash.
+    pub fn checked_text(&self) -> &TextHash {
+        &self.checked
+    }
+}
+
+/// A revocation, a retirement, a purge or a publication: a judgement that keeps no
+/// object. Made by [`Judgement::split`] and nothing else.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlainJudgement {
+    judgement: Judgement,
+}
+
+impl PlainJudgement {
+    /// The judgement.
+    pub fn judgement(&self) -> &Judgement {
+        &self.judgement
+    }
+
+    /// The judgement, given up.
+    pub fn into_judgement(self) -> Judgement {
+        self.judgement
     }
 }
 
@@ -913,6 +1010,63 @@ mod tests {
     use crate::domain::id::test_support::{docid, iid};
     use crate::domain::judge::test_support::judge;
     use crate::domain::ledger::Ledger;
+
+    #[test]
+    fn an_object_of_a_text_the_gate_did_not_read_does_not_make_an_approval() {
+        // The same content, and a text other than the one the check read: an alias
+        // or a tag changed after the check, say.
+        let passed = cr_passed(1, "v1");
+        let read = *passed.text();
+        let other = ObjectKey::new(hash_of("v1"), TextHash::of("text of v1, retagged"));
+        let got = Judgement::approve(
+            jid(1),
+            ts(),
+            judge("ada"),
+            Visibility::Public,
+            passed.clone(),
+            other,
+        );
+        assert_eq!(
+            got,
+            Err(JudgementError::ObjectNotChecked {
+                object: TextHash::of("text of v1, retagged"),
+                checked: read,
+            })
+        );
+        let kept = ObjectKey::new(hash_of("v1"), read);
+        let made = Judgement::approve(jid(1), ts(), judge("ada"), Visibility::Public, passed, kept)
+            .expect("the text read");
+        assert_eq!(made.object().map(ObjectKey::text), Some(&read));
+        let Split::WithObject(view) = made.split() else {
+            panic!("an approval keeps an object");
+        };
+        assert_eq!(view.checked_text(), &read);
+    }
+
+    #[test]
+    fn a_judgement_splits_by_whether_it_keeps_an_object() {
+        let ada = judge("ada");
+        let approval = approve(1, &ada, Visibility::Public, cr_passed(1, "v1"));
+        let purge = Judgement::purge(
+            jid(2),
+            ts(),
+            ada,
+            Visibility::Public,
+            docid(1),
+            TextHash::of("t"),
+            why(),
+        );
+        let Split::WithObject(with) = approval.clone().split() else {
+            panic!("an approval keeps an object");
+        };
+        assert_eq!(Some(with.object()), approval.object());
+        assert_eq!(with.checked_text(), with.object().text());
+        assert_eq!(with.into_judgement(), approval);
+        let Split::Plain(plain) = purge.clone().split() else {
+            panic!("a purge keeps no object");
+        };
+        assert_eq!(plain.into_judgement(), purge);
+    }
 
     #[test]
     fn an_object_of_another_version_does_not_make_an_approval() {

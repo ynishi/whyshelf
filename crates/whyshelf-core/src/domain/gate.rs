@@ -11,10 +11,11 @@
 //! ```compile_fail
 //! use whyshelf_core::domain::approval::{Attestation, Gate};
 //! use whyshelf_core::domain::gate::Passed;
+//! use whyshelf_core::domain::hash::TextHash;
 //!
 //! // `Passed` has private fields: only a gate's check can make one.
-//! fn forged(attestation: Attestation) -> Passed {
-//!     Passed { gate: Gate::Cr, attestation }
+//! fn forged(attestation: Attestation, text: TextHash) -> Passed {
+//!     Passed { gate: Gate::Cr, attestation, text }
 //! }
 //! ```
 //!
@@ -25,6 +26,13 @@
 //! gates that look at an upstream, [`States`]: the state of every entity whatever
 //! its kind, which is where the state of an upstream is read (a document whose kind
 //! is in conflict has a state there and no typed evaluation).
+//!
+//! Each input also carries the [`TextHash`] of the file the target was read from
+//! (for CA, the Design's file), and a [`Passed`] keeps it ([`Passed::text`]). It is
+//! the evidence of which version the check looked at: the object an approval keeps
+//! must be that text, so a text the gate did not check cannot be stored as the
+//! version approved. It is not part of the attestation, nor of anything hashed or
+//! recorded from it.
 //!
 //! | gate | input | looks at | pins, if it passes |
 //! |---|---|---|---|
@@ -89,7 +97,7 @@ use super::boundary::{Crosses, CrossingText};
 use super::design::{Design, WorkItem};
 use super::evaluate::{Evaluated, ImplView, ItemEvaluation, ItemKey, States, Subject};
 use super::finding::{EvidenceLabel, Finding, FindingSource};
-use super::hash::ContentHash;
+use super::hash::{ContentHash, TextHash};
 use super::id::{DesignId, EntityId, FindingId, SpecId};
 use super::keyring::{PinKeyring, UpstreamHash};
 use super::lint::{CheckViolation, UpstreamProblem, UpstreamReach, upstream_problems_reaching};
@@ -103,12 +111,13 @@ use super::state::{Approval, Completeness, EntityState, InvalidReason, LackNeed}
 /// approval.
 ///
 /// It holds the attestation the approval will carry, built by the check from the
-/// values it looked at. See the module documentation for why it cannot be made
-/// anywhere else.
+/// values it looked at, and the [`TextHash`] of the text the check read. See the
+/// module documentation for why it cannot be made anywhere else.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Passed {
     gate: Gate,
     attestation: Attestation,
+    text: TextHash,
 }
 
 impl Passed {
@@ -131,6 +140,15 @@ impl Passed {
     pub fn gate_basis(&self) -> GateBasis {
         self.attestation.gate_basis()
     }
+
+    /// The hash of the normalized text of the version the check read: the text an
+    /// approval made from this proof keeps as its object.
+    ///
+    /// Evidence, not part of the attestation: it is not in what the approval pins
+    /// and changes no hash or canonical form.
+    pub fn text(&self) -> &TextHash {
+        &self.text
+    }
 }
 
 impl Crosses for Passed {
@@ -139,6 +157,7 @@ impl Crosses for Passed {
         let Self {
             gate: _,
             attestation,
+            text: _,
         } = self;
         attestation.cross_into(out);
     }
@@ -148,10 +167,20 @@ impl Crosses for Passed {
 impl Passed {
     /// A proof made without a check, for the tests of the modules that consume one.
     /// It exists only in a test build, so the rule above holds for the library.
+    ///
+    /// The text read is `text of <target hash>`, the text the test objects of
+    /// [`judgement`](super::judgement) keep for that hash.
     pub(crate) fn for_test(attestation: Attestation) -> Self {
+        let text = TextHash::of(&format!("text of {}", attestation.target_hash()));
+        Self::for_test_read(attestation, text)
+    }
+
+    /// [`for_test`](Self::for_test), with the text the check read given.
+    pub(crate) fn for_test_read(attestation: Attestation, text: TextHash) -> Self {
         Self {
             gate: attestation.gate(),
             attestation,
+            text,
         }
     }
 }
@@ -167,12 +196,17 @@ fn settle(
     violations: Vec<CheckViolation>,
     pass: impl FnOnce() -> Option<Attestation>,
     gate: Gate,
+    text: TextHash,
     unpinnable: impl FnOnce() -> Violations,
 ) -> Checked {
     match NonEmptyVec::from_vec(violations) {
         Ok(violations) => Err(violations),
         Err(_) => match pass() {
-            Some(attestation) => Ok(Passed { gate, attestation }),
+            Some(attestation) => Ok(Passed {
+                gate,
+                attestation,
+                text,
+            }),
             None => Err(unpinnable()),
         },
     }
@@ -372,6 +406,9 @@ fn refuses(lack: Option<LackNeed>) -> bool {
 pub struct CrInput<'a> {
     /// The Finding.
     pub finding: &'a Evaluated<Finding>,
+    /// The hash of the normalized text of the Finding's file as it was read: the
+    /// version checked, which a [`Passed`] keeps.
+    pub text: TextHash,
 }
 
 /// CR, layer 1: the Finding is complete as a record.
@@ -399,6 +436,7 @@ pub mod cr {
                 })
             },
             Gate::Cr,
+            input.text,
             || unpinnable(Mode::Whole, finding.id().entity()),
         )
     }
@@ -415,6 +453,9 @@ pub struct CsInput<'a> {
     pub states: &'a States<'a>,
     /// What the project demands of a Spec; a passed CS records it.
     pub policy: GatePolicy,
+    /// The hash of the normalized text of the Spec's file as it was read: the
+    /// version checked, which a [`Passed`] keeps.
+    pub text: TextHash,
 }
 
 /// CS, layer 1: every ground exists and can be read here, passed CR and is
@@ -487,6 +528,7 @@ pub mod cs {
                 _ => None,
             },
             Gate::Cs,
+            input.text,
             || unpinnable(mode, spec.id().entity()),
         )
     }
@@ -501,6 +543,9 @@ pub struct CiInput<'a> {
     pub specs: BTreeMap<SpecId, &'a Evaluated<Spec>>,
     /// The state of every entity, the Spec's among them.
     pub states: &'a States<'a>,
+    /// The hash of the normalized text of the Design's file as it was read: the
+    /// version checked, which a [`Passed`] keeps.
+    pub text: TextHash,
 }
 
 /// CI, layer 1: the Spec passed CS, is current and can be read in full here; pins
@@ -566,6 +611,7 @@ pub mod ci {
                 })
             },
             Gate::Ci,
+            input.text,
             || unpinnable(mode, spec_id),
         )
     }
@@ -592,6 +638,9 @@ pub struct CaInput<'a> {
     pub revision: RevisionId,
     /// What running the tests at that revision came to.
     pub tests: TestsRun,
+    /// The hash of the normalized text of the Design's (the item's) file as it was read: the
+    /// version checked, which a [`Passed`] keeps.
+    pub text: TextHash,
 }
 
 /// CA, layer 1: the Design passed CI, is current and can be read in full here; the
@@ -628,6 +677,7 @@ pub mod ca {
             impl_view,
             revision,
             tests,
+            text,
             ..
         } = input;
         let design_id = key.design.entity();
@@ -693,6 +743,7 @@ pub mod ca {
                 })
             },
             Gate::Ca,
+            text,
             || unpinnable(mode, design_id),
         )
     }
@@ -710,6 +761,9 @@ pub struct CmInput<'a> {
     /// For a `fail-hyp`, the Finding it names, as evaluated; none if it is not
     /// there.
     pub hyp_finding: Option<&'a Evaluated<Finding>>,
+    /// The hash of the normalized text of the Spec's file as it was read: the
+    /// version checked, which a [`Passed`] keeps.
+    pub text: TextHash,
 }
 
 /// CM, layer 1: the CS approval that fixed the hypotheses exists, and fixed them as
@@ -753,6 +807,7 @@ pub mod cm {
                 })
             },
             Gate::Cm,
+            input.text,
             || unpinnable(Mode::Whole, spec.id().entity()),
         )
     }
@@ -872,6 +927,7 @@ mod tests {
         fn cs_under(&self, spec: &Spec, policy: GatePolicy) -> Checked {
             let states = self.states();
             cs::check(CsInput {
+                text: read_text(),
                 spec: &self.specs[&spec.id()],
                 grounds: self.grounds(),
                 states: &states,
@@ -882,6 +938,7 @@ mod tests {
         fn ci(&self, design: &Design) -> Checked {
             let states = self.states();
             ci::check(CiInput {
+                text: read_text(),
                 design: &self.designs[&design.id()],
                 specs: self.spec_refs(),
                 states: &states,
@@ -911,6 +968,33 @@ mod tests {
         }
     }
 
+    /// The text of the target's file as the tests read it.
+    fn read_text() -> TextHash {
+        TextHash::of("the file as read\n")
+    }
+
+    #[test]
+    fn a_pass_keeps_the_text_its_input_read_and_the_attestation_does_not() {
+        let f = finding(1, "Login takes 8 s.");
+        let world = World::new(&[&f], &[], &[], &[]);
+        let check = |text| {
+            passed(cr::check(CrInput {
+                finding: &world.findings[&f.id()],
+                text,
+            }))
+        };
+        let read = check(read_text());
+        assert_eq!(read.text(), &read_text());
+        // Another text of the same content: the same attestation, another version read.
+        let other = check(TextHash::of("the file, retagged\n"));
+        assert_eq!(other.text(), &TextHash::of("the file, retagged\n"));
+        assert_eq!(read.attestation(), other.attestation());
+        assert_eq!(
+            read.attestation().to_canon(),
+            other.attestation().to_canon()
+        );
+    }
+
     fn upstream(id: u128, problem: UpstreamProblem) -> CheckViolation {
         CheckViolation::Upstream {
             upstream: eid(id),
@@ -923,6 +1007,7 @@ mod tests {
     fn cr_of(f: &Finding) -> Checked {
         let world = World::new(&[f], &[], &[], &[]);
         cr::check(CrInput {
+            text: read_text(),
             finding: &world.findings[&f.id()],
         })
     }
@@ -984,7 +1069,10 @@ mod tests {
             crate::domain::hash::ContentHash::raw(b"x"),
         );
         let ev = Evaluated::<Finding>::from_unparsed(unparsed, &[]);
-        let got = violations(cr::check(CrInput { finding: &ev }));
+        let got = violations(cr::check(CrInput {
+            text: read_text(),
+            finding: &ev,
+        }));
         assert!(
             matches!(&got[..], [CheckViolation::TargetInvalid { reasons }]
             if reasons.first() == &InvalidReason::Unparsed(UnparsedReason::MergeConflictMarker))
@@ -1075,6 +1163,7 @@ mod tests {
         let states = states_of(&NO_FINDINGS, &NO_SPECS, &NO_DESIGNS, []);
         let unreadable = Evaluator::spec(&s, &NO_FINDINGS, &states, &l, &unreadable_ground(), &[]);
         let got = violations(cs::check(CsInput {
+            text: read_text(),
             spec: &unreadable,
             grounds: BTreeMap::new(),
             states: &states,
@@ -1338,6 +1427,7 @@ mod tests {
         let key = key(number);
         let evaluation = evaluation_of(w, number, view);
         ca::check(CaInput {
+            text: read_text(),
             key: &key,
             item,
             evaluation: &evaluation,
@@ -1520,6 +1610,7 @@ mod tests {
             &[],
         );
         let got = violations(ca::check(CaInput {
+            text: read_text(),
             key: &key,
             item: &w.design.items()[&num(1)],
             evaluation: &evaluation,
@@ -1581,6 +1672,7 @@ mod tests {
         let states = states_of(&NO_FINDINGS, &specs, &designs, []);
         assert_eq!(
             violations(ci::check(CiInput {
+                text: read_text(),
                 design: &designs[&d.id()],
                 specs: specs.iter().map(|(id, ev)| (*id, ev)).collect(),
                 states: &states,
@@ -1629,6 +1721,7 @@ mod tests {
         );
         assert_eq!(
             violations(ca::check(CaInput {
+                text: read_text(),
                 key: &key,
                 item: &d.items()[&num(1)],
                 evaluation: &evaluation,
@@ -1674,6 +1767,7 @@ mod tests {
         let l = ledger(events);
         let hyp = hyp_finding.map(|f| Evaluator::finding(f, &l, &[]));
         cm::check(CmInput {
+            text: read_text(),
             spec: &world.specs[&s.id()],
             ledger: &l,
             result,
@@ -1807,6 +1901,7 @@ mod tests {
         let l = ledger(&events);
         let world = World::new(&[&f1], &[&s], &[], &events);
         let passed = passed(cm::check(CmInput {
+            text: read_text(),
             spec: &world.specs[&s.id()],
             ledger: &l,
             result: CmResult::Pass,
@@ -1853,6 +1948,7 @@ mod tests {
         let s = spec(11, &[1], &["PIN-A"]);
         let world = World::new(&[], &[&s], &[], &[]);
         let got = violations(cm::check(CmInput {
+            text: read_text(),
             spec: &world.specs[&s.id()],
             ledger: &ledger(&[]),
             result: CmResult::Pass,
@@ -1879,6 +1975,7 @@ mod tests {
         ];
         let world = World::new(&[&f1], &[&s], &[], &events);
         let cr = passed(cr::check(CrInput {
+            text: read_text(),
             finding: &world.findings[&f1.id()],
         }));
         let cm = passed(cm_of(&s, &events, CmResult::Pass, None));
@@ -1935,6 +2032,7 @@ mod tests {
         );
         let violations = |policy| -> Vec<CheckViolation> {
             match cs::check(CsInput {
+                text: read_text(),
                 spec: &bare_evaluated,
                 grounds: BTreeMap::new(),
                 states: &states_of(&NO_FINDINGS, &NO_SPECS, &NO_DESIGNS, []),

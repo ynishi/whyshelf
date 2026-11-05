@@ -101,7 +101,7 @@ use crate::domain::event::{
 };
 use crate::domain::finding::Finding;
 use crate::domain::front::{ClassificationImport, Stored};
-use crate::domain::hash::ContentHash;
+use crate::domain::hash::{ContentHash, TextHash};
 use crate::domain::id::{Alias, DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
 use crate::domain::lint::PrivateName;
 use crate::domain::location::RelPath;
@@ -786,6 +786,7 @@ pub struct DocEntry {
     tips: BTreeSet<EventId>,
     recorded: Option<Version>,
     present: Option<Present>,
+    text: Option<TextHash>,
 }
 
 /// A document whose kind or path was set differently on two branches: what is known
@@ -877,6 +878,12 @@ impl DocEntry {
     /// The file as it is now; `None` when the file is missing.
     pub fn present(&self) -> Option<&Present> {
         self.present.as_ref()
+    }
+
+    /// The hash of the normalized text of the file as it was read, whether or not
+    /// it built; `None` when the file is missing. What a gate is told it checked.
+    pub fn text(&self) -> Option<&TextHash> {
+        self.text.as_ref()
     }
 
     /// The title, for a Finding that parsed.
@@ -1113,6 +1120,7 @@ impl Model {
                     tips: class.tips().clone(),
                     recorded: class.version().agreed().cloned(),
                     present: None,
+                    text: candidate.as_ref().map(Candidate::text_hash),
                 },
                 built,
             });

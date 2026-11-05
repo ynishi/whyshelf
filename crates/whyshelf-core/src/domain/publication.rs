@@ -1097,7 +1097,11 @@ mod tests {
     fn a_leak_in_a_copied_object_refuses_the_plan() {
         let mut all = records();
         let leaky = "an old text that cites finding/secret-plan";
-        let passed = ci_passed("leaky");
+        // The gate read the leaky text, so the approval keeps it.
+        let passed = Passed::for_test_read(
+            ci_passed("leaky").attestation().clone(),
+            TextHash::of(leaky),
+        );
         let content = *passed.attestation().target_hash();
         all.push(
             Judgement::approve(

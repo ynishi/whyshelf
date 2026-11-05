@@ -519,7 +519,8 @@ mod tests {
     use crate::domain::hash::BytesHash;
     use crate::domain::id::test_support::{docid, fid, iid, sid};
     use crate::domain::judge::{Email, Judge, PersonName, Principal, ToolName};
-    use crate::domain::judgement::test_support::{approve, ca_passed, hash_of, jid, object_of, ts};
+    use crate::domain::judgement::ObjectKey;
+    use crate::domain::judgement::test_support::{approve, ca_passed, hash_of, jid, ts};
     use crate::domain::judgement::{FilePresence, Judgement, JudgementKind, Target};
     use crate::domain::keyring::PinKeyring;
     use crate::domain::location::SourceUri;
@@ -753,9 +754,10 @@ mod tests {
             target: Target::Doc(docid(1)),
             source: "https://tracker.example/issues/7",
             keyring: &PinKeyring::empty(),
+            text: TextHash::of("the file as read\n"),
         })
         .unwrap();
-        let object = object_of(adoptable.attestation().hash());
+        let object = ObjectKey::new(*adoptable.attestation().hash(), *adoptable.text());
         let record = Judgement::adopt(
             jid(9),
             ts(),

@@ -1565,8 +1565,11 @@ mod tests {
     }
 
     fn adoptable_finding(source: &str) -> Adoptable {
+        let read = finding(1, "Login takes 8 s.");
+        // The text the test objects keep for the Finding's hash (`object_of`).
+        let text = TextHash::of(&format!("text of {}", read.hash()));
         let corpus = corpus_of(vec![Filed::public(crate::domain::corpus::Entity::Finding(
-            finding(1, "Login takes 8 s."),
+            read,
         ))]);
         adoption::check(AdoptionInput {
             corpus: &corpus,
@@ -1574,6 +1577,7 @@ mod tests {
             target: Target::Doc(docid(1)),
             source,
             keyring: &crate::domain::keyring::PinKeyring::empty(),
+            text,
         })
         .unwrap()
     }
