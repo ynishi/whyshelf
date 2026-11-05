@@ -8,6 +8,7 @@ use std::num::ParseIntError;
 
 use thiserror::Error;
 
+use super::event::EventId;
 use super::id::EntityId;
 use super::query::StateFilter;
 
@@ -30,6 +31,9 @@ pub enum ValueError {
     /// A hash digest held a character that is not lowercase hex.
     #[error("a content hash digest is lowercase hex")]
     HashNotLowerHex,
+    /// The digest of a record was not 16 lowercase hex characters.
+    #[error("the digest of a record is 16 lowercase hex characters")]
+    RecordDigestShape,
     /// An identifier text was not a UUID.
     #[error("an entity id is a UUID")]
     IdNotUuid(#[source] uuid::Error),
@@ -269,6 +273,17 @@ pub enum EventError {
     /// A snapshot publication, the root of a store's stream, had heads.
     #[error("a snapshot publication is the root of its stream and has no heads")]
     SnapshotHasHeads,
+    /// Two records carry one event identifier but are not the same event.
+    ///
+    /// The identifier covers the kind, the target, the heads and the part of the
+    /// body that decides the change, so records of one change agree on the whole
+    /// event; if they do not, one of them was altered or came from another
+    /// history.
+    #[error("two records of the event {id} do not describe the same event")]
+    RecordsDiffer {
+        /// The identifier both records carry.
+        id: EventId,
+    },
 }
 
 /// Why a `find` query could not be parsed.

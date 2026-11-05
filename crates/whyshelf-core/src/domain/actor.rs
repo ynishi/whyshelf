@@ -9,14 +9,14 @@
 //!
 //! # Time
 //!
-//! The domain never reads a clock. [`Timestamp`] is the time an event was
-//! recorded, supplied by the application from its clock port; [`MeasuredAt`] is
+//! The domain never reads a clock. [`Timestamp`] is the time a record of an event
+//! was written, supplied by the application from its clock port; [`MeasuredAt`] is
 //! the time a measurement was taken, copied from a Finding's metadata. Both are
 //! RFC 3339 texts that an adapter has validated with a real date library, so the
 //! domain holds them as opaque values. They are compared for equality only: two
 //! RFC 3339 texts with different UTC offsets do not sort as text, and the model
-//! never needs an order (event order comes from the event graph, and `at` is for
-//! display).
+//! never needs an order (event order comes from the event graph, and the time of a
+//! record is for display).
 
 use std::fmt;
 
@@ -112,10 +112,13 @@ macro_rules! rfc3339_value {
 }
 
 rfc3339_value!(
-    /// The time an event was recorded, taken from the clock port.
+    /// The time a record of an event was written, taken from the clock port.
     ///
-    /// Display only: it never enters an event identifier and never decides
-    /// anything.
+    /// For display, and for telling records of one event apart: it never enters an
+    /// event identifier and never decides anything, but it does enter the digest of
+    /// the record (see [`RecordDigest`](super::event::RecordDigest)), which is how
+    /// the same change written at two times stays two records. It is compared for
+    /// equality only.
     Timestamp
 );
 rfc3339_value!(

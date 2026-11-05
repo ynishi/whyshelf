@@ -17,7 +17,9 @@
 //!    draft's `push_approval`), so by the time it is in the draft its check has
 //!    passed.
 //! 2. **Append.** Texts first, then events, so no event points at a text that is not
-//!    there. Appending is idempotent: an event or text already present is success.
+//!    there. Appending is idempotent: a text already present, or a record of an
+//!    event (the same event at the same time), is success. Each event is recorded
+//!    at the time of the draft.
 //! 3. **Notify** (cannot stop anything). The model is loaded again from the stores
 //!    and every subscriber is told; a failure becomes a warning in the result. If the
 //!    model cannot be loaded the warning says so, because the write itself happened.
@@ -42,7 +44,8 @@
 //!   |                                                                  |
 //!   | 2. APPEND  (idempotent: "already there" is success)              |
 //!   |      texts  -> store.put_object   first, so no event dangles     |
-//!   |      events -> store.append       in draft order                 |
+//!   |      events -> store.append       in draft order, at the draft's |
+//!   |                                   time                           |
 //!   |                                                                  |
 //!   | 3. NOTIFY  (cannot stop or undo anything)                        |
 //!   |      Model::load again, then each subscriber in turn:            |
@@ -73,6 +76,9 @@ use super::raw::NormalizedText;
 use super::subscriber::{Subscriber, SubscriberError, SubscriberWarning};
 
 /// What a write use case wants recorded, before the gate has looked at it.
+///
+/// An event has no time of its own; the draft has one, and every event of it is
+/// appended as a record at that time.
 #[derive(Debug)]
 pub(crate) struct Draft {
     at: Timestamp,
@@ -146,7 +152,7 @@ impl Draft {
             Some(tips) => tips.clone(),
             None => model.tips_in(store, target),
         };
-        let event = Event::new(target, heads, self.at.clone(), body)?;
+        let event = Event::new(target, heads, body)?;
         let id = event.id();
         self.tips.insert((store, target), BTreeSet::from([id]));
         self.events.push((store, event));
@@ -281,7 +287,7 @@ impl<P: Ports> Workspace<P> {
         for (store, event) in &draft.events {
             self.ports
                 .store()
-                .append(*store, event)
+                .append(*store, event, &draft.at)
                 .await
                 .map_err(AppError::port(PortName::Store))?;
         }

@@ -887,9 +887,16 @@ impl TraceReport {
 pub struct ChangeEntry {
     store: StoreKind,
     event: Event,
+    at: Timestamp,
 }
 
 impl ChangeEntry {
+    /// The time shown for the event: that of one record of it, for display only (see
+    /// [`Model::shown_at`]).
+    pub fn at(&self) -> &Timestamp {
+        &self.at
+    }
+
     /// The store the event is in.
     pub fn store(&self) -> StoreKind {
         self.store
@@ -904,7 +911,7 @@ impl ChangeEntry {
 /// The history of one entity, from its events.
 ///
 /// Ordered by the event graph (an event after the ones it saw), never by time; the
-/// time is on each event for display.
+/// time of a record of each event is on its entry for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Changelog {
     entity: EntityId,
@@ -928,17 +935,17 @@ impl Changelog {
         // The private store's history comes first: a published entity was
         // private before it was public.
         for store in [StoreKind::Private, StoreKind::Repo] {
-            let events: Vec<&Event> = model
-                .events(store)
-                .iter()
-                .filter(|e| model.canonical(e.target()) == id)
+            let events: Vec<(&Event, &Timestamp)> = model
+                .timed_events(store)
+                .filter(|(e, _)| model.canonical(e.target()) == id)
                 .collect();
-            let by_id: BTreeMap<EventId, &Event> = events.iter().map(|e| (e.id(), *e)).collect();
+            let by_id: BTreeMap<EventId, &Event> =
+                events.iter().map(|(e, _)| (e.id(), *e)).collect();
             let mut depth: BTreeMap<EventId, usize> = BTreeMap::new();
             // Heads form a DAG; resolve depth by repeated passes (bounded by the
             // number of events, so a malformed cycle cannot loop forever).
             for _ in 0..=events.len() {
-                for e in &events {
+                for (e, _) in &events {
                     let d = e
                         .heads()
                         .iter()
@@ -950,10 +957,11 @@ impl Changelog {
                 }
             }
             let mut ordered = events;
-            ordered.sort_by_key(|e| (depth.get(&e.id()).copied().unwrap_or(0), e.id()));
-            entries.extend(ordered.into_iter().map(|e| ChangeEntry {
+            ordered.sort_by_key(|(e, _)| (depth.get(&e.id()).copied().unwrap_or(0), e.id()));
+            entries.extend(ordered.into_iter().map(|(e, at)| ChangeEntry {
                 store,
                 event: e.clone(),
+                at: at.clone(),
             }));
         }
         Changelog {
@@ -979,7 +987,7 @@ pub struct AuditRow {
 }
 
 impl AuditRow {
-    fn of(record: &ApprovalRecord, revoked: bool) -> Self {
+    fn of(record: &ApprovalRecord, at: &Timestamp, revoked: bool) -> Self {
         let (revision, tests, result) = match record.attestation() {
             Attestation::Ca {
                 revision, tests, ..
@@ -992,7 +1000,7 @@ impl AuditRow {
             gate: record.attestation().gate(),
             subject: record.subject(),
             by: record.by().clone(),
-            at: record.at().clone(),
+            at: at.clone(),
             hash: *record.attestation().target_hash(),
             revision,
             tests,
@@ -1021,7 +1029,7 @@ impl AuditRow {
         &self.by
     }
 
-    /// When it was recorded (display only).
+    /// The time shown for it: that of one record of the approval (display only).
     pub fn at(&self) -> &Timestamp {
         &self.at
     }
@@ -1235,11 +1243,10 @@ impl<P: Ports> Workspace<P> {
             Some(query) => Some(self.matching_ids(&model, query).await?),
         };
         let ledger = model.ledger();
-        let mut rows: Vec<AuditRow> = ledger
-            .all()
-            .iter()
-            .filter(|r| selected.as_ref().is_none_or(|s| s.contains(&r.subject())))
-            .map(|r| AuditRow::of(r, ledger.is_revoked(&r.event())))
+        let mut rows: Vec<AuditRow> = model
+            .timed_approvals()
+            .filter(|(r, _)| selected.as_ref().is_none_or(|s| s.contains(&r.subject())))
+            .map(|(r, at)| AuditRow::of(r, at, ledger.is_revoked(&r.event())))
             .collect();
         rows.sort_by_key(|r| (r.gate, r.subject, r.event));
         Ok(AuditReport { rows })

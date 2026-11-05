@@ -36,7 +36,7 @@ use std::num::NonZeroU32;
 use crate::domain::actor::Timestamp;
 use crate::domain::approval::TestsRun;
 use crate::domain::error::ValueError;
-use crate::domain::event::{DocKind, Event, StoreKind};
+use crate::domain::event::{DocKind, Event, Recorded, StoreKind};
 use crate::domain::finding::FindingType;
 use crate::domain::hash::ContentHash;
 use crate::domain::id::EntityId;
@@ -159,7 +159,7 @@ pub trait RevisionPort: Send + Sync {
 /// Whether an append wrote something.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppendOutcome {
-    /// The event or object was new.
+    /// The record of an event, or the object, was new.
     Written,
     /// It was there already; an append is idempotent, so this is success.
     AlreadyPresent,
@@ -257,22 +257,32 @@ pub trait StorePort: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// Append an event. Idempotent: an event with the same identifier is
-    /// already there, which is success.
+    /// Append a record of an event: the event and the time it was written.
+    ///
+    /// Idempotent per record. A record is the pair of the event's identifier and the
+    /// time (see [`RecordDigest`](crate::domain::event::RecordDigest)): the same
+    /// pair again is already there, [`AppendOutcome::AlreadyPresent`]; the same
+    /// event at another time is a further record, kept beside the first and never
+    /// replacing it, [`AppendOutcome::Written`].
+    ///
+    /// The contract every implementation keeps is
+    /// [`store_contract`](super::store_contract), and a test runs it on each.
     fn append(
         &self,
         scope: StoreKind,
         event: &Event,
+        at: &Timestamp,
     ) -> impl Future<Output = Result<AppendOutcome, Self::Error>> + Send;
 
-    /// Every event of the store.
+    /// Every event of the store, once, with the time of each of its records
+    /// ([`Recorded`]).
     ///
     /// A store that is not there has no events: this cannot tell it from an empty
     /// one, which [`private_reach`](Self::private_reach) does.
     fn events(
         &self,
         scope: StoreKind,
-    ) -> impl Future<Output = Result<Vec<Event>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<Vec<Recorded>, Self::Error>> + Send;
 
     /// Whether the private store is there to be read: a store that is there and has
     /// no event yet is [`Reach::Available`], a store that is not there (a public

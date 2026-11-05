@@ -17,6 +17,7 @@
 //! | [`Source::Settings`] | `version` of `.whyshelf.toml` | yes |
 //! | [`Source::Event`] (repo) | `v` of each file in `.whyshelf/events/` | yes |
 //! | [`Source::Event`] (private) | `v` of each file in the private store's `events/` | yes |
+//! | [`Source::Layout`] (repo, private) | the number in the store's `layout` file, as [`store_fs::layout_of`] judges it; a store with events and no such file counts as the layout before the mark | yes |
 //! | [`Projection::Map`] | `version` of each `map.json` | no: shown; `whyshelf rebuild` writes it again |
 //! | [`Projection::Cache`] | `schema_version` of the cache database | no: shown; `whyshelf rebuild` writes it again |
 //!
@@ -42,8 +43,10 @@
 //!        |  project, project_id (only if the version is read)
 //!        v
 //!   private store ? --- decided --> events/ ---------------> Source::Event(Private)
+//!        |                          layout ---------------> Source::Layout(Private)
 //!        |              not decided -> Unplaced { reason }
 //!   .whyshelf/events/ ------------------------------------> Source::Event(Repo)
+//!   .whyshelf/layout -------------------------------------> Source::Layout(Repo)
 //!   map.json (both stores), cache/index.db ----------------> Projection (shown only)
 //! ```
 //!
@@ -73,6 +76,7 @@ use whyshelf_core::domain::reference::{ProjectId, ProjectName};
 use crate::blocking::{self, BlockingError};
 use crate::cache_sqlite::SCHEMA_VERSION;
 use crate::config::{self, FILE_NAME, SUPPORTED_VERSION, UserDirs};
+use crate::store_fs::{self, Layout, StoreError};
 use crate::{REPO_STORE_DIR, wire};
 
 /// Something whose version decides whether the data can be read.
@@ -82,21 +86,27 @@ pub enum Source {
     Settings,
     /// The event files of a store.
     Event(StoreKind),
+    /// The layout of a store: how its files are named and where they are.
+    Layout(StoreKind),
 }
 
 impl Source {
     /// Every source, in the order a table shows them.
-    pub const ALL: [Source; 3] = [
+    pub const ALL: [Source; 5] = [
         Source::Settings,
         Source::Event(StoreKind::Repo),
         Source::Event(StoreKind::Private),
+        Source::Layout(StoreKind::Repo),
+        Source::Layout(StoreKind::Private),
     ];
 
-    /// The name a person reads: `settings`, `events (repo)`, `events (private)`.
+    /// The name a person reads: `settings`, `events (repo)`, `events (private)`,
+    /// `layout (repo)`, `layout (private)`.
     pub fn name(self) -> String {
         match self {
             Self::Settings => "settings".to_owned(),
             Self::Event(store) => format!("events ({})", store.as_str()),
+            Self::Layout(store) => format!("layout ({})", store.as_str()),
         }
     }
 
@@ -105,6 +115,7 @@ impl Source {
         match self {
             Self::Settings => vec![SUPPORTED_VERSION],
             Self::Event(_) => vec![wire::VERSION],
+            Self::Layout(_) => vec![store_fs::LAYOUT],
         }
     }
 }
@@ -394,6 +405,38 @@ async fn events(store_dir: &Path, source: Source, census: &mut Census) -> Result
     Ok(())
 }
 
+/// Count the layout of a store, as [`store_fs::layout_of`] judges it: the one
+/// function the store itself asks, so the census cannot disagree with a read.
+///
+/// A store with no event is looked at and has nothing to count; a store whose layout
+/// is not the one this build reads is counted under what it says it is.
+async fn layout(
+    store_dir: &Path,
+    store: StoreKind,
+    census: &mut Census,
+) -> Result<(), FormatError> {
+    let source = Source::Layout(store);
+    census.looked_at(source);
+    match store_fs::layout_of(store_dir).await {
+        Ok(Layout::Empty) => Ok(()),
+        Ok(Layout::Current) => {
+            census.count(source, Found::Version(store_fs::LAYOUT));
+            Ok(())
+        }
+        Err(StoreError::Layout { found, .. }) => {
+            census.count(source, found);
+            Ok(())
+        }
+        Err(StoreError::Io { path, source }) => Err(FormatError::Io { path, source }),
+        // `layout_of` fails in no other way; if that changes, the census cannot say
+        // what it saw, and says so.
+        Err(other) => Err(FormatError::Io {
+            path: store_dir.to_path_buf(),
+            source: std::io::Error::other(other),
+        }),
+    }
+}
+
 /// Count the `version` of the `map.json` of a store, if there is one.
 async fn map(store_dir: &Path, census: &mut Census) -> Result<(), FormatError> {
     #[derive(Deserialize)]
@@ -434,18 +477,22 @@ pub async fn census(root: &Path, dirs: &UserDirs) -> Result<Census, FormatError>
 
     let repo_store = root.join(REPO_STORE_DIR);
     events(&repo_store, Source::Event(StoreKind::Repo), &mut census).await?;
+    layout(&repo_store, StoreKind::Repo, &mut census).await?;
     map(&repo_store, &mut census).await?;
 
     let private = Source::Event(StoreKind::Private);
     match placed {
         Placed::At(dir) => {
             events(&dir, private, &mut census).await?;
+            layout(&dir, StoreKind::Private, &mut census).await?;
             map(&dir, &mut census).await?;
         }
-        Placed::Unplaced(reason) => census.unplaced.push(Unplaced {
-            source: private,
-            reason,
-        }),
+        Placed::Unplaced(reason) => {
+            // Everything that lives in the store is not looked at.
+            for source in [private, Source::Layout(StoreKind::Private)] {
+                census.unplaced.push(Unplaced { source, reason });
+            }
+        }
     }
 
     let cache = repo_store.join("cache").join("index.db");
@@ -495,7 +542,16 @@ mod tests {
     #[test]
     fn names_are_the_words_of_a_table_and_every_source_is_listed_once() {
         let names: Vec<String> = Source::ALL.iter().map(|s| s.name()).collect();
-        assert_eq!(names, ["settings", "events (repo)", "events (private)"]);
+        assert_eq!(
+            names,
+            [
+                "settings",
+                "events (repo)",
+                "events (private)",
+                "layout (repo)",
+                "layout (private)"
+            ]
+        );
         let projections: Vec<&str> = Projection::ALL.iter().map(|p| p.name()).collect();
         assert_eq!(projections, ["map", "cache"]);
         assert_eq!(v(1).to_string(), "v1");
@@ -506,6 +562,7 @@ mod tests {
     fn the_versions_read_are_the_constants_of_the_modules_that_read_them() {
         assert_eq!(Source::Settings.reads(), [SUPPORTED_VERSION]);
         assert_eq!(REPO.reads(), [wire::VERSION]);
+        assert_eq!(Source::Layout(StoreKind::Repo).reads(), [store_fs::LAYOUT]);
         assert_eq!(Projection::Map.reads(), [MAP_VERSION]);
         assert_eq!(Projection::Cache.reads(), [1]);
     }

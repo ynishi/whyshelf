@@ -116,9 +116,10 @@
 //! reclassification, move, approval, revocation, purge, publication. Content lives in
 //! files that people edit; history lives in the log. The events of one entity form a
 //! graph in which each event lists the tips it saw. An event identifier is the hash of
-//! its content and heads, excluding time and person, so two writers who see the same
-//! state and find the same change write one file. A fork made by two branches heals
-//! at the next write, which lists every tip.
+//! its content and heads, excluding the time (and including the person only for the
+//! judgements `Approved` and `Revoked`), so two writers who see the same state and
+//! find the same change write records of one event, each with its own time. A fork
+//! made by two branches heals at the next write, which lists every tip.
 //!
 //! # Two stores and what crosses
 //!

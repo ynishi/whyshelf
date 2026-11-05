@@ -47,6 +47,9 @@ pub enum HashKind {
     Item,
     /// An event identifier.
     Event,
+    /// The record of an event: its identifier and the time it was written, which
+    /// names the file of that record.
+    EventRecord,
     /// The normalized source text of an entity.
     Raw,
     /// The content of a generated file.
@@ -63,6 +66,7 @@ impl HashKind {
             Self::Design => "design",
             Self::Item => "item",
             Self::Event => "event",
+            Self::EventRecord => "event-record",
             Self::Raw => "raw",
             Self::Export => "export",
         }
@@ -197,6 +201,7 @@ mod tests {
     fn tag_has_the_documented_shape() {
         assert_eq!(HashKind::SpecContract.tag(), b"whyshelf/spec-contract/v1\0");
         assert_eq!(HashKind::Raw.tag(), b"whyshelf/raw/v1\0");
+        assert_eq!(HashKind::EventRecord.tag(), b"whyshelf/event-record/v1\0");
     }
 
     #[test]

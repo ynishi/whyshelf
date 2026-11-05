@@ -5,7 +5,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Timestamp};
 use crate::domain::approval::{Gate, TestOutcome};
 use crate::domain::classification::{ConflictField, fold};
 use crate::domain::event::{
@@ -487,6 +487,9 @@ fn two_writes_in_a_row_see_one_tip_and_a_fork_heals_on_the_next_write() {
         let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
         model.tips_in(StoreKind::Repo, id)
     };
+    let at = ws.ports().recorded_in(StoreKind::Repo)[0]
+        .shown_at()
+        .clone();
     for tag in ["x1", "x2"] {
         let change = NonEmptyVec::new(
             ClassChange::Tag(add_tag(&format!("+{tag}")).first().clone()),
@@ -495,11 +498,10 @@ fn two_writes_in_a_row_see_one_tip_and_a_fork_heals_on_the_next_write() {
         let event = Event::new(
             id,
             tips.clone(),
-            events[0].at().clone(),
             EventBody::Reclassified { changes: change },
         )
         .expect("event");
-        block_on(StorePort::append(ws.ports(), StoreKind::Repo, &event)).expect("append");
+        block_on(StorePort::append(ws.ports(), StoreKind::Repo, &event, &at)).expect("append");
     }
     assert_eq!(tips_of(&ws, "finding/slow-login"), 2);
     // The next write lists both, so the stream is one again and no tag is lost.
@@ -1986,11 +1988,13 @@ fn the_cs_a_measurement_is_set_against_may_have_been_recorded_before_two_registr
     let twin = Event::new(
         survivor,
         BTreeSet::new(),
-        registration.at().clone(),
         EventBody::Registered(Registration::Doc(doc.clone())),
     )
     .expect("event");
-    block_on(StorePort::append(ws.ports(), StoreKind::Repo, &twin)).expect("append");
+    let at = ws.ports().recorded_in(StoreKind::Repo)[0]
+        .shown_at()
+        .clone();
+    block_on(StorePort::append(ws.ports(), StoreKind::Repo, &twin, &at)).expect("append");
     // The smaller identifier survives, and the Spec's approvals are asked for it.
     let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
     assert_eq!(model.canonical(spec), survivor);
@@ -2004,10 +2008,12 @@ fn fork(ws: &Workspace<FakePorts>, id: EntityId, bodies: [EventBody; 2]) {
     let tips = block_on(Model::load(ws.ports(), ws.config()))
         .expect("model")
         .tips_in(StoreKind::Repo, id);
-    let at = ws.ports().events_in(StoreKind::Repo)[0].at().clone();
+    let at = ws.ports().recorded_in(StoreKind::Repo)[0]
+        .shown_at()
+        .clone();
     for body in bodies {
-        let event = Event::new(id, tips.clone(), at.clone(), body).expect("event");
-        block_on(StorePort::append(ws.ports(), StoreKind::Repo, &event)).expect("append");
+        let event = Event::new(id, tips.clone(), body).expect("event");
+        block_on(StorePort::append(ws.ports(), StoreKind::Repo, &event, &at)).expect("append");
     }
 }
 
@@ -2093,18 +2099,21 @@ fn publish_purge_and_the_other_reads_of_a_conflicted_classification_are_stopped(
     register_chain(&mut ws);
     let finding = id_of(&ws, "finding/slow-login");
     let events = ws.ports().events_in(StoreKind::Private);
+    let at = ws.ports().recorded_in(StoreKind::Private)[0]
+        .shown_at()
+        .clone();
     let tips = block_on(Model::load(ws.ports(), ws.config()))
         .expect("model")
         .tips_in(StoreKind::Private, finding);
     for kind in [DocKind::Spec, DocKind::Design] {
-        let event = Event::new(
-            finding,
-            tips.clone(),
-            events[0].at().clone(),
-            set_kind(kind),
-        )
-        .expect("event");
-        block_on(StorePort::append(ws.ports(), StoreKind::Private, &event)).expect("append");
+        let event = Event::new(finding, tips.clone(), set_kind(kind)).expect("event");
+        block_on(StorePort::append(
+            ws.ports(),
+            StoreKind::Private,
+            &event,
+            &at,
+        ))
+        .expect("append");
     }
     let before = repo_and_private_events(&ws);
     let stopped = |result: Result<_, AppError>| {
@@ -2547,4 +2556,119 @@ fn a_file_whose_keys_name_no_single_kind_asks_for_a_kind() {
         &AddOptions::new().with_kind(DocKind::Finding),
     ))
     .expect("add");
+}
+
+// --- records: one event, written at more than one time ------------------------
+
+fn time(text: &str) -> Timestamp {
+    Timestamp::from_validated(text.to_owned()).expect("a time")
+}
+
+/// The fake and the store on disk answer to one contract: this is the fake's run
+/// of it, and the storage adapter's tests run the same function on the real store.
+#[test]
+fn the_fake_store_keeps_the_store_contract() {
+    let ports = FakePorts::new();
+    block_on(super::store_contract::check_append_and_events(&ports)).expect("the contract");
+}
+
+#[test]
+fn two_people_approving_one_finding_are_two_approvals_and_each_can_be_withdrawn_alone() {
+    let mut ws = workspace();
+    let bob = Actor::new("bob").expect("name");
+    let by_alice = block_on(ws.approve_cr(&r("finding/slow-login"), None)).expect("alice");
+    let by_bob = block_on(ws.approve_cr(&r("finding/slow-login"), Some(bob))).expect("bob");
+    assert_ne!(by_alice.event(), by_bob.event());
+    let audit = block_on(ws.audit(None)).expect("audit");
+    let rows: Vec<_> = audit
+        .rows()
+        .iter()
+        .filter(|row| row.gate() == Gate::Cr)
+        .collect();
+    assert_eq!(rows.len(), 2);
+
+    // Alice withdraws hers; Bob's approval is not touched and the Finding stays
+    // approved.
+    block_on(ws.revoke(by_alice.event(), why("changed my mind"), None)).expect("revoke");
+    let audit = block_on(ws.audit(None)).expect("audit");
+    let revoked: Vec<_> = audit
+        .rows()
+        .iter()
+        .filter(|row| row.gate() == Gate::Cr && row.revoked())
+        .map(|row| row.by().as_str())
+        .collect();
+    assert_eq!(revoked, ["alice"]);
+    assert!(matches!(
+        approval_of(row(&status(&ws), "finding/slow-login")),
+        Approval::Approved
+    ));
+}
+
+#[test]
+fn the_same_change_recorded_at_two_times_is_one_event_with_two_times() {
+    let mut ws = workspace();
+    block_on(ws.tag(&r("finding/slow-login"), add_tag("+wip"))).expect("tag");
+    let before = ws.ports().recorded_in(StoreKind::Repo);
+    let tagged = before.last().expect("an event").clone();
+    // A second writer, who saw the same state, found the same change at another time.
+    let later = time("2030-01-01T00:00:00Z");
+    assert_eq!(
+        block_on(StorePort::append(
+            ws.ports(),
+            StoreKind::Repo,
+            tagged.event(),
+            &later
+        ))
+        .expect("append"),
+        super::ports::AppendOutcome::Written
+    );
+    let after = ws.ports().recorded_in(StoreKind::Repo);
+    assert_eq!(after.len(), before.len(), "still one event");
+    let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
+    let id = tagged.event().id();
+    let times = model.times_of(&id).expect("times");
+    assert_eq!(times.len(), 2);
+    assert!(times.iter().any(|t| t == &later));
+    assert!(times.iter().any(|t| t == tagged.shown_at()));
+    assert_eq!(model.shown_at(&id), Some(times.first()));
+    // The history lists the event once.
+    let log = block_on(ws.changelog(&r("finding/slow-login"))).expect("changelog");
+    assert_eq!(
+        log.entries()
+            .iter()
+            .filter(|entry| entry.event().id() == id)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn an_event_in_both_stores_is_read_as_one_event_with_the_times_of_both() {
+    let mut ws = workspace();
+    block_on(ws.tag(&r("finding/slow-login"), add_tag("+wip"))).expect("tag");
+    let recorded = ws
+        .ports()
+        .recorded_in(StoreKind::Repo)
+        .pop()
+        .expect("an event");
+    let there = time("2029-06-01T00:00:00Z");
+    block_on(StorePort::append(
+        ws.ports(),
+        StoreKind::Private,
+        recorded.event(),
+        &there,
+    ))
+    .expect("append");
+    let model = block_on(Model::load(ws.ports(), ws.config())).expect("model");
+    let times = model.times_of(&recorded.event().id()).expect("times");
+    assert_eq!(times.len(), 2, "the times of the two stores are one set");
+    assert!(times.iter().any(|t| t == &there));
+    assert!(times.iter().any(|t| t == recorded.shown_at()));
+    // The same union whichever store is asked first.
+    assert_eq!(
+        times,
+        &crate::domain::event::union_times(&recorded.event().id(), recorded.at(), &{
+            NonEmptyVec::new(there, Vec::new())
+        })
+    );
 }

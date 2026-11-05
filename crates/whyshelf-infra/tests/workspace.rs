@@ -280,14 +280,13 @@ async fn publishing_writes_an_event_in_each_store() {
     let repo = store.events(StoreKind::Repo).await.unwrap();
     assert!(matches!(
         repo.as_slice(),
-        [e] if matches!(e.body(), EventBody::Published(Publication::Incoming { .. })) && e.heads().is_empty()
+        [e] if matches!(e.event().body(), EventBody::Published(Publication::Incoming { .. })) && e.event().heads().is_empty()
     ));
     let private = store.events(StoreKind::Private).await.unwrap();
-    assert!(
-        private
-            .iter()
-            .any(|e| matches!(e.body(), EventBody::Published(Publication::Outgoing { .. })))
-    );
+    assert!(private.iter().any(|e| matches!(
+        e.event().body(),
+        EventBody::Published(Publication::Outgoing { .. })
+    )));
     assert!(
         read(&p, ".whyshelf/map.json")
             .await
@@ -435,7 +434,6 @@ fn registered(id: u128, kind: DocKind, path: &str, alias: &str, tags: &[&str]) -
     Event::new(
         entity(id),
         BTreeSet::new(),
-        Timestamp::from_validated("2026-11-04T21:40:00Z".to_owned()).unwrap(),
         EventBody::Registered(Registration::Doc(DocRegistration::new(
             kind,
             path.parse().unwrap(),
@@ -472,6 +470,7 @@ async fn fixed_project() -> (Project, Workspace<InfraPorts>, Shutdown) {
     )
     .await;
     let store = FsStore::new(p.root().join(".whyshelf"), p.private().to_path_buf());
+    let at = Timestamp::from_validated("2026-11-04T21:40:00Z".to_owned()).unwrap();
     for event in [
         registered(
             0x11,
@@ -489,7 +488,7 @@ async fn fixed_project() -> (Project, Workspace<InfraPorts>, Shutdown) {
         ),
     ] {
         assert_eq!(
-            store.append(StoreKind::Repo, &event).await.unwrap(),
+            store.append(StoreKind::Repo, &event, &at).await.unwrap(),
             AppendOutcome::Written
         );
     }

@@ -84,8 +84,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::actor::Actor;
-use crate::domain::approval::{ApprovalSet, Attestation};
+use crate::domain::actor::{Actor, Timestamp};
+use crate::domain::approval::{ApprovalRecord, ApprovalSet, Attestation};
 use crate::domain::classification::{
     ClassificationIssue, ClassificationView, ConflictedDoc, DocClass, ItemClass, Merged, fold,
 };
@@ -96,7 +96,8 @@ use crate::domain::evaluate::{
     states_of,
 };
 use crate::domain::event::{
-    DocKind, EntityKind, Event, EventBody, EventId, Publication, Registration, StoreKind, Version,
+    DocKind, EntityKind, Event, EventBody, EventId, Publication, Recorded, Registration, StoreKind,
+    Version, union_times,
 };
 use crate::domain::finding::Finding;
 use crate::domain::front::{ClassificationImport, Stored};
@@ -137,13 +138,19 @@ impl Side {
     }
 }
 
-/// The events of both stores, folded, with the ledger of approvals.
+/// The events of both stores, folded, with the ledger of approvals and the time of
+/// every record.
+///
+/// The fold, the event graph and the ledger do not use time, so the events stay
+/// plain [`Event`]s and the times sit beside them, by event. An event that is in
+/// both stores is one event, with the times of the records of both.
 #[derive(Debug)]
 pub(crate) struct Snapshot {
     repo: Side,
     private: Side,
     ledger: ApprovalSet,
     reach: Reach,
+    times: BTreeMap<EventId, NonEmptyVec<Timestamp>>,
 }
 
 impl Snapshot {
@@ -167,10 +174,27 @@ impl Snapshot {
     }
 
     pub(crate) fn from_events(
-        repo_events: Vec<Event>,
-        private_events: Vec<Event>,
+        repo_recorded: Vec<Recorded>,
+        private_recorded: Vec<Recorded>,
         reach: Reach,
     ) -> Self {
+        let mut times: BTreeMap<EventId, NonEmptyVec<Timestamp>> = BTreeMap::new();
+        for recorded in repo_recorded.iter().chain(private_recorded.iter()) {
+            let id = recorded.event().id();
+            let merged = match times.get(&id) {
+                Some(held) => union_times(&id, held, recorded.at()),
+                None => recorded.at().clone(),
+            };
+            times.insert(id, merged);
+        }
+        let repo_events: Vec<Event> = repo_recorded
+            .into_iter()
+            .map(Recorded::into_event)
+            .collect();
+        let private_events: Vec<Event> = private_recorded
+            .into_iter()
+            .map(Recorded::into_event)
+            .collect();
         // The ledger is read from both stores at once: approvals of a published
         // entity stay in the private store. The union fold is used only for its
         // duplicate registrations (which approval belongs to which survivor).
@@ -194,7 +218,19 @@ impl Snapshot {
             private,
             ledger,
             reach,
+            times,
         }
+    }
+
+    /// The time of one record of the event, for display: see
+    /// [`Recorded::shown_at`]. Every event of the snapshot has one.
+    pub(crate) fn shown_at(&self, id: &EventId) -> Option<&Timestamp> {
+        self.times.get(id).map(NonEmptyVec::first)
+    }
+
+    /// The time of each record of the event, in the order of their digests.
+    pub(crate) fn times_of(&self, id: &EventId) -> Option<&NonEmptyVec<Timestamp>> {
+        self.times.get(id)
     }
 
     /// Whether the private store can be read in this environment.
@@ -1384,6 +1420,43 @@ impl Model {
     /// The events of one store.
     pub fn events(&self, store: StoreKind) -> &[Event] {
         self.snap.side(store).events()
+    }
+
+    /// The time of each record of an event, in the order of the digests of the
+    /// records (see [`Recorded`]); an event that is in both stores has the times of
+    /// both. `None` for an identifier the model has no event of.
+    pub fn times_of(&self, id: &EventId) -> Option<&NonEmptyVec<Timestamp>> {
+        self.snap.times_of(id)
+    }
+
+    /// The time to show for an event: that of one of its records, the first in the
+    /// order of the digests (not the earliest). `None` for an identifier the model
+    /// has no event of.
+    pub fn shown_at(&self, id: &EventId) -> Option<&Timestamp> {
+        self.snap.shown_at(id)
+    }
+
+    /// The events of one store, each with the time to show for it.
+    ///
+    /// Every event the model holds came with a time, so none is left out.
+    pub(crate) fn timed_events(
+        &self,
+        store: StoreKind,
+    ) -> impl Iterator<Item = (&Event, &Timestamp)> {
+        self.events(store)
+            .iter()
+            .filter_map(|event| self.shown_at(&event.id()).map(|at| (event, at)))
+    }
+
+    /// The approvals of the ledger, each with the time to show for it.
+    ///
+    /// Every approval is an event the model holds, which came with a time, so none
+    /// is left out.
+    pub(crate) fn timed_approvals(&self) -> impl Iterator<Item = (&ApprovalRecord, &Timestamp)> {
+        self.ledger()
+            .all()
+            .iter()
+            .filter_map(|record| self.shown_at(&record.event()).map(|at| (record, at)))
     }
 
     /// The classification fold of one store.

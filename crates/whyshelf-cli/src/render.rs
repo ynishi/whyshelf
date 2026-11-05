@@ -648,10 +648,10 @@ fn entity_fields(view: &EntityView) -> Vec<(&'static str, Cell)> {
                 .iter()
                 .map(|a| format!(
                     "{} by {} at {} ({})",
-                    a.attestation().gate().name(),
-                    a.by(),
+                    a.record().attestation().gate().name(),
+                    a.record().by(),
                     a.at(),
-                    a.event()
+                    a.record().event()
                 ))
                 .collect::<Vec<_>>()
         ),
@@ -959,7 +959,7 @@ fn changelog_doc(log: &Changelog) -> Doc {
                 _ => String::new(),
             };
             vec![
-                json!(event.at().to_string()),
+                json!(entry.at().to_string()),
                 json!(event.id().to_string()),
                 json!(event.body().kind_name()),
                 json!(detail),

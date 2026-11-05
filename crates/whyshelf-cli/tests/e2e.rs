@@ -417,8 +417,16 @@ async fn the_exit_status_is_zero_one_two_or_three_and_each_means_one_thing() {
 
     // 3: the run failed: an event file of a version this build does not read cannot
     // be loaded, whatever the command. The message says where to look.
-    repo.write(".whyshelf/events/ffff.json", "{\"v\": 2}\n")
-        .await;
+    // (Named as a record file is, or the name is what is refused first.)
+    repo.write(
+        &format!(
+            ".whyshelf/events/{}.{}.json",
+            "ff".repeat(32),
+            "0".repeat(16)
+        ),
+        "{\"v\": 2}\n",
+    )
+    .await;
     let unreadable = repo.run(&["status"]).await.failed();
     assert_eq!(unreadable.code, Some(3), "{}", unreadable.stderr);
     assert!(
@@ -536,6 +544,7 @@ async fn the_table_migrate_prints_has_this_shape() {
         "version = 1\nproject = \"demo\"\nproject_id = \"0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506\"\n[test]\ncommand = \"true\"\n",
     )
     .await;
+    repo.write(".whyshelf/layout", "2\n").await;
     repo.write(".whyshelf/events/a.json", "{\"v\": 1}\n").await;
     repo.write(".whyshelf/events/b.json", "{\"v\": 1}\n").await;
     repo.write(".whyshelf/map.json", "{\"version\": 0}\n").await;
@@ -546,11 +555,35 @@ WHAT              FOUND    BUILD      NOTE
 settings          v1: 1    reads: v1  -
 events (repo)     v1: 2    reads: v1  -
 events (private)  no file  reads: v1  -
+layout (repo)     v2: 1    reads: v2  -
+layout (private)  no file  reads: v2  -
 map               v0: 1    reads: v1  derived: `whyshelf rebuild` writes it again
 
 verdict  readable: every file counted is of a version this build reads
 ";
     assert_eq!(migrate.stdout, expected);
+
+    // A store with events and no mark is the layout before the mark: counted, and a
+    // refusal.
+    let repo = Repo::new().await;
+    repo.write(
+        ".whyshelf.toml",
+        "version = 1\nproject = \"demo\"\nproject_id = \"0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506\"\n[test]\ncommand = \"true\"\n",
+    )
+    .await;
+    repo.write(".whyshelf/events/a.json", "{\"v\": 1}\n").await;
+    let unmarked = repo.run(&["migrate"]).await.failed();
+    assert_eq!(unmarked.code, Some(1));
+    assert!(
+        unmarked
+            .stdout
+            .lines()
+            .any(|l| l.starts_with("layout (repo)")
+                && l.contains("v1: 1")
+                && l.contains("reads: v2")),
+        "{}",
+        unmarked.stdout
+    );
 }
 
 #[tokio::test]

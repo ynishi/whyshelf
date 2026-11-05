@@ -153,7 +153,7 @@ pub fn render_changelog(doc: &ChangelogDoc) -> String {
         for entry in entries {
             let event = entry.event();
             let short: String = event.id().hash().hex().chars().take(12).collect();
-            let _ = writeln!(out, "- {} {} (`{short}`)", event.at(), describe(event));
+            let _ = writeln!(out, "- {} {} (`{short}`)", entry.at(), describe(event));
         }
     }
     out

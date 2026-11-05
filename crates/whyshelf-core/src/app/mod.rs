@@ -15,9 +15,11 @@
 //! workspace are serialized by the type: each loads the tips of the stream it
 //! writes to, decides, records and notifies, with no other write in between, so a
 //! process cannot fork a stream with itself. Two processes (a command line and a
-//! tool server, or two worktrees) can still write at once; that is safe because an
-//! event file's name is the hash of its content and heads, so the same change is
-//! the same file, and the next write lists every tip it sees and joins a fork.
+//! tool server, or two worktrees) can still write at once; that is safe because the
+//! identifier of an event is the hash of its content and heads, so the same change
+//! is one event whichever of them found it, a record file is named by that
+//! identifier and the digest of its time, and the next write lists every tip it sees
+//! and joins a fork.
 //!
 //! | writes (`&mut self`) | reads (`&self`) |
 //! |---|---|
@@ -34,8 +36,8 @@
 //! |---|---|
 //! | two calls on one [`Workspace`] | none needed: `&mut self` lets one write run at a time |
 //! | the tool server's requests | the server hands its one workspace to a single task with a bounded queue, so requests run one after another; the workspace is not behind a lock |
-//! | a command line and a tool server, in one worktree or in two | an event file is named by the hash of its content and heads, so the same change is the same file; a file is written under a name of its own and renamed, and an existing target is a success; the cache is SQLite in WAL mode with a busy timeout; generated files are rebuilt whole, so the last writer wins and the state converges |
-//! | two branches (a merge) | one event is one file, so the files of both sides simply add up; see below |
+//! | a command line and a tool server, in one worktree or in two | a record file is named by the event's identifier (the hash of its content and heads) and the digest of its time, so the same change is one event, the same record is the same file, and a record at another time is a file beside it; a file is written under a name of its own and renamed, and an existing target is a success; the cache is SQLite in WAL mode with a busy timeout; generated files are rebuilt whole, so the last writer wins and the state converges |
+//! | two branches (a merge) | one record is one file, so the files of both sides simply add up; see below |
 //!
 //! ```text
 //!   worktree A (branch a)                     worktree B (branch b)
@@ -45,7 +47,9 @@
 //!                 +------- git merge  -----------+
 //!                                  |
 //!                                  v
-//!   .whyshelf/events/  e1 e2 e3 e4      the union; the same event is one file
+//!   .whyshelf/events/  e1 e2 e3 e4      the union; a record both wrote is one file, the
+//!                                       same change at two times is two files, read as
+//!                                       one event with two times
 //!   docs/*.md          ordinary text merge; a conflict marker makes that
 //!                      entity Invalid until a person resolves it
 //!   .whyshelf/map.json may conflict (one file rewritten by both sides):
@@ -197,6 +201,7 @@ pub mod query;
 pub mod raw;
 pub mod register;
 pub mod scaffold;
+pub mod store_contract;
 pub mod subscriber;
 pub mod view;
 

@@ -24,7 +24,7 @@ mod in_memory {
     use crate::domain::actor::{MeasuredAt, Timestamp};
     use crate::domain::approval::{TestOutcome, TestsRun};
     use crate::domain::design::{ChosenOption, Crux, RejectedOption, WorkItem};
-    use crate::domain::event::{DocKind, Event, StoreKind};
+    use crate::domain::event::{DocKind, Event, Recorded, StoreKind};
     use crate::domain::finding::{EvidenceLabel, Reproducibility};
     use crate::domain::front::{FileClassification, Guess};
     use crate::domain::hash::ContentHash;
@@ -92,7 +92,7 @@ mod in_memory {
         /// The text of each file a scaffold created, as it wrote it.
         created: BTreeMap<RelPath, String>,
         stamp: u64,
-        events: BTreeMap<StoreKind, Vec<Event>>,
+        events: BTreeMap<StoreKind, Vec<Recorded>>,
         objects: BTreeMap<(StoreKind, ContentHash), NormalizedText>,
         exports: BTreeMap<(StoreKind, ExportKind), (String, ContentHash)>,
         export_writes: usize,
@@ -405,7 +405,16 @@ mod in_memory {
                 .retain(|(store, _), _| *store != StoreKind::Private);
         }
 
+        /// The events of a store, without their times.
         pub(crate) fn events_in(&self, store: StoreKind) -> Vec<Event> {
+            self.recorded_in(store)
+                .into_iter()
+                .map(Recorded::into_event)
+                .collect()
+        }
+
+        /// The events of a store with the time of each record.
+        pub(crate) fn recorded_in(&self, store: StoreKind) -> Vec<Recorded> {
             self.lock().events.get(&store).cloned().unwrap_or_default()
         }
 
@@ -513,21 +522,32 @@ mod in_memory {
     impl StorePort for FakePorts {
         type Error = FakeError;
 
+        /// A record is the pair of the identifier and the time, as a store on disk
+        /// keeps it: the same pair is already present, the same identifier at
+        /// another time is a further record of the one event.
         async fn append(
             &self,
             scope: StoreKind,
             event: &Event,
+            at: &Timestamp,
         ) -> Result<AppendOutcome, FakeError> {
             let mut s = self.lock();
             let events = s.events.entry(scope).or_default();
-            if events.iter().any(|e| e.id() == event.id()) {
-                return Ok(AppendOutcome::AlreadyPresent);
+            let record = Recorded::new(event.clone(), at.clone());
+            match events.iter_mut().find(|e| e.event().id() == event.id()) {
+                None => events.push(record),
+                Some(held) => {
+                    if held.at().iter().any(|held_at| held_at == at) {
+                        return Ok(AppendOutcome::AlreadyPresent);
+                    }
+                    held.merge(record)
+                        .map_err(|_| FakeError("one identifier, two different events"))?;
+                }
             }
-            events.push(event.clone());
             Ok(AppendOutcome::Written)
         }
 
-        async fn events(&self, scope: StoreKind) -> Result<Vec<Event>, FakeError> {
+        async fn events(&self, scope: StoreKind) -> Result<Vec<Recorded>, FakeError> {
             Ok(self.lock().events.get(&scope).cloned().unwrap_or_default())
         }
 

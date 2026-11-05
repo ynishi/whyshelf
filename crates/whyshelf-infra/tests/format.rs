@@ -13,9 +13,16 @@ use whyshelf_infra::format::{
 
 const REPO: Source = Source::Event(StoreKind::Repo);
 const PRIVATE: Source = Source::Event(StoreKind::Private);
+const REPO_LAYOUT: Source = Source::Layout(StoreKind::Repo);
+const PRIVATE_LAYOUT: Source = Source::Layout(StoreKind::Private);
 
 fn v(n: u32) -> Found {
     Found::Version(n)
+}
+
+/// The mark a store of this build has, written first by its first append.
+async fn mark(store_dir: &Path, number: &str) {
+    write(store_dir, "layout", &format!("{number}\n")).await;
 }
 
 fn counted(census: &Census, source: Source) -> Vec<(Found, usize)> {
@@ -28,6 +35,8 @@ fn counted(census: &Census, source: Source) -> Vec<(Found, usize)> {
 #[tokio::test]
 async fn a_project_of_version_one_files_is_readable() {
     let p = project("").await;
+    mark(&p.root().join(".whyshelf"), "2").await;
+    mark(&p.private(), "2").await;
     write(p.root(), ".whyshelf/events/aa.json", "{\"v\": 1}\n").await;
     write(
         p.root(),
@@ -47,13 +56,53 @@ async fn a_project_of_version_one_files_is_readable() {
     assert_eq!(counted(&census, Source::Settings), [(v(1), 1)]);
     assert_eq!(counted(&census, REPO), [(v(1), 2)]);
     assert_eq!(counted(&census, PRIVATE), [(v(1), 1)]);
+    assert_eq!(counted(&census, REPO_LAYOUT), [(v(2), 1)]);
+    assert_eq!(counted(&census, PRIVATE_LAYOUT), [(v(2), 1)]);
     assert_eq!(census.projections()[&Projection::Map].get(&v(1)), Some(&1));
     assert_eq!(census.verdict(), Verdict::Readable);
+}
+
+/// The census asks the store's own judge (`layout_of`), so it counts what a read
+/// would refuse: no mark and no event is an empty store, nothing to count; events and
+/// no mark are the layout before the mark; another number is counted as it is.
+#[tokio::test]
+async fn the_layout_is_counted_as_the_store_judges_it() {
+    // No mark and no event: looked at, nothing counted, and readable.
+    let p = project("").await;
+    let found = census(p.root(), &p.dirs()).await.unwrap();
+    assert_eq!(counted(&found, REPO_LAYOUT), [], "looked at, and empty");
+    assert_eq!(counted(&found, PRIVATE_LAYOUT), []);
+    assert_eq!(found.verdict(), Verdict::Readable);
+
+    // An event and no mark: the layout before the mark, unreadable.
+    let p = project("").await;
+    write(p.root(), ".whyshelf/events/aa.json", "{\"v\": 1}\n").await;
+    let found = census(p.root(), &p.dirs()).await.unwrap();
+    assert_eq!(counted(&found, REPO_LAYOUT), [(v(1), 1)]);
+    let Verdict::Unreadable(groups) = found.verdict() else {
+        panic!("unreadable");
+    };
+    assert_eq!(groups.len(), 1);
+    assert_eq!(
+        (groups.first().source, groups.first().found),
+        (REPO_LAYOUT, v(1))
+    );
+
+    // A mark of a number this build does not read, and a mark that is no number.
+    for (text, found) in [("3", v(3)), ("two", Found::Unknown)] {
+        let p = project("").await;
+        mark(&p.root().join(".whyshelf"), text).await;
+        write(p.root(), ".whyshelf/events/aa.json", "{\"v\": 1}\n").await;
+        let seen = census(p.root(), &p.dirs()).await.unwrap();
+        assert_eq!(counted(&seen, REPO_LAYOUT), [(found, 1)]);
+        assert!(matches!(seen.verdict(), Verdict::Unreadable(_)));
+    }
 }
 
 #[tokio::test]
 async fn an_event_file_of_version_two_makes_it_unreadable_and_is_counted_as_it_is() {
     let p = project("").await;
+    mark(&p.root().join(".whyshelf"), "2").await;
     write(p.root(), ".whyshelf/events/aa.json", "{\"v\": 1}\n").await;
     write(p.root(), ".whyshelf/events/bb.json", "{\"v\": 2}\n").await;
     write(p.root(), ".whyshelf/events/cc.json", "{\"v\": 2}\n").await;
@@ -116,6 +165,7 @@ async fn write_cache(path: &Path, version: &str) {
 #[tokio::test]
 async fn an_old_map_and_an_old_cache_are_shown_and_do_not_make_the_data_unreadable() {
     let p = project("").await;
+    mark(&p.root().join(".whyshelf"), "2").await;
     write(p.root(), ".whyshelf/events/aa.json", "{\"v\": 1}\n").await;
     write(
         p.root(),
@@ -176,7 +226,9 @@ async fn the_census_does_not_change_the_cache() {
 
 async fn look(p: &common::Project) -> (Census, Vec<UnplacedReason>) {
     let census = census(p.root(), &p.dirs()).await.unwrap();
-    let reasons = census.unplaced().iter().map(|u| u.reason).collect();
+    // The private store holds two sources, and both are unplaced for the one reason.
+    let mut reasons: Vec<UnplacedReason> = census.unplaced().iter().map(|u| u.reason).collect();
+    reasons.dedup();
     (census, reasons)
 }
 
@@ -195,11 +247,13 @@ async fn settings_of_another_version_or_without_an_id_are_counted_and_the_privat
         &settings.replace("version = 1", "version = 2"),
     )
     .await;
+    mark(&p.root().join(".whyshelf"), "2").await;
     write(p.root(), ".whyshelf/events/aa.json", "{\"v\": 1}\n").await;
     let (census, reasons) = look(&p).await;
     assert_eq!(counted(&census, Source::Settings), [(v(2), 1)]);
     assert_eq!(reasons, [UnplacedReason::SettingsUnreadable]);
     assert!(!census.sources().contains_key(&PRIVATE));
+    assert!(!census.sources().contains_key(&PRIVATE_LAYOUT));
     let Verdict::Incomplete {
         unplaced,
         unreadable,
@@ -207,7 +261,11 @@ async fn settings_of_another_version_or_without_an_id_are_counted_and_the_privat
     else {
         panic!("incomplete");
     };
-    assert_eq!(unplaced.first().source, PRIVATE);
+    assert_eq!(
+        unplaced.iter().map(|u| u.source).collect::<Vec<_>>(),
+        [PRIVATE, PRIVATE_LAYOUT],
+        "everything of the private store is not looked at"
+    );
     assert_eq!(
         unreadable.len(),
         1,
@@ -242,11 +300,13 @@ async fn settings_of_another_version_or_without_an_id_are_counted_and_the_privat
 #[tokio::test]
 async fn a_clone_without_a_private_store_is_readable_the_store_is_there_to_be_empty() {
     let p = project("").await;
+    mark(&p.root().join(".whyshelf"), "2").await;
     write(p.root(), ".whyshelf/events/aa.json", "{\"v\": 1}\n").await;
     assert!(!tokio::fs::try_exists(p.private()).await.unwrap());
     let census = census(p.root(), &p.dirs()).await.unwrap();
     assert!(census.unplaced().is_empty());
     assert_eq!(counted(&census, PRIVATE), [], "looked at, and empty");
+    assert_eq!(counted(&census, PRIVATE_LAYOUT), [], "looked at, and empty");
     assert_eq!(census.verdict(), Verdict::Readable);
 }
 
@@ -269,7 +329,8 @@ async fn a_directory_without_settings_is_no_project_and_a_data_dir_that_cannot_b
             .iter()
             .map(|u| u.reason)
             .collect::<Vec<_>>(),
-        [UnplacedReason::DataDirUnusable]
+        [UnplacedReason::DataDirUnusable; 2],
+        "the events and the layout of the private store"
     );
     assert!(matches!(census.verdict(), Verdict::Incomplete { .. }));
     let nothing = UserDirs::default().with_home("relative");

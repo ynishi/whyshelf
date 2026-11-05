@@ -40,7 +40,7 @@
 //!   a change anywhere upstream makes the downstream approval Stale instead of
 //!   silently wrong.
 //! - **Event-sourced approvals.** Registration, revision, classification and
-//!   approval are events in an append-only log, one file per event. Nothing is
+//!   approval are events in an append-only log, one file per record of an event. Nothing is
 //!   updated in place, so two branches that each add something merge without
 //!   conflict, and whether something is approved is a question asked of the
 //!   whole set of events. An approval is withdrawn by another event, never
@@ -133,7 +133,7 @@
 //! | **baseline** | the branch that counts as "done" (`main` by default, `[git] baseline`) |
 //! | **integrated** | a CA-approved revision that has reached the baseline (is an ancestor of it) |
 //! | **clean tree** | no uncommitted change outside `.whyshelf/`; CA approval requires it |
-//! | **event** | one record of the append-only log: `Registered`, `Revised`, `Reclassified`, `Moved`, `Approved`, `Revoked`, `Purged`, `Published`; one file each |
+//! | **event** | one record of the append-only log: `Registered`, `Revised`, `Reclassified`, `Moved`, `Approved`, `Revoked`, `Purged`, `Published`; one file for each time it was written |
 //! | **head, tip** | the tips of an entity's stream are the events no other event lists in its `heads`; an event's heads are the tips its writer saw; more than one tip is a fork, joined by the next write |
 //! | **ingest** | turning edits of the document files into events (`Revised`, `Moved`, `Registered`) |
 //! | **alias** | a human name for an entity (`spec/cache-timeout`), unique within a store |
@@ -333,9 +333,10 @@
 //!
 //! One workspace runs one write at a time (`&mut self`); the tool server keeps that
 //! across requests with a single task; a command line and a tool server, or two
-//! worktrees, can write at once because an event file is named by the hash of its
-//! content and heads, so the same change is the same file. Merging branches adds
-//! event files and never conflicts on them; `map.json` may conflict and
+//! worktrees, can write at once because a record file is named by the hash of the
+//! event's content and heads and by the digest of the time it was written, so the
+//! same change is one event and the same record is the same file. Merging branches
+//! adds record files and never conflicts on them; `map.json` may conflict and
 //! `whyshelf rebuild` writes it again; a conflict marker in a document makes that
 //! entity Invalid until a person resolves it; the cache is per worktree and not
 //! merged. The full account, with a picture, is in [`app`].
@@ -361,8 +362,8 @@
 //!   and the private store of the other stays in a directory that is no longer looked
 //!   at: what lived in it reads as unresolved until the directory is renamed to the
 //!   surviving id.
-//! - *No packing of events.* One event is one file, and every command reads all of
-//!   them.
+//! - *No packing of events.* One record of an event is one file, and every command
+//!   reads all of them.
 //! - *Generated Markdown.* `status.md` and `changelog.md`, when enabled, are written
 //!   at the root of the repo store (`.whyshelf/`), not in the documents' directories.
 //! - *Approver independence* is not checked (see Security).

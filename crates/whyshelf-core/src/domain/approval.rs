@@ -94,7 +94,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
-use super::actor::{Actor, Timestamp};
+use super::actor::Actor;
 use super::canon::{Canon, ToCanon};
 use super::classification::ClassificationView;
 use super::event::{DocKind, EntityKind, Event, EventBody, EventGraph, EventId};
@@ -456,7 +456,6 @@ pub struct ApprovalRecord {
     event: EventId,
     subject: EntityId,
     by: Actor,
-    at: Timestamp,
     attestation: Attestation,
 }
 
@@ -471,14 +470,10 @@ impl ApprovalRecord {
         self.subject
     }
 
-    /// Who approved, as declared.
+    /// Who approved, as declared. The person is part of the event, so two people
+    /// who approve the same attestation are two approvals.
     pub fn by(&self) -> &Actor {
         &self.by
-    }
-
-    /// When it was recorded. Display only.
-    pub fn at(&self) -> &Timestamp {
-        &self.at
     }
 
     /// What was approved.
@@ -531,7 +526,6 @@ impl ApprovalSet {
                     event: event.id(),
                     subject: view.canonical(event.target()),
                     by: by.clone(),
-                    at: event.at().clone(),
                     attestation: attestation.clone(),
                 }),
                 EventBody::Revoked { revokes, .. } => {
@@ -650,7 +644,6 @@ impl ApprovalSet {
 #[cfg(test)]
 pub(crate) mod test_support {
     use super::*;
-    use crate::domain::event::test_support::ts;
     use crate::domain::id::test_support::{did, fid, iid, sid};
     use crate::domain::revision::RevisionId;
 
@@ -719,28 +712,40 @@ pub(crate) mod test_support {
         }
     }
 
+    pub(crate) fn bob() -> Actor {
+        Actor::new("bob").unwrap()
+    }
+
     pub(crate) fn approve(attestation: Attestation, heads: &[EventId]) -> Event {
+        approve_by(attestation, heads, alice())
+    }
+
+    pub(crate) fn approve_by(attestation: Attestation, heads: &[EventId], by: Actor) -> Event {
         Event::new(
             attestation.subject(),
             heads.iter().copied().collect(),
-            ts(),
-            EventBody::Approved {
-                by: alice(),
-                attestation,
-            },
+            EventBody::Approved { by, attestation },
         )
         .unwrap()
     }
 
     pub(crate) fn revoke(target: EntityId, approved: EventId, heads: &[EventId]) -> Event {
+        revoke_by(target, approved, heads, alice())
+    }
+
+    pub(crate) fn revoke_by(
+        target: EntityId,
+        approved: EventId,
+        heads: &[EventId],
+        by: Actor,
+    ) -> Event {
         Event::new(
             target,
             heads.iter().copied().collect(),
-            ts(),
             EventBody::Revoked {
                 revokes: approved,
                 reason: NonBlank::new("found a flaw").unwrap(),
-                by: alice(),
+                by,
             },
         )
         .unwrap()
@@ -880,7 +885,6 @@ mod tests {
         let err = Event::new(
             eid(99),
             BTreeSet::new(),
-            crate::domain::event::test_support::ts(),
             EventBody::Approved {
                 by: alice(),
                 attestation: cr(1, &h(1)),
@@ -894,19 +898,49 @@ mod tests {
     }
 
     #[test]
-    fn the_person_does_not_enter_the_approval_identifier() {
+    fn the_person_enters_the_approval_identifier() {
         let a = approve(cr(1, &h(1)), &[]);
-        let b = Event::new(
+        let b = approve_by(cr(1, &h(1)), &[], bob());
+        assert_ne!(a.id(), b.id());
+        assert_eq!(a.id(), approve_by(cr(1, &h(1)), &[], alice()).id());
+    }
+
+    #[test]
+    fn the_person_enters_the_revocation_identifier() {
+        let a = approve(cr(1, &h(1)), &[]);
+        let by_alice = revoke_by(fid(1).entity(), a.id(), &[a.id()], alice());
+        let by_bob = revoke_by(fid(1).entity(), a.id(), &[a.id()], bob());
+        assert_ne!(by_alice.id(), by_bob.id());
+    }
+
+    #[test]
+    fn two_people_approving_the_same_attestation_make_two_approvals_and_a_revocation_is_theirs() {
+        let reg = register_doc(1, DocKind::Finding, "docs/finding/a.md", None, 1);
+        let by_alice = approve(cr(1, &h(1)), &[reg.id()]);
+        let by_bob = approve_by(cr(1, &h(1)), &[reg.id()], bob());
+        assert_ne!(by_alice.id(), by_bob.id());
+        let events = vec![reg.clone(), by_alice.clone(), by_bob.clone()];
+        let set = ApprovalSet::from_events(&events, &view_of(&events));
+        assert_eq!(set.all().len(), 2);
+        let people: BTreeSet<_> = set.active().map(|r| r.by().clone()).collect();
+        assert_eq!(people, BTreeSet::from([alice(), bob()]));
+
+        // Alice withdraws her own approval: Bob's stands, and so does the approval.
+        let withdrawn = revoke_by(
             fid(1).entity(),
-            BTreeSet::new(),
-            crate::domain::event::test_support::ts(),
-            EventBody::Approved {
-                by: Actor::new("bob").unwrap(),
-                attestation: cr(1, &h(1)),
-            },
-        )
-        .unwrap();
-        assert_eq!(a.id(), b.id());
+            by_alice.id(),
+            &[by_alice.id(), by_bob.id()],
+            alice(),
+        );
+        let events = vec![reg, by_alice.clone(), by_bob.clone(), withdrawn];
+        let set = ApprovalSet::from_events(&events, &view_of(&events));
+        assert!(set.is_revoked(&by_alice.id()));
+        assert!(!set.is_revoked(&by_bob.id()));
+        assert_eq!(
+            set.active().map(ApprovalRecord::event).collect::<Vec<_>>(),
+            vec![by_bob.id()]
+        );
+        assert!(set.is_approved(Gate::Cr, fid(1).entity(), &h(1)));
     }
 
     fn view_of(events: &[Event]) -> ClassificationView {

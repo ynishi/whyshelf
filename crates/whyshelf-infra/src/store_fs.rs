@@ -4,16 +4,49 @@
 //! committed with the project) and for the private store (outside the project):
 //!
 //! ```text
-//! events/<hex>.json     one event per file, written once, never rewritten
-//! objects/<hex>         the normalized text of a version, named by its `raw` hash
-//! map.json              the map (generated)
-//! map.schema.json       the JSON Schema of the map (generated)
-//! status.md             the status, when the settings ask for it (generated)
-//! changelog.md          the changelog, when the settings ask for it (generated)
+//! layout                    the layout number of the store (`2`), written first
+//! events/<id>.<digest>.json one record of an event per file, written once, never rewritten
+//! objects/<hex>             the normalized text of a version, named by its `raw` hash
+//! map.json                  the map (generated)
+//! map.schema.json           the JSON Schema of the map (generated)
+//! status.md                 the status, when the settings ask for it (generated)
+//! changelog.md              the changelog, when the settings ask for it (generated)
 //! ```
 //!
-//! `<hex>` is the 64 hex digits of the identifier or hash, without the `sha256:`
-//! scheme, so the names are valid on every file system.
+//! `<hex>` and `<id>` are the 64 hex digits of the hash or of the event identifier,
+//! without the `sha256:` scheme, so the names are valid on every file system.
+//! `<digest>` is the 16 hex digits of the digest of the record (see
+//! [`RecordDigest`]).
+//!
+//! # Records
+//!
+//! The identifier of an event does not cover the time, so the same change found by
+//! two writers is one event written twice. Each write is a **record**: a file named
+//! by the identifier and by the digest of the identifier and the time. The same
+//! record again is the same file; the same event at another time is a file beside
+//! it, with a name that does not collide, so a Git merge of two branches that
+//! recorded the same change adds both files. Reading puts the files of one
+//! identifier together into one event with the time of each file
+//! ([`Recorded`]). The name is checked against the content, not trusted: see
+//! *Integrity*.
+//!
+//! # The mark of the layout
+//!
+//! The rule for how files are named holds for the whole store, so it is held by the
+//! store as a whole: a file `layout` at its root, holding the layout number
+//! ([`LAYOUT`]). The first append writes it, before the first event. [`layout_of`]
+//! is the one function that reads it; the store's reads and appends and the census
+//! of versions ([`crate::format`]) all ask it, so none of them has its own idea of
+//! what an unmarked store is.
+//!
+//! | the store has | [`layout_of`] says |
+//! |---|---|
+//! | the mark `2` | [`Layout::Current`] |
+//! | no mark and no event file | [`Layout::Empty`]: an empty store |
+//! | no mark and an event file, or a mark of another number, or a mark that is no number | [`StoreError::Layout`], naming what was found |
+//!
+//! Two branches that each write the mark first write the same bytes, and Git joins
+//! two additions of identical content without a conflict.
 //!
 //! # Two stores
 //!
@@ -74,37 +107,73 @@
 //!
 //! # Many writers, no lock
 //!
-//! The identifier of an event is the hash of its content and heads, so the same
-//! change found by two processes is the same file, and an event is never
-//! overwritten. A file is written under a name that no other writer uses
-//! (`<name>.tmp-<pid>-<counter>`) and then renamed into place, so a reader never
-//! sees half a file; if the target exists already the write is a success
-//! ([`AppendOutcome::AlreadyPresent`]), the same for an object. The generated files
-//! are rebuilt from the sources each time, so whichever writer is last wins and the
-//! state converges. Nothing here serializes writers: that is the application's
-//! `&mut self` within a process, and the idempotent names between processes.
+//! The identifier of an event is the hash of its content and heads, and a record is
+//! named by that identifier and the digest of its time, so the same record found by
+//! two processes is the same file, the same change at another time is another file,
+//! and a record is never overwritten. A file is written under a name that no other
+//! writer uses (`<name>.tmp-<pid>-<counter>`) and then renamed into place, so a
+//! reader never sees half a file; if the target exists already the write is a
+//! success ([`AppendOutcome::AlreadyPresent`]), the same for an object. The
+//! generated files are rebuilt from the sources each time, so whichever writer is
+//! last wins and the state converges. Nothing here serializes writers: that is the
+//! application's `&mut self` within a process, and the idempotent names between
+//! processes.
 //!
 //! # Integrity
 //!
-//! An event file whose name is not its identifier, an object whose bytes do not
-//! hash to its name, and a text stored under another text's hash are all refused
-//! with an error. Silence would turn a corrupt history into a wrong answer.
+//! The name of a record file is a claim, and it is checked against the content when
+//! the file is read: the identifier and the digest are computed again from what is
+//! inside, and a name that differs ([`StoreError::NameMismatch`]; a hand-edited time
+//! is caught here), a name that is not `<id>.<digest>.json` at all
+//! ([`StoreError::BadName`]), event files of one identifier that disagree on the
+//! event as a whole (target, heads, body; [`StoreError::Corrupt`], with every path),
+//! an object whose bytes do not hash to its name, and a text stored under another
+//! text's hash are all refused with an error. Silence would turn a corrupt history
+//! into a wrong answer.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use whyshelf_core::app::ports::{AppendOutcome, ExportDoc, ExportFile, ExportParts, StorePort};
 use whyshelf_core::app::raw::NormalizedText;
-use whyshelf_core::domain::event::{Event, EventId, StoreKind};
+use whyshelf_core::domain::actor::Timestamp;
+use whyshelf_core::domain::event::{Event, EventId, RecordDigest, Recorded, StoreKind};
 use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::reference::Reach;
 
 use crate::export::{self, RenderError};
+use crate::format::Found;
 use crate::map_dto;
 use crate::wire::{self, WireError};
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// The layout number this build reads and writes, held by the `layout` file at the
+/// root of a store.
+///
+/// It moves when the names or the places of the files of a store change (what the
+/// module documentation lists). It is a property of the store as a whole, not of a
+/// file in it, which is why it is a file of its own at the root and not a key of the
+/// event files.
+pub const LAYOUT: u32 = 2;
+
+/// The layout of a store that has event files and no `layout` file: named
+/// `events/<id>.json`, before the mark and the digest in the name existed.
+pub const LAYOUT_BEFORE_THE_MARK: u32 = 1;
+
+/// The name of the file at the root of a store that holds its layout number.
+const LAYOUT_FILE: &str = "layout";
+
+/// What [`layout_of`] found in a store this build can read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Layout {
+    /// No mark and no event: a store nothing was written to yet.
+    Empty,
+    /// The mark holds [`LAYOUT`].
+    Current,
+}
 
 /// Why the store could not be read or written.
 #[derive(Debug, thiserror::Error)]
@@ -136,13 +205,23 @@ pub enum StoreError {
         #[source]
         source: WireError,
     },
-    /// An event file is named after another identifier than the one inside it.
-    #[error("the event file {path} holds the event {id}")]
+    /// A file in `events/` is not named `<id>.<digest>.json` (64 lowercase hex, a dot,
+    /// 16 lowercase hex).
+    #[error("the file {path} in the events is not named `<id>.<digest>.json`")]
+    BadName {
+        /// The file.
+        path: PathBuf,
+    },
+    /// An event file is named after another identifier or another digest than the
+    /// ones its content gives.
+    #[error("the event file {path} holds the record {digest} of the event {id}")]
     NameMismatch {
         /// The file.
         path: PathBuf,
-        /// The identifier inside.
+        /// The identifier computed from the content.
         id: EventId,
+        /// The digest computed from the content's identifier and time.
+        digest: RecordDigest,
     },
     /// A text was offered under a hash that is not its own.
     #[error("the text does not have the `raw` hash {key}")]
@@ -150,11 +229,23 @@ pub enum StoreError {
         /// The hash it was offered under.
         key: ContentHash,
     },
-    /// A stored object does not hash to its name, or is not text.
-    #[error("the stored object {path} does not match its name")]
+    /// What a store holds contradicts itself, in these files: a stored object that does
+    /// not hash to its name or is not text (one path), or event files of one
+    /// identifier that disagree on the event (the two paths).
+    #[error("the store is corrupt: {}", paths_text(paths))]
     Corrupt {
-        /// The file.
-        path: PathBuf,
+        /// The files that contradict their names or each other.
+        paths: Vec<PathBuf>,
+    },
+    /// The store is in a layout this build does not read.
+    #[error(
+        "the store is in layout {found}, and this build reads layout v{reads}; `whyshelf migrate` counts what each store holds"
+    )]
+    Layout {
+        /// What the store says it is in.
+        found: Found,
+        /// The layout this build reads and writes.
+        reads: u32,
     },
     /// A generated file could not be rendered.
     #[error("cannot render a generated file")]
@@ -162,6 +253,14 @@ pub enum StoreError {
     /// The schema of the map could not be rendered.
     #[error("cannot render the schema of the map")]
     Schema(#[source] serde_json::Error),
+}
+
+fn paths_text(paths: &[PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn io_error(path: &Path) -> impl FnOnce(io::Error) -> StoreError + '_ {
@@ -251,58 +350,162 @@ async fn refresh(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), StoreError>
     publish(dir, name, bytes, true).await.map(|_| ())
 }
 
-fn event_name(id: &EventId) -> String {
-    format!("{}.json", id.hash().hex())
+/// The name of the file of one record: the identifier of the event and the digest of
+/// the record, which the domain computes ([`RecordDigest`]).
+fn record_name(id: &EventId, at: &Timestamp) -> String {
+    format!("{}.{}.json", id.hash().hex(), RecordDigest::of(id, at))
+}
+
+/// The two halves of the name of a record file, if the name has the one shape:
+/// 64 lowercase hex, a dot, 16 lowercase hex, `.json`.
+fn split_record_name(name: &str) -> Option<(&str, RecordDigest)> {
+    let stem = name.strip_suffix(".json")?;
+    let (id, digest) = stem.split_once('.')?;
+    let id_shaped = id.len() == 64 && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+    if !id_shaped {
+        return None;
+    }
+    Some((id, digest.parse().ok()?))
+}
+
+/// The files of the `events` directory that are record files, by path.
+///
+/// Every `.json` file is one: a file of that kind with a name of another shape is
+/// refused by the caller, not skipped.
+async fn record_files(dir: &Path) -> Result<Vec<PathBuf>, StoreError> {
+    let mut listing = match tokio::fs::read_dir(dir).await {
+        Ok(listing) => listing,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(io_error(dir)(error)),
+    };
+    let mut files: Vec<PathBuf> = Vec::new();
+    while let Some(entry) = listing.next_entry().await.map_err(io_error(dir))? {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "json") {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// The layout a store directory is in, decided by one function for every reader of
+/// the store: the events, the append and the census of versions.
+///
+/// - the mark (`layout`, at the root of the store) holds the number this build
+///   writes: [`Layout::Current`];
+/// - no mark and no event file: [`Layout::Empty`], a store nothing was written to
+///   yet (the first append writes the mark);
+/// - no mark and an event file, or a mark with another number, or a mark that is no
+///   number: [`StoreError::Layout`] naming what was found. Reading such a store as if
+///   its files were named in the layout of this build would report a wrong cause (a
+///   name of the wrong shape) instead of the true one.
+///
+/// A store with events and no mark is the layout before the mark existed
+/// ([`LAYOUT_BEFORE_THE_MARK`]).
+pub async fn layout_of(store_dir: &Path) -> Result<Layout, StoreError> {
+    let mark = store_dir.join(LAYOUT_FILE);
+    match tokio::fs::read(&mark).await {
+        Ok(bytes) => {
+            let found = std::str::from_utf8(&bytes)
+                .ok()
+                .and_then(|text| text.trim().parse::<u32>().ok())
+                .map_or(Found::Unknown, Found::Version);
+            if found == Found::Version(LAYOUT) {
+                Ok(Layout::Current)
+            } else {
+                Err(StoreError::Layout {
+                    found,
+                    reads: LAYOUT,
+                })
+            }
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            if record_files(&store_dir.join("events")).await?.is_empty() {
+                Ok(Layout::Empty)
+            } else {
+                Err(StoreError::Layout {
+                    found: Found::Version(LAYOUT_BEFORE_THE_MARK),
+                    reads: LAYOUT,
+                })
+            }
+        }
+        Err(error) => Err(io_error(&mark)(error)),
+    }
 }
 
 impl StorePort for FsStore {
     type Error = StoreError;
 
-    async fn append(&self, scope: StoreKind, event: &Event) -> Result<AppendOutcome, StoreError> {
-        let text = wire::encode(event).map_err(|source| StoreError::Write {
+    async fn append(
+        &self,
+        scope: StoreKind,
+        event: &Event,
+        at: &Timestamp,
+    ) -> Result<AppendOutcome, StoreError> {
+        let dir = self.dir(scope);
+        let layout = layout_of(dir).await?;
+        let text = wire::encode(event, at).map_err(|source| StoreError::Write {
             id: event.id(),
             source,
         })?;
+        if layout == Layout::Empty {
+            // The mark goes down before the first event, so a store with an event
+            // always has one. Two writers that both find the store empty write the
+            // same bytes, and the second finds the first's file.
+            publish(dir, LAYOUT_FILE, format!("{LAYOUT}\n").as_bytes(), false).await?;
+        }
         publish(
-            &self.dir(scope).join("events"),
-            &event_name(&event.id()),
+            &dir.join("events"),
+            &record_name(&event.id(), at),
             text.as_bytes(),
             false,
         )
         .await
     }
 
-    async fn events(&self, scope: StoreKind) -> Result<Vec<Event>, StoreError> {
-        let dir = self.dir(scope).join("events");
-        let mut listing = match tokio::fs::read_dir(&dir).await {
-            Ok(listing) => listing,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(error) => return Err(io_error(&dir)(error)),
-        };
-        let mut files: Vec<PathBuf> = Vec::new();
-        while let Some(entry) = listing.next_entry().await.map_err(io_error(&dir))? {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "json") {
-                files.push(path);
-            }
+    async fn events(&self, scope: StoreKind) -> Result<Vec<Recorded>, StoreError> {
+        let dir = self.dir(scope);
+        if layout_of(dir).await? == Layout::Empty {
+            return Ok(Vec::new());
         }
-        files.sort();
-        let mut events = Vec::with_capacity(files.len());
-        for path in files {
+        let mut events: Vec<(PathBuf, Recorded)> = Vec::new();
+        let mut position: BTreeMap<EventId, usize> = BTreeMap::new();
+        for path in record_files(&dir.join("events")).await? {
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            let Some((named_id, named_digest)) = split_record_name(name) else {
+                return Err(StoreError::BadName { path });
+            };
+            let (named_id, named_digest) = (named_id.to_owned(), named_digest);
             let bytes = tokio::fs::read(&path).await.map_err(io_error(&path))?;
-            let event = wire::decode(&bytes).map_err(|source| StoreError::Read {
+            let record = wire::decode(&bytes).map_err(|source| StoreError::Read {
                 path: path.clone(),
                 source,
             })?;
-            if path.file_name().and_then(|n| n.to_str()) != Some(event_name(&event.id()).as_str()) {
-                return Err(StoreError::NameMismatch {
-                    path,
-                    id: event.id(),
-                });
+            // The name is a claim about the content, and the content is what counts:
+            // the identifier and the digest are computed again from it.
+            let id = record.event().id();
+            let digest = RecordDigest::of(&id, record.shown_at());
+            if id.hash().hex() != named_id || digest != named_digest {
+                return Err(StoreError::NameMismatch { path, id, digest });
             }
-            events.push(event);
+            match position.get(&id) {
+                None => {
+                    position.insert(id, events.len());
+                    events.push((path, record));
+                }
+                Some(&at) => {
+                    let (first_path, held) = &mut events[at];
+                    held.merge(record).map_err(|_| StoreError::Corrupt {
+                        paths: vec![first_path.clone(), path],
+                    })?;
+                }
+            }
         }
-        Ok(events)
+        Ok(events.into_iter().map(|(_, record)| record).collect())
     }
 
     async fn private_reach(&self) -> Result<Reach, StoreError> {
@@ -351,11 +554,11 @@ impl StorePort for FsStore {
             Err(error) => return Err(io_error(&path)(error)),
         };
         if ContentHash::raw(&bytes) != *raw {
-            return Err(StoreError::Corrupt { path });
+            return Err(StoreError::Corrupt { paths: vec![path] });
         }
         match String::from_utf8(bytes) {
             Ok(text) => Ok(Some(NormalizedText::new(text))),
-            Err(_) => Err(StoreError::Corrupt { path }),
+            Err(_) => Err(StoreError::Corrupt { paths: vec![path] }),
         }
     }
 

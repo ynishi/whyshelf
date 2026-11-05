@@ -29,7 +29,7 @@
 //!
 //! Event A is an **ancestor** of event B when B reaches A by following heads.
 //! Whether one event "saw" another is defined by ancestry, never by time. The time
-//! `at` is for display and decides nothing.
+//! of a record (see [`Recorded`]) is for display and decides nothing.
 //!
 //! ```text
 //!  one stream (all events are about one entity; an arrow is "lists as head")
@@ -49,7 +49,8 @@
 //!              J  any next write   heads = {E2, E3}   <- the join: one tip {J}
 //!
 //!   event id = hash( kind, target, kind-specific content, heads )
-//!                                   (not at, not by, not the file format version)
+//!                  (not the time, not the file format version; the person `by`
+//!                   only inside the content of Approved and Revoked)
 //! ```
 //!
 //! Nothing resolves the fork but the next write: it reads every tip, lists them
@@ -59,17 +60,40 @@
 //! # Identifiers
 //!
 //! An [`EventId`] is the hash of the kind, the target, the kind-specific content
-//! and the heads. It excludes the time, the person (`by`) and any wire-format
-//! version, so two writers who see the same state and find the same change
-//! compute the same identifier and write one file, not two. Because the heads are
+//! and the heads. It excludes the time and any wire-format version, so two
+//! writers who see the same state and find the same change compute the same
+//! identifier: they write records of one event (see below). Because the heads are
 //! inside, the same change made again after something else happened has a
 //! different identifier: `+x`, `-x`, `+x` are three events; revoke and approve
 //! again are two approvals; a revision A, B, A, B is four events.
 //!
+//! The person (`by`) is inside the identifier of `Approved` and `Revoked` and of
+//! no other kind. A judgement is a fact about the person who made it: two people
+//! who approve the same attestation make two events, and a revocation withdraws
+//! the approval of one of them and leaves the other standing. For the other kinds
+//! the person is not recorded, and a change found by two writers is one event
+//! whoever they are.
+//!
 //! The identifier of `Registered` also contains the new entity's identifier, so
-//! two processes that register the same file independently never write the same
-//! file name and a Git merge never collides on it. The overlapping registrations
-//! are folded afterwards (see `classification`).
+//! two processes that register the same file independently write two events, not
+//! two records of one. The overlapping registrations are folded afterwards (see
+//! `classification`).
+//!
+//! # Records: one event, written more than once
+//!
+//! An [`Event`] has no time. The same change, found by two writers who saw the
+//! same state, is one event that was recorded twice, at two times. A [`Recorded`]
+//! is the event with the time of each of its records. A record is told from
+//! another of the same event by its [`RecordDigest`], the hash of the event's
+//! identifier and the time of that record, so a record written again (same
+//! identifier, same time) is the same record, and one written at another time is
+//! a further record, never a replacement.
+//!
+//! A [`Timestamp`] is compared for equality only (RFC 3339 texts of different UTC
+//! offsets do not sort as time), so the times of an event are not put in time
+//! order and none is called the earliest. They are kept in the order of their
+//! digests, which every reader computes alike, and the one shown is the first of
+//! them: *a* time of one record of the event.
 //!
 //! # Crossing stores
 //!
@@ -86,6 +110,16 @@
 //! The wire form of an event (JSON with a format version) belongs to the storage
 //! adapter. The domain's event knows no format version, so migrating the file
 //! format cannot change an identifier.
+//!
+//! # Compatibility
+//!
+//! The identifier of `Approved` and `Revoked` contains `by`, and a record has a
+//! digest, a hash kind of its own. The hash domain tag of events stays `v1`: the
+//! formula of those two identifiers changed before any release, so there are no
+//! files written under the earlier formula to keep readable. Once a release has
+//! been made, a change to the formula of an identifier is a new tag, and every
+//! identifier and approval already written is then migrated (see the compatibility
+//! table of the wire format in the storage adapter).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -632,8 +666,10 @@ impl EventBody {
         }
     }
 
-    /// The part of the body that enters the event identifier: everything but the
-    /// person (`by`) and, for a registration, the starting classification.
+    /// The part of the body that enters the event identifier: everything but, for
+    /// a registration, the starting classification. The person (`by`) is in it for
+    /// `Approved` and `Revoked`, the judgements of a person, and for no other kind
+    /// (no other has one).
     fn id_content(&self) -> Canon {
         match self {
             Self::Registered(Registration::Doc(doc)) => Canon::map([
@@ -653,12 +689,18 @@ impl EventBody {
             Self::Moved { old, new } => {
                 Canon::map([("old", old.to_canon()), ("new", new.to_canon())])
             }
-            Self::Approved { attestation, .. } => attestation.to_canon(),
+            Self::Approved { by, attestation } => Canon::map([
+                ("by", by.to_canon()),
+                ("attestation", attestation.to_canon()),
+            ]),
             Self::Revoked {
-                revokes, reason, ..
+                revokes,
+                reason,
+                by,
             } => Canon::map([
                 ("revokes", revokes.to_canon()),
                 ("reason", reason.to_canon()),
+                ("by", by.to_canon()),
             ]),
             Self::Purged { raw, reason } => {
                 Canon::map([("raw", raw.to_canon()), ("reason", reason.to_canon())])
@@ -753,12 +795,13 @@ impl From<RecordBody> for EventBody {
 }
 
 /// One event of one entity's stream.
+///
+/// It has no time: the time belongs to a record of the event, see [`Recorded`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
     id: EventId,
     target: EntityId,
     heads: BTreeSet<EventId>,
-    at: Timestamp,
     body: EventBody,
 }
 
@@ -771,7 +814,6 @@ impl Event {
     pub fn new(
         target: EntityId,
         heads: BTreeSet<EventId>,
-        at: Timestamp,
         body: EventBody,
     ) -> Result<Self, EventError> {
         if let EventBody::Approved { attestation, .. } = &body {
@@ -796,7 +838,6 @@ impl Event {
             id,
             target,
             heads,
-            at,
             body,
         })
     }
@@ -816,14 +857,151 @@ impl Event {
         &self.heads
     }
 
-    /// When the event was recorded. Display only.
-    pub fn at(&self) -> &Timestamp {
-        &self.at
-    }
-
     /// What the event records.
     pub fn body(&self) -> &EventBody {
         &self.body
+    }
+}
+
+/// The digest of one record of an event: 16 lowercase hex characters, the first
+/// 64 bits of the hash ([`HashKind::EventRecord`]) of the event's identifier and
+/// the time of the record.
+///
+/// It is what tells the records of one event apart, and the order of the times of
+/// an event. It is computed from domain values, not from the bytes of a file, so
+/// that whether two records are the same is decided here and not by how a file
+/// happens to be written.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RecordDigest(String);
+
+/// The number of hex characters of a [`RecordDigest`].
+const RECORD_DIGEST_LEN: usize = 16;
+
+impl RecordDigest {
+    /// The digest of the record of `event` at `at`.
+    pub fn of(event: &EventId, at: &Timestamp) -> Self {
+        let hash = ContentHash::of(
+            HashKind::EventRecord,
+            &Canon::map([("event", event.to_canon()), ("at", at.to_canon())]),
+        );
+        Self(hash.hex().chars().take(RECORD_DIGEST_LEN).collect())
+    }
+
+    /// The 16 hex characters.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for RecordDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl FromStr for RecordDigest {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let shaped = s.len() == RECORD_DIGEST_LEN
+            && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+        if shaped {
+            Ok(Self(s.to_owned()))
+        } else {
+            Err(ValueError::RecordDigestShape)
+        }
+    }
+}
+
+/// The times of an event: those of `first` and of `more`, each record once, in the
+/// order of their digests.
+fn ordered_times(
+    event: &EventId,
+    first: &Timestamp,
+    more: impl IntoIterator<Item = Timestamp>,
+) -> NonEmptyVec<Timestamp> {
+    let mut by_digest: BTreeMap<RecordDigest, Timestamp> = BTreeMap::new();
+    for at in std::iter::once(first.clone()).chain(more) {
+        by_digest.entry(RecordDigest::of(event, &at)).or_insert(at);
+    }
+    let mut times = by_digest.into_values();
+    // `first` is in the map, so the list is never empty; the head is taken from it.
+    match times.next() {
+        Some(head) => NonEmptyVec::new(head, times.collect()),
+        None => NonEmptyVec::new(first.clone(), Vec::new()),
+    }
+}
+
+/// The times of two sets of records of one event, each record once, in the order of
+/// their digests.
+///
+/// For a reader that has the event in two stores: it is one event, with the records
+/// of both.
+pub fn union_times(
+    event: &EventId,
+    a: &NonEmptyVec<Timestamp>,
+    b: &NonEmptyVec<Timestamp>,
+) -> NonEmptyVec<Timestamp> {
+    ordered_times(event, a.first(), a.iter().skip(1).chain(b.iter()).cloned())
+}
+
+/// An event with the time of each of its records.
+///
+/// Reading a store gives these: the writers who recorded the same change at
+/// different times left a record each, and the event is read once with all their
+/// times. The times are in the order of the digests of their records, not in
+/// time order (see the module documentation).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Recorded {
+    event: Event,
+    at: NonEmptyVec<Timestamp>,
+}
+
+impl Recorded {
+    /// An event with the time of its one record.
+    pub fn new(event: Event, at: Timestamp) -> Self {
+        Self {
+            event,
+            at: NonEmptyVec::new(at, Vec::new()),
+        }
+    }
+
+    /// The event.
+    pub fn event(&self) -> &Event {
+        &self.event
+    }
+
+    /// The event, without its times.
+    pub fn into_event(self) -> Event {
+        self.event
+    }
+
+    /// The time of each record of the event, in the order of the digests of the
+    /// records.
+    pub fn at(&self) -> &NonEmptyVec<Timestamp> {
+        &self.at
+    }
+
+    /// The time to show: the time of one record of the event, the first in the order
+    /// of the digests. It is not the earliest, and decides nothing.
+    pub fn shown_at(&self) -> &Timestamp {
+        self.at.first()
+    }
+
+    /// Add the records of `other`, which must be records of the same event.
+    ///
+    /// A record that is already there (same time) stays one. Refused when the
+    /// other is not the same event, whole: the identifier does not cover everything
+    /// (a registration's starting classification is outside it), so two records that
+    /// agree on the identifier and disagree on the rest are not records of one event.
+    pub fn merge(&mut self, other: Recorded) -> Result<(), EventError> {
+        if self.event != other.event {
+            return Err(EventError::RecordsDiffer {
+                id: self.event.id(),
+            });
+        }
+        self.at = union_times(&self.event.id(), &self.at, &other.at);
+        Ok(())
     }
 }
 
@@ -918,10 +1096,6 @@ pub(crate) mod test_support {
     use super::*;
     use crate::domain::id::test_support::eid;
 
-    pub(crate) fn ts() -> Timestamp {
-        Timestamp::from_validated("2026-11-04T21:40:00+09:00".into()).unwrap()
-    }
-
     pub(crate) fn path(p: &str) -> RelPath {
         p.parse().unwrap()
     }
@@ -951,7 +1125,6 @@ pub(crate) mod test_support {
         Event::new(
             eid(entity),
             BTreeSet::new(),
-            ts(),
             EventBody::Registered(Registration::Doc(DocRegistration::new(
                 kind,
                 path(p),
@@ -968,7 +1141,6 @@ pub(crate) mod test_support {
         Event::new(
             eid(entity),
             heads(hs),
-            ts(),
             EventBody::Reclassified {
                 changes: NonEmptyVec::from_vec(changes).unwrap(),
             },
@@ -992,7 +1164,6 @@ pub(crate) mod test_support {
         Event::new(
             eid(entity),
             heads(hs),
-            ts(),
             EventBody::Moved {
                 old: path(old),
                 new: path(new),
@@ -1005,7 +1176,6 @@ pub(crate) mod test_support {
         Event::new(
             eid(entity),
             heads(hs),
-            ts(),
             EventBody::Revised {
                 old: version(old),
                 new: version(new),
@@ -1022,12 +1192,11 @@ mod tests {
     use crate::domain::id::test_support::{did, eid};
 
     #[test]
-    fn identifiers_exclude_time_and_person() {
+    fn a_registration_identifier_excludes_the_starting_classification() {
         let a = register_doc(1, DocKind::Spec, "docs/spec/a.md", None, 1);
         let b = Event::new(
             eid(1),
             BTreeSet::new(),
-            Timestamp::from_validated("2030-01-01T00:00:00Z".into()).unwrap(),
             EventBody::Registered(Registration::Doc(DocRegistration::new(
                 DocKind::Spec,
                 path("docs/spec/a.md"),
@@ -1072,7 +1241,6 @@ mod tests {
             Event::new(
                 eid(entity),
                 BTreeSet::new(),
-                ts(),
                 EventBody::Registered(Registration::Item {
                     design: did(design),
                     number: ItemNumber::new(n).unwrap(),
@@ -1134,10 +1302,10 @@ mod tests {
         };
         let some_head = register_doc(1, DocKind::Spec, "docs/spec/a.md", None, 1).id();
         assert_eq!(
-            Event::new(eid(1), heads(&[some_head]), ts(), body()),
+            Event::new(eid(1), heads(&[some_head]), body()),
             Err(EventError::SnapshotHasHeads)
         );
-        assert!(Event::new(eid(1), BTreeSet::new(), ts(), body()).is_ok());
+        assert!(Event::new(eid(1), BTreeSet::new(), body()).is_ok());
     }
 
     #[test]
@@ -1260,6 +1428,161 @@ mod tests {
         assert_eq!(
             root.id().to_string(),
             "sha256:53449694df6a1cb247050ff1db465d288e8496be16ac63038a4e59c4279a7f68"
+        );
+    }
+
+    fn at(text: &str) -> Timestamp {
+        Timestamp::from_validated(text.to_owned()).unwrap()
+    }
+
+    // Golden vector: fixed identifier and time, fixed digest. The digest names a file
+    // of a store, so if this fails a stored record would no longer be found by name.
+    #[test]
+    fn golden_record_digest() {
+        let root = register_doc(1, DocKind::Spec, "docs/spec/cache-timeout.md", None, 1);
+        let digest = RecordDigest::of(&root.id(), &at("2026-11-04T21:40:00+09:00"));
+        assert_eq!(digest.as_str(), "28ddceaf478b5198");
+        assert_eq!(
+            digest.to_string().parse::<RecordDigest>(),
+            Ok(digest.clone())
+        );
+
+        // The same digest from the bytes written out by hand: a map of two entries,
+        // `at` then `event` (keys in order), each a string; under the tag of the kind.
+        let text = |s: &str| [&[0x03][..], &(s.len() as u64).to_be_bytes(), s.as_bytes()].concat();
+        let canon = [
+            &[0x05][..],
+            &2u64.to_be_bytes(),
+            &text("at"),
+            &text("2026-11-04T21:40:00+09:00"),
+            &text("event"),
+            &text(&root.id().to_string()),
+        ]
+        .concat();
+        let by_hand = ContentHash::of_bytes(HashKind::EventRecord, &canon);
+        assert_eq!(by_hand.hex()[..16], *digest.as_str());
+    }
+
+    #[test]
+    fn a_record_digest_is_16_lowercase_hex_characters() {
+        for bad in [
+            "",
+            "0123456789abcde",
+            "0123456789abcdef0",
+            "0123456789ABCDEF",
+            "0123456789abcdeg",
+        ] {
+            assert_eq!(
+                bad.parse::<RecordDigest>(),
+                Err(ValueError::RecordDigestShape),
+                "{bad}"
+            );
+        }
+        assert!("0123456789abcdef".parse::<RecordDigest>().is_ok());
+    }
+
+    #[test]
+    fn the_digest_follows_the_identifier_and_the_time() {
+        let a = register_doc(1, DocKind::Spec, "docs/spec/a.md", None, 1);
+        let b = register_doc(2, DocKind::Spec, "docs/spec/a.md", None, 1);
+        let t = at("2026-11-04T21:40:00+09:00");
+        let u = at("2026-11-04T21:41:00+09:00");
+        assert_eq!(RecordDigest::of(&a.id(), &t), RecordDigest::of(&a.id(), &t));
+        assert_ne!(RecordDigest::of(&a.id(), &t), RecordDigest::of(&b.id(), &t));
+        assert_ne!(RecordDigest::of(&a.id(), &t), RecordDigest::of(&a.id(), &u));
+    }
+
+    #[test]
+    fn records_of_one_event_at_two_times_are_one_event_with_two_times() {
+        let event = register_doc(1, DocKind::Spec, "docs/spec/a.md", None, 1);
+        let (t, u) = (
+            at("2026-11-04T21:40:00+09:00"),
+            at("2026-11-04T21:41:00+09:00"),
+        );
+        let mut recorded = Recorded::new(event.clone(), t.clone());
+        recorded
+            .merge(Recorded::new(event.clone(), u.clone()))
+            .unwrap();
+        assert_eq!(recorded.event(), &event);
+        assert_eq!(recorded.at().len(), 2);
+        let times: BTreeSet<_> = recorded.at().iter().map(Timestamp::as_str).collect();
+        assert_eq!(times, BTreeSet::from([t.as_str(), u.as_str()]));
+        // The same record again is the same record.
+        recorded.merge(Recorded::new(event, t)).unwrap();
+        assert_eq!(recorded.at().len(), 2);
+    }
+
+    /// The times are kept in the order of the digests of their records, whichever
+    /// order they arrive in, and are not read as instants: the same instant written
+    /// with two offsets is two times.
+    #[test]
+    fn times_are_in_digest_order_and_are_not_interpreted() {
+        let event = register_doc(1, DocKind::Spec, "docs/spec/a.md", None, 1);
+        let utc = at("2026-11-04T12:00:00Z");
+        let tokyo = at("2026-11-04T21:00:00+09:00");
+        let mut one = Recorded::new(event.clone(), utc.clone());
+        one.merge(Recorded::new(event.clone(), tokyo.clone()))
+            .unwrap();
+        let mut other = Recorded::new(event.clone(), tokyo.clone());
+        other
+            .merge(Recorded::new(event.clone(), utc.clone()))
+            .unwrap();
+        assert_eq!(one, other, "the order of arrival does not matter");
+        assert_eq!(one.at().len(), 2, "one instant, two texts, two records");
+
+        let mut by_digest = [utc, tokyo];
+        by_digest.sort_by_key(|t| RecordDigest::of(&event.id(), t));
+        assert_eq!(
+            one.at().iter().collect::<Vec<_>>(),
+            by_digest.iter().collect::<Vec<_>>()
+        );
+        assert_eq!(one.shown_at(), &by_digest[0]);
+    }
+
+    #[test]
+    fn the_times_of_two_stores_are_one_set() {
+        let event = register_doc(1, DocKind::Spec, "docs/spec/a.md", None, 1);
+        let (t, u, v) = (
+            at("2026-11-04T21:40:00+09:00"),
+            at("2026-11-04T21:41:00+09:00"),
+            at("2026-11-04T21:42:00+09:00"),
+        );
+        let repo = Recorded::new(event.clone(), t.clone());
+        let mut private = Recorded::new(event.clone(), t.clone());
+        private
+            .merge(Recorded::new(event.clone(), u.clone()))
+            .unwrap();
+        private
+            .merge(Recorded::new(event.clone(), v.clone()))
+            .unwrap();
+        let union = union_times(&event.id(), repo.at(), private.at());
+        assert_eq!(&union, private.at());
+        assert_eq!(union_times(&event.id(), private.at(), repo.at()), union);
+    }
+
+    #[test]
+    fn records_that_do_not_agree_on_the_whole_event_are_not_merged() {
+        // The starting classification is outside the identifier of a registration.
+        let plain = register_doc(1, DocKind::Spec, "docs/spec/a.md", None, 1);
+        let tagged = Event::new(
+            eid(1),
+            BTreeSet::new(),
+            EventBody::Registered(Registration::Doc(DocRegistration::new(
+                DocKind::Spec,
+                path("docs/spec/a.md"),
+                None,
+                None,
+                BTreeSet::from([tag("area:auth")]),
+                version(1),
+            ))),
+        )
+        .unwrap();
+        assert_eq!(plain.id(), tagged.id());
+        let t = at("2026-11-04T21:40:00+09:00");
+        let mut recorded = Recorded::new(plain.clone(), t.clone());
+        assert_eq!(
+            recorded.merge(Recorded::new(tagged, t)),
+            Err(EventError::RecordsDiffer { id: plain.id() })
         );
     }
 }

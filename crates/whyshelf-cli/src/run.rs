@@ -376,6 +376,12 @@ mod tests {
         tokio::fs::create_dir_all(dir.path().join(".whyshelf/events"))
             .await
             .unwrap();
+        tokio::fs::write(
+            dir.path().join(".whyshelf/layout"),
+            format!("{}\n", whyshelf_infra::store_fs::LAYOUT),
+        )
+        .await
+        .unwrap();
         for (index, text) in events.iter().enumerate() {
             tokio::fs::write(
                 dir.path().join(format!(".whyshelf/events/{index}.json")),

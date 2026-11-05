@@ -3,8 +3,10 @@
 //! The domain's [`Event`] knows no file format and no format version, so that a
 //! change of the format can never change an event identifier (the identifier is
 //! computed from domain values). This module owns the format: [`EventV1`] is the
-//! shape of one JSON file, [`encode`] writes an event as that shape and [`decode`]
-//! reads one back through a reader chosen by the `v` key.
+//! shape of one JSON file, [`encode`] writes a record (an event and the time it was
+//! written) as that shape and [`decode`] reads one back through a reader chosen by
+//! the `v` key. A file is one record; the event of several records is put together
+//! by the store that reads them.
 //!
 //! ```json
 //! {
@@ -23,7 +25,7 @@
 //!
 //! A file whose `v` is not known is refused with [`WireError::UnsupportedVersion`]
 //! and not guessed at. A future version adds its own DTO and its own arm in
-//! [`decode`], converting into the same domain [`Event`]; an old file stays
+//! [`decode`], converting into the same domain [`Recorded`]; an old file stays
 //! readable without being rewritten.
 //!
 //! The `id` stored in the file is a check, not a source: the event is rebuilt
@@ -34,13 +36,14 @@
 //!
 //! # Compatibility
 //!
-//! Five things carry a version. Which change moves which, and what happens to data
+//! These carry a version. Which change moves which, and what happens to data
 //! written before:
 //!
 //! | what | where it is written | moves when | older data |
 //! |---|---|---|---|
 //! | settings `version` | `.whyshelf.toml` (`config::SUPPORTED_VERSION`) | a key is renamed, removed, or means something else | a build reads its own version only; another is `ConfigError::Version`, naming both |
 //! | event `v` | every event file ([`VERSION`]) | the JSON of an event changes in a way an old reader would misread (a key renamed, retyped or made required) | [`decode`] picks the reader by `v`; a version it does not know is `UnsupportedVersion`, never guessed at. A new version adds a reader and keeps the old one, so an old file is read without being rewritten |
+//! | store layout | the `layout` file at the root of each store ([`crate::store_fs::LAYOUT`]) | the names or the places of the files of a store change (what [`crate::store_fs`] documents) | a store with events and no `layout` file, or with another number, is refused whole with `StoreError::Layout`, which names both and points at `whyshelf migrate`; a store with no events and no file is empty |
 //! | map `version` | `map.json` and its `map.schema.json` | the shape of the map changes; the schema of the old version is kept | the map is generated and never read back as input: a newer build writes it again (`whyshelf rebuild`) |
 //! | cache `schema_version` | the `meta` table of `index.db` | the tables change | a cache of another version is dropped and built again |
 //! | hash domain tag | `whyshelf/<kind>/v1` at the start of every digest | the canonical form of a value, or the scope of a hash, changes | see below |
@@ -56,8 +59,8 @@
 //! is not the one recomputed is refused. A change of the canonical form or of a hash
 //! scope would be a new tag, and every identifier and approval already written
 //! would then disagree with the recomputed ones; it would need a migration that
-//! rewrites them with their new hashes. There is none: `whyshelf migrate` says that
-//! the files are in the newest format and does nothing, because there is one format.
+//! rewrites them with their new hashes. There is none: `whyshelf migrate` counts the
+//! versions found against the ones this build reads and rewrites nothing.
 //!
 //! ```
 //! use whyshelf_infra::wire::{WireError, decode};
@@ -84,7 +87,7 @@ use whyshelf_core::domain::approval::{Attestation, CmResult, Pinned, TestOutcome
 use whyshelf_core::domain::error::{EventError, ValueError};
 use whyshelf_core::domain::event::{
     ClassChange, ClassSnapshot, DocKind, DocRegistration, Event, EventBody, EventId, Publication,
-    Registration, StoreKind, Version,
+    Recorded, Registration, StoreKind, Version,
 };
 use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::id::{Alias, DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
@@ -491,14 +494,14 @@ fn body_dto(body: &EventBody) -> BodyV1 {
 }
 
 impl EventV1 {
-    /// The version-1 shape of an event.
-    pub fn of(event: &Event) -> Self {
+    /// The version-1 shape of a record: an event and the time it was written.
+    pub fn of(event: &Event, at: &Timestamp) -> Self {
         Self {
             v: VERSION,
             id: event.id().to_string(),
             target: event.target().to_string(),
             heads: event.heads().iter().map(ToString::to_string).collect(),
-            at: event.at().to_string(),
+            at: at.to_string(),
             body: body_dto(event.body()),
         }
     }
@@ -738,18 +741,18 @@ fn body_from(dto: &BodyV1) -> Result<EventBody, WireError> {
 }
 
 impl EventV1 {
-    /// Rebuild the domain event, checking that the identifier in the file is the
+    /// Rebuild the domain record, checking that the identifier in the file is the
     /// one its content gives.
-    pub fn into_event(self) -> Result<Event, WireError> {
+    pub fn into_recorded(self) -> Result<Recorded, WireError> {
         let heads = self
             .heads
             .iter()
             .map(|head| parse_field::<EventId>("heads", head))
             .collect::<Result<BTreeSet<_>, _>>()?;
+        let at = field("at", Timestamp::from_validated(self.at.clone()))?;
         let event = Event::new(
             entity("target", &self.target)?,
             heads,
-            field("at", Timestamp::from_validated(self.at.clone()))?,
             body_from(&self.body)?,
         )
         .map_err(WireError::Event)?;
@@ -759,15 +762,17 @@ impl EventV1 {
                 computed: event.id(),
             });
         }
-        Ok(event)
+        Ok(Recorded::new(event, at))
     }
 }
 
 // ---- files ---------------------------------------------------------------
 
-/// The text of an event file: pretty JSON with a closing line feed.
-pub fn encode(event: &Event) -> Result<String, WireError> {
-    let mut text = serde_json::to_string_pretty(&EventV1::of(event)).map_err(WireError::Json)?;
+/// The text of an event file, the file of one record: pretty JSON with a closing line
+/// feed, holding the event and the time it was written.
+pub fn encode(event: &Event, at: &Timestamp) -> Result<String, WireError> {
+    let mut text =
+        serde_json::to_string_pretty(&EventV1::of(event, at)).map_err(WireError::Json)?;
     text.push('\n');
     Ok(text)
 }
@@ -785,13 +790,14 @@ pub fn version_of(bytes: &[u8]) -> Option<u64> {
     serde_json::from_slice::<Head>(bytes).ok()?.v
 }
 
-/// Read an event file, choosing the reader by its `v`.
-pub fn decode(bytes: &[u8]) -> Result<Event, WireError> {
+/// Read an event file, choosing the reader by its `v`: the event, with the one time
+/// the file holds.
+pub fn decode(bytes: &[u8]) -> Result<Recorded, WireError> {
     let value: serde_json::Value = serde_json::from_slice(bytes).map_err(WireError::Json)?;
     match value.get("v").and_then(serde_json::Value::as_u64) {
         Some(1) => serde_json::from_value::<EventV1>(value)
             .map_err(WireError::Json)?
-            .into_event(),
+            .into_recorded(),
         found => Err(WireError::UnsupportedVersion { found }),
     }
 }
@@ -827,7 +833,7 @@ mod tests {
     }
 
     fn event(target: u128, heads: &[EventId], body: EventBody) -> Event {
-        Event::new(eid(target), heads.iter().copied().collect(), at(), body).unwrap()
+        Event::new(eid(target), heads.iter().copied().collect(), body).unwrap()
     }
 
     /// One event of every kind and variant of the domain.
@@ -959,7 +965,6 @@ mod tests {
                 Event::new(
                     target,
                     BTreeSet::new(),
-                    at(),
                     EventBody::Approved {
                         by: alice(),
                         attestation,
@@ -1026,17 +1031,19 @@ mod tests {
     #[test]
     fn every_kind_of_event_survives_a_round_trip() {
         for event in every_event() {
-            let text = encode(&event).unwrap();
+            let text = encode(&event, &at()).unwrap();
             let back = decode(text.as_bytes()).unwrap();
-            assert_eq!(back, event, "{text}");
-            assert_eq!(back.id(), event.id());
+            assert_eq!(back.event(), &event, "{text}");
+            assert_eq!(back.event().id(), event.id());
+            assert_eq!(back.shown_at(), &at());
+            assert_eq!(back.at().len(), 1, "a file is one record");
         }
     }
 
     #[test]
     fn the_file_is_pretty_json_with_a_version_and_a_closing_line_feed() {
         let event = &every_event()[3];
-        let text = encode(event).unwrap();
+        let text = encode(event, &at()).unwrap();
         assert!(text.ends_with("}\n"));
         let json: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(json["v"], 1);
@@ -1044,14 +1051,14 @@ mod tests {
         assert_eq!(json["id"], event.id().to_string());
         assert!(text.contains("\n  \"target\""), "two-space indent: {text}");
         // Encoding twice gives the same bytes.
-        assert_eq!(text, encode(event).unwrap());
+        assert_eq!(text, encode(event, &at()).unwrap());
     }
 
     #[test]
     fn the_registration_and_attestation_carry_their_tags() {
         let all = every_event();
         let registered: serde_json::Value =
-            serde_json::from_str(&encode(&all[0]).unwrap()).unwrap();
+            serde_json::from_str(&encode(&all[0], &at()).unwrap()).unwrap();
         assert_eq!(registered["kind"], "Registered");
         assert_eq!(registered["entity"], "spec");
         assert_eq!(registered["first"]["raw"], h("r").to_string());
@@ -1067,7 +1074,7 @@ mod tests {
                 )
             })
             .unwrap();
-        let ca: serde_json::Value = serde_json::from_str(&encode(ca).unwrap()).unwrap();
+        let ca: serde_json::Value = serde_json::from_str(&encode(ca, &at()).unwrap()).unwrap();
         assert_eq!(ca["attestation"]["gate"], "CA");
         assert_eq!(ca["attestation"]["revision"]["form"], "commit");
         assert_eq!(ca["attestation"]["tests"], "passed");
@@ -1075,7 +1082,7 @@ mod tests {
 
     #[test]
     fn a_file_of_another_version_is_refused_not_guessed() {
-        let text = encode(&every_event()[0])
+        let text = encode(&every_event()[0], &at())
             .unwrap()
             .replace("\"v\": 1", "\"v\": 2");
         assert!(matches!(
@@ -1092,7 +1099,7 @@ mod tests {
     #[test]
     fn an_edited_file_is_refused_because_its_identifier_no_longer_matches() {
         let event = &every_event()[5];
-        let text = encode(event).unwrap().replace("b.md", "c.md");
+        let text = encode(event, &at()).unwrap().replace("b.md", "c.md");
         assert!(matches!(
             decode(text.as_bytes()),
             Err(WireError::IdMismatch { .. })
@@ -1100,19 +1107,32 @@ mod tests {
     }
 
     #[test]
-    fn the_time_and_the_person_are_not_part_of_the_identifier() {
+    fn the_time_is_not_part_of_the_identifier() {
         let event = &every_event()[3];
-        let text = encode(event)
+        let text = encode(event, &at())
             .unwrap()
             .replace("2026-11-04T21:40:00+09:00", "2027-01-01T00:00:00Z");
         let back = decode(text.as_bytes()).unwrap();
-        assert_eq!(back.id(), event.id());
-        assert_eq!(back.at().as_str(), "2027-01-01T00:00:00Z");
+        assert_eq!(back.event().id(), event.id());
+        assert_eq!(back.shown_at().as_str(), "2027-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn the_person_of_a_judgement_is_part_of_the_identifier() {
+        let approved = every_event()
+            .into_iter()
+            .find(|e| matches!(e.body(), EventBody::Approved { .. }))
+            .unwrap();
+        let text = encode(&approved, &at()).unwrap().replace("alice", "bob");
+        assert!(matches!(
+            decode(text.as_bytes()),
+            Err(WireError::IdMismatch { .. })
+        ));
     }
 
     #[test]
     fn a_bad_value_names_its_field() {
-        let text = encode(&every_event()[5])
+        let text = encode(&every_event()[5], &at())
             .unwrap()
             .replace("\"old\": \"a.md\"", "\"old\": \"/abs.md\"");
         let Err(WireError::Field { field, .. }) = decode(text.as_bytes()) else {

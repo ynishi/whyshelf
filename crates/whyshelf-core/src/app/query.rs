@@ -23,7 +23,7 @@ use std::fmt;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Timestamp};
 use crate::domain::approval::ApprovalRecord;
 use crate::domain::design::{Design, WorkItem};
 use crate::domain::evaluate::{Cause, Unparsed};
@@ -120,7 +120,7 @@ pub struct EntityView {
     content: EntityContent,
     state: Option<EntityState>,
     causes: Vec<Cause>,
-    approvals: Vec<ApprovalRecord>,
+    approvals: Vec<ApprovalEntry>,
 }
 
 impl EntityView {
@@ -180,8 +180,30 @@ impl EntityView {
     }
 
     /// The approvals recorded for it, withdrawn ones included.
-    pub fn approvals(&self) -> &[ApprovalRecord] {
+    pub fn approvals(&self) -> &[ApprovalEntry] {
         &self.approvals
+    }
+}
+
+/// An approval of an entity, with the time shown for it.
+///
+/// The time belongs to a record of the approval, not to the approval (see
+/// [`Model::shown_at`]), so it is carried beside the [`ApprovalRecord`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalEntry {
+    record: ApprovalRecord,
+    at: Timestamp,
+}
+
+impl ApprovalEntry {
+    /// The approval.
+    pub fn record(&self) -> &ApprovalRecord {
+        &self.record
+    }
+
+    /// The time shown for it: that of one record of the approval, for display only.
+    pub fn at(&self) -> &Timestamp {
+        &self.at
     }
 }
 
@@ -252,14 +274,15 @@ fn item_view(model: &Model, item: &ItemEntry) -> EntityView {
     }
 }
 
-fn approvals_of(model: &Model, id: EntityId) -> Vec<ApprovalRecord> {
+fn approvals_of(model: &Model, id: EntityId) -> Vec<ApprovalEntry> {
     let id = model.canonical(id);
     model
-        .ledger()
-        .all()
-        .iter()
-        .filter(|r| r.subject() == id)
-        .cloned()
+        .timed_approvals()
+        .filter(|(r, _)| r.subject() == id)
+        .map(|(record, at)| ApprovalEntry {
+            record: record.clone(),
+            at: at.clone(),
+        })
         .collect()
 }
 

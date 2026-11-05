@@ -888,7 +888,6 @@ mod tests {
         let r = Event::new(
             eid(1),
             BTreeSet::new(),
-            ts(),
             EventBody::Registered(Registration::Doc(DocRegistration::new(
                 DocKind::Spec,
                 path(P),
@@ -1293,7 +1292,6 @@ mod tests {
             Event::new(
                 eid(entity),
                 BTreeSet::new(),
-                ts(),
                 EventBody::Registered(Registration::Item {
                     design: did(design),
                     number: ItemNumber::new(n).unwrap(),
@@ -1342,7 +1340,6 @@ mod tests {
         let root_in_repo = Event::new(
             eid(1),
             BTreeSet::new(),
-            ts(),
             EventBody::Published(Publication::Incoming {
                 from: StoreKind::Private,
                 snapshot,
@@ -1374,7 +1371,6 @@ mod tests {
         let out = Event::new(
             eid(1),
             BTreeSet::from([r.id()]),
-            ts(),
             EventBody::Published(Publication::Outgoing {
                 to: StoreKind::Repo,
             }),
