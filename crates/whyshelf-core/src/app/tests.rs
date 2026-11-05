@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 
 use crate::domain::actor::{Actor, Timestamp};
-use crate::domain::approval::{Gate, TestOutcome};
+use crate::domain::approval::{Gate, GateBasis, TestOutcome};
 use crate::domain::classification::{ConflictField, fold};
 use crate::domain::event::{
     ClassChange, DocKind, EntityKind, Event, EventBody, Registration, StoreKind, Version,
@@ -15,6 +15,7 @@ use crate::domain::finding::FindingType;
 use crate::domain::id::{Alias, DesignId, EntityId, FindingId, SpecId, test_support::eid};
 use crate::domain::lint::{CheckViolation, UpstreamProblem};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::policy::GatePolicy;
 use crate::domain::query::Query;
 use crate::domain::reference::{ItemRef, LocalRef, Ref};
 use crate::domain::revision::{IntegrationFact, Revision, RevisionId};
@@ -1496,6 +1497,56 @@ fn an_unreadable_ground_makes_the_spec_partial_not_invalid_and_cs_writes_nothing
         Err(AppError::CheckFailed { gate: Gate::Cs, .. })
     ));
     assert_eq!(repo_and_private_events(&ws), before, "nothing was written");
+}
+
+/// A chain whose Spec declares no pin (and whose one item takes none), registered.
+fn chain_without_pins(config: Config) -> Workspace<FakePorts> {
+    let ports = FakePorts::new();
+    ports.put_finding("docs/finding/slow.md", "Slow login", "p95 is 4s");
+    ports.put_spec(
+        "docs/spec/cache.md",
+        &["finding/slow-login"],
+        "cache the token",
+        &[],
+    );
+    ports.put_design(
+        "docs/design/cache.md",
+        "spec/cache-timeout",
+        &[(1, "add a ttl", &[])],
+    );
+    ports.set_pins(&[]);
+    let mut ws = Workspace::new(ports, config);
+    register_chain(&mut ws);
+    ws
+}
+
+#[test]
+fn the_default_policy_refuses_a_spec_without_pins() {
+    let mut ws = chain_without_pins(test_config());
+    block_on(ws.approve_cr(&r("finding/slow-login"), None)).expect("cr");
+    let report = block_on(ws.check_cs(&r("spec/cache-timeout"))).expect("check");
+    assert_eq!(report.violations(), [CheckViolation::NoPinsDeclared]);
+    assert!(matches!(
+        block_on(ws.approve_cs(&r("spec/cache-timeout"), None)),
+        Err(AppError::CheckFailed { gate: Gate::Cs, .. })
+    ));
+}
+
+#[test]
+fn a_policy_that_does_not_require_pins_passes_cs_and_the_approval_records_it() {
+    let policy = GatePolicy::new(false, true);
+    let mut ws = chain_without_pins(test_config().with_gate_policy(policy));
+    block_on(ws.approve_cr(&r("finding/slow-login"), None)).expect("cr");
+    let cs = block_on(ws.approve_cs(&r("spec/cache-timeout"), None)).expect("cs");
+    assert_eq!(cs.attestation().gate_basis(), GateBasis::Cs { policy });
+    // The pin checks downstream have nothing to compare and pass; CA still runs
+    // the tests.
+    block_on(ws.approve_ci(&r("design/cache"), None)).expect("ci");
+    let ca = block_on(ws.approve_ca(&it("design/cache#1"), None, None)).expect("ca");
+    assert_eq!(
+        ca.attestation().gate_basis(),
+        GateBasis::Fixed { gate: Gate::Ca }
+    );
 }
 
 #[test]

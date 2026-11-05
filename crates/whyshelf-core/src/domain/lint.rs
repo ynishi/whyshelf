@@ -29,12 +29,12 @@
 //! | `EmptyBody` | CR | the Finding has no body | nothing is written under the front matter | write what was seen and how it is known |
 //! | `MeasuredDataNotLabelledMeasured` | CR | a measured_data Finding must be labelled `evidence: measured` | a measurement carries a weaker label | set `evidence: measured`, or change `finding_type` if it was not measured |
 //! | `Upstream` | CS, CI, CA | upstream *x* is not ready: *why* | an entity this one stands on cannot be depended on yet; *why* is an [`UpstreamProblem`] (next table) | clear the problem upstream first, nearest to the Finding first |
-//! | `NoPinsDeclared` | CS | the Spec declares no pin | `accept.pins` is empty | declare at least one `PIN-*` or `UT-*` with its contract sentence |
-//! | `NoHypsDeclared` | CS | the Spec declares no hypothesis | `accept.hyp` is empty | declare at least one `HYP-*` with a metric and a target |
+//! | `NoPinsDeclared` | CS | the Spec declares no pin | `accept.pins` is empty, and the [`GatePolicy`](super::policy::GatePolicy) requires pins (it does by default) | declare at least one `PIN-*` or `UT-*` with its contract sentence |
+//! | `NoHypsDeclared` | CS | the Spec declares no hypothesis | `accept.hyp` is empty, and the policy requires hypotheses (it does by default) | declare at least one `HYP-*` with a metric and a target |
 //! | `PinCoverage` | CI | pin coverage: *issue* | the Design and the Spec disagree about a pin; *issue* is a [`CoverageIssue`] | assign the pin to an item, or declare it in the Spec |
 //! | `PinMissingInTests` | CA | the item declares *pin* but no test carries it | no `@pin: ...` tag for it in the scanned directories, at the revision | add the tag to the test that holds the contract, commit, check again |
 //! | `PinUndeclaredInTests` | CA | a test carries *pin* but no Spec of the project declares it | a tag in a test file (`test.files`, inside the scan directories) at the revision that no Spec lists ([`DeclaredPins`](super::spec::DeclaredPins)); it counts wherever it is, not only on this item's tests, and whichever Spec declares it | declare it in a Spec, or take the tag off the test |
-//! | `MalformedPin` | CA | *file:line*: `@pin: text` is not a pin name | a pin tag whose name is not `PIN-` or `UT-` followed by capitals, digits, `_` and `-` (`PIN-foo`) | correct the name, or take the tag off |
+//! | `MalformedPin` | CA | *file:line*: `@pin: text` is not a pin name | a pin tag whose name is not a prefix of the pin vocabulary (by default `PIN-` or `UT-`) followed by capitals, digits, `_` and `-` (`PIN-foo`) | correct the name, or take the tag off |
 //! | `TestsFailed` | CA | the tests did not pass | `test.command` exited with a non-zero status at the revision | make the tests pass at that revision |
 //! | `TestsTimedOut` | CA | the tests did not finish within *time* | `test.command` was still running when `test.timeout` ended and was stopped; no result exists, so nothing is recorded | make the tests faster, or raise `test.timeout` |
 //! | `ItemNotInDesign` | CA | the Design no longer has this item | the Design's item at that number is not the item that was handed to the check (a guard: the application takes the item from the same Design, so it is not expected) | run the command again |
@@ -149,11 +149,11 @@ pub enum CheckViolation {
         /// What is wrong with it.
         problem: UpstreamProblem,
     },
-    /// CS: the Spec declares no PIN or unit-test tag.
+    /// CS: the Spec declares no PIN or unit-test tag, and the policy requires one.
     ///
     /// Fix: declare at least one under `accept.pins`.
     NoPinsDeclared,
-    /// CS: the Spec declares no hypothesis.
+    /// CS: the Spec declares no hypothesis, and the policy requires one.
     ///
     /// Fix: declare at least one under `accept.hyp`.
     NoHypsDeclared,
@@ -178,7 +178,8 @@ pub enum CheckViolation {
     },
     /// CA: a tag in a test file is shaped like a pin tag but is not a pin name.
     ///
-    /// Fix: correct the tag (`PIN-` or `UT-`, then capitals, digits, `_` and `-`), or
+    /// Fix: correct the tag (a prefix of the pin vocabulary, `PIN-` or `UT-` by
+    /// default, then capitals, digits, `_` and `-`), or
     /// take it off the test.
     MalformedPin {
         /// Where the tag was found.

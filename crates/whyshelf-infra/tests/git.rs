@@ -7,11 +7,14 @@ use std::path::Path;
 use std::time::Duration;
 
 use common::{all_files, commit_all, git, init_repo, write};
-use whyshelf_core::app::config::{PinPattern, TestCommand, TestTimeout};
+use whyshelf_core::app::config::{PinPattern, PinSearch, TestCommand, TestTimeout};
 use whyshelf_core::app::ports::{CodeScanPort, RevisionPort, TestRunPort};
 use whyshelf_core::app::raw::RawRevision;
 use whyshelf_core::domain::approval::{TestOutcome, TestsRun};
 use whyshelf_core::domain::location::{RelPath, TestFileSet};
+use whyshelf_core::domain::nonempty::NonEmptyVec;
+use whyshelf_core::domain::pin::{PinId, PinKind};
+use whyshelf_core::domain::policy::{ExternalTag, PinNormalize, PinPrefix, PinVocabulary};
 use whyshelf_core::domain::revision::{IntegrationFact, RevisionId, UnknownIntegration};
 use whyshelf_infra::config::DEFAULT_PIN_PATTERN;
 use whyshelf_infra::git::{GitCodeScan, GitError, GitRevision};
@@ -203,8 +206,35 @@ async fn a_shallow_clone_with_the_baseline_but_not_the_old_commit_is_unknown() {
     );
 }
 
-fn pattern() -> PinPattern {
-    PinPattern::new(DEFAULT_PIN_PATTERN).unwrap()
+/// The scan settings of a project that gave none: the scanner's own pattern and the
+/// default vocabulary.
+fn pattern() -> PinSearch {
+    PinSearch::default()
+}
+
+/// A vocabulary of the prefixes `names` (invariants) and the tags `tags` mapped to pins
+/// of the first prefix.
+fn vocabulary(names: &[&str], normalize: PinNormalize, tags: &[(&str, &str)]) -> PinVocabulary {
+    let prefixes: Vec<PinPrefix> = names
+        .iter()
+        .map(|name| PinPrefix::new(*name, PinKind::Pin).unwrap())
+        .collect();
+    let written = PinVocabulary::new(
+        NonEmptyVec::from_vec(prefixes.clone()).unwrap(),
+        PinNormalize::Strict,
+        std::collections::BTreeMap::new(),
+    )
+    .unwrap();
+    let mapping = tags
+        .iter()
+        .map(|(tag, pin)| {
+            (
+                ExternalTag::new(*tag).unwrap(),
+                PinId::parse_in(&written, pin).unwrap(),
+            )
+        })
+        .collect();
+    PinVocabulary::new(NonEmptyVec::from_vec(prefixes).unwrap(), normalize, mapping).unwrap()
 }
 
 fn dirs(names: &[&str]) -> Vec<RelPath> {
@@ -509,10 +539,81 @@ async fn a_pin_pattern_without_a_group_is_refused() {
             &rev(&head),
             &dirs(&["tests"]),
             &whole(&["tests"]),
-            &PinPattern::new("@pin").unwrap(),
+            &PinSearch::default().with_pattern(PinPattern::new("@pin").unwrap()),
         )
         .await;
     assert!(matches!(result, Err(GitError::PatternGroup)));
+}
+
+/// What a scan of `tests/` at the head finds, as `(pins, malformed marks)`.
+async fn scanned(dir: &Path, search: &PinSearch) -> (Vec<String>, Vec<String>) {
+    let head = git(dir, &["rev-parse", "HEAD"]).await;
+    let scan = GitCodeScan::new(dir.to_path_buf())
+        .pins_at(&rev(&head), &dirs(&["tests"]), &whole(&["tests"]), search)
+        .await
+        .unwrap();
+    (
+        scan.pins.keys().map(ToString::to_string).collect(),
+        scan.malformed
+            .iter()
+            .map(|m| m.text().to_string())
+            .collect(),
+    )
+}
+
+#[tokio::test]
+async fn the_default_vocabulary_finds_pin_and_ut_and_reports_any_other_prefix() {
+    let dir = repo().await;
+    write(
+        dir.path(),
+        "tests/a.rs",
+        "// @pin: PIN-A\n// @pin: UT-B\n// @pin: REQ-C\n// @pin: pin_d\n",
+    )
+    .await;
+    commit_all(dir.path(), "Tests").await;
+    let (pins, malformed) = scanned(dir.path(), &PinSearch::default()).await;
+    assert_eq!(pins, ["PIN-A", "UT-B"]);
+    assert_eq!(malformed, ["REQ-C", "pin_d"]);
+}
+
+#[tokio::test]
+async fn a_custom_prefix_is_found_and_one_the_vocabulary_lacks_is_reported() {
+    let dir = repo().await;
+    write(
+        dir.path(),
+        "tests/a.rs",
+        "// @pin: REQ-LOGIN\n// @pin: PIN-A\n// @pin: SPEC-X\n",
+    )
+    .await;
+    commit_all(dir.path(), "Tests").await;
+    let search = PinSearch::new(vocabulary(&["REQ", "SPEC"], PinNormalize::Strict, &[]));
+    let (pins, malformed) = scanned(dir.path(), &search).await;
+    assert_eq!(pins, ["REQ-LOGIN", "SPEC-X"]);
+    assert_eq!(
+        malformed,
+        ["PIN-A"],
+        "the default prefix is not this project's"
+    );
+}
+
+#[tokio::test]
+async fn upper_dash_and_the_table_turn_marks_into_pins() {
+    let dir = repo().await;
+    write(
+        dir.path(),
+        "tests/a.rs",
+        "// @pin: pin_login_cache\n// @pin: AUTH_LOGIN\n// @pin: unknown_tag\n",
+    )
+    .await;
+    commit_all(dir.path(), "Tests").await;
+    let search = PinSearch::new(vocabulary(
+        &["PIN"],
+        PinNormalize::UpperDash,
+        &[("AUTH_LOGIN", "PIN-AUTH-LOGIN")],
+    ));
+    let (pins, malformed) = scanned(dir.path(), &search).await;
+    assert_eq!(pins, ["PIN-AUTH-LOGIN", "PIN-LOGIN-CACHE"]);
+    assert_eq!(malformed, ["unknown_tag"]);
 }
 
 fn command(text: &str) -> TestCommand {

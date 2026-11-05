@@ -251,10 +251,12 @@ pub async fn open_with(
     let repo_store = root.join(REPO_STORE_DIR);
     let (cache, driver) = SqliteCache::open(&repo_store.join("cache").join("index.db")).await?;
 
+    // A Spec's pins are read in the vocabulary the scan of the tests reads marks in.
+    let vocabulary = settings.config().test().pin_search().vocabulary().clone();
     let ports = InfraPorts {
         revision,
         store: FsStore::new(repo_store, settings.private_dir().to_path_buf()),
-        current: FsCurrent::new(root.clone()),
+        current: FsCurrent::new(root.clone()).with_vocabulary(vocabulary),
         scaffold: FsScaffold::new(root.clone()),
         code_scan: GitCodeScan::new(root.clone()),
         test_run: GitTestRun::new(root),

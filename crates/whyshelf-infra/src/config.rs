@@ -30,6 +30,17 @@
 //! files = ["src", "tests"]         # the test files: globs under the scan directories
 //! timeout = "30m"                  # a test run is stopped after this: "90s", "30m", "2h"
 //!
+//! [gate]
+//! cs_requires_pins = true          # CS refuses a Spec that declares no pin
+//! cs_requires_hypotheses = true    # CS refuses a Spec that declares no hypothesis
+//!
+//! [pins]
+//! prefixes = { PIN = "pin", UT = "unit-test" }   # what a pin begins with, and what its pins are
+//! normalize = "strict"             # or "upper-dash": `pin_login_cache` reads as PIN-LOGIN-CACHE
+//!
+//! [pins.mapping]                   # tags the code already has, and the pin each stands for
+//! # AUTH_LOGIN = "PIN-AUTH-LOGIN"
+//!
 //! [stores]
 //! default = "private"              # where a new document goes: "private" or "repo"
 //!                                  # (where the private store is, is not set here)
@@ -68,6 +79,17 @@
 //!   check whose tests did not finish records nothing (the violation is
 //!   `TestsTimedOut`). Only the last 64 KiB of the command's output is kept in memory.
 //!
+//! `[gate]` is the [`GatePolicy`]: what the machine check of CS demands of a Spec.
+//! `[pins]` is the [`PinVocabulary`] (see [`whyshelf_core::domain::policy`]): each key of
+//! `pins.prefixes` is a prefix (capitals and digits, starting with a capital; not
+//! `HYP`) and its value says whether its pins are invariants (`"pin"`) or unit-test
+//! tags (`"unit-test"`); `pins.prefixes`, when written, replaces the default `PIN` and
+//! `UT` rather than adding to them. `pins.mapping` maps a tag as the code writes it to
+//! the pin it stands for, written as a Spec writes a pin (a listed prefix, as written).
+//! The vocabulary is read by the scan of the tests and by the reading of a Spec's and a
+//! Design's pins alike, so the two never disagree about what a pin is. A value that is
+//! refused names its key (`pins.prefixes.req`, `pins.mapping.AUTH_LOGIN`).
+//!
 //! # Project identity
 //!
 //! `project` is a name and two projects can share one. `project_id` is a UUID that
@@ -93,6 +115,7 @@
 //!   .whyshelf.toml  (committed; whoever can change the repository can change it)
 //!        decides:  project name and id, document and test directories, the test
 //!                  command and its time limit, the pin pattern, the test files,
+//!                  what CS demands ([gate]), the pin vocabulary ([pins]),
 //!                  the baseline ref, the default store of new
 //!                  documents, the official tag vocabulary, which Markdown
 //!                  files are generated, the ingest threshold, the default
@@ -128,6 +151,16 @@
 //! a `Makefile` or a CI script has. `git.baseline` is handed to Git as a ref and
 //! `test.pin_pattern` is compiled as a regular expression; neither runs anything.
 //! `user.name` is the declared approver: it is a label, and nothing authenticates it.
+//!
+//! `[gate]` can relax what CS demands, and anyone who can change the repository can
+//! relax it: nothing stops a commit that sets `cs_requires_pins = false`. That is
+//! allowed, and it is why every CS approval records the policy it passed under: an
+//! approval made under a relaxed policy is told from one made under the default by
+//! reading the approval, never by what the settings say today, and putting the
+//! setting back does not make a relaxed approval look strict. `[pins]` decides which
+//! marks are pins. A change of it that changes the pins a Spec declares changes the
+//! Spec's hash, so its approvals become stale rather than silently covering other
+//! pins, and a Spec that uses a prefix no longer listed does not parse.
 //!
 //! The same facts, run:
 //!
@@ -177,12 +210,18 @@ use regex::Regex;
 use serde::Deserialize;
 use whyshelf_core::app::Config;
 use whyshelf_core::app::config::{
-    ExportSettings, IngestSettings, Paths, PinPattern, TestCommand, TestSettings, TestTimeout,
+    ExportSettings, IngestSettings, Paths, PinPattern, PinSearch, TestCommand, TestSettings,
+    TestTimeout,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::event::StoreKind;
 use whyshelf_core::domain::location::{RelPath, TestFileSet};
+use whyshelf_core::domain::nonempty::NonEmptyVec;
+use whyshelf_core::domain::pin::{PinId, PinKind};
+use whyshelf_core::domain::policy::{
+    ExternalTag, GatePolicy, PinNormalize, PinPrefix, PinVocabulary,
+};
 use whyshelf_core::domain::reference::{ProjectId, ProjectName};
 use whyshelf_core::domain::tag::TagVocabulary;
 
@@ -237,6 +276,17 @@ pub enum ConfigError {
     DefaultStore {
         /// The text found.
         found: String,
+    },
+    /// A key that takes one of a few words has another (`pins.normalize`, the kind of
+    /// a prefix in `pins.prefixes`).
+    #[error("`{field}` is `{found}`; it is one of {allowed}")]
+    Word {
+        /// The key.
+        field: String,
+        /// The text found.
+        found: String,
+        /// The words it may be, listed.
+        allowed: String,
     },
     /// The pin pattern is not a regular expression.
     #[error("`test.pin_pattern` does not compile")]
@@ -354,6 +404,10 @@ struct FileDto {
     paths: PathsDto,
     test: TestDto,
     #[serde(default)]
+    gate: GateDto,
+    #[serde(default)]
+    pins: PinsDto,
+    #[serde(default)]
     stores: StoresDto,
     #[serde(default)]
     git: GitDto,
@@ -398,6 +452,100 @@ struct TestDto {
     pin_pattern: Option<String>,
     files: Option<Vec<String>>,
     timeout: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+struct GateDto {
+    cs_requires_pins: bool,
+    cs_requires_hypotheses: bool,
+}
+
+impl Default for GateDto {
+    fn default() -> Self {
+        let policy = GatePolicy::default();
+        Self {
+            cs_requires_pins: policy.cs_requires_pins(),
+            cs_requires_hypotheses: policy.cs_requires_hypotheses(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+struct PinsDto {
+    /// Left out: the default prefixes. Written: these and only these.
+    prefixes: Option<BTreeMap<String, String>>,
+    normalize: Option<String>,
+    mapping: BTreeMap<String, String>,
+}
+
+/// The words of `pins.prefixes` for what the pins of a prefix are.
+const PIN_KINDS: [(&str, PinKind); 2] = [("pin", PinKind::Pin), ("unit-test", PinKind::UnitTest)];
+
+/// The words of `pins.normalize`.
+const PIN_NORMALIZE: [(&str, PinNormalize); 2] = [
+    ("strict", PinNormalize::Strict),
+    ("upper-dash", PinNormalize::UpperDash),
+];
+
+/// The value a key names with one of a few words.
+fn word<T: Copy>(field: &str, found: &str, words: &[(&str, T)]) -> Result<T, ConfigError> {
+    words
+        .iter()
+        .find(|(name, _)| *name == found)
+        .map(|(_, value)| *value)
+        .ok_or_else(|| ConfigError::Word {
+            field: field.to_owned(),
+            found: found.to_owned(),
+            allowed: words
+                .iter()
+                .map(|(name, _)| format!("`{name}`"))
+                .collect::<Vec<_>>()
+                .join(", "),
+        })
+}
+
+/// The pin vocabulary of `[pins]`.
+fn pin_vocabulary(dto: PinsDto) -> Result<PinVocabulary, ConfigError> {
+    let prefixes = match dto.prefixes {
+        None => PinVocabulary::default().prefixes().clone(),
+        Some(table) => {
+            let prefixes = table
+                .into_iter()
+                .map(|(text, kind)| {
+                    let field = format!("pins.prefixes.{text}");
+                    let kind = word(&field, &kind, &PIN_KINDS)?;
+                    value(&field, PinPrefix::new(text, kind))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            value("pins.prefixes", NonEmptyVec::from_vec(prefixes))?
+        }
+    };
+    let normalize = match &dto.normalize {
+        None => PinNormalize::Strict,
+        Some(text) => word("pins.normalize", text, &PIN_NORMALIZE)?,
+    };
+    // A pin of the table is written as a Spec writes one: a listed prefix, as written.
+    let written = value(
+        "pins.prefixes",
+        PinVocabulary::new(prefixes.clone(), PinNormalize::Strict, BTreeMap::new()),
+    )?;
+    let mapping = dto
+        .mapping
+        .into_iter()
+        .map(|(tag, pin)| {
+            let field = format!("pins.mapping.{tag}");
+            Ok((
+                value(&field, ExternalTag::new(tag))?,
+                value(&field, PinId::parse_in(&written, &pin))?,
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, ConfigError>>()?;
+    value(
+        "pins.mapping",
+        PinVocabulary::new(prefixes, normalize, mapping),
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -583,18 +731,16 @@ pub fn parse(text: &str, dirs: &UserDirs) -> Result<Settings, ConfigError> {
         rel_list("paths.watch_dirs", &dto.paths.watch_dirs)?,
     );
 
-    let pattern = dto
-        .test
-        .pin_pattern
-        .unwrap_or_else(|| DEFAULT_PIN_PATTERN.to_owned());
-    let compiled = Regex::new(&pattern).map_err(ConfigError::PinPattern)?;
-    if compiled.captures_len() < 2 {
-        return Err(ConfigError::PinPatternGroup);
+    let mut search = PinSearch::new(pin_vocabulary(dto.pins)?);
+    if let Some(pattern) = dto.test.pin_pattern {
+        let compiled = Regex::new(&pattern).map_err(ConfigError::PinPattern)?;
+        if compiled.captures_len() < 2 {
+            return Err(ConfigError::PinPatternGroup);
+        }
+        search = search.with_pattern(value("test.pin_pattern", PinPattern::new(pattern))?);
     }
-    let mut test = TestSettings::new(
-        value("test.command", TestCommand::new(dto.test.command))?,
-        value("test.pin_pattern", PinPattern::new(pattern))?,
-    );
+    let mut test = TestSettings::new(value("test.command", TestCommand::new(dto.test.command))?)
+        .with_pin_search(search);
     if let Some(globs) = dto.test.files {
         test = test.with_files(value("test.files", TestFileSet::new(globs))?);
     }
@@ -611,6 +757,10 @@ pub fn parse(text: &str, dirs: &UserDirs) -> Result<Settings, ConfigError> {
             })?;
 
     let mut config = Config::new(project, paths, test)
+        .with_gate_policy(GatePolicy::new(
+            dto.gate.cs_requires_pins,
+            dto.gate.cs_requires_hypotheses,
+        ))
         .with_default_store(default_store)
         .with_vocabulary(TagVocabulary::new(dto.tags.official))
         .with_export(ExportSettings::new(
@@ -710,6 +860,11 @@ name = "alice"
         assert_eq!(config.paths().finding_dir().as_str(), "notes/finding");
         assert_eq!(config.paths().scan_dirs().len(), 1);
         assert_eq!(config.test().command().as_str(), "make test");
+        assert_eq!(
+            config.test().pin_search().pattern().map(PinPattern::as_str),
+            Some(r"@pin\s+(PIN-[A-Z]+)"),
+            "test.pin_pattern is kept as the project's own pattern"
+        );
         assert_eq!(config.default_store(), StoreKind::Repo);
         assert!(config.export().status_md());
         assert!(!config.export().changelog_md());
@@ -739,7 +894,12 @@ name = "alice"
         let config = settings.config();
         assert_eq!(config.default_store(), StoreKind::Private);
         assert_eq!(config.paths().spec_dir().as_str(), "docs/spec");
-        assert_eq!(config.test().pin_pattern().as_str(), DEFAULT_PIN_PATTERN);
+        assert_eq!(
+            config.test().pin_search(),
+            &PinSearch::default(),
+            "no key: the scanner's own pattern, the default vocabulary"
+        );
+        assert_eq!(config.gate_policy(), GatePolicy::default());
         assert_eq!(config.ingest().rebuild_threshold(), 200);
         assert_eq!(settings.baseline(), "main");
         assert!(config.user().is_none());
@@ -837,6 +997,120 @@ name = "alice"
                 "version = 1\nproject = \"d\"\n[test]\ncommand = \"x\"\npin_pattern = \"@pin\"\n"
             ),
             Err(ConfigError::PinPatternGroup)
+        ));
+    }
+
+    fn with_tables(tables: &str) -> Result<Settings, ConfigError> {
+        parse_full(&format!(
+            "version = 1\nproject = \"d\"\n[test]\ncommand = \"x\"\n{tables}"
+        ))
+    }
+
+    #[test]
+    fn the_gate_table_sets_what_cs_demands() {
+        let relaxed = with_tables("[gate]\ncs_requires_pins = false\n").unwrap();
+        assert_eq!(relaxed.config().gate_policy(), GatePolicy::new(false, true));
+        let both =
+            with_tables("[gate]\ncs_requires_pins = false\ncs_requires_hypotheses = false\n")
+                .unwrap();
+        assert_eq!(both.config().gate_policy(), GatePolicy::new(false, false));
+        let written = with_tables("[gate]\ncs_requires_pins = true\n").unwrap();
+        assert_eq!(written.config().gate_policy(), GatePolicy::default());
+        assert!(matches!(
+            with_tables("[gate]\ncs_requires_tests = false\n"),
+            Err(ConfigError::Parse(_))
+        ));
+        assert!(matches!(
+            with_tables("[gate]\ncs_requires_pins = \"no\"\n"),
+            Err(ConfigError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn the_pins_table_sets_the_vocabulary_of_the_scan() {
+        let settings = with_tables(
+            "[pins]\nprefixes = { REQ = \"pin\", UT = \"unit-test\" }\nnormalize = \"upper-dash\"\n[pins.mapping]\nAUTH_LOGIN = \"REQ-AUTH-LOGIN\"\n",
+        )
+        .unwrap();
+        let vocabulary = settings.config().test().pin_search().vocabulary();
+        let read =
+            |mark: &str| PinId::parse_in(vocabulary, mark).map(|p| (p.to_string(), p.kind()));
+        assert_eq!(
+            read("REQ-LOGIN"),
+            Ok(("REQ-LOGIN".to_owned(), PinKind::Pin))
+        );
+        assert_eq!(
+            read("ut_parse"),
+            Ok(("UT-PARSE".to_owned(), PinKind::UnitTest))
+        );
+        assert_eq!(
+            read("AUTH_LOGIN"),
+            Ok(("REQ-AUTH-LOGIN".to_owned(), PinKind::Pin))
+        );
+        assert!(
+            read("PIN-A").is_err(),
+            "written prefixes replace the default"
+        );
+        assert_eq!(vocabulary.normalize(), PinNormalize::UpperDash);
+        // No table: the default vocabulary.
+        assert_eq!(
+            with_tables("")
+                .unwrap()
+                .config()
+                .test()
+                .pin_search()
+                .vocabulary(),
+            &PinVocabulary::default()
+        );
+    }
+
+    #[test]
+    fn a_refused_value_of_the_pins_table_names_its_key() {
+        let field_of = |tables: &str| match with_tables(tables) {
+            Err(ConfigError::Value { field, .. } | ConfigError::Word { field, .. }) => field,
+            other => panic!("{tables}: {other:?}"),
+        };
+        assert_eq!(
+            field_of("[pins]\nprefixes = { req = \"pin\" }\n"),
+            "pins.prefixes.req"
+        );
+        assert_eq!(
+            field_of("[pins]\nprefixes = { HYP = \"pin\" }\n"),
+            "pins.prefixes.HYP"
+        );
+        assert_eq!(
+            field_of("[pins]\nprefixes = { REQ = \"invariant\" }\n"),
+            "pins.prefixes.REQ"
+        );
+        assert_eq!(field_of("[pins]\nprefixes = {}\n"), "pins.prefixes");
+        assert_eq!(
+            field_of("[pins]\nnormalize = \"lower\"\n"),
+            "pins.normalize"
+        );
+        assert_eq!(
+            field_of("[pins.mapping]\nAUTH_LOGIN = \"REQ-AUTH-LOGIN\"\n"),
+            "pins.mapping.AUTH_LOGIN",
+            "a pin of a prefix the vocabulary does not list"
+        );
+        assert_eq!(
+            field_of("[pins.mapping]\nAUTH_LOGIN = \"pin_auth_login\"\n"),
+            "pins.mapping.AUTH_LOGIN",
+            "the pin of the table is written as a Spec writes it"
+        );
+        assert_eq!(
+            field_of("[pins.mapping]\n\"AUTH LOGIN\" = \"PIN-AUTH-LOGIN\"\n"),
+            "pins.mapping.AUTH LOGIN"
+        );
+        let Err(error) = with_tables("[pins]\nnormalize = \"lower\"\n") else {
+            panic!("refused");
+        };
+        assert_eq!(
+            error.to_string(),
+            "`pins.normalize` is `lower`; it is one of `strict`, `upper-dash`"
+        );
+        assert!(matches!(
+            with_tables("[pins]\nsuffixes = []\n"),
+            Err(ConfigError::Parse(_))
         ));
     }
 

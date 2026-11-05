@@ -9,7 +9,7 @@
 //! | gate | target | layer 1, machine | layer 2, judgement | by |
 //! |---|---|---|---|---|
 //! | CR | Finding | the required metadata of its type is there | the source or method is trustworthy; viewpoints are independent | Reviewer |
-//! | CS | Spec | every ground exists, passed CR and is not stale; pins and hypotheses are declared | the claim follows from the Findings; the declared pins and hypotheses bind the Contract | User |
+//! | CS | Spec | every ground exists, passed CR and is not stale; pins and hypotheses are declared (by default; the [`GatePolicy`] of the project may relax either) | the claim follows from the Findings; the declared pins and hypotheses bind the Contract | User |
 //! | CI | Design | the Spec's current hash passed CS and is not stale; every pin is assigned and none is undeclared; the Crux has rejection reasons | the approach is sound; the items are small enough | Reviewer |
 //! | CA | Item | the Design's current hash passed CI and is not stale; every assigned pin exists in the tests at the approved revision, and no tag in the tests is undeclared; the tests pass | the tests are not hollow, judged against the Spec, the Design and the diff, setting the implementer's account aside | independent Reviewer |
 //! | CM | measurement | the hypothesis hash fixed before the run, and the same hypothesis measured | the measurement met the hypothesis; if not, say whether it is a wiring gap (add an item to the Design) or a wrong hypothesis (new `measured_data` Finding, revise the Spec) | whoever reads the measurement |
@@ -40,7 +40,15 @@
 //! | CM | Spec, `hyp_hash` | the event id of the CS approval that fixed that `hyp_hash` | nothing: a CM is a one-time record |
 //!
 //! A CS approval also records the `hyp_hash` it fixed, so a later CM can find it
-//! ([`ApprovalSet::cs_for_cm`]).
+//! ([`ApprovalSet::cs_for_cm`]), and the [`GatePolicy`] it passed under, so that an
+//! approval made while the project demanded less is told from one made under the
+//! default. A policy other than the default is part of the canonical form of the
+//! attestation (and so of the identity of the record); the default one is left out
+//! of it, so an approval made under it has the identity it had before the policy
+//! was recorded, and one written then still verifies. The policy is not what
+//! "Modified" compares: a change of
+//! the settings does not take an approval away. No other gate reads the policy, so
+//! no other attestation carries one.
 //!
 //! # An approval can be recorded only through a gate
 //!
@@ -101,8 +109,29 @@ use super::event::{DocKind, EntityKind, Event, EventBody, EventGraph, EventId};
 use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, SpecId};
 use super::nonempty::{NonBlank, NonEmptyVec};
+use super::policy::GatePolicy;
 use super::revision::Revision;
 use super::vocabulary::closed_vocabulary;
+
+/// What a passed gate's check demanded, as far as a reader can tell approvals apart.
+///
+/// Only CS reads a [`GatePolicy`]; every other gate demands the same of everyone, so
+/// the shape of the answer follows the gate and no field is present or absent by
+/// convention.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GateBasis {
+    /// A CS passed under this policy. An approval made under a relaxed one is told
+    /// from the rest by it.
+    Cs {
+        /// What the check demanded when it let the Spec through.
+        policy: GatePolicy,
+    },
+    /// A gate whose requirements no policy changes.
+    Fixed {
+        /// The gate (never CS).
+        gate: Gate,
+    },
+}
 
 /// One of the five gates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -318,6 +347,8 @@ pub enum Attestation {
         hyp: ContentHash,
         /// Every ground, at the hash it had.
         grounds: NonEmptyVec<Pinned<FindingId>>,
+        /// What the check demanded when it let the Spec through.
+        policy: GatePolicy,
     },
     /// A Design passed CI.
     Ci {
@@ -382,6 +413,17 @@ impl Attestation {
         }
     }
 
+    /// What the check demanded when it passed: the policy for a CS, the one gate that
+    /// reads one, and just the gate for the others.
+    pub fn gate_basis(&self) -> GateBasis {
+        match self {
+            Self::Cs { policy, .. } => GateBasis::Cs { policy: *policy },
+            Self::Cr { .. } | Self::Ci { .. } | Self::Ca { .. } | Self::Cm { .. } => {
+                GateBasis::Fixed { gate: self.gate() }
+            }
+        }
+    }
+
     /// The revision of the code the approval was made at: only a CA has one.
     pub fn revision(&self) -> Option<&Revision> {
         match self {
@@ -411,12 +453,29 @@ impl ToCanon for Attestation {
         let gate = ("gate", Canon::str(self.gate().name()));
         match self {
             Self::Cr { finding } => Canon::map([gate, ("target", finding.to_canon())]),
-            Self::Cs { spec, hyp, grounds } => Canon::map([
-                gate,
-                ("target", spec.to_canon()),
-                ("hyp", hyp.to_canon()),
-                ("grounds", grounds.to_canon()),
-            ]),
+            Self::Cs {
+                spec,
+                hyp,
+                grounds,
+                policy,
+            } => {
+                // The default policy is left out, so a CS made under it has the
+                // canonical form (and the event identifier) it had before the policy
+                // was recorded, and the approvals already written still verify. Any
+                // other policy is written, so a relaxed approval is never the same
+                // record as a default one.
+                let policy = policy.is_relaxed().then(|| ("policy", policy.to_canon()));
+                Canon::map(
+                    [
+                        gate,
+                        ("target", spec.to_canon()),
+                        ("hyp", hyp.to_canon()),
+                        ("grounds", grounds.to_canon()),
+                    ]
+                    .into_iter()
+                    .chain(policy),
+                )
+            }
             Self::Ci { design, spec } => Canon::map([
                 gate,
                 ("target", design.to_canon()),
@@ -677,6 +736,7 @@ pub(crate) mod test_support {
             spec: Pinned::new(sid(s), *hash),
             hyp: *hyp,
             grounds: NonEmptyVec::new(head, it.collect()),
+            policy: GatePolicy::default(),
         }
     }
 
@@ -772,6 +832,38 @@ mod tests {
                 result: CmResult::Pass,
             },
         }
+    }
+
+    #[test]
+    fn a_cs_under_the_default_policy_keeps_the_canonical_form_it_had_before() {
+        let strict = cs(2, &h(2), &h(9), &[(1, h(1))]);
+        let Attestation::Cs {
+            spec, hyp, grounds, ..
+        } = &strict
+        else {
+            unreachable!("cs makes a CS");
+        };
+        // The form written before the policy was recorded.
+        let before = Canon::map([
+            ("gate", Canon::str("CS")),
+            ("target", spec.to_canon()),
+            ("hyp", hyp.to_canon()),
+            ("grounds", grounds.to_canon()),
+        ]);
+        assert_eq!(strict.to_canon().to_bytes(), before.to_bytes());
+        // A relaxed one is written, and so is another record.
+        let relaxed = Attestation::Cs {
+            spec: spec.clone(),
+            hyp: *hyp,
+            grounds: grounds.clone(),
+            policy: GatePolicy::new(false, true),
+        };
+        assert_ne!(relaxed.to_canon().to_bytes(), before.to_bytes());
+        assert_ne!(
+            approve(strict, &[]).id(),
+            approve(relaxed, &[]).id(),
+            "the policy enters the identity of the record"
+        );
     }
 
     /// What the table of the module says an approval records of the upstream.

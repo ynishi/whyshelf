@@ -58,8 +58,9 @@
 //!
 //! "Is `(gate, subject, hash)` approved?" is asked of the whole set: an unrevoked
 //! approval or adoption exists for it ([`Ledgers::is_approved`]). The
-//! [`Basis`] says which: a gate's machine check passed, or
-//! an earlier decision was taken in.
+//! [`Basis`] says which: a gate's machine check passed (for CS, under which
+//! [`GatePolicy`](super::policy::GatePolicy), so an approval made under a relaxed
+//! one is told from the rest), or an earlier decision was taken in.
 //!
 //! A measurement (gate CM) binds to the Spec and the hash of its hypotheses, not to
 //! the record of the CS approval that fixed them ([`Ledgers::is_measured`]): with
@@ -911,12 +912,14 @@ impl Judgement {
 mod tests {
     use super::*;
     use crate::domain::adoption::{self, Adoptable, AdoptionInput};
+    use crate::domain::approval::GateBasis;
     use crate::domain::design::test_support::{design, identified};
     use crate::domain::finding::test_support::finding;
     use crate::domain::gate::Passed;
     use crate::domain::id::test_support::{docid, eid, iid, sid};
     use crate::domain::judge::test_support::judge;
     use crate::domain::judgement::test_support::*;
+    use crate::domain::policy::GatePolicy;
     use crate::domain::spec::test_support::spec;
 
     fn ada() -> Judge {
@@ -1588,7 +1591,7 @@ mod tests {
                 Basis::Adopted {
                     source: "https://tracker.example/issues/7".parse().unwrap()
                 },
-                Basis::Gate
+                Basis::Gate(GateBasis::Fixed { gate: Gate::Cr })
             ]
         );
         // One revocation by attestation takes the adoption of its judge, and only that.
@@ -1612,6 +1615,37 @@ mod tests {
             panic!("expected a revoke");
         };
         assert_eq!(targets.iter().copied().collect::<Vec<_>>(), [jid(1)]);
+    }
+
+    #[test]
+    fn an_approval_shows_the_policy_its_gate_passed_under() {
+        let relaxed = GatePolicy::new(false, true);
+        let strict = approve(1, &ada(), Visibility::Public, cs_passed(11, "c", "h"));
+        let loose = approve(
+            2,
+            &grace(),
+            Visibility::Public,
+            cs_passed_under(11, "c", "h", relaxed),
+        );
+        let ledgers = public_only(vec![strict, loose]);
+        let hash = hash_of("c");
+        assert!(ledgers.is_approved(Gate::Cs, eid(11), &hash));
+        let bases: Vec<Basis> = ledgers
+            .approvals_at(Gate::Cs, eid(11), &hash)
+            .map(|approval| approval.basis().clone())
+            .collect();
+        assert_eq!(bases.len(), 2);
+        for policy in [GatePolicy::default(), relaxed] {
+            assert!(bases.contains(&Basis::Gate(GateBasis::Cs { policy })));
+        }
+        // A gate that reads no policy shows just the gate.
+        let cr = approve(3, &ada(), Visibility::Public, cr_passed(1, "f"));
+        let ledgers = public_only(vec![cr]);
+        let shown: Vec<Basis> = ledgers
+            .approvals_at(Gate::Cr, eid(1), &hash_of("f"))
+            .map(|approval| approval.basis().clone())
+            .collect();
+        assert_eq!(shown, [Basis::Gate(GateBasis::Fixed { gate: Gate::Cr })]);
     }
 
     // --- retire -------------------------------------------------------------

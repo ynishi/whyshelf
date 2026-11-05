@@ -15,6 +15,7 @@ use whyshelf_core::app::raw::Candidate;
 use whyshelf_core::domain::event::DocKind;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonEmptyVec;
+use whyshelf_core::domain::policy::PinVocabulary;
 use whyshelf_core::domain::state::UnparsedReason;
 
 use crate::blocking::{self, BlockingError};
@@ -41,12 +42,24 @@ pub enum CurrentError {
 #[derive(Debug, Clone)]
 pub struct FsCurrent {
     root: PathBuf,
+    vocabulary: PinVocabulary,
 }
 
 impl FsCurrent {
-    /// The documents under this project root.
+    /// The documents under this project root, their pins read in the default
+    /// vocabulary.
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            vocabulary: PinVocabulary::default(),
+        }
+    }
+
+    /// Read the pins of a Spec and a Design in this vocabulary, the project's
+    /// (`[pins]`), which the scan of the tests reads its marks in too.
+    pub fn with_vocabulary(mut self, vocabulary: PinVocabulary) -> Self {
+        self.vocabulary = vocabulary;
+        self
     }
 }
 
@@ -92,7 +105,7 @@ impl CurrentPort for FsCurrent {
                 NonEmptyVec::new(reason, Vec::new()),
             )));
         }
-        let read = parse::read(&normalized, kind);
+        let read = parse::read_in(&normalized, kind, &self.vocabulary);
         let candidate = match read.outcome {
             Ok(doc) => Candidate::parsed(path.clone(), normalized, doc),
             Err(reasons) => Candidate::unparsed(path.clone(), normalized, reasons),

@@ -29,7 +29,7 @@
 //! | gate | input | looks at | pins, if it passes |
 //! |---|---|---|---|
 //! | CR | [`CrInput`] | the Finding's body and its label | the Finding at its hash |
-//! | CS | [`CsInput`] | each ground's state; the Spec's pins and hypotheses | the Spec at its contract hash, the hypothesis hash, every ground at its hash |
+//! | CS | [`CsInput`] | each ground's state; the Spec's pins and hypotheses, as far as the [`GatePolicy`] demands them | the Spec at its contract hash, the hypothesis hash, every ground at its hash, the policy it passed under |
 //! | CI | [`CiInput`] | the Spec's state; the pin coverage | the Design at its hash, the Spec at its contract hash |
 //! | CA | [`CaInput`] | the Design's state; the pins in the tests, in both directions; the tests | the item at its hash, the Design at its hash, the revision, the outcome |
 //! | CM | [`CmInput`] | the CS approval that fixed the hypotheses; the Finding of a `fail-hyp` | the Spec at its hypothesis hash, that CS approval, the result |
@@ -53,7 +53,7 @@
 use std::collections::BTreeMap;
 
 use super::approval::{
-    ApprovalSet, Attestation, CmResult, CsFixing, Gate, Pinned, TestOutcome, TestsRun,
+    ApprovalSet, Attestation, CmResult, CsFixing, Gate, GateBasis, Pinned, TestOutcome, TestsRun,
 };
 use super::design::{Design, WorkItem};
 use super::evaluate::{Evaluated, ImplView, ItemEvaluation, ItemKey, States, Subject};
@@ -61,6 +61,7 @@ use super::finding::{EvidenceLabel, Finding, FindingSource};
 use super::id::{DesignId, EntityId, FindingId, SpecId};
 use super::lint::{CheckViolation, UpstreamProblem, upstream_problems};
 use super::nonempty::NonEmptyVec;
+use super::policy::GatePolicy;
 use super::revision::{Revision, RevisionId};
 use super::spec::{DeclaredPins, Spec};
 use super::state::{Approval, Completeness, EntityState, InvalidReason};
@@ -91,6 +92,11 @@ impl Passed {
     /// The entity the approval is about.
     pub fn subject(&self) -> EntityId {
         self.attestation.subject()
+    }
+
+    /// The policy the check passed under: only CS reads one.
+    pub fn gate_basis(&self) -> GateBasis {
+        self.attestation.gate_basis()
     }
 }
 
@@ -243,16 +249,22 @@ pub struct CsInput<'a> {
     pub grounds: BTreeMap<FindingId, &'a Evaluated<Finding>>,
     /// The state of every entity, the grounds' among them.
     pub states: &'a States<'a>,
+    /// What the project demands of a Spec; a passed CS records it.
+    pub policy: GatePolicy,
 }
 
 /// CS, layer 1: every ground exists and can be read here, passed CR and is
-/// current; pins and hypotheses are declared.
+/// current; pins and hypotheses are declared, as far as the [`GatePolicy`] demands.
 pub mod cs {
     use super::*;
 
     /// The Spec's own state says, in its completeness, which grounds were written
     /// with a mark into a store this environment cannot read. Such a ground is a
     /// violation: it cannot be checked, and the hash of it cannot be recorded.
+    ///
+    /// Pins and hypotheses are demanded unless the policy says otherwise. A Spec
+    /// that declares none of either and passes under a relaxed policy is recorded
+    /// with that policy.
     pub fn check(input: CsInput<'_>) -> Checked {
         let spec = target(input.spec)?;
         let upstreams: Vec<_> = spec
@@ -261,10 +273,10 @@ pub mod cs {
             .map(|ground| (ground.entity(), state_of(input.states, ground.entity())))
             .collect();
         let mut violations = upstream_violations(input.spec.state().completeness(), &upstreams);
-        if spec.pins().is_empty() {
+        if input.policy.cs_requires_pins() && spec.pins().is_empty() {
             violations.push(CheckViolation::NoPinsDeclared);
         }
-        if spec.hyps().is_empty() {
+        if input.policy.cs_requires_hypotheses() && spec.hyps().is_empty() {
             violations.push(CheckViolation::NoHypsDeclared);
         }
         // An attestation names every ground at its hash. A ground that cannot be
@@ -296,6 +308,7 @@ pub mod cs {
                     spec: Pinned::new(spec.id(), *spec.contract_hash()),
                     hyp: *spec.hyp_hash(),
                     grounds: NonEmptyVec::new(head, tail),
+                    policy: input.policy,
                 }),
                 _ => None,
             },
@@ -532,6 +545,7 @@ mod tests {
     use crate::domain::approval::test_support::{
         approve, ci as ci_att, cr as cr_att, cs as cs_att, revoke,
     };
+    use crate::domain::canon::ToCanon;
     use crate::domain::classification::{ConflictedDoc, fold};
     use crate::domain::design::CoverageIssue;
     use crate::domain::design::test_support::{design, item, num};
@@ -631,11 +645,16 @@ mod tests {
         }
 
         fn cs(&self, spec: &Spec) -> Checked {
+            self.cs_under(spec, GatePolicy::default())
+        }
+
+        fn cs_under(&self, spec: &Spec, policy: GatePolicy) -> Checked {
             let states = self.states();
             cs::check(CsInput {
                 spec: &self.specs[&spec.id()],
                 grounds: self.grounds(),
                 states: &states,
+                policy,
             })
         }
 
@@ -838,8 +857,109 @@ mod tests {
             spec: &unreadable,
             grounds: BTreeMap::new(),
             states: &states,
+            policy: GatePolicy::default(),
         }));
         assert_eq!(got, vec![upstream(1, UpstreamProblem::Unresolved)]);
+    }
+
+    #[test]
+    fn a_relaxed_policy_lets_a_spec_without_pins_through_and_is_recorded() {
+        let f1 = finding(1, "one");
+        let approved = [approve(cr_att(1, f1.hash()), &[])];
+        let spec_with = |n: u128, declared_pins: &[&str], declared_hyps: &[&str]| {
+            Spec::new(
+                sid(n),
+                NonEmptyVec::new(fid(1), vec![]),
+                NonBlank::new("c").unwrap(),
+                pins(declared_pins),
+                hyps(declared_hyps),
+            )
+            .unwrap()
+        };
+        let no_pins = spec_with(11, &[], &["HYP-A"]);
+        let no_hyps = spec_with(12, &["PIN-A"], &[]);
+        let bare = spec_with(13, &[], &[]);
+        let world = World::new(&[&f1], &[&no_pins, &no_hyps, &bare], &[], &approved);
+
+        // The default policy refuses each, as it always did.
+        assert_eq!(
+            violations(world.cs(&no_pins)),
+            vec![CheckViolation::NoPinsDeclared]
+        );
+        assert_eq!(
+            violations(world.cs(&no_hyps)),
+            vec![CheckViolation::NoHypsDeclared]
+        );
+
+        // Relaxing one demand lets that one through, and only that one.
+        let no_pins_ok = GatePolicy::new(false, true);
+        let passed_no_pins = passed(world.cs_under(&no_pins, no_pins_ok));
+        assert_eq!(
+            passed_no_pins.gate_basis(),
+            GateBasis::Cs { policy: no_pins_ok }
+        );
+        assert_eq!(
+            violations(world.cs_under(&no_hyps, no_pins_ok)),
+            vec![CheckViolation::NoHypsDeclared]
+        );
+        let no_hyps_ok = GatePolicy::new(true, false);
+        assert_eq!(
+            passed(world.cs_under(&no_hyps, no_hyps_ok)).gate_basis(),
+            GateBasis::Cs { policy: no_hyps_ok }
+        );
+        assert_eq!(
+            violations(world.cs_under(&no_pins, no_hyps_ok)),
+            vec![CheckViolation::NoPinsDeclared]
+        );
+
+        // Relaxing both passes a Spec with neither.
+        let both = GatePolicy::new(false, false);
+        assert_eq!(
+            passed(world.cs_under(&bare, both)).gate_basis(),
+            GateBasis::Cs { policy: both }
+        );
+    }
+
+    #[test]
+    fn two_approvals_of_one_spec_under_different_policies_are_distinguishable() {
+        let f1 = finding(1, "one");
+        let approved = [approve(cr_att(1, f1.hash()), &[])];
+        let s = spec(11, &[1], &["PIN-A"]);
+        let world = World::new(&[&f1], &[&s], &[], &approved);
+        let strict = passed(world.cs_under(&s, GatePolicy::default()));
+        let relaxed = passed(world.cs_under(&s, GatePolicy::new(false, true)));
+        // The same Spec at the same hashes: only the policy differs, and the
+        // attestation, and with it the bytes a record is compared by, differ.
+        assert_ne!(strict.attestation(), relaxed.attestation());
+        assert_ne!(
+            strict.attestation().to_canon().to_bytes(),
+            relaxed.attestation().to_canon().to_bytes()
+        );
+        assert_eq!(
+            strict.attestation().target_hash(),
+            relaxed.attestation().target_hash()
+        );
+        assert_eq!(
+            strict.gate_basis(),
+            GateBasis::Cs {
+                policy: GatePolicy::default()
+            }
+        );
+        assert_eq!(
+            relaxed.gate_basis(),
+            GateBasis::Cs {
+                policy: GatePolicy::new(false, true)
+            }
+        );
+    }
+
+    #[test]
+    fn only_cs_records_a_policy() {
+        let f = finding(1, "one");
+        assert_eq!(
+            passed(cr_of(&f)).gate_basis(),
+            GateBasis::Fixed { gate: Gate::Cr }
+        );
     }
 
     #[test]

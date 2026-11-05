@@ -37,7 +37,7 @@ use std::process::Stdio;
 
 use regex::Regex;
 use tokio::process::Command;
-use whyshelf_core::app::config::PinPattern;
+use whyshelf_core::app::config::{PinPattern, PinSearch};
 use whyshelf_core::app::ports::{CodeScanPort, PinScan, RevisionPort, WorktreeRoot};
 use whyshelf_core::app::raw::RawRevision;
 use whyshelf_core::domain::error::ValueError;
@@ -45,6 +45,8 @@ use whyshelf_core::domain::location::{CodeLocation, RelPath, TestFileSet};
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::pin::{MalformedPin, PinId};
 use whyshelf_core::domain::revision::{IntegrationFact, RevisionId, UnknownIntegration};
+
+use crate::config::DEFAULT_PIN_PATTERN;
 
 /// Why a Git question could not be answered.
 #[derive(Debug, thiserror::Error)]
@@ -424,6 +426,25 @@ fn pathspecs(files: &TestFileSet) -> Vec<String> {
         .collect()
 }
 
+/// The regular expression that cuts a mark out of a line, built from the settings of
+/// the scan.
+///
+/// The project's own pattern if it gave one, else [`DEFAULT_PIN_PATTERN`]. The
+/// expression only delimits a mark; it does not say what a pin is. The vocabulary of
+/// the search decides that, mark by mark ([`PinId::parse_in`]), so a mark of a prefix
+/// the vocabulary does not list is found by the same expression and reported as
+/// malformed, and a custom prefix needs no change of the expression.
+fn mark_regex(search: &PinSearch) -> Result<Regex, GitError> {
+    let text = search
+        .pattern()
+        .map_or(DEFAULT_PIN_PATTERN, PinPattern::as_str);
+    let re = Regex::new(text).map_err(GitError::Pattern)?;
+    if re.captures_len() < 2 {
+        return Err(GitError::PatternGroup);
+    }
+    Ok(re)
+}
+
 impl CodeScanPort for GitCodeScan {
     type Error = GitError;
 
@@ -432,13 +453,10 @@ impl CodeScanPort for GitCodeScan {
         revision: &RevisionId,
         scan_dirs: &[RelPath],
         files: &TestFileSet,
-        pattern: &PinPattern,
+        search: &PinSearch,
     ) -> Result<PinScan, GitError> {
         let rev = full_hash(revision)?;
-        let re = Regex::new(pattern.as_str()).map_err(GitError::Pattern)?;
-        if re.captures_len() < 2 {
-            return Err(GitError::PatternGroup);
-        }
+        let re = mark_regex(search)?;
         let mut scan = PinScan::default();
         if scan_dirs.is_empty() {
             return Ok(scan);
@@ -468,7 +486,7 @@ impl CodeScanPort for GitCodeScan {
                     continue;
                 };
                 let location = CodeLocation::new(path.clone(), number).map_err(GitError::Value)?;
-                match named.as_str().parse::<PinId>() {
+                match PinId::parse_in(search.vocabulary(), named.as_str()) {
                     Ok(pin) => scan.pins.entry(pin).or_default().push(location),
                     Err(_) => scan.malformed.push(MalformedPin::new(
                         location,

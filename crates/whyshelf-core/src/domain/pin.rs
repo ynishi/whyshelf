@@ -9,6 +9,9 @@
 //!   moves and how, fixed by hash when the Spec is approved and measured later
 //!   (gate CM).
 //!
+//! `PIN` and `UT` are the default prefixes of pins; a project's own are in its
+//! [`PinVocabulary`], which also says how a mark in code is read.
+//!
 //! The tests are written in the implementation stage together with the code, and
 //! the approval of a work item (gate CA) checks both directions: every PIN assigned
 //! to the item exists in the tests, and no tag in the tests is undeclared.
@@ -20,14 +23,19 @@ use super::canon::{Canon, ToCanon};
 use super::error::ValueError;
 use super::location::CodeLocation;
 use super::nonempty::NonBlank;
+use super::policy::PinVocabulary;
 
 fn is_name_char(c: char) -> bool {
     c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_' || c == '-'
 }
 
+/// Whether a text is a name: at least one character, all of them name characters.
+pub(super) fn is_name(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(is_name_char)
+}
+
 fn has_name_after(s: &str, prefix: &str) -> bool {
-    s.strip_prefix(prefix)
-        .is_some_and(|rest| !rest.is_empty() && rest.chars().all(is_name_char))
+    s.strip_prefix(prefix).is_some_and(is_name)
 }
 
 /// What a [`PinId`] binds.
@@ -39,51 +47,88 @@ pub enum PinKind {
     UnitTest,
 }
 
-/// The name of a PIN or unit-test tag: `PIN-<NAME>` or `UT-<NAME>`.
+/// The name of a PIN or unit-test tag: `<PREFIX>-<NAME>`, by default `PIN-<NAME>` or
+/// `UT-<NAME>`.
 ///
-/// `<NAME>` is upper-case letters, digits, `_` and `-`. This is the same shape
-/// the code scan looks for after `@pin:`, so a name that parses here can be found
-/// in a test.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PinId(String);
+/// `<PREFIX>` is one of a [`PinVocabulary`]; `<NAME>` is upper-case letters, digits,
+/// `_` and `-`. A name is made by reading a mark in a vocabulary
+/// ([`parse_in`](Self::parse_in)), or in the default one (`FromStr`), and equality
+/// (with order and hash) is that of the name read alone: the kind follows from the
+/// prefix, so two pins of one name are one pin, whichever way each was read.
+#[derive(Debug, Clone)]
+pub struct PinId {
+    text: String,
+    kind: PinKind,
+}
+
+impl PartialEq for PinId {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+    }
+}
+
+impl Eq for PinId {}
+
+impl PartialOrd for PinId {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PinId {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.text.cmp(&other.text)
+    }
+}
+
+impl std::hash::Hash for PinId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.text.hash(state);
+    }
+}
 
 impl PinId {
-    /// The name as text.
-    pub fn as_str(&self) -> &str {
-        &self.0
+    /// The pin a mark is in `vocabulary`: the table first, then the normalized
+    /// mark against the prefixes (see [`policy`](super::policy)).
+    pub fn parse_in(vocabulary: &PinVocabulary, mark: &str) -> Result<Self, ValueError> {
+        vocabulary.read(mark)
     }
 
-    /// Whether this is a `PIN-*` or a `UT-*` name.
+    /// A pin from a text the vocabulary has checked and the kind of its prefix.
+    pub(super) fn from_parts(text: String, kind: PinKind) -> Self {
+        Self { text, kind }
+    }
+
+    /// The name as text.
+    pub fn as_str(&self) -> &str {
+        &self.text
+    }
+
+    /// What the pin is, by its prefix: an invariant (`PIN-*` by default) or a
+    /// unit-test tag (`UT-*`).
     pub fn kind(&self) -> PinKind {
-        if self.0.starts_with("PIN-") {
-            PinKind::Pin
-        } else {
-            PinKind::UnitTest
-        }
+        self.kind
     }
 }
 
 impl fmt::Display for PinId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.text)
     }
 }
 
 impl FromStr for PinId {
     type Err = ValueError;
 
+    /// The name in the default vocabulary: `PIN-` or `UT-` and a name, as written.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if has_name_after(s, "PIN-") || has_name_after(s, "UT-") {
-            Ok(Self(s.to_owned()))
-        } else {
-            Err(ValueError::PinIdBadShape)
-        }
+        Self::parse_in(&PinVocabulary::default(), s)
     }
 }
 
 impl ToCanon for PinId {
     fn to_canon(&self) -> Canon {
-        Canon::str(self.0.as_str())
+        Canon::str(self.text.as_str())
     }
 }
 

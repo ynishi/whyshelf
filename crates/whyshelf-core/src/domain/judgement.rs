@@ -56,7 +56,7 @@ use std::str::FromStr;
 
 use super::actor::Timestamp;
 use super::adoption::Adoptable;
-use super::approval::{Gate, UpstreamRecord};
+use super::approval::{Gate, GateBasis, UpstreamRecord};
 use super::canon::{Canon, ToCanon};
 use super::corpus::Visibility;
 use super::error::{JudgementError, ValueError};
@@ -224,7 +224,11 @@ impl ToCanon for ObjectKey {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Basis {
     /// A gate's machine check passed first.
-    Gate,
+    ///
+    /// For CS it carries the policy the check passed under, so a reader tells an
+    /// approval made under a relaxed policy by it; the other gates demand the same of
+    /// everyone.
+    Gate(GateBasis),
     /// An earlier decision was taken in, from this source, without a check.
     Adopted {
         /// Where the decision came from.
@@ -310,7 +314,7 @@ impl JudgementKind {
                 gate: passed.gate(),
                 subject: passed.attestation().subject(),
                 hash: passed.attestation().target_hash(),
-                basis: Basis::Gate,
+                basis: Basis::Gate(passed.gate_basis()),
             }),
             Self::Adopt { adoptable, .. } => Some(Pinning {
                 gate: adoptable.attestation().gate(),
@@ -697,6 +701,7 @@ pub(crate) mod test_support {
     use crate::domain::hash::BytesHash;
     use crate::domain::id::test_support::{eid, fid, sid};
     use crate::domain::knowable::Knowable;
+    use crate::domain::policy::GatePolicy;
 
     pub(crate) fn jid(n: u128) -> JudgementId {
         JudgementId::new(eid(10_000 + n))
@@ -727,10 +732,21 @@ pub(crate) mod test_support {
 
     /// A CS proof for Spec `n`, with `contract` and `hyp` named by tags.
     pub(crate) fn cs_passed(n: u128, contract: &str, hyp: &str) -> Passed {
+        cs_passed_under(n, contract, hyp, GatePolicy::default())
+    }
+
+    /// A CS proof as [`cs_passed`] makes it, passed under `policy`.
+    pub(crate) fn cs_passed_under(
+        n: u128,
+        contract: &str,
+        hyp: &str,
+        policy: GatePolicy,
+    ) -> Passed {
         Passed::for_test(Attestation::Cs {
             spec: Pinned::new(sid(n), hash_of(contract)),
             hyp: hash_of(hyp),
             grounds: NonEmptyVec::new(Pinned::new(fid(1), hash_of("ground")), Vec::new()),
+            policy,
         })
     }
 

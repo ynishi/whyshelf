@@ -56,7 +56,7 @@
 //! | gate | about | approved by |
 //! |---|---|---|
 //! | CR | a Finding is trustworthy | a Reviewer |
-//! | CS | the Contract follows from the Findings and is bound by its pins | the User |
+//! | CS | the Contract follows from the Findings and is bound by its pins (by default; see [`policy`]) | the User |
 //! | CI | the approach and the split into items are sound | a Reviewer |
 //! | CA | an item's tests really hold the Contract (checked at one revision) | an independent Reviewer |
 //! | CM | a measurement met the hypotheses; a miss is either a wiring gap or a wrong hypothesis | whoever reads the measurement |
@@ -191,6 +191,7 @@
 //! | [`event`], [`classification`], [`approval`] | the log, its fold, and the set of approvals |
 //! | [`judgement`], [`ledger`], [`judge`], [`adoption`] | the judgements people made as an append-only set that merges by union (concurrent approvals survive a revocation that did not see them; the objects are a set that can delete), who made them, and taking an earlier decision in as an approval |
 //! | [`state`], [`evaluate`] | derived state and how it is derived |
+//! | [`policy`] | what a project decides for itself: what CS demands of a Spec ([`policy::GatePolicy`], recorded in the approval it lets through) and the pin prefixes and spellings ([`policy::PinVocabulary`]) |
 //! | [`gate`], [`next`] | the machine check of each gate and the proof it passed; the next step of an entity |
 //! | [`lint`], [`query`] | the violations and the order of upstream problems, the leak lint, drift of generated files, the `find` language |
 //! | [`error`] | one enum per kind of failure |
@@ -221,6 +222,7 @@ pub mod location;
 pub mod next;
 pub mod nonempty;
 pub mod pin;
+pub mod policy;
 pub mod query;
 pub mod reference;
 pub mod revision;

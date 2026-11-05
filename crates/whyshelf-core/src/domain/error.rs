@@ -86,9 +86,40 @@ pub enum ValueError {
     /// A name of a project (in an `ext:` reference) was malformed.
     #[error("a project name holds lowercase letters, digits and `. _ -`")]
     ProjectNameBadShape,
-    /// A PIN identifier did not match `PIN-*` or `UT-*`.
-    #[error("a pin id looks like PIN-<NAME> or UT-<NAME> (A-Z 0-9 _ -)")]
+    /// A PIN identifier is not `<PREFIX>-<NAME>` with a prefix of the vocabulary it
+    /// was read in (by default `PIN` or `UT`).
+    #[error(
+        "a pin id looks like <PREFIX>-<NAME> with a prefix of the pin vocabulary (by default PIN or UT) and a name of A-Z 0-9 _ -"
+    )]
     PinIdBadShape,
+    /// A pin prefix is not capital letters and digits starting with a letter.
+    #[error("a pin prefix is capital letters and digits, starting with a letter")]
+    PinPrefixBadShape,
+    /// A pin prefix is one that names something else (`HYP`, a hypothesis).
+    #[error("`{prefix}` is not available as a pin prefix: it names something else")]
+    PinPrefixReserved {
+        /// The prefix refused.
+        prefix: String,
+    },
+    /// A pin vocabulary lists the same prefix twice.
+    #[error("the pin prefix `{prefix}` is listed twice")]
+    PinPrefixDuplicate {
+        /// The prefix listed twice.
+        prefix: String,
+    },
+    /// An external tag is empty or holds white space.
+    #[error("an external tag is a non-empty text without white space")]
+    ExternalTagBadShape,
+    /// A pin vocabulary maps an external tag to a pin whose prefix it does not list.
+    #[error(
+        "the external tag `{tag}` is mapped to `{pin}`, whose prefix the vocabulary does not list"
+    )]
+    PinMappingOutsideVocabulary {
+        /// The external tag.
+        tag: String,
+        /// The pin it is mapped to.
+        pin: String,
+    },
     /// A hypothesis identifier did not match `HYP-*`.
     #[error("a hypothesis id looks like HYP-<NAME> (A-Z 0-9 _ -)")]
     HypIdBadShape,

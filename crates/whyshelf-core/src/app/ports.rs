@@ -46,7 +46,7 @@ use crate::domain::pin::{MalformedPin, PinId};
 use crate::domain::reference::{Reach, Ref};
 use crate::domain::revision::{IntegrationFact, RevisionId};
 
-use super::config::{PinPattern, TestCommand, TestTimeout};
+use super::config::{PinSearch, TestCommand, TestTimeout};
 use super::projection::{ChangelogDoc, MapDoc};
 use super::raw::{Candidate, NormalizedText, RawRevision};
 use super::view::StatusReport;
@@ -583,14 +583,15 @@ pub trait CodeScanPort: Send + Sync {
     /// the revision, not the working tree.
     ///
     /// A file is a test file when it is under one of `scan_dirs` and `files` names it
-    /// (see [`TestFileSet`]). A tag the pattern finds whose name is not a pin's is
-    /// reported in [`PinScan::malformed`], never dropped.
+    /// (see [`TestFileSet`]). A mark `search` cuts out of a line is read as a pin in
+    /// its vocabulary ([`PinId::parse_in`]); one that is none is reported in
+    /// [`PinScan::malformed`], never dropped.
     fn pins_at(
         &self,
         revision: &RevisionId,
         scan_dirs: &[RelPath],
         files: &TestFileSet,
-        pattern: &PinPattern,
+        search: &PinSearch,
     ) -> impl Future<Output = Result<PinScan, Self::Error>> + Send;
 }
 

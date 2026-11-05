@@ -1011,7 +1011,7 @@ pub(crate) async fn impl_view_at<P: Ports>(
                 &revision,
                 config.paths().scan_dirs(),
                 &files,
-                config.test().pin_pattern(),
+                config.test().pin_search(),
             )
             .await
             .map_err(AppError::port(PortName::CodeScan))?,

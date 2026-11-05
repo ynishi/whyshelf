@@ -93,6 +93,7 @@ use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::id::{Alias, DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
+use whyshelf_core::domain::policy::GatePolicy;
 use whyshelf_core::domain::revision::{Revision, RevisionId};
 use whyshelf_core::domain::tag::{Tag, TagChange};
 
@@ -283,6 +284,8 @@ enum AttestationV1 {
         spec: PinnedV1,
         hyp: String,
         grounds: Vec<PinnedV1>,
+        #[serde(default, skip_serializing_if = "GatePolicyV1::is_default")]
+        policy: GatePolicyV1,
     },
     #[serde(rename = "CI")]
     Ci { design: PinnedV1, spec: PinnedV1 },
@@ -299,6 +302,28 @@ enum AttestationV1 {
         cs: String,
         result: CmResultV1,
     },
+}
+
+/// What a CS approval says the check demanded. The default policy is not written, and
+/// a file without the key is read as it: it is the one every approval was made under
+/// before the policy was recorded, so such a file has the bytes it always had. Any
+/// other policy is written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+struct GatePolicyV1 {
+    cs_requires_pins: bool,
+    cs_requires_hypotheses: bool,
+}
+
+impl GatePolicyV1 {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+impl Default for GatePolicyV1 {
+    fn default() -> Self {
+        gate_policy_dto(GatePolicy::default())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -378,15 +403,28 @@ fn change_dto(change: &ClassChange) -> ChangeV1 {
     }
 }
 
+fn gate_policy_dto(policy: GatePolicy) -> GatePolicyV1 {
+    GatePolicyV1 {
+        cs_requires_pins: policy.cs_requires_pins(),
+        cs_requires_hypotheses: policy.cs_requires_hypotheses(),
+    }
+}
+
 fn attestation_dto(attestation: &Attestation) -> AttestationV1 {
     match attestation {
         Attestation::Cr { finding } => AttestationV1::Cr {
             finding: pinned_dto(finding),
         },
-        Attestation::Cs { spec, hyp, grounds } => AttestationV1::Cs {
+        Attestation::Cs {
+            spec,
+            hyp,
+            grounds,
+            policy,
+        } => AttestationV1::Cs {
             spec: pinned_dto(spec),
             hyp: hyp.to_string(),
             grounds: grounds.iter().map(pinned_dto).collect(),
+            policy: gate_policy_dto(*policy),
         },
         Attestation::Ci { design, spec } => AttestationV1::Ci {
             design: pinned_dto(design),
@@ -611,7 +649,12 @@ fn attestation_from(dto: &AttestationV1) -> Result<Attestation, WireError> {
         AttestationV1::Cr { finding } => Attestation::Cr {
             finding: pinned_from("finding", finding, FindingId::new)?,
         },
-        AttestationV1::Cs { spec, hyp, grounds } => {
+        AttestationV1::Cs {
+            spec,
+            hyp,
+            grounds,
+            policy,
+        } => {
             let grounds = grounds
                 .iter()
                 .map(|g| pinned_from("grounds", g, FindingId::new))
@@ -620,6 +663,7 @@ fn attestation_from(dto: &AttestationV1) -> Result<Attestation, WireError> {
                 spec: pinned_from("spec", spec, SpecId::new)?,
                 hyp: hash("hyp", hyp)?,
                 grounds: field("grounds", NonEmptyVec::from_vec(grounds))?,
+                policy: GatePolicy::new(policy.cs_requires_pins, policy.cs_requires_hypotheses),
             }
         }
         AttestationV1::Ci { design, spec } => Attestation::Ci {
@@ -926,6 +970,13 @@ mod tests {
                     pinned(FindingId::new, 5, "f"),
                     vec![pinned(FindingId::new, 7, "g")],
                 ),
+                policy: GatePolicy::default(),
+            },
+            Attestation::Cs {
+                spec: pinned(SpecId::new, 6, "s"),
+                hyp: h("hyp"),
+                grounds: NonEmptyVec::new(pinned(FindingId::new, 5, "f"), vec![]),
+                policy: GatePolicy::new(false, true),
             },
             Attestation::Ci {
                 design: pinned(DesignId::new, 8, "d"),
@@ -1086,6 +1137,54 @@ mod tests {
         assert_eq!(ca["attestation"]["gate"], "CA");
         assert_eq!(ca["attestation"]["revision"]["form"], "commit");
         assert_eq!(ca["attestation"]["tests"], "passed");
+    }
+
+    #[test]
+    fn a_cs_writes_its_policy_only_when_it_is_not_the_default() {
+        let cs_files: Vec<serde_json::Value> = every_event()
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e.body(),
+                    EventBody::Approved {
+                        attestation: Attestation::Cs { .. },
+                        ..
+                    }
+                )
+            })
+            .map(|e| serde_json::from_str(&encode(e, &at()).unwrap()).unwrap())
+            .collect();
+        let [strict, relaxed] = cs_files.as_slice() else {
+            panic!("every_event has two CS approvals");
+        };
+        // A file of the default policy is the file written before the policy was
+        // recorded, and it still reads with the identifier it was named by.
+        assert!(strict["attestation"].get("policy").is_none());
+        assert_eq!(
+            relaxed["attestation"]["policy"],
+            serde_json::json!({"cs_requires_pins": false, "cs_requires_hypotheses": true})
+        );
+        let back = decode(strict.to_string().as_bytes()).unwrap();
+        let EventBody::Approved { attestation, .. } = back.event().body() else {
+            panic!("an approval");
+        };
+        assert_eq!(
+            attestation.gate_basis(),
+            whyshelf_core::domain::approval::GateBasis::Cs {
+                policy: GatePolicy::default()
+            }
+        );
+        // The policy enters the identifier: a relaxed approval edited to look strict
+        // no longer matches its name.
+        let mut edited = relaxed.clone();
+        edited["attestation"]
+            .as_object_mut()
+            .unwrap()
+            .remove("policy");
+        assert!(matches!(
+            decode(edited.to_string().as_bytes()),
+            Err(WireError::IdMismatch { .. })
+        ));
     }
 
     /// Golden: the store names a stored `Published` event carries. They are

@@ -13,13 +13,17 @@ use crate::domain::error::ValueError;
 use crate::domain::event::StoreKind;
 use crate::domain::location::{RelPath, TestFileSet};
 use crate::domain::nonempty::NonBlank;
+use crate::domain::policy::{GatePolicy, PinVocabulary};
 use crate::domain::reference::ProjectName;
 use crate::domain::tag::TagVocabulary;
 
-/// The regular expression that finds a pin tag in a test file.
+/// The regular expression that delimits a pin tag in a test file, when the project
+/// writes its own instead of the scanner's.
 ///
-/// Why a type: it is a rule of the project that the code scanner needs, and a
-/// blank pattern would match nothing and hide every pin.
+/// Its first group is the whole mark; whether the mark is a pin is decided by the
+/// [`PinVocabulary`] it is read in, not by the expression. Why a type: it is a rule
+/// of the project that the code scanner needs, and a blank pattern would match
+/// nothing and hide every pin.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinPattern(NonBlank);
 
@@ -32,6 +36,47 @@ impl PinPattern {
     /// The pattern text.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+/// What the scan of the tests needs to find pins and to tell which marks are pins:
+/// the project's [`PinVocabulary`], and optionally its own [`PinPattern`].
+///
+/// The scanner builds the regular expression from this value: the project's pattern
+/// if it gave one, else the scanner's own, which delimits a mark after `@pin:`. The
+/// expression only cuts a mark out of a line; the vocabulary alone decides whether
+/// it is a pin (see [`PinId::parse_in`](crate::domain::pin::PinId::parse_in)), so a mark that is none is reported, never
+/// dropped.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PinSearch {
+    vocabulary: PinVocabulary,
+    pattern: Option<PinPattern>,
+}
+
+impl PinSearch {
+    /// A search in this vocabulary, with the scanner's own pattern.
+    pub fn new(vocabulary: PinVocabulary) -> Self {
+        Self {
+            vocabulary,
+            pattern: None,
+        }
+    }
+
+    /// The project's own pattern for cutting a mark out of a line
+    /// (`test.pin_pattern`).
+    pub fn with_pattern(mut self, pattern: PinPattern) -> Self {
+        self.pattern = Some(pattern);
+        self
+    }
+
+    /// The vocabulary the marks are read in.
+    pub fn vocabulary(&self) -> &PinVocabulary {
+        &self.vocabulary
+    }
+
+    /// The project's own pattern, if it gave one.
+    pub fn pattern(&self) -> Option<&PinPattern> {
+        self.pattern.as_ref()
     }
 }
 
@@ -141,22 +186,28 @@ impl Default for TestTimeout {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestSettings {
     command: TestCommand,
-    pin_pattern: PinPattern,
+    pin_search: PinSearch,
     files: Option<TestFileSet>,
     timeout: TestTimeout,
 }
 
 impl TestSettings {
-    /// The command and the pattern of the pin tag. Every file under the scan
-    /// directories is a test file, and the command may run for
-    /// [`DEFAULT_TEST_TIMEOUT`], until the settings say otherwise.
-    pub fn new(command: TestCommand, pin_pattern: PinPattern) -> Self {
+    /// The command. Every file under the scan directories is a test file, the
+    /// command may run for [`DEFAULT_TEST_TIMEOUT`], and pins are `PIN-*` and `UT-*`
+    /// tags after `@pin:`, until the settings say otherwise.
+    pub fn new(command: TestCommand) -> Self {
         Self {
             command,
-            pin_pattern,
+            pin_search: PinSearch::default(),
             files: None,
             timeout: TestTimeout::default(),
         }
+    }
+
+    /// How pin tags are found and read (`test.pin_pattern`, and the vocabulary).
+    pub fn with_pin_search(mut self, pin_search: PinSearch) -> Self {
+        self.pin_search = pin_search;
+        self
     }
 
     /// Only the files these globs name are test files (`test.files`).
@@ -186,9 +237,9 @@ impl TestSettings {
         &self.command
     }
 
-    /// The pattern of the pin tag.
-    pub fn pin_pattern(&self) -> &PinPattern {
-        &self.pin_pattern
+    /// How pin tags are found in the tests and read as pins.
+    pub fn pin_search(&self) -> &PinSearch {
+        &self.pin_search
     }
 }
 
@@ -260,6 +311,7 @@ pub struct Config {
     vocabulary: TagVocabulary,
     export: ExportSettings,
     ingest: IngestSettings,
+    gate_policy: GatePolicy,
     user: Option<Actor>,
 }
 
@@ -275,8 +327,15 @@ impl Config {
             vocabulary: TagVocabulary::default(),
             export: ExportSettings::default(),
             ingest: IngestSettings::default(),
+            gate_policy: GatePolicy::default(),
             user: None,
         }
+    }
+
+    /// What CS demands of a Spec; a passed CS records it.
+    pub fn with_gate_policy(mut self, gate_policy: GatePolicy) -> Self {
+        self.gate_policy = gate_policy;
+        self
     }
 
     /// Where a new document goes when the caller does not say.
@@ -351,6 +410,11 @@ impl Config {
     /// The ingest settings.
     pub fn ingest(&self) -> &IngestSettings {
         &self.ingest
+    }
+
+    /// What CS demands of a Spec.
+    pub fn gate_policy(&self) -> GatePolicy {
+        self.gate_policy
     }
 
     /// The default approver.

@@ -342,9 +342,17 @@ async fn two_workspaces_ingesting_the_same_change_write_one_event() {
     a.unwrap();
     b.unwrap();
 
-    // One Registered and one Revised; the second process wrote nothing new.
+    // One Registered and one Revised: two events. A record file is named
+    // `<event id>.<digest of its time>.json`, so the same Revised found by both
+    // processes is one event, recorded once or twice depending on whether the two
+    // writes fell on the same clock reading. Count events, not files.
     let files = json_files(&events).await;
-    assert_eq!(files.len(), 2, "{files:?}");
+    let events_seen: std::collections::BTreeSet<&str> = files
+        .iter()
+        .map(|name| name.split('.').next().unwrap_or(name))
+        .collect();
+    assert_eq!(events_seen.len(), 2, "{files:?}");
+    assert!(files.len() <= 3, "at most one extra record: {files:?}");
     assert_eq!(
         common::all_files(&events).await,
         files,
@@ -635,6 +643,59 @@ async fn the_map_conforms_to_the_schema_that_is_written_next_to_it() {
 
     // The schema file is what `schema_json` renders, deterministically.
     assert_eq!(schema_text, whyshelf_infra::map_dto::schema_json().unwrap());
+    shutdown.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn the_settings_set_the_pin_vocabulary_of_a_spec_and_what_cs_demands() {
+    // A project whose pins begin with REQ, and whose CS asks for no hypothesis.
+    let p = with_one_finding(
+        "[gate]\ncs_requires_hypotheses = false\n\n[pins]\nprefixes = { REQ = \"pin\" }\n",
+    )
+    .await;
+    let spec = |pin: &str| {
+        spec_text(&["finding/slow-login"], "Cache the session.").replace("PIN-LOGIN-CACHE", pin)
+    };
+    write(p.root(), "docs/spec/cache.md", &spec("REQ-LOGIN-CACHE")).await;
+    write(p.root(), "docs/spec/old.md", &spec("PIN-LOGIN-CACHE")).await;
+    let (mut ws, shutdown) = opened(&p).await;
+    ws.add(&[rel(LOGIN)], &alias("finding/slow-login"))
+        .await
+        .unwrap();
+    ws.add(&[rel("docs/spec/cache.md")], &alias("spec/cache"))
+        .await
+        .unwrap();
+    // It does not parse here, so its kind is said.
+    ws.add(
+        &[rel("docs/spec/old.md")],
+        &alias("spec/old").with_kind(DocKind::Spec),
+    )
+    .await
+    .unwrap();
+    let alice = || Some(whyshelf_core::domain::actor::Actor::new("alice").unwrap());
+    ws.approve_cr(&refer("finding/slow-login"), alice())
+        .await
+        .unwrap();
+
+    // The custom prefix is a pin; the default one is not this project's.
+    let report = ws.check_cs(&refer("spec/cache")).await.unwrap();
+    assert_eq!(report.violations(), []);
+    let old = ws.check_cs(&refer("spec/old")).await.unwrap();
+    assert_eq!(old.violations().len(), 1, "{:?}", old.violations());
+    assert!(
+        format!("{:?}", old.violations()).contains("accept.pins[0].id"),
+        "{:?}",
+        old.violations()
+    );
+
+    // The approval records the policy it passed under.
+    let approved = ws.approve_cs(&refer("spec/cache"), alice()).await.unwrap();
+    assert_eq!(
+        approved.attestation().gate_basis(),
+        whyshelf_core::domain::approval::GateBasis::Cs {
+            policy: whyshelf_core::domain::policy::GatePolicy::new(true, false)
+        }
+    );
     shutdown.close().await.unwrap();
 }
 

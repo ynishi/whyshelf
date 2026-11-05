@@ -135,6 +135,12 @@
 //! The Contract is the text under `## Contract`; a `## Design Notes` section and
 //! any other section are kept in the file but are not part of the content.
 //!
+//! A pin (`accept.pins[i].id` here, `items[i].pins` of a Design) is read in the
+//! project's pin vocabulary (`[pins]` of the settings, [`crate::config`]; by default
+//! `PIN-*` and `UT-*`), the same one the scan of the tests reads marks in ([`read_in`]):
+//! a project that lists `REQ` declares `REQ-LOGIN`, and the pin read, after the
+//! vocabulary's normalization and table, is what the hash covers.
+//!
 //! # Design
 //!
 //! ```yaml
@@ -188,6 +194,7 @@ use whyshelf_core::domain::id::{Alias, ItemId, ItemNumber};
 use whyshelf_core::domain::location::{CodeLocation, SourceUri};
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::pin::{HypId, Hypothesis, PinContract, PinId};
+use whyshelf_core::domain::policy::PinVocabulary;
 use whyshelf_core::domain::reference::Ref;
 use whyshelf_core::domain::state::UnparsedReason;
 use whyshelf_core::domain::tag::Tag;
@@ -222,10 +229,21 @@ pub struct Read {
 /// one naming key is another kind's (`finding_type` in a registered Spec): it is not
 /// a Spec with extra sections but another document, and says so
 /// ([`UnparsedReason::KindChanged`]).
+///
+/// The pins of a Spec and of a Design are read in the default vocabulary; a project
+/// that sets its own reads them with [`read_in`].
 pub fn read(text: &NormalizedText, kind: Option<DocKind>) -> Read {
+    read_in(text, kind, &PinVocabulary::default())
+}
+
+/// Read as [`read`] does, with the pins of a Spec (`accept.pins[i].id`) and of a
+/// Design (`items[i].pins`) read in `vocabulary` ([`PinId::parse_in`]): the one the
+/// scan of the tests reads its marks in, so that a pin a Spec declares is the pin a
+/// test carries, and a mark that is no pin of the project is refused by both.
+pub fn read_in(text: &NormalizedText, kind: Option<DocKind>, vocabulary: &PinVocabulary) -> Read {
     let mut problems = Problems::default();
     let mut seen = Seen::default();
-    let doc = read_into(text.as_str(), kind, &mut problems, &mut seen);
+    let doc = read_into(text.as_str(), kind, vocabulary, &mut problems, &mut seen);
     let outcome = match (doc, NonEmptyVec::from_vec(problems.0)) {
         (Some(doc), Err(_)) => Ok(doc),
         (_, Ok(reasons)) => Err(reasons),
@@ -296,6 +314,7 @@ fn classification(front: ClassFront, problems: &mut Problems) -> FileClassificat
 fn read_into(
     text: &str,
     registered: Option<DocKind>,
+    vocabulary: &PinVocabulary,
     problems: &mut Problems,
     seen: &mut Seen,
 ) -> Option<RawDoc> {
@@ -367,11 +386,11 @@ fn read_into(
         }
         DocKind::Spec => {
             let front = typed::<SpecFront>(parts.yaml, problems)?;
-            parse_spec(front, parts.body, problems).map(RawDoc::Spec)
+            parse_spec(front, parts.body, vocabulary, problems).map(RawDoc::Spec)
         }
         DocKind::Design => {
             let front = typed::<DesignFront>(parts.yaml, problems)?;
-            parse_design(front, problems).map(RawDoc::Design)
+            parse_design(front, vocabulary, problems).map(RawDoc::Design)
         }
     }
 }
@@ -514,6 +533,19 @@ impl Problems {
     ) -> Option<T> {
         let text = self.need(value, field)?;
         text.parse()
+            .map_err(|error| self.invalid(field, error))
+            .ok()
+    }
+
+    /// A pin, read in the project's vocabulary.
+    fn pin(
+        &mut self,
+        vocabulary: &PinVocabulary,
+        value: Option<String>,
+        field: &str,
+    ) -> Option<PinId> {
+        let text = self.need(value, field)?;
+        PinId::parse_in(vocabulary, &text)
             .map_err(|error| self.invalid(field, error))
             .ok()
     }
@@ -704,7 +736,12 @@ fn parse_finding(front: FindingFront, body: &str, problems: &mut Problems) -> Op
 
 // ---- Spec ----------------------------------------------------------------
 
-fn parse_spec(front: SpecFront, body: &str, problems: &mut Problems) -> Option<RawSpec> {
+fn parse_spec(
+    front: SpecFront,
+    body: &str,
+    vocabulary: &PinVocabulary,
+    problems: &mut Problems,
+) -> Option<RawSpec> {
     let grounds = problems.parsed_list::<Ref>(front.grounds, "grounds");
     let grounds = match NonEmptyVec::from_vec(grounds) {
         Ok(grounds) => Some(grounds),
@@ -718,7 +755,7 @@ fn parse_spec(front: SpecFront, body: &str, problems: &mut Problems) -> Option<R
     if let Some(accept) = front.accept {
         for (index, pin) in accept.pins.unwrap_or_default().into_iter().enumerate() {
             let at = format!("accept.pins[{index}]");
-            let id = problems.parsed::<PinId>(pin.id, &format!("{at}.id"));
+            let id = problems.pin(vocabulary, pin.id, &format!("{at}.id"));
             let contract = problems.need(pin.contract, &format!("{at}.contract"));
             let contract = contract.and_then(|text| {
                 PinContract::new(text)
@@ -758,7 +795,11 @@ fn parse_spec(front: SpecFront, body: &str, problems: &mut Problems) -> Option<R
 
 // ---- Design --------------------------------------------------------------
 
-fn parse_design(front: DesignFront, problems: &mut Problems) -> Option<RawDesign> {
+fn parse_design(
+    front: DesignFront,
+    vocabulary: &PinVocabulary,
+    problems: &mut Problems,
+) -> Option<RawDesign> {
     let spec = problems.parsed::<Ref>(front.spec, "spec");
     let crux = parse_crux(front.crux, problems);
     let mut items: BTreeMap<ItemNumber, WorkItem> = BTreeMap::new();
@@ -767,9 +808,14 @@ fn parse_design(front: DesignFront, problems: &mut Problems) -> Option<RawDesign
         let at = format!("items[{index}]");
         let number = problems.parsed::<ItemNumber>(item.number, &format!("{at}.number"));
         let summary = problems.non_blank(item.summary, &format!("{at}.summary"));
-        let pins: BTreeSet<PinId> = problems
-            .parsed_list::<PinId>(item.pins, &format!("{at}.pins"))
+        let pins: BTreeSet<PinId> = item
+            .pins
+            .unwrap_or_default()
             .into_iter()
+            .enumerate()
+            .filter_map(|(i, text)| {
+                problems.pin(vocabulary, Some(text), &format!("{at}.pins[{i}]"))
+            })
             .collect();
         // The `id:` is optional here: whether an item needs one is the rule of the
         // corpus, not of reading. One that is written must be an identifier.
@@ -1150,6 +1196,118 @@ mod tests {
             spec, again,
             "a supplementary section is outside the content"
         );
+    }
+
+    /// A vocabulary of the prefixes `REQ` (invariants) and `UT`, spelled upper-dash,
+    /// with the tag `AUTH_LOGIN` standing for `REQ-AUTH-LOGIN`.
+    fn req_vocabulary() -> PinVocabulary {
+        use whyshelf_core::domain::pin::PinKind;
+        use whyshelf_core::domain::policy::{ExternalTag, PinNormalize, PinPrefix};
+        let prefixes = NonEmptyVec::new(
+            PinPrefix::new("REQ", PinKind::Pin).unwrap(),
+            vec![PinPrefix::new("UT", PinKind::UnitTest).unwrap()],
+        );
+        let strict =
+            PinVocabulary::new(prefixes.clone(), PinNormalize::Strict, BTreeMap::new()).unwrap();
+        let mapping = BTreeMap::from([(
+            ExternalTag::new("AUTH_LOGIN").unwrap(),
+            PinId::parse_in(&strict, "REQ-AUTH-LOGIN").unwrap(),
+        )]);
+        PinVocabulary::new(prefixes, PinNormalize::UpperDash, mapping).unwrap()
+    }
+
+    fn read_text_in(text: &str, vocabulary: &PinVocabulary) -> Result<RawDoc, Vec<UnparsedReason>> {
+        read_in(&normalize(text), None, vocabulary)
+            .outcome
+            .map_err(NonEmptyVec::into_vec)
+    }
+
+    fn spec_declaring(ids: &[&str]) -> String {
+        let pins: String = ids
+            .iter()
+            .map(|id| format!("    - {{id: {id}, contract: c}}\n"))
+            .collect();
+        format!("---\ngrounds: [finding/a]\naccept:\n  pins:\n{pins}---\n## Contract\nc\n")
+    }
+
+    fn declared(doc: RawDoc) -> Vec<String> {
+        let RawDoc::Spec(spec) = doc else {
+            panic!("not a Spec");
+        };
+        let id = |text: &str| text.parse::<whyshelf_core::domain::id::EntityId>().unwrap();
+        let ground =
+            whyshelf_core::domain::id::FindingId::new(id("0192f3a4-5b6c-7d8e-8f90-0000000000f1"));
+        spec.build(
+            SpecId::new(id("0192f3a4-5b6c-7d8e-8f90-0000000000a1")),
+            NonEmptyVec::new(ground, vec![]),
+        )
+        .unwrap()
+        .pins()
+        .keys()
+        .map(ToString::to_string)
+        .collect()
+    }
+
+    #[test]
+    fn a_spec_declares_pins_in_the_vocabulary_of_the_project() {
+        let custom = spec_declaring(&["REQ-LOGIN", "ut_parse", "AUTH_LOGIN"]);
+        assert_eq!(
+            declared(read_text_in(&custom, &req_vocabulary()).unwrap()),
+            ["REQ-AUTH-LOGIN", "REQ-LOGIN", "UT-PARSE"],
+            "a custom prefix, the normalization and the table, as the scan reads them"
+        );
+        // The default vocabulary refuses the custom prefix, as it always did.
+        let reasons = parse_text(&spec_declaring(&["REQ-LOGIN"])).unwrap_err();
+        assert!(matches!(
+            reasons.as_slice(),
+            [UnparsedReason::InvalidField { field, .. }] if field == "accept.pins[0].id"
+        ));
+        // A project without `PIN` cannot declare a `PIN-*`: its tests could never
+        // carry one.
+        let reasons = read_text_in(&spec_declaring(&["PIN-A"]), &req_vocabulary()).unwrap_err();
+        assert!(matches!(
+            reasons.as_slice(),
+            [UnparsedReason::InvalidField { field, .. }] if field == "accept.pins[0].id"
+        ));
+        // A mark and the pin it is, both declared, are one pin declared twice.
+        let reasons = read_text_in(
+            &spec_declaring(&["AUTH_LOGIN", "REQ-AUTH-LOGIN"]),
+            &req_vocabulary(),
+        )
+        .unwrap_err();
+        assert_eq!(reasons.len(), 1, "{reasons:?}");
+    }
+
+    #[test]
+    fn a_design_assigns_pins_in_the_vocabulary_of_the_project() {
+        let with_pins = |pins: &str| {
+            design_with_items(&format!(
+                "  - number: 1\n    summary: s\n    pins: [{pins}]\n"
+            ))
+        };
+        let Ok(RawDoc::Design(design)) = read_text_in(
+            &with_pins("REQ-LOGIN, ut_parse, AUTH_LOGIN"),
+            &req_vocabulary(),
+        ) else {
+            panic!("a Design");
+        };
+        let id = |text: &str| text.parse::<whyshelf_core::domain::id::EntityId>().unwrap();
+        let design = design.build(
+            DesignId::new(id("0192f3a4-5b6c-7d8e-8f90-0000000000d1")),
+            SpecId::new(id("0192f3a4-5b6c-7d8e-8f90-0000000000a1")),
+        );
+        let assigned: Vec<String> = design
+            .items()
+            .values()
+            .flat_map(|item| item.assigned_pins().iter().map(ToString::to_string))
+            .collect();
+        assert_eq!(assigned, ["REQ-AUTH-LOGIN", "REQ-LOGIN", "UT-PARSE"]);
+        // A pin of a prefix the project does not list is refused where it is written.
+        let reasons = read_text_in(&with_pins("REQ-LOGIN, PIN-A"), &req_vocabulary()).unwrap_err();
+        assert!(matches!(
+            reasons.as_slice(),
+            [UnparsedReason::InvalidField { field, .. }] if field == "items[0].pins[1]"
+        ));
     }
 
     #[test]

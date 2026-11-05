@@ -36,7 +36,7 @@ mod in_memory {
     use crate::domain::revision::{IntegrationFact, RevisionId, UnknownIntegration};
     use crate::domain::state::UnparsedReason;
 
-    use crate::app::config::{Config, Paths, PinPattern, TestCommand, TestSettings, TestTimeout};
+    use crate::app::config::{Config, Paths, PinSearch, TestCommand, TestSettings, TestTimeout};
     use crate::app::ports::{
         AppendOutcome, CacheEntry, ClockPort, CodeScanPort, CreateOutcome, CurrentPort, ExportDoc,
         ExportFile, ExportKind, ExportParts, FileStat, IdPort, IndexCachePort, Listing, Mtime,
@@ -750,7 +750,7 @@ mod in_memory {
             _revision: &RevisionId,
             _scan_dirs: &[RelPath],
             _files: &TestFileSet,
-            _pattern: &PinPattern,
+            _search: &PinSearch,
         ) -> Result<PinScan, FakeError> {
             let s = self.lock();
             Ok(PinScan {
@@ -933,10 +933,7 @@ mod in_memory {
         Config::new(
             "demo".parse().expect("a project name"),
             paths,
-            TestSettings::new(
-                TestCommand::new("cargo test").expect("a command"),
-                PinPattern::new("@pin").expect("a pattern"),
-            ),
+            TestSettings::new(TestCommand::new("cargo test").expect("a command")),
         )
         .with_default_store(StoreKind::Repo)
         .with_user(Actor::new("alice").expect("a name"))

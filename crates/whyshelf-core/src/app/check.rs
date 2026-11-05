@@ -35,6 +35,7 @@ use crate::domain::gate::{
 use crate::domain::id::{DesignId, EntityId, FindingId, SpecId};
 use crate::domain::lint::CheckViolation;
 use crate::domain::nonempty::NonBlank;
+use crate::domain::policy::GatePolicy;
 use crate::domain::reference::{ItemRef, Ref};
 use crate::domain::spec::DeclaredPins;
 
@@ -181,7 +182,7 @@ fn prepare_cr(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
     })
 }
 
-fn prepare_cs(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
+fn prepare_cs(model: &Model, target: &Ref, policy: GatePolicy) -> Result<Prepared, AppError> {
     let gate = Gate::Cs;
     let id = model.resolve_as(target, gate.target_kind())?;
     let Some(spec) = model.specs().get(&SpecId::new(id)) else {
@@ -195,6 +196,7 @@ fn prepare_cs(model: &Model, target: &Ref) -> Result<Prepared, AppError> {
             spec,
             grounds: model.findings().iter().map(|(id, ev)| (*id, ev)).collect(),
             states: &states,
+            policy,
         }),
     })
 }
@@ -353,7 +355,7 @@ impl<P: Ports> Workspace<P> {
     /// CS, machine layer.
     pub async fn check_cs(&self, spec: &Ref) -> Result<CheckReport, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        Ok(prepare_cs(&model, spec)?.report())
+        Ok(prepare_cs(&model, spec, self.config.gate_policy())?.report())
     }
 
     /// CS, human layer.
@@ -363,7 +365,7 @@ impl<P: Ports> Workspace<P> {
         by: Option<Actor>,
     ) -> Result<Approved, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        let prepared = prepare_cs(&model, spec)?;
+        let prepared = prepare_cs(&model, spec, self.config.gate_policy())?;
         self.approve_checked(&model, prepared, by).await
     }
 
