@@ -85,6 +85,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::approval::{
     ApprovalSet, Attestation, CmResult, CsFixing, Gate, GateBasis, Pinned, TestOutcome, TestsRun,
 };
+use super::boundary::{Crosses, CrossingText};
 use super::design::{Design, WorkItem};
 use super::evaluate::{Evaluated, ImplView, ItemEvaluation, ItemKey, States, Subject};
 use super::finding::{EvidenceLabel, Finding, FindingSource};
@@ -129,6 +130,17 @@ impl Passed {
     /// The policy the check passed under: only CS reads one.
     pub fn gate_basis(&self) -> GateBasis {
         self.attestation.gate_basis()
+    }
+}
+
+impl Crosses for Passed {
+    fn cross_into(&self, out: &mut CrossingText) {
+        // The gate is the attestation's own; the attestation carries the text.
+        let Self {
+            gate: _,
+            attestation,
+        } = self;
+        attestation.cross_into(out);
     }
 }
 

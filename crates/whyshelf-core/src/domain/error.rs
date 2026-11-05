@@ -9,11 +9,17 @@ use std::num::ParseIntError;
 use thiserror::Error;
 
 use super::approval::Gate;
+use super::boundary::Leak;
+use super::corpus::Invalidity;
 use super::event::{DocKind, EventId};
-use super::hash::ContentHash;
-use super::id::{DocId, EntityId};
+use super::hash::{BytesHash, ContentHash, TextHash};
+use super::id::{DocId, EntityId, ShortId};
 use super::judge::Judge;
 use super::judgement::{JudgementId, Target};
+use super::location::RelPath;
+use super::naming::{Place, RefForm};
+use super::nonempty::NonEmptyVec;
+use super::publication::LeakRemedy;
 use super::query::StateFilter;
 
 /// Why a text could not become a value object.
@@ -98,6 +104,17 @@ pub enum ValueError {
     /// An alias started or ended with `/`, or held an empty segment.
     #[error("an alias has no empty path segment")]
     AliasBadShape,
+    /// An alias was 8 to 32 hexadecimal characters, which a short id is written as.
+    ///
+    /// Refused so that a bare hexadecimal text is never ambiguous between an alias
+    /// and a short id. Fix: add a hyphen or a letter outside `a-f`.
+    #[error(
+        "an alias is not 8 to 32 hexadecimal characters, which is how a short id is written; found {len}"
+    )]
+    AliasLooksLikeShortId {
+        /// Characters found.
+        len: usize,
+    },
     /// A name of a project (in an `ext:` reference) was malformed.
     #[error("a project name holds lowercase letters, digits and `. _ -`")]
     ProjectNameBadShape,
@@ -219,6 +236,28 @@ pub enum ValueError {
     /// A local reference was neither an entity id nor an alias.
     #[error("a reference is an entity id or an alias")]
     RefLocalShape(#[source] Box<ValueError>),
+    /// A short id had fewer characters than the least that cannot match by accident.
+    #[error("a short id has at least {min} hexadecimal characters, found {len}")]
+    ShortIdTooShort {
+        /// Characters found.
+        len: usize,
+        /// The least.
+        min: usize,
+    },
+    /// A short id had more characters than the hexadecimal digits of a UUID.
+    #[error("a short id has at most {max} hexadecimal characters, found {len}")]
+    ShortIdTooLong {
+        /// Characters found.
+        len: usize,
+        /// The most.
+        max: usize,
+    },
+    /// A short id held a character that is not lowercase hexadecimal.
+    #[error("a short id is lowercase hexadecimal, found `{ch}`")]
+    ShortIdBadChar {
+        /// The offending character.
+        ch: char,
+    },
     /// A store name was neither `repo` nor `private`.
     #[error("a store is `repo` or `private`")]
     StoreKind,
@@ -328,6 +367,143 @@ pub enum ItemRefError {
     Ambiguous {
         /// How many designs refer to the Spec.
         count: usize,
+    },
+}
+
+/// Why a text is not a reference where it was written.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum RefError {
+    /// The text was empty.
+    #[error("a reference is empty")]
+    Empty,
+    /// A hyphenated UUID that is not an id (an uppercase one, one of another version).
+    #[error("a reference that looks like a UUID is not an id")]
+    Id(#[source] ValueError),
+    /// A short id that is malformed (too short, too long, not lowercase hexadecimal).
+    #[error("a short id is malformed")]
+    Short(#[source] ValueError),
+    /// The text is neither an alias nor a path.
+    #[error("a reference is an id, a short id, an alias or a path")]
+    Name(#[source] ValueError),
+    /// `ext:` was not followed by `<project>/<id>`.
+    #[error("an external reference is `ext:<project>/<id>`")]
+    ExtShape,
+    /// The project of an `ext:` reference is malformed.
+    #[error("the project of an external reference is malformed")]
+    Project(#[source] ValueError),
+    /// The id of an `ext:` reference is malformed.
+    #[error("the id of an external reference is malformed")]
+    ExtId(#[source] ValueError),
+    /// What follows `private:` is neither an id nor a short id.
+    #[error("`private:` is followed by an id or a short id")]
+    PrivateTarget(#[source] ValueError),
+    /// A URL is malformed.
+    #[error("a URL is malformed")]
+    Url(#[source] ValueError),
+    /// What follows `#` is neither digits nor `id:` and a short id.
+    #[error("an item is named `#<number>` or `#id:<short id>`, found `#{text}`")]
+    ItemSelector {
+        /// The text after the `#`.
+        text: String,
+    },
+    /// The number after `#` is not a positive number that fits.
+    #[error("an item number is a positive number")]
+    ItemNumber(#[source] ValueError),
+    /// A short id stands where a document names its upstream or another document.
+    ///
+    /// Fix: write the full id or the alias.
+    #[error("a short id (`{short}`) is not accepted in {place}; write the full id or the alias")]
+    ShortIdInDocument {
+        /// The short id.
+        short: ShortId,
+        /// Where it was written.
+        place: Place,
+    },
+    /// A form that does not belong in the place it was written.
+    #[error("a {form} is not accepted in {place}")]
+    NotAllowedHere {
+        /// The form.
+        form: RefForm,
+        /// Where it was written.
+        place: Place,
+    },
+}
+
+/// Why text may not be written where others read it.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum LeakRefusal {
+    /// The check cannot run: this person's private root is set and cannot be read.
+    #[error("the leak check cannot run: the private root is set and cannot be read")]
+    Uncheckable,
+    /// The text names private documents.
+    #[error("the text names {} private name(s)", .0.len())]
+    Leaks(NonEmptyVec<Leak>),
+}
+
+/// Why a publication cannot be planned.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum PublicationError {
+    /// No file of the corpus has that id.
+    #[error("{doc} is not in the corpus")]
+    NotFound {
+        /// The document.
+        doc: DocId,
+    },
+    /// The document is public already, and no publication of it is open.
+    #[error("{doc} is public already")]
+    AlreadyPublic {
+        /// The document.
+        doc: DocId,
+    },
+    /// The document cannot be trusted as it stands (a private file Git would add is
+    /// not among the reasons: that is what a publication ends).
+    #[error("{doc} cannot be published: it is invalid as it stands")]
+    DocInvalid {
+        /// The document.
+        doc: DocId,
+        /// Why.
+        reasons: NonEmptyVec<Invalidity>,
+    },
+    /// A file stands at the destination already.
+    #[error("a file is at {to} already")]
+    DestinationTaken {
+        /// The destination.
+        to: RelPath,
+    },
+    /// An open publication has its public file elsewhere.
+    #[error("the public file of the open publication is at {file}, not at {to}")]
+    DestinationDiffers {
+        /// Where the public file is.
+        file: RelPath,
+        /// The destination asked for.
+        to: RelPath,
+    },
+    /// The text of a version to be copied was not given, and its record has not been
+    /// purged: it can neither be copied nor checked.
+    #[error("the object {text} is neither purged nor given")]
+    ObjectUnavailable {
+        /// The hash of the text.
+        text: TextHash,
+    },
+    /// The bytes the leak check read are not the bytes of the file that would be
+    /// copied: the file changed since they were read. Read it again and plan again.
+    #[error("the file is {expected} now, and the text checked was {found}")]
+    EvidenceStale {
+        /// The bytes the corpus has for the file.
+        expected: BytesHash,
+        /// The bytes that were given to be checked.
+        found: BytesHash,
+    },
+    /// The leak check cannot run, and nothing is written to the public ledger.
+    #[error("the leak check cannot run: the private root is set and cannot be read")]
+    LeakUncheckable,
+    /// Text that would cross names private documents. Nothing is planned.
+    #[error("{} private name(s) would cross", .leaks.len())]
+    Leaks {
+        /// Every leak found.
+        leaks: NonEmptyVec<Leak>,
+        /// What to do about it.
+        remedy: LeakRemedy,
     },
 }
 

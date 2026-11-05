@@ -80,6 +80,7 @@
 //! | an item has no `id:` | [`ItemIssue::UnidentifiedItem`] |
 //! | two items of one Design have one `id:` | [`ItemIssue::DuplicateItemId`] |
 //! | an item has the `id:` of its own Design | [`ItemIssue::ItemIdIsDesignId`] |
+//! | the ids of two items of one Design end in the same 8 characters | [`ItemIssue::DuplicateItemShortId`] |
 //! | two items of one Design have one number | not representable here: the number is the key of the map, so the file reader refuses the file with `UnparsedReason::DuplicateItemNumber` |
 //!
 //! # Hashes
@@ -104,7 +105,7 @@ use std::str::FromStr;
 use super::canon::{Canon, ToCanon};
 use super::error::{EntityError, ValueError};
 use super::hash::{ContentHash, HashKind};
-use super::id::{DesignId, ItemId, ItemNumber, SpecId};
+use super::id::{DesignId, ItemId, ItemNumber, ShortId, SpecId};
 use super::nonempty::{NonBlank, NonEmptyVec};
 use super::pin::PinId;
 use super::spec::Spec;
@@ -403,6 +404,17 @@ pub enum ItemIssue {
         /// The number of the item.
         number: ItemNumber,
     },
+    /// The ids of two or more items of one Design end in the same 8 characters, so a
+    /// reference `<design>#id:<short>` could not tell them apart.
+    ///
+    /// Fix: give all but one of them a new `id:`.
+    #[error("the items {} have ids that end in {short}", join_numbers(.numbers))]
+    DuplicateItemShortId {
+        /// The shared end.
+        short: ShortId,
+        /// The numbers of the items whose ids end so, in order; at least two.
+        numbers: NonEmptyVec<ItemNumber>,
+    },
 }
 
 /// The numbers of the items an issue names, as `#1, #3`.
@@ -530,11 +542,26 @@ impl Design {
                 None => issues.push(ItemIssue::UnidentifiedItem { number: *number }),
             }
         }
+        // Items that share a whole id are `DuplicateItemId`'s business; here, only ids
+        // that differ and end alike.
+        let mut ends: BTreeMap<ShortId, BTreeMap<ItemId, Vec<ItemNumber>>> = BTreeMap::new();
         for (id, numbers) in carriers {
+            ends.entry(ShortId::of(id.entity()))
+                .or_default()
+                .insert(id, numbers.clone());
             if numbers.len() > 1
                 && let Ok(numbers) = NonEmptyVec::from_vec(numbers)
             {
                 issues.push(ItemIssue::DuplicateItemId { id, numbers });
+            }
+        }
+        for (short, ids) in ends {
+            if ids.len() > 1 {
+                let mut numbers: Vec<ItemNumber> = ids.into_values().flatten().collect();
+                numbers.sort();
+                if let Ok(numbers) = NonEmptyVec::from_vec(numbers) {
+                    issues.push(ItemIssue::DuplicateItemShortId { short, numbers });
+                }
             }
         }
         issues
@@ -859,6 +886,38 @@ mod tests {
         assert_eq!(
             d.item_issues(),
             vec![ItemIssue::ItemIdIsDesignId { number: num(1) }]
+        );
+    }
+
+    #[test]
+    fn items_whose_ids_end_alike_are_reported_so_a_short_id_names_one() {
+        // Ids made together differ in the start and may end alike; here they do.
+        let d = design(
+            10,
+            1,
+            vec![
+                (1, identified(0x1_0000_0007, "a", &[])),
+                (2, identified(0x2_0000_0007, "b", &[])),
+                (4, identified(0x3_0000_0008, "c", &[])),
+            ],
+        );
+        assert_eq!(
+            d.item_issues(),
+            vec![ItemIssue::DuplicateItemShortId {
+                short: "00000007".parse().unwrap(),
+                numbers: NonEmptyVec::new(num(1), vec![num(2)]),
+            }]
+        );
+        // One id on two items is the other issue's business, and only that.
+        let same = design(
+            10,
+            1,
+            vec![(1, identified(7, "a", &[])), (2, identified(7, "b", &[]))],
+        );
+        assert!(
+            same.item_issues()
+                .iter()
+                .all(|issue| matches!(issue, ItemIssue::DuplicateItemId { .. }))
         );
     }
 

@@ -159,6 +159,12 @@
 //! its alias or title, or writing its identifier without the mark, is stopped by the
 //! leak lint ([`lint::leak_lint`]).
 //!
+//! Beside this, [`naming`] holds the grammar the documents of the corpus are read
+//! with: one parser for command arguments and for references in documents, which
+//! decides by place what a short id, a path or an item number may be used for, and
+//! looks a name up in both roots by id. What crosses to the public side when a
+//! document is published is [`publication`] and [`boundary`].
+//!
 //! # Merging judgements
 //!
 //! Git merges the documents. The judgements that people made live in two ledgers
@@ -209,6 +215,9 @@
 //! | [`judgement`], [`ledger`], [`judge`], [`adoption`] | the judgements people made as an append-only set that merges by union (concurrent approvals survive a revocation that did not see them; the objects are a set that can delete), who made them, and taking an earlier decision in as an approval |
 //! | [`state`], [`evaluate`] | derived state and how it is derived |
 //! | [`corpus_eval`] | the state of every document and item read from the files and the ledgers: presence, readiness, the basis of each approval |
+//! | [`naming`] | the one grammar of a reference (a command argument and a reference in a document), where each form is accepted, the lookup over the corpus (`Resolved`, `Ambiguous`, `Dangling` with a rename hint, `Unresolved`) and the lints of a reference in a document (`FragileItemRef`, `MarkStale`); the short id is [`id::ShortId`] |
+//! | [`boundary`] | the text that crosses to the public side, listed from the fields of the types that cross ([`boundary::CrossingText`]), the leak check over it, and what it can say when the private root is absent or unused ([`boundary::PrivateRoot`]) |
+//! | [`publication`] | what publishing a document would do: the plan with its steps, the records and versions it copies and the ones it leaves, the leak check, the cut-short forms, and the digest a person confirms ([`publication::plan_publication`]) |
 //! | [`keyring`] | keys for the pins of private upstreams, and the keyed pins they make (the HMAC itself is in [`hash`]) |
 //! | [`policy`] | what a project decides for itself: what CS demands of a Spec ([`policy::GatePolicy`], recorded in the approval it lets through) and the pin prefixes and spellings ([`policy::PinVocabulary`]) |
 //! | [`gate`], [`next`] | the machine check of each gate and the proof it passed; the next step of an entity |
@@ -220,6 +229,7 @@ mod vocabulary;
 pub mod actor;
 pub mod adoption;
 pub mod approval;
+pub mod boundary;
 pub mod canon;
 pub mod classification;
 pub mod corpus;
@@ -240,10 +250,12 @@ pub mod knowable;
 pub mod ledger;
 pub mod lint;
 pub mod location;
+pub mod naming;
 pub mod next;
 pub mod nonempty;
 pub mod pin;
 pub mod policy;
+pub mod publication;
 pub mod query;
 pub mod reference;
 pub mod revision;

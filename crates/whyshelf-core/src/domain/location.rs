@@ -8,6 +8,7 @@ use std::fmt;
 use std::num::NonZeroU32;
 use std::str::FromStr;
 
+use super::boundary::{Crosses, CrossingField, CrossingText};
 use super::canon::{Canon, ToCanon};
 use super::error::{GlobProblem, ValueError};
 use super::nonempty::NonBlank;
@@ -260,6 +261,15 @@ impl ToCanon for SourceUri {
         match self {
             Self::Uri(uri) => Canon::map([("uri", Canon::str(uri.as_str()))]),
             Self::Citation(text) => Canon::map([("citation", text.to_canon())]),
+        }
+    }
+}
+
+impl Crosses for SourceUri {
+    fn cross_into(&self, out: &mut CrossingText) {
+        match self {
+            Self::Uri(uri) => out.push(CrossingField::Source, uri.as_str()),
+            Self::Citation(text) => out.push(CrossingField::Source, text.as_str()),
         }
     }
 }

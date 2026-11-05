@@ -57,6 +57,7 @@ use std::str::FromStr;
 use super::actor::Timestamp;
 use super::adoption::Adoptable;
 use super::approval::{Gate, GateBasis, UpstreamRecord};
+use super::boundary::{Crosses, CrossingField, CrossingText};
 use super::canon::{Canon, ToCanon};
 use super::corpus::Visibility;
 use super::error::{JudgementError, ValueError};
@@ -706,6 +707,40 @@ impl ToCanon for Judgement {
             ),
             ("body", self.kind.to_canon()),
         ])
+    }
+}
+
+impl Crosses for JudgementKind {
+    fn cross_into(&self, out: &mut CrossingText) {
+        match self {
+            Self::Approve { passed, object: _ } => passed.cross_into(out),
+            Self::Adopt {
+                adoptable,
+                object: _,
+            } => adoptable.cross_into(out),
+            Self::Revoke { targets: _, reason }
+            | Self::Retire { target: _, reason }
+            | Self::Purge {
+                doc: _,
+                object: _,
+                reason,
+            } => out.push(CrossingField::Reason, reason.as_str()),
+            Self::Published { doc: _, records: _ } => {}
+        }
+    }
+}
+
+impl Crosses for Judgement {
+    fn cross_into(&self, out: &mut CrossingText) {
+        let Self {
+            id: _,
+            at: _,
+            judge,
+            origin: _,
+            kind,
+        } = self;
+        judge.cross_into(out);
+        kind.cross_into(out);
     }
 }
 

@@ -35,6 +35,7 @@
 
 use std::fmt;
 
+use super::boundary::{Crosses, CrossingField, CrossingText};
 use super::canon::{Canon, ToCanon};
 use super::error::JudgeError;
 
@@ -253,6 +254,30 @@ impl ToCanon for Judge {
             ("email", self.email.to_canon()),
             ("principal", self.principal.to_canon()),
         ])
+    }
+}
+
+impl Crosses for Principal {
+    fn cross_into(&self, out: &mut CrossingText) {
+        match self {
+            Self::Human | Self::Undeclared => {}
+            Self::Agent { tool } => out.push(CrossingField::JudgeTool, tool.as_str()),
+        }
+    }
+}
+
+impl Crosses for Judge {
+    fn cross_into(&self, out: &mut CrossingText) {
+        let Self {
+            name,
+            email,
+            principal,
+        } = self;
+        out.push(CrossingField::JudgeName, name.as_str());
+        if let Some(email) = email {
+            out.push(CrossingField::JudgeEmail, email.as_str());
+        }
+        principal.cross_into(out);
     }
 }
 

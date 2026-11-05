@@ -208,6 +208,92 @@ impl ToCanon for ItemNumber {
     }
 }
 
+/// The short form of an identifier: the last 8 or more hexadecimal characters of a
+/// UUID, which is its random part.
+///
+/// The first characters of a UUID v7 are a time in milliseconds, so the first few
+/// of two identifiers made together are the same; the end is not. A short id is
+/// therefore matched against the end of an identifier, never the start. Eight
+/// characters are 32 bits, so two identifiers of one project ending alike is rare, and
+/// when it happens the lookup lists the candidates instead of choosing
+/// ([`naming`](super::naming)).
+///
+/// A short id is a convenience for a person typing a command. It is not an identity,
+/// and no file keeps one outside a Design's `<design>#id:<short>` (where it is
+/// accepted is in [`naming`](super::naming)).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ShortId(String);
+
+impl ShortId {
+    /// The fewest characters of a short id.
+    pub const MIN_LEN: usize = 8;
+
+    /// The most characters of a short id: the 32 hexadecimal digits of a UUID.
+    pub const MAX_LEN: usize = 32;
+
+    /// Whether `text` has the shape of a short id: 8 to 32 hexadecimal digits, of
+    /// either case. Uppercase is refused by parsing, but it is still this shape, so it
+    /// is not read as an alias or a path.
+    pub fn looks_like(text: &str) -> bool {
+        (Self::MIN_LEN..=Self::MAX_LEN).contains(&text.len())
+            && text.bytes().all(|b| b.is_ascii_hexdigit())
+    }
+
+    /// The short form of an identifier, as it is shown: its last 8 characters.
+    pub fn of(id: EntityId) -> Self {
+        let mut buffer = Uuid::encode_buffer();
+        let hex = id.as_uuid().simple().encode_lower(&mut buffer);
+        Self(hex[hex.len() - Self::MIN_LEN..].to_owned())
+    }
+
+    /// The short id as text: lowercase hexadecimal.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Whether the identifier ends with these characters.
+    pub fn matches(&self, id: EntityId) -> bool {
+        // Called for every document of a lookup: no allocation.
+        let mut buffer = Uuid::encode_buffer();
+        id.as_uuid()
+            .simple()
+            .encode_lower(&mut buffer)
+            .ends_with(self.0.as_str())
+    }
+}
+
+impl fmt::Display for ShortId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl FromStr for ShortId {
+    type Err = ValueError;
+
+    /// 8 to 32 characters of lowercase hexadecimal. A shorter text is refused rather
+    /// than guessed at, so that a lookup cannot match half the project.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some(ch) = s.chars().find(|c| !matches!(c, '0'..='9' | 'a'..='f')) {
+            return Err(ValueError::ShortIdBadChar { ch });
+        }
+        let len = s.len();
+        if len < Self::MIN_LEN {
+            return Err(ValueError::ShortIdTooShort {
+                len,
+                min: Self::MIN_LEN,
+            });
+        }
+        if len > Self::MAX_LEN {
+            return Err(ValueError::ShortIdTooLong {
+                len,
+                max: Self::MAX_LEN,
+            });
+        }
+        Ok(Self(s.to_owned()))
+    }
+}
+
 const ALIAS_MAX: usize = 128;
 
 /// A human-readable name such as `spec/cache-timeout`.
@@ -215,6 +301,11 @@ const ALIAS_MAX: usize = 128;
 /// Lowercase letters, digits and `. _ - /`, at most 128 characters, no empty
 /// segment. The `:` is not allowed, so an alias can never be confused with a
 /// `private:` or `ext:` reference.
+///
+/// A text of 8 to 32 hexadecimal characters (either case) is refused
+/// ([`ValueError::AliasLooksLikeShortId`]): that is how a [`ShortId`] is written, and
+/// a bare text must never be ambiguous between the two. `cafe-babe` and `v20240101`
+/// are aliases.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Alias(String);
 
@@ -237,6 +328,10 @@ impl FromStr for Alias {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.is_empty() {
             return Err(ValueError::AliasEmpty);
+        }
+        // Either case: `CAFEBABE` is not an alias either, and not a short id.
+        if ShortId::looks_like(s) {
+            return Err(ValueError::AliasLooksLikeShortId { len: s.len() });
         }
         let len = s.chars().count();
         if len > ALIAS_MAX {
@@ -377,9 +472,77 @@ mod tests {
     }
 
     #[test]
+    fn a_short_id_is_the_end_of_an_identifier_and_not_its_start() {
+        let id = eid(0xabcd_ef01_2345);
+        let hex = id.to_string().replace('-', "");
+        let short = ShortId::of(id);
+        assert_eq!(short.as_str().len(), 8);
+        assert!(hex.ends_with(short.as_str()));
+        assert!(short.matches(id));
+        // The end tells two identifiers made together apart.
+        assert!(!short.matches(eid(0xabcd_ef01_2346)));
+        // A longer end still matches; the start does not.
+        assert!(hex[20..].parse::<ShortId>().unwrap().matches(id));
+        assert!(!hex[..12].parse::<ShortId>().unwrap().matches(id));
+    }
+
+    #[test]
+    fn a_short_id_has_a_length_and_an_alphabet() {
+        assert_eq!(
+            "9f3c21a".parse::<ShortId>(),
+            Err(ValueError::ShortIdTooShort { len: 7, min: 8 })
+        );
+        assert_eq!(
+            "9F3C21A7".parse::<ShortId>(),
+            Err(ValueError::ShortIdBadChar { ch: 'F' })
+        );
+        assert_eq!(
+            "9f3c21ag".parse::<ShortId>(),
+            Err(ValueError::ShortIdBadChar { ch: 'g' })
+        );
+        assert!(matches!(
+            "0".repeat(33).parse::<ShortId>(),
+            Err(ValueError::ShortIdTooLong { len: 33, max: 32 })
+        ));
+        assert_eq!(
+            "12345678".parse::<ShortId>().unwrap().to_string(),
+            "12345678"
+        );
+    }
+
+    #[test]
     fn alias_accepts_the_documented_shape() {
-        for ok in ["spec/cache-timeout", "finding/slow-login", "a", "x.y_z-1/2"] {
+        for ok in [
+            "spec/cache-timeout",
+            "finding/slow-login",
+            "a",
+            "x.y_z-1/2",
+            "cafe-babe",
+            "v20240101",
+            "cafebab",
+            "cafebabe/x",
+        ] {
             assert_eq!(ok.parse::<Alias>().unwrap().as_str(), ok);
+        }
+        // One more than a short id may be.
+        let long = "a".repeat(33);
+        assert_eq!(long.parse::<Alias>().unwrap().as_str(), long);
+    }
+
+    #[test]
+    fn an_alias_may_not_look_like_a_short_id() {
+        for (text, len) in [
+            ("cafebabe", 8),
+            ("CAFEBABE", 8),
+            ("12345678", 8),
+            ("9f3c21a7", 8),
+            ("0123456789abcdef0123456789abcdef", 32),
+        ] {
+            assert_eq!(
+                text.parse::<Alias>(),
+                Err(ValueError::AliasLooksLikeShortId { len }),
+                "{text}"
+            );
         }
     }
 

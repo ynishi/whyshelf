@@ -50,6 +50,7 @@
 //! layer that knows the principal and the terminal; this module does not decide them.
 
 use super::approval::{Gate, Pinned};
+use super::boundary::{Crosses, CrossingText};
 use super::canon::{Canon, ToCanon};
 use super::corpus::{Corpus, CorpusDocument, Entity};
 use super::error::AdoptionRefusal;
@@ -135,6 +136,32 @@ impl ToCanon for Adoptable {
             ("attestation", self.attestation.to_canon()),
             ("source", self.source.to_canon()),
         ])
+    }
+}
+
+impl Crosses for AdoptedAttestation {
+    fn cross_into(&self, out: &mut CrossingText) {
+        // Identifiers and hashes, and the name of the key of a keyed pin.
+        let Self {
+            gate: _,
+            subject: _,
+            hash: _,
+            upstream,
+        } = self;
+        for pinned in upstream {
+            pinned.pin().cross_into(out);
+        }
+    }
+}
+
+impl Crosses for Adoptable {
+    fn cross_into(&self, out: &mut CrossingText) {
+        let Self {
+            attestation,
+            source,
+        } = self;
+        attestation.cross_into(out);
+        source.cross_into(out);
     }
 }
 

@@ -355,6 +355,9 @@ fn concerns_item(invalidity: &Invalidity, id: ItemId, number: ItemNumber) -> boo
     match invalidity {
         Invalidity::Item(ItemIssue::DuplicateItemId { id: shared, .. }) => *shared == id,
         Invalidity::Item(ItemIssue::ItemIdIsDesignId { number: at }) => *at == number,
+        Invalidity::Item(ItemIssue::DuplicateItemShortId { short, .. }) => {
+            short.matches(id.entity())
+        }
         Invalidity::DuplicateItemIdAcross { id: shared, .. } => *shared == id.entity(),
         Invalidity::DuplicateId { .. }
         | Invalidity::DuplicateAlias { .. }

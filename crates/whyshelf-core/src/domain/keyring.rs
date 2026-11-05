@@ -46,6 +46,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
+use super::boundary::{Crosses, CrossingField, CrossingText};
 use super::canon::{Canon, ToCanon};
 use super::error::ValueError;
 use super::hash::{ContentHash, PinKey, PinMac};
@@ -117,6 +118,23 @@ impl KeyedPin {
     /// The MAC.
     pub fn mac(&self) -> &PinMac {
         &self.mac
+    }
+}
+
+impl Crosses for KeyedPin {
+    fn cross_into(&self, out: &mut CrossingText) {
+        // The name of a key is chosen by a person, so it is text; the MAC is a hash.
+        let Self { kid, mac: _ } = self;
+        out.push(CrossingField::KeyName, kid.as_str());
+    }
+}
+
+impl Crosses for UpstreamHash {
+    fn cross_into(&self, out: &mut CrossingText) {
+        match self {
+            Self::Plain(_) => {}
+            Self::Keyed(pin) => pin.cross_into(out),
+        }
     }
 }
 

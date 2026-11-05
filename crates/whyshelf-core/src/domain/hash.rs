@@ -86,6 +86,8 @@ pub enum HashKind {
     Bytes,
     /// The message a [`PinMac`] authenticates.
     PinMac,
+    /// What a publication will do: see [`PlanDigest`](super::publication::PlanDigest).
+    Plan,
 }
 
 impl HashKind {
@@ -104,6 +106,7 @@ impl HashKind {
             Self::Text => "text",
             Self::Bytes => "bytes",
             Self::PinMac => "pin-mac",
+            Self::Plan => "plan",
         }
     }
 
