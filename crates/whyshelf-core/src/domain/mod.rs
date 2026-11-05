@@ -176,6 +176,8 @@
 //! |---|---|
 //! | [`canon`], [`hash`] | canonical encoding and the only place a hash is computed |
 //! | [`id`], [`revision`], [`pin`], [`nonempty`], [`tag`], [`actor`], [`location`], [`mod@reference`] | value objects with checking constructors |
+//! | [`knowable`] | a fact that may be impossible to tell in this environment |
+//! | [`corpus`] | the document files of a project taken together: duplicate ids and aliases, a private document Git would publish, a publication cut short, files with no `id:` |
 //! | [`finding`], [`spec`], [`design`] | the three stages with files |
 //! | [`front`] | which key of a front matter is content, classification, another kind's or a mistake |
 //! | [`event`], [`classification`], [`approval`] | the log, its fold, and the set of approvals |
@@ -190,6 +192,7 @@ pub mod actor;
 pub mod approval;
 pub mod canon;
 pub mod classification;
+pub mod corpus;
 pub mod design;
 pub mod error;
 pub mod evaluate;
@@ -199,6 +202,7 @@ pub mod front;
 pub mod gate;
 pub mod hash;
 pub mod id;
+pub mod knowable;
 pub mod lint;
 pub mod location;
 pub mod next;

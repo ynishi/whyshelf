@@ -8,8 +8,8 @@ use std::num::ParseIntError;
 
 use thiserror::Error;
 
-use super::event::EventId;
-use super::id::EntityId;
+use super::event::{DocKind, EventId};
+use super::id::{DocId, EntityId};
 use super::query::StateFilter;
 
 /// Why a text could not become a value object.
@@ -233,6 +233,28 @@ pub enum EntityError {
     DuplicateOptionId {
         /// The repeated identifier.
         id: String,
+    },
+}
+
+/// Why a header and an entity do not make one
+/// [`Document`](super::corpus::Document).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum DocumentError {
+    /// The header names one kind and the entity is another.
+    #[error("the header says {header}, and the entity is a {entity}")]
+    KindMismatch {
+        /// The kind the header names.
+        header: DocKind,
+        /// The kind of the entity.
+        entity: DocKind,
+    },
+    /// The header and the entity carry different identities.
+    #[error("the header has the id {header}, and the entity has {entity}")]
+    IdMismatch {
+        /// The id the header names.
+        header: DocId,
+        /// The id the entity carries.
+        entity: DocId,
     },
 }
 

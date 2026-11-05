@@ -137,6 +137,15 @@ typed_id!(
     /// The identifier of a work item, stable across revisions of its Design.
     ItemId
 );
+typed_id!(
+    /// The identity of a document file, written as `id:` in its front matter.
+    ///
+    /// A document is one of the three kinds that have a file (Finding, Spec,
+    /// Design). The same UUID v7 is the identifier of the entity the file holds
+    /// ([`FindingId`], [`SpecId`] or [`DesignId`]); this type names it before the
+    /// kind is settled, which is when files are collected into a corpus.
+    DocId
+);
 
 /// The number of a work item inside its Design, starting at 1.
 ///
@@ -264,6 +273,10 @@ pub(crate) mod test_support {
 
     pub(crate) fn iid(n: u128) -> ItemId {
         ItemId::new(eid(n))
+    }
+
+    pub(crate) fn docid(n: u128) -> DocId {
+        DocId::new(eid(n))
     }
 }
 

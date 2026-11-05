@@ -102,6 +102,8 @@
 //! | [`UnparsedReason::ExternalRefNotAllowed`] | Invalid | `grounds` or `spec` holds a URL or an `ext:` reference | name an entity of this project |
 //! | [`UnparsedReason::ForeignSection`] | Invalid | a key of another kind of document (a `crux` in a Spec) | take the section out, or register the file as the kind it is |
 //! | [`UnparsedReason::UnknownKey`] | Invalid | a key no kind of document has and that classifies nothing (a typing mistake) | correct the key, or take it out |
+//! | [`UnparsedReason::KindUnknown`] | Invalid | neither the `kind:` key nor the place of the file says what kind of document it is | write `kind:` in the front matter |
+//! | [`UnparsedReason::KindDisagrees`] | Invalid | the `kind:` key and the place of the file name different kinds | make them agree |
 //! | [`UnparsedReason::EmptyGrounds`], [`UnparsedReason::DuplicateGround`] | Invalid | a Spec with no ground, or one Finding twice among them | list each Finding once, and at least one |
 //! | [`InvalidReason::DanglingRef`] | Invalid | an identifier a reference spells (plain, or `private:` where the private store can be read) is not an entity here | bring the entity back, or correct the reference |
 //! | [`InvalidReason::ClassificationConflict`] | Invalid | two branches set the kind or the path differently | set it again (the application's `reclassify`; no command does it), or `whyshelf mv` for the path |
@@ -267,6 +269,25 @@ pub enum UnparsedReason {
     UnknownKey {
         /// The key.
         key: String,
+    },
+    /// Neither the front matter nor the place of the file says what kind of
+    /// document it is.
+    ///
+    /// The kind is the `kind:` key; without it, the rule of the place the file
+    /// sits in (the directory and the kind it holds). Fix: write `kind:` in the
+    /// front matter.
+    #[error("the kind of the document cannot be told")]
+    KindUnknown,
+    /// The front matter and the place of the file name different kinds.
+    ///
+    /// Fix: make the `kind:` key and the place agree, by correcting one or moving
+    /// the file.
+    #[error("the file says it is a {front}, and its place says {place}")]
+    KindDisagrees {
+        /// The kind the `kind:` key names.
+        front: DocKind,
+        /// The kind the rule of the place names.
+        place: DocKind,
     },
     /// A Spec was left with no ground.
     ///

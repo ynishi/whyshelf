@@ -18,9 +18,20 @@
 //! classification are never hashed, so correcting a typo in a note or retagging
 //! does not remove an approval.
 //!
-//! Two further kinds hash bytes rather than a [`Canon`]:
+//! Four further kinds hash bytes rather than a [`Canon`]:
 //! `raw` is the hash of an entity's normalized source text (the key of the
-//! stored object), and `export` is the hash of a generated file's content.
+//! stored object), `export` is the hash of a generated file's content, and the
+//! two below are types of their own, so that one cannot stand where the other is
+//! asked for:
+//!
+//! | type | of | for |
+//! |---|---|---|
+//! | [`TextHash`] | the normalized full text of a document | the key the object of that version of the text is to have, in place of `raw`, once objects are keyed by document |
+//! | [`BytesHash`] | the bytes of a file as they are on disk, before normalization | telling whether two files are byte-for-byte copies |
+//!
+//! A [`BytesHash`] sees a difference in line breaks or in trailing white space that
+//! normalization removes, so two files that read as one text but were written
+//! differently are not copies of one another.
 
 use std::fmt;
 use std::str::FromStr;
@@ -54,6 +65,10 @@ pub enum HashKind {
     Raw,
     /// The content of a generated file.
     Export,
+    /// The normalized full text of a document: see [`TextHash`].
+    Text,
+    /// The raw bytes of a file before any normalization: see [`BytesHash`].
+    Bytes,
 }
 
 impl HashKind {
@@ -69,6 +84,8 @@ impl HashKind {
             Self::EventRecord => "event-record",
             Self::Raw => "raw",
             Self::Export => "export",
+            Self::Text => "text",
+            Self::Bytes => "bytes",
         }
     }
 
@@ -163,6 +180,64 @@ impl super::canon::ToCanon for ContentHash {
     }
 }
 
+macro_rules! bytes_hash {
+    ($(#[$meta:meta])* $name:ident, $kind:ident, $input:ty) => {
+        $(#[$meta])*
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $name(ContentHash);
+
+        impl $name {
+            /// The hash of `input` under this type's domain separation tag.
+            pub fn of(input: &$input) -> Self {
+                Self(ContentHash::of_bytes(HashKind::$kind, input.as_ref()))
+            }
+
+            /// The 64 lowercase hex characters of the digest.
+            pub fn hex(&self) -> String {
+                self.0.hex()
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Display::fmt(&self.0, f)
+            }
+        }
+
+        impl fmt::Debug for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, concat!(stringify!($name), "({})"), self.0)
+            }
+        }
+    };
+}
+
+bytes_hash!(
+    /// The hash of the normalized full text of a document (`text` tag).
+    ///
+    /// Why a type of its own: it will be the key of the object that keeps a
+    /// version of the text. The adapter that reads a file normalizes the text
+    /// (line breaks to LF, trailing spaces and tabs removed, exactly one LF at the
+    /// end) before the domain sees it, so this hash is of that form. It cannot be
+    /// confused with a [`BytesHash`] of the same characters.
+    TextHash,
+    Text,
+    str
+);
+
+bytes_hash!(
+    /// The hash of a file's bytes as they are on disk, before normalization
+    /// (`bytes` tag).
+    ///
+    /// Why a type of its own: two files are copies of one another only when they
+    /// agree byte for byte; the normalized text would hide a difference in line
+    /// breaks or in white space at the end of a line. A file that is a copy in
+    /// this sense cannot be told apart from the original by anything it says.
+    BytesHash,
+    Bytes,
+    [u8]
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,6 +284,35 @@ mod tests {
         assert_ne!(ContentHash::raw(b"x"), ContentHash::export(b"x"));
     }
 
+    #[test]
+    fn text_and_bytes_hashes_have_their_own_tags() {
+        assert_eq!(HashKind::Text.tag(), b"whyshelf/text/v1\0");
+        assert_eq!(HashKind::Bytes.tag(), b"whyshelf/bytes/v1\0");
+    }
+
+    #[test]
+    fn a_text_hash_and_a_bytes_hash_of_the_same_input_differ() {
+        let text = TextHash::of("same\n");
+        let bytes = BytesHash::of(b"same\n");
+        assert_ne!(text.hex(), bytes.hex());
+        // Neither is the `raw` hash of the same payload either.
+        assert_ne!(text.hex(), ContentHash::raw(b"same\n").hex());
+        assert_ne!(bytes.hex(), ContentHash::raw(b"same\n").hex());
+    }
+
+    #[test]
+    fn bytes_hash_sees_a_line_break_that_normalization_removes() {
+        assert_ne!(BytesHash::of(b"a\r\nb\r\n"), BytesHash::of(b"a\nb\n"));
+        assert_eq!(BytesHash::of(b"a\nb\n"), BytesHash::of(b"a\nb\n"));
+    }
+
+    #[test]
+    fn text_hash_follows_the_text() {
+        assert_eq!(TextHash::of("a\n"), TextHash::of("a\n"));
+        assert_ne!(TextHash::of("a\n"), TextHash::of("b\n"));
+        assert!(TextHash::of("a\n").to_string().starts_with("sha256:"));
+    }
+
     // Golden vectors: fixed input, fixed expected digest. These must never
     // change; if one fails, a hash that approvals depend on has moved.
     #[test]
@@ -216,6 +320,22 @@ mod tests {
         assert_eq!(
             ContentHash::raw(b"hello\n").to_string(),
             "sha256:e088bfd1850ff6d188730b1c1f448cd05ece8cd953495feaf7f441ac2f548523"
+        );
+    }
+
+    #[test]
+    fn golden_text() {
+        assert_eq!(
+            TextHash::of("hello\n").to_string(),
+            "sha256:fe5c3d05a7f8e0fa67e291a48f186d7d96eb1d9efe6d1611379ff891f84f0784"
+        );
+    }
+
+    #[test]
+    fn golden_bytes() {
+        assert_eq!(
+            BytesHash::of(b"hello\r\n").to_string(),
+            "sha256:fbb6a4d2567bf784b93943ef1595e3d96681080c7f02de29586d20a4cc08cdd9"
         );
     }
 
