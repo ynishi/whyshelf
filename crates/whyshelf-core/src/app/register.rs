@@ -37,7 +37,7 @@ use super::Workspace;
 use super::commit::{Committed, Draft};
 use super::error::AppError;
 use super::model::{Built, Model, Resolved, build};
-use super::ports::{CurrentPort, IdPort, PortName, Ports, StorePort};
+use super::ports::{CurrentPort, IdPort, PortName, Ports, StorePort, UnreadablePath};
 use super::raw::Candidate;
 
 /// What to register a file as.
@@ -85,6 +85,7 @@ impl AddOptions {
 pub struct Added {
     registered: Vec<(EntityId, RelPath)>,
     skipped: Vec<RelPath>,
+    unreadable: Vec<UnreadablePath>,
     committed: Committed,
 }
 
@@ -97,6 +98,12 @@ impl Added {
     /// Files that were registered already and left alone.
     pub fn skipped(&self) -> &[RelPath] {
         &self.skipped
+    }
+
+    /// Paths under the ones asked for that cannot be named, so they were not
+    /// registered.
+    pub fn unreadable(&self) -> &[UnreadablePath] {
+        &self.unreadable
     }
 
     /// The write and its subscribers' warnings.
@@ -240,12 +247,15 @@ impl<P: Ports> Workspace<P> {
     ) -> Result<Added, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
         let store = options.store.unwrap_or(self.config.default_store());
-        let listed = self
+        // A path that cannot be named is not registered, and is reported in the
+        // answer; the call goes on with the files it can name.
+        let (listed, unreadable) = self
             .ports
             .current()
             .list(paths)
             .await
-            .map_err(AppError::port(PortName::Current))?;
+            .map_err(AppError::port(PortName::Current))?
+            .into_parts();
         let (known, fresh): (Vec<_>, Vec<_>) = listed
             .into_iter()
             .map(|s| s.path().clone())
@@ -276,6 +286,7 @@ impl<P: Ports> Workspace<P> {
         Ok(Added {
             registered,
             skipped: known,
+            unreadable,
             committed,
         })
     }

@@ -30,7 +30,7 @@
 //!   argv --clap--> Cli { root, format, command }
 //!                      |
 //!                      v   Action
-//!        init / schema map / migrate     -> no workspace needed
+//!        init / schema / migrate         -> no workspace needed
 //!        mcp                              -> open, serve until the client leaves
 //!        every other command (Command)    -> open
 //!                                              |
@@ -306,6 +306,7 @@
 //! | `audit [<TERM>...]` | who approved which version at which revision, and when; narrowed by a query |
 //! | `rebuild` | reads every file, replaces the cache, writes the generated files again (after a merge, say) |
 //! | `schema map` | prints the JSON Schema of `map.json` |
+//! | `schema output` | prints the JSON Schema of what `--format json` prints for every command; it is made from the types the JSON is made from |
 //! | `migrate` | reads the versions of the project's data and sets them against the ones this build reads (below); it only looks and writes nothing, and opens no workspace, so it works on data the other commands cannot read |
 //! | `mcp` | serves the commands as tools over standard input and output (below) |
 //!
@@ -490,6 +491,7 @@ mod command;
 mod error;
 mod init;
 mod mcp;
+mod output;
 mod render;
 mod run;
 

@@ -343,6 +343,12 @@ fn pinned_dto<I: ToString>(pinned: &Pinned<I>) -> PinnedV1 {
     }
 }
 
+/// The name of a store in the wire format.
+///
+/// A literal of its own, apart from `StoreKind::as_str` (the display) and the
+/// canonical form (the hash): a stored event must stay readable when the display
+/// is renamed, so the wire format is an anti-corruption layer with its own
+/// words. `a_store_is_written_with_the_wire_formats_own_names` pins them.
 fn store_name(store: StoreKind) -> &'static str {
     match store {
         StoreKind::Repo => "repo",
@@ -560,6 +566,8 @@ fn pinned_from<I>(
     ))
 }
 
+/// The store a wire name stands for: the inverse of `store_name`, with the same
+/// literals and the same reason for keeping them apart from the display.
 fn store_from(name: &'static str, text: &str) -> Result<StoreKind, WireError> {
     match text {
         "repo" => Ok(StoreKind::Repo),
@@ -1078,6 +1086,30 @@ mod tests {
         assert_eq!(ca["attestation"]["gate"], "CA");
         assert_eq!(ca["attestation"]["revision"]["form"], "commit");
         assert_eq!(ca["attestation"]["tests"], "passed");
+    }
+
+    /// Golden: the store names a stored `Published` event carries. They are
+    /// written out here, not derived from `StoreKind::as_str`, so renaming the
+    /// display cannot break a stored event.
+    #[test]
+    fn a_store_is_written_with_the_wire_formats_own_names() {
+        let all = every_event();
+        let published = |pick: fn(&Publication) -> bool| -> serde_json::Value {
+            let event = all
+                .iter()
+                .find(|e| matches!(e.body(), EventBody::Published(p) if pick(p)))
+                .unwrap();
+            serde_json::from_str(&encode(event, &at()).unwrap()).unwrap()
+        };
+        let outgoing = published(|p| matches!(p, Publication::Outgoing { .. }));
+        assert_eq!(outgoing["to"], "repo");
+        let incoming = published(|p| matches!(p, Publication::Incoming { .. }));
+        assert_eq!(incoming["from"], "private");
+        for (store, name) in [(StoreKind::Repo, "repo"), (StoreKind::Private, "private")] {
+            assert_eq!(store_name(store), name);
+            assert_eq!(store_from("to", name).unwrap(), store);
+        }
+        assert!(store_from("to", "public").is_err());
     }
 
     #[test]

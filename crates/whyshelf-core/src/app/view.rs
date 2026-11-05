@@ -42,7 +42,8 @@ use super::config::Config;
 use super::error::AppError;
 use super::model::{ConflictedEntry, Content, DocEntry, ItemEntry, Model, current_revision};
 use super::ports::{
-    ExportDoc, ExportFile, ExportKind, PortName, Ports, RevisionPort, StorePort, WorktreeRoot,
+    ExportDoc, ExportFile, ExportKind, PortName, Ports, RevisionPort, StorePort, UnreadablePath,
+    WorktreeRoot,
 };
 use super::projection::{ChangelogDoc, MapDoc};
 use super::query::Target;
@@ -293,6 +294,71 @@ impl RowKind {
     }
 }
 
+/// What only an item has, in the status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItemRow {
+    number: ItemNumber,
+    parent: EntityId,
+    integration: Integration,
+    pins: PinTally,
+    implementing: bool,
+}
+
+impl ItemRow {
+    /// The number inside its Design.
+    pub fn number(&self) -> ItemNumber {
+        self.number
+    }
+
+    /// The Design.
+    pub fn parent(&self) -> EntityId {
+        self.parent
+    }
+
+    /// The integration state.
+    pub fn integration(&self) -> &Integration {
+        &self.integration
+    }
+
+    /// Pins found of those declared.
+    pub fn pins(&self) -> PinTally {
+        self.pins
+    }
+
+    /// Whether the item's tests do not yet carry its pins (shown as
+    /// implementing; never Invalid).
+    pub fn implementing(&self) -> bool {
+        self.implementing
+    }
+}
+
+/// What a row has beyond the fields every row has, by what it is: which fields
+/// exist depends on the kind, so each kind carries its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowDetail {
+    /// A file with no pins to count: a Finding, a Design, or a Spec that cannot
+    /// be read.
+    Doc {
+        /// Where the file is.
+        path: RelPath,
+    },
+    /// A Spec that was read: a file, and the pins its tests carry.
+    Spec {
+        /// Where the file is.
+        path: RelPath,
+        /// Pins found of those declared.
+        pins: PinTally,
+    },
+    /// An item of a Design: it has no file.
+    Item(ItemRow),
+    /// A document whose kind or path is in conflict; its path is the one that
+    /// could be told, if any.
+    Conflict {
+        /// Where the file is, when one place could be told.
+        path: Option<RelPath>,
+    },
+}
+
 /// One entity in the status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusRow {
@@ -300,15 +366,10 @@ pub struct StatusRow {
     kind: RowKind,
     store: StoreKind,
     alias: Option<Alias>,
-    path: Option<RelPath>,
-    number: Option<ItemNumber>,
-    parent: Option<EntityId>,
     label: Option<String>,
     state: Option<EntityState>,
-    integration: Option<Integration>,
-    pins: Option<PinTally>,
-    implementing: bool,
     next: NextAction,
+    detail: RowDetail,
 }
 
 impl StatusRow {
@@ -334,17 +395,16 @@ impl StatusRow {
 
     /// The path; none for an item.
     pub fn path(&self) -> Option<&RelPath> {
-        self.path.as_ref()
+        match &self.detail {
+            RowDetail::Doc { path } | RowDetail::Spec { path, .. } => Some(path),
+            RowDetail::Conflict { path } => path.as_ref(),
+            RowDetail::Item(_) => None,
+        }
     }
 
-    /// The number inside its Design, for an item.
-    pub fn number(&self) -> Option<ItemNumber> {
-        self.number
-    }
-
-    /// The Design, for an item.
-    pub fn parent(&self) -> Option<EntityId> {
-        self.parent
+    /// What this kind of row adds to the fields every row has.
+    pub fn detail(&self) -> &RowDetail {
+        &self.detail
     }
 
     /// The title of a Finding or the summary of an item (free text).
@@ -357,20 +417,13 @@ impl StatusRow {
         self.state.as_ref()
     }
 
-    /// The integration state, for an item.
-    pub fn integration(&self) -> Option<&Integration> {
-        self.integration.as_ref()
-    }
-
-    /// Pins found of those declared, for a Spec or an item.
+    /// Pins found of those declared: a Spec and an item have them.
     pub fn pins(&self) -> Option<PinTally> {
-        self.pins
-    }
-
-    /// Whether the item's tests do not yet carry its pins (shown as
-    /// implementing; never Invalid).
-    pub fn implementing(&self) -> bool {
-        self.implementing
+        match &self.detail {
+            RowDetail::Spec { pins, .. } => Some(*pins),
+            RowDetail::Item(item) => Some(item.pins),
+            RowDetail::Doc { .. } | RowDetail::Conflict { .. } => None,
+        }
     }
 
     /// The command to run next.
@@ -416,6 +469,7 @@ pub struct StatusReport {
     context: ContextLine,
     rows: Vec<StatusRow>,
     unregistered: Vec<RelPath>,
+    unreadable: Vec<UnreadablePath>,
     missing: Vec<RelPath>,
     changed_since_ingest: Vec<RelPath>,
     issues: Vec<StoreIssue>,
@@ -437,6 +491,13 @@ impl StatusReport {
     /// Files nobody registered, each with `whyshelf add` as its next action.
     pub fn unregistered(&self) -> &[RelPath] {
         &self.unregistered
+    }
+
+    /// Paths the listing found and could not name (a name that is not UTF-8, say).
+    /// They are in no other list of the status, and they are not files that are
+    /// not there.
+    pub fn unreadable(&self) -> &[UnreadablePath] {
+        &self.unreadable
     }
 
     /// The next action of an unregistered file.
@@ -477,7 +538,7 @@ impl StatusReport {
             .rows
             .iter()
             .filter(|r| r.store == StoreKind::Repo)
-            .filter_map(|r| r.path.as_ref())
+            .filter_map(|r| r.path())
             .collect();
         StatusReport {
             context: self.context.clone(),
@@ -488,6 +549,7 @@ impl StatusReport {
                 .cloned()
                 .collect(),
             unregistered: self.unregistered.clone(),
+            unreadable: self.unreadable.clone(),
             missing: self
                 .missing
                 .iter()
@@ -557,6 +619,7 @@ impl StatusReport {
             context,
             rows,
             unregistered: model.unregistered().iter().cloned().collect(),
+            unreadable: model.unreadable_paths().to_vec(),
             missing,
             changed_since_ingest: changed,
             issues,
@@ -707,24 +770,23 @@ fn doc_row(model: &Model, states: &States<'_>, doc: &DocEntry) -> StatusRow {
             )
         }
     };
-    let pins = match present.map(|p| p.content()) {
-        Some(Content::Spec(spec)) => Some(spec_tally(&spec_progress(model, spec))),
-        _ => None,
+    let path = doc.path().clone();
+    let detail = match present.map(|p| p.content()) {
+        Some(Content::Spec(spec)) => RowDetail::Spec {
+            path,
+            pins: spec_tally(&spec_progress(model, spec)),
+        },
+        _ => RowDetail::Doc { path },
     };
     StatusRow {
         id: doc.id(),
         kind: RowKind::Entity(doc.kind().entity_kind()),
         store: doc.store(),
         alias: doc.alias().cloned(),
-        path: Some(doc.path().clone()),
-        number: None,
-        parent: None,
         label: doc.title().map(str::to_owned),
         state: present.map(|p| p.state().clone()),
-        integration: None,
-        pins,
-        implementing: false,
         next,
+        detail,
     }
 }
 
@@ -753,15 +815,16 @@ fn item_row(model: &Model, states: &States<'_>, design: &DocEntry, item: &ItemEn
         kind: RowKind::Entity(EntityKind::Item),
         store: item.store(),
         alias: None,
-        path: None,
-        number: Some(key.number),
-        parent: Some(key.design.entity()),
         label: Some(item.item().summary().as_str().to_owned()),
         state: Some(evaluation.state().clone()),
-        integration: Some(evaluation.integration().clone()),
-        pins: Some(item_tally(progress)),
-        implementing: progress.is_implementing(),
         next,
+        detail: RowDetail::Item(ItemRow {
+            number: key.number,
+            parent: key.design.entity(),
+            integration: evaluation.integration().clone(),
+            pins: item_tally(progress),
+            implementing: progress.is_implementing(),
+        }),
     }
 }
 
@@ -782,15 +845,12 @@ fn conflicted_row(model: &Model, entry: &ConflictedEntry) -> StatusRow {
         kind: RowKind::Conflict(doc.kinds().clone()),
         store: entry.store(),
         alias: entry.alias().cloned(),
-        path: entry.path().cloned(),
-        number: None,
-        parent: None,
         label: None,
         state: Some(doc.state().clone()),
-        integration: None,
-        pins: None,
-        implementing: false,
         next: action_of(model, step, Target::Entity(own.clone()), &own),
+        detail: RowDetail::Conflict {
+            path: entry.path().cloned(),
+        },
     }
 }
 
@@ -971,6 +1031,26 @@ impl Changelog {
     }
 }
 
+/// What an approval records beyond what every approval records: it depends on the
+/// gate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuditDetail {
+    /// A CA: the revision of the code, and how the tests went there.
+    Ca {
+        /// The revision the item was approved at.
+        revision: Revision,
+        /// The outcome of the tests.
+        tests: TestOutcome,
+    },
+    /// A CM: what the measurement showed.
+    Cm {
+        /// The result.
+        result: CmResult,
+    },
+    /// CR, CS and CI record nothing more.
+    Plain,
+}
+
 /// One approval in the audit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditRow {
@@ -980,20 +1060,23 @@ pub struct AuditRow {
     by: Actor,
     at: Timestamp,
     hash: ContentHash,
-    revision: Option<Revision>,
-    tests: Option<TestOutcome>,
-    result: Option<CmResult>,
+    detail: AuditDetail,
     revoked: bool,
 }
 
 impl AuditRow {
     fn of(record: &ApprovalRecord, at: &Timestamp, revoked: bool) -> Self {
-        let (revision, tests, result) = match record.attestation() {
+        let detail = match record.attestation() {
             Attestation::Ca {
                 revision, tests, ..
-            } => (Some(revision.clone()), Some(*tests), None),
-            Attestation::Cm { result, .. } => (None, None, Some(result.clone())),
-            _ => (None, None, None),
+            } => AuditDetail::Ca {
+                revision: revision.clone(),
+                tests: *tests,
+            },
+            Attestation::Cm { result, .. } => AuditDetail::Cm {
+                result: result.clone(),
+            },
+            _ => AuditDetail::Plain,
         };
         Self {
             event: record.event(),
@@ -1002,9 +1085,7 @@ impl AuditRow {
             by: record.by().clone(),
             at: at.clone(),
             hash: *record.attestation().target_hash(),
-            revision,
-            tests,
-            result,
+            detail,
             revoked,
         }
     }
@@ -1039,19 +1120,9 @@ impl AuditRow {
         &self.hash
     }
 
-    /// For a CA: the revision.
-    pub fn revision(&self) -> Option<&Revision> {
-        self.revision.as_ref()
-    }
-
-    /// For a CA: the outcome of the tests.
-    pub fn tests(&self) -> Option<TestOutcome> {
-        self.tests
-    }
-
-    /// For a CM: the result.
-    pub fn result(&self) -> Option<&CmResult> {
-        self.result.as_ref()
+    /// What the gate recorded besides the hash.
+    pub fn detail(&self) -> &AuditDetail {
+        &self.detail
     }
 
     /// Whether a later event withdrew it.

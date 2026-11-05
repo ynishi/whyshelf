@@ -10,7 +10,7 @@
 use std::io;
 use std::path::PathBuf;
 
-use whyshelf_core::app::ports::{CurrentPort, FileStat};
+use whyshelf_core::app::ports::{CurrentPort, Listing};
 use whyshelf_core::app::raw::Candidate;
 use whyshelf_core::domain::event::DocKind;
 use whyshelf_core::domain::location::RelPath;
@@ -53,7 +53,7 @@ impl FsCurrent {
 impl CurrentPort for FsCurrent {
     type Error = CurrentError;
 
-    async fn list(&self, roots: &[RelPath]) -> Result<Vec<FileStat>, CurrentError> {
+    async fn list(&self, roots: &[RelPath]) -> Result<Listing, CurrentError> {
         blocking::list_markdown(self.root.clone(), roots.to_vec())
             .await
             .map_err(CurrentError::List)
@@ -195,18 +195,19 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert!(current.list(&[rel("docs")]).await.unwrap().is_empty());
+        let listed = current.list(&[rel("docs")]).await.unwrap();
+        assert!(listed.files().is_empty() && listed.unreadable().is_empty());
     }
 
     #[tokio::test]
     async fn listing_gives_a_stamp_that_changes_with_the_file() {
         let (dir, current) = project_with(&[("docs/a.md", "one\n")]).await;
         let before = current.list(&[rel("docs")]).await.unwrap();
-        assert_eq!(before.len(), 1);
+        assert_eq!(before.files().len(), 1);
         tokio::fs::write(dir.path().join("docs/a.md"), "one and more\n")
             .await
             .unwrap();
         let after = current.list(&[rel("docs")]).await.unwrap();
-        assert!(!before[0].same_as(&after[0]));
+        assert!(!before.files()[0].same_as(&after.files()[0]));
     }
 }

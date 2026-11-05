@@ -332,18 +332,37 @@ pub trait StorePort: Send + Sync {
 }
 
 /// An opaque stamp of a file's modification time, compared for equality only.
+///
+/// The time of a file can fail to be read. That is a stamp of its own,
+/// [`Mtime::Unknown`], which [`Mtime::matches`] nothing, not even itself: a file
+/// whose time is not known is read again each time, never taken as unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Mtime(u64);
+pub enum Mtime {
+    /// The time was read; the adapter decides the unit.
+    Known(u64),
+    /// The time could not be read.
+    Unknown,
+}
 
 impl Mtime {
-    /// A stamp. The adapter decides the unit; the use cases never order it.
+    /// A stamp that was read. The adapter decides the unit; the use cases never
+    /// order it.
     pub fn new(stamp: u64) -> Self {
-        Self(stamp)
+        Self::Known(stamp)
     }
 
-    /// The stamp.
-    pub fn get(&self) -> u64 {
-        self.0
+    /// The stamp, when it was read.
+    pub fn known(&self) -> Option<u64> {
+        match self {
+            Self::Known(stamp) => Some(*stamp),
+            Self::Unknown => None,
+        }
+    }
+
+    /// Whether this stamp says the file is the same as when `other` was taken:
+    /// both were read, and they are equal.
+    pub fn matches(&self, other: &Mtime) -> bool {
+        matches!((self, other), (Self::Known(a), Self::Known(b)) if a == b)
     }
 }
 
@@ -377,9 +396,89 @@ impl FileStat {
         self.size
     }
 
-    /// Whether another stat of the same path says the file is unchanged.
+    /// Whether another stat of the same path says the file is unchanged. A stat
+    /// whose time is unknown says nothing of the kind.
     pub fn same_as(&self, other: &FileStat) -> bool {
-        self.mtime == other.mtime && self.size == other.size
+        self.mtime.matches(&other.mtime) && self.size == other.size
+    }
+}
+
+/// Why a path that was found cannot be the path of a document.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathProblem {
+    /// The name is not valid UTF-8.
+    NotUtf8,
+    /// The text is not a path a document can have, for this reason.
+    Invalid(String),
+}
+
+impl fmt::Display for PathProblem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotUtf8 => f.write_str("its name is not valid UTF-8"),
+            Self::Invalid(reason) => write!(f, "it is not a path a document can have: {reason}"),
+        }
+    }
+}
+
+/// A file or directory the listing found and could not name: it is not in the
+/// listing, and not being there is not the same as not having been seen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnreadablePath {
+    shown: String,
+    problem: PathProblem,
+}
+
+impl UnreadablePath {
+    /// A path that cannot be named, as it can be shown (lossily, for a name that is
+    /// not UTF-8), and why.
+    pub fn new(shown: String, problem: PathProblem) -> Self {
+        Self { shown, problem }
+    }
+
+    /// The path, as it can be shown.
+    pub fn shown(&self) -> &str {
+        &self.shown
+    }
+
+    /// Why it cannot be named.
+    pub fn problem(&self) -> &PathProblem {
+        &self.problem
+    }
+}
+
+impl fmt::Display for UnreadablePath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.shown, self.problem)
+    }
+}
+
+/// What a listing found: the files, and the paths it could not name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Listing {
+    files: Vec<FileStat>,
+    unreadable: Vec<UnreadablePath>,
+}
+
+impl Listing {
+    /// A listing.
+    pub fn new(files: Vec<FileStat>, unreadable: Vec<UnreadablePath>) -> Self {
+        Self { files, unreadable }
+    }
+
+    /// The files, by path.
+    pub fn files(&self) -> &[FileStat] {
+        &self.files
+    }
+
+    /// The paths that were found and could not be named: reported, never dropped.
+    pub fn unreadable(&self) -> &[UnreadablePath] {
+        &self.unreadable
+    }
+
+    /// The files and the unreadable paths apart.
+    pub fn into_parts(self) -> (Vec<FileStat>, Vec<UnreadablePath>) {
+        (self.files, self.unreadable)
     }
 }
 
@@ -389,11 +488,9 @@ pub trait CurrentPort: Send + Sync {
     type Error: Error + Send + Sync + 'static;
 
     /// The document files under these paths (a path may be a directory or a
-    /// file). A path that does not exist gives nothing.
-    fn list(
-        &self,
-        roots: &[RelPath],
-    ) -> impl Future<Output = Result<Vec<FileStat>, Self::Error>> + Send;
+    /// file). A path that does not exist gives nothing; a file whose path cannot be
+    /// named is reported in the listing, not left out of it.
+    fn list(&self, roots: &[RelPath]) -> impl Future<Output = Result<Listing, Self::Error>> + Send;
 
     /// Read and parse one file. `None` when it does not exist.
     ///

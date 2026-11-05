@@ -39,9 +39,9 @@ mod in_memory {
     use crate::app::config::{Config, Paths, PinPattern, TestCommand, TestSettings, TestTimeout};
     use crate::app::ports::{
         AppendOutcome, CacheEntry, ClockPort, CodeScanPort, CreateOutcome, CurrentPort, ExportDoc,
-        ExportFile, ExportKind, ExportParts, FileStat, IdPort, IndexCachePort, Mtime, PinScan,
-        Ports, RevisionPort, ScaffoldPort, SecretHit, SecretScanPort, StorePort, Template,
-        TestRunPort, WorktreeRoot,
+        ExportFile, ExportKind, ExportParts, FileStat, IdPort, IndexCachePort, Listing, Mtime,
+        PathProblem, PinScan, Ports, RevisionPort, ScaffoldPort, SecretHit, SecretScanPort,
+        StorePort, Template, TestRunPort, UnreadablePath, WorktreeRoot,
     };
     use crate::app::raw::{
         Candidate, NormalizedText, RawDesign, RawDoc, RawFinding, RawFindingSource, RawRevision,
@@ -81,6 +81,8 @@ mod in_memory {
     struct FakeFile {
         text: String,
         mtime: u64,
+        /// Whether the listing cannot read the file's time.
+        mtime_unknown: bool,
         parsed: Parsed,
         classification: FileClassification,
         guess: Option<Guess>,
@@ -89,6 +91,8 @@ mod in_memory {
     #[derive(Debug)]
     struct State {
         files: BTreeMap<RelPath, FakeFile>,
+        /// Paths the listing finds and cannot name.
+        unreadable_paths: Vec<UnreadablePath>,
         /// The text of each file a scaffold created, as it wrote it.
         created: BTreeMap<RelPath, String>,
         stamp: u64,
@@ -136,6 +140,7 @@ mod in_memory {
             Self {
                 state: Mutex::new(State {
                     files: BTreeMap::new(),
+                    unreadable_paths: Vec::new(),
                     created: BTreeMap::new(),
                     stamp: 0,
                     events: BTreeMap::new(),
@@ -174,11 +179,26 @@ mod in_memory {
                 FakeFile {
                     text,
                     mtime,
+                    mtime_unknown: false,
                     parsed,
                     classification: FileClassification::default(),
                     guess: None,
                 },
             );
+        }
+
+        /// Make the listing find a path it cannot name.
+        pub(crate) fn add_unreadable_path(&self, shown: &str, problem: PathProblem) {
+            self.lock()
+                .unreadable_paths
+                .push(UnreadablePath::new(shown.to_owned(), problem));
+        }
+
+        /// Make the listing unable to read the time of a file.
+        pub(crate) fn forget_mtime(&self, at: &str) {
+            if let Some(file) = self.lock().files.get_mut(&path(at)) {
+                file.mtime_unknown = true;
+            }
         }
 
         /// What the keys of a file say about its kind, when the file does not parse.
@@ -476,7 +496,11 @@ mod in_memory {
     fn stat_of(at: &RelPath, file: &FakeFile) -> FileStat {
         FileStat::new(
             at.clone(),
-            Mtime::new(file.mtime),
+            if file.mtime_unknown {
+                Mtime::Unknown
+            } else {
+                Mtime::new(file.mtime)
+            },
             u64::try_from(file.text.len()).unwrap_or(u64::MAX),
         )
     }
@@ -628,9 +652,10 @@ mod in_memory {
     impl CurrentPort for FakePorts {
         type Error = FakeError;
 
-        async fn list(&self, roots: &[RelPath]) -> Result<Vec<FileStat>, FakeError> {
+        async fn list(&self, roots: &[RelPath]) -> Result<Listing, FakeError> {
             let s = self.lock();
-            Ok(s.files
+            let files = s
+                .files
                 .iter()
                 .filter(|(p, _)| {
                     roots.iter().any(|r| {
@@ -639,7 +664,8 @@ mod in_memory {
                     })
                 })
                 .map(|(p, f)| stat_of(p, f))
-                .collect())
+                .collect();
+            Ok(Listing::new(files, s.unreadable_paths.clone()))
         }
 
         async fn read(

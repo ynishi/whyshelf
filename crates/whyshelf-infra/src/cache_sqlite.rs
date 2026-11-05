@@ -52,7 +52,10 @@ use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonBlank;
 
 /// The shape of the tables this build writes.
-pub const SCHEMA_VERSION: &str = "1";
+///
+/// Version 2: `mtime` may be `NULL`, which is a time that could not be read
+/// ([`Mtime::Unknown`]); it was a made-up `0` before.
+pub const SCHEMA_VERSION: &str = "2";
 
 /// How long a statement waits for another connection's lock.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -107,7 +110,7 @@ fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
     tx.execute_batch(
         "CREATE TABLE IF NOT EXISTS files (
              path TEXT PRIMARY KEY,
-             mtime INTEGER NOT NULL,
+             mtime INTEGER,
              size INTEGER NOT NULL,
              raw TEXT NOT NULL
          );
@@ -124,7 +127,8 @@ fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
 #[derive(Debug)]
 struct Row {
     path: String,
-    mtime: i64,
+    /// `None` is a time that could not be read.
+    mtime: Option<i64>,
     size: i64,
     raw: String,
     body: String,
@@ -134,7 +138,12 @@ impl Row {
     fn of(entry: &CacheEntry) -> Result<Self, CacheError> {
         Ok(Self {
             path: entry.path().to_string(),
-            mtime: i64::try_from(entry.stat().mtime().get()).map_err(|_| CacheError::Range)?,
+            mtime: entry
+                .stat()
+                .mtime()
+                .known()
+                .map(|stamp| i64::try_from(stamp).map_err(|_| CacheError::Range))
+                .transpose()?,
             size: i64::try_from(entry.stat().size()).map_err(|_| CacheError::Range)?,
             raw: entry.raw().to_string(),
             body: entry.body().to_owned(),
@@ -144,10 +153,13 @@ impl Row {
     fn into_entry(self) -> Result<CacheEntry, CacheError> {
         let path: RelPath = self.path.parse().map_err(CacheError::Row)?;
         let raw: ContentHash = self.raw.parse().map_err(CacheError::Row)?;
-        let mtime = u64::try_from(self.mtime).map_err(|_| CacheError::Range)?;
+        let mtime = match self.mtime {
+            Some(stamp) => Mtime::new(u64::try_from(stamp).map_err(|_| CacheError::Range)?),
+            None => Mtime::Unknown,
+        };
         let size = u64::try_from(self.size).map_err(|_| CacheError::Range)?;
         Ok(CacheEntry::new(
-            FileStat::new(path, Mtime::new(mtime), size),
+            FileStat::new(path, mtime, size),
             raw,
             self.body,
         ))
@@ -390,6 +402,23 @@ mod tests {
 
         cache.remove(&["docs/a.md".parse().unwrap()]).await.unwrap();
         assert_eq!(cache.load().await.unwrap(), vec![b]);
+        driver.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_time_that_was_not_read_comes_back_unknown_and_matches_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (cache, driver) = open_in(dir.path()).await;
+        let unknown = CacheEntry::new(
+            FileStat::new("docs/a.md".parse().unwrap(), Mtime::Unknown, 5),
+            ContentHash::raw(b"a"),
+            "a".to_owned(),
+        );
+        cache.upsert(std::slice::from_ref(&unknown)).await.unwrap();
+        let loaded = cache.load().await.unwrap();
+        assert_eq!(loaded, vec![unknown.clone()]);
+        assert_eq!(loaded[0].stat().mtime(), Mtime::Unknown);
+        assert!(!loaded[0].stat().same_as(unknown.stat()));
         driver.shutdown().await.unwrap();
     }
 

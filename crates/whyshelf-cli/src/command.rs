@@ -213,7 +213,7 @@ pub enum Outcome {
     /// The versions of the project's data, counted (`migrate`). It needs no
     /// workspace, so [`execute`] never makes one.
     Migrate(Census),
-    /// Lines for standard output, as they are (`init`, `schema map`): nothing in them
+    /// Lines for standard output, as they are (`init`, `schema`): nothing in them
     /// is judged.
     Printed(Vec<String>),
 }
@@ -244,7 +244,8 @@ pub fn parse_fields<S: AsRef<str>>(names: &[S]) -> Result<BTreeSet<Field>, CliEr
         .collect()
 }
 
-fn warning(error: &dyn Error) -> String {
+/// An error as one warning line, with its causes under it.
+pub(crate) fn warning(error: &dyn Error) -> String {
     format!("{error}{}", chain(error))
 }
 
@@ -260,6 +261,12 @@ fn ingest_warnings(report: &IngestReport, into: &mut Vec<String>) {
             warning(blocked.error())
         ));
     }
+    into.extend(
+        report
+            .unreadable()
+            .iter()
+            .map(|path| format!("path not listed: {path}")),
+    );
     into.extend(report.warnings().iter().map(|w| warning(w)));
 }
 
@@ -295,6 +302,13 @@ async fn run<P: Ports>(
         Command::Add { paths, options } => {
             let added = ws.add(&paths, &options).await?;
             committed_warnings(added.committed(), warnings);
+            // The ingest before this command may have said so already.
+            for path in added.unreadable() {
+                let line = format!("path not listed: {path}");
+                if !warnings.contains(&line) {
+                    warnings.push(line);
+                }
+            }
             Ok(Outcome::Added(added))
         }
         Command::Tag { target, changes } => {

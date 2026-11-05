@@ -118,6 +118,7 @@ use super::config::Config;
 use super::error::AppError;
 use super::ports::{
     CodeScanPort, CurrentPort, FileStat, PinScan, PortName, Ports, RevisionPort, StorePort,
+    UnreadablePath,
 };
 use super::raw::{Candidate, ParseOutcome, RawDoc};
 
@@ -958,6 +959,7 @@ pub struct Model {
     impl_view: ImplView,
     stats: BTreeMap<RelPath, FileStat>,
     unregistered: BTreeSet<RelPath>,
+    unreadable_paths: Vec<UnreadablePath>,
     pending_items: BTreeSet<(DesignId, ItemNumber)>,
     file_drift: Vec<(StoreKind, ClassificationIssue)>,
 }
@@ -1276,11 +1278,12 @@ impl Model {
 
         // Files that no entity owns.
         let roots = listing_roots(config, docs.values().map(|d| d.path.clone()));
-        let listed = ports
+        let (listed, unreadable_paths) = ports
             .current()
             .list(&roots)
             .await
-            .map_err(AppError::port(PortName::Current))?;
+            .map_err(AppError::port(PortName::Current))?
+            .into_parts();
         let owned: BTreeSet<&RelPath> = snap
             .docs()
             .into_iter()
@@ -1309,6 +1312,7 @@ impl Model {
             impl_view,
             stats,
             unregistered,
+            unreadable_paths,
             pending_items,
             file_drift,
         })
@@ -1409,6 +1413,12 @@ impl Model {
     /// Files nobody registered, in path order. Never taken in silently.
     pub fn unregistered(&self) -> &BTreeSet<RelPath> {
         &self.unregistered
+    }
+
+    /// Paths the last listing found and could not name, so they are in no other
+    /// list here: reported, not dropped.
+    pub fn unreadable_paths(&self) -> &[UnreadablePath] {
+        &self.unreadable_paths
     }
 
     /// Item numbers in a Design that no registration has been written for yet

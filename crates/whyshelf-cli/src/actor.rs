@@ -18,7 +18,7 @@ use whyshelf_core::app::Workspace;
 use whyshelf_core::app::ports::Ports;
 use whyshelf_core::app::view::ContextLine;
 
-use crate::command::{Command, Done, execute};
+use crate::command::{Command, Done, execute, warning};
 use crate::error::CliError;
 
 /// How many requests may wait for the task before senders wait in turn.
@@ -30,8 +30,9 @@ const QUEUE: usize = 16;
 pub struct Answer {
     /// The outcome and its warnings, or why the command failed.
     pub result: Result<Done, CliError>,
-    /// The context after the command ran; none if it could not be read.
-    pub context: Option<ContextLine>,
+    /// The context after the command ran; if it could not be read, the warning
+    /// line that says why (the failure is carried, not turned into "no context").
+    pub context: Result<ContextLine, String>,
 }
 
 struct Request {
@@ -84,12 +85,13 @@ impl<P: Ports + 'static> WorkspaceActor<P> {
 
     async fn answer(&mut self, command: Command) -> Answer {
         let result = execute(&mut self.workspace, command).await;
-        let context = self
-            .workspace
-            .context()
-            .await
-            .ok()
-            .map(|report| report.line().clone());
+        let context = match self.workspace.context().await {
+            Ok(report) => Ok(report.line().clone()),
+            Err(error) => Err(format!(
+                "the context line could not be read: {}",
+                warning(&error)
+            )),
+        };
         Answer { result, context }
     }
 }

@@ -79,7 +79,9 @@ use super::Workspace;
 use super::commit::Committed;
 use super::error::AppError;
 use super::model::{Built, Content, Model, build};
-use super::ports::{CacheEntry, CurrentPort, FileStat, IndexCachePort, PortName, Ports};
+use super::ports::{
+    CacheEntry, CurrentPort, FileStat, IndexCachePort, PortName, Ports, UnreadablePath,
+};
 use super::raw::Candidate;
 use super::subscriber::SubscriberWarning;
 
@@ -109,6 +111,7 @@ pub struct IngestReport {
     moved: Vec<(EntityId, RelPath, RelPath)>,
     items_registered: usize,
     unregistered: Vec<RelPath>,
+    unreadable: Vec<UnreadablePath>,
     missing: Vec<RelPath>,
     blocked: Vec<BlockedFile>,
     rebuilt: bool,
@@ -135,6 +138,12 @@ impl IngestReport {
     /// Files nobody registered. Never taken in silently.
     pub fn unregistered(&self) -> &[RelPath] {
         &self.unregistered
+    }
+
+    /// Paths the listing found and could not name: they are not ingested, and
+    /// they are here so that they are not taken for files that are not there.
+    pub fn unreadable(&self) -> &[UnreadablePath] {
+        &self.unreadable
     }
 
     /// Registered files that are gone. No event was written for them.
@@ -198,7 +207,10 @@ impl<P: Ports> Workspace<P> {
 
     async fn run_ingest(&self, mode: Mode) -> Result<IngestReport, AppError> {
         let model = Model::load(&self.ports, &self.config).await?;
-        let mut report = IngestReport::default();
+        let mut report = IngestReport {
+            unreadable: model.unreadable_paths().to_vec(),
+            ..IngestReport::default()
+        };
 
         // 1. Which files changed since the cache.
         let cached: BTreeMap<RelPath, CacheEntry> = self

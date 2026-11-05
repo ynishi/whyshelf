@@ -29,11 +29,13 @@ use super::config::{Config, IngestSettings};
 use super::error::AppError;
 use super::fake::{FakePorts, block_on, path, test_config};
 use super::model::Model;
-use super::ports::{ExportKind, StorePort};
+use super::ports::{ExportKind, PathProblem, StorePort};
 use super::projection::MapDoc;
 use super::query::{Field, GetResult, PageLimit, PageRequest, Target};
 use super::register::AddOptions;
-use super::view::{ExportProblem, NextAction, RowKind, StatusReport, StatusRow};
+use super::view::{
+    AuditDetail, ExportProblem, NextAction, RowDetail, RowKind, StatusReport, StatusRow,
+};
 
 fn r(text: &str) -> Ref {
     text.parse().expect("a test reference")
@@ -112,6 +114,14 @@ fn item_row(report: &StatusReport) -> &StatusRow {
         .expect("an item row")
 }
 
+/// The integration state of an item row; any other row has none.
+fn integration_of(row: &StatusRow) -> &Integration {
+    match row.detail() {
+        RowDetail::Item(item) => item.integration(),
+        other => panic!("not an item: {other:?}"),
+    }
+}
+
 fn approval_of(row: &StatusRow) -> &Approval {
     row.state().expect("a state").approval()
 }
@@ -186,8 +196,8 @@ fn register_ingest_check_and_status_end_to_end() {
     let item = item_row(&s);
     assert!(matches!(approval_of(item), Approval::Approved));
     assert!(matches!(
-        item.integration(),
-        Some(Integration::ApprovedPending { .. })
+        integration_of(item),
+        Integration::ApprovedPending { .. }
     ));
     assert_eq!(item.pins().map(|p| (p.found(), p.declared())), Some((1, 1)));
     assert!(matches!(item.next(), NextAction::AwaitIntegration));
@@ -198,8 +208,8 @@ fn register_ingest_check_and_status_end_to_end() {
     ws.ports().integrate("rev-1");
     let s = status(&ws);
     assert!(matches!(
-        item_row(&s).integration(),
-        Some(Integration::Integrated { .. })
+        integration_of(item_row(&s)),
+        Integration::Integrated { .. }
     ));
     assert!(matches!(
         row(&s, "spec/cache-timeout").next(),
@@ -730,6 +740,45 @@ fn many_changed_files_rebuild_the_cache_instead_of_diffing() {
 }
 
 #[test]
+fn a_file_whose_time_cannot_be_read_is_read_again_each_time_never_taken_as_unchanged() {
+    let config: Config = test_config().with_ingest(IngestSettings::new(1));
+    let mut ws = Workspace::new(files(), config);
+    register_chain(&mut ws);
+    block_on(ws.ingest()).expect("ingest");
+    // Nothing changed, so nothing is read again.
+    assert!(!block_on(ws.ingest()).expect("ingest").rebuilt());
+
+    // Two files lose their time: more than the threshold is read again, and the
+    // stamp the cache then holds for them equals nothing either.
+    ws.ports().forget_mtime("docs/finding/slow.md");
+    ws.ports().forget_mtime("docs/spec/cache.md");
+    assert!(block_on(ws.ingest()).expect("ingest").rebuilt());
+    assert!(block_on(ws.ingest()).expect("ingest").rebuilt());
+}
+
+#[test]
+fn a_path_that_cannot_be_named_is_reported_by_ingest_status_and_add() {
+    let mut ws = workspace();
+    ws.ports()
+        .add_unreadable_path("docs/finding/caf\u{fffd}.md", PathProblem::NotUtf8);
+    let wanted = "docs/finding/caf\u{fffd}.md: its name is not valid UTF-8";
+
+    let report = block_on(ws.ingest()).expect("ingest");
+    assert_eq!(report.unreadable().len(), 1);
+    assert_eq!(report.unreadable()[0].to_string(), wanted);
+    // It is not taken for a file that is missing, nor for one nobody registered.
+    assert!(report.missing().is_empty() && report.unregistered().is_empty());
+
+    let s = status(&ws);
+    assert_eq!(s.unreadable().len(), 1);
+    assert_eq!(s.unreadable()[0].to_string(), wanted);
+    assert!(s.unregistered().is_empty() && s.missing().is_empty());
+
+    let added = block_on(ws.add(&[path("docs")], &AddOptions::new())).expect("add");
+    assert_eq!(added.unreadable().len(), 1);
+}
+
+#[test]
 fn ingest_blocks_a_file_with_a_secret_and_still_records_the_others() {
     let mut ws = workspace();
     ws.ports()
@@ -1254,7 +1303,13 @@ fn views_trace_changelog_audit_and_context() {
         .iter()
         .find(|r| r.gate() == Gate::Ca)
         .expect("ca");
-    assert!(ca.revision().is_some() && ca.tests() == Some(TestOutcome::Passed));
+    assert!(matches!(
+        ca.detail(),
+        AuditDetail::Ca {
+            tests: TestOutcome::Passed,
+            ..
+        }
+    ));
     assert_eq!(ca.by(), &Actor::new("alice").expect("name"));
     let only_specs =
         block_on(ws.audit(Some(&Query::parse("kind:spec").expect("q")))).expect("audit");
@@ -2416,11 +2471,11 @@ fn a_clone_that_cannot_tell_integration_shows_unknown_and_no_command_stops() {
         .cannot_tell_integration(Some(UnknownIntegration::BaselineUnresolved));
     let s = status(&ws);
     assert!(matches!(
-        item_row(&s).integration(),
-        Some(Integration::Unknown {
+        integration_of(item_row(&s)),
+        Integration::Unknown {
             reason: UnknownIntegration::BaselineUnresolved,
             ..
-        })
+        }
     ));
     // Nothing is due that depends on the baseline, and the other reads go on.
     assert!(!matches!(
@@ -2433,8 +2488,8 @@ fn a_clone_that_cannot_tell_integration_shows_unknown_and_no_command_stops() {
     ws.ports().cannot_tell_integration(None);
     ws.ports().integrate("rev-1");
     assert!(matches!(
-        item_row(&status(&ws)).integration(),
-        Some(Integration::Integrated { .. })
+        integration_of(item_row(&status(&ws))),
+        Integration::Integrated { .. }
     ));
 }
 

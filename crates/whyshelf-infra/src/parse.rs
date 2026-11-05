@@ -260,7 +260,8 @@ fn classification(front: ClassFront, problems: &mut Problems) -> FileClassificat
     let kind = front.kind.and_then(|name| {
         let kind = DocKind::from_name(&name);
         if kind.is_none() {
-            problems.invalid("kind", format!("`{name}` is none of finding, spec, design"));
+            let offered = DocKind::names().collect::<Vec<_>>().join(", ");
+            problems.invalid("kind", format!("`{name}` is none of {offered}"));
         }
         kind
     });

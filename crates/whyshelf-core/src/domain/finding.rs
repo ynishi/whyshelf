@@ -335,15 +335,11 @@ impl FindingSource {
         }
     }
 
-    /// The `finding_type` name of this variant, as written in a file.
+    /// The `finding_type` name of this variant, as written in a file: the one
+    /// [`FindingType::name`] holds. The hash covers it too, so changing a name is
+    /// a change of format (`golden_finding_hash` pins it).
     pub fn type_name(&self) -> &'static str {
-        match self {
-            Self::MeasuredData { .. } => "measured_data",
-            Self::UsageObservation { .. } => "usage_observation",
-            Self::ExternalSource { .. } => "external_source",
-            Self::CodeObservation { .. } => "code_observation",
-            Self::DomainConstraint { .. } => "domain_constraint",
-        }
+        self.finding_type().name()
     }
 }
 

@@ -10,8 +10,9 @@
 //! **Every answer starts with the context line**, `[context: project=..,
 //! worktree=.., revision=..]`, an error answer included, so a caller can never
 //! take the answer for the answer about another project or checkout. The rest is
-//! the result in the requested format (`table`, `json` or `markdown`; Markdown
-//! unless asked otherwise), then the warnings, if any.
+//! the result in the requested format (Markdown unless asked otherwise), then the
+//! warnings, if any. When the context line cannot be read, the line says
+//! `[context: unavailable]` and the reason is a warning of the answer.
 //!
 //! **A tool that lists** (`find`, `status`, `trace`, `changelog`, `audit`) takes
 //! `limit`, `cursor` and `fields`, so that an answer cannot flood the caller's
@@ -37,6 +38,7 @@ use whyshelf_core::app::ports::Ports;
 use whyshelf_core::app::query::{Cursor, Field, PageLimit, PageRequest, Target};
 use whyshelf_core::app::raw::RawRevision;
 use whyshelf_core::app::register::AddOptions;
+use whyshelf_core::app::view::ContextLine;
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::event::{DocKind, EventId, StoreKind};
 use whyshelf_core::domain::finding::FindingType;
@@ -52,17 +54,42 @@ use crate::command::{CheckTarget, Command, parse_fields};
 use crate::error::CliError;
 use crate::render::{Format, Window, document};
 
+/// What the first line of an answer says when the context could not be read.
+const UNAVAILABLE: &str = "[context: unavailable]";
+
+/// The first line of an answer, and the warning that says why when the context
+/// line could not be read.
+fn head_of(context: Result<ContextLine, String>) -> (String, Option<String>) {
+    match context {
+        Ok(line) => (line.to_string(), None),
+        Err(failure) => (UNAVAILABLE.to_owned(), Some(failure)),
+    }
+}
+
+/// The warnings of an answer as the text that follows the result; nothing when
+/// there are none.
+fn warnings_block(warnings: &[String]) -> String {
+    if warnings.is_empty() {
+        return String::new();
+    }
+    let mut text = String::from("\nwarnings:\n");
+    for warning in warnings {
+        text.push_str(&format!("- {warning}\n"));
+    }
+    text
+}
+
 /// How an answer is written.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Rendering {
-    /// `markdown` (default), `table` or `json`.
+    /// How to write the answer; default: markdown.
     format: Option<Format>,
 }
 
 /// How a list is cut, and how it is written.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Listing {
-    /// `markdown` (default), `table` or `json`.
+    /// How to write the answer; default: markdown.
     format: Option<Format>,
     /// How many rows at most.
     limit: Option<usize>,
@@ -85,16 +112,90 @@ struct NoArgs {
 struct AddArgs {
     /// Files or directories to register, relative to the project root.
     paths: Vec<String>,
-    /// `finding`, `spec` or `design`, when the file does not say.
-    kind: Option<String>,
+    /// The kind of the documents, when the file does not say.
+    kind: Option<KindChoice>,
     /// Tags to put on every document, such as `area:auth`.
     tags: Option<Vec<String>>,
     /// The alias of the document (for one file).
     alias: Option<String>,
-    /// `repo` or `private`; default: the project's setting.
-    store: Option<String>,
+    /// Where the documents go; default: the project's setting.
+    store: Option<StoreChoice>,
     #[serde(flatten)]
     rendering: Rendering,
+}
+
+/// The kinds of document, as the tool input offers them.
+///
+/// The input shape is the tool server's own; the words are the domain's
+/// (`DocKind::name`), and a test keeps the two sets the same.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum KindChoice {
+    /// A Finding file.
+    Finding,
+    /// A Spec file.
+    Spec,
+    /// A Design file.
+    Design,
+}
+
+impl From<KindChoice> for DocKind {
+    fn from(kind: KindChoice) -> Self {
+        match kind {
+            KindChoice::Finding => Self::Finding,
+            KindChoice::Spec => Self::Spec,
+            KindChoice::Design => Self::Design,
+        }
+    }
+}
+
+/// The stores, as the tool input offers them (the words are the domain's:
+/// `StoreKind::as_str`).
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum StoreChoice {
+    /// The store committed with the repository.
+    Repo,
+    /// The store outside the repository, never published.
+    Private,
+}
+
+impl From<StoreChoice> for StoreKind {
+    fn from(store: StoreChoice) -> Self {
+        match store {
+            StoreChoice::Repo => Self::Repo,
+            StoreChoice::Private => Self::Private,
+        }
+    }
+}
+
+/// The types of Finding, as the tool input offers them (the words are the
+/// domain's: `FindingType::name`).
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum FindingTypeChoice {
+    /// A measurement.
+    MeasuredData,
+    /// What users did and what went wrong.
+    UsageObservation,
+    /// A document from outside.
+    ExternalSource,
+    /// A look at existing code.
+    CodeObservation,
+    /// A limit set from outside the code.
+    DomainConstraint,
+}
+
+impl From<FindingTypeChoice> for FindingType {
+    fn from(finding_type: FindingTypeChoice) -> Self {
+        match finding_type {
+            FindingTypeChoice::MeasuredData => Self::MeasuredData,
+            FindingTypeChoice::UsageObservation => Self::UsageObservation,
+            FindingTypeChoice::ExternalSource => Self::ExternalSource,
+            FindingTypeChoice::CodeObservation => Self::CodeObservation,
+            FindingTypeChoice::DomainConstraint => Self::DomainConstraint,
+        }
+    }
 }
 
 /// Arguments of `whyshelf_tag`.
@@ -140,9 +241,8 @@ struct TargetListArgs {
 /// Arguments of `whyshelf_finding_new`.
 #[derive(Debug, Deserialize, JsonSchema)]
 struct FindingNewArgs {
-    /// `measured_data`, `usage_observation`, `external_source`,
-    /// `code_observation` or `domain_constraint`.
-    finding_type: String,
+    /// The type of the Finding.
+    finding_type: FindingTypeChoice,
     /// The title.
     title: String,
     /// The alias; default: `finding/` and the title as a slug.
@@ -206,10 +306,10 @@ enum Measured {
 /// Arguments of `whyshelf_check`.
 #[derive(Debug, Deserialize, JsonSchema)]
 struct CheckArgs {
-    /// `cr` (a Finding), `cs` (a Spec), `ci` (a Design), `ca` (an item as
-    /// `<design>#<n>`) or `cm` (a Spec that was measured).
+    /// The gate; the values are listed in the schema with what each one checks.
     gate: Gate,
-    /// What to check.
+    /// What to check: a reference of the kind the gate takes (an item as
+    /// `<design>#<n>`).
     target: String,
     /// Record the approval when the check passes (not for `cm`, which always
     /// records).
@@ -217,7 +317,7 @@ struct CheckArgs {
     approve: bool,
     /// `ca` only: approve a past revision instead of the current one.
     revision: Option<String>,
-    /// `cm` only: `pass`, `fail-wiring` or `fail-hyp`.
+    /// `cm` only: what the measurement showed.
     result: Option<Measured>,
     /// `cm` with `fail-wiring`: a hint at the missing item.
     item_hint: Option<String>,
@@ -307,24 +407,14 @@ impl AddArgs {
                 .into_iter()
                 .collect(),
         );
-        if let Some(kind) = &self.kind {
-            let kind = DocKind::from_name(kind).ok_or_else(|| {
-                CliError::argument(
-                    "kind",
-                    std::io::Error::other("one of finding, spec, design"),
-                )
-            })?;
-            options = options.with_kind(kind);
+        if let Some(kind) = self.kind {
+            options = options.with_kind(kind.into());
         }
         if let Some(alias) = &self.alias {
             options = options.with_alias(parse::<Alias>("alias", alias)?);
         }
-        if let Some(store) = &self.store {
-            options = options.with_store(
-                store
-                    .parse::<StoreKind>()
-                    .map_err(|e| CliError::argument("store", e))?,
-            );
+        if let Some(store) = self.store {
+            options = options.with_store(store.into());
         }
         Ok(Command::Add {
             paths: parse_all::<RelPath>("paths", &self.paths)?,
@@ -407,36 +497,41 @@ impl WhyshelfServer {
             Err(error) => return Err(self.with_context(error.report()).await),
         };
         let Answer { result, context } = self.actor.call(command).await.map_err(|e| e.report())?;
-        let head = context.map_or_else(
-            || "[context: unavailable]".to_owned(),
-            |line| line.to_string(),
-        );
+        let (head, context_failure) = head_of(context);
         let body = result.and_then(|done| {
             let doc = document(&done.outcome, &fields).window(&window)?;
             let mut text = doc.render(format.unwrap_or(Format::Markdown))?;
-            if !done.warnings.is_empty() {
-                text.push_str("\nwarnings:\n");
-                for warning in &done.warnings {
-                    text.push_str(&format!("- {warning}\n"));
-                }
-            }
+            let mut warnings = done.warnings;
+            warnings.extend(context_failure.clone());
+            text.push_str(&warnings_block(&warnings));
             Ok(text)
         });
         match body {
             Ok(text) => Ok(format!("{head}\n{text}")),
-            Err(error) => Err(format!("{head}\n{}", error.report())),
+            Err(error) => {
+                let mut text = error.report();
+                text.push_str(&warnings_block(
+                    &context_failure.into_iter().collect::<Vec<_>>(),
+                ));
+                Err(format!("{head}\n{text}"))
+            }
         }
     }
 
     async fn with_context(&self, message: String) -> String {
-        let head = match self.actor.call(Command::Context).await {
-            Ok(Answer {
-                context: Some(line),
-                ..
-            }) => line.to_string(),
-            _ => "[context: unavailable]".to_owned(),
+        let (head, failure) = match self.actor.call(Command::Context).await {
+            Ok(Answer { context, .. }) => head_of(context),
+            Err(error) => (
+                UNAVAILABLE.to_owned(),
+                Some(format!(
+                    "the context line could not be read: {}",
+                    error.report()
+                )),
+            ),
         };
-        format!("{head}\n{message}")
+        let mut text = format!("{head}\n{message}");
+        text.push_str(&warnings_block(&failure.into_iter().collect::<Vec<_>>()));
+        text
     }
 
     async fn plain(
@@ -537,11 +632,8 @@ impl WhyshelfServer {
         Parameters(args): Parameters<FindingNewArgs>,
     ) -> Result<String, String> {
         let command = (|| {
-            let finding_type = FindingType::from_name(&args.finding_type).ok_or_else(|| {
-                CliError::argument("finding_type", std::io::Error::other("not a finding type"))
-            })?;
             Ok(Command::FindingNew {
-                finding_type,
+                finding_type: args.finding_type.into(),
                 title: non_blank("title", &args.title)?,
                 alias: args
                     .alias
@@ -758,6 +850,20 @@ mod tests {
             .collect()
     }
 
+    #[test]
+    fn a_context_that_could_not_be_read_is_unavailable_and_says_why() {
+        let (head, failure) = head_of(Err("the context line could not be read: boom".to_owned()));
+        assert_eq!(head, "[context: unavailable]");
+        let failure = failure.expect("the reason is kept");
+        assert!(failure.contains("boom"), "{failure}");
+        let text = warnings_block(&[failure]);
+        assert!(
+            text.starts_with("\nwarnings:\n- the context line could not be read"),
+            "{text}"
+        );
+        assert_eq!(warnings_block(&[]), "");
+    }
+
     /// The tool server's input shapes are its own (they stay an anti-corruption
     /// layer), but the words are the domain's: the sets are the same.
     #[test]
@@ -770,6 +876,36 @@ mod tests {
         for name in &domain {
             serde_json::from_value::<Measured>(serde_json::Value::String(name.clone()))
                 .expect("the domain's name is read");
+        }
+    }
+
+    #[test]
+    fn the_names_of_a_kind_a_store_and_a_finding_type_are_the_domains() {
+        let kinds: BTreeSet<String> = DocKind::names().map(str::to_owned).collect();
+        assert_eq!(schema_names::<KindChoice>(), kinds);
+        let stores: BTreeSet<String> = StoreKind::ALL
+            .iter()
+            .map(|store| store.as_str().to_owned())
+            .collect();
+        assert_eq!(schema_names::<StoreChoice>(), stores);
+        let types: BTreeSet<String> = FindingType::ALL
+            .iter()
+            .map(|finding_type| finding_type.name().to_owned())
+            .collect();
+        assert_eq!(schema_names::<FindingTypeChoice>(), types);
+        // Each name is read, and read as the domain value of that name.
+        for name in &kinds {
+            let choice: KindChoice = serde_json::from_value(name.clone().into()).expect("a kind");
+            assert_eq!(DocKind::from(choice).name(), name);
+        }
+        for name in &stores {
+            let choice: StoreChoice = serde_json::from_value(name.clone().into()).expect("a store");
+            assert_eq!(StoreKind::from(choice).as_str(), name);
+        }
+        for name in &types {
+            let choice: FindingTypeChoice =
+                serde_json::from_value(name.clone().into()).expect("a type");
+            assert_eq!(FindingType::from(choice).name(), name);
         }
     }
 

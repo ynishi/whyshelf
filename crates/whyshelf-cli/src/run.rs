@@ -39,7 +39,7 @@ use crate::command::{Command, Outcome, execute};
 use crate::error::CliError;
 use crate::init::init;
 use crate::mcp;
-use crate::render::{Format, Window, document};
+use crate::render::{Format, Window, document, output_schema};
 
 /// What a run came to, as the status a script reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +195,11 @@ async fn run(cli: Cli) -> Result<Outcome, CliError> {
         }
         Action::SchemaMap => {
             let lines = vec![schema_json()?];
+            print_lines(&lines);
+            Ok(Outcome::Printed(lines))
+        }
+        Action::SchemaOutput => {
+            let lines = vec![output_schema()?];
             print_lines(&lines);
             Ok(Outcome::Printed(lines))
         }

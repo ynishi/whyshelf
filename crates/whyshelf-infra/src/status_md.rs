@@ -12,7 +12,7 @@
 use std::fmt::Write;
 
 use whyshelf_core::app::projection::ChangelogDoc;
-use whyshelf_core::app::view::{StatusReport, StatusRow};
+use whyshelf_core::app::view::{RowDetail, StatusReport, StatusRow};
 use whyshelf_core::domain::event::{Event, EventBody};
 use whyshelf_core::domain::query::StateFilter;
 use whyshelf_core::domain::state::{EntityState, Integration};
@@ -29,8 +29,8 @@ fn name_of(row: &StatusRow) -> String {
     if let Some(path) = row.path() {
         return path.to_string();
     }
-    match (row.number(), row.parent()) {
-        (Some(number), Some(parent)) => format!("{number} of {parent}"),
+    match row.detail() {
+        RowDetail::Item(item) => format!("{} of {}", item.number(), item.parent()),
         _ => row.id().to_string(),
     }
 }
@@ -69,7 +69,10 @@ pub fn render_status(report: &StatusReport) -> String {
                 upstream_cell(state),
             )
         });
-        let integration = row.integration().map_or("-", integration_name);
+        let integration = match row.detail() {
+            RowDetail::Item(item) => integration_name(item.integration()),
+            _ => "-",
+        };
         let pins = row.pins().map_or_else(
             || "-".to_owned(),
             |t| format!("{}/{}", t.found(), t.declared()),
@@ -85,7 +88,7 @@ pub fn render_status(report: &StatusReport) -> String {
             cell(&row.next().to_string()),
         );
     }
-    let sections: [(&str, Vec<String>); 3] = [
+    let sections: [(&str, Vec<String>); 4] = [
         (
             "Not registered",
             report
@@ -97,6 +100,14 @@ pub fn render_status(report: &StatusReport) -> String {
         (
             "File missing",
             report.missing().iter().map(ToString::to_string).collect(),
+        ),
+        (
+            "Path that cannot be named",
+            report
+                .unreadable()
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
         ),
         (
             "Changed since the last ingest",

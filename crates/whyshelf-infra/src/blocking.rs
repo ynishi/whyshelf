@@ -14,7 +14,8 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use walkdir::{DirEntry, WalkDir};
-use whyshelf_core::app::ports::{FileStat, Mtime};
+use whyshelf_core::app::ports::{FileStat, Listing, Mtime, PathProblem, UnreadablePath};
+use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 
 /// Why a blocking job failed.
@@ -112,27 +113,45 @@ where
 
 /// The modification time as nanoseconds since the Unix epoch, which is the
 /// stamp the cache compares for equality.
-fn stamp(meta: &std::fs::Metadata) -> u64 {
-    meta.modified()
-        .ok()
-        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-        .map_or(0, |since| {
-            u64::try_from(since.as_nanos()).unwrap_or(u64::MAX)
-        })
+///
+/// A time that cannot be read (the platform has none, or it is before the epoch)
+/// is [`Mtime::Unknown`], which equals no stamp the cache holds: the file is read
+/// again every time instead of being taken as unchanged. A time too far from the
+/// epoch for the stamp is the largest stamp, which is a time of its own.
+fn stamp(meta: &std::fs::Metadata) -> Mtime {
+    let Ok(since) = meta
+        .modified()
+        .map_err(|_| ())
+        .and_then(|time| time.duration_since(UNIX_EPOCH).map_err(|_| ()))
+    else {
+        return Mtime::Unknown;
+    };
+    Mtime::new(u64::try_from(since.as_nanos()).unwrap_or(u64::MAX))
 }
 
 fn is_hidden(entry: &DirEntry) -> bool {
     entry.depth() > 0 && entry.file_name().to_string_lossy().starts_with('.')
 }
 
-fn relative(root: &Path, full: &Path) -> Option<RelPath> {
-    let rel = full.strip_prefix(root).ok()?;
+/// The path of `full` under `root`, as a document path.
+///
+/// An error carries what is wrong with the path, so that the listing can report
+/// the file instead of leaving it out.
+fn relative(root: &Path, full: &Path) -> Result<RelPath, UnreadablePath> {
+    let rel = full.strip_prefix(root).unwrap_or(full);
+    let shown = rel.to_string_lossy().into_owned();
     let parts: Option<Vec<&str>> = rel.components().map(|c| c.as_os_str().to_str()).collect();
-    parts?.join("/").parse().ok()
+    let Some(parts) = parts else {
+        return Err(UnreadablePath::new(shown, PathProblem::NotUtf8));
+    };
+    parts.join("/").parse().map_err(|error: ValueError| {
+        UnreadablePath::new(shown, PathProblem::Invalid(error.to_string()))
+    })
 }
 
-fn list_sync(root: &Path, roots: &[RelPath]) -> Result<Vec<FileStat>, BlockingError> {
+fn list_sync(root: &Path, roots: &[RelPath]) -> Result<Listing, BlockingError> {
     let mut found: BTreeMap<RelPath, FileStat> = BTreeMap::new();
+    let mut unreadable: Vec<UnreadablePath> = Vec::new();
     for rel in roots {
         let start = root.join(rel.as_str());
         match std::fs::symlink_metadata(&start) {
@@ -162,22 +181,30 @@ fn list_sync(root: &Path, roots: &[RelPath]) -> Result<Vec<FileStat>, BlockingEr
                 continue;
             }
             let meta = entry.metadata().map_err(BlockingError::Walk)?;
-            if let Some(path) = relative(root, entry.path()) {
-                let stat = FileStat::new(path.clone(), Mtime::new(stamp(&meta)), meta.len());
-                found.insert(path, stat);
+            match relative(root, entry.path()) {
+                Ok(path) => {
+                    let stat = FileStat::new(path.clone(), stamp(&meta), meta.len());
+                    found.insert(path, stat);
+                }
+                // Not in the listing, but not unseen either: it is reported once,
+                // however many of the paths asked for reach it.
+                Err(problem) => {
+                    if !unreadable.contains(&problem) {
+                        unreadable.push(problem);
+                    }
+                }
             }
         }
     }
-    Ok(found.into_values().collect())
+    Ok(Listing::new(found.into_values().collect(), unreadable))
 }
 
 /// The Markdown files under these paths (a path may be a directory or one file),
 /// by path, each with its modification stamp and size. A path that does not
 /// exist gives nothing, and hidden directories (`.git`, `.whyshelf`) are skipped.
-pub async fn list_markdown(
-    root: PathBuf,
-    roots: Vec<RelPath>,
-) -> Result<Vec<FileStat>, BlockingError> {
+/// A file whose path cannot be a document path (its name is not UTF-8, say) is
+/// listed in [`Listing::unreadable`] instead of being dropped.
+pub async fn list_markdown(root: PathBuf, roots: Vec<RelPath>) -> Result<Listing, BlockingError> {
     run(move || list_sync(&root, &roots)).await
 }
 
@@ -267,6 +294,7 @@ mod tests {
             .await
             .unwrap();
         let names: Vec<(&str, u64)> = listed
+            .files()
             .iter()
             .map(|s| (s.path().as_str(), s.size()))
             .collect();
@@ -274,6 +302,57 @@ mod tests {
             names,
             [("docs/a.md", 1), ("docs/b.md", 2), ("docs/deep/d.md", 4)]
         );
+        assert!(listed.unreadable().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_file_whose_name_is_not_utf8_is_reported_not_dropped() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        tokio::fs::create_dir_all(dir.path().join("docs"))
+            .await
+            .unwrap();
+        tokio::fs::write(dir.path().join("docs/ok.md"), "a")
+            .await
+            .unwrap();
+        let odd = dir
+            .path()
+            .join("docs")
+            .join(std::ffi::OsStr::from_bytes(b"bad-\xff.md"));
+        // A file system that refuses such a name has nothing to report.
+        if std::fs::write(&odd, "b").is_err() {
+            return;
+        }
+        // Asked for by two roots, it is still reported once.
+        let listed = list_markdown(dir.path().to_path_buf(), vec![rel("docs"), rel("docs")])
+            .await
+            .unwrap();
+        let files: Vec<&str> = listed.files().iter().map(|s| s.path().as_str()).collect();
+        assert_eq!(files, ["docs/ok.md"]);
+        let [problem] = listed.unreadable() else {
+            panic!(
+                "expected one unreadable path, got {:?}",
+                listed.unreadable()
+            );
+        };
+        assert_eq!(problem.problem(), &PathProblem::NotUtf8);
+        assert!(problem.shown().starts_with("docs/bad-"));
+    }
+
+    #[test]
+    fn a_time_that_cannot_be_read_is_unknown_and_matches_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.md");
+        std::fs::write(&file, "a").unwrap();
+        let meta = std::fs::metadata(&file).unwrap();
+        let now = stamp(&meta);
+        assert!(now.known().is_some());
+        assert!(now.matches(&now));
+        assert!(!Mtime::Unknown.matches(&Mtime::Unknown));
+        assert!(!Mtime::Unknown.matches(&now));
+        assert!(!now.matches(&Mtime::Unknown));
     }
 
     #[tokio::test]
@@ -285,7 +364,7 @@ mod tests {
         let listed = list_markdown(dir.path().to_path_buf(), vec![rel("notes.txt")])
             .await
             .unwrap();
-        assert_eq!(listed.len(), 1);
+        assert_eq!(listed.files().len(), 1);
     }
 
     #[tokio::test]

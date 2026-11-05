@@ -564,7 +564,10 @@ mod tests {
         assert_eq!(REPO.reads(), [wire::VERSION]);
         assert_eq!(Source::Layout(StoreKind::Repo).reads(), [store_fs::LAYOUT]);
         assert_eq!(Projection::Map.reads(), [MAP_VERSION]);
-        assert_eq!(Projection::Cache.reads(), [1]);
+        assert_eq!(
+            Projection::Cache.reads(),
+            [SCHEMA_VERSION.parse::<u32>().expect("a number")]
+        );
     }
 
     #[test]

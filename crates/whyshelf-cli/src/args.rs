@@ -110,7 +110,7 @@ pub enum Sub {
     },
     /// Rebuild the cache and the generated files.
     Rebuild,
-    /// Print the JSON Schema of `map.json`.
+    /// Print a JSON Schema: of `map.json`, or of what `--format json` prints.
     #[command(subcommand)]
     Schema(SchemaCommand),
     /// Count the versions of the project's data and say whether this build reads
@@ -344,6 +344,8 @@ pub struct FindArgs {
 pub enum SchemaCommand {
     /// The schema of `.whyshelf/map.json`.
     Map,
+    /// The schema of the answer of every command in `--format json`.
+    Output,
 }
 
 /// What a command line asks for, split by what it needs.
@@ -353,6 +355,8 @@ pub enum Action {
     Init(InitArgs),
     /// `schema map`: needs nothing.
     SchemaMap,
+    /// `schema output`: needs nothing.
+    SchemaOutput,
     /// `migrate`: reads the data itself, and opens no workspace.
     Migrate,
     /// `mcp`: serve the commands as tools.
@@ -374,7 +378,8 @@ fn parse_revision(text: &str) -> Result<RawRevision, ValueError> {
 }
 
 fn parse_doc_kind(text: &str) -> Result<DocKind, String> {
-    DocKind::from_name(text).ok_or_else(|| "one of finding, spec, design".to_owned())
+    DocKind::from_name(text)
+        .ok_or_else(|| format!("one of {}", DocKind::names().collect::<Vec<_>>().join(", ")))
 }
 
 fn parse_finding_type(text: &str) -> Result<FindingType, String> {
@@ -453,6 +458,7 @@ impl Sub {
         let command = match self {
             Self::Init(args) => return Ok(Action::Init(args)),
             Self::Schema(SchemaCommand::Map) => return Ok(Action::SchemaMap),
+            Self::Schema(SchemaCommand::Output) => return Ok(Action::SchemaOutput),
             Self::Migrate => return Ok(Action::Migrate),
             Self::Mcp => return Ok(Action::Mcp),
             Self::Context => Command::Context,
@@ -573,6 +579,33 @@ mod tests {
             .map(clap::Command::get_name)
             .collect();
         let domain: BTreeSet<&str> = CmResultKind::ALL.iter().map(|kind| kind.name()).collect();
+        assert_eq!(offered, domain);
+    }
+
+    /// The command line keeps its own choice of stores (clap reads the variants),
+    /// but the words are the domain's, and each variant is the store of its name.
+    #[test]
+    fn the_stores_offered_are_the_domains_names() {
+        use std::collections::BTreeSet;
+
+        use clap::ValueEnum;
+
+        let offered: BTreeSet<String> = StoreArg::value_variants()
+            .iter()
+            .map(|store| {
+                let name = store
+                    .to_possible_value()
+                    .expect("a value")
+                    .get_name()
+                    .to_owned();
+                assert_eq!(StoreKind::from(*store).as_str(), name);
+                name
+            })
+            .collect();
+        let domain: BTreeSet<String> = StoreKind::ALL
+            .iter()
+            .map(|store| store.as_str().to_owned())
+            .collect();
         assert_eq!(offered, domain);
     }
 

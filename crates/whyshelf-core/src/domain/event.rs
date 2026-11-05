@@ -186,26 +186,38 @@ impl DocKind {
 }
 
 impl DocKind {
-    /// The kind named `finding`, `spec` or `design`; `None` for any other text.
+    /// Every kind that has a file, in the order of the declaration.
+    pub const ALL: [DocKind; 3] = [DocKind::Finding, DocKind::Spec, DocKind::Design];
+
+    /// The name a person reads and types: the one [`EntityKind::name`] holds.
+    pub fn name(self) -> &'static str {
+        self.entity_kind().name()
+    }
+
+    /// The names of all kinds, in the order of [`DocKind::ALL`]: for a message
+    /// that offers the choices.
+    pub fn names() -> impl Iterator<Item = &'static str> {
+        Self::ALL.into_iter().map(Self::name)
+    }
+
+    /// The kind with this name; `None` for any other text.
+    ///
+    /// Read off [`DocKind::ALL`] and [`DocKind::name`], so the names are written
+    /// once, in [`EntityKind::name`].
     pub fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "finding" => Some(Self::Finding),
-            "spec" => Some(Self::Spec),
-            "design" => Some(Self::Design),
-            _ => None,
-        }
+        Self::ALL.into_iter().find(|kind| kind.name() == name)
     }
 }
 
 impl fmt::Display for DocKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.entity_kind().name())
+        f.write_str(self.name())
     }
 }
 
 impl ToCanon for DocKind {
     fn to_canon(&self) -> Canon {
-        Canon::str(self.entity_kind().name())
+        Canon::str(self.name())
     }
 }
 
@@ -219,11 +231,15 @@ pub enum StoreKind {
 }
 
 impl StoreKind {
+    /// Every store, in the order of the declaration.
+    pub const ALL: [StoreKind; 2] = [StoreKind::Repo, StoreKind::Private];
+
     /// The name a person reads and types: `repo` or `private`.
     ///
     /// This is the name of the display and of the input (settings, the command
-    /// line, the tool server). The hash (the canonical form) and the wire format
-    /// keep their own literals, so renaming a display cannot change an identifier
+    /// line, the tool server); [`FromStr`] reads it back off [`StoreKind::ALL`].
+    /// The hash (the canonical form, see `ToCanon`) and the wire format keep
+    /// their own literals, so renaming a display cannot change an identifier
     /// or break a stored event.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -267,17 +283,20 @@ impl FromStr for StoreKind {
     type Err = ValueError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "repo" => Ok(Self::Repo),
-            "private" => Ok(Self::Private),
-            _ => Err(ValueError::StoreKind),
-        }
+        Self::ALL
+            .into_iter()
+            .find(|store| store.as_str() == s)
+            .ok_or(ValueError::StoreKind)
     }
 }
 
 impl ToCanon for StoreKind {
+    /// The canonical form of a store, which the event hash covers.
+    ///
+    /// These literals are their own, apart from [`StoreKind::as_str`], on purpose:
+    /// they are hash input, so renaming the display must not move an identifier.
+    /// `golden_store_kind_canon` pins the bytes.
     fn to_canon(&self) -> Canon {
-        // The hash has its own literals: see `as_str`.
         Canon::str(match self {
             Self::Repo => "repo",
             Self::Private => "private",
@@ -1355,6 +1374,21 @@ mod tests {
         assert_ne!(parsed.key(), Version::Unparsed { raw }.key());
         assert_eq!(parsed.content(), Some(&content));
         assert_eq!(Version::Unparsed { raw }.content(), None);
+    }
+
+    #[test]
+    fn a_document_kind_is_named_once_and_read_back() {
+        for kind in DocKind::ALL {
+            assert_eq!(kind.name(), kind.entity_kind().name());
+            assert_eq!(DocKind::from_name(kind.name()), Some(kind));
+        }
+        for bad in ["", "Finding", "item", " spec"] {
+            assert_eq!(DocKind::from_name(bad), None);
+        }
+        // Every kind of entity but the item has a file, and `ALL` lists them all.
+        for entity in [EntityKind::Finding, EntityKind::Spec, EntityKind::Design] {
+            assert!(DocKind::ALL.iter().any(|kind| kind.entity_kind() == entity));
+        }
     }
 
     #[test]

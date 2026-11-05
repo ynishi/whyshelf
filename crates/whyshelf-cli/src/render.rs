@@ -1,36 +1,25 @@
 //! Showing an outcome: as a table, as JSON, as Markdown.
 //!
-//! An [`Outcome`] is first turned into a [`Doc`], a few named sections that are
-//! a table, a list of fields or a list of lines, with the values kept as JSON
-//! values. One document renders in the three [`Format`]s, so a command never has
-//! three renderers and the formats cannot disagree about what a command says.
-//! Nothing here decides anything: a name is looked up, a state is spelled, a
-//! list is cut to the window the caller asked for.
+//! An [`Outcome`] is first turned into a [`Doc`]: the typed output of the command
+//! (see [`output`](crate::output)), the context line when the command says it, and
+//! the cursor of the next window. One document renders in the three [`Format`]s: JSON
+//! is the serialization of the output, and the two text formats write its
+//! sections, so a command never has three renderers and the formats cannot disagree
+//! about what a command says. Nothing here decides anything: a list is cut to the
+//! window the caller asked for.
 
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt::Write;
 
 use clap::ValueEnum;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::{Map, Value, json};
-use whyshelf_core::app::check::CheckReport;
-use whyshelf_core::app::query::{EntityContent, EntityView, Field, FoundPage, GetResult};
+use whyshelf_core::app::query::Field;
 use whyshelf_core::app::view::ContextLine;
-use whyshelf_core::app::view::{
-    AuditReport, Changelog, ContextReport, StatusReport, StatusRow, TraceReport,
-};
-use whyshelf_core::domain::approval::CmResult;
-use whyshelf_core::domain::classification::ClassificationIssue;
-use whyshelf_core::domain::event::{EventBody, StoreKind};
-use whyshelf_core::domain::id::EntityId;
-use whyshelf_core::domain::lint::{CheckViolation, UpstreamProblem};
-use whyshelf_core::domain::revision::{IntegrationFact, Revision};
-use whyshelf_core::domain::state::{Approval, Completeness, EntityState, Integration, Upstream};
-use whyshelf_infra::format::{Census, Found, Projection, Source, Verdict};
 
 use crate::command::Outcome;
 use crate::error::CliError;
+use crate::output::{Block, Document, Section, Shape, output};
 
 /// How a result is written.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum, Deserialize, JsonSchema)]
@@ -77,123 +66,32 @@ impl Window {
     }
 }
 
-/// A cell, a field or a line is a JSON value so that JSON output keeps lists.
-type Cell = Value;
-
-#[derive(Debug)]
-enum Body {
-    Table {
-        columns: Vec<&'static str>,
-        rows: Vec<Vec<Cell>>,
-    },
-    Fields(Vec<(&'static str, Cell)>),
-    Lines(Vec<String>),
-}
-
-#[derive(Debug)]
-struct Section {
-    key: &'static str,
-    title: &'static str,
-    body: Body,
-}
-
 /// What a command says, before it is written in a format.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Doc {
-    sections: Vec<Section>,
-    next_cursor: Option<String>,
-    context: Option<ContextLine>,
+    document: Document,
 }
 
 impl Doc {
     /// Put the context line first: in a table or Markdown the line itself, in JSON a
     /// `context` object. The tool server does not use this, since it opens every
-    /// answer with the line already.
+    /// answer with the line already. Only a status says it.
     pub fn with_context(mut self, context: &ContextLine) -> Self {
-        self.context = Some(context.clone());
-        self
-    }
-
-    fn table(
-        mut self,
-        key: &'static str,
-        title: &'static str,
-        columns: Vec<&'static str>,
-        rows: Vec<Vec<Cell>>,
-    ) -> Self {
-        self.sections.push(Section {
-            key,
-            title,
-            body: Body::Table { columns, rows },
-        });
-        self
-    }
-
-    fn fields(mut self, key: &'static str, fields: Vec<(&'static str, Cell)>) -> Self {
-        self.sections.push(Section {
-            key,
-            title: "",
-            body: Body::Fields(fields),
-        });
-        self
-    }
-
-    fn lines(mut self, key: &'static str, title: &'static str, lines: Vec<String>) -> Self {
-        if !lines.is_empty() {
-            self.sections.push(Section {
-                key,
-                title,
-                body: Body::Lines(lines),
-            });
-        }
-        self
-    }
-
-    fn with_next(mut self, cursor: Option<String>) -> Self {
-        self.next_cursor = cursor;
+        self.document.output.with_context(context);
         self
     }
 
     /// Cut the first table to the window: the columns asked for, then `limit`
     /// rows after the cursor. The cursor of the next window is kept.
     pub fn window(mut self, window: &Window) -> Result<Self, CliError> {
-        let Some(Section {
-            body: Body::Table { columns, rows },
-            ..
-        }) = self
-            .sections
-            .iter_mut()
-            .find(|s| matches!(s.body, Body::Table { .. }))
-        else {
+        let Some(table) = self.document.output.table() else {
             return Ok(self);
         };
         if !window.fields.is_empty() {
-            let keep: Vec<usize> = window
-                .fields
-                .iter()
-                .map(|name| {
-                    columns
-                        .iter()
-                        .position(|c| c.eq_ignore_ascii_case(name))
-                        .ok_or_else(|| CliError::UnknownColumn {
-                            name: name.clone(),
-                            columns: columns.join(", ").to_ascii_lowercase(),
-                        })
-                })
-                .collect::<Result<_, _>>()?;
-            *columns = keep.iter().map(|&i| columns[i]).collect();
-            for row in rows.iter_mut() {
-                *row = keep.iter().map(|&i| row[i].clone()).collect();
-            }
+            table.select(&window.fields)?;
         }
-        let total = rows.len();
-        let start = window.offset.min(total);
-        let end = window
-            .limit
-            .map_or(total, |l| start.saturating_add(l).min(total));
-        *rows = rows.drain(start..end).collect();
-        if end < total {
-            self.next_cursor = Some(end.to_string());
+        if let Some(next) = table.cut(window.offset, window.limit) {
+            self.document.next_cursor = Some(next.to_string());
         }
         Ok(self)
     }
@@ -207,35 +105,21 @@ impl Doc {
         }
     }
 
+    /// The output, serialized. It goes through a JSON value so that the keys of an
+    /// object come out in sorted order, as they always have.
     fn json(&self) -> Result<String, CliError> {
-        let mut object = Map::new();
-        if let Some(line) = &self.context {
-            object.insert(
-                "context".to_owned(),
-                json!({
-                    "project": line.project().to_string(),
-                    "worktree": line.worktree().to_string(),
-                    "revision": line.revision().to_string(),
-                    "branch": line.label(),
-                }),
-            );
-        }
-        for section in &self.sections {
-            object.insert(section.key.to_owned(), section.body.json());
-        }
-        if let Some(cursor) = &self.next_cursor {
-            object.insert("next_cursor".to_owned(), json!(cursor));
-        }
-        Ok(serde_json::to_string_pretty(&Value::Object(object))?)
+        let value = serde_json::to_value(&self.document)?;
+        Ok(serde_json::to_string_pretty(&value)?)
     }
 
     fn text(&self, markdown: bool) -> String {
-        let titled = self.sections.len() > 1;
+        let sections = self.document.output.sections();
+        let titled = sections.len() > 1;
         let mut blocks: Vec<String> = Vec::new();
-        if let Some(line) = &self.context {
-            blocks.push(format!("{line}\n"));
+        if let Some(line) = self.document.output.context() {
+            blocks.push(format!("{}\n", line.text()));
         }
-        for section in &self.sections {
+        for section in &sections {
             let mut block = String::new();
             if titled && !section.title.is_empty() {
                 if markdown {
@@ -244,89 +128,47 @@ impl Doc {
                     let _ = writeln!(block, "{}:", section.title);
                 }
             }
-            block.push_str(&section.body.text(markdown));
+            block.push_str(&section_text(section, markdown));
             blocks.push(block);
         }
-        if let Some(cursor) = &self.next_cursor {
+        if let Some(cursor) = &self.document.next_cursor {
             blocks.push(format!("next cursor: {cursor}\n"));
         }
         blocks.join("\n")
     }
 }
 
-impl Body {
-    fn json(&self) -> Value {
-        match self {
-            Self::Table { columns, rows } => Value::Array(
-                rows.iter()
-                    .map(|row| {
-                        Value::Object(
-                            columns
-                                .iter()
-                                .zip(row)
-                                .map(|(c, v)| (c.to_ascii_lowercase().replace(' ', "_"), v.clone()))
-                                .collect(),
-                        )
-                    })
-                    .collect(),
-            ),
-            Self::Fields(fields) => Value::Object(
-                fields
-                    .iter()
-                    .map(|(k, v)| ((*k).to_owned(), v.clone()))
-                    .collect(),
-            ),
-            Self::Lines(lines) => json!(lines),
+fn section_text(section: &Section, markdown: bool) -> String {
+    let mut out = String::new();
+    match &section.block {
+        Block::Table { columns, grid } => {
+            if markdown {
+                pipe_table(&mut out, columns, grid);
+            } else {
+                aligned_table(&mut out, columns, grid);
+            }
         }
-    }
-
-    fn text(&self, markdown: bool) -> String {
-        let mut out = String::new();
-        match self {
-            Self::Table { columns, rows } => {
-                let grid: Vec<Vec<String>> = rows
-                    .iter()
-                    .map(|row| row.iter().map(cell_text).collect())
-                    .collect();
+        Block::Fields(fields) => {
+            let width = fields.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
+            for (key, value) in fields {
                 if markdown {
-                    pipe_table(&mut out, columns, &grid);
+                    let _ = writeln!(out, "- **{key}**: {value}");
                 } else {
-                    aligned_table(&mut out, columns, &grid);
-                }
-            }
-            Self::Fields(fields) => {
-                let width = fields.iter().map(|(k, _)| k.len()).max().unwrap_or(0);
-                for (key, value) in fields {
-                    if markdown {
-                        let _ = writeln!(out, "- **{key}**: {}", cell_text(value));
-                    } else {
-                        let _ = writeln!(out, "{key:<width$}  {}", cell_text(value));
-                    }
-                }
-            }
-            Self::Lines(lines) => {
-                for line in lines {
-                    if markdown {
-                        let _ = writeln!(out, "- {line}");
-                    } else {
-                        let _ = writeln!(out, "{line}");
-                    }
+                    let _ = writeln!(out, "{key:<width$}  {value}");
                 }
             }
         }
-        out
+        Block::Lines(lines) => {
+            for line in lines {
+                if markdown {
+                    let _ = writeln!(out, "- {line}");
+                } else {
+                    let _ = writeln!(out, "{line}");
+                }
+            }
+        }
     }
-}
-
-fn cell_text(value: &Cell) -> String {
-    match value {
-        Value::Null => "-".to_owned(),
-        Value::String(text) if text.is_empty() => "-".to_owned(),
-        Value::String(text) => text.clone(),
-        Value::Array(items) if items.is_empty() => "-".to_owned(),
-        Value::Array(items) => items.iter().map(cell_text).collect::<Vec<_>>().join(", "),
-        other => other.to_string(),
-    }
+    out
 }
 
 fn aligned_table(out: &mut String, columns: &[&str], grid: &[Vec<String>]) {
@@ -364,956 +206,26 @@ fn pipe_table(out: &mut String, columns: &[&str], grid: &[Vec<String>]) {
     }
 }
 
-/// Spell the machine check's finding in a sentence.
-pub fn violation_text(violation: &CheckViolation) -> String {
-    match violation {
-        CheckViolation::TargetInvalid { reasons } => {
-            let why: Vec<String> = reasons.iter().map(ToString::to_string).collect();
-            format!("the target is invalid: {}", why.join("; "))
-        }
-        CheckViolation::EmptyBody => "the Finding has no body".to_owned(),
-        CheckViolation::MeasuredDataNotLabelledMeasured => {
-            "a measured_data Finding must be labelled `evidence: measured`".to_owned()
-        }
-        CheckViolation::Upstream { upstream, problem } => {
-            let why = match problem {
-                UpstreamProblem::Invalid => "it is invalid",
-                UpstreamProblem::Unresolved => "it cannot be read here",
-                UpstreamProblem::NotApproved => "it is not approved",
-                UpstreamProblem::Stale => "it is stale",
-                UpstreamProblem::Blocked => "it is blocked",
-            };
-            format!("upstream {upstream} is not ready: {why}")
-        }
-        CheckViolation::NoPinsDeclared => "the Spec declares no pin".to_owned(),
-        CheckViolation::NoHypsDeclared => "the Spec declares no hypothesis".to_owned(),
-        CheckViolation::PinCoverage(issue) => format!("pin coverage: {issue:?}"),
-        CheckViolation::PinMissingInTests { pin } => {
-            format!("the item declares {pin} but no test carries it")
-        }
-        CheckViolation::PinUndeclaredInTests { pin } => {
-            format!("a test carries {pin} but no Spec of the project declares it")
-        }
-        CheckViolation::MalformedPin { location, text } => {
-            format!("{location}: `{}` is not a pin name", text.as_str())
-        }
-        CheckViolation::TestsFailed => "the tests did not pass".to_owned(),
-        CheckViolation::TestsTimedOut { after } => format!(
-            "the tests did not finish within {}: raise `test.timeout` or make them faster",
-            duration_text(*after)
-        ),
-        CheckViolation::ItemNotInDesign => "the Design no longer has this item".to_owned(),
-        CheckViolation::MeasurementNotMeasuredData { finding } => {
-            format!("{finding} is not a measured_data Finding")
-        }
-        CheckViolation::CsApprovalNotFound => {
-            "no CS approval fixed the hypotheses of this Spec".to_owned()
-        }
-        CheckViolation::HypothesisChanged { fixed, current } => {
-            format!("the hypotheses changed after CS fixed them ({fixed} became {current})")
-        }
-    }
-}
-
-fn approval_text(approval: &Approval) -> &'static str {
-    match approval {
-        Approval::Invalid(_) => "Invalid",
-        Approval::Draft => "Draft",
-        Approval::Approved => "Approved",
-        Approval::Modified { .. } => "Modified",
-    }
-}
-
-fn upstream_text(upstream: &Upstream) -> &'static str {
-    match upstream {
-        Upstream::Ok => "Ok",
-        Upstream::Stale(_) => "Stale",
-        Upstream::Blocked(_) => "Blocked",
-    }
-}
-
-fn integration_text(integration: &Integration) -> &'static str {
-    match integration {
-        Integration::Unapproved => "Unapproved",
-        Integration::ApprovedPending { .. } => "Pending",
-        Integration::Integrated { .. } => "Integrated",
-        Integration::Unknown { .. } => "Unknown",
-    }
-}
-
-/// A time limit the way the settings write it: the largest unit that divides it.
-fn duration_text(span: std::time::Duration) -> String {
-    let seconds = span.as_secs();
-    match seconds {
-        s if s != 0 && s % 3600 == 0 => format!("{}h", s / 3600),
-        s if s != 0 && s % 60 == 0 => format!("{}m", s / 60),
-        s if span.subsec_nanos() == 0 => format!("{s}s"),
-        _ => format!("{}ms", span.as_millis()),
-    }
-}
-
-/// What the status says of a classification problem.
-fn issue_text(issue: &ClassificationIssue) -> String {
-    match issue {
-        ClassificationIssue::FileDiffers { entity, drift } => format!(
-            "{entity}: the file says {} {}, the store has {}; the store is kept (change it with `tag`, or edit the file)",
-            drift.field, drift.file, drift.store
-        ),
-        other => format!("{other:?}"),
-    }
-}
-
-fn integrated_text(fact: IntegrationFact) -> &'static str {
-    match fact {
-        IntegrationFact::Integrated => " (integrated)",
-        IntegrationFact::NotIntegrated => "",
-        IntegrationFact::Unknown { .. } => " (integration unknown here)",
-    }
-}
-
-fn revision_text(revision: &Revision) -> String {
-    match revision {
-        Revision::Commit(id) => id.to_string(),
-        Revision::Patch { base, .. } => format!("{base}+patch"),
-    }
-}
-
-/// Why a state is not plain: each reason on its own.
-fn reasons(state: &EntityState) -> Vec<String> {
-    let mut out = Vec::new();
-    if let Approval::Invalid(list) = state.approval() {
-        out.extend(list.iter().map(ToString::to_string));
-    }
-    match state.upstream() {
-        Upstream::Ok => {}
-        Upstream::Stale(list) => out.extend(list.iter().map(ToString::to_string)),
-        Upstream::Blocked(list) => out.extend(list.iter().map(ToString::to_string)),
-    }
-    // Partial is a fact of its own: it is listed whatever the axes say.
-    out.extend(
-        state
-            .completeness()
-            .reasons()
-            .map(|reason| format!("unresolved: {reason}")),
-    );
-    out
-}
-
-fn completeness_text(completeness: &Completeness) -> &'static str {
-    match completeness {
-        Completeness::Complete => "Complete",
-        Completeness::Partial(_) => "Unresolved",
-    }
-}
-
-/// What to call an entity: its alias, else its path, else (an item) its
-/// Design's name and number, else its identifier.
-fn row_name(row: &StatusRow, names: &BTreeMap<EntityId, String>) -> String {
-    if let Some(alias) = row.alias() {
-        alias.to_string()
-    } else if let Some(path) = row.path() {
-        path.to_string()
-    } else {
-        match (row.number(), row.parent()) {
-            (Some(number), Some(parent)) => {
-                let design = names.get(&parent).cloned().unwrap_or(parent.to_string());
-                // An item number is written with its own `#`.
-                format!("{design}{number}")
-            }
-            _ => row.id().to_string(),
-        }
-    }
-}
-
-fn status_doc(report: &StatusReport) -> Doc {
-    let mut rows = Vec::new();
-    let mut notes = Vec::new();
-    let names: BTreeMap<EntityId, String> = report
-        .rows()
-        .iter()
-        .filter(|row| row.parent().is_none())
-        .map(|row| (row.id(), row_name(row, &BTreeMap::new())))
-        .collect();
-    for row in report.rows() {
-        let (approval, upstream) = row.state().map_or(("Missing", "-"), |s| {
-            (approval_text(s.approval()), upstream_text(s.upstream()))
-        });
-        let name = row_name(row, &names);
-        if let Some(state) = row.state() {
-            notes.extend(reasons(state).into_iter().map(|r| format!("{name}: {r}")));
-        }
-        rows.push(vec![
-            json!(name),
-            json!(row.kind().name()),
-            json!(row.label()),
-            json!(approval),
-            json!(upstream),
-            json!(row.integration().map_or("-", integration_text)),
-            json!(row.pins().map_or_else(
-                || "-".to_owned(),
-                |t| format!("{}/{}", t.found(), t.declared())
-            )),
-            json!(row.next().to_string()),
-        ]);
-    }
-    for path in report.unregistered() {
-        rows.push(vec![
-            json!(path.to_string()),
-            json!("-"),
-            Value::Null,
-            json!("Unregistered"),
-            json!("-"),
-            json!("-"),
-            json!("-"),
-            json!(StatusReport::next_for_unregistered(path).to_string()),
-        ]);
-    }
-    notes.extend(
-        report
-            .missing()
-            .iter()
-            .map(|p| format!("file missing: {p}")),
-    );
-    notes.extend(
-        report
-            .changed_since_ingest()
-            .iter()
-            .map(|p| format!("changed since the last ingest: {p}")),
-    );
-    notes.extend(
-        report
-            .issues()
-            .iter()
-            .map(|i| format!("{} store: {}", i.store.as_str(), issue_text(&i.issue))),
-    );
-    notes.extend(report.exports().iter().map(|e| {
-        format!(
-            "{} store: {:?} is {:?}; `whyshelf rebuild` writes it again",
-            e.scope.as_str(),
-            e.kind,
-            e.problem
-        )
-    }));
-    Doc::default()
-        .table(
-            "entities",
-            "Entities",
-            vec![
-                "ID",
-                "KIND",
-                "TITLE",
-                "APPROVAL",
-                "UPSTREAM",
-                "INTEGRATION",
-                "PINS",
-                "NEXT",
-            ],
-            rows,
-        )
-        .lines("notes", "Notes", notes)
-}
-
-fn entity_fields(view: &EntityView) -> Vec<(&'static str, Cell)> {
-    let mut fields = vec![
-        ("id", json!(view.id().to_string())),
-        ("kind", json!(view.kind().name())),
-        ("store", json!(view.store().as_str())),
-        ("path", json!(view.path().map(ToString::to_string))),
-        ("alias", json!(view.alias().map(ToString::to_string))),
-        ("owner", json!(view.owner().map(ToString::to_string))),
-        (
-            "tags",
-            json!(
-                view.tags()
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            ),
-        ),
-    ];
-    if let Some(state) = view.state() {
-        fields.push(("approval", json!(approval_text(state.approval()))));
-        fields.push(("upstream", json!(upstream_text(state.upstream()))));
-        fields.push((
-            "completeness",
-            json!(completeness_text(state.completeness())),
-        ));
-        fields.push(("reasons", json!(reasons(state))));
-    }
-    fields.extend(content_fields(view.content()));
-    fields.push((
-        "approvals",
-        json!(
-            view.approvals()
-                .iter()
-                .map(|a| format!(
-                    "{} by {} at {} ({})",
-                    a.record().attestation().gate().name(),
-                    a.record().by(),
-                    a.at(),
-                    a.record().event()
-                ))
-                .collect::<Vec<_>>()
-        ),
-    ));
-    fields
-}
-
-fn content_fields(content: &EntityContent) -> Vec<(&'static str, Cell)> {
-    match content {
-        EntityContent::Finding(f) => vec![
-            ("finding_type", json!(f.source().type_name())),
-            ("title", json!(f.title().as_str())),
-            (
-                "evidence",
-                json!(format!("{:?}", f.evidence()).to_lowercase()),
-            ),
-            ("body", json!(f.body())),
-        ],
-        EntityContent::Spec(s) => vec![
-            ("contract", json!(s.contract().as_str())),
-            (
-                "grounds",
-                json!(
-                    s.grounds()
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                ),
-            ),
-            (
-                "pins",
-                json!(
-                    s.pins()
-                        .iter()
-                        .map(|(id, c)| format!("{id}: {}", c.as_str()))
-                        .collect::<Vec<_>>()
-                ),
-            ),
-            (
-                "hyps",
-                json!(
-                    s.hyps()
-                        .iter()
-                        .map(|(id, h)| format!("{id}: {} -> {}", h.metric(), h.target()))
-                        .collect::<Vec<_>>()
-                ),
-            ),
-        ],
-        EntityContent::Design(d) => vec![
-            ("spec", json!(d.spec().to_string())),
-            ("question", json!(d.crux().question().as_str())),
-            (
-                "chosen",
-                json!(format!(
-                    "{}: {}",
-                    d.crux().chosen().id(),
-                    d.crux().chosen().summary()
-                )),
-            ),
-            (
-                "rejected",
-                json!(
-                    d.crux()
-                        .rejected()
-                        .iter()
-                        .map(|o| format!("{}: {}", o.id(), o.summary()))
-                        .collect::<Vec<_>>()
-                ),
-            ),
-            (
-                "items",
-                json!(
-                    d.items()
-                        .iter()
-                        .map(|(n, i)| format!(
-                            "{n}: {} [{}]",
-                            i.summary(),
-                            i.assigned_pins()
-                                .iter()
-                                .map(ToString::to_string)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        ))
-                        .collect::<Vec<_>>()
-                ),
-            ),
-        ],
-        EntityContent::Unparsed(u) => vec![(
-            "parse_errors",
-            json!(
-                u.reasons()
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            ),
-        )],
-        EntityContent::FileMissing => vec![("file", json!("missing"))],
-        EntityContent::Item {
-            design,
-            number,
-            item,
-            integration,
-            progress,
-            ..
-        } => vec![
-            ("design", json!(design.to_string())),
-            ("number", json!(number.to_string())),
-            ("summary", json!(item.summary().as_str())),
-            ("integration", json!(integration_text(integration))),
-            (
-                "pins_declared",
-                json!(
-                    progress
-                        .declared()
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                ),
-            ),
-            (
-                "pins_found",
-                json!(
-                    progress
-                        .found()
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                ),
-            ),
-        ],
-    }
-}
-
-fn get_doc(result: &GetResult) -> Doc {
-    match result {
-        GetResult::Entity(view) => Doc::default().fields("entity", entity_fields(view)),
-        GetResult::Unresolved(reference) => Doc::default().fields(
-            "unresolved",
-            vec![
-                ("reference", json!(reference.to_string())),
-                ("note", json!("this environment cannot look it up")),
-            ],
-        ),
-        GetResult::External(uri) => {
-            Doc::default().fields("external", vec![("uri", json!(uri.to_string()))])
-        }
-    }
-}
-
-fn found_doc(page: &FoundPage, fields: &std::collections::BTreeSet<Field>) -> Doc {
-    let wants = |f: Field| fields.is_empty() || fields.contains(&f);
-    let mut columns = vec!["ID", "KIND"];
-    for (field, name) in [
-        (Field::Store, "STORE"),
-        (Field::Path, "PATH"),
-        (Field::Alias, "ALIAS"),
-        (Field::Title, "TITLE"),
-        (Field::Tags, "TAGS"),
-        (Field::Owner, "OWNER"),
-    ] {
-        if wants(field) {
-            columns.push(name);
-        }
-    }
-    if wants(Field::State) {
-        columns.extend(["APPROVAL", "UPSTREAM"]);
-    }
-    let rows = page
-        .rows()
-        .iter()
-        .map(|row| {
-            let mut cells = vec![json!(row.id.to_string()), json!(row.kind.name())];
-            if wants(Field::Store) {
-                cells.push(json!(row.store.as_ref().map(StoreKind::as_str)));
-            }
-            if wants(Field::Path) {
-                cells.push(json!(row.path.as_ref().map(ToString::to_string)));
-            }
-            if wants(Field::Alias) {
-                cells.push(json!(row.alias.as_ref().map(ToString::to_string)));
-            }
-            if wants(Field::Title) {
-                cells.push(json!(row.title));
-            }
-            if wants(Field::Tags) {
-                cells.push(json!(row.tags.as_ref().map(|t| {
-                    t.iter().map(ToString::to_string).collect::<Vec<_>>()
-                })));
-            }
-            if wants(Field::Owner) {
-                cells.push(json!(row.owner.as_ref().map(ToString::to_string)));
-            }
-            if wants(Field::State) {
-                cells.push(json!(
-                    row.state.as_ref().map(|s| approval_text(s.approval()))
-                ));
-                cells.push(json!(
-                    row.state.as_ref().map(|s| upstream_text(s.upstream()))
-                ));
-            }
-            cells
-        })
-        .collect();
-    Doc::default()
-        .table("found", "Found", columns, rows)
-        .fields("page", vec![("total", json!(page.total()))])
-        .with_next(page.next().map(|c| c.to_string()))
-}
-
-fn check_doc(report: &CheckReport) -> Doc {
-    Doc::default()
-        .fields(
-            "check",
-            vec![
-                ("gate", json!(report.gate().name())),
-                ("target", json!(report.target().to_string())),
-                (
-                    "result",
-                    json!(if report.passed() { "passed" } else { "failed" }),
-                ),
-            ],
-        )
-        .lines(
-            "violations",
-            "Violations",
-            report.violations().iter().map(violation_text).collect(),
-        )
-}
-
-fn trace_doc(report: &TraceReport) -> Doc {
-    let name_of = |id| {
-        report
-            .nodes()
-            .iter()
-            .find(|n| n.id() == id)
-            .map_or_else(|| id.to_string(), node_name)
-    };
-    let rows = report
-        .nodes()
-        .iter()
-        .map(|node| {
-            let (approval, upstream) = node.state().map_or(("Missing", "-"), |s| {
-                (approval_text(s.approval()), upstream_text(s.upstream()))
-            });
-            let approved: Vec<String> = node
-                .approved()
-                .iter()
-                .map(|a| {
-                    format!(
-                        "{} by {}{}",
-                        revision_text(&a.revision),
-                        a.by,
-                        integrated_text(a.integrated)
-                    )
-                })
-                .collect();
-            vec![
-                json!(node_name(node)),
-                json!(node.kind().name()),
-                json!(approval),
-                json!(upstream),
-                json!(approved),
-            ]
-        })
-        .collect();
-    let links = report
-        .links()
-        .iter()
-        .map(|(from, to)| format!("{} -> {}", name_of(*from), name_of(*to)))
-        .collect();
-    Doc::default()
-        .table(
-            "nodes",
-            "Chain",
-            vec!["ID", "KIND", "APPROVAL", "UPSTREAM", "APPROVED AT"],
-            rows,
-        )
-        .lines("links", "Links", links)
-}
-
-fn node_name(node: &whyshelf_core::app::view::TraceNode) -> String {
-    if let Some(alias) = node.alias() {
-        alias.to_string()
-    } else if let Some(path) = node.path() {
-        path.to_string()
-    } else if let Some(number) = node.number() {
-        format!("{number} ({})", node.id())
-    } else {
-        node.id().to_string()
-    }
-}
-
-fn changelog_doc(log: &Changelog) -> Doc {
-    let rows = log
-        .entries()
-        .iter()
-        .map(|entry| {
-            let event = entry.event();
-            let detail = match event.body() {
-                EventBody::Approved { by, attestation } => {
-                    format!("{} by {by}", attestation.gate().name())
-                }
-                EventBody::Revoked { by, reason, .. } => format!("by {by}: {reason}"),
-                EventBody::Moved { old, new } => format!("{old} -> {new}"),
-                _ => String::new(),
-            };
-            vec![
-                json!(entry.at().to_string()),
-                json!(event.id().to_string()),
-                json!(event.body().kind_name()),
-                json!(detail),
-                json!(entry.store().as_str()),
-            ]
-        })
-        .collect();
-    Doc::default().table(
-        "events",
-        "Events",
-        vec!["AT", "EVENT", "KIND", "DETAIL", "STORE"],
-        rows,
-    )
-}
-
-fn audit_doc(report: &AuditReport) -> Doc {
-    let rows = report
-        .rows()
-        .iter()
-        .map(|row| {
-            let result = row.result().map(|r| match r {
-                CmResult::Pass => "pass".to_owned(),
-                CmResult::FailWiring { item_hint } => format!("fail-wiring: {item_hint}"),
-                CmResult::FailHyp { finding } => format!("fail-hyp: {finding}"),
-            });
-            vec![
-                json!(row.at().to_string()),
-                json!(row.gate().name()),
-                json!(row.subject().to_string()),
-                json!(row.by().to_string()),
-                json!(row.revision().map(revision_text)),
-                json!(row.tests().map(|t| format!("{t:?}").to_lowercase())),
-                json!(result),
-                json!(row.event().to_string()),
-                json!(if row.revoked() { "revoked" } else { "-" }),
-            ]
-        })
-        .collect();
-    Doc::default().table(
-        "approvals",
-        "Approvals",
-        vec![
-            "AT", "GATE", "SUBJECT", "BY", "REVISION", "TESTS", "RESULT", "EVENT", "REVOKED",
-        ],
-        rows,
-    )
-}
-
-fn context_doc(report: &ContextReport) -> Doc {
-    let line = report.line();
-    Doc::default().fields(
-        "context",
-        vec![
-            ("project", json!(line.project().to_string())),
-            ("worktree", json!(line.worktree().to_string())),
-            ("revision", json!(line.revision().to_string())),
-            ("branch", json!(line.label())),
-            ("default_store", json!(report.default_store().as_str())),
-            ("repo_events", json!(report.events_in(StoreKind::Repo))),
-            (
-                "private_events",
-                json!(report.events_in(StoreKind::Private)),
-            ),
-        ],
-    )
+/// The JSON Schema of `--format json`, made from the types the JSON is made from.
+///
+/// An answer with some columns left out (`--fields`) has fewer keys in each row
+/// than the schema lists.
+pub fn output_schema() -> Result<String, CliError> {
+    let schema = serde_json::to_value(schemars::schema_for!(Document))?;
+    Ok(serde_json::to_string_pretty(&schema)?)
 }
 
 /// The document an outcome says.
-pub fn document(outcome: &Outcome, fields: &std::collections::BTreeSet<Field>) -> Doc {
-    match outcome {
-        Outcome::Context(report) => context_doc(report),
-        Outcome::Added(added) => Doc::default()
-            .table(
-                "registered",
-                "Registered",
-                vec!["ID", "PATH"],
-                added
-                    .registered()
-                    .iter()
-                    .map(|(id, path)| vec![json!(id.to_string()), json!(path.to_string())])
-                    .collect(),
-            )
-            .lines(
-                "skipped",
-                "Already registered",
-                added.skipped().iter().map(ToString::to_string).collect(),
-            ),
-        Outcome::Recorded(committed) => Doc::default().fields(
-            "recorded",
-            vec![(
-                "events",
-                json!(
-                    committed
-                        .events()
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                ),
-            )],
-        ),
-        Outcome::Scaffolded(made) => Doc::default().fields(
-            "created",
-            vec![
-                ("id", json!(made.id().to_string())),
-                ("alias", json!(made.alias().to_string())),
-                ("path", json!(made.path().to_string())),
-            ],
-        ),
-        Outcome::Checked(report) => check_doc(report),
-        Outcome::Approved {
-            gate,
-            event,
-            attestation,
-        } => {
-            // What was recorded, not where the working tree is now: only a CA
-            // records a revision, and it may be an older one than the current.
-            let recorded = match attestation.revision() {
-                Some(revision) => format!("{} at {}", gate.name(), revision_text(revision)),
-                None => gate.name().to_owned(),
-            };
-            Doc::default().fields(
-                "approved",
-                vec![
-                    ("recorded", json!(recorded)),
-                    ("event", json!(event.to_string())),
-                ],
-            )
-        }
-        Outcome::Got(result) => get_doc(result),
-        Outcome::Found(page) => found_doc(page, fields),
-        Outcome::Status(report) => status_doc(report),
-        Outcome::Trace(report) => trace_doc(report),
-        Outcome::Changelog(log) => changelog_doc(log),
-        Outcome::Audit(report) => audit_doc(report),
-        Outcome::Rebuilt { revised } => {
-            Doc::default().fields("rebuilt", vec![("revised", json!(revised))])
-        }
-        Outcome::Migrate(found) => migrate_doc(found),
-        Outcome::Printed(lines) => Doc::default().lines("lines", "", lines.clone()),
-    }
-}
-
-/// The versions found, set against the ones this build reads.
-///
-/// The words are the census's: what was found and what is read. Nothing says a format
-/// is "newest", because this build only knows what it reads.
-fn migrate_doc(found: &Census) -> Doc {
-    let reads = |versions: Vec<u32>| {
-        let list: Vec<String> = versions.iter().map(|v| format!("v{v}")).collect();
-        format!("reads: {}", list.join(", "))
+pub fn document(outcome: &Outcome, fields: &BTreeSet<Field>) -> Doc {
+    // A page of `find` carries the cursor of the page after it.
+    let next_cursor = match outcome {
+        Outcome::Found(page) => page.next().map(|cursor| cursor.to_string()),
+        _ => None,
     };
-    let counted = |counts: Option<&std::collections::BTreeMap<Found, usize>>| match counts {
-        Some(counts) if !counts.is_empty() => counts
-            .iter()
-            .map(|(found, count)| format!("{found}: {count}"))
-            .collect::<Vec<_>>()
-            .join("  "),
-        _ => "no file".to_owned(),
-    };
-    let mut rows: Vec<Vec<Cell>> = Vec::new();
-    for source in Source::ALL {
-        if let Some(unplaced) = found.unplaced().iter().find(|u| u.source == source) {
-            rows.push(vec![
-                json!(source.name()),
-                json!(format!(
-                    "not looked at: the place cannot be decided ({})",
-                    unplaced.reason.describe()
-                )),
-                json!(reads(source.reads())),
-                json!(""),
-            ]);
-        } else {
-            rows.push(vec![
-                json!(source.name()),
-                json!(counted(found.sources().get(&source))),
-                json!(reads(source.reads())),
-                json!(""),
-            ]);
-        }
-    }
-    for projection in Projection::ALL {
-        let Some(counts) = found.projections().get(&projection) else {
-            continue;
-        };
-        rows.push(vec![
-            json!(projection.name()),
-            json!(counted(Some(counts))),
-            json!(reads(projection.reads())),
-            json!("derived: `whyshelf rebuild` writes it again"),
-        ]);
-    }
-    let verdict = match found.verdict() {
-        Verdict::Readable => {
-            "readable: every file counted is of a version this build reads".to_owned()
-        }
-        Verdict::Unreadable(groups) => {
-            let list: Vec<String> = groups
-                .iter()
-                .map(|g| format!("{} {} ({} file(s))", g.source.name(), g.found, g.count))
-                .collect();
-            format!("unreadable by this build: {}", list.join("; "))
-        }
-        Verdict::Incomplete {
-            unplaced,
-            unreadable,
-        } => {
-            let list: Vec<String> = unplaced
-                .iter()
-                .map(|u| format!("{} ({})", u.source.name(), u.reason.describe()))
-                .collect();
-            let mut text = format!("incomplete: not looked at: {}", list.join("; "));
-            if !unreadable.is_empty() {
-                let groups: Vec<String> = unreadable
-                    .iter()
-                    .map(|g| format!("{} {} ({} file(s))", g.source.name(), g.found, g.count))
-                    .collect();
-                text.push_str(&format!(
-                    "; unreadable by this build: {}",
-                    groups.join("; ")
-                ));
-            }
-            text
-        }
-    };
-    Doc::default()
-        .table(
-            "versions",
-            "Versions",
-            vec!["WHAT", "FOUND", "BUILD", "NOTE"],
-            rows,
-        )
-        .fields("verdict", vec![("verdict", json!(verdict))])
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeSet;
-
-    use whyshelf_core::domain::nonempty::NonEmptyVec;
-    use whyshelf_core::domain::state::{BlockReason, UnresolvedReason};
-
-    use super::*;
-
-    fn id(last: u8) -> EntityId {
-        format!("01912345-6789-7abc-8def-0123456789a{last}")
-            .parse()
-            .expect("a test identifier")
-    }
-
-    fn partial(root: u8, upstream: u8) -> Completeness {
-        Completeness::from_reasons(BTreeSet::from([UnresolvedReason::new(
-            id(root),
-            id(upstream),
-        )]))
-    }
-
-    #[test]
-    fn a_partial_state_lists_its_reasons_beside_the_ones_of_the_axes() {
-        // A public Draft upstream blocks, and another upstream cannot be read.
-        let state = EntityState::new(
-            Approval::Draft,
-            Upstream::Blocked(NonEmptyVec::new(
-                BlockReason::UpstreamUnapproved { upstream: id(1) },
-                vec![],
-            )),
-            partial(2, 2),
-        );
-        let lines = reasons(&state);
-        assert_eq!(lines.len(), 2, "{lines:?}");
-        assert!(lines[0].contains(&id(1).to_string()) && lines[0].contains("not approved"));
-        assert!(lines[1].starts_with("unresolved: "));
-        assert!(lines[1].contains(&id(2).to_string()));
-    }
-
-    #[test]
-    fn a_complete_state_adds_no_line() {
-        let state = EntityState::new(Approval::Draft, Upstream::Ok, Completeness::Complete);
-        assert!(reasons(&state).is_empty());
-        assert_eq!(completeness_text(&Completeness::Complete), "Complete");
-        assert_eq!(completeness_text(&partial(2, 3)), "Unresolved");
-    }
-
-    #[test]
-    fn the_route_to_an_unreadable_entity_is_told() {
-        let state = EntityState::new(Approval::Approved, Upstream::Ok, partial(2, 3));
-        let lines = reasons(&state);
-        assert!(
-            lines[0].contains(&format!("through {}", id(3))),
-            "{lines:?}"
-        );
-    }
-
-    /// A CA approval can name an older revision. What is shown is the revision it
-    /// recorded, whatever the working tree is at now; a gate with no revision shows
-    /// none.
-    #[test]
-    fn an_approval_shows_the_revision_it_recorded() {
-        use whyshelf_core::domain::approval::{Attestation, Gate, Pinned, TestOutcome};
-        use whyshelf_core::domain::event::EventId;
-        use whyshelf_core::domain::hash::ContentHash;
-        use whyshelf_core::domain::id::{DesignId, ItemId};
-        use whyshelf_core::domain::revision::RevisionId;
-
-        let old = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
-        let hash = ContentHash::raw(b"x");
-        let ca = Attestation::Ca {
-            item: Pinned::new(ItemId::new(id(1)), hash),
-            design: Pinned::new(DesignId::new(id(2)), hash),
-            revision: Revision::Commit(RevisionId::from_validated(old.to_owned()).unwrap()),
-            tests: TestOutcome::Passed,
-        };
-        let event: EventId = format!("sha256:{}", "0".repeat(64)).parse().unwrap();
-        let shown = |gate, attestation| {
-            let outcome = Outcome::Approved {
-                gate,
-                event,
-                attestation,
-            };
-            document(&outcome, &BTreeSet::new())
-                .render(Format::Json)
-                .expect("a document")
-        };
-        let ca_text = shown(Gate::Ca, ca);
-        assert!(ca_text.contains(&format!("CA at {old}")), "{ca_text}");
-        let cr = Attestation::Cr {
-            finding: Pinned::new(
-                whyshelf_core::domain::id::FindingId::new(id(3)),
-                ContentHash::raw(b"y"),
-            ),
-        };
-        let cr_text = shown(Gate::Cr, cr);
-        assert!(
-            cr_text.contains("CR") && !cr_text.contains(" at "),
-            "{cr_text}"
-        );
-    }
-
-    #[test]
-    fn an_invalid_target_is_told_with_its_reasons() {
-        use whyshelf_core::domain::state::InvalidReason;
-
-        let text = violation_text(&CheckViolation::TargetInvalid {
-            reasons: NonEmptyVec::new(InvalidReason::DanglingRef { upstream: id(1) }, vec![]),
-        });
-        assert!(text.starts_with("the target is invalid: "), "{text}");
-        assert!(text.contains(&id(1).to_string()), "{text}");
-    }
-
-    #[test]
-    fn a_check_says_in_words_that_an_upstream_cannot_be_read() {
-        let text = violation_text(&CheckViolation::Upstream {
-            upstream: id(1),
-            problem: UpstreamProblem::Unresolved,
-        });
-        assert!(text.ends_with("it cannot be read here"), "{text}");
+    Doc {
+        document: Document {
+            output: output(outcome, fields),
+            next_cursor,
+        },
     }
 }

@@ -16,7 +16,7 @@ use whyshelf_infra::OpenError;
 use whyshelf_infra::cache_sqlite::CacheError;
 use whyshelf_infra::format::FormatError;
 
-use crate::render;
+use crate::output;
 
 /// Why a command failed.
 #[derive(Debug, thiserror::Error)]
@@ -112,7 +112,7 @@ impl CliError {
         out.push_str(&chain(self));
         if let Self::App(AppError::CheckFailed { violations, .. }) = self {
             for violation in violations {
-                let _ = write!(out, "\n  - {}", render::violation_text(violation));
+                let _ = write!(out, "\n  - {}", output::violation_text(violation));
             }
         }
         out
