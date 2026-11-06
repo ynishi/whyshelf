@@ -234,6 +234,17 @@ macro_rules! bytes_hash {
                 write!(f, concat!(stringify!($name), "({})"), self.0)
             }
         }
+
+        impl FromStr for $name {
+            type Err = ValueError;
+
+            /// Only the form [`Display`](fmt::Display) writes: `sha256:` and 64
+            /// lowercase hex digits. The text carries no kind, so any digest parses;
+            /// where the digest came from is for the reader of the record to know.
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                s.parse::<ContentHash>().map(Self)
+            }
+        }
     };
 }
 

@@ -81,10 +81,11 @@ use super::error::{LeakRefusal, PublicationError};
 use super::hash::{BytesHash, ContentHash, HashKind, TextHash};
 use super::id::DocId;
 use super::judge::Judge;
-use super::judgement::{Judgement, JudgementId, JudgementKind, ObjectKey};
+use super::judgement::{JudgementId, JudgementKind, ObjectKey};
 use super::ledger::Ledgers;
 use super::location::RelPath;
 use super::nonempty::NonEmptyVec;
+use super::stored::StoredJudgement;
 
 /// The texts of the objects that exist, as the application read them from the
 /// stores.
@@ -502,12 +503,12 @@ fn locate(doc: DocId, corpus: &Corpus, to: &RelPath) -> Result<Located, Publicat
 }
 
 /// The records about `doc` that count, and what is left out.
-fn records_of(doc: DocId, ledgers: &Ledgers) -> (Vec<&Judgement>, NotCopied) {
-    let about: Vec<&Judgement> = ledgers
+fn records_of(doc: DocId, ledgers: &Ledgers) -> (Vec<&StoredJudgement>, NotCopied) {
+    let about: Vec<&StoredJudgement> = ledgers
         .judgements()
         .filter(|record| record.kind().is_revocable() && ledgers.is_of_doc(record, doc))
         .collect();
-    let (revoked, carried): (Vec<&Judgement>, Vec<&Judgement>) = about
+    let (revoked, carried): (Vec<&StoredJudgement>, Vec<&StoredJudgement>) = about
         .iter()
         .partition(|record| ledgers.is_revoked(&record.id()));
     let revoked_ids: BTreeSet<JudgementId> = revoked.iter().map(|record| record.id()).collect();
@@ -711,7 +712,7 @@ mod tests {
     use crate::domain::judgement::test_support::{
         approve, ca_passed, hash_of, jid, object_of, ts, why,
     };
-    use crate::domain::judgement::{FilePresence, Target};
+    use crate::domain::judgement::{FilePresence, Judgement, Target};
     use crate::domain::knowable::Knowable;
     use crate::domain::ledger::Ledger;
     use crate::domain::nonempty::NonBlank;
@@ -829,7 +830,7 @@ mod tests {
         ObjectTexts::of(
             ledgers
                 .judgements()
-                .filter_map(Judgement::object)
+                .filter_map(StoredJudgement::object)
                 .map(|key| ObjectText::new(format!("text of {}", key.content()))),
         )
     }
@@ -1000,7 +1001,7 @@ mod tests {
         let objects = ObjectTexts::of(
             ledgers
                 .judgements()
-                .filter_map(Judgement::object)
+                .filter_map(StoredJudgement::object)
                 .filter(|k| k.text() != key.text())
                 .map(|k| ObjectText::new(format!("text of {}", k.content()))),
         );

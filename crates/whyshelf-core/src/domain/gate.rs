@@ -113,14 +113,48 @@ use super::state::{Approval, Completeness, EntityState, InvalidReason, LackNeed}
 /// It holds the attestation the approval will carry, built by the check from the
 /// values it looked at, and the [`TextHash`] of the text the check read. See the
 /// module documentation for why it cannot be made anywhere else.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Passed {
     gate: Gate,
     attestation: Attestation,
     text: TextHash,
+    /// Whether this was rebuilt from a stored record, not made by a check just now.
+    restored: bool,
 }
 
+/// Two proofs are equal when they say the same; whether one was read back from a
+/// ledger is not part of what it says.
+impl PartialEq for Passed {
+    fn eq(&self, other: &Self) -> bool {
+        self.gate == other.gate && self.attestation == other.attestation && self.text == other.text
+    }
+}
+
+impl Eq for Passed {}
+
 impl Passed {
+    /// The proof of a record read back from a ledger: what the check said when the
+    /// record was written, not a check made now.
+    ///
+    /// Only [`StoredJudgement::decode`](super::stored::StoredJudgement::decode) calls
+    /// it. A restored proof can be read like any other, but
+    /// [`Judgement::approve`](super::judgement::Judgement::approve) refuses it
+    /// ([`is_restored`](Self::is_restored)): a new approval stands on a check made for
+    /// it, never on the record of an earlier one.
+    pub(in crate::domain) fn restore(attestation: Attestation, text: TextHash) -> Self {
+        Self {
+            gate: attestation.gate(),
+            attestation,
+            text,
+            restored: true,
+        }
+    }
+
+    /// Whether the proof was rebuilt from a stored record and not made by a check.
+    pub(in crate::domain) fn is_restored(&self) -> bool {
+        self.restored
+    }
+
     /// The gate that let it through.
     pub fn gate(&self) -> Gate {
         self.gate
@@ -158,6 +192,7 @@ impl Crosses for Passed {
             gate: _,
             attestation,
             text: _,
+            restored: _,
         } = self;
         attestation.cross_into(out);
     }
@@ -181,6 +216,7 @@ impl Passed {
             gate: attestation.gate(),
             attestation,
             text,
+            restored: false,
         }
     }
 }
@@ -206,6 +242,7 @@ fn settle(
                 gate,
                 attestation,
                 text,
+                restored: false,
             }),
             None => Err(unpinnable()),
         },

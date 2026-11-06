@@ -22,6 +22,7 @@ use crate::domain::judgement::{Judgement, JudgementId, ObjectJudgement, PlainJud
 use crate::domain::knowable::Knowable;
 use crate::domain::ledger::{Ledger, Ledgers};
 use crate::domain::publication::{ObjectTexts, PublicationPlan, PublishEvidence, plan_publication};
+use crate::domain::stored::StoredJudgement;
 
 pub(crate) fn ada() -> Judge {
     judge("ada")
@@ -85,10 +86,10 @@ fn ci_passed(tag: &str) -> Passed {
 /// A publication plan, with what it was made from.
 pub(crate) struct Publishing {
     pub(crate) plan: PublicationPlan,
-    /// The two records the plan carries, in the private ledger.
-    pub(crate) carried: Vec<Judgement>,
+    /// The two records the plan carries, as read from the private ledger.
+    pub(crate) carried: Vec<StoredJudgement>,
     /// A record of the private ledger about another document: not in the plan.
-    pub(crate) other: Judgement,
+    pub(crate) other: StoredJudgement,
     /// The private ledger the plan was made from: the carried records and `other`.
     pub(crate) private: Ledger,
 }
@@ -109,17 +110,18 @@ impl Publishing {
         let reading = Reading::Document(Document::new(header, entity).expect("a document"));
         let corpus = Corpus::build([(facts, reading)], &BTreeSet::new());
 
-        let carried = vec![
-            approve(1, &ada(), Visibility::Private, ci_passed("d1")),
-            approve(2, &ada(), Visibility::Private, ca_passed(31, "i1")),
+        let carried: Vec<StoredJudgement> = vec![
+            approve(1, &ada(), Visibility::Private, ci_passed("d1")).into(),
+            approve(2, &ada(), Visibility::Private, ca_passed(31, "i1")).into(),
         ];
-        let other = approve(6, &ada(), Visibility::Private, cr_passed(1, "other"));
+        let other: StoredJudgement =
+            approve(6, &ada(), Visibility::Private, cr_passed(1, "other")).into();
         let private = carried.iter().cloned().chain([other.clone()]);
-        let ledgers = Ledgers::new(Ledger::new(), Ledger::from_judgements(private));
+        let ledgers = Ledgers::new(Ledger::new(), Ledger::from_stored(private));
         let objects = ObjectTexts::of(
             ledgers
                 .judgements()
-                .filter_map(Judgement::object)
+                .filter_map(StoredJudgement::object)
                 .map(|key| ObjectText::new(format!("text of {}", key.content()))),
         );
         let plan = plan_publication(
@@ -144,6 +146,6 @@ impl Publishing {
     }
 
     pub(crate) fn carried_ids(&self) -> Vec<JudgementId> {
-        self.carried.iter().map(Judgement::id).collect()
+        self.carried.iter().map(StoredJudgement::id).collect()
     }
 }

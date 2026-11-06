@@ -119,14 +119,71 @@ impl ToCanon for AdoptedAttestation {
 /// Proof that an adoption was checked: the only way to record one.
 ///
 /// See the module documentation for why it cannot be made anywhere else.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Adoptable {
     attestation: AdoptedAttestation,
     source: SourceUri,
     text: TextHash,
+    /// Whether this was rebuilt from a stored record, not made by [`check`] just now.
+    restored: bool,
+}
+
+/// Two proofs are equal when they say the same; whether one was read back from a
+/// ledger is not part of what it says.
+impl PartialEq for Adoptable {
+    fn eq(&self, other: &Self) -> bool {
+        self.attestation == other.attestation
+            && self.source == other.source
+            && self.text == other.text
+    }
+}
+
+impl Eq for Adoptable {}
+
+impl AdoptedAttestation {
+    /// An attestation rebuilt from a stored record.
+    pub(in crate::domain) fn restore(
+        gate: Gate,
+        subject: EntityId,
+        hash: ContentHash,
+        upstream: Vec<Pinned<EntityId, UpstreamHash>>,
+    ) -> Self {
+        Self {
+            gate,
+            subject,
+            hash,
+            upstream,
+        }
+    }
 }
 
 impl Adoptable {
+    /// The proof of a record read back from a ledger: what the check said when the
+    /// record was written, not a check made now.
+    ///
+    /// Only [`StoredJudgement::decode`](super::stored::StoredJudgement::decode) calls
+    /// it. A restored proof can be read like any other, but
+    /// [`Judgement::adopt`](super::judgement::Judgement::adopt) refuses it
+    /// ([`is_restored`](Self::is_restored)): a new adoption stands on a check made for
+    /// it, never on the record of an earlier one.
+    pub(in crate::domain) fn restore(
+        attestation: AdoptedAttestation,
+        source: SourceUri,
+        text: TextHash,
+    ) -> Self {
+        Self {
+            attestation,
+            source,
+            text,
+            restored: true,
+        }
+    }
+
+    /// Whether the proof was rebuilt from a stored record and not made by a check.
+    pub(in crate::domain) fn is_restored(&self) -> bool {
+        self.restored
+    }
+
     /// What the adopted approval says.
     pub fn attestation(&self) -> &AdoptedAttestation {
         &self.attestation
@@ -141,6 +198,30 @@ impl Adoptable {
     /// adoption keeps as its object. Evidence, not part of the canonical form.
     pub fn text(&self) -> &TextHash {
         &self.text
+    }
+}
+
+#[cfg(test)]
+impl Adoptable {
+    /// A proof made without a check, for the tests of the modules that consume one.
+    /// It exists only in a test build, so the rule of the module holds for the library.
+    pub(crate) fn for_test(
+        (gate, subject, hash): (Gate, EntityId, ContentHash),
+        upstream: Vec<Pinned<EntityId, UpstreamHash>>,
+        source: SourceUri,
+    ) -> Self {
+        let text = TextHash::of(&format!("text of {hash}"));
+        Self {
+            attestation: AdoptedAttestation {
+                gate,
+                subject,
+                hash,
+                upstream,
+            },
+            source,
+            text,
+            restored: false,
+        }
     }
 }
 
@@ -174,6 +255,7 @@ impl Crosses for Adoptable {
             attestation,
             source,
             text: _,
+            restored: _,
         } = self;
         attestation.cross_into(out);
         source.cross_into(out);
@@ -341,6 +423,7 @@ pub fn check(input: AdoptionInput<'_>) -> Result<Adoptable, AdoptionRefusal> {
         },
         source,
         text,
+        restored: false,
     })
 }
 

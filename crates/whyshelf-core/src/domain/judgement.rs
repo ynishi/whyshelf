@@ -473,7 +473,7 @@ pub(super) struct Pinning<'a> {
 
 /// That an object is of the version pinned (`target`) and of the text the check read
 /// (`checked`).
-fn object_of_version(
+pub(super) fn object_of_version(
     object: &ObjectKey,
     target: &ContentHash,
     checked: &TextHash,
@@ -535,6 +535,9 @@ impl Judgement {
         passed: Passed,
         object: ObjectKey,
     ) -> Result<Self, JudgementError> {
+        if passed.is_restored() {
+            return Err(JudgementError::ProofRestored);
+        }
         object_of_version(&object, passed.attestation().target_hash(), passed.text())?;
         Ok(Self::assemble(
             id,
@@ -557,6 +560,9 @@ impl Judgement {
         adoptable: Adoptable,
         object: ObjectKey,
     ) -> Result<Self, JudgementError> {
+        if adoptable.is_restored() {
+            return Err(JudgementError::ProofRestored);
+        }
         object_of_version(&object, adoptable.attestation().hash(), adoptable.text())?;
         Ok(Self::assemble(
             id,

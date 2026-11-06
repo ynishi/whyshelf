@@ -13,7 +13,7 @@ readme.workspace = true
 [dependencies]
 whyshelf-core.workspace = true
 thiserror.workspace = true
-uuid = { workspace = true, features = ["v7"] }
+uuid = { workspace = true, features = ["v4", "v7"] }
 serde.workspace = true
 serde_json.workspace = true
 schemars.workspace = true

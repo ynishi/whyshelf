@@ -1,4 +1,5 @@
-//! Git: [`RevisionPort`] and [`CodeScanPort`] over the `git` command.
+//! Git: [`RevisionPort`], [`CodeScanPort`] and [`RevisionFactsPort`] (see
+//! [`GitFacts`]) over the `git` command.
 //!
 //! The model speaks only of a revision, of being integrated and of a clean tree;
 //! Git's words stay in this module. Every call starts `git` with `tokio::process`
@@ -31,20 +32,32 @@
 //! however the tree has changed since, and reading Git's object store needs no
 //! checkout.
 
+use std::collections::{BTreeSet, HashMap};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 
 use regex::Regex;
 use tokio::process::Command;
 use whyshelf_core::app::config::{PinPattern, PinSearch};
-use whyshelf_core::app::ports::{CodeScanPort, PinScan, RevisionPort, WorktreeRoot};
+use whyshelf_core::app::ports::{
+    Author, BaselineAnswer, BaselineQuery, CodeScanPort, PinScan, RevisionFactsPort, RevisionPort,
+    WorktreeRoot,
+};
 use whyshelf_core::app::raw::RawRevision;
+use whyshelf_core::domain::corpus::{GitPlace, Visibility};
 use whyshelf_core::domain::error::ValueError;
+use whyshelf_core::domain::hash::HunkId;
+use whyshelf_core::domain::integration::{
+    BaselineFacts, ChangeFingerprint, Hunk, HunkScheme, UnknownWhy,
+};
+use whyshelf_core::domain::judge::{Email, PersonName};
+use whyshelf_core::domain::knowable::Knowable;
 use whyshelf_core::domain::location::{CodeLocation, RelPath, TestFileSet};
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::pin::{MalformedPin, PinId};
-use whyshelf_core::domain::revision::{IntegrationFact, RevisionId, UnknownIntegration};
+use whyshelf_core::domain::revision::{IntegrationFact, Revision, RevisionId, UnknownIntegration};
 
 use crate::config::DEFAULT_PIN_PATTERN;
 
@@ -499,9 +512,693 @@ impl CodeScanPort for GitCodeScan {
     }
 }
 
+// --- the facts the corpus model takes as values --------------------------------------
+
+/// How many commits after the approval's tip of the baseline are looked through, by
+/// default (`integration.window`).
+pub const DEFAULT_WINDOW: usize = 1000;
+
+/// How many commits between where the change branched off and the approval's tip of
+/// the baseline are looked through, by default (`integration.backlog`).
+pub const DEFAULT_BACKLOG: usize = 5000;
+
+/// How many commits one `git log` reads.
+const LOG_CHUNK: usize = 64;
+
+/// The hunks of a commit, per commit and per scheme.
+type HunkCache = HashMap<(String, String), Arc<BTreeSet<HunkId>>>;
+
+/// More entries than this and the cache starts again: it is made of things that can be
+/// made again, and the point is to bound it, not to keep it.
+const CACHE_LIMIT: usize = 200_000;
+
+/// The flags every diff the hunks are cut from is made with, on the approval's side
+/// and on the baseline's alike. Whatever the person's configuration says (renames,
+/// prefixes, the algorithm, quoting) is overridden, since two sides cut with different
+/// flags would cut different hunks from the same change.
+const DIFF_FLAGS: [&str; 8] = [
+    "-U0",
+    "--no-renames",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--diff-algorithm=myers",
+    "--src-prefix=a/",
+    "--dst-prefix=b/",
+];
+
+/// What version control says about the code, in the terms of the corpus model:
+/// [`RevisionFactsPort`] over the `git` command.
+///
+/// | question | git |
+/// |---|---|
+/// | what Git makes of a path ([`git_place`](RevisionFactsPort::git_place)) | `ls-files --error-unmatch` (tracked), else `check-ignore` (ignored), else untracked; a path outside the work tree is outside |
+/// | who wrote a revision ([`author`](RevisionFactsPort::author)) | `log -1 --format=%an%x00%ae` |
+/// | the fingerprint of a change ([`change_fingerprint`](RevisionFactsPort::change_fingerprint)) | the baseline's `rev-list --first-parent`, a search along it for the base, and `diff -U0 <base> <revision>` cut into hunks |
+/// | whether a change landed ([`baseline_facts`](RevisionFactsPort::baseline_facts)) | `merge-base --is-ancestor`, and `log --first-parent -p -U0` over the window |
+///
+/// # The base
+///
+/// The *base* of an approved revision is its nearest ancestor on the baseline's
+/// first-parent line: the commit of the baseline the change branched off. It is found
+/// by a binary search along that line (a commit on the line is an ancestor of the
+/// revision exactly when every older one is, so the ancestors form the old end of the
+/// line), and it is on the line by its definition, so a change that branched off
+/// another feature branch (a stacked pull request) still has one. A revision that is
+/// itself on the line has no change of its own, and no fingerprint. The *baseline at
+/// approval* is the line's tip then.
+///
+/// # The hunks
+///
+/// Every diff is cut with `-U0` and the flags of the `DIFF_FLAGS` constant, and a
+/// file's header is read only before its first hunk, so a removed line that starts
+/// with `-- ` is not taken for a header. A merge commit on the line is read as its
+/// diff against its first parent: the whole of what the merge brought in, which is
+/// what makes a merge-commit flow land by its hunks as well as by ancestry. Binary
+/// files have no hunks. A path that is no [`RelPath`] is left out, which can only make
+/// a change look less landed, never more.
+///
+/// # What is looked through
+///
+/// Along the line, the commits strictly after the base up to the baseline's tip at
+/// approval (at most `backlog` of them, from the tip at approval back), then the
+/// commits after the tip at approval, oldest first (at most `window`). The search
+/// stops at the first commit that completes the set. A commit the search had to cut
+/// off, when the set is not complete, makes the answer
+/// [`UnknownWhy::OutsideWindow`]; nothing cut off makes it a "no".
+///
+/// # Not knowing
+///
+/// | what is missing | the answer |
+/// |---|---|
+/// | the baseline is no commit here | both facts unknown, [`UnknownWhy::BaselineUnresolved`] |
+/// | the approved commit is not here | the ancestry is unknown: [`UnknownWhy::Shallow`] in a shallow clone, else [`UnknownWhy::BaseMissing`] |
+/// | the base or the tip at approval is not on the baseline's line here | the hunks are unknown, for the same reasons |
+/// | the approval recorded no fingerprint | the hunks are unknown, [`UnknownWhy::NoFingerprint`] |
+/// | the fingerprint's scheme is not one this build has | the hunks are unknown, [`UnknownWhy::FingerprintVersion`] |
+///
+/// A revision that is a patch is never an ancestor, has no fingerprint, and has no
+/// known author.
+///
+/// # The cache
+///
+/// The hunks of a commit are kept per commit and scheme, in memory, for as long as
+/// this value (and its clones) live: it is made from the commit and can be made again,
+/// so dropping it changes nothing but the time. The cache port of the application
+/// ([`IndexCachePort`](whyshelf_core::app::ports::IndexCachePort)) holds file stamps
+/// and searchable text and has no place for it.
+#[derive(Debug, Clone)]
+pub struct GitFacts {
+    git: Git,
+    baseline: String,
+    private_root: Option<PathBuf>,
+    window: usize,
+    backlog: usize,
+    cache: Arc<Mutex<HunkCache>>,
+}
+
+/// One part of a diff or a log: the hunks of one commit (or of the whole diff).
+struct Section {
+    commit: Option<String>,
+    hunks: Vec<Hunk>,
+}
+
+impl GitFacts {
+    /// The facts of the repository of `root`, against `baseline` (a ref such as
+    /// `main`), with the default limits.
+    pub fn new(root: PathBuf, baseline: String) -> Self {
+        Self {
+            git: Git::new(root),
+            baseline,
+            private_root: None,
+            window: DEFAULT_WINDOW,
+            backlog: DEFAULT_BACKLOG,
+            cache: Arc::default(),
+        }
+    }
+
+    /// The directory of the private root, for [`git_place`](RevisionFactsPort::git_place)
+    /// of a private file. Without it, what Git makes of a private path is unknown.
+    pub fn with_private_root(mut self, root: PathBuf) -> Self {
+        self.private_root = Some(root);
+        self
+    }
+
+    /// The limits of what is looked through: `window` commits after the approval's tip
+    /// of the baseline, `backlog` before it.
+    pub fn with_limits(mut self, window: usize, backlog: usize) -> Self {
+        self.window = window;
+        self.backlog = backlog;
+        self
+    }
+
+    async fn is_shallow(&self) -> Result<bool, GitError> {
+        Ok(self
+            .git
+            .line(["rev-parse", "--is-shallow-repository"])
+            .await?
+            == "true")
+    }
+
+    /// Why a commit the model needs is not on the line here.
+    async fn missing(&self) -> Result<UnknownWhy, GitError> {
+        Ok(if self.is_shallow().await? {
+            UnknownWhy::Shallow
+        } else {
+            UnknownWhy::BaseMissing
+        })
+    }
+
+    /// The commits of the baseline's first-parent line, newest first.
+    async fn first_parent_line(&self, tip: &str) -> Result<Vec<String>, GitError> {
+        let stdout = self.git.run(["rev-list", "--first-parent", tip]).await?;
+        Ok(String::from_utf8_lossy(&stdout)
+            .lines()
+            .map(str::to_owned)
+            .collect())
+    }
+
+    /// The index in `line` of the newest commit that is an ancestor of `approved` (or
+    /// is it), or `None` when none is.
+    async fn nearest_on_line(
+        &self,
+        line: &[String],
+        approved: &str,
+    ) -> Result<Option<usize>, GitError> {
+        let (mut low, mut high) = (0, line.len());
+        while low < high {
+            let mid = low + (high - low) / 2;
+            let args = ["merge-base", "--is-ancestor", line[mid].as_str(), approved];
+            let finished = self.git.finish(args).await?;
+            match finished.code {
+                Some(0) => high = mid,
+                Some(1) => low = mid + 1,
+                _ => return Err(failed(&args, &finished)),
+            }
+        }
+        Ok((low < line.len()).then_some(low))
+    }
+
+    /// The hunk identities of these commits, each cut from its diff against its first
+    /// parent, from the cache where it is there.
+    async fn commit_hunks(
+        &self,
+        commits: &[&String],
+        scheme: &HunkScheme,
+    ) -> Result<Vec<Arc<BTreeSet<HunkId>>>, GitError> {
+        let key = |commit: &str| (commit.to_owned(), scheme.name().to_owned());
+        let missing: Vec<&String> = {
+            let cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+            commits
+                .iter()
+                .copied()
+                .filter(|c| !cache.contains_key(&key(c)))
+                .collect()
+        };
+        if !missing.is_empty() {
+            let mut args: Vec<String> = ["-c", "core.quotepath=false", "log"]
+                .into_iter()
+                .chain(["--no-walk=unsorted", "--first-parent", "-p"])
+                .chain(DIFF_FLAGS)
+                .chain(["--format=%x1e%H"])
+                .map(str::to_owned)
+                .collect();
+            args.extend(missing.iter().map(|c| (*c).clone()));
+            args.push("--".to_owned());
+            let stdout = self.git.run(&args).await?;
+            let text = String::from_utf8_lossy(&stdout);
+            let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+            if cache.len() > CACHE_LIMIT {
+                cache.clear();
+            }
+            for commit in &missing {
+                cache.insert(key(commit), Arc::default());
+            }
+            for section in parse_diff(&text) {
+                let Some(commit) = section.commit else {
+                    continue;
+                };
+                let ids: BTreeSet<HunkId> = section
+                    .hunks
+                    .iter()
+                    .filter_map(|hunk| hunk.id(scheme))
+                    .collect();
+                cache.insert(key(&commit), Arc::new(ids));
+            }
+        }
+        let cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(commits
+            .iter()
+            .map(|c| cache.get(&key(c)).cloned().unwrap_or_default())
+            .collect())
+    }
+
+    /// Whether every hunk of the fingerprint is in the diff of some commit looked
+    /// through, and if not, whether that is for want of looking.
+    async fn hunks_contained(
+        &self,
+        fingerprint: &ChangeFingerprint,
+        tip: &str,
+    ) -> Result<(Knowable<bool>, Option<UnknownWhy>), GitError> {
+        let line = self.first_parent_line(tip).await?;
+        let position = |revision: &Revision| match revision {
+            Revision::Commit(id) => line.iter().position(|commit| commit == id.as_str()),
+            Revision::Patch { .. } => None,
+        };
+        let (Some(base), Some(at)) = (
+            position(fingerprint.base()),
+            position(fingerprint.baseline_at_approval()),
+        ) else {
+            return Ok((Knowable::Unknown, Some(self.missing().await?)));
+        };
+        // The line is newest first: the tip at approval is not older than the base.
+        if at > base {
+            return Ok((Knowable::Unknown, Some(UnknownWhy::BaseMissing)));
+        }
+
+        // After the tip at approval, oldest first; then back from it to the base.
+        let after = (0..at.min(self.window)).map(|n| &line[at - 1 - n]);
+        let before = (0..(base - at).min(self.backlog)).map(|n| &line[at + n]);
+        let cut_off = at > self.window || base - at > self.backlog;
+        let order: Vec<&String> = after.chain(before).collect();
+
+        let mut needed: BTreeSet<HunkId> = fingerprint.hunks().iter().copied().collect();
+        for chunk in order.chunks(LOG_CHUNK) {
+            for found in self.commit_hunks(chunk, fingerprint.scheme()).await? {
+                needed.retain(|hunk| !found.contains(hunk));
+            }
+            if needed.is_empty() {
+                return Ok((Knowable::Known(true), None));
+            }
+        }
+        if cut_off {
+            Ok((Knowable::Unknown, Some(UnknownWhy::OutsideWindow)))
+        } else {
+            Ok((Knowable::Known(false), None))
+        }
+    }
+}
+
+/// The hunks of a diff or of a log of diffs, by the commit they belong to (a log marks
+/// each commit with a line that starts with the record separator).
+fn parse_diff(text: &str) -> Vec<Section> {
+    enum State {
+        Outside,
+        Header,
+        Body,
+    }
+
+    fn flush(
+        section: &mut Section,
+        path: &Option<RelPath>,
+        removed: &mut Vec<String>,
+        added: &mut Vec<String>,
+    ) {
+        let (removed, added) = (std::mem::take(removed), std::mem::take(added));
+        if let Some(path) = path
+            && !(removed.is_empty() && added.is_empty())
+        {
+            section.hunks.push(Hunk::new(path.clone(), removed, added));
+        }
+    }
+
+    let mut sections = vec![Section {
+        commit: None,
+        hunks: Vec::new(),
+    }];
+    let mut state = State::Outside;
+    let (mut old, mut new): (Option<String>, Option<String>) = (None, None);
+    let mut path: Option<RelPath> = None;
+    let (mut removed, mut added): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    for line in text.lines() {
+        if let Some(commit) = line.strip_prefix('\u{1e}') {
+            if let Some(section) = sections.last_mut() {
+                flush(section, &path, &mut removed, &mut added);
+            }
+            path = None;
+            state = State::Outside;
+            sections.push(Section {
+                commit: Some(commit.trim().to_owned()),
+                hunks: Vec::new(),
+            });
+            continue;
+        }
+        if line.starts_with("diff --git ") {
+            if let Some(section) = sections.last_mut() {
+                flush(section, &path, &mut removed, &mut added);
+            }
+            (old, new, path) = (None, None, None);
+            state = State::Header;
+            continue;
+        }
+        match state {
+            State::Outside => {}
+            State::Header => {
+                if let Some(name) = line.strip_prefix("--- ") {
+                    old = diff_path(name, "a/");
+                } else if let Some(name) = line.strip_prefix("+++ ") {
+                    new = diff_path(name, "b/");
+                } else if line.starts_with("@@") {
+                    path = new
+                        .take()
+                        .or_else(|| old.take())
+                        .and_then(|p| p.parse().ok());
+                    state = State::Body;
+                }
+            }
+            State::Body => {
+                if line.starts_with("@@") {
+                    if let Some(section) = sections.last_mut() {
+                        flush(section, &path, &mut removed, &mut added);
+                    }
+                } else if let Some(text) = line.strip_prefix('+') {
+                    added.push(text.to_owned());
+                } else if let Some(text) = line.strip_prefix('-') {
+                    removed.push(text.to_owned());
+                }
+            }
+        }
+    }
+    if let Some(section) = sections.last_mut() {
+        flush(section, &path, &mut removed, &mut added);
+    }
+    sections
+}
+
+/// The path a `---` or `+++` line names, without its `a/` or `b/`; `None` for
+/// `/dev/null`, and for a quoted name this cannot read.
+fn diff_path(name: &str, prefix: &str) -> Option<String> {
+    let name = name.strip_suffix('\t').unwrap_or(name);
+    if name == "/dev/null" {
+        return None;
+    }
+    let name = if name.starts_with('"') {
+        unquote(name)?
+    } else {
+        name.to_owned()
+    };
+    name.strip_prefix(prefix).map(str::to_owned)
+}
+
+/// A name Git quoted in the C way: `"..."` with `\\`, `\"`, `\t`, `\n`, `\r` and
+/// three-digit octal escapes.
+fn unquote(quoted: &str) -> Option<String> {
+    let inner = quoted.strip_prefix('"')?.strip_suffix('"')?;
+    let mut bytes: Vec<u8> = Vec::new();
+    let mut chars = inner.bytes();
+    while let Some(byte) = chars.next() {
+        if byte != b'\\' {
+            bytes.push(byte);
+            continue;
+        }
+        match chars.next()? {
+            b'\\' => bytes.push(b'\\'),
+            b'"' => bytes.push(b'"'),
+            b't' => bytes.push(b'\t'),
+            b'n' => bytes.push(b'\n'),
+            b'r' => bytes.push(b'\r'),
+            first @ b'0'..=b'3' => {
+                let second = chars.next().filter(|b| (b'0'..=b'7').contains(b))?;
+                let third = chars.next().filter(|b| (b'0'..=b'7').contains(b))?;
+                bytes.push(((first - b'0') << 6) | ((second - b'0') << 3) | (third - b'0'));
+            }
+            _ => return None,
+        }
+    }
+    String::from_utf8(bytes).ok()
+}
+
+impl RevisionFactsPort for GitFacts {
+    type Error = GitError;
+
+    async fn baseline_facts(&self, query: &BaselineQuery<'_>) -> Result<BaselineAnswer, GitError> {
+        let Some(tip) = self.git.commit_of(self.baseline.as_str()).await? else {
+            return Ok(BaselineAnswer::new(
+                BaselineFacts::new(Knowable::Unknown, Knowable::Unknown),
+                UnknownWhy::BaselineUnresolved,
+            ));
+        };
+
+        let (ancestor, ancestor_why) = match query.approved() {
+            // A patch itself is never integrated, only its base can be; the model asks
+            // of the commit, and a patch is none.
+            Revision::Patch { .. } => (Knowable::Known(false), None),
+            Revision::Commit(id) => {
+                let rev = full_hash(id)?;
+                let args = ["merge-base", "--is-ancestor", rev, tip.as_str()];
+                let finished = self.git.finish(args).await?;
+                match finished.code {
+                    Some(0) => (Knowable::Known(true), None),
+                    Some(1) => (Knowable::Known(false), None),
+                    _ if self.git.commit_of(rev).await?.is_none() => {
+                        (Knowable::Unknown, Some(self.missing().await?))
+                    }
+                    _ => return Err(failed(&args, &finished)),
+                }
+            }
+        };
+
+        let (hunks, hunks_why) = match query.fingerprint() {
+            None => (Knowable::Unknown, Some(UnknownWhy::NoFingerprint)),
+            Some(fingerprint) if !fingerprint.scheme().is_known() => {
+                (Knowable::Unknown, Some(UnknownWhy::FingerprintVersion))
+            }
+            Some(fingerprint) => self.hunks_contained(fingerprint, tip.as_str()).await?,
+        };
+
+        Ok(BaselineAnswer::new(
+            BaselineFacts::new(ancestor, hunks),
+            ancestor_why
+                .or(hunks_why)
+                .unwrap_or(UnknownWhy::NoFingerprint),
+        ))
+    }
+
+    async fn change_fingerprint(
+        &self,
+        approved: &Revision,
+    ) -> Result<Option<ChangeFingerprint>, GitError> {
+        let Revision::Commit(id) = approved else {
+            return Ok(None);
+        };
+        let rev = full_hash(id)?;
+        let Some(tip) = self.git.commit_of(self.baseline.as_str()).await? else {
+            return Ok(None);
+        };
+        let Some(approved) = self.git.commit_of(rev).await? else {
+            return Ok(None);
+        };
+        let line = self.first_parent_line(&tip).await?;
+        let Some(nearest) = self.nearest_on_line(&line, &approved).await? else {
+            return Ok(None);
+        };
+        let base = &line[nearest];
+        if *base == approved {
+            // The revision is on the baseline: its change has landed by being there.
+            return Ok(None);
+        }
+
+        let mut args: Vec<&str> = vec!["-c", "core.quotepath=false", "diff"];
+        args.extend(DIFF_FLAGS);
+        args.extend([base.as_str(), approved.as_str(), "--"]);
+        let stdout = self.git.run(&args).await?;
+        let text = String::from_utf8_lossy(&stdout);
+        let hunks: Vec<Hunk> = parse_diff(&text)
+            .into_iter()
+            .flat_map(|section| section.hunks)
+            .collect();
+
+        let revision = |sha: &str| {
+            RevisionId::from_validated(sha.to_owned())
+                .map(Revision::Commit)
+                .map_err(GitError::Value)
+        };
+        Ok(ChangeFingerprint::of_hunks(
+            revision(base)?,
+            revision(&tip)?,
+            &hunks,
+            HunkScheme::CURRENT,
+        )
+        .ok())
+    }
+
+    async fn author(&self, at: &Revision) -> Result<Knowable<Author>, GitError> {
+        let Revision::Commit(id) = at else {
+            return Ok(Knowable::Unknown);
+        };
+        let rev = full_hash(id)?;
+        let finished = self
+            .git
+            .finish(["log", "-1", "--no-walk", "--format=%an%x00%ae", rev])
+            .await?;
+        if finished.code != Some(0) {
+            // The commit is not in this clone.
+            return Ok(Knowable::Unknown);
+        }
+        let printed = String::from_utf8_lossy(&finished.stdout);
+        let (name, mail) = printed
+            .trim_end()
+            .split_once('\0')
+            .unwrap_or((&printed, ""));
+        Ok(match PersonName::new(name) {
+            Ok(name) => Knowable::Known(Author::new(name, Email::new(mail).ok())),
+            Err(_) => Knowable::Unknown,
+        })
+    }
+
+    async fn git_place(
+        &self,
+        root: Visibility,
+        path: &RelPath,
+    ) -> Result<Knowable<GitPlace>, GitError> {
+        let base = match root {
+            Visibility::Public => self.git.root().to_path_buf(),
+            Visibility::Private => match &self.private_root {
+                Some(root) => root.clone(),
+                None => return Ok(Knowable::Unknown),
+            },
+        };
+        let (Ok(work), Ok(base)) = (
+            tokio::fs::canonicalize(self.git.root()).await,
+            tokio::fs::canonicalize(&base).await,
+        ) else {
+            return Ok(Knowable::Unknown);
+        };
+        let full = base.join(path.as_str());
+        let Ok(inside) = full.strip_prefix(&work) else {
+            return Ok(Knowable::Known(GitPlace::Outside));
+        };
+        let Some(inside) = inside.to_str().map(str::to_owned) else {
+            return Ok(Knowable::Unknown);
+        };
+
+        let literal = format!(":(literal){inside}");
+        let tracked = self
+            .git
+            .finish(["ls-files", "--error-unmatch", "--", literal.as_str()])
+            .await?;
+        match tracked.code {
+            Some(0) => return Ok(Knowable::Known(GitPlace::Tracked)),
+            Some(1) => {}
+            // Not a repository, or Git cannot say.
+            _ => return Ok(Knowable::Unknown),
+        }
+        let ignored = self
+            .git
+            .finish(["check-ignore", "-q", "--", inside.as_str()])
+            .await?;
+        Ok(match ignored.code {
+            Some(0) => Knowable::Known(GitPlace::Ignored),
+            Some(1) => Knowable::Known(GitPlace::Untracked),
+            _ => Knowable::Unknown,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_log_is_cut_into_the_hunks_of_each_commit() {
+        let log = "\u{1e}aaa\n\
+            \n\
+            diff --git a/src/lib.rs b/src/lib.rs\n\
+            index 1..2 100644\n\
+            --- a/src/lib.rs\n\
+            +++ b/src/lib.rs\n\
+            @@ -3 +3,2 @@ fn x()\n\
+            -let a = 1;\n\
+            +let a = 2;\n\
+            +let b = 3;\n\
+            @@ -9,0 +10 @@\n\
+            +let c = 4;\n\
+            \\ No newline at end of file\n\
+            diff --git a/new.txt b/new.txt\n\
+            new file mode 100644\n\
+            --- /dev/null\n\
+            +++ b/new.txt\n\
+            @@ -0,0 +1 @@\n\
+            +hello\n\
+            diff --git a/gone.txt b/gone.txt\n\
+            deleted file mode 100644\n\
+            --- a/gone.txt\n\
+            +++ /dev/null\n\
+            @@ -1 +0,0 @@\n\
+            -bye\n\
+            \u{1e}bbb\n\
+            \n\
+            diff --git a/img.png b/img.png\n\
+            Binary files a/img.png and b/img.png differ\n\
+            \u{1e}ccc\n";
+        let sections = parse_diff(log);
+        let commits: Vec<_> = sections.iter().map(|s| s.commit.as_deref()).collect();
+        assert_eq!(commits, [None, Some("aaa"), Some("bbb"), Some("ccc")]);
+        assert_eq!(sections[1].hunks.len(), 4, "{:?}", sections[1].hunks);
+        assert!(sections[2].hunks.is_empty(), "a binary file has no hunk");
+        assert!(
+            sections[3].hunks.is_empty(),
+            "a commit with no diff has none"
+        );
+
+        let lib = |removed: &[&str], added: &[&str]| {
+            Hunk::new(
+                "src/lib.rs".parse().unwrap(),
+                removed.iter().map(|s| (*s).to_owned()).collect(),
+                added.iter().map(|s| (*s).to_owned()).collect(),
+            )
+        };
+        assert_eq!(
+            sections[1].hunks[0],
+            lib(&["let a = 1;"], &["let a = 2;", "let b = 3;"])
+        );
+        assert_eq!(sections[1].hunks[1], lib(&[], &["let c = 4;"]));
+        assert_eq!(
+            sections[1].hunks[2],
+            Hunk::new("new.txt".parse().unwrap(), vec![], vec!["hello".to_owned()])
+        );
+        assert_eq!(
+            sections[1].hunks[3],
+            Hunk::new("gone.txt".parse().unwrap(), vec!["bye".to_owned()], vec![])
+        );
+    }
+
+    #[test]
+    fn a_removed_line_that_looks_like_a_header_is_content() {
+        let diff = "diff --git a/a.txt b/a.txt\n\
+            --- a/a.txt\n\
+            +++ b/a.txt\n\
+            @@ -1,2 +1,2 @@\n\
+            --- a/a.txt\n\
+            -- not a header\n\
+            +++ b/a.txt\n\
+            ++ not a header\n";
+        let sections = parse_diff(diff);
+        let [hunk] = sections[0].hunks.as_slice() else {
+            panic!("one hunk, got {:?}", sections[0].hunks);
+        };
+        let expected = Hunk::new(
+            "a.txt".parse().unwrap(),
+            vec!["-- a/a.txt".to_owned(), "- not a header".to_owned()],
+            vec!["++ b/a.txt".to_owned(), "+ not a header".to_owned()],
+        );
+        assert_eq!(hunk, &expected);
+    }
+
+    #[test]
+    fn a_quoted_name_is_read_and_an_odd_one_is_left_out() {
+        assert_eq!(unquote(r#""a\tb""#).as_deref(), Some("a\tb"));
+        assert_eq!(unquote(r#""caf\303\251""#).as_deref(), Some("café"));
+        assert_eq!(unquote(r#""q\"q\\""#).as_deref(), Some("q\"q\\"));
+        assert_eq!(unquote(r#""bad\x""#), None);
+        assert_eq!(unquote(r#""bad\30""#), None);
+        assert_eq!(
+            diff_path("a/my file.txt\t", "a/").as_deref(),
+            Some("my file.txt")
+        );
+        assert_eq!(diff_path("/dev/null", "a/"), None);
+        assert_eq!(diff_path("b/x", "a/"), None, "the prefix is checked");
+    }
 
     #[test]
     fn only_a_full_hash_is_a_revision() {

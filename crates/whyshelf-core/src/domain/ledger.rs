@@ -133,13 +133,14 @@ use super::judgement::{
     About, Basis, FilePresence, Judgement, JudgementId, JudgementKind, Pinning, Target,
 };
 use super::nonempty::{NonBlank, NonEmptyVec};
+use super::stored::StoredJudgement;
 
 /// What a ledger holds under one identifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Slot {
     /// One record, with its canonical bytes.
     Sound {
-        judgement: Box<Judgement>,
+        judgement: Box<StoredJudgement>,
         bytes: Vec<u8>,
     },
     /// Two records of one identifier that differ in the bytes: neither is kept.
@@ -147,7 +148,7 @@ enum Slot {
 }
 
 impl Slot {
-    fn of(judgement: Judgement) -> Self {
+    fn of(judgement: StoredJudgement) -> Self {
         let bytes = judgement.canonical_bytes();
         Self::Sound {
             judgement: Box::new(judgement),
@@ -173,7 +174,7 @@ impl Slot {
         }
     }
 
-    fn judgement(&self) -> Option<&Judgement> {
+    fn judgement(&self) -> Option<&StoredJudgement> {
         match self {
             Self::Sound { judgement, .. } => Some(judgement),
             Self::Corrupt => None,
@@ -204,22 +205,30 @@ impl Ledger {
         Self::default()
     }
 
-    /// A ledger of the records given, in any order and with repeats. The decoding of
-    /// stored records into [`Judgement`]s is an adapter's work; the canonical bytes
-    /// that tell two records of one identifier apart are computed here from the
-    /// decoded value.
-    pub fn from_judgements(judgements: impl IntoIterator<Item = Judgement>) -> Self {
+    /// A ledger of the records read back, in any order and with repeats: what an
+    /// adapter gives after it decoded the files ([`StoredJudgement::decode`]). The
+    /// canonical bytes that tell two records of one identifier apart are computed
+    /// here from the decoded value.
+    pub fn from_stored(records: impl IntoIterator<Item = StoredJudgement>) -> Self {
         let mut ledger = Self::new();
-        for judgement in judgements {
-            ledger.insert(judgement);
+        for record in records {
+            ledger.insert(record);
         }
         ledger
     }
 
+    /// A ledger of records just made, in any order and with repeats: what a test or
+    /// a fake store holds. Each is kept as it would be read back
+    /// ([`StoredJudgement::from`]).
+    pub fn from_judgements(judgements: impl IntoIterator<Item = Judgement>) -> Self {
+        Self::from_stored(judgements.into_iter().map(StoredJudgement::from))
+    }
+
     /// Add a record. A record of an identifier the ledger holds is merged with it:
     /// equal records are one, different records make the identifier corrupt.
-    pub fn insert(&mut self, judgement: Judgement) {
-        self.absorb(judgement.id(), Slot::of(judgement));
+    pub fn insert(&mut self, record: impl Into<StoredJudgement>) {
+        let record = record.into();
+        self.absorb(record.id(), Slot::of(record));
     }
 
     fn absorb(&mut self, id: JudgementId, slot: Slot) {
@@ -243,7 +252,7 @@ impl Ledger {
     }
 
     /// The record of an identifier, unless there is none or it is corrupt.
-    pub fn get(&self, id: &JudgementId) -> Option<&Judgement> {
+    pub fn get(&self, id: &JudgementId) -> Option<&StoredJudgement> {
         self.slots.get(id).and_then(Slot::judgement)
     }
 
@@ -266,7 +275,7 @@ impl Ledger {
     }
 
     /// The sound records, ordered by identifier.
-    pub fn judgements(&self) -> impl Iterator<Item = &Judgement> {
+    pub fn judgements(&self) -> impl Iterator<Item = &StoredJudgement> {
         self.slots.values().filter_map(Slot::judgement)
     }
 
@@ -323,13 +332,13 @@ pub enum ObjectReading {
 /// An approval or adoption that stands, with what it pins.
 #[derive(Debug)]
 pub struct StandingApproval<'a> {
-    judgement: &'a Judgement,
+    judgement: &'a StoredJudgement,
     pinning: Pinning<'a>,
 }
 
 impl<'a> StandingApproval<'a> {
     /// The record.
-    pub fn judgement(&self) -> &'a Judgement {
+    pub fn judgement(&self) -> &'a StoredJudgement {
         self.judgement
     }
 
@@ -559,7 +568,7 @@ impl Ledgers {
     }
 
     /// A sound record of either ledger, whether or not it counts.
-    pub(super) fn record(&self, id: &JudgementId) -> Option<&Judgement> {
+    pub(super) fn record(&self, id: &JudgementId) -> Option<&StoredJudgement> {
         if self.corrupt.contains(id) {
             return None;
         }
@@ -569,12 +578,12 @@ impl Ledgers {
     /// The records that count, ordered by identifier: sound, and either in the
     /// private ledger or in the public one with a public `origin` or named by a
     /// `Published`. Revoked records are among them.
-    pub fn judgements(&self) -> impl Iterator<Item = &Judgement> {
+    pub fn judgements(&self) -> impl Iterator<Item = &StoredJudgement> {
         self.sides.keys().filter_map(|id| self.record(id))
     }
 
     /// The record of an identifier, if it counts.
-    pub fn get(&self, id: &JudgementId) -> Option<&Judgement> {
+    pub fn get(&self, id: &JudgementId) -> Option<&StoredJudgement> {
         if self.sides.contains_key(id) {
             self.record(id)
         } else {
@@ -712,7 +721,7 @@ impl Ledgers {
 
     /// What a record is about; for a revocation, what the first record it names that
     /// counts on `side` is about.
-    fn subject_of(&self, record: &Judgement, side: Visibility) -> Option<Target> {
+    fn subject_of(&self, record: &StoredJudgement, side: Visibility) -> Option<Target> {
         let direct = |kind: &JudgementKind| match kind.about() {
             About::Target(target) => Some(target),
             About::Records(_) => None,
@@ -734,7 +743,7 @@ impl Ledgers {
     ///
     /// A retirement of an item pins no Design, so the item is taken to be `doc`'s when
     /// a sound approval or adoption of it, in either ledger, pins `doc` as its Design.
-    pub(super) fn is_of_doc(&self, record: &Judgement, doc: DocId) -> bool {
+    pub(super) fn is_of_doc(&self, record: &StoredJudgement, doc: DocId) -> bool {
         match record.kind() {
             JudgementKind::Retire {
                 target: Target::Item(item),
@@ -774,7 +783,7 @@ impl Ledgers {
         } = request;
         let visible = |id: &JudgementId| self.sides.get(id).is_some_and(|s| s.on(origin));
 
-        let chosen: Vec<&Judgement> = match &what {
+        let chosen: Vec<&StoredJudgement> = match &what {
             RevokeWhat::Attestation {
                 gate,
                 subject,
@@ -1198,7 +1207,7 @@ mod tests {
         bool,
     ) {
         (
-            ledgers.judgements().map(Judgement::id).collect(),
+            ledgers.judgements().map(StoredJudgement::id).collect(),
             ids_of(ledgers.approvals()),
             ledgers.corrupt().iter().copied().collect(),
             ledgers.published_docs(),
@@ -1726,11 +1735,14 @@ mod tests {
         }
 
         // The file goes again and a retirement is written again: it is alive.
-        let again = public_only(vec![
-            retire(1, target),
-            revoked.get(&jid(2)).cloned().unwrap(),
-            retire(3, target),
-        ]);
+        let again = Ledgers::new(
+            Ledger::from_stored([
+                retire(1, target).into(),
+                revoked.get(&jid(2)).cloned().unwrap(),
+                retire(3, target).into(),
+            ]),
+            Ledger::new(),
+        );
         assert_eq!(
             again.retirement(&target, FilePresence::Absent),
             Retirement::Retired

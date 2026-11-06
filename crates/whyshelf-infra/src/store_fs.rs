@@ -263,7 +263,7 @@ fn paths_text(paths: &[PathBuf]) -> String {
         .join(", ")
 }
 
-fn io_error(path: &Path) -> impl FnOnce(io::Error) -> StoreError + '_ {
+pub(crate) fn io_error(path: &Path) -> impl FnOnce(io::Error) -> StoreError + '_ {
     move |source| StoreError::Io {
         path: path.to_path_buf(),
         source,
@@ -295,7 +295,7 @@ impl FsStore {
 ///
 /// With `overwrite` false an existing target is left alone and reported as
 /// [`AppendOutcome::AlreadyPresent`].
-async fn publish(
+pub(crate) async fn publish(
     dir: &Path,
     name: &str,
     bytes: &[u8],

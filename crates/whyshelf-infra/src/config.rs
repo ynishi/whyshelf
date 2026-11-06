@@ -343,6 +343,7 @@ pub const DATA_DIR_VAR: &str = "WHYSHELF_DATA_DIR";
 pub struct UserDirs {
     data_dir: Option<PathBuf>,
     data_home: Option<PathBuf>,
+    config_home: Option<PathBuf>,
     home: Option<PathBuf>,
 }
 
@@ -353,6 +354,7 @@ impl UserDirs {
         Self {
             data_dir: var(DATA_DIR_VAR),
             data_home: var("XDG_DATA_HOME"),
+            config_home: var("XDG_CONFIG_HOME"),
             home: var("HOME"),
         }
     }
@@ -366,6 +368,12 @@ impl UserDirs {
     /// Set the base directory for user data as `XDG_DATA_HOME` would.
     pub fn with_data_home(mut self, dir: impl Into<PathBuf>) -> Self {
         self.data_home = Some(dir.into());
+        self
+    }
+
+    /// Set the base directory for user settings as `XDG_CONFIG_HOME` would.
+    pub fn with_config_home(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.config_home = Some(dir.into());
         self
     }
 
@@ -391,6 +399,18 @@ impl UserDirs {
         absolute(&self.home)
             .map(|home| home.join(".local").join("share").join("whyshelf"))
             .ok_or(ConfigError::NoDataDir)
+    }
+
+    /// The directory of the person's own settings: `$XDG_CONFIG_HOME/whyshelf`, else
+    /// `$HOME/.config/whyshelf` (the XDG Base Directory default). A variable that is
+    /// unset, empty or relative is skipped. `None` when neither gives an absolute
+    /// path: there is then no place to look for settings, which is not the same as
+    /// a place with no file in it (see [`crate::user_settings`]).
+    pub fn config_dir(&self) -> Option<PathBuf> {
+        let absolute = |dir: &Option<PathBuf>| dir.clone().filter(|d| d.is_absolute());
+        absolute(&self.config_home)
+            .map(|base| base.join("whyshelf"))
+            .or_else(|| absolute(&self.home).map(|home| home.join(".config").join("whyshelf")))
     }
 }
 

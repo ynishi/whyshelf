@@ -282,6 +282,7 @@ impl From<JudgementError> for Refusal {
             JudgementError::NotRevocable { record } => Self::NotRevocable(record),
             JudgementError::ObjectNotOfTarget { .. }
             | JudgementError::ObjectNotChecked { .. }
+            | JudgementError::ProofRestored
             | JudgementError::TargetPresent { .. }
             | JudgementError::RecordNotInPublicLedger { .. }
             | JudgementError::RecordNotOfDoc { .. }

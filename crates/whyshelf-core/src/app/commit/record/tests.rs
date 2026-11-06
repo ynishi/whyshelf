@@ -9,8 +9,8 @@ use crate::app::fake::{FakeCorpus, FakePorts, block_on};
 use crate::domain::gate::Passed;
 use crate::domain::id::test_support::docid;
 use crate::domain::judge::test_support::judge;
-use crate::domain::judgement::Split;
 use crate::domain::judgement::test_support::{cr_passed, hash_of, jid, object_of, ts, why};
+use crate::domain::judgement::{Judgement, Split};
 use crate::domain::ledger::Ledger;
 
 fn key_of(judgement: &ObjectJudgement) -> ObjectKey {
@@ -237,9 +237,15 @@ fn an_approval_is_recordable_with_the_object_it_keeps() {
     let judgement = approval_with_object("v1", Visibility::Public);
     let evidence = stored_evidence(&judgement, "v1", Visibility::Public);
     let record = Recordable::with_object(judgement.clone(), &evidence).expect("recordable");
-    assert_eq!(record.judgement(), judgement.judgement());
+    assert_eq!(
+        record.judgement(),
+        &StoredJudgement::from(judgement.judgement().clone())
+    );
     assert_eq!(record.ledger(), Visibility::Public);
-    assert_eq!(record.into_judgement(), judgement.into_judgement());
+    assert_eq!(
+        record.into_stored(),
+        StoredJudgement::from(judgement.into_judgement())
+    );
 }
 
 #[test]
@@ -371,8 +377,7 @@ fn a_ledger_no_rule_can_choose_is_a_refusal_at_the_append_as_at_the_scan() {
 fn a_record_the_plan_carries_is_copied_to_the_public_ledger_unchanged() {
     let publishing = Publishing::of(b"bytes");
     let record = publishing.carried[0].clone();
-    let copy =
-        Recordable::copied(record.clone(), &publishing.plan, &publishing.private).expect("a copy");
+    let copy = Recordable::copied(&record, &publishing.plan, &publishing.private).expect("a copy");
     assert_eq!(copy.ledger(), Visibility::Public);
     assert_eq!(copy.judgement().origin(), Visibility::Private);
     assert_eq!(copy.judgement().canonical_bytes(), record.canonical_bytes());
@@ -383,11 +388,7 @@ fn a_record_the_plan_does_not_carry_is_not_copied() {
     let publishing = Publishing::of(b"bytes");
     assert!(!publishing.carried_ids().contains(&publishing.other.id()));
     assert_eq!(
-        Recordable::copied(
-            publishing.other.clone(),
-            &publishing.plan,
-            &publishing.private
-        ),
+        Recordable::copied(&publishing.other, &publishing.plan, &publishing.private),
         Err(ChainError::NotInPlan {
             record: publishing.other.id(),
         })
@@ -410,7 +411,11 @@ fn a_record_of_the_plans_id_with_other_bytes_is_not_copied() {
     .expect("an approval");
     assert_ne!(altered.canonical_bytes(), read.canonical_bytes());
     assert_eq!(
-        Recordable::copied(altered, &publishing.plan, &publishing.private),
+        Recordable::copied(
+            &StoredJudgement::from(altered),
+            &publishing.plan,
+            &publishing.private
+        ),
         Err(ChainError::NotAsRead { record: read.id() })
     );
 }
@@ -427,7 +432,7 @@ fn an_approval_reaches_the_ledger_only_after_its_object_is_stored() {
     block_on(append_with_object(&fake, judgement.clone(), &evidence)).expect("appended");
     assert_eq!(
         fake.records(Visibility::Public),
-        vec![judgement.judgement().clone()]
+        vec![StoredJudgement::from(judgement.judgement().clone())]
     );
     assert!(fake.records(Visibility::Private).is_empty());
 
@@ -461,7 +466,10 @@ fn a_purge_reaches_the_ledger_and_takes_the_text_out() {
         &no_ledgers(),
     ))
     .expect("appended");
-    assert!(fake.records(Visibility::Public).contains(&purge));
+    assert!(
+        fake.records(Visibility::Public)
+            .contains(&StoredJudgement::from(purge))
+    );
     assert!(!fake.has_object(Visibility::Public, hash));
 
     // And it is not put back.
@@ -477,14 +485,14 @@ fn a_publications_copy_is_the_same_record_in_both_ledgers() {
         fake.seed_record(Visibility::Private, record.clone());
         block_on(append_copied(
             &fake,
-            record.clone(),
+            record,
             &publishing.plan,
             &publishing.private,
         ))
         .expect("copied");
     }
-    let private = Ledger::from_judgements(fake.records(Visibility::Private));
-    let public = Ledger::from_judgements(fake.records(Visibility::Public));
+    let private = Ledger::from_stored(fake.records(Visibility::Private));
+    let public = Ledger::from_stored(fake.records(Visibility::Public));
     let both = Ledgers::new(public, private);
     // Byte for byte the same in both, so nothing is corrupt.
     assert!(both.corrupt().is_empty());

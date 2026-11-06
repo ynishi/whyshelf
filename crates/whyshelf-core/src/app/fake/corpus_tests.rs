@@ -24,6 +24,7 @@ use crate::domain::keyring::PinKeyring;
 use crate::domain::knowable::Knowable;
 use crate::domain::location::RelPath;
 use crate::domain::revision::{Revision, RevisionId};
+use crate::domain::stored::StoredJudgement;
 
 fn rel(path: &str) -> RelPath {
     path.parse().expect("a path")
@@ -72,7 +73,7 @@ fn a_ledger_reads_back_what_was_appended_and_nothing_of_the_other_side() {
     write_approval(&fake, &judgement, "v1");
 
     let public = block_on(fake.read(Visibility::Public)).expect("read");
-    assert_eq!(public.records(), [judgement]);
+    assert_eq!(public.records(), [StoredJudgement::from(judgement)]);
     assert!(public.corrupt().is_empty());
     let private = block_on(fake.read(Visibility::Private)).expect("read");
     assert!(private.records().is_empty());

@@ -1,6 +1,6 @@
 //! The chain of evidence between a judgement and a ledger.
 //!
-//! A [`Judgement`] says which version it keeps an object for ([`ObjectKey`]); it does
+//! A [`Judgement`](crate::domain::judgement::Judgement) says which version it keeps an object for ([`ObjectKey`]); it does
 //! not know the object was stored. That guarantee is not in the domain's type. It is
 //! kept by the one door into a ledger, [`LedgerStore::append`], taking only a
 //! [`Recordable`], and by a [`Recordable`] with an object being made only from
@@ -22,7 +22,7 @@
 //!
 //!     append_with_object(ledger, ObjectJudgement, &StoredObject)      Approve, Adopt
 //!     append_without_object(ledger, PlainJudgement, corpus, ledgers)  Revoke, Retire, Purge, Published
-//!     append_copied(ledger, judgement, &PublicationPlan, private)  a publication's copy
+//!     append_copied(ledger, &StoredJudgement, &PublicationPlan, private)  a publication's copy
 //!        |   each makes a Recordable (the checks below) and spends it
 //!        v
 //!     LedgerStore::append(&Recordable)
@@ -73,14 +73,23 @@
 //!
 //! ```compile_fail,E0624
 //! use whyshelf_core::app::commit::record::Recordable;
-//! use whyshelf_core::domain::judgement::Judgement;
 //! use whyshelf_core::domain::ledger::Ledger;
 //! use whyshelf_core::domain::publication::PublicationPlan;
+//! use whyshelf_core::domain::stored::StoredJudgement;
 //!
-//! fn forged(judgement: Judgement, plan: &PublicationPlan, private: &Ledger) {
-//!     let _ = Recordable::copied(judgement, plan, private);
+//! fn forged(record: &StoredJudgement, plan: &PublicationPlan, private: &Ledger) {
+//!     let _ = Recordable::copied(record, plan, private);
 //! }
 //! ```
+//!
+//! # What a record read back can be written as
+//!
+//! A [`StoredJudgement`] (a record read from a ledger) has no way into the first two
+//! constructors: they take an [`ObjectJudgement`] or a [`PlainJudgement`], which only
+//! [`Judgement::split`](crate::domain::judgement::Judgement::split) makes, and a stored record has no `split` (see
+//! [`stored`](crate::domain::stored)). Its one write is `Recordable::copied`, a
+//! publication's copy of a record of the private ledger: it takes the record as read
+//! and writes it to the public ledger byte for byte.
 //!
 //! ```compile_fail,E0624
 //! use whyshelf_core::app::commit::record::Scanned;
@@ -141,11 +150,10 @@ use crate::app::raw::NormalizedText;
 use crate::domain::corpus::{Corpus, Visibility};
 use crate::domain::error::JudgementError;
 use crate::domain::hash::TextHash;
-use crate::domain::judgement::{
-    Judgement, JudgementId, ObjectJudgement, ObjectKey, PlainJudgement,
-};
+use crate::domain::judgement::{JudgementId, ObjectJudgement, ObjectKey, PlainJudgement};
 use crate::domain::ledger::{Ledger, Ledgers};
 use crate::domain::publication::PublicationPlan;
+use crate::domain::stored::StoredJudgement;
 
 /// Why the parts handed to a step do not belong together.
 ///
@@ -288,9 +296,12 @@ impl StoredObject {
 ///
 /// The only argument of [`LedgerStore::append`]:
 /// the ledger is inside, so a caller cannot ask for a record in the wrong one.
+///
+/// The judgement is held as a [`StoredJudgement`], the form it has once written: what
+/// an adapter writes is the canonical bytes, and reads it back as one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recordable {
-    judgement: Judgement,
+    judgement: StoredJudgement,
     ledger: Visibility,
 }
 
@@ -319,12 +330,13 @@ impl Recordable {
         }
         Ok(Self {
             ledger: stored.ledger,
-            judgement: judgement.into_judgement(),
+            judgement: judgement.into_judgement().into(),
         })
     }
 
     /// A revocation, a retirement, a purge or a publication: a judgement that keeps
-    /// no object. The ledger is the one [`Judgement::ledger`] chooses.
+    /// no object. The ledger is the one
+    /// [`Judgement::ledger`](crate::domain::judgement::Judgement::ledger) chooses.
     pub(in crate::app::commit) fn without_object(
         judgement: PlainJudgement,
         corpus: &Corpus,
@@ -338,37 +350,42 @@ impl Recordable {
                 ledger,
             });
         }
-        Ok(Self { judgement, ledger })
+        Ok(Self {
+            judgement: judgement.into(),
+            ledger,
+        })
     }
 
     /// A record of the private ledger, copied to the public one by a publication.
     ///
-    /// `judgement` is the record as it was read; it keeps its origin and its
-    /// canonical bytes, so the copy is the same record in both ledgers. It is
-    /// accepted only if the plan carries it and `private` (the private ledger the
-    /// plan was made from) holds it with the same bytes: a record of the same id
-    /// with other bytes would make the id corrupt in both ledgers.
+    /// `held` is the record as it was read; it keeps its origin and its canonical
+    /// bytes, so the copy is the same record in both ledgers. It is accepted only if
+    /// the plan carries it and `private` (the private ledger the plan was made from)
+    /// holds it with the same bytes: a record of the same id with other bytes would
+    /// make the id corrupt in both ledgers.
+    ///
+    /// The one way a record read back is written.
     pub(in crate::app::commit) fn copied(
-        judgement: Judgement,
+        held: &StoredJudgement,
         plan: &PublicationPlan,
         private: &Ledger,
     ) -> Result<Self, ChainError> {
-        let record = judgement.id();
+        let record = held.id();
         if !plan.records().iter().any(|r| r.id() == record) {
             return Err(ChainError::NotInPlan { record });
         }
-        let held = private.get(&record).map(Judgement::canonical_bytes);
-        if held != Some(judgement.canonical_bytes()) {
+        let read = private.get(&record).map(StoredJudgement::canonical_bytes);
+        if read != Some(held.canonical_bytes()) {
             return Err(ChainError::NotAsRead { record });
         }
         Ok(Self {
-            judgement,
+            judgement: held.clone(),
             ledger: Visibility::Public,
         })
     }
 
-    /// The judgement.
-    pub fn judgement(&self) -> &Judgement {
+    /// The judgement, as it will be read back.
+    pub fn judgement(&self) -> &StoredJudgement {
         &self.judgement
     }
 
@@ -378,7 +395,7 @@ impl Recordable {
     }
 
     /// The judgement, given up.
-    pub fn into_judgement(self) -> Judgement {
+    pub fn into_stored(self) -> StoredJudgement {
         self.judgement
     }
 }
@@ -470,11 +487,11 @@ pub async fn append_without_object<L: LedgerStore>(
 /// one (`private`, as the plan was made from it).
 pub async fn append_copied<L: LedgerStore>(
     ledger: &L,
-    judgement: Judgement,
+    held: &StoredJudgement,
     plan: &PublicationPlan,
     private: &Ledger,
 ) -> Result<(), Stop> {
-    let record = Recordable::copied(judgement, plan, private)?;
+    let record = Recordable::copied(held, plan, private)?;
     append(ledger, &record).await
 }
 

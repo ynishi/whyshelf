@@ -65,7 +65,7 @@ use crate::domain::hash::{BytesHash, ContentHash, TextHash};
 use crate::domain::id::EntityId;
 use crate::domain::integration::{BaselineFacts, ChangeFingerprint, UnknownWhy};
 use crate::domain::judge::{Email, Judge, PersonName};
-use crate::domain::judgement::{Judgement, JudgementId};
+use crate::domain::judgement::JudgementId;
 use crate::domain::keyring::PinKeyring;
 use crate::domain::knowable::Knowable;
 use crate::domain::ledger::Ledger;
@@ -75,6 +75,7 @@ use crate::domain::pin::{MalformedPin, PinId};
 use crate::domain::publication::{PlanDigest, PublicationPlan};
 use crate::domain::reference::{Reach, Ref};
 use crate::domain::revision::{IntegrationFact, Revision, RevisionId};
+use crate::domain::stored::StoredJudgement;
 
 use super::commit::record::{Recordable, Scanned};
 use super::config::{PinSearch, TestCommand, TestTimeout};
@@ -926,21 +927,24 @@ impl fmt::Display for CorruptRecord {
 /// What reading one ledger gave: the records, and the ones it could not read.
 ///
 /// Two records of one identifier that differ are both in `records`; telling them
-/// apart is the domain's ([`Ledger::from_judgements`]), not the adapter's.
+/// apart is the domain's ([`Ledger::from_stored`]), not the adapter's. The records are
+/// [`StoredJudgement`]s, which the adapter makes with
+/// [`StoredJudgement::decode`] and nothing else: the domain owns the reading of the
+/// bytes, and a record read back cannot start a new one.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LedgerRead {
-    records: Vec<Judgement>,
+    records: Vec<StoredJudgement>,
     corrupt: Vec<CorruptRecord>,
 }
 
 impl LedgerRead {
     /// What was read.
-    pub fn new(records: Vec<Judgement>, corrupt: Vec<CorruptRecord>) -> Self {
+    pub fn new(records: Vec<StoredJudgement>, corrupt: Vec<CorruptRecord>) -> Self {
         Self { records, corrupt }
     }
 
     /// The records that were decoded, every one found.
-    pub fn records(&self) -> &[Judgement] {
+    pub fn records(&self) -> &[StoredJudgement] {
         &self.records
     }
 
@@ -951,7 +955,7 @@ impl LedgerRead {
 
     /// The records as a ledger (a set, merged by union).
     pub fn ledger(&self) -> Ledger {
-        Ledger::from_judgements(self.records.iter().cloned())
+        Ledger::from_stored(self.records.iter().cloned())
     }
 }
 

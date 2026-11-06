@@ -834,6 +834,7 @@ mod tests {
         BlockReason, Completeness, StaleReason, UnparsedReason, UnresolvedCause, UnresolvedReason,
         Upstream,
     };
+    use crate::domain::stored::StoredJudgement;
 
     // --- the chain: Finding 1, Spec 11 on it, Design 21 on that, item 31 --------
 
@@ -915,6 +916,11 @@ mod tests {
             Ledger::from_judgements(public),
             Ledger::from_judgements(private),
         )
+    }
+
+    /// The two ledgers, of records read back from others.
+    fn ledgers_read(public: Vec<StoredJudgement>, private: Vec<StoredJudgement>) -> Ledgers {
+        Ledgers::new(Ledger::from_stored(public), Ledger::from_stored(private))
     }
 
     fn evaluate(files: Vec<Filed>, ledgers: &Ledgers) -> CorpusEvaluation {
@@ -1605,13 +1611,13 @@ mod tests {
         for keys in [ring("k2", 2), PinKeyring::empty()] {
             let (files, l) = private_ground(&now, &approved, &theirs);
             let again = record(4, Visibility::Private, now.cr());
-            let l = ledgers(
-                l.public().judgements().cloned().collect(),
+            let l = ledgers_read(
+                l.public().judgements().cloned().collect::<Vec<_>>(),
                 l.private()
                     .judgements()
                     .cloned()
-                    .chain(std::iter::once(again))
-                    .collect(),
+                    .chain(std::iter::once(StoredJudgement::from(again)))
+                    .collect::<Vec<_>>(),
             );
             let new = eval_keyed(files, &l, &keys);
             let state = new.document(&docid(11)).unwrap().state();
@@ -1651,13 +1657,13 @@ mod tests {
         now.f = finding(1, "Login takes 7 s.");
         let (files, l) = private_ground(&now, &approved, &ring("k1", 1));
         let again = record(4, Visibility::Private, now.cr());
-        let l = ledgers(
-            l.public().judgements().cloned().collect(),
+        let l = ledgers_read(
+            l.public().judgements().cloned().collect::<Vec<_>>(),
             l.private()
                 .judgements()
                 .cloned()
-                .chain(std::iter::once(again))
-                .collect(),
+                .chain(std::iter::once(StoredJudgement::from(again)))
+                .collect::<Vec<_>>(),
         );
         // The Finding is here and read; the key its pin was made under is not.
         let keyless = eval_keyed(files, &l, &ring("k2", 2));
@@ -1773,13 +1779,13 @@ mod tests {
         let keys = ring("k1", 1);
         let (_, l) = private_ground(&c, &c, &keys);
         let plain = record(3, Visibility::Public, c.cs());
-        let both = ledgers(
+        let both = ledgers_read(
             l.public()
                 .judgements()
                 .cloned()
-                .chain(std::iter::once(plain))
-                .collect(),
-            l.private().judgements().cloned().collect(),
+                .chain(std::iter::once(StoredJudgement::from(plain)))
+                .collect::<Vec<_>>(),
+            l.private().judgements().cloned().collect::<Vec<_>>(),
         );
         let new = eval_keyed(c.files(), &both, &keys);
         assert!(lacks_of(&new, 11).is_empty());

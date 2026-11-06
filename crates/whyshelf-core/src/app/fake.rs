@@ -968,12 +968,13 @@ mod corpus_fake {
     use crate::domain::integration::{BaselineFacts, ChangeFingerprint, UnknownWhy};
     use crate::domain::judge::Judge;
     use crate::domain::judge::test_support::judge;
-    use crate::domain::judgement::{Judgement, JudgementKind};
+    use crate::domain::judgement::JudgementKind;
     use crate::domain::keyring::PinKeyring;
     use crate::domain::knowable::Knowable;
     use crate::domain::location::RelPath;
     use crate::domain::publication::PlanDigest;
     use crate::domain::revision::Revision;
+    use crate::domain::stored::StoredJudgement;
 
     /// How the fake person answers a question.
     #[derive(Debug, Clone, Copy)]
@@ -997,7 +998,7 @@ mod corpus_fake {
     #[derive(Debug)]
     struct CorpusState {
         documents: Vec<(FileFacts, RawDocument)>,
-        ledgers: BTreeMap<Visibility, Vec<Judgement>>,
+        ledgers: BTreeMap<Visibility, Vec<StoredJudgement>>,
         corrupt: BTreeMap<Visibility, Vec<CorruptRecord>>,
         objects: BTreeMap<(Visibility, TextHash), String>,
         purged: BTreeSet<(Visibility, TextHash)>,
@@ -1088,8 +1089,12 @@ mod corpus_fake {
         // --- ledgers
 
         /// Put a record in a ledger as it would be found there, with no check.
-        pub(crate) fn seed_record(&self, side: Visibility, record: Judgement) {
-            self.lock().ledgers.entry(side).or_default().push(record);
+        pub(crate) fn seed_record(&self, side: Visibility, record: impl Into<StoredJudgement>) {
+            self.lock()
+                .ledgers
+                .entry(side)
+                .or_default()
+                .push(record.into());
         }
 
         pub(crate) fn seed_corrupt(&self, side: Visibility, record: CorruptRecord) {
@@ -1097,7 +1102,7 @@ mod corpus_fake {
         }
 
         /// The records of a ledger, in the order written.
-        pub(crate) fn records(&self, side: Visibility) -> Vec<Judgement> {
+        pub(crate) fn records(&self, side: Visibility) -> Vec<StoredJudgement> {
             self.lock().ledgers.get(&side).cloned().unwrap_or_default()
         }
 

@@ -655,6 +655,11 @@ pub enum JudgementError {
         /// The hash of the text the check read.
         checked: TextHash,
     },
+    /// An approval or an adoption was asked of a proof that was read back from a
+    /// ledger: it says what a check found when an earlier record was written, and a
+    /// new record stands on a check made for it.
+    #[error("the proof was read back from a ledger; a new record needs a check of its own")]
+    ProofRestored,
     /// A retirement was asked for a document or item whose file is there.
     #[error("{target} is present; only what is missing can be retired")]
     TargetPresent {

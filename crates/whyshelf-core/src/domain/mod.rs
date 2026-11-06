@@ -228,6 +228,7 @@
 //! | [`front`] | which key of a front matter is content, classification, another kind's or a mistake |
 //! | [`event`], [`classification`], [`approval`] | the log, its fold, and the set of approvals |
 //! | [`judgement`], [`ledger`], [`judge`], [`adoption`] | the judgements people made as an append-only set that merges by union (concurrent approvals survive a revocation that did not see them; the objects are a set that can delete), who made them, and taking an earlier decision in as an approval |
+//! | [`stored`] | a judgement read back from a ledger, and the one decoder of its canonical bytes; it can be read and kept in a ledger, and cannot start a new record |
 //! | [`state`], [`evaluate`] | derived state and how it is derived |
 //! | [`corpus_eval`] | the state of every document and item read from the files and the ledgers: presence, readiness, the basis of each approval |
 //! | [`naming`] | the one grammar of a reference (a command argument and a reference in a document), where each form is accepted, the lookup over the corpus (`Resolved`, `Ambiguous`, `Dangling` with a rename hint, `Unresolved`) and the lints of a reference in a document (`FragileItemRef`, `MarkStale`); the short id is [`id::ShortId`] |
@@ -280,4 +281,5 @@ pub mod reference;
 pub mod revision;
 pub mod spec;
 pub mod state;
+pub mod stored;
 pub mod tag;

@@ -76,6 +76,13 @@
 //! | [`store_fs`], [`export`], [`map_dto`], [`status_md`] | the repo store and the private store; the generated files, their marker and the JSON Schema of the map |
 //! | [`git`], [`test_run`] | the revision, the baseline (or that a clone cannot tell) and the pins in the test files; the test command at a revision, with a time limit |
 //! | [`cache_sqlite`] | the file stamps and the full-text index, on `rusqlite-isle` |
+//! | [`documents_fs`] | the corpus model's `DocumentSource`: the files of the public and the private root, their bytes' hash, and their readings with the references resolved |
+//! | [`ledger_fs`] | the corpus model's `LedgerStore` and `ObjectStore`: one file per judgement and one per object, in layout 3, in each of the two sides |
+//! | [`actor_env`], [`user_settings`], [`keys_fs`] | who is acting (the environment, Git, the person's own settings); the person's own settings file and the private root it names; the pin keys, which only an explicit call makes |
+//!
+//! The corpus model's `RevisionFactsPort` is [`git::GitFacts`], beside the `git`
+//! adapters above. Writing a document file (`FileWriter`) and asking a person
+//! (`ConfirmPort`) have no adapter here.
 //! | [`secret`], [`clock`], [`id`] | the secret scan, the time (RFC 3339), new UUID v7 identifiers |
 //! | [`blocking`] | the only place with blocking I/O, inside `spawn_blocking` |
 //!
@@ -83,15 +90,19 @@
 //! flattens a failure into text.
 #![warn(missing_docs)]
 
+pub mod actor_env;
 pub mod blocking;
 pub mod cache_sqlite;
 pub mod clock;
 pub mod config;
+pub mod documents_fs;
 pub mod export;
 pub mod format;
 pub mod fs_current;
 pub mod git;
 pub mod id;
+pub mod keys_fs;
+pub mod ledger_fs;
 pub mod map_dto;
 pub mod markdown;
 pub mod parse;
@@ -100,6 +111,7 @@ pub mod secret;
 pub mod status_md;
 pub mod store_fs;
 pub mod test_run;
+pub mod user_settings;
 pub mod wire;
 
 use std::path::{Path, PathBuf};
