@@ -133,6 +133,7 @@ use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
 use super::keyring::{Kid, PinKeyring, PinMatch};
 use super::location::{CodeLocation, RelPath};
+use super::naming::Written;
 use super::nonempty::NonEmptyVec;
 use super::pin::{MalformedPin, PinId};
 use super::revision::{IntegrationFact, RevisionId};
@@ -457,21 +458,6 @@ impl<'a> UpView<'a> {
             hash: typed.and_then(Evaluated::entity).map(hash_of),
         }
     }
-}
-
-/// How a file wrote the upstream identifiers it holds that no state can answer for.
-///
-/// What an entity holds is the identifier alone (the mark it was written with is a
-/// fact about the file, and stays out of every hash), so the evaluator is told the
-/// two facts about how it was written that it could not know: the identifier of a
-/// store this environment cannot read, and the identifier that the document, where
-/// it stands, can see nothing under.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Written {
-    /// Written with a mark that points into a store that cannot be read here.
-    pub unresolved: BTreeSet<EntityId>,
-    /// Written as an identifier that nothing visible from the document holds.
-    pub dangling: BTreeSet<EntityId>,
 }
 
 /// The state of every entity that has one, whatever its kind, keyed by identifier.
@@ -2012,7 +1998,7 @@ mod tests {
 
     #[test]
     fn a_patch_is_integrated_through_its_base() {
-        use crate::domain::approval::{Pinned, TestOutcome};
+        use crate::domain::approval::{CaChange, Pinned, TestOutcome};
         use crate::domain::revision::Revision;
         let (f0, s0, d0) = (f("body"), s(), d());
         let mut events = approvals(&f0, &s0, &d0);
@@ -2034,7 +2020,7 @@ mod tests {
                     patch: ContentHash::raw(b"diff"),
                 },
                 tests: TestOutcome::Passed,
-                fingerprint: None,
+                change: CaChange::NotRecorded,
             },
             &[],
         ));

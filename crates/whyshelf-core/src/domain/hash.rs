@@ -93,6 +93,12 @@ pub enum HashKind {
     Plan,
     /// One hunk of a change: see [`HunkId`].
     Hunk,
+    /// What taking an earlier decision in will do: see
+    /// [`AdoptDigest`](super::adoption::AdoptDigest).
+    Adopt,
+    /// What aborting a publication will do: see
+    /// [`AbortDigest`](super::publication::AbortDigest).
+    Abort,
 }
 
 impl HashKind {
@@ -113,6 +119,8 @@ impl HashKind {
             Self::PinMac => "pin-mac",
             Self::Plan => "plan",
             Self::Hunk => "hunk",
+            Self::Adopt => "adopt",
+            Self::Abort => "abort",
         }
     }
 
@@ -121,6 +129,39 @@ impl HashKind {
         format!("whyshelf/{}/v1\0", self.name()).into_bytes()
     }
 }
+
+/// The methods of a digest a person types back: a `struct $name(ContentHash)`, kept
+/// apart from the others by its type (and its [`HashKind`]), with its short form,
+/// the whole hash, a `Debug` that shows the short form under the type's name, and a
+/// `Display` of the whole hash.
+macro_rules! confirm_digest {
+    ($name:ident) => {
+        impl $name {
+            /// The first 8 characters of the digest: what a person types back.
+            pub fn short(&self) -> String {
+                self.0.hex().chars().take(8).collect()
+            }
+
+            /// The whole digest.
+            pub fn hash(&self) -> &$crate::domain::hash::ContentHash {
+                &self.0
+            }
+        }
+
+        impl ::std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                write!(f, concat!(stringify!($name), "({})"), self.short())
+            }
+        }
+
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                ::std::fmt::Display::fmt(&self.0, f)
+            }
+        }
+    };
+}
+pub(crate) use confirm_digest;
 
 /// A SHA-256 digest written `sha256:<64 lowercase hex>`.
 ///
@@ -499,6 +540,18 @@ mod tests {
 
     fn path(text: &str) -> RelPath {
         text.parse().unwrap()
+    }
+
+    #[test]
+    fn what_a_person_confirms_is_separated_by_what_it_is_the_digest_of() {
+        let canon = Canon::map([("doc", Canon::str("x"))]);
+        assert_eq!(HashKind::Adopt.tag(), b"whyshelf/adopt/v1\0");
+        assert_eq!(HashKind::Abort.tag(), b"whyshelf/abort/v1\0");
+        let digests = [HashKind::Plan, HashKind::Adopt, HashKind::Abort]
+            .map(|kind| ContentHash::of(kind, &canon));
+        assert_ne!(digests[0], digests[1]);
+        assert_ne!(digests[1], digests[2]);
+        assert_ne!(digests[0], digests[2]);
     }
 
     #[test]

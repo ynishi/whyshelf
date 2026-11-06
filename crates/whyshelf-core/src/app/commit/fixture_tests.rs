@@ -3,7 +3,8 @@
 use std::collections::BTreeSet;
 
 use crate::app::raw::NormalizedText;
-use crate::domain::approval::{Attestation, Pinned};
+use crate::domain::adoption::Adoptable;
+use crate::domain::approval::{Attestation, Gate, Pinned};
 use crate::domain::boundary::{ObjectText, PrivateRoot};
 use crate::domain::corpus::{
     Corpus, Document, Entity, FileFacts, GitPlace, Header, Location, Reading, Visibility,
@@ -12,7 +13,7 @@ use crate::domain::design::test_support::{design, identified};
 use crate::domain::finding::test_support::finding;
 use crate::domain::gate::Passed;
 use crate::domain::hash::BytesHash;
-use crate::domain::id::test_support::{did, docid, sid};
+use crate::domain::id::test_support::{did, docid, eid, sid};
 use crate::domain::judge::Judge;
 use crate::domain::judge::test_support::judge;
 use crate::domain::judgement::test_support::{
@@ -21,7 +22,12 @@ use crate::domain::judgement::test_support::{
 use crate::domain::judgement::{Judgement, JudgementId, ObjectJudgement, PlainJudgement, Split};
 use crate::domain::knowable::Knowable;
 use crate::domain::ledger::{Ledger, Ledgers};
-use crate::domain::publication::{ObjectTexts, PublicationPlan, PublishEvidence, plan_publication};
+use crate::domain::location::SourceUri;
+use crate::domain::nonempty::NonBlank;
+use crate::domain::publication::{
+    AbortEvidence, AbortPlan, ObjectTexts, PublicationPlan, PublishEvidence, plan_abort,
+    plan_publication,
+};
 use crate::domain::stored::StoredJudgement;
 
 pub(crate) fn ada() -> Judge {
@@ -107,7 +113,7 @@ impl Publishing {
             ),
             BytesHash::of(bytes),
         );
-        let reading = Reading::Document(Document::new(header, entity).expect("a document"));
+        let reading = Reading::resolved(Document::new(header, entity).expect("a document"));
         let corpus = Corpus::build([(facts, reading)], &BTreeSet::new());
 
         let carried: Vec<StoredJudgement> = vec![
@@ -148,4 +154,93 @@ impl Publishing {
     pub(crate) fn carried_ids(&self) -> Vec<JudgementId> {
         self.carried.iter().map(StoredJudgement::id).collect()
     }
+
+    /// The plan of a publication recorded as published, whose private copy holds
+    /// `private`: only the copy is left to remove.
+    pub(crate) fn recorded(private: &[u8]) -> Self {
+        let (corpus, ledgers) = cut_short(true, b"bytes", private);
+        let plan = plan_publication(
+            docid(DOC),
+            &corpus,
+            &ledgers,
+            "docs/d21.md".parse().expect("a path"),
+            &ada(),
+            &PublishEvidence {
+                objects: &ObjectTexts::new(),
+                document: b"bytes",
+                private_root: PrivateRoot::Present,
+            },
+        )
+        .expect("a plan");
+        Self {
+            plan,
+            carried: Vec::new(),
+            other: approve(6, &ada(), Visibility::Private, cr_passed(1, "other")).into(),
+            private: ledgers.private().clone(),
+        }
+    }
+}
+
+/// The design 21 as a public file of `public` and as a private file of `private`, in a
+/// publication that stopped part way (a copy that differs is a publication only when
+/// it is recorded as published).
+fn cut_short(recorded: bool, public: &[u8], private: &[u8]) -> (Corpus, Ledgers) {
+    let entity = Entity::Design(design(DOC, 11, vec![(1, identified(31, "the item", &[]))]));
+    let file = |visibility, git, path: &str, bytes: &[u8]| {
+        let header = Header::new(entity.id(), entity.kind(), None, BTreeSet::new(), None);
+        let facts = FileFacts::new(
+            Location::new(
+                visibility,
+                path.parse().expect("a path"),
+                Knowable::Known(git),
+            ),
+            BytesHash::of(bytes),
+        );
+        let reading = Reading::resolved(Document::new(header, entity.clone()).expect("a document"));
+        (facts, reading)
+    };
+    let published = if recorded {
+        BTreeSet::from([docid(DOC)])
+    } else {
+        BTreeSet::new()
+    };
+    let corpus = Corpus::build(
+        [
+            file(Visibility::Public, GitPlace::Tracked, "docs/d21.md", public),
+            file(Visibility::Private, GitPlace::Ignored, "d21.md", private),
+        ],
+        &published,
+    );
+    (corpus, Ledgers::new(Ledger::new(), Ledger::new()))
+}
+
+/// An abort plan, with what it was made from.
+pub(crate) struct Aborting {
+    pub(crate) plan: AbortPlan,
+}
+
+impl Aborting {
+    /// The plan to abort the publication of Design 21 whose public file and private
+    /// copy both hold `bytes`: a copy not yet recorded, the only publication that can
+    /// be aborted.
+    pub(crate) fn of(bytes: &[u8]) -> Self {
+        let (corpus, ledgers) = cut_short(false, bytes, bytes);
+        let plan = plan_abort(
+            docid(DOC),
+            &corpus,
+            &ledgers,
+            &AbortEvidence { public_file: bytes },
+        )
+        .expect("a plan");
+        Self { plan }
+    }
+}
+
+/// A proof that taking the decision of Finding 1 in was checked.
+pub(crate) fn adoptable_finding() -> Adoptable {
+    Adoptable::for_test(
+        (Gate::Cr, eid(1), hash_of("v1")),
+        Vec::new(),
+        SourceUri::Citation(NonBlank::new("the old tracker").expect("a citation")),
+    )
 }

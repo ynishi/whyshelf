@@ -62,11 +62,12 @@ use super::canon::{Canon, ToCanon};
 use super::corpus::{Corpus, CorpusDocument, Entity};
 use super::error::AdoptionRefusal;
 use super::event::EntityKind;
-use super::hash::{ContentHash, TextHash};
+use super::hash::{ContentHash, HashKind, TextHash, confirm_digest};
 use super::id::{DocId, EntityId, ItemId};
 use super::judgement::Target;
 use super::keyring::{NoKey, PinKeyring, UpstreamHash};
 use super::location::SourceUri;
+use super::publication::ConfirmDigest;
 
 /// What an adopted approval says: the target at its hash, and the upstream pinned.
 ///
@@ -199,6 +200,14 @@ impl Adoptable {
     pub fn text(&self) -> &TextHash {
         &self.text
     }
+
+    /// What a person is asked to confirm before it is recorded. An adoption cannot be
+    /// taken back, so this is always `Some`; it has the shape of the other plans'
+    /// ([`PublicationPlan::confirmation`](super::publication::PublicationPlan::confirmation)),
+    /// which may say nothing is asked.
+    pub fn confirmation(&self) -> Option<ConfirmDigest> {
+        Some(ConfirmDigest::Adopt(digest(self)))
+    }
 }
 
 #[cfg(test)]
@@ -232,6 +241,30 @@ impl ToCanon for Adoptable {
             ("source", self.source.to_canon()),
         ])
     }
+}
+
+/// The hash of what taking an earlier decision in will record: what a person
+/// confirms, and what the run checks it against just before it writes.
+///
+/// An adoption is stronger than a gate and cannot be taken back, so it is never
+/// recorded on a flag or an argument: a person types back the short form of this
+/// digest ([`ConfirmDigest`]). It covers the whole
+/// of the [`Adoptable`] (the target at its hash, the upstream pinned, the source) and
+/// the text the object will keep, so a confirmation does not carry over to an adoption
+/// that has changed under it.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AdoptDigest(ContentHash);
+
+confirm_digest!(AdoptDigest);
+
+/// The digest of an adoption: the one place it is computed, so what is shown and what
+/// is checked cannot be two digests.
+pub fn digest(adoptable: &Adoptable) -> AdoptDigest {
+    let canon = Canon::map([
+        ("adoptable", adoptable.to_canon()),
+        ("text", Canon::str(adoptable.text.to_string())),
+    ]);
+    AdoptDigest(ContentHash::of(HashKind::Adopt, &canon))
 }
 
 impl Crosses for AdoptedAttestation {
@@ -718,14 +751,17 @@ mod tests {
     }
 
     #[test]
-    fn a_ground_that_is_not_a_finding_cannot_be_pinned() {
-        // Spec 12 names document 11 (a Spec) as its ground.
+    fn a_ground_that_is_not_a_finding_leaves_no_document_to_adopt_on() {
+        // Spec 12 names document 11 (a Spec) as its ground: the corpus cannot hold
+        // it (`WrongKind`), so there is no target to take a decision in for.
         let odd = Entity::Spec(spec(12, &[11], &["PIN-A"]));
         let mut files = chain();
         files.push(Filed::public_at("odd.md", odd));
         assert_eq!(
             run(files, Gate::Cs, Target::Doc(docid(12)), "x"),
-            Err(AdoptionRefusal::UpstreamUnavailable { upstream: eid(11) })
+            Err(AdoptionRefusal::TargetUnknown {
+                target: Target::Doc(docid(12))
+            })
         );
     }
 
@@ -749,5 +785,47 @@ mod tests {
             run(files(), Gate::Ca, Target::Item(iid(31)), "x"),
             Err(AdoptionRefusal::UpstreamNeedsKey { upstream: eid(21) })
         );
+    }
+
+    // --- what a person confirms ---------------------------------------------------
+
+    fn adopted(source: &str) -> Adoptable {
+        run(
+            chain().into_iter().take(1).collect(),
+            Gate::Cr,
+            Target::Doc(docid(1)),
+            source,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn an_adoption_is_always_confirmed_by_the_digest_of_what_it_records() {
+        let one = adopted("https://tracker.example/issues/7");
+        assert_eq!(
+            one.confirmation(),
+            Some(ConfirmDigest::Adopt(digest(&one))),
+            "an adoption cannot be taken back, so it is always asked"
+        );
+        // The same adoption has the same digest, whoever made the proof.
+        assert_eq!(
+            digest(&one),
+            digest(&adopted("https://tracker.example/issues/7"))
+        );
+        // It covers where the decision came from, and what the object will keep.
+        assert_ne!(
+            digest(&one),
+            digest(&adopted("https://tracker.example/issues/8"))
+        );
+        let other_text = Adoptable::for_test(
+            (Gate::Cr, eid(1), *one.attestation().hash()),
+            Vec::new(),
+            one.source().clone(),
+        );
+        assert_ne!(digest(&one), digest(&other_text));
+        // And it is a kind of its own: the same bytes as a plan's are not a plan's.
+        assert_eq!(digest(&one).short().len(), 8);
+        assert!(format!("{:?}", digest(&one)).starts_with("AdoptDigest("));
+        assert_eq!(digest(&one).to_string(), digest(&one).hash().to_string());
     }
 }

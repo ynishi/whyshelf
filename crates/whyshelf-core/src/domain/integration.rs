@@ -98,10 +98,17 @@
 //! An approval written before fingerprints existed has none. It is not wrong, it
 //! cannot be matched by its hunks, and so it lands by its ancestry or it is Unknown
 //! ([`UnknownWhy::NoFingerprint`]) and never Pending: the hunks could have landed.
+//! The same holds for an approval made where the change could not be cut
+//! ([`CaChange::NotFingerprinted`]); the reason the approver's clone gave
+//! ([`FingerprintUnavailable`]) is shown with it and is not read into the verdict. An
+//! approval of a change that had nothing to fingerprint ([`CaChange::NothingToFingerprint`])
+//! is different: no hunk could have landed, so the ancestry alone decides, and a no
+//! there is Pending. The table is on [`ApprovedChange::checked`].
 
 use std::collections::BTreeSet;
 use std::fmt;
 
+use super::approval::CaChange;
 use super::boundary::{Crosses, CrossingText};
 use super::canon::{Canon, ToCanon};
 use super::error::{FingerprintError, ValueError};
@@ -110,6 +117,7 @@ use super::knowable::Knowable;
 use super::location::RelPath;
 use super::nonempty::NonEmptySet;
 use super::revision::Revision;
+use super::vocabulary::closed_vocabulary;
 
 /// Fewer characters than this, other than white space, in the lines of a hunk make
 /// it weak.
@@ -119,7 +127,8 @@ pub const WEAK_HUNK_BELOW: usize = 16;
 ///
 /// Recorded in every [`ChangeFingerprint`]. The rule of a version is never edited;
 /// a rule that changes is a new variant, and the old one stays so that what was
-/// recorded under it can still be judged.
+/// recorded under it can still be judged. A version never adds a `kind` key to the
+/// map of a fingerprint: that key is how [`CaChange`] tells the other cases from it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HunkScheme {
     /// Diff with no lines of context; the lines of a hunk with white space
@@ -262,9 +271,16 @@ impl Hunk {
 /// What a CA approval records of the change it approved, so that the change can be
 /// found again in the baseline after the approved commit is gone.
 ///
-/// It is part of the attestation of a CA approval. An approval that has none (one
-/// written before this existed, or of a change with no hunk) is judged by the
-/// ancestry alone.
+/// It is part of the attestation of a CA approval, as [`CaChange::Fingerprinted`]. An
+/// approval that has none (one written before this existed, of a change with no hunk,
+/// or made where the change could not be cut) is judged by the ancestry alone.
+///
+/// # The keys of its map
+///
+/// The canonical map of a fingerprint is told from the other cases of [`CaChange`] by
+/// having no `kind` key, which the others have. A key named `kind` must therefore
+/// never be added to it, and a new field takes another name; a scheme that needs a
+/// tag is a new [`HunkScheme`], which is written under the `scheme` key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangeFingerprint(Box<FingerprintParts>);
 
@@ -460,6 +476,67 @@ impl fmt::Display for UnknownWhy {
     }
 }
 
+/// Why the clone an approval was made in could not cut its change into hunks.
+///
+/// A fact about the approver's clone when the approval was made, recorded beside the
+/// approval ([`CaChange::NotFingerprinted`]). It is **not** an [`UnknownWhy`]: that is
+/// a fact about the clone that reads the landing now, and the two clones are not the
+/// same. The recorded reason is shown and never copied into a verdict; how the
+/// approval is read is [`CaChange`]'s table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FingerprintUnavailable {
+    /// The clone was shallow: the history needed to find where the change branched
+    /// off was cut.
+    Shallow,
+    /// Where the change branched off is not on the baseline's line in the clone.
+    BaseMissing,
+    /// The baseline ref was not in the clone.
+    BaselineUnresolved,
+    /// The code was not under version control.
+    NotVersioned,
+    /// The approved revision is a patch over a commit: the change is not in history
+    /// yet, so there is no commit of it to cut against the baseline.
+    NotCommitted,
+}
+
+closed_vocabulary!(FingerprintUnavailable, "reason a change has no fingerprint", {
+    Shallow => "shallow",
+    BaseMissing => "base-missing",
+    BaselineUnresolved => "baseline-unresolved",
+    NotVersioned => "not-versioned",
+    NotCommitted => "not-committed",
+});
+
+impl fmt::Display for FingerprintUnavailable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Shallow => "the clone was shallow",
+            Self::BaseMissing => "where the change branched off was not in the clone",
+            Self::BaselineUnresolved => "the baseline was not in the clone",
+            Self::NotVersioned => "the code was not under version control",
+            Self::NotCommitted => "the change was a patch, not in history yet",
+        })
+    }
+}
+
+/// What the version-control side says of the fingerprint of a change, for the CA
+/// check to record.
+///
+/// Three answers, because three are different facts: a change was cut into hunks,
+/// there was nothing to cut, or the clone could not. The check turns each into the
+/// [`CaChange`] it records, once ([`gate::ca`](super::gate::ca)).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Fingerprinting {
+    /// The change, cut into hunks.
+    Of(ChangeFingerprint),
+    /// The revision is the baseline, or the change has no hunk.
+    NothingToFingerprint,
+    /// The clone cannot cut the change into hunks, for this reason. It is an answer,
+    /// not an error: an approval is a person's judgement, and the fingerprint is a hint
+    /// to the landing that the ancestry can do without.
+    Unavailable(FingerprintUnavailable),
+}
+
 /// How an item's approved change has landed, for an item as it is now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Integration {
@@ -561,7 +638,7 @@ pub struct ApprovedChange {
 enum ChangeSource {
     Checked {
         approved: Revision,
-        fingerprint: Option<ChangeFingerprint>,
+        change: CaChange,
         facts: BaselineFacts,
         cannot_tell: UnknownWhy,
     },
@@ -571,20 +648,28 @@ enum ChangeSource {
 impl ApprovedChange {
     /// An approval made through the gate, at `approved`.
     ///
-    /// `fingerprint` is what the attestation records; none for an approval that
-    /// records none. `facts` are the port's answers, and `cannot_tell` the port's
-    /// reason for whichever of them it could not give; it is used only when the
-    /// verdict turns on a fact that is unknown.
+    /// `change` is what the attestation records of the change. `facts` are the port's
+    /// answers, and `cannot_tell` the port's reason for whichever of them it could not
+    /// give; it is used only when the verdict turns on a fact that is unknown.
+    ///
+    /// How each [`CaChange`] is read is decided here and nowhere else:
+    ///
+    /// | `change` | the hunks are | so the landing is |
+    /// |---|---|---|
+    /// | `Fingerprinted(fp)` | what the port says, or a known no when `fp` has no strong hunk, or unknown under a scheme this build lacks | by hunks or ancestry, as the module says |
+    /// | `NothingToFingerprint` | a known no: there is nothing to find | by ancestry; Pending when it is a no |
+    /// | `NotFingerprinted(_)` | unknown, for [`UnknownWhy::NoFingerprint`]; the reason the approver's clone gave is for showing | by ancestry; else Unknown |
+    /// | `NotRecorded` | as `NotFingerprinted` | as `NotFingerprinted` |
     pub fn checked(
         approved: Revision,
-        fingerprint: Option<ChangeFingerprint>,
+        change: CaChange,
         facts: BaselineFacts,
         cannot_tell: UnknownWhy,
     ) -> Self {
         Self {
             source: ChangeSource::Checked {
                 approved,
-                fingerprint,
+                change,
                 facts,
                 cannot_tell,
             },
@@ -604,10 +689,16 @@ impl ApprovedChange {
             ChangeSource::Adopted => Landing::Integrated(IntegrationEvidence::Adopted),
             ChangeSource::Checked {
                 approved,
-                fingerprint,
+                change,
                 facts,
                 cannot_tell,
             } => {
+                // A change with nothing to fingerprint has no hunk to find, so the
+                // hunks are a known no whatever the port says, and the ancestry alone
+                // decides. The cases that have no fingerprint for another reason read
+                // as no fingerprint, below.
+                let nothing = matches!(change, CaChange::NothingToFingerprint);
+                let fingerprint = change.fingerprint();
                 // Without a fingerprint nothing can be matched, whatever the port
                 // says, and that is its own reason when it is what leaves it open.
                 // The same holds for a fingerprint under a scheme this build does
@@ -622,6 +713,7 @@ impl ApprovedChange {
                     Some(_) if scheme_unknown => Knowable::Unknown,
                     Some(fingerprint) if fingerprint.is_strong() => facts.hunks_contained,
                     Some(_) => Knowable::Known(false),
+                    None if nothing => Knowable::Known(false),
                     None => Knowable::Unknown,
                 };
                 let hunks_unknown_why = match fingerprint {
@@ -726,7 +818,25 @@ mod tests {
         ancestor: Knowable<bool>,
         hunks: Knowable<bool>,
     ) -> ApprovedChange {
-        ApprovedChange::checked(rev("a1"), fp, facts(ancestor, hunks), UnknownWhy::Shallow)
+        ApprovedChange::checked(
+            rev("a1"),
+            fp.map_or(CaChange::NotRecorded, CaChange::Fingerprinted),
+            facts(ancestor, hunks),
+            UnknownWhy::Shallow,
+        )
+    }
+
+    fn decide_with(
+        change: CaChange,
+        ancestor: Knowable<bool>,
+        hunks: Knowable<bool>,
+    ) -> Integration {
+        Integration::decide([ApprovedChange::checked(
+            rev("a1"),
+            change,
+            facts(ancestor, hunks),
+            UnknownWhy::Shallow,
+        )])
     }
 
     fn decide_one(
@@ -971,7 +1081,7 @@ mod tests {
             ] {
                 let got = Integration::decide([ApprovedChange::checked(
                     rev("a1"),
-                    Some(strong_fp()),
+                    CaChange::Fingerprinted(strong_fp()),
                     facts(ancestor, hunks),
                     why,
                 )]);
@@ -1017,6 +1127,77 @@ mod tests {
     }
 
     #[test]
+    fn an_approval_of_a_change_with_nothing_to_fingerprint_is_judged_by_the_ancestry_alone() {
+        // The ancestry settles it either way: no hunk could have landed, so a no there
+        // is a Pending and not an Unknown.
+        for hunks in [YES, NO, UNKNOWN] {
+            assert_eq!(
+                decide_with(CaChange::NothingToFingerprint, YES, hunks),
+                Integration::Integrated {
+                    evidence: IntegrationEvidence::Ancestor(rev("a1"))
+                },
+                "what the port says of hunks changes nothing"
+            );
+            assert_eq!(
+                decide_with(CaChange::NothingToFingerprint, NO, hunks),
+                Integration::Pending {
+                    approved: rev("a1")
+                }
+            );
+        }
+        // An ancestry that cannot be told keeps the port's reason.
+        assert_eq!(
+            decide_with(CaChange::NothingToFingerprint, UNKNOWN, NO),
+            Integration::Unknown {
+                approved: rev("a1"),
+                why: UnknownWhy::Shallow
+            }
+        );
+    }
+
+    #[test]
+    fn an_approval_made_where_the_change_could_not_be_cut_reads_as_one_with_no_fingerprint() {
+        // Whatever reason the approver's clone gave, the reading is that of a record
+        // that has none: ancestry, else Unknown for the missing fingerprint.
+        for why in FingerprintUnavailable::ALL {
+            let recorded = CaChange::NotFingerprinted(why);
+            assert_eq!(
+                decide_with(recorded.clone(), NO, UNKNOWN),
+                Integration::Unknown {
+                    approved: rev("a1"),
+                    why: UnknownWhy::NoFingerprint
+                },
+                "{why:?}"
+            );
+            assert_eq!(
+                decide_with(recorded.clone(), NO, YES),
+                Integration::Unknown {
+                    approved: rev("a1"),
+                    why: UnknownWhy::NoFingerprint
+                },
+                "{why:?}: hunks cannot be matched without a fingerprint"
+            );
+            assert!(decide_with(recorded.clone(), YES, UNKNOWN).is_integrated());
+            for (ancestor, hunks) in [(NO, NO), (UNKNOWN, UNKNOWN), (YES, NO), (NO, UNKNOWN)] {
+                assert_eq!(
+                    decide_with(recorded.clone(), ancestor, hunks),
+                    decide_with(CaChange::NotRecorded, ancestor, hunks),
+                    "{why:?} reads as NotRecorded"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_reasons_for_no_fingerprint_have_names_that_read_back_and_words_to_show() {
+        for why in FingerprintUnavailable::ALL {
+            assert_eq!(why.name().parse::<FingerprintUnavailable>(), Ok(why));
+            assert!(!why.to_string().is_empty());
+        }
+        assert!("elsewhere".parse::<FingerprintUnavailable>().is_err());
+    }
+
+    #[test]
     fn an_adopted_approval_has_landed() {
         assert_eq!(
             Integration::decide([ApprovedChange::adopted()]),
@@ -1037,19 +1218,19 @@ mod tests {
     fn one_approval_that_landed_makes_the_item_integrated() {
         let pending = ApprovedChange::checked(
             rev("old"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(NO, NO),
             UnknownWhy::Shallow,
         );
         let unknown = ApprovedChange::checked(
             rev("older"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(UNKNOWN, UNKNOWN),
             UnknownWhy::Shallow,
         );
         let landed = ApprovedChange::checked(
             rev("new"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(NO, YES),
             UnknownWhy::Shallow,
         );
@@ -1069,13 +1250,13 @@ mod tests {
     fn an_unknown_approval_keeps_the_item_open_beside_a_pending_one() {
         let pending = ApprovedChange::checked(
             rev("p"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(NO, NO),
             UnknownWhy::Shallow,
         );
         let unknown = ApprovedChange::checked(
             rev("u"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(UNKNOWN, UNKNOWN),
             UnknownWhy::BaseMissing,
         );
@@ -1094,13 +1275,13 @@ mod tests {
     fn the_verdict_of_several_pending_approvals_does_not_depend_on_their_order() {
         let a = ApprovedChange::checked(
             rev("a"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(NO, NO),
             UnknownWhy::Shallow,
         );
         let b = ApprovedChange::checked(
             rev("b"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(NO, NO),
             UnknownWhy::Shallow,
         );
@@ -1114,13 +1295,13 @@ mod tests {
     fn the_ancestry_is_preferred_as_evidence_when_both_approvals_landed() {
         let by_hunks = ApprovedChange::checked(
             rev("h"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(NO, YES),
             UnknownWhy::Shallow,
         );
         let by_ancestry = ApprovedChange::checked(
             rev("z"),
-            Some(strong_fp()),
+            CaChange::Fingerprinted(strong_fp()),
             facts(YES, NO),
             UnknownWhy::Shallow,
         );

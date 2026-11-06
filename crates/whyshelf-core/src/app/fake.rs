@@ -954,25 +954,27 @@ mod corpus_fake {
     use std::collections::{BTreeMap, BTreeSet};
     use std::sync::{Mutex, MutexGuard};
 
-    use super::in_memory::FakeError;
+    use super::in_memory::{FakeError, FakePorts};
 
     use crate::app::commit::record::Scanned;
     use crate::app::ports::{
         ActorSource, Author, BaselineAnswer, BaselineQuery, ConfirmPort, ConfirmPrompt, Confirmed,
-        CorpusPorts, CorruptRecord, DocumentSource, FileWriter, KeySource, LedgerRead, LedgerStore,
-        ObjectStore, PortName, Put, RevisionFactsPort, Write,
+        CorpusPorts, CorpusRead, CorruptRecord, DocumentListing, DocumentSource, FileBytes,
+        FileWriter, KeySource, LedgerAppend, LedgerContents, LedgerRead, ObjectPut, ObjectRead,
+        PathProblem, PortName, Put, RevisionFactsPort, UnreadablePath, WorkTree, Write,
     };
     use crate::app::raw::RawDocument;
+    use crate::domain::boundary::PrivateRoot;
     use crate::domain::corpus::{FileFacts, GitPlace, Location, Visibility};
     use crate::domain::hash::{BytesHash, TextHash};
-    use crate::domain::integration::{BaselineFacts, ChangeFingerprint, UnknownWhy};
+    use crate::domain::integration::{BaselineFacts, Fingerprinting, UnknownWhy};
     use crate::domain::judge::Judge;
     use crate::domain::judge::test_support::judge;
     use crate::domain::judgement::JudgementKind;
     use crate::domain::keyring::PinKeyring;
     use crate::domain::knowable::Knowable;
     use crate::domain::location::RelPath;
-    use crate::domain::publication::PlanDigest;
+    use crate::domain::publication::ConfirmDigest;
     use crate::domain::revision::Revision;
     use crate::domain::stored::StoredJudgement;
 
@@ -982,7 +984,7 @@ mod corpus_fake {
         /// The same answer to every question.
         Always(Confirmed),
         /// Types back this digest: yes to a question about it, no to any other.
-        TypesBack(PlanDigest),
+        TypesBack(ConfirmDigest),
     }
 
     #[derive(Debug, Clone)]
@@ -991,6 +993,7 @@ mod corpus_fake {
         links: u32,
         regular: bool,
         group_blocks: bool,
+        owner_blocks: bool,
     }
 
     type FileKey = (Visibility, RelPath);
@@ -998,6 +1001,8 @@ mod corpus_fake {
     #[derive(Debug)]
     struct CorpusState {
         documents: Vec<(FileFacts, RawDocument)>,
+        unreadable: Vec<UnreadablePath>,
+        private_root: PrivateRoot,
         ledgers: BTreeMap<Visibility, Vec<StoredJudgement>>,
         corrupt: BTreeMap<Visibility, Vec<CorruptRecord>>,
         objects: BTreeMap<(Visibility, TextHash), String>,
@@ -1009,7 +1014,8 @@ mod corpus_fake {
         files: BTreeMap<FileKey, FakeFile>,
         race: Option<(FileKey, Vec<u8>)>,
         baseline: BaselineAnswer,
-        fingerprint: Option<ChangeFingerprint>,
+        fingerprinting: Fingerprinting,
+        work_tree: Knowable<WorkTree>,
         authors: BTreeMap<Revision, Author>,
         places: BTreeMap<FileKey, GitPlace>,
         failing: BTreeSet<PortName>,
@@ -1021,7 +1027,7 @@ mod corpus_fake {
     ///   there (the same canonical bytes) is success, and one of the same identifier
     ///   with other bytes is kept beside the first. Appending a purge also takes the
     ///   text out of the objects of the same side and remembers the hash as purged
-    ///   there, as [`LedgerStore::append`] says.
+    ///   there, as [`LedgerAppend::append`] says.
     /// - The objects are a 2P-set per side: a purged hash is never stored, and
     ///   [`merge_objects_from`](Self::merge_objects_from) reads a branch that stored
     ///   it before the purge as gone.
@@ -1031,6 +1037,7 @@ mod corpus_fake {
     #[derive(Debug)]
     pub(crate) struct FakeCorpus {
         state: Mutex<CorpusState>,
+        shared: FakePorts,
     }
 
     fn key(location: &Location) -> FileKey {
@@ -1042,6 +1049,8 @@ mod corpus_fake {
             Self {
                 state: Mutex::new(CorpusState {
                     documents: Vec::new(),
+                    unreadable: Vec::new(),
+                    private_root: PrivateRoot::Present,
                     ledgers: BTreeMap::new(),
                     corrupt: BTreeMap::new(),
                     objects: BTreeMap::new(),
@@ -1056,11 +1065,13 @@ mod corpus_fake {
                         BaselineFacts::new(Knowable::Known(false), Knowable::Known(false)),
                         UnknownWhy::Shallow,
                     ),
-                    fingerprint: None,
+                    fingerprinting: Fingerprinting::NothingToFingerprint,
+                    work_tree: Knowable::Known(WorkTree::Clean),
                     authors: BTreeMap::new(),
                     places: BTreeMap::new(),
                     failing: BTreeSet::new(),
                 }),
+                shared: FakePorts::new(),
             }
         }
 
@@ -1084,6 +1095,18 @@ mod corpus_fake {
 
         pub(crate) fn add_document(&self, facts: FileFacts, raw: RawDocument) {
             self.lock().documents.push((facts, raw));
+        }
+
+        /// Make the listing find a path it cannot name.
+        pub(crate) fn add_unreadable_path(&self, shown: &str, problem: PathProblem) {
+            self.lock()
+                .unreadable
+                .push(UnreadablePath::new(shown.to_owned(), problem));
+        }
+
+        /// What the person's settings and the disk say of the private root.
+        pub(crate) fn set_private_root(&self, root: PrivateRoot) {
+            self.lock().private_root = root;
         }
 
         // --- ledgers
@@ -1162,6 +1185,7 @@ mod corpus_fake {
                     links: 1,
                     regular: true,
                     group_blocks: false,
+                    owner_blocks: false,
                 },
             );
         }
@@ -1191,6 +1215,12 @@ mod corpus_fake {
             }
         }
 
+        pub(crate) fn make_owner_unkeepable(&self, root: Visibility, at: &RelPath) {
+            if let Some(f) = self.lock().files.get_mut(&(root, at.clone())) {
+                f.owner_blocks = true;
+            }
+        }
+
         /// Another editor writes `bytes` to the file after the next write or removal of
         /// it has compared it and before it replaces it.
         pub(crate) fn race_on_next_write(&self, root: Visibility, at: &RelPath, bytes: &[u8]) {
@@ -1203,8 +1233,12 @@ mod corpus_fake {
             self.lock().baseline = answer;
         }
 
-        pub(crate) fn set_fingerprint(&self, fingerprint: Option<ChangeFingerprint>) {
-            self.lock().fingerprint = fingerprint;
+        pub(crate) fn set_fingerprinting(&self, fingerprinting: Fingerprinting) {
+            self.lock().fingerprinting = fingerprinting;
+        }
+
+        pub(crate) fn set_work_tree(&self, work_tree: Knowable<WorkTree>) {
+            self.lock().work_tree = work_tree;
         }
 
         pub(crate) fn set_author(&self, at: Revision, author: Author) {
@@ -1233,6 +1267,9 @@ mod corpus_fake {
             if file.group_blocks {
                 return Err(Write::CannotKeepGroup);
             }
+            if file.owner_blocks {
+                return Err(Write::CannotKeepOwner);
+            }
             if s.race.as_ref().is_some_and(|(raced, _)| *raced == k)
                 && let Some((_, bytes)) = s.race.take()
                 && let Some(file) = s.files.get_mut(&k)
@@ -1260,23 +1297,45 @@ mod corpus_fake {
     impl DocumentSource for FakeCorpus {
         type Error = FakeError;
 
-        async fn list(&self) -> Result<Vec<(FileFacts, RawDocument)>, FakeError> {
+        async fn list(&self) -> Result<DocumentListing, FakeError> {
             self.check(PortName::Documents)?;
-            Ok(self.lock().documents.clone())
+            let s = self.lock();
+            Ok(DocumentListing::new(
+                s.documents.clone(),
+                s.unreadable.clone(),
+            ))
+        }
+
+        async fn bytes(&self, file: &FileFacts) -> Result<FileBytes, FakeError> {
+            self.check(PortName::Documents)?;
+            Ok(self
+                .lock()
+                .files
+                .get(&key(file.location()))
+                .map_or(FileBytes::Gone, |held| FileBytes::Read(held.bytes.clone())))
+        }
+
+        async fn private_root(&self) -> Result<PrivateRoot, FakeError> {
+            self.check(PortName::Documents)?;
+            Ok(self.lock().private_root)
         }
     }
 
-    impl LedgerStore for FakeCorpus {
+    impl LedgerRead for FakeCorpus {
         type Error = FakeError;
 
-        async fn read(&self, side: Visibility) -> Result<LedgerRead, FakeError> {
+        async fn read(&self, side: Visibility) -> Result<LedgerContents, FakeError> {
             self.check(PortName::Ledger)?;
             let s = self.lock();
-            Ok(LedgerRead::new(
+            Ok(LedgerContents::new(
                 s.ledgers.get(&side).cloned().unwrap_or_default(),
                 s.corrupt.get(&side).cloned().unwrap_or_default(),
             ))
         }
+    }
+
+    impl LedgerAppend for FakeCorpus {
+        type Error = FakeError;
 
         async fn append(
             &self,
@@ -1298,7 +1357,7 @@ mod corpus_fake {
         }
     }
 
-    impl ObjectStore for FakeCorpus {
+    impl ObjectPut for FakeCorpus {
         type Error = FakeError;
 
         async fn put(&self, text: &Scanned<'_>) -> Result<Put, FakeError> {
@@ -1313,6 +1372,10 @@ mod corpus_fake {
                 .or_insert_with(|| text.text().to_owned());
             Ok(Put::Stored)
         }
+    }
+
+    impl ObjectRead for FakeCorpus {
+        type Error = FakeError;
 
         async fn get(&self, side: Visibility, key: TextHash) -> Result<Option<String>, FakeError> {
             self.check(PortName::Objects)?;
@@ -1351,7 +1414,7 @@ mod corpus_fake {
             s.asked.push(*prompt);
             Ok(match s.reply {
                 Reply::Always(answer) => answer,
-                Reply::TypesBack(digest) if digest == prompt.plan() => Confirmed::Yes,
+                Reply::TypesBack(digest) if digest == prompt.digest() => Confirmed::Yes,
                 Reply::TypesBack(_) => Confirmed::No,
             })
         }
@@ -1373,6 +1436,7 @@ mod corpus_fake {
                     links: 1,
                     regular: true,
                     group_blocks: false,
+                    owner_blocks: false,
                 },
             );
             Ok(Write::Done)
@@ -1422,9 +1486,14 @@ mod corpus_fake {
         async fn change_fingerprint(
             &self,
             _approved: &Revision,
-        ) -> Result<Option<ChangeFingerprint>, FakeError> {
+        ) -> Result<Fingerprinting, FakeError> {
             self.check(PortName::RevisionFacts)?;
-            Ok(self.lock().fingerprint.clone())
+            Ok(self.lock().fingerprinting.clone())
+        }
+
+        async fn work_tree(&self) -> Result<Knowable<WorkTree>, FakeError> {
+            self.check(PortName::RevisionFacts)?;
+            Ok(self.lock().work_tree)
         }
 
         async fn author(&self, at: &Revision) -> Result<Knowable<Author>, FakeError> {
@@ -1452,15 +1521,14 @@ mod corpus_fake {
         }
     }
 
-    impl CorpusPorts for FakeCorpus {
+    impl CorpusRead for FakeCorpus {
         type Documents = FakeCorpus;
-        type Ledger = FakeCorpus;
+        type Ledgers = FakeCorpus;
         type Objects = FakeCorpus;
-        type Actor = FakeCorpus;
         type Keys = FakeCorpus;
-        type Confirm = FakeCorpus;
-        type Files = FakeCorpus;
         type Facts = FakeCorpus;
+        type Scanner = FakePorts;
+        type Runner = FakePorts;
 
         fn documents(&self) -> &FakeCorpus {
             self
@@ -1471,10 +1539,37 @@ mod corpus_fake {
         fn objects(&self) -> &FakeCorpus {
             self
         }
-        fn actor_source(&self) -> &FakeCorpus {
+        fn key_source(&self) -> &FakeCorpus {
             self
         }
-        fn key_source(&self) -> &FakeCorpus {
+        fn facts(&self) -> &FakeCorpus {
+            self
+        }
+        fn scanner(&self) -> &FakePorts {
+            &self.shared
+        }
+        fn runner(&self) -> &FakePorts {
+            &self.shared
+        }
+    }
+
+    impl CorpusPorts for FakeCorpus {
+        type Appender = FakeCorpus;
+        type Texts = FakeCorpus;
+        type Actor = FakeCorpus;
+        type Confirm = FakeCorpus;
+        type Files = FakeCorpus;
+        type Time = FakePorts;
+        type Ids = FakePorts;
+        type Secrets = FakePorts;
+
+        fn appender(&self) -> &FakeCorpus {
+            self
+        }
+        fn put_texts(&self) -> &FakeCorpus {
+            self
+        }
+        fn actor_source(&self) -> &FakeCorpus {
             self
         }
         fn confirm(&self) -> &FakeCorpus {
@@ -1483,8 +1578,14 @@ mod corpus_fake {
         fn files(&self) -> &FakeCorpus {
             self
         }
-        fn facts(&self) -> &FakeCorpus {
-            self
+        fn time(&self) -> &FakePorts {
+            &self.shared
+        }
+        fn ids(&self) -> &FakePorts {
+            &self.shared
+        }
+        fn secrets(&self) -> &FakePorts {
+            &self.shared
         }
     }
 }

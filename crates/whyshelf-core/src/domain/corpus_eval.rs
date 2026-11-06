@@ -77,17 +77,16 @@
 //! # What this does not read
 //!
 //! How a document wrote its references (`private:` marks, aliases) is naming, which
-//! is not decided here: the caller hands over, per document, which upstream
-//! identifiers it wrote with a mark into a store that cannot be read, in `written`.
+//! is not decided here: the corpus says, per document, which upstream identifiers it
+//! wrote with a mark into a store that cannot be read, and which nothing visible holds
+//! ([`Corpus::written`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::approval::{Gate, UpstreamRecord};
 use super::corpus::{Corpus, CorpusDocument, Entity, Invalidity};
 use super::design::{Design, ItemIssue, WorkItem};
-use super::evaluate::{
-    ApprovalView, Cause, Evaluated, Evaluator, ItemKey, States, Written, states_of,
-};
+use super::evaluate::{ApprovalView, Cause, Evaluated, Evaluator, ItemKey, States, states_of};
 use super::event::EntityKind;
 use super::finding::Finding;
 use super::gate::{self, UpstreamPins};
@@ -96,6 +95,7 @@ use super::id::{DesignId, DocId, EntityId, FindingId, ItemId, ItemNumber, SpecId
 use super::judgement::{Basis, FilePresence, Target};
 use super::keyring::{PinKeyring, UpstreamHash};
 use super::ledger::{Ledgers, Retirement};
+use super::naming::Written;
 use super::nonempty::NonEmptyVec;
 use super::policy::GatePolicy;
 use super::spec::Spec;
@@ -115,9 +115,6 @@ pub struct CorpusInput<'a> {
     pub keyring: &'a PinKeyring,
     /// What the project demands of a Spec at CS; it decides what a Spec lacks.
     pub policy: GatePolicy,
-    /// How each document wrote the upstream identifiers it holds that no state can
-    /// answer for. A document not in the map wrote none of the kind.
-    pub written: &'a BTreeMap<DocId, Written>,
 }
 
 /// The ledgers as the evaluator's store of approvals.
@@ -448,7 +445,9 @@ fn now_public_keyed(
                         id,
                         hash: UpstreamHash::Keyed(_),
                     } if public(&id) => Some(id),
-                    UpstreamRecord::Entity { .. } | UpstreamRecord::Event(_) => None,
+                    UpstreamRecord::Entity { .. }
+                    | UpstreamRecord::Event(_)
+                    | UpstreamRecord::Judgement(_) => None,
                 })
                 .collect()
         })
@@ -576,9 +575,9 @@ pub fn evaluate_corpus(input: CorpusInput<'_>) -> CorpusEvaluation {
         ledgers,
         keyring,
         policy,
-        written,
     } = input;
     let view = LedgerView { ledgers, keyring };
+    let written = corpus.written();
     let no_written = Written::default();
     let written_of = |id: DocId| written.get(&id).unwrap_or(&no_written);
 
@@ -808,18 +807,21 @@ fn report(
 mod tests {
     use super::*;
     use crate::domain::approval::test_support::approve as logged;
-    use crate::domain::approval::{ApprovalSet, Attestation, Pinned, TestOutcome};
+    use crate::domain::approval::{ApprovalSet, Attestation, CaChange, Pinned, TestOutcome};
     use crate::domain::classification::fold;
     use crate::domain::corpus::{FileFacts, GitPlace, Location, Reading, Visibility};
     use crate::domain::design::test_support::{design, identified, num};
     use crate::domain::evaluate::ImplView;
     use crate::domain::event::Event;
     use crate::domain::finding::test_support::finding;
-    use crate::domain::gate::{CaInput, Checked, CiInput, CsInput, Passed, ca, ci, cs};
+    use crate::domain::gate::{
+        CaInput, Checked, CiInput, CsInput, FingerprintAsked, Passed, ca, ci, cs,
+    };
     use crate::domain::hash::BytesHash;
     use crate::domain::hash::PinKey;
     use crate::domain::hash::TextHash;
     use crate::domain::id::test_support::{did, docid, eid, fid, iid, sid};
+    use crate::domain::integration::Fingerprinting;
     use crate::domain::judge::test_support::judge;
     use crate::domain::judgement::test_support::{Filed, approve, corpus_of, jid, ts, why};
     use crate::domain::judgement::{Judgement, JudgementKind};
@@ -898,7 +900,7 @@ mod tests {
                 design: Pinned::new(self.d.id(), (*self.d.design_hash()).into()),
                 revision: Revision::Commit(RevisionId::from_validated("a1".into()).unwrap()),
                 tests: TestOutcome::Passed,
-                fingerprint: None,
+                change: CaChange::NotRecorded,
             }
         }
 
@@ -924,13 +926,7 @@ mod tests {
     }
 
     fn evaluate(files: Vec<Filed>, ledgers: &Ledgers) -> CorpusEvaluation {
-        evaluate_with(
-            files,
-            ledgers,
-            &PinKeyring::empty(),
-            GatePolicy::default(),
-            &BTreeMap::new(),
-        )
+        evaluate_with(files, ledgers, &PinKeyring::empty(), GatePolicy::default())
     }
 
     fn evaluate_with(
@@ -938,7 +934,6 @@ mod tests {
         ledgers: &Ledgers,
         keyring: &PinKeyring,
         policy: GatePolicy,
-        written: &BTreeMap<DocId, Written>,
     ) -> CorpusEvaluation {
         let corpus = corpus_of(files);
         evaluate_corpus(CorpusInput {
@@ -946,7 +941,6 @@ mod tests {
             ledgers,
             keyring,
             policy,
-            written,
         })
     }
 
@@ -1379,7 +1373,6 @@ mod tests {
             ledgers,
             keyring: &PinKeyring::empty(),
             policy: GatePolicy::default(),
-            written: &BTreeMap::new(),
         })
     }
 
@@ -1490,7 +1483,6 @@ mod tests {
             &Ledgers::default(),
             &PinKeyring::empty(),
             relaxed,
-            &BTreeMap::new(),
         );
         assert_eq!(
             lacks_of(&new, 11),
@@ -1565,7 +1557,7 @@ mod tests {
     }
 
     fn eval_keyed(files: Vec<Filed>, l: &Ledgers, keys: &PinKeyring) -> CorpusEvaluation {
-        evaluate_with(files, l, keys, GatePolicy::default(), &BTreeMap::new())
+        evaluate_with(files, l, keys, GatePolicy::default())
     }
 
     #[test]
@@ -1674,22 +1666,14 @@ mod tests {
         );
 
         // The Finding is in a store this clone does not have.
-        let written = BTreeMap::from([(
-            docid(11),
-            Written {
-                unresolved: BTreeSet::from([eid(1)]),
-                ..Written::default()
-            },
-        )]);
         let storeless = evaluate_with(
             vec![
-                Filed::public(Entity::Spec(approved.s.clone())),
+                Filed::public(Entity::Spec(approved.s.clone())).written_with_a_mark(),
                 Filed::public(Entity::Design(approved.d.clone())),
             ],
             &Ledgers::default(),
             &PinKeyring::empty(),
             GatePolicy::default(),
-            &written,
         );
         let cause = |new: &CorpusEvaluation| {
             new.document(&docid(11))
@@ -1876,15 +1860,8 @@ mod tests {
         let c = chain();
         // Finding 1 is not in this clone; the Spec wrote it with a mark into the
         // private store.
-        let written = BTreeMap::from([(
-            docid(11),
-            Written {
-                unresolved: BTreeSet::from([eid(1)]),
-                ..Written::default()
-            },
-        )]);
         let files = vec![
-            Filed::public(Entity::Spec(c.s.clone())),
+            Filed::public(Entity::Spec(c.s.clone())).written_with_a_mark(),
             Filed::public(Entity::Design(c.d.clone())),
         ];
         let new = evaluate_with(
@@ -1892,7 +1869,6 @@ mod tests {
             &Ledgers::default(),
             &PinKeyring::empty(),
             GatePolicy::default(),
-            &written,
         );
         assert_eq!(
             violations(run_cs(&new, &c, &PinKeyring::empty())),
@@ -1910,22 +1886,14 @@ mod tests {
         let pin = ring("theirs", 7).pin(eid(1), c.f.hash()).unwrap();
         let cs = c.cs_with(UpstreamHash::Keyed(pin), GatePolicy::default());
         let l = ledgers(vec![record(1, Visibility::Public, cs)], Vec::new());
-        let written = BTreeMap::from([(
-            docid(11),
-            Written {
-                unresolved: BTreeSet::from([eid(1)]),
-                ..Written::default()
-            },
-        )]);
         evaluate_with(
             vec![
-                Filed::public(Entity::Spec(c.s.clone())),
+                Filed::public(Entity::Spec(c.s.clone())).written_with_a_mark(),
                 Filed::public(Entity::Design(c.d.clone())),
             ],
             &l,
             keys,
             GatePolicy::default(),
-            &written,
         )
     }
 
@@ -2052,27 +2020,24 @@ mod tests {
                 )]),
                 Default::default(),
             );
-            let evaluation = Evaluator::item(
-                &key,
-                work,
-                new.designs(),
-                &states,
-                &ApprovalSet::default(),
-                &view,
-                &[],
-            );
+            // The state of the item, as the corpus gives it.
+            let state = new
+                .item(&key.id)
+                .expect("the item is in the Design")
+                .state();
             ca::check_in(
                 CaInput {
                     text: TextHash::of("the file as read\n"),
                     key: &key,
                     item: work,
-                    evaluation: &evaluation,
+                    state,
                     designs: new.designs().iter().map(|(id, e)| (*id, e)).collect(),
                     declared: &DeclaredPins::of(new.specs().values().filter_map(Evaluated::entity)),
                     states: &states,
                     impl_view: &view,
                     revision: RevisionId::from_validated("head".into()).unwrap(),
                     tests: crate::domain::approval::TestsRun::Finished(TestOutcome::Passed),
+                    fingerprint: FingerprintAsked::Asked(Fingerprinting::NothingToFingerprint),
                 },
                 new.pins(keys),
             )

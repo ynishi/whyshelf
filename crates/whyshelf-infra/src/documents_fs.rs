@@ -1,11 +1,12 @@
 //! The document files of both roots: [`DocumentSource`] over the file system.
 //!
-//! Read only. For every Markdown file under the scanned directories of the public
-//! root and of the private root, [`FsDocuments`] gives where it sits, the hash of
-//! its bytes **as they are on disk** ([`FileFacts`]), and what reading it gave with
-//! its normalized text ([`RawDocument`]). The bytes' hash is taken before the text is
-//! decoded or normalized, so a file with CRLF line ends or trailing spaces differs
-//! from its copy that has none, which the normalized text would hide.
+//! Read only, and read and parse only. For every Markdown file under the scanned
+//! directories of the public root and of the private root, [`FsDocuments`] gives
+//! where it sits, the hash of its bytes **as they are on disk** ([`FileFacts`]), and
+//! what reading it gave with its normalized text ([`RawDocument`]). The bytes' hash is
+//! taken before the text is decoded or normalized, so a file with CRLF line ends or
+//! trailing spaces differs from its copy that has none, which the normalized text
+//! would hide.
 //!
 //! ```text
 //!   file bytes --- BytesHash --------------------------------> FileFacts
@@ -14,17 +15,16 @@
 //!                           |
 //!                           +-- `id:` taken out, parse::read_in --> RawDoc
 //!                                |
-//!                                +-- references of a Spec and a Design resolved
-//!                                    among the files of both roots --> Reading
+//!                                +-- references kept as written ---> ReadFile
 //! ```
 //!
 //! # What a file reads as
 //!
-//! | the file | [`Reading`] |
+//! | the file | [`ReadFile`] |
 //! |---|---|
-//! | not UTF-8, a merge-conflict marker, front matter or keys that do not parse, a reference that names nothing or the wrong kind | `Unparsed`, with every reason and the `id:` the file shows if it shows one |
+//! | not UTF-8, a merge-conflict marker, front matter or keys that do not parse, a reference in `grounds` or `spec` that is no reference a key may hold | `Unparsed`, with every reason and the `id:` the file shows if it shows one |
 //! | reads, and has no `id:` | `Unidentified`, with the kind the file shows |
-//! | reads, and has one `id:` | `Document` |
+//! | reads, and has one `id:` | `Document`, with its references as written |
 //!
 //! A file that has an `id:` line that is no identifier, or two different ones, is
 //! `Unparsed` for that.
@@ -40,49 +40,44 @@
 //! # References
 //!
 //! `grounds` of a Spec and `spec` of a Design name documents by identifier or alias
-//! (`private:<id>` for a private one). They are looked up among the files read here,
-//! by the rule of [`EntityRef::resolve`](whyshelf_core::domain::reference::EntityRef::resolve) and [`bind`]:
-//!
-//! - an identifier or alias without a mark is seen from the file's own root: a public
-//!   file sees public files, a private file sees both;
-//! - `private:<id>` is looked up by identifier in either root, and where it is not
-//!   found it is dangling if the private root is configured and unresolved if it is not;
-//! - an identifier shared by files of two kinds is a conflict;
-//! - a document is never dropped from a Spec for being dangling: the Spec is built
-//!   with the identifier it wrote, and **how it wrote it** (dangling, unresolved)
-//!   goes to [`Documents::written`], for the evaluation.
-//!
-//! The port [`DocumentSource::list`] returns the files and drops `written`, which has
-//! no place in it; [`FsDocuments::read_all`] returns both.
+//! (`private:<id>` for a private one). This adapter does not look them up: what an
+//! alias names depends on the other files, and the rule is the domain's. It reads
+//! each as a reference of the place a key is ([`Place::Key`]) and hands it over as
+//! written; [`Corpus::build`](whyshelf_core::domain::corpus::Corpus::build) resolves it,
+//! with the root of the file in mind.
 //!
 //! A Finding's `revision` is accepted when it is a full 40-digit revision (the rule of
 //! the revision port), lowercased.
+//!
+//! # The private root
+//!
+//! Whether the person has a private root, and whether it can be read, is one decision,
+//! [`PrivateRoot`], that [`DocumentSource::private_root`] returns: a root that is not
+//! named is [`PrivateRoot::NotUsedHere`], a root that is named and can be listed is
+//! [`PrivateRoot::Present`], and one that is named and cannot is
+//! [`PrivateRoot::Absent`]. Listing a root that is absent gives no file from it, which
+//! says nothing of whether it holds any; the caller that must not take its silence for
+//! "none" asks `private_root` first.
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::PathBuf;
 
-use whyshelf_core::app::ports::{DocumentSource, UnreadablePath};
-use whyshelf_core::app::raw::{NormalizedText, RawDoc, RawDocument};
-use whyshelf_core::domain::corpus::{
-    Document, Entity, FileFacts, Header, Location, Reading, Visibility,
-};
-use whyshelf_core::domain::design::Design;
-use whyshelf_core::domain::error::EntityError;
-use whyshelf_core::domain::evaluate::Written;
-use whyshelf_core::domain::event::{DocKind, EntityKind};
+use whyshelf_core::app::ports::{DocumentListing, DocumentSource, FileBytes, UnreadablePath};
+use whyshelf_core::app::raw::{NormalizedText, RawDoc, RawDocument, ReadFile};
+use whyshelf_core::domain::boundary::PrivateRoot;
+use whyshelf_core::domain::corpus::{FileFacts, Header, Location, Visibility};
+use whyshelf_core::domain::event::DocKind;
 use whyshelf_core::domain::finding::Finding;
 use whyshelf_core::domain::hash::BytesHash;
-use whyshelf_core::domain::id::{Alias, DesignId, DocId, EntityId, FindingId, SpecId};
+use whyshelf_core::domain::id::{DesignId, DocId, FindingId, SpecId};
 use whyshelf_core::domain::knowable::Knowable;
 use whyshelf_core::domain::location::RelPath;
+use whyshelf_core::domain::naming::{Place, Ref};
 use whyshelf_core::domain::nonempty::NonEmptyVec;
+use whyshelf_core::domain::parsed::ParsedEntity;
 use whyshelf_core::domain::policy::PinVocabulary;
-use whyshelf_core::domain::reference::{
-    Bound, ById, Directory, LocalRef, Located, Lookup, Reach, Ref, bind,
-};
+use whyshelf_core::domain::reference::Ref as LegacyRef;
 use whyshelf_core::domain::revision::RevisionId;
-use whyshelf_core::domain::spec::Spec;
 use whyshelf_core::domain::state::UnparsedReason;
 
 use crate::blocking::{self, BlockingError};
@@ -103,6 +98,12 @@ pub enum DocumentsError {
         /// The operating system's error.
         #[source]
         source: io::Error,
+    },
+    /// A file of the private root was asked for, and this adapter has no private root.
+    #[error("the file {path} is in the private root, and no private root is configured")]
+    NoPrivateRoot {
+        /// The file.
+        path: RelPath,
     },
 }
 
@@ -146,30 +147,31 @@ impl DocumentRoot {
     }
 }
 
-/// What reading every file gave.
-#[derive(Debug, Clone, Default)]
-pub struct Documents {
-    /// Every file, in the order of root (public first) and path.
-    pub files: Vec<(FileFacts, RawDocument)>,
-    /// How each document wrote the upstream identifiers it holds that no state can
-    /// answer for.
-    pub written: BTreeMap<DocId, Written>,
-    /// Files and directories the listing found and could not name as paths.
-    pub unreadable: Vec<UnreadablePath>,
+/// What the person's settings say of the private root.
+///
+/// Why not an `Option<DocumentRoot>`: "no private root" and "a private root that is
+/// not there" are different facts ([`PrivateRoot`]), and an `Option` would make the
+/// second look like the first.
+#[derive(Debug, Clone)]
+pub enum PrivateDocuments {
+    /// The settings name no private root.
+    NotUsedHere,
+    /// The settings name this root; it may or may not be readable.
+    At(DocumentRoot),
 }
 
 /// The documents of the public root and of the private one.
 #[derive(Debug, Clone)]
 pub struct FsDocuments {
     public: DocumentRoot,
-    private: Option<DocumentRoot>,
+    private: PrivateDocuments,
     vocabulary: PinVocabulary,
 }
 
 impl FsDocuments {
     /// The documents of the public root, and of the private root if the person has
     /// one here.
-    pub fn new(public: DocumentRoot, private: Option<DocumentRoot>) -> Self {
+    pub fn new(public: DocumentRoot, private: PrivateDocuments) -> Self {
         Self {
             public,
             private,
@@ -184,15 +186,29 @@ impl FsDocuments {
     }
 
     fn roots(&self) -> impl Iterator<Item = (Visibility, &DocumentRoot)> {
-        std::iter::once((Visibility::Public, &self.public))
-            .chain(self.private.iter().map(|root| (Visibility::Private, root)))
+        std::iter::once((Visibility::Public, &self.public)).chain(match &self.private {
+            PrivateDocuments::NotUsedHere => None,
+            PrivateDocuments::At(root) => Some((Visibility::Private, root)),
+        })
     }
 
-    /// Every file, once, with how its references were written.
-    pub async fn read_all(&self) -> Result<Documents, DocumentsError> {
+    /// The root a file of this visibility is under, if this adapter has one.
+    fn root_of(&self, visibility: Visibility) -> Option<&DocumentRoot> {
+        self.roots()
+            .find(|(seen, _)| *seen == visibility)
+            .map(|(_, root)| root)
+    }
+
+    /// Every file, once, as it was read.
+    pub async fn read_all(&self) -> Result<DocumentListing, DocumentsError> {
         let mut unreadable: Vec<UnreadablePath> = Vec::new();
-        let mut read: Vec<Read> = Vec::new();
+        let mut files: Vec<(FileFacts, RawDocument)> = Vec::new();
         for (visibility, root) in self.roots() {
+            // A private root that `private_root` calls absent gives no file, as the
+            // module says, rather than failing the whole listing.
+            if visibility == Visibility::Private && !listable(root).await {
+                continue;
+            }
             let listing = blocking::list_markdown(root.dir.clone(), root.scan.clone())
                 .await
                 .map_err(DocumentsError::List)?;
@@ -209,69 +225,63 @@ impl FsDocuments {
                     Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
                     Err(source) => return Err(DocumentsError::Read { path, source }),
                 };
-                read.push(read_file(root, visibility, path, &bytes, &self.vocabulary));
+                files.push(read_file(root, visibility, path, &bytes, &self.vocabulary));
             }
         }
-
-        let index = Index::of(&read, self.private.is_some());
-        let mut written: BTreeMap<DocId, Written> = BTreeMap::new();
-        let mut files = Vec::with_capacity(read.len());
-        for file in read {
-            let (reading, wrote) = file.settle(&index);
-            if let (Some(id), Some(wrote)) = (file.shown_id, wrote) {
-                written.insert(id, wrote);
-            }
-            let location = Location::new(file.visibility, file.path, Knowable::Unknown);
-            files.push((
-                FileFacts::new(location, file.bytes),
-                RawDocument::new(reading, file.text),
-            ));
-        }
-        Ok(Documents {
-            files,
-            written,
-            unreadable,
-        })
+        Ok(DocumentListing::new(files, unreadable))
     }
 }
 
 impl DocumentSource for FsDocuments {
     type Error = DocumentsError;
 
-    async fn list(&self) -> Result<Vec<(FileFacts, RawDocument)>, DocumentsError> {
-        Ok(self.read_all().await?.files)
+    async fn list(&self) -> Result<DocumentListing, DocumentsError> {
+        self.read_all().await
     }
+
+    async fn bytes(&self, file: &FileFacts) -> Result<FileBytes, DocumentsError> {
+        let location = file.location();
+        let path = location.path();
+        let Some(root) = self.root_of(location.visibility()) else {
+            return Err(DocumentsError::NoPrivateRoot { path: path.clone() });
+        };
+        match tokio::fs::read(root.dir.join(path.as_str())).await {
+            Ok(bytes) => Ok(FileBytes::Read(bytes)),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(FileBytes::Gone),
+            Err(source) => Err(DocumentsError::Read {
+                path: path.clone(),
+                source,
+            }),
+        }
+    }
+
+    async fn private_root(&self) -> Result<PrivateRoot, DocumentsError> {
+        match &self.private {
+            PrivateDocuments::NotUsedHere => Ok(PrivateRoot::NotUsedHere),
+            // Whatever stops the directory from being listed makes the root absent:
+            // the question is whether its documents can be read, not why they cannot.
+            PrivateDocuments::At(root) => Ok(if listable(root).await {
+                PrivateRoot::Present
+            } else {
+                PrivateRoot::Absent
+            }),
+        }
+    }
+}
+
+/// Whether the directory of a root can be listed: the one test of whether a private
+/// root is there, for [`DocumentSource::private_root`] and for the listing alike.
+async fn listable(root: &DocumentRoot) -> bool {
+    tokio::fs::read_dir(&root.dir).await.is_ok()
 }
 
 // --- one file ---------------------------------------------------------------------------
 
-/// What reading one file's own text gave, before its references are looked up.
-enum Parsed {
-    /// It does not read.
-    Unparsed(NonEmptyVec<UnparsedReason>),
-    /// It reads and has no `id:`.
-    Unidentified(DocKind),
-    /// It reads and has this `id:`.
-    Identified {
-        id: DocId,
-        raw: Box<RawDoc>,
-        header: Header,
-    },
-}
-
-/// One file as read, waiting for the references of the others.
-struct Read {
-    visibility: Visibility,
-    path: RelPath,
-    bytes: BytesHash,
-    text: NormalizedText,
-    /// The `id:` the file shows, whether or not it reads.
-    shown_id: Option<DocId>,
-    parsed: Parsed,
-}
-
-fn unparsed(reason: UnparsedReason) -> Parsed {
-    Parsed::Unparsed(NonEmptyVec::new(reason, Vec::new()))
+fn unparsed(id: Option<DocId>, reason: UnparsedReason) -> ReadFile {
+    ReadFile::Unparsed {
+        id,
+        reasons: NonEmptyVec::new(reason, Vec::new()),
+    }
 }
 
 fn invalid(field: &str, detail: impl Into<String>) -> UnparsedReason {
@@ -328,21 +338,18 @@ fn probe(text: &str) -> (Option<String>, bool) {
     (kind, has_id)
 }
 
+/// One file read: where it sits, its bytes' hash, what it reads as and its text.
 fn read_file(
     root: &DocumentRoot,
     visibility: Visibility,
     path: RelPath,
     bytes: &[u8],
     vocabulary: &PinVocabulary,
-) -> Read {
+) -> (FileFacts, RawDocument) {
     let hash = BytesHash::of(bytes);
-    let finish = |text: NormalizedText, shown_id, parsed| Read {
-        visibility,
-        path: path.clone(),
-        bytes: hash,
-        text,
-        shown_id,
-        parsed,
+    let finish = |text: NormalizedText, file: ReadFile| {
+        let location = Location::new(visibility, path.clone(), Knowable::Unknown);
+        (FileFacts::new(location, hash), RawDocument::new(file, text))
     };
     let text = match std::str::from_utf8(bytes) {
         Ok(text) => markdown::normalize(text),
@@ -352,7 +359,7 @@ fn read_file(
                 detail: "the file is not valid UTF-8".to_owned(),
             };
             let shown = markdown::seen_id(lossy.as_str());
-            return finish(lossy, shown, unparsed(reason));
+            return finish(lossy, unparsed(shown, reason));
         }
     };
     let shown_id = markdown::seen_id(text.as_str());
@@ -371,7 +378,7 @@ fn read_file(
     }) {
         None => None,
         Some(Ok(kind)) => Some(kind),
-        Some(Err(reason)) => return finish(text, shown_id, unparsed(reason)),
+        Some(Err(reason)) => return finish(text, unparsed(shown_id, reason)),
     };
     let placed = root.placed(&path);
     if let (Some(said), Some(placed)) = (front_kind, placed)
@@ -385,7 +392,7 @@ fn read_file(
                 placed.name()
             ),
         );
-        return finish(text, shown_id, unparsed(reason));
+        return finish(text, unparsed(shown_id, reason));
     }
 
     let read = parse::read_in(
@@ -395,19 +402,30 @@ fn read_file(
     );
     let doc = match read.outcome {
         Ok(doc) => doc,
-        Err(reasons) => return finish(text, shown_id, Parsed::Unparsed(reasons)),
+        Err(reasons) => {
+            return finish(
+                text,
+                ReadFile::Unparsed {
+                    id: shown_id,
+                    reasons,
+                },
+            );
+        }
     };
     let kind = doc.kind();
     let Some(id) = shown_id else {
-        let parsed = if has_id_line {
-            unparsed(invalid(
-                "id",
-                "the `id:` is no identifier, or the file has two different ones",
-            ))
+        let file = if has_id_line {
+            unparsed(
+                None,
+                invalid(
+                    "id",
+                    "the `id:` is no identifier, or the file has two different ones",
+                ),
+            )
         } else {
-            Parsed::Unidentified(kind)
+            ReadFile::Unidentified { kind: Some(kind) }
         };
-        return finish(text, None, parsed);
+        return finish(text, file);
     };
     let classification = read.classification;
     let header = Header::new(
@@ -417,211 +435,37 @@ fn read_file(
         classification.tags.unwrap_or_default(),
         classification.owner,
     );
-    finish(
-        text,
-        Some(id),
-        Parsed::Identified {
-            id,
-            raw: Box::new(doc),
-            header,
-        },
-    )
-}
-
-// --- looking references up ----------------------------------------------------------------
-
-/// What a reference finds: which entity, of which kind.
-#[derive(Debug, Clone, Copy)]
-struct Found {
-    id: EntityId,
-    kind: EntityKind,
-}
-
-impl Located for Found {
-    fn id(&self) -> EntityId {
-        self.id
-    }
-
-    fn kind(&self) -> EntityKind {
-        self.kind
+    match entity_of(id, doc) {
+        Ok(entity) => finish(
+            text,
+            ReadFile::Document {
+                header,
+                entity: Box::new(entity),
+            },
+        ),
+        Err(reasons) => finish(
+            text,
+            ReadFile::Unparsed {
+                id: Some(id),
+                reasons,
+            },
+        ),
     }
 }
 
-fn entity_kind(kind: DocKind) -> EntityKind {
-    match kind {
-        DocKind::Finding => EntityKind::Finding,
-        DocKind::Spec => EntityKind::Spec,
-        DocKind::Design => EntityKind::Design,
-    }
+/// A reference of `grounds` or `spec`, read for the place a key is.
+///
+/// A URL and an `ext:` reference are refused as the reason of the key, as before: an
+/// entity that stands on another project's could not be approved in any environment.
+fn key_ref(reference: &LegacyRef, field: &str) -> Result<Ref, UnparsedReason> {
+    reference.entity_of(field)?;
+    Ref::parse(&reference.to_string(), Place::Key)
+        .map_err(|error| invalid(field, error.to_string()))
 }
 
-/// The documents read, by identifier and by alias, per root.
-struct Index {
-    by_id: BTreeMap<EntityId, Vec<(Visibility, EntityKind)>>,
-    by_alias: BTreeMap<Alias, BTreeSet<(Visibility, EntityId)>>,
-    private_here: bool,
-}
-
-impl Index {
-    fn of(files: &[Read], private_here: bool) -> Self {
-        let mut by_id: BTreeMap<EntityId, Vec<(Visibility, EntityKind)>> = BTreeMap::new();
-        let mut by_alias: BTreeMap<Alias, BTreeSet<(Visibility, EntityId)>> = BTreeMap::new();
-        for file in files {
-            if let Parsed::Identified { id, header, .. } = &file.parsed {
-                by_id
-                    .entry(id.entity())
-                    .or_default()
-                    .push((file.visibility, entity_kind(header.kind())));
-                if let Some(alias) = header.alias() {
-                    by_alias
-                        .entry(alias.clone())
-                        .or_default()
-                        .insert((file.visibility, id.entity()));
-                }
-            }
-        }
-        Self {
-            by_id,
-            by_alias,
-            private_here,
-        }
-    }
-
-    /// What one identifier is, among the files `visible` allows.
-    fn at(&self, id: EntityId, visible: impl Fn(Visibility) -> bool) -> Lookup<Found> {
-        let kinds: BTreeSet<EntityKind> = self
-            .by_id
-            .get(&id)
-            .into_iter()
-            .flatten()
-            .filter(|(root, _)| visible(*root))
-            .map(|(_, kind)| *kind)
-            .collect();
-        let mut kinds = kinds.into_iter();
-        match (kinds.next(), kinds.next()) {
-            (None, _) => Lookup::Missing,
-            (Some(kind), None) => Lookup::Found(Found { id, kind }),
-            // Two kinds under one identifier: it is known and nothing more.
-            (Some(_), Some(_)) => Lookup::Conflicted(id),
-        }
-    }
-
-    /// The questions of a reference written in a file of this root.
-    fn seen_from(&self, from: Visibility) -> Scoped<'_> {
-        Scoped { index: self, from }
-    }
-}
-
-struct Scoped<'a> {
-    index: &'a Index,
-    from: Visibility,
-}
-
-impl Scoped<'_> {
-    /// A public file sees public files; a private file sees both.
-    fn sees(&self, root: Visibility) -> bool {
-        self.from == Visibility::Private || root == Visibility::Public
-    }
-}
-
-impl Directory<Found> for Scoped<'_> {
-    fn local(&self, reference: &LocalRef) -> Lookup<Found> {
-        match reference {
-            LocalRef::Id(id) => self.index.at(*id, |root| self.sees(root)),
-            LocalRef::Alias(alias) => {
-                let ids: BTreeSet<EntityId> = self
-                    .index
-                    .by_alias
-                    .get(alias)
-                    .into_iter()
-                    .flatten()
-                    .filter(|(root, _)| self.sees(*root))
-                    .map(|(_, id)| *id)
-                    .collect();
-                let mut ids = ids.into_iter();
-                match (ids.next(), ids.next()) {
-                    (None, _) => Lookup::Missing,
-                    (Some(id), None) => self.index.at(id, |root| self.sees(root)),
-                    (Some(_), Some(_)) => Lookup::Ambiguous,
-                }
-            }
-        }
-    }
-
-    fn by_id(&self, id: EntityId) -> ById<Found> {
-        match self.index.at(id, |_| true) {
-            Lookup::Found(found) => ById::Found(found),
-            Lookup::Conflicted(id) => ById::Conflicted(id),
-            Lookup::Missing | Lookup::Ambiguous => ById::Missing,
-        }
-    }
-
-    fn private_reach(&self) -> Reach {
-        if self.index.private_here {
-            Reach::Available
-        } else {
-            Reach::Absent
-        }
-    }
-}
-
-/// What a reference in a key comes to, in the root of the file that wrote it.
-fn bound(directory: &Scoped<'_>, reference: &Ref, field: &str, expected: EntityKind) -> Bound {
-    match reference.entity_of(field) {
-        Ok(entity) => bind(entity.resolve(directory), &entity, expected),
-        Err(refused) => Bound::Unparsed(refused),
-    }
-}
-
-impl Read {
-    /// The reading of this file, now that the others are known, and how it wrote its
-    /// upstream identifiers.
-    fn settle(&self, index: &Index) -> (Reading, Option<Written>) {
-        match &self.parsed {
-            Parsed::Unparsed(reasons) => (
-                Reading::Unparsed {
-                    id: self.shown_id,
-                    reasons: reasons.clone(),
-                },
-                None,
-            ),
-            Parsed::Unidentified(kind) => (Reading::Unidentified { kind: Some(*kind) }, None),
-            Parsed::Identified { id, raw, header } => {
-                let directory = index.seen_from(self.visibility);
-                match build(&directory, id.entity(), (**raw).clone()) {
-                    Ok((entity, written)) => match Document::new(header.clone(), entity) {
-                        Ok(document) => (Reading::Document(document), Some(written)),
-                        Err(error) => (
-                            Reading::Unparsed {
-                                id: Some(*id),
-                                reasons: NonEmptyVec::new(
-                                    invalid("id", error.to_string()),
-                                    Vec::new(),
-                                ),
-                            },
-                            None,
-                        ),
-                    },
-                    Err(reasons) => (
-                        Reading::Unparsed {
-                            id: Some(*id),
-                            reasons,
-                        },
-                        None,
-                    ),
-                }
-            }
-        }
-    }
-}
-
-/// Build the entity a file describes, with how it wrote its upstream identifiers, or
-/// the reasons it cannot be built.
-fn build(
-    directory: &Scoped<'_>,
-    id: EntityId,
-    doc: RawDoc,
-) -> Result<(Entity, Written), NonEmptyVec<UnparsedReason>> {
+/// The entity a file describes, with its references as written, or the reasons it
+/// cannot be one.
+fn entity_of(id: DocId, doc: RawDoc) -> Result<ParsedEntity, NonEmptyVec<UnparsedReason>> {
     let one = |reason| NonEmptyVec::new(reason, Vec::new());
     match doc {
         RawDoc::Finding(raw) => {
@@ -642,30 +486,18 @@ fn build(
                     }
                 }
             };
-            let finding: Finding = raw.build(FindingId::new(id), revision).map_err(one)?;
-            Ok((Entity::Finding(finding), Written::default()))
+            let finding: Finding = raw
+                .build(FindingId::new(id.entity()), revision)
+                .map_err(one)?;
+            Ok(ParsedEntity::Finding(finding))
         }
         RawDoc::Spec(raw) => {
             let mut grounds = Vec::new();
-            let mut written = Written::default();
             let mut reasons = Vec::new();
             for reference in raw.grounds().iter() {
-                // An identifier is available in each case but the last: the Spec is
-                // built with it, and the evaluation judges what stands behind it. No
-                // ground is dropped, which would change the hash in silence.
-                match bound(directory, reference, "grounds", EntityKind::Finding) {
-                    Bound::Id(found) | Bound::Conflicted(found) => {
-                        grounds.push(FindingId::new(found));
-                    }
-                    Bound::Dangling(found) => {
-                        written.dangling.insert(found);
-                        grounds.push(FindingId::new(found));
-                    }
-                    Bound::Unresolved(unreadable) => {
-                        written.unresolved.insert(unreadable);
-                        grounds.push(FindingId::new(unreadable));
-                    }
-                    Bound::Unparsed(reason) => reasons.push(reason),
+                match key_ref(reference, "grounds") {
+                    Ok(reference) => grounds.push(reference),
+                    Err(reason) => reasons.push(reason),
                 }
             }
             if let Ok(reasons) = NonEmptyVec::from_vec(reasons) {
@@ -673,32 +505,15 @@ fn build(
             }
             let grounds =
                 NonEmptyVec::from_vec(grounds).map_err(|_| one(UnparsedReason::EmptyGrounds))?;
-            let spec: Spec = raw
-                .build(SpecId::new(id), grounds)
-                .map_err(|error| match error {
-                    EntityError::DuplicateGround { finding } => {
-                        one(UnparsedReason::DuplicateGround { finding })
-                    }
-                    other => one(invalid("grounds", other.to_string())),
-                })?;
-            Ok((Entity::Spec(spec), written))
+            Ok(ParsedEntity::Spec(
+                raw.into_parsed(SpecId::new(id.entity()), grounds),
+            ))
         }
         RawDoc::Design(raw) => {
-            let mut written = Written::default();
-            let spec = match bound(directory, raw.spec(), "spec", EntityKind::Spec) {
-                Bound::Id(spec) | Bound::Conflicted(spec) => spec,
-                Bound::Dangling(spec) => {
-                    written.dangling.insert(spec);
-                    spec
-                }
-                Bound::Unresolved(spec) => {
-                    written.unresolved.insert(spec);
-                    spec
-                }
-                Bound::Unparsed(reason) => return Err(one(reason)),
-            };
-            let design: Design = raw.build(DesignId::new(id), SpecId::new(spec));
-            Ok((Entity::Design(design), written))
+            let spec = key_ref(raw.spec(), "spec").map_err(one)?;
+            Ok(ParsedEntity::Design(
+                raw.into_parsed(DesignId::new(id.entity()), spec),
+            ))
         }
     }
 }

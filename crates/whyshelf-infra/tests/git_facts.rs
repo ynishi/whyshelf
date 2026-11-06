@@ -6,15 +6,44 @@ mod common;
 use std::path::Path;
 
 use common::{commit_all, git, init_repo, write};
-use whyshelf_core::app::ports::{BaselineQuery, RevisionFactsPort};
+use whyshelf_core::app::ports::{BaselineQuery, RevisionFactsPort, WorkTree};
+use whyshelf_core::domain::approval::CaChange;
 use whyshelf_core::domain::corpus::{GitPlace, Visibility};
 use whyshelf_core::domain::integration::{
-    ApprovedChange, ChangeFingerprint, HunkScheme, Integration, IntegrationEvidence, UnknownWhy,
+    ApprovedChange, ChangeFingerprint, FingerprintUnavailable, Fingerprinting, HunkScheme,
+    Integration, IntegrationEvidence, UnknownWhy,
 };
 use whyshelf_core::domain::knowable::Knowable;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::revision::{Revision, RevisionId};
 use whyshelf_infra::git::GitFacts;
+
+/// What a test asks of the answer when it expects a fingerprint.
+trait Fingerprinted {
+    fn expect(self, message: &str) -> ChangeFingerprint;
+    fn unwrap(self) -> ChangeFingerprint;
+    fn as_ref(&self) -> Option<&ChangeFingerprint>;
+}
+
+impl Fingerprinted for Fingerprinting {
+    fn expect(self, message: &str) -> ChangeFingerprint {
+        match self {
+            Self::Of(fingerprint) => fingerprint,
+            other => panic!("{message}: {other:?}"),
+        }
+    }
+
+    fn unwrap(self) -> ChangeFingerprint {
+        self.expect("a fingerprint")
+    }
+
+    fn as_ref(&self) -> Option<&ChangeFingerprint> {
+        match self {
+            Self::Of(fingerprint) => Some(fingerprint),
+            Self::NothingToFingerprint | Self::Unavailable(_) => None,
+        }
+    }
+}
 
 /// A file of distinct, long lines, so that a change to it is a strong hunk.
 fn lines(prefix: &str, count: usize) -> String {
@@ -173,33 +202,89 @@ async fn nothing_is_fingerprinted_for_a_revision_on_the_baseline_or_a_patch_or_a
     let dir = repo().await;
     let on_main = head(dir.path()).await;
     let port = facts(dir.path());
-    assert!(
-        port.change_fingerprint(&commit(&on_main))
-            .await
-            .unwrap()
-            .is_none(),
+    assert_eq!(
+        port.change_fingerprint(&commit(&on_main)).await.unwrap(),
+        Fingerprinting::NothingToFingerprint,
         "a revision on the baseline has no change of its own"
     );
     let patch = Revision::Patch {
         base: RevisionId::from_validated(on_main.clone()).unwrap(),
         patch: whyshelf_core::domain::hash::ContentHash::raw(b"diff"),
     };
-    assert!(port.change_fingerprint(&patch).await.unwrap().is_none());
-    // A commit this clone does not have.
-    assert!(
+    assert_eq!(
+        port.change_fingerprint(&patch).await.unwrap(),
+        Fingerprinting::Unavailable(FingerprintUnavailable::NotCommitted),
+        "a patch is not a commit"
+    );
+    // A commit this clone does not have: not shallow here, so the base is missing.
+    assert_eq!(
         port.change_fingerprint(&commit(&"1".repeat(40)))
             .await
-            .unwrap()
-            .is_none()
+            .unwrap(),
+        Fingerprinting::Unavailable(FingerprintUnavailable::BaseMissing)
     );
     // A baseline that is no commit.
     let nowhere = GitFacts::new(dir.path().to_path_buf(), "no-such-ref".to_owned());
-    assert!(
-        nowhere
-            .change_fingerprint(&commit(&on_main))
-            .await
-            .unwrap()
-            .is_none()
+    assert_eq!(
+        nowhere.change_fingerprint(&commit(&on_main)).await.unwrap(),
+        Fingerprinting::Unavailable(FingerprintUnavailable::BaselineUnresolved)
+    );
+}
+
+#[tokio::test]
+async fn a_shallow_clone_says_so_when_it_cannot_cut_the_change() {
+    let origin = repo().await;
+    let approved = feature(origin.path()).await;
+    let clone = tempfile::tempdir().unwrap();
+    git(
+        clone.path().parent().unwrap(),
+        &[
+            "clone",
+            "-q",
+            "--depth=1",
+            "--no-single-branch",
+            &format!("file://{}", origin.path().display()),
+            clone.path().to_str().unwrap(),
+        ],
+    )
+    .await;
+    // The approved commit is the tip of a branch the clone has; the commits before it
+    // are cut off, so the point it branched off the baseline is not here.
+    git(
+        clone.path(),
+        &["checkout", "-q", "-B", "main", "origin/main"],
+    )
+    .await;
+    let got = GitFacts::new(clone.path().to_path_buf(), "main".to_owned())
+        .change_fingerprint(&commit(&approved))
+        .await
+        .unwrap();
+    assert_eq!(
+        got,
+        Fingerprinting::Unavailable(FingerprintUnavailable::Shallow)
+    );
+}
+
+// --- the work tree ----------------------------------------------------------------------
+
+#[tokio::test]
+async fn the_work_tree_is_clean_dirty_or_not_one() {
+    let dir = repo().await;
+    let port = facts(dir.path());
+    assert_eq!(
+        port.work_tree().await.unwrap(),
+        Knowable::Known(WorkTree::Clean)
+    );
+    write(dir.path(), "src/lib.rs", "changed\n").await;
+    assert_eq!(
+        port.work_tree().await.unwrap(),
+        Knowable::Known(WorkTree::Dirty)
+    );
+    // A directory that is no repository cannot say: not dirty, and not clean.
+    let nowhere = tempfile::tempdir().unwrap();
+    assert_eq!(
+        facts(nowhere.path()).work_tree().await.unwrap(),
+        Knowable::Unknown
     );
 }
 
@@ -238,7 +323,7 @@ async fn a_squash_merge_lands_by_its_hunks_and_not_by_ancestry() {
         .unwrap();
     let verdict = Integration::decide([ApprovedChange::checked(
         commit(&approved),
-        Some(fingerprint),
+        CaChange::Fingerprinted(fingerprint),
         answer.facts(),
         why,
     )]);
@@ -300,7 +385,7 @@ async fn a_change_of_weak_hunks_alone_needs_the_ancestry() {
     assert_eq!(answer.facts().hunks_contained(), Knowable::Known(true));
     let verdict = Integration::decide([ApprovedChange::checked(
         commit(&approved),
-        Some(fingerprint.clone()),
+        CaChange::Fingerprinted(fingerprint.clone()),
         answer.facts(),
         answer.cannot_tell(),
     )]);
@@ -325,7 +410,7 @@ async fn a_change_of_weak_hunks_alone_needs_the_ancestry() {
         .unwrap();
     let verdict = Integration::decide([ApprovedChange::checked(
         commit(&approved),
-        Some(fingerprint),
+        CaChange::Fingerprinted(fingerprint),
         answer.facts(),
         answer.cannot_tell(),
     )]);

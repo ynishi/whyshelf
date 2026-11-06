@@ -92,8 +92,7 @@ use crate::domain::classification::{
 use crate::domain::design::{Design, WorkItem};
 use crate::domain::error::EntityError;
 use crate::domain::evaluate::{
-    Cause, Evaluated, Evaluator, ImplView, ItemEvaluation, ItemKey, States, Unparsed, Written,
-    states_of,
+    Cause, Evaluated, Evaluator, ImplView, ItemEvaluation, ItemKey, States, Unparsed, states_of,
 };
 use crate::domain::event::{
     DocKind, EntityKind, Event, EventBody, EventId, Publication, Recorded, Registration, StoreKind,
@@ -105,6 +104,7 @@ use crate::domain::hash::{ContentHash, TextHash};
 use crate::domain::id::{Alias, DesignId, EntityId, FindingId, ItemId, ItemNumber, SpecId};
 use crate::domain::lint::PrivateName;
 use crate::domain::location::RelPath;
+use crate::domain::naming::Written;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::reference::{
     Bound, ById, Directory, ItemRef, LocalRef, Located, Lookup, Reach, Ref, Resolution, bind,

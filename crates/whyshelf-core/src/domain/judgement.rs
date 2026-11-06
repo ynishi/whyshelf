@@ -363,7 +363,7 @@ impl JudgementKind {
                 let attestation = passed.attestation();
                 let design = attestation.upstream().first().and_then(|up| match up {
                     UpstreamRecord::Entity { id, .. } => Some(*id),
-                    UpstreamRecord::Event(_) => None,
+                    UpstreamRecord::Event(_) | UpstreamRecord::Judgement(_) => None,
                 });
                 home_of(attestation.gate(), attestation.subject(), design)
             }
@@ -852,7 +852,7 @@ pub(crate) mod test_support {
     use std::collections::BTreeSet;
 
     use super::*;
-    use crate::domain::approval::{Attestation, CmResult, Pinned};
+    use crate::domain::approval::{Attestation, CaChange, CmResult, CsRef, Pinned};
     use crate::domain::corpus::{
         Corpus, Document, Entity, FileFacts, GitPlace, Header, Location, Reading,
     };
@@ -915,7 +915,17 @@ pub(crate) mod test_support {
         let cs: EventId = hash_of(cs).to_string().parse().unwrap();
         Passed::for_test(Attestation::Cm {
             spec: Pinned::new(sid(n), hash_of(hyp)),
-            cs,
+            cs: CsRef::Event(cs),
+            result: CmResult::Pass,
+        })
+    }
+
+    /// A CM proof for Spec `n` at the hypothesis hash named `hyp`, set against the CS
+    /// judgement `cs` of a ledger.
+    pub(crate) fn cm_passed_on(n: u128, hyp: &str, cs: JudgementId) -> Passed {
+        Passed::for_test(Attestation::Cm {
+            spec: Pinned::new(sid(n), hash_of(hyp)),
+            cs: CsRef::Judgement(cs),
             result: CmResult::Pass,
         })
     }
@@ -930,7 +940,7 @@ pub(crate) mod test_support {
             design: Pinned::new(did(21), hash_of("design").into()),
             revision: Revision::Commit(RevisionId::from_validated("a1".into()).unwrap()),
             tests: TestOutcome::Passed,
-            fingerprint: None,
+            change: CaChange::NotRecorded,
         })
     }
 
@@ -946,6 +956,7 @@ pub(crate) mod test_support {
         visibility: Visibility,
         path: String,
         git: Knowable<GitPlace>,
+        marked: bool,
     }
 
     impl Filed {
@@ -959,7 +970,15 @@ pub(crate) mod test_support {
                 visibility,
                 path,
                 git: Knowable::Known(git),
+                marked: false,
             }
+        }
+
+        /// The file writes each reference with a `private:` mark, as a public file
+        /// does that stands on a document of the private root.
+        pub(crate) fn written_with_a_mark(mut self) -> Self {
+            self.marked = true;
+            self
         }
 
         /// A file under the public root.
@@ -983,6 +1002,12 @@ pub(crate) mod test_support {
         }
 
         pub(crate) fn reading(self) -> (FileFacts, Reading) {
+            self.reading_among(&BTreeSet::new())
+        }
+
+        /// The reading of the file, which writes a reference to a document of
+        /// `private` with the mark a public text must use for it.
+        fn reading_among(self, private: &BTreeSet<DocId>) -> (FileFacts, Reading) {
             let header = Header::new(
                 self.entity.id(),
                 self.entity.kind(),
@@ -993,10 +1018,15 @@ pub(crate) mod test_support {
             // The bytes of two files of one entity are equal; that is what a copy is.
             let bytes = BytesHash::of(format!("{:?}", self.entity).as_bytes());
             let location = Location::new(self.visibility, self.path.parse().unwrap(), self.git);
-            (
-                FileFacts::new(location, bytes),
-                Reading::Document(Document::new(header, self.entity).unwrap()),
-            )
+            let document = Document::new(header, self.entity).unwrap();
+            let reading = if self.marked {
+                Reading::resolved_marking(document, None)
+            } else if self.visibility == Visibility::Public {
+                Reading::resolved_marking(document, Some(private))
+            } else {
+                Reading::resolved(document)
+            };
+            (FileFacts::new(location, bytes), reading)
         }
     }
 
@@ -1005,7 +1035,16 @@ pub(crate) mod test_support {
     }
 
     pub(crate) fn corpus_with(files: Vec<Filed>, published: &BTreeSet<DocId>) -> Corpus {
-        Corpus::build(files.into_iter().map(Filed::reading), published)
+        // A public file stands on a private document only by the `private:` mark.
+        let private: BTreeSet<DocId> = files
+            .iter()
+            .filter(|file| file.visibility == Visibility::Private)
+            .map(|file| file.entity.id())
+            .collect();
+        Corpus::build(
+            files.into_iter().map(|file| file.reading_among(&private)),
+            published,
+        )
     }
 }
 

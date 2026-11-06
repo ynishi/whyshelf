@@ -76,8 +76,8 @@
 //! | [`store_fs`], [`export`], [`map_dto`], [`status_md`] | the repo store and the private store; the generated files, their marker and the JSON Schema of the map |
 //! | [`git`], [`test_run`] | the revision, the baseline (or that a clone cannot tell) and the pins in the test files; the test command at a revision, with a time limit |
 //! | [`cache_sqlite`] | the file stamps and the full-text index, on `rusqlite-isle` |
-//! | [`documents_fs`] | the corpus model's `DocumentSource`: the files of the public and the private root, their bytes' hash, and their readings with the references resolved |
-//! | [`ledger_fs`] | the corpus model's `LedgerStore` and `ObjectStore`: one file per judgement and one per object, in layout 3, in each of the two sides |
+//! | [`documents_fs`] | the corpus model's `DocumentSource`: the files of the public and the private root, their bytes' hash, and their readings with the references as written (the corpus looks them up); the bytes of a file now; whether the private root is there |
+//! | [`ledger_fs`] | the corpus model's `LedgerRead`, `LedgerAppend`, `ObjectRead` and `ObjectPut`: one file per judgement and one per object, in layout 3, in each of the two sides |
 //! | [`actor_env`], [`user_settings`], [`keys_fs`] | who is acting (the environment, Git, the person's own settings); the person's own settings file and the private root it names; the pin keys, which only an explicit call makes |
 //!
 //! The corpus model's `RevisionFactsPort` is [`git::GitFacts`], beside the `git`

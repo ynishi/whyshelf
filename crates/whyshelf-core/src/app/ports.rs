@@ -32,22 +32,33 @@
 //! The model that reads the documents from their files and keeps judgements in two
 //! ledgers (see [`domain::corpus`](crate::domain::corpus) and
 //! [`domain::ledger`](crate::domain::ledger)) has ports of its own, bundled apart as
-//! [`CorpusPorts`] so that the ports above, and the use cases that stand on them, are
-//! not touched while the new ones are built beside them. They keep the three rules
-//! above. Writing is by evidence: what can be written to the ledger or the object
-//! store is made only by the commit step
+//! [`CorpusRead`] and [`CorpusPorts`] so that the ports above, and the use cases that
+//! stand on them, are not touched while the new ones are built beside them. They keep
+//! the three rules above. Writing is by evidence: what can be written to the ledger or
+//! the object store is made only by the commit step
 //! ([`commit::record`](super::commit::record)), never by an adapter.
+//!
+//! ```text
+//!   CorpusRead   DocumentSource  LedgerRead  ObjectRead  KeySource
+//!                RevisionFactsPort  CodeScanPort  TestRunPort
+//!        ^
+//!        |       what a use case that does not write is generic over
+//!   CorpusPorts  + LedgerAppend  ObjectPut  FileWriter  ActorSource  ConfirmPort
+//!                + ClockPort  IdPort  SecretScanPort
+//! ```
 //!
 //! | port | gives the use cases |
 //! |---|---|
-//! | [`DocumentSource`] | every document file of both roots, with its place, the hash of its bytes, its reading and its normalized text |
-//! | [`LedgerStore`] | a ledger read whole (its records and the ones it could not decode), and a [`Recordable`] appended |
-//! | [`ObjectStore`] | the text of a version put under its [`TextHash`] (unless purged) and read back |
+//! | [`DocumentSource`] | every document file of both roots, with its place, the hash of its bytes, its reading and its normalized text; the bytes of a file as they are now; whether the private root is there |
+//! | [`LedgerRead`] | a ledger read whole (its records and the ones it could not decode) |
+//! | [`LedgerAppend`] | a [`Recordable`] appended |
+//! | [`ObjectRead`] | the text of a version read back |
+//! | [`ObjectPut`] | the text of a version put under its [`TextHash`] (unless purged) |
 //! | [`ActorSource`] | who is acting: a [`Judge`], with what stands behind it |
 //! | [`KeySource`] | the keys that pin private upstreams, or that there are none to be had here |
 //! | [`ConfirmPort`] | asking a person to confirm what cannot be undone |
 //! | [`FileWriter`] | creating, replacing and removing a file in a root, checked against the bytes the caller saw |
-//! | [`RevisionFactsPort`] | what version control says about the code: whether a change landed, the fingerprint of a change, who wrote a revision, what Git makes of a path |
+//! | [`RevisionFactsPort`] | what version control says about the code: whether a change landed, the fingerprint of a change, whether the work tree is clean, who wrote a revision, what Git makes of a path |
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -56,14 +67,16 @@ use std::future::Future;
 use std::num::NonZeroU32;
 
 use crate::domain::actor::Timestamp;
+use crate::domain::adoption::Adoptable;
 use crate::domain::approval::TestsRun;
+use crate::domain::boundary::PrivateRoot;
 use crate::domain::corpus::{FileFacts, GitPlace, Location, Visibility};
 use crate::domain::error::ValueError;
 use crate::domain::event::{DocKind, Event, Recorded, StoreKind};
 use crate::domain::finding::FindingType;
 use crate::domain::hash::{BytesHash, ContentHash, TextHash};
 use crate::domain::id::EntityId;
-use crate::domain::integration::{BaselineFacts, ChangeFingerprint, UnknownWhy};
+use crate::domain::integration::{BaselineFacts, ChangeFingerprint, Fingerprinting, UnknownWhy};
 use crate::domain::judge::{Email, Judge, PersonName};
 use crate::domain::judgement::JudgementId;
 use crate::domain::keyring::PinKeyring;
@@ -72,7 +85,7 @@ use crate::domain::ledger::Ledger;
 use crate::domain::location::{CodeLocation, RelPath, TestFileSet};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::pin::{MalformedPin, PinId};
-use crate::domain::publication::{PlanDigest, PublicationPlan};
+use crate::domain::publication::{AbortPlan, ConfirmDigest, PublicationPlan};
 use crate::domain::reference::{Reach, Ref};
 use crate::domain::revision::{IntegrationFact, Revision, RevisionId};
 use crate::domain::stored::StoredJudgement;
@@ -109,9 +122,9 @@ pub enum PortName {
     Id,
     /// [`DocumentSource`].
     Documents,
-    /// [`LedgerStore`].
+    /// [`LedgerRead`] and [`LedgerAppend`].
     Ledger,
-    /// [`ObjectStore`].
+    /// [`ObjectRead`] and [`ObjectPut`].
     Objects,
     /// [`ActorSource`].
     Actor,
@@ -870,10 +883,72 @@ pub trait DocumentSource: Send + Sync {
     ///
     /// A file that cannot be read as a document is listed with the
     /// [`Reading`](crate::domain::corpus::Reading) that says so; it is never left
-    /// out.
-    fn list(
+    /// out. A path that was found and cannot be named is not a file of the listing;
+    /// it comes back beside it, in [`DocumentListing::unreadable`], so that its
+    /// absence from the files is not taken for its absence from the disk.
+    ///
+    /// The references of a document are kept as written: looking them up is the
+    /// corpus's ([`Corpus::build`](crate::domain::corpus::Corpus::build)), so an
+    /// adapter has no second place where they are resolved.
+    fn list(&self) -> impl Future<Output = Result<DocumentListing, Self::Error>> + Send;
+
+    /// The bytes the file has now, for a publication or an import that must write what
+    /// it read. [`FileBytes::Gone`] when the file is not there any more.
+    ///
+    /// The adapter does not compare them with [`FileFacts::bytes`]: whether the file
+    /// is still the one that was listed is the caller's to say, and it says so by the
+    /// hash.
+    fn bytes(
         &self,
-    ) -> impl Future<Output = Result<Vec<(FileFacts, RawDocument)>, Self::Error>> + Send;
+        file: &FileFacts,
+    ) -> impl Future<Output = Result<FileBytes, Self::Error>> + Send;
+
+    /// Whether the person has a private root here, and whether it can be read: the one
+    /// decision about it. A listing that comes back without private files says nothing
+    /// until this is asked ([`PrivateRoot::Absent`] is no "none").
+    fn private_root(&self) -> impl Future<Output = Result<PrivateRoot, Self::Error>> + Send;
+}
+
+/// What listing the documents gave: the files, and the paths it could not name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DocumentListing {
+    files: Vec<(FileFacts, RawDocument)>,
+    unreadable: Vec<UnreadablePath>,
+}
+
+impl DocumentListing {
+    /// A listing of files and the paths that were found and could not be named.
+    pub fn new(files: Vec<(FileFacts, RawDocument)>, unreadable: Vec<UnreadablePath>) -> Self {
+        Self { files, unreadable }
+    }
+
+    /// The files, in the order of root (public first) and path.
+    pub fn files(&self) -> &[(FileFacts, RawDocument)] {
+        &self.files
+    }
+
+    /// The paths that were found and could not be named: reported, never dropped.
+    pub fn unreadable(&self) -> &[UnreadablePath] {
+        &self.unreadable
+    }
+
+    /// The files and the unreadable paths apart.
+    pub fn into_parts(self) -> (Vec<(FileFacts, RawDocument)>, Vec<UnreadablePath>) {
+        (self.files, self.unreadable)
+    }
+}
+
+/// The bytes of a file, or that it is gone.
+///
+/// A file that vanished between the listing and the read is not an error of the
+/// port: it is a fact the caller turns into a refusal
+/// ([`Refusal::ChangedUnderfoot`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileBytes {
+    /// The bytes as they are on disk.
+    Read(Vec<u8>),
+    /// There is no such file any more.
+    Gone,
 }
 
 /// Why a record in a ledger could not be read.
@@ -932,12 +1007,12 @@ impl fmt::Display for CorruptRecord {
 /// [`StoredJudgement::decode`] and nothing else: the domain owns the reading of the
 /// bytes, and a record read back cannot start a new one.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct LedgerRead {
+pub struct LedgerContents {
     records: Vec<StoredJudgement>,
     corrupt: Vec<CorruptRecord>,
 }
 
-impl LedgerRead {
+impl LedgerContents {
     /// What was read.
     pub fn new(records: Vec<StoredJudgement>, corrupt: Vec<CorruptRecord>) -> Self {
         Self { records, corrupt }
@@ -959,13 +1034,12 @@ impl LedgerRead {
     }
 }
 
-/// The two ledgers, public and private.
+/// Reading the two ledgers, public and private.
 ///
-/// A ledger is an append-only set of judgements. The only thing that can be written
-/// is a [`Recordable`], which can be made only by the commit step: the adapter cannot
-/// write an approval whose object was not stored, nor a record to a ledger other than
-/// the one the rule chose.
-pub trait LedgerStore: Send + Sync {
+/// The read half of the ledgers' store. It is a trait of its own so that a use case
+/// that only reads (status, check) is given nothing that can write a ledger: the type
+/// it is generic over has no `append` to call ([`CorpusRead`]).
+pub trait LedgerRead: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
@@ -974,7 +1048,18 @@ pub trait LedgerStore: Send + Sync {
     fn read(
         &self,
         side: Visibility,
-    ) -> impl Future<Output = Result<LedgerRead, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<LedgerContents, Self::Error>> + Send;
+}
+
+/// Writing the two ledgers.
+///
+/// A ledger is an append-only set of judgements. The only thing that can be written
+/// is a [`Recordable`], which can be made only by the commit step: the adapter cannot
+/// write an approval whose object was not stored, nor a record to a ledger other than
+/// the one the rule chose.
+pub trait LedgerAppend: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
 
     /// Write a record to the ledger the [`Recordable`] names.
     ///
@@ -984,8 +1069,8 @@ pub trait LedgerStore: Send + Sync {
     /// corrupt.
     ///
     /// A [`Purge`](crate::domain::judgement::JudgementKind::Purge) record also takes
-    /// the text it names out of the [`ObjectStore`] of the same side, and the store
-    /// remembers the hash as purged (see there).
+    /// the text it names out of the objects of the same side ([`ObjectPut`]), and the
+    /// store remembers the hash as purged (see there).
     fn append(&self, record: &Recordable) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
@@ -1002,19 +1087,14 @@ pub enum Put {
     Purged,
 }
 
-/// The texts of the versions that were judged.
+/// Reading the texts of the versions that were judged.
 ///
 /// The objects form a set that can also delete (a 2P-set): a hash that is purged is
-/// gone for good. A store that has seen the purge answers [`Put::Purged`] to a put of
-/// that hash, and gives nothing for it; a branch that diverged before the purge and
-/// stored the hash is read as gone after the merge.
-pub trait ObjectStore: Send + Sync {
+/// gone for good. A store that has seen the purge gives nothing for that hash; a branch
+/// that diverged before the purge and stored the hash is read as gone after the merge.
+pub trait ObjectRead: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
-
-    /// Store the text of a [`Scanned`] under its key, in the store of its ledger.
-    /// Idempotent.
-    fn put(&self, text: &Scanned<'_>) -> impl Future<Output = Result<Put, Self::Error>> + Send;
 
     /// The text under `key` in one side's store; `None` when there is none, and when
     /// the hash was purged.
@@ -1023,6 +1103,19 @@ pub trait ObjectStore: Send + Sync {
         side: Visibility,
         key: TextHash,
     ) -> impl Future<Output = Result<Option<String>, Self::Error>> + Send;
+}
+
+/// Storing the texts of the versions that were judged.
+///
+/// A store that has seen a purge answers [`Put::Purged`] to a put of that hash and
+/// stores nothing.
+pub trait ObjectPut: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// Store the text of a [`Scanned`] under its key, in the store of its ledger.
+    /// Idempotent.
+    fn put(&self, text: &Scanned<'_>) -> impl Future<Output = Result<Put, Self::Error>> + Send;
 }
 
 /// Who is acting.
@@ -1071,6 +1164,8 @@ pub enum ConfirmAction {
     RemoveDifferingCopy,
     /// Take earlier decisions in as approvals.
     Adopt,
+    /// Abort a publication, removing a public file that is not a copy of the private one.
+    AbortPublish,
 }
 
 /// What the person is shown beside the digest.
@@ -1100,34 +1195,48 @@ impl PlanSummary {
 /// What a person is asked: what to type back, and what to read first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmPrompt {
-    plan: PlanDigest,
+    digest: ConfirmDigest,
     summary: PlanSummary,
 }
 
 impl ConfirmPrompt {
     /// A prompt for the plan with this digest.
-    pub fn new(plan: PlanDigest, summary: PlanSummary) -> Self {
-        Self { plan, summary }
+    pub fn new(digest: ConfirmDigest, summary: PlanSummary) -> Self {
+        Self { digest, summary }
     }
 
     /// The prompt for a publication plan, or `None` when the plan needs no
-    /// confirmation (it has nothing that cannot be undone).
+    /// confirmation (it has nothing that cannot be undone): the plan's own
+    /// [`confirmation`](PublicationPlan::confirmation) decides.
     pub fn of_publication(plan: &PublicationPlan) -> Option<Self> {
-        if !plan.needs_human_confirmation() {
-            return None;
-        }
+        let digest = plan.confirmation()?;
         let summary = if plan.irreversible().is_some() {
             PlanSummary::new(ConfirmAction::Publish, plan.records().len())
         } else {
             PlanSummary::new(ConfirmAction::RemoveDifferingCopy, 1)
         };
-        Some(Self::new(plan.digest(), summary))
+        Some(Self::new(digest, summary))
+    }
+
+    /// The prompt for an abort, or `None` when it asks for nothing.
+    pub fn of_abort(plan: &AbortPlan) -> Option<Self> {
+        let digest = plan.confirmation()?;
+        Some(Self::new(
+            digest,
+            PlanSummary::new(ConfirmAction::AbortPublish, 1),
+        ))
+    }
+
+    /// The prompt for taking an earlier decision in. It always asks.
+    pub fn of_adoption(adoptable: &Adoptable) -> Option<Self> {
+        let digest = adoptable.confirmation()?;
+        Some(Self::new(digest, PlanSummary::new(ConfirmAction::Adopt, 1)))
     }
 
     /// The digest of the plan: what the person types back, in its short form
-    /// ([`PlanDigest::short`]).
-    pub fn plan(&self) -> PlanDigest {
-        self.plan
+    /// ([`ConfirmDigest::short`]).
+    pub fn digest(&self) -> ConfirmDigest {
+        self.digest
     }
 
     /// What the person is shown.
@@ -1176,6 +1285,9 @@ pub enum Write {
     NotRegularFile,
     /// The file's group cannot be kept on the replacement, and the group has access.
     CannotKeepGroup,
+    /// The file's owner cannot be kept on the replacement: the file is another user's
+    /// and this process may not give a file to its owner.
+    CannotKeepOwner,
 }
 
 impl Write {
@@ -1189,6 +1301,7 @@ impl Write {
             Self::MultipleLinks => Some(Refusal::MultipleLinks(at.clone())),
             Self::NotRegularFile => Some(Refusal::NotRegularFile(at.clone())),
             Self::CannotKeepGroup => Some(Refusal::CannotKeepGroup(at.clone())),
+            Self::CannotKeepOwner => Some(Refusal::CannotKeepOwner(at.clone())),
         }
     }
 }
@@ -1335,6 +1448,15 @@ impl BaselineAnswer {
     }
 }
 
+/// Whether the working tree has an uncommitted change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum WorkTree {
+    /// Nothing is uncommitted.
+    Clean,
+    /// Something is uncommitted.
+    Dirty,
+}
+
 /// What version control says about the code, in the terms of the corpus model.
 ///
 /// The ports of the model above ([`RevisionPort`]) speak of a revision and a clean
@@ -1352,13 +1474,23 @@ pub trait RevisionFactsPort: Send + Sync {
         query: &BaselineQuery<'_>,
     ) -> impl Future<Output = Result<BaselineAnswer, Self::Error>> + Send;
 
-    /// The fingerprint of the change approved at `approved`, recorded by the approval;
-    /// `None` when there is nothing to fingerprint (the revision is the baseline, or
-    /// the change has no hunk) or the clone cannot tell.
+    /// The fingerprint of the change approved at `approved`, for the approval to record.
+    ///
+    /// Three answers, because they are three facts ([`Fingerprinting`]): the change cut
+    /// into hunks, nothing to fingerprint (the revision is the baseline, or the change
+    /// has no hunk), or that this clone cannot cut it, with the reason. The last is an
+    /// answer and not an error; an error is for a failure of the tool itself.
     fn change_fingerprint(
         &self,
         approved: &Revision,
-    ) -> impl Future<Output = Result<Option<ChangeFingerprint>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<Fingerprinting, Self::Error>> + Send;
+
+    /// Whether the working tree has an uncommitted change.
+    ///
+    /// [`Knowable::Unknown`] when this clone cannot say (it is not a work tree): that is
+    /// an answer, and it is not "dirty" and not "clean", so the caller does not tell a
+    /// person to commit when nothing says there is anything to commit.
+    fn work_tree(&self) -> impl Future<Output = Result<Knowable<WorkTree>, Self::Error>> + Send;
 
     /// Who wrote the revision; unknown for a private root outside Git or a patch.
     fn author(
@@ -1375,45 +1507,91 @@ pub trait RevisionFactsPort: Send + Sync {
     ) -> impl Future<Output = Result<Knowable<GitPlace>, Self::Error>> + Send;
 }
 
-/// The ports of the corpus and the ledgers, bundled.
+/// The read side of the ports of the corpus and the ledgers, bundled.
 ///
-/// A separate bundle from [`Ports`] so that adding it changes nothing that stands on
-/// [`Ports`]; a workspace for the new use cases is generic over both
-/// (`P: Ports + CorpusPorts`) and takes the clock, the identifiers and the secret scan
-/// from [`Ports`].
-pub trait CorpusPorts: Send + Sync {
+/// What a use case that does not write is generic over (status, check): it can read the
+/// documents, the ledgers, the stored texts, the keys and what version control says, and
+/// run the code scan and the tests. There is no way in it to write a document, a ledger
+/// or a store of texts, because no such port is among its types.
+///
+/// Running the tests ([`TestRunPort`]) makes a checkout in the adapter's own working
+/// directory, which is outside the stores this promise is about.
+///
+/// The accessors are named so that a type that is also a [`Ports`] answers to one
+/// method for each.
+pub trait CorpusRead: Send + Sync {
     /// The document files.
     type Documents: DocumentSource;
-    /// The ledgers.
-    type Ledger: LedgerStore;
-    /// The stored texts.
-    type Objects: ObjectStore;
-    /// Who is acting.
-    type Actor: ActorSource;
+    /// Reading the ledgers.
+    type Ledgers: LedgerRead;
+    /// Reading the stored texts.
+    type Objects: ObjectRead;
     /// The pin keys.
     type Keys: KeySource;
+    /// Facts from version control.
+    type Facts: RevisionFactsPort;
+    /// Finding the pins in the test files.
+    type Scanner: CodeScanPort;
+    /// Running the tests.
+    type Runner: TestRunPort;
+
+    /// The document files.
+    fn documents(&self) -> &Self::Documents;
+    /// Reading the ledgers.
+    fn ledger(&self) -> &Self::Ledgers;
+    /// Reading the stored texts.
+    fn objects(&self) -> &Self::Objects;
+    /// The pin keys.
+    fn key_source(&self) -> &Self::Keys;
+    /// Facts from version control.
+    fn facts(&self) -> &Self::Facts;
+    /// Finding the pins in the test files.
+    fn scanner(&self) -> &Self::Scanner;
+    /// Running the tests.
+    fn runner(&self) -> &Self::Runner;
+}
+
+/// The ports of the corpus and the ledgers, bundled: the read side, the write side, and
+/// what a write needs of the world.
+///
+/// A separate bundle from [`Ports`] so that adding it changes nothing that stands on
+/// [`Ports`]; the use cases of the corpus are generic over this one only. The clock, the
+/// identifiers and the secret scan are the traits [`Ports`] has, held here as types of
+/// their own, so an adapter's types serve both bundles and no bound on [`Ports`] is
+/// needed.
+pub trait CorpusPorts: CorpusRead {
+    /// Appending to the ledgers.
+    type Appender: LedgerAppend;
+    /// Storing texts.
+    type Texts: ObjectPut;
+    /// Who is acting.
+    type Actor: ActorSource;
     /// The confirmation of what cannot be undone.
     type Confirm: ConfirmPort;
     /// Writing document files.
     type Files: FileWriter;
-    /// Facts from version control.
-    type Facts: RevisionFactsPort;
+    /// The time.
+    type Time: ClockPort;
+    /// New identifiers.
+    type Ids: IdPort;
+    /// Looking for secrets before text is written.
+    type Secrets: SecretScanPort;
 
-    /// The document files.
-    fn documents(&self) -> &Self::Documents;
-    /// The ledgers.
-    fn ledger(&self) -> &Self::Ledger;
-    /// The stored texts.
-    fn objects(&self) -> &Self::Objects;
+    /// Appending to the ledgers.
+    fn appender(&self) -> &Self::Appender;
+    /// Storing texts.
+    fn put_texts(&self) -> &Self::Texts;
     /// Who is acting. (Not `actor`: that is the method of the port itself, and a
     /// type that is both would answer to two.)
     fn actor_source(&self) -> &Self::Actor;
-    /// The pin keys.
-    fn key_source(&self) -> &Self::Keys;
     /// The confirmation.
     fn confirm(&self) -> &Self::Confirm;
     /// Writing document files.
     fn files(&self) -> &Self::Files;
-    /// Facts from version control.
-    fn facts(&self) -> &Self::Facts;
+    /// The time.
+    fn time(&self) -> &Self::Time;
+    /// New identifiers.
+    fn ids(&self) -> &Self::Ids;
+    /// Looking for secrets.
+    fn secrets(&self) -> &Self::Secrets;
 }

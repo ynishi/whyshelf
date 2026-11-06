@@ -1,5 +1,5 @@
-//! The two ledgers and their objects on disk: [`LedgerStore`] and [`ObjectStore`]
-//! over files, in layout 3.
+//! The two ledgers and their objects on disk: [`LedgerRead`], [`LedgerAppend`],
+//! [`ObjectRead`] and [`ObjectPut`] over files, in layout 3.
 //!
 //! A *side* is a directory of the same shape, the public one in the project
 //! (`<project>/.whyshelf/`, committed with it) and the private one outside it:
@@ -71,8 +71,8 @@
 //! is purged is **read from the ledger of the same side every time**: a purge record
 //! there is the whole of the fact, so a branch that merged in a purge, or an object
 //! file that came back with a merge, is read as gone with no index to bring up to
-//! date. [`FsObjects::put`](ObjectStore::put) answers [`Put::Purged`] for such a
-//! hash and writes nothing; [`FsObjects::get`](ObjectStore::get) answers `None`.
+//! date. [`FsObjects::put`](ObjectPut::put) answers [`Put::Purged`] for such a
+//! hash and writes nothing; [`FsObjects::get`](ObjectRead::get) answers `None`.
 //! Appending a purge record also deletes the object file, so that a purged text does
 //! not stay on disk. A record that is itself corrupt (two files of one id, a name
 //! that disagrees) purges nothing, as in the domain.
@@ -86,7 +86,8 @@ use std::path::{Path, PathBuf};
 
 use whyshelf_core::app::commit::record::{Recordable, Scanned};
 use whyshelf_core::app::ports::{
-    AppendOutcome, CorruptRecord, LedgerRead, LedgerStore, ObjectStore, Put, RecordProblem,
+    AppendOutcome, CorruptRecord, LedgerAppend, LedgerContents, LedgerRead, ObjectPut, ObjectRead,
+    Put, RecordProblem,
 };
 use whyshelf_core::domain::canon::Canon;
 use whyshelf_core::domain::corpus::Visibility;
@@ -488,16 +489,16 @@ impl FsLedger {
     }
 
     /// The files of one ledger, whatever they hold, with what the adapter could tell
-    /// of each. This is what [`LedgerStore::read`] stands on.
+    /// of each. This is what [`LedgerRead::read`] stands on.
     pub async fn read_raw(&self, side: Visibility) -> Result<RawLedger, LedgerFsError> {
         read_raw(self.dirs.side(side)).await
     }
 }
 
-impl LedgerStore for FsLedger {
+impl LedgerRead for FsLedger {
     type Error = LedgerFsError;
 
-    async fn read(&self, side: Visibility) -> Result<LedgerRead, LedgerFsError> {
+    async fn read(&self, side: Visibility) -> Result<LedgerContents, LedgerFsError> {
         let raw = self.read_raw(side).await?;
         let well_formed = raw
             .entries()
@@ -510,8 +511,12 @@ impl LedgerStore for FsLedger {
                 records: well_formed,
             });
         }
-        Ok(LedgerRead::new(Vec::new(), raw.corrupt()))
+        Ok(LedgerContents::new(Vec::new(), raw.corrupt()))
     }
+}
+
+impl LedgerAppend for FsLedger {
+    type Error = LedgerFsError;
 
     async fn append(&self, record: &Recordable) -> Result<(), LedgerFsError> {
         let side = self.dirs.side(record.ledger());
@@ -579,7 +584,7 @@ impl FsObjects {
     }
 }
 
-impl ObjectStore for FsObjects {
+impl ObjectPut for FsObjects {
     type Error = LedgerFsError;
 
     async fn put(&self, text: &Scanned<'_>) -> Result<Put, LedgerFsError> {
@@ -603,6 +608,10 @@ impl ObjectStore for FsObjects {
         }
         Ok(Put::Stored)
     }
+}
+
+impl ObjectRead for FsObjects {
+    type Error = LedgerFsError;
 
     async fn get(&self, side: Visibility, key: TextHash) -> Result<Option<String>, LedgerFsError> {
         let side = self.dirs.side(side);

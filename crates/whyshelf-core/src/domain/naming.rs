@@ -58,29 +58,42 @@
 //! Design where two items end alike in their last 8 characters is Invalid
 //! ([`ItemIssue::DuplicateItemShortId`](super::design::ItemIssue)).
 //!
-//! # Looking up: [`Resolver`]
+//! # Looking up: [`Index`] and [`Resolver`]
 //!
-//! A reference is looked up in the corpus (both roots, by id, so a document that
-//! was published is found at its new place) and gives a [`Resolution`]:
+//! A reference is looked up in an [`Index`]: the ids, aliases, places and item
+//! numbers the headers of the files say, from both roots, by id, so a document that
+//! was published is found at its new place. The index is made before the entities
+//! are (a Spec holds the ids its grounds resolve to, so the grounds are resolved
+//! first), and the corpus keeps the one it was built with
+//! ([`Corpus::index`]). The [`Resolver`] stands on an index and nothing else, and
+//! gives a [`Resolution`]:
 //!
 //! | resolution | meaning |
 //! |---|---|
 //! | `Resolved` | exactly one document or item |
 //! | `Ambiguous` | several: the candidates are listed, none is chosen |
-//! | `Dangling` | nothing has that name here and the corpus can say so; a [`Rename`] says so when an earlier name is known |
-//! | `Unresolved` | it cannot be told here: a `private:` that names nothing here, `ext:`, a URL, an item that has no `id:` yet |
+//! | `Dangling` | nothing has that name here and the index can say so; the `hint` is a [`Rename`] when an earlier name is known, `Known(None)` when none fits, and `Unknown` when the history that would say is not available |
+//! | `Unresolved` | it cannot be told here, for one of the four [`UnresolvedWhy`]: a `private:` that names nothing here, `ext:`, a URL, an item that has no `id:` yet |
 //!
-//! A `private:<id>` that names nothing in the corpus is always `Unresolved`, never
+//! A `private:<id>` that names nothing in the index is always `Unresolved`, never
 //! `Dangling`, whatever this person's [`PrivateRoot`](super::boundary::PrivateRoot) is: the private documents of
 //! someone else are never visible here, so "there is no such document" cannot be
 //! told from "it is someone else's". (A clone that cannot see the private documents
-//! must stay usable too.) The resolver therefore does not look at the private root.
+//! must stay usable too.) The index and the resolver therefore do not look at the
+//! private root.
+//!
+//! A reference written in a file is looked up from that file's root
+//! ([`Resolver::seen_from`]): a public file sees public files, a private file sees
+//! both. A person's argument is looked up from the private side, which sees both.
+//! `private:<id>` is looked up by id in either root, whoever writes it.
 //!
 //! The renames come from two histories the application builds from the stored full
 //! texts of past versions and passes in as values: [`AliasHistory`] (the aliases a
-//! document has had) and [`ItemNumberHistory`] (the numbers an item has had). A
-//! purged version leaves no entry. A hint is given only when exactly one document
-//! or item fits.
+//! document has had) and [`ItemNumberHistory`] (the numbers an item has had). Each
+//! comes as a [`Knowable`]: a history that could not be built is not an empty one,
+//! and a `Dangling` it would have explained says so with an `Unknown` hint instead of
+//! claiming that no earlier name exists. A purged version leaves no entry. A hint is
+//! given only when exactly one document or item fits.
 //!
 //! A number that was given up and given again to another item cannot be told from
 //! the number it was: nothing in `<design>#3` says which time it means, and time does
@@ -98,12 +111,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 
-use super::corpus::{Corpus, Entity};
-use super::design::Design;
+use super::corpus::{Corpus, CorpusDocument, Entity, Header, Location, UnparsedFile, Visibility};
 use super::error::RefError;
-use super::id::{Alias, DocId, ItemId, ItemNumber, ShortId};
+use super::event::DocKind;
+use super::id::{Alias, DocId, EntityId, ItemId, ItemNumber, ShortId};
+use super::knowable::Knowable;
 use super::location::{RelPath, Uri};
 use super::nonempty::NonEmptyVec;
+use super::parsed::{ParsedDocument, ParsedEntity};
 use super::reference::ProjectName;
 
 /// Where a reference is written: the place decides which forms may stand there.
@@ -375,10 +390,61 @@ pub enum Resolution<T> {
     /// Nothing here has that name.
     Dangling {
         /// What the name used to belong to, when an earlier version says.
-        hint: Option<Rename>,
+        ///
+        /// `Known(None)` is the statement that no earlier name fits; `Unknown` is
+        /// that the history which would say could not be read here, so the lack of
+        /// a hint is no statement at all.
+        hint: Knowable<Option<Rename>>,
     },
-    /// The name cannot be looked up here.
-    Unresolved,
+    /// The name cannot be looked up here, for this reason.
+    Unresolved(UnresolvedWhy),
+}
+
+/// Why a reference cannot be looked up here, which is not the same as there being
+/// nothing under it.
+///
+/// Each cause is a fact about where the reference points, so the surface can tell
+/// the person what to do (open the other project, ask the owner of the private
+/// document, give the item an `id:`) instead of reporting a miss.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum UnresolvedWhy {
+    /// A `private:<id>` that names nothing here: the document may be someone else's.
+    PrivateNotHere,
+    /// An `ext:<project>/<id>`: another project's document is never looked up.
+    External,
+    /// A URL: it points outside the model.
+    Url,
+    /// An item that has no `id:` yet, so it is not an item of the model.
+    ItemWithoutId,
+}
+
+impl fmt::Display for UnresolvedWhy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::PrivateNotHere => {
+                "no `private:` document with that id is here (it may be someone else's)"
+            }
+            Self::External => "it names a document of another project",
+            Self::Url => "it points outside the model",
+            Self::ItemWithoutId => "the item has no `id:` yet",
+        })
+    }
+}
+
+/// How a file wrote the upstream identifiers it holds that no state can answer for.
+///
+/// What an entity holds is the identifier alone (the mark it was written with is a
+/// fact about the file, and stays out of every hash), so the evaluator is told the
+/// two facts about how it was written that it could not know: the identifier of a
+/// store this environment cannot read, and the identifier that the document, where
+/// it stands, can see nothing under. The corpus makes them while it resolves the
+/// references of its files ([`Corpus::written`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Written {
+    /// Written with a mark that points into a store that cannot be read here.
+    pub unresolved: BTreeSet<EntityId>,
+    /// Written as an identifier that nothing visible from the document holds.
+    pub dangling: BTreeSet<EntityId>,
 }
 
 /// What a reference names: a document or an item of a Design.
@@ -471,60 +537,197 @@ impl ItemNumberHistory {
     }
 }
 
-/// Looks references up in a corpus. See the module documentation for the rules.
+/// The number of each item of a Design, and the `id:` it has if it has one.
+type ItemIds = BTreeMap<ItemNumber, Option<ItemId>>;
+
+/// One file of the index: what its header and its place say, and nothing of its
+/// content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Indexed {
+    visibility: Visibility,
+    path: RelPath,
+    /// The kind the header says; `None` for a file that could not be read, which
+    /// only shows its `id:`.
+    kind: Option<DocKind>,
+    alias: Option<Alias>,
+    /// The items, when the file is a Design.
+    items: ItemIds,
+}
+
+/// What the headers of the files say, to look references up in: the ids, the
+/// aliases, the places and the numbers of the items.
+///
+/// Why before the entities: a Spec holds the ids its grounds resolve to, so the
+/// grounds are looked up before the Spec exists, and the lookup cannot stand on the
+/// [`Corpus`]. The index is not told the person's private root and does not look at
+/// it: see the module documentation. It keeps every file of an id, so a duplicate
+/// id is seen as the several files it is, and the lookup reports the id once.
+///
+/// A file that cannot be read but still shows its `id:` is in it, with no kind: the
+/// document is there and cannot be trusted, which is not a name that nothing holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Index {
+    files: BTreeMap<DocId, Vec<Indexed>>,
+}
+
+impl Index {
+    /// The index of files that are not resolved yet, and of the files beside them
+    /// that could not be read.
+    pub(crate) fn of_parsed<'a>(
+        files: impl IntoIterator<Item = (&'a Location, &'a ParsedDocument)>,
+        unparsed: &[UnparsedFile],
+    ) -> Self {
+        let mut index = Self::default();
+        index.add_unparsed(unparsed);
+        for (location, document) in files {
+            let items = match document.entity() {
+                ParsedEntity::Design(design) => design
+                    .items()
+                    .iter()
+                    .map(|(number, item)| (*number, item.id()))
+                    .collect(),
+                ParsedEntity::Finding(_) | ParsedEntity::Spec(_) => ItemIds::new(),
+            };
+            index.add(location, document.header(), items);
+        }
+        index.settle()
+    }
+
+    /// The index of the documents of a corpus, and of its files that could not be read.
+    pub(crate) fn of_documents(documents: &[CorpusDocument], unparsed: &[UnparsedFile]) -> Self {
+        let mut index = Self::default();
+        index.add_unparsed(unparsed);
+        for file in documents {
+            let items = match file.document().entity() {
+                Entity::Design(design) => design
+                    .items()
+                    .iter()
+                    .map(|(number, item)| (*number, item.id()))
+                    .collect(),
+                Entity::Finding(_) | Entity::Spec(_) => ItemIds::new(),
+            };
+            index.add(file.location(), file.document().header(), items);
+        }
+        index.settle()
+    }
+
+    fn add(&mut self, location: &Location, header: &Header, items: ItemIds) {
+        self.files.entry(header.id()).or_default().push(Indexed {
+            visibility: location.visibility(),
+            path: location.path().clone(),
+            kind: Some(header.kind()),
+            alias: header.alias().cloned(),
+            items,
+        });
+    }
+
+    fn add_unparsed(&mut self, unparsed: &[UnparsedFile]) {
+        for file in unparsed {
+            let Some(id) = file.id() else { continue };
+            let location = file.facts().location();
+            self.files.entry(id).or_default().push(Indexed {
+                visibility: location.visibility(),
+                path: location.path().clone(),
+                kind: None,
+                alias: None,
+                items: ItemIds::new(),
+            });
+        }
+    }
+
+    /// Order the files of an id by their place, so the file a lookup takes the items
+    /// from does not depend on the order the files arrived in.
+    fn settle(mut self) -> Self {
+        for files in self.files.values_mut() {
+            files.sort_by(|a, b| (a.visibility, &a.path).cmp(&(b.visibility, &b.path)));
+        }
+        self
+    }
+
+    /// The kinds the files of this id say they are: one kind for a document, several
+    /// when the files of one id disagree, none when nothing has the id or when the
+    /// only file that has it could not be read.
+    pub fn kinds(&self, id: &DocId) -> BTreeSet<DocKind> {
+        self.files
+            .get(id)
+            .into_iter()
+            .flatten()
+            .filter_map(|file| file.kind)
+            .collect()
+    }
+
+    /// The files of `id` that a file of `from` sees.
+    fn seen<'a>(
+        &'a self,
+        id: &DocId,
+        from: Visibility,
+    ) -> impl Iterator<Item = &'a Indexed> + use<'a> {
+        self.files
+            .get(id)
+            .into_iter()
+            .flatten()
+            .filter(move |file| sees(from, file.visibility))
+    }
+}
+
+/// A private file sees both roots; a public file sees the public one.
+fn sees(from: Visibility, root: Visibility) -> bool {
+    from == Visibility::Private || root == Visibility::Public
+}
+
+/// Looks references up in an [`Index`]. See the module documentation for the rules.
 #[derive(Debug, Clone, Copy)]
 pub struct Resolver<'a> {
-    corpus: &'a Corpus,
-    aliases: &'a AliasHistory,
-    numbers: &'a ItemNumberHistory,
+    index: &'a Index,
+    aliases: Knowable<&'a AliasHistory>,
+    numbers: Knowable<&'a ItemNumberHistory>,
+    from: Visibility,
 }
 
 impl<'a> Resolver<'a> {
-    /// A resolver over `corpus`. It does not depend on the person's
-    /// [`PrivateRoot`](super::boundary::PrivateRoot): see the module documentation.
+    /// A resolver over `index`, seeing both roots. The histories are what the
+    /// application could build, or `Unknown`; they decide only the hint of a
+    /// `Dangling`.
     pub fn new(
-        corpus: &'a Corpus,
-        aliases: &'a AliasHistory,
-        numbers: &'a ItemNumberHistory,
+        index: &'a Index,
+        aliases: Knowable<&'a AliasHistory>,
+        numbers: Knowable<&'a ItemNumberHistory>,
     ) -> Self {
         Self {
-            corpus,
+            index,
             aliases,
             numbers,
+            from: Visibility::Private,
         }
+    }
+
+    /// The same resolver, for a reference written in a file of this root.
+    pub fn seen_from(self, from: Visibility) -> Self {
+        Self { from, ..self }
     }
 
     /// Look a reference up.
     pub fn resolve(&self, reference: &Ref) -> Resolution<Named> {
         match reference {
-            Ref::Id(id) => self.by_id(*id),
-            Ref::Short(short) => settle(self.by_end(short), || Resolution::Dangling { hint: None }),
+            Ref::Id(id) => settle(self.holders(*id), no_hint),
+            Ref::Short(short) => settle(self.by_end(short), no_hint),
             Ref::Alias(alias) => settle(self.by_alias_docs(alias), || Resolution::Dangling {
                 hint: self.alias_hint(alias),
             }),
-            Ref::Path(path) => settle(
-                self.corpus
-                    .documents()
-                    .iter()
-                    .filter(|file| file.location().path() == path)
-                    .map(|file| file.id())
-                    .collect(),
-                || Resolution::Dangling { hint: None },
-            ),
+            Ref::Path(path) => settle(self.by_path(path), no_hint),
             Ref::Item(base, number) => {
-                self.in_design(base, |design, found| match found.items().get(number) {
-                    Some(item) => self.named_item(design, *number, item.id()),
+                self.in_design(base, |design, items| match items.get(number) {
+                    Some(id) => self.named_item(design, *number, *id),
                     None => Resolution::Dangling {
-                        hint: self.number_hint(design, found, *number),
+                        hint: self.number_hint(design, items, *number),
                     },
                 })
             }
-            Ref::ItemId(base, short) => self.in_design(base, |design, found| {
-                let fits: Vec<Named> = found
-                    .items()
+            Ref::ItemId(base, short) => self.in_design(base, |design, items| {
+                let fits: Vec<Named> = items
                     .iter()
                     .filter_map(|(number, item)| {
-                        let id = item.id().filter(|id| short.matches(id.entity()))?;
+                        let id = item.filter(|id| short.matches(id.entity()))?;
                         Some(Named::Item(NamedItem {
                             design,
                             id,
@@ -532,89 +735,112 @@ impl<'a> Resolver<'a> {
                         }))
                     })
                     .collect();
-                one_of(fits, || Resolution::Dangling { hint: None })
+                one_of(fits, no_hint)
             }),
             Ref::Private(inner) => {
+                // Looked up by id in either root, whoever writes the mark.
+                let both = self.seen_from(Visibility::Private);
                 let found = match inner.as_ref() {
-                    Ref::Id(id) => self.holders(*id),
-                    Ref::Short(short) => self.by_end(short),
+                    Ref::Id(id) => both.holders(*id),
+                    Ref::Short(short) => both.by_end(short),
                     _ => BTreeSet::new(),
                 };
                 // Never `Dangling`: someone else's private document is not visible
                 // here, so "not found" cannot be told from "not mine".
-                settle(found, || Resolution::Unresolved)
+                settle(found, || {
+                    Resolution::Unresolved(UnresolvedWhy::PrivateNotHere)
+                })
             }
-            Ref::Ext { .. } | Ref::Url(_) => Resolution::Unresolved,
+            Ref::Ext { .. } => Resolution::Unresolved(UnresolvedWhy::External),
+            Ref::Url(_) => Resolution::Unresolved(UnresolvedWhy::Url),
         }
     }
 
-    fn by_id(&self, id: DocId) -> Resolution<Named> {
-        settle(self.holders(id), || Resolution::Dangling { hint: None })
-    }
-
-    /// `id` itself when a file has it (several files of one id are one document).
+    /// `id` itself when a file it can see has it (several files of one id are one
+    /// document).
     fn holders(&self, id: DocId) -> BTreeSet<DocId> {
-        self.corpus
-            .by_id(&id)
-            .first()
-            .map(|file| file.id())
+        self.index
+            .seen(&id, self.from)
+            .next()
+            .map(|_| id)
             .into_iter()
             .collect()
     }
 
     fn by_end(&self, short: &ShortId) -> BTreeSet<DocId> {
-        self.corpus
-            .documents()
-            .iter()
-            .map(|file| file.id())
+        self.index
+            .files
+            .keys()
             .filter(|id| short.matches(id.entity()))
+            .filter(|id| self.index.seen(id, self.from).next().is_some())
+            .copied()
             .collect()
     }
 
     fn by_alias_docs(&self, alias: &Alias) -> BTreeSet<DocId> {
-        self.corpus
-            .by_alias(alias)
-            .into_iter()
-            .map(|file| file.id())
+        self.index
+            .files
+            .keys()
+            .filter(|id| {
+                self.index
+                    .seen(id, self.from)
+                    .any(|file| file.alias.as_ref() == Some(alias))
+            })
+            .copied()
+            .collect()
+    }
+
+    fn by_path(&self, path: &RelPath) -> BTreeSet<DocId> {
+        self.index
+            .files
+            .keys()
+            .filter(|id| {
+                self.index
+                    .seen(id, self.from)
+                    .any(|file| &file.path == path)
+            })
+            .copied()
             .collect()
     }
 
     /// The alias a document has had, if exactly one document that is here has had
-    /// `alias` and has another now.
-    fn alias_hint(&self, alias: &Alias) -> Option<Rename> {
-        let mut renames = self.aliases.owners(alias).into_iter().filter_map(|doc| {
-            let now = self
-                .corpus
-                .by_id(&doc)
-                .first()?
-                .document()
-                .header()
-                .alias()?;
+    /// `alias` and has another now. `Unknown` when the history is.
+    fn alias_hint(&self, alias: &Alias) -> Knowable<Option<Rename>> {
+        let Knowable::Known(history) = self.aliases else {
+            return Knowable::Unknown;
+        };
+        let mut renames = history.owners(alias).into_iter().filter_map(|doc| {
+            let now = self.index.seen(&doc, self.from).next()?.alias.as_ref()?;
             (now != alias).then(|| Rename::Alias {
                 was: alias.clone(),
                 now: now.clone(),
                 doc,
             })
         });
-        let hint = renames.next()?;
-        renames.next().is_none().then_some(hint)
+        Knowable::Known(only(&mut renames))
     }
 
     /// The number an item has now, if exactly one item of the Design has had `number`.
-    fn number_hint(&self, design: DocId, found: &Design, number: ItemNumber) -> Option<Rename> {
-        let mut renames = found.items().iter().filter_map(|(now, item)| {
-            let item = item.id()?;
-            (*now != number && self.numbers.had(design, item, number)).then_some(
-                Rename::ItemNumber {
-                    design,
-                    was: number,
-                    now: *now,
-                    item,
-                },
-            )
+    /// `Unknown` when the history is.
+    fn number_hint(
+        &self,
+        design: DocId,
+        items: &ItemIds,
+        number: ItemNumber,
+    ) -> Knowable<Option<Rename>> {
+        let Knowable::Known(history) = self.numbers else {
+            return Knowable::Unknown;
+        };
+        let mut renames = items.iter().filter_map(|(now, item)| {
+            let item = (*item)?;
+            (*now != number && history.had(design, item, number)).then_some(Rename::ItemNumber {
+                design,
+                was: number,
+                now: *now,
+                item,
+            })
         });
-        let hint = renames.next()?;
-        renames.next().is_none().then_some(hint)
+        Knowable::Known(only(&mut renames))
     }
 
     /// An item found by number. One with no `id:` is not an item of the model yet.
@@ -626,35 +852,53 @@ impl<'a> Resolver<'a> {
     ) -> Resolution<Named> {
         match id {
             Some(id) => Resolution::Resolved(Named::Item(NamedItem { design, id, number })),
-            None => Resolution::Unresolved,
+            None => Resolution::Unresolved(UnresolvedWhy::ItemWithoutId),
         }
     }
 
-    /// Resolve `base` to a Design and ask `select` of it.
+    /// Resolve `base` to a Design and ask `select` of its items.
     fn in_design(
         &self,
         base: &Ref,
-        select: impl FnOnce(DocId, &Design) -> Resolution<Named>,
+        select: impl FnOnce(DocId, &ItemIds) -> Resolution<Named>,
     ) -> Resolution<Named> {
+        // A `private:` base is looked up in either root, so its Design is read from
+        // whichever root holds it, as the base was.
+        let from = match base {
+            Ref::Private(_) => Visibility::Private,
+            _ => self.from,
+        };
         match self.resolve(base) {
             Resolution::Resolved(Named::Doc(doc)) => {
-                let design = self.corpus.by_id(&doc).first().and_then(|file| {
-                    match file.document().entity() {
-                        Entity::Design(design) => Some(design),
-                        Entity::Finding(_) | Entity::Spec(_) => None,
-                    }
-                });
+                let design = self
+                    .index
+                    .seen(&doc, from)
+                    .next()
+                    .filter(|file| file.kind == Some(DocKind::Design));
                 match design {
-                    Some(design) => select(doc, design),
-                    None => Resolution::Dangling { hint: None },
+                    Some(file) => select(doc, &file.items),
+                    None => no_hint(),
                 }
             }
-            Resolution::Resolved(Named::Item(_)) => Resolution::Dangling { hint: None },
+            Resolution::Resolved(Named::Item(_)) => no_hint(),
             Resolution::Ambiguous(candidates) => Resolution::Ambiguous(candidates),
             Resolution::Dangling { hint } => Resolution::Dangling { hint },
-            Resolution::Unresolved => Resolution::Unresolved,
+            Resolution::Unresolved(why) => Resolution::Unresolved(why),
         }
     }
+}
+
+/// A miss that no history is asked about: nothing earlier can have had the name.
+fn no_hint() -> Resolution<Named> {
+    Resolution::Dangling {
+        hint: Knowable::Known(None),
+    }
+}
+
+/// The one rename there is; `None` for none, and for several (none is chosen).
+fn only(renames: &mut impl Iterator<Item = Rename>) -> Option<Rename> {
+    let hint = renames.next()?;
+    renames.next().is_none().then_some(hint)
 }
 
 /// One document, several, or none (answered by `none`).
@@ -996,7 +1240,7 @@ mod tests {
         let entity = Entity::Spec(spec(n, &[900], &["PIN-A"]));
         (
             FileFacts::new(at(visibility, path), BytesHash::of(path.as_bytes())),
-            Reading::Document(Document::new(header, entity).unwrap()),
+            Reading::resolved(Document::new(header, entity).unwrap()),
         )
     }
 
@@ -1018,7 +1262,7 @@ mod tests {
                 at(Visibility::Public, &format!("design-{n}.md")),
                 BytesHash::of(&n.to_le_bytes()),
             ),
-            Reading::Document(Document::new(header, entity).unwrap()),
+            Reading::resolved(Document::new(header, entity).unwrap()),
         )
     }
 
@@ -1030,7 +1274,7 @@ mod tests {
                 at(visibility, &format!("finding-{n}.md")),
                 BytesHash::of(&n.to_le_bytes()),
             ),
-            Reading::Document(Document::new(header, entity).unwrap()),
+            Reading::resolved(Document::new(header, entity).unwrap()),
         )
     }
 
@@ -1053,7 +1297,19 @@ mod tests {
         numbers: &ItemNumberHistory,
         text: &str,
     ) -> Resolution<Named> {
-        Resolver::new(corpus, aliases, numbers).resolve(&parse(text))
+        Resolver::new(
+            corpus.index(),
+            Knowable::Known(aliases),
+            Knowable::Known(numbers),
+        )
+        .resolve(&parse(text))
+    }
+
+    /// A miss that no earlier name explains: the histories were read and hold none.
+    fn miss() -> Resolution<Named> {
+        Resolution::Dangling {
+            hint: Knowable::Known(None),
+        }
     }
 
     fn doc(n: u128) -> Named {
@@ -1064,10 +1320,7 @@ mod tests {
     fn an_id_resolves_where_a_file_has_it_and_dangles_where_none_does() {
         let c = corpus(vec![spec_file(11, None, Visibility::Public, "a.md")]);
         assert_eq!(resolve(&c, &id_text(11)), Resolution::Resolved(doc(11)));
-        assert_eq!(
-            resolve(&c, &id_text(12)),
-            Resolution::Dangling { hint: None }
-        );
+        assert_eq!(resolve(&c, &id_text(12)), miss());
     }
 
     #[test]
@@ -1088,7 +1341,7 @@ mod tests {
             ),
             other => panic!("expected Ambiguous, got {other:?}"),
         }
-        assert_eq!(resolve(&c, "deadbeef"), Resolution::Dangling { hint: None });
+        assert_eq!(resolve(&c, "deadbeef"), miss());
     }
 
     #[test]
@@ -1100,7 +1353,7 @@ mod tests {
             "a.md",
         )]);
         let start = &docid(0x9f3c_21a7).to_string().replace('-', "")[..10];
-        assert_eq!(resolve(&c, start), Resolution::Dangling { hint: None });
+        assert_eq!(resolve(&c, start), miss());
     }
 
     #[test]
@@ -1169,10 +1422,7 @@ mod tests {
         assert_eq!(resolve(&c, "docs/a.md"), Resolution::Resolved(doc(1)));
         assert_eq!(resolve(&c, "docs/b.md"), Resolution::Resolved(doc(2)));
         assert!(matches!(resolve(&c, "docs/c.md"), Resolution::Ambiguous(_)));
-        assert_eq!(
-            resolve(&c, "docs/none.md"),
-            Resolution::Dangling { hint: None }
-        );
+        assert_eq!(resolve(&c, "docs/none.md"), miss());
     }
 
     #[test]
@@ -1189,15 +1439,72 @@ mod tests {
         assert_eq!(
             resolve_with(&c, &aliases, &ItemNumberHistory::new(), "spec/old"),
             Resolution::Dangling {
-                hint: Some(Rename::Alias {
+                hint: Knowable::Known(Some(Rename::Alias {
                     was: "spec/old".parse().unwrap(),
                     now: "spec/new".parse().unwrap(),
                     doc: docid(1),
-                })
+                }))
             }
         );
-        // No history: nothing to say.
-        assert_eq!(resolve(&c, "spec/old"), Resolution::Dangling { hint: None });
+        // A history that holds nothing: no earlier name fits, and that is said.
+        assert_eq!(resolve(&c, "spec/old"), miss());
+    }
+
+    #[test]
+    fn a_history_that_could_not_be_read_is_not_a_history_that_holds_nothing() {
+        let c = with_design();
+        let unknown = Resolution::Dangling {
+            hint: Knowable::Unknown,
+        };
+        let without_histories = |text: &str| {
+            Resolver::new(c.index(), Knowable::Unknown, Knowable::Unknown).resolve(&parse(text))
+        };
+        // A name that only a history could explain is not a plain miss.
+        assert_eq!(without_histories("spec/old"), unknown);
+        assert_eq!(without_histories("design/cache#3"), unknown);
+        // A name no history is asked about is a miss all the same.
+        assert_eq!(without_histories("deadbeef"), miss());
+        assert_eq!(without_histories("design/cache#id:deadbeef"), miss());
+        // One history may be known while the other is not.
+        let aliases = AliasHistory::new();
+        let numbers_only = Resolver::new(c.index(), Knowable::Known(&aliases), Knowable::Unknown);
+        assert_eq!(numbers_only.resolve(&parse("spec/old")), miss());
+        assert_eq!(numbers_only.resolve(&parse("design/cache#3")), unknown);
+    }
+
+    #[test]
+    fn a_reference_is_looked_up_from_the_root_of_the_file_that_writes_it() {
+        let c = corpus(vec![
+            spec_file(1, Some("spec/hidden"), Visibility::Private, "p.md"),
+            spec_file(2, Some("spec/shown"), Visibility::Public, "q.md"),
+        ]);
+        let from = |root, text: &str| {
+            Resolver::new(c.index(), Knowable::Unknown, Knowable::Unknown)
+                .seen_from(root)
+                .resolve(&parse(text))
+        };
+        let hidden = "spec/hidden";
+        assert!(matches!(
+            from(Visibility::Public, hidden),
+            Resolution::Dangling { .. }
+        ));
+        assert_eq!(
+            from(Visibility::Private, hidden),
+            Resolution::Resolved(doc(1))
+        );
+        assert_eq!(
+            from(Visibility::Public, "spec/shown"),
+            Resolution::Resolved(doc(2))
+        );
+        // A plain id is seen the same way; `private:<id>` is looked up in either root.
+        assert!(matches!(
+            from(Visibility::Public, &id_text(1)),
+            Resolution::Dangling { .. }
+        ));
+        assert_eq!(
+            from(Visibility::Public, &format!("private:{}", id_text(1))),
+            Resolution::Resolved(doc(1))
+        );
     }
 
     #[test]
@@ -1212,12 +1519,12 @@ mod tests {
         aliases.record(docid(2), "spec/old".parse().unwrap());
         // Two documents had it: no guess.
         let got = resolve_with(&c, &aliases, &ItemNumberHistory::new(), "spec/old");
-        assert_eq!(got, Resolution::Dangling { hint: None });
+        assert_eq!(got, miss());
         // A document with no alias now has no name to point at.
         let mut aliases = AliasHistory::new();
         aliases.record(docid(3), "spec/gone".parse().unwrap());
         let got = resolve_with(&c, &aliases, &ItemNumberHistory::new(), "spec/gone");
-        assert_eq!(got, Resolution::Dangling { hint: None });
+        assert_eq!(got, miss());
     }
 
     fn with_design() -> Corpus {
@@ -1241,6 +1548,33 @@ mod tests {
     }
 
     #[test]
+    fn an_item_of_a_private_design_is_found_from_a_public_file_through_the_mark() {
+        let (_, reading) = design_file(
+            21,
+            Some("design/cache"),
+            vec![(5, identified(0x2_0000_0002, "five", &[]))],
+        );
+        let c = corpus(vec![(
+            FileFacts::new(at(Visibility::Private, "design-21.md"), BytesHash::of(b"d")),
+            reading,
+        )]);
+        let from_public = |text: &str| {
+            Resolver::new(c.index(), Knowable::Unknown, Knowable::Unknown)
+                .seen_from(Visibility::Public)
+                .resolve(&parse(text))
+        };
+        assert_eq!(
+            from_public(&format!("private:{}#5", id_text(21))),
+            Resolution::Resolved(named_item(5, 0x2_0000_0002))
+        );
+        // Without the mark the Design is not seen from the public root.
+        assert!(matches!(
+            from_public(&format!("{}#5", id_text(21))),
+            Resolution::Dangling { .. }
+        ));
+    }
+
+    #[test]
     fn an_item_is_found_by_number_and_by_the_end_of_its_id() {
         let c = with_design();
         let by_number = resolve(&c, "design/cache#5");
@@ -1252,10 +1586,7 @@ mod tests {
         assert_eq!(by_id, Resolution::Resolved(named_item(1, 0x1_9f3c_21a7)));
         let by_full = resolve(&c, &format!("{}#id:00000002", id_text(21)));
         assert_eq!(by_full, Resolution::Resolved(named_item(5, 0x2_0000_0002)));
-        assert_eq!(
-            resolve(&c, "design/cache#id:deadbeef"),
-            Resolution::Dangling { hint: None }
-        );
+        assert_eq!(resolve(&c, "design/cache#id:deadbeef"), miss());
     }
 
     #[test]
@@ -1284,18 +1615,15 @@ mod tests {
         assert_eq!(
             got,
             Resolution::Dangling {
-                hint: Some(Rename::ItemNumber {
+                hint: Knowable::Known(Some(Rename::ItemNumber {
                     design: docid(21),
                     was: num(3),
                     now: num(5),
                     item: iid(0x2_0000_0002),
-                })
+                }))
             }
         );
-        assert_eq!(
-            resolve(&c, "design/cache#3"),
-            Resolution::Dangling { hint: None }
-        );
+        assert_eq!(resolve(&c, "design/cache#3"), miss());
     }
 
     #[test]
@@ -1304,13 +1632,13 @@ mod tests {
             design_file(21, Some("design/cache"), vec![(6, item("six, no id", &[]))]),
             spec_file(11, Some("spec/a"), Visibility::Public, "a.md"),
         ]);
-        assert_eq!(resolve(&c, "design/cache#6"), Resolution::Unresolved);
-        assert_eq!(resolve(&c, "spec/a#1"), Resolution::Dangling { hint: None });
-        // A base that dangles, or is ambiguous, says so for the item.
         assert_eq!(
-            resolve(&c, "spec/none#1"),
-            Resolution::Dangling { hint: None }
+            resolve(&c, "design/cache#6"),
+            Resolution::Unresolved(UnresolvedWhy::ItemWithoutId)
         );
+        assert_eq!(resolve(&c, "spec/a#1"), miss());
+        // A base that dangles, or is ambiguous, says so for the item.
+        assert_eq!(resolve(&c, "spec/none#1"), miss());
     }
 
     #[test]
@@ -1321,20 +1649,18 @@ mod tests {
         let none = format!("private:{}", id_text(2));
         // Nothing is named: it is not told from a document that is someone else's,
         // so it is never `Dangling`, by id or by short id.
-        assert_eq!(resolve(&c, &none), Resolution::Unresolved);
-        assert_eq!(resolve(&c, "private:deadbeef"), Resolution::Unresolved);
+        let not_here = Resolution::Unresolved(UnresolvedWhy::PrivateNotHere);
+        assert_eq!(resolve(&c, &none), not_here);
+        assert_eq!(resolve(&c, "private:deadbeef"), not_here);
         assert_eq!(
             resolve(&c, "private:00000001"),
             Resolution::Resolved(doc(1))
         );
         // The same where the corpus has no private document at all.
         let empty = corpus(vec![]);
-        assert_eq!(resolve(&empty, &none), Resolution::Unresolved);
+        assert_eq!(resolve(&empty, &none), not_here);
         // A plain id that names nothing still dangles: it is not a claim of privacy.
-        assert_eq!(
-            resolve(&c, &id_text(2)),
-            Resolution::Dangling { hint: None }
-        );
+        assert_eq!(resolve(&c, &id_text(2)), miss());
     }
 
     #[test]
@@ -1342,9 +1668,12 @@ mod tests {
         let c = corpus(vec![]);
         assert_eq!(
             resolve(&c, &format!("ext:p/{}", id_text(1))),
-            Resolution::Unresolved
+            Resolution::Unresolved(UnresolvedWhy::External)
         );
-        assert_eq!(resolve(&c, "https://example.org/a"), Resolution::Unresolved);
+        assert_eq!(
+            resolve(&c, "https://example.org/a"),
+            Resolution::Unresolved(UnresolvedWhy::Url)
+        );
     }
 
     // --- lints --------------------------------------------------------------

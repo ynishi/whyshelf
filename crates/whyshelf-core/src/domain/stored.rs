@@ -114,16 +114,15 @@ use thiserror::Error;
 
 use super::actor::Timestamp;
 use super::adoption::{Adoptable, AdoptedAttestation};
-use super::approval::{Attestation, CmResult, Gate, Pinned, TestOutcome};
+use super::approval::{Attestation, CaChange, CmResult, CsRef, Gate, Pinned, TestOutcome};
 use super::boundary::{Crosses, CrossingText};
 use super::canon::{Canon, CanonError, ToCanon};
 use super::corpus::Visibility;
 use super::error::JudgementError;
-use super::event::EventId;
 use super::gate::Passed;
 use super::hash::{ContentHash, HunkId, PinMac, TextHash};
 use super::id::{DesignId, DocId, EntityId, FindingId, ItemId, SpecId};
-use super::integration::{ChangeFingerprint, HunkScheme};
+use super::integration::{ChangeFingerprint, FingerprintUnavailable, HunkScheme};
 use super::judge::{Email, Judge, PersonName, Principal, ToolName};
 use super::judgement::{
     Judgement, JudgementId, JudgementKind, ObjectKey, Target, object_of_version,
@@ -465,6 +464,27 @@ fn fingerprint(node: &Node<'_>) -> Result<ChangeFingerprint, DecodeError> {
     ))
 }
 
+/// The value of the `change` key of a CA. A tagged case has a `kind` key, which a
+/// fingerprint's map never has ([`CaChange`]).
+fn ca_change(node: &Node<'_>) -> Result<CaChange, DecodeError> {
+    let Some(kind) = node.field_opt("kind")? else {
+        return fingerprint(node).map(CaChange::Fingerprinted);
+    };
+    match kind.text()? {
+        "nothing" => Ok(CaChange::NothingToFingerprint),
+        "unavailable" => Ok(CaChange::NotFingerprinted(
+            node.field("why")?.parse::<FingerprintUnavailable>()?,
+        )),
+        other => Err(kind.refused(format_args!("`{other}` is not a kind of change"))),
+    }
+}
+
+/// The CS approval a CM stands on: an event of the earlier model is a hash, a judgement
+/// of a ledger is an identifier, and the two are told by their form.
+fn cs_ref(node: &Node<'_>) -> Result<CsRef, DecodeError> {
+    node.parse::<CsRef>()
+}
+
 fn cm_result(node: &Node<'_>) -> Result<CmResult, DecodeError> {
     match node.field("result")?.text()? {
         "pass" => Ok(CmResult::Pass),
@@ -526,15 +546,16 @@ fn attestation(node: &Node<'_>) -> Result<Attestation, DecodeError> {
                 ("passed", TestOutcome::Passed),
                 ("failed", TestOutcome::Failed),
             ])?,
-            // Left out when there is none.
-            fingerprint: node
+            // Left out for `NotRecorded`.
+            change: node
                 .field_opt("change")?
-                .map(|change| fingerprint(&change))
-                .transpose()?,
+                .map(|change| ca_change(&change))
+                .transpose()?
+                .unwrap_or(CaChange::NotRecorded),
         },
         Gate::Cm => Attestation::Cm {
             spec: pinned::<SpecId>(&target()?)?,
-            cs: node.field("cs")?.parse::<EventId>()?,
+            cs: cs_ref(&node.field("cs")?)?,
             result: cm_result(&node.field("result")?)?,
         },
     })

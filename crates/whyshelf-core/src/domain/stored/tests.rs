@@ -2,11 +2,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::*;
 use crate::domain::id::test_support::{docid, eid, iid};
+use crate::domain::integration::FingerprintUnavailable;
 use crate::domain::judge::test_support::{agent, judge};
 use crate::domain::judgement::test_support::{
-    approve, ca_passed, cm_passed, cr_passed, cs_passed, cs_passed_under, hash_of, jid, ts, why,
+    approve, ca_passed, cm_passed, cm_passed_on, cr_passed, cs_passed, cs_passed_under, hash_of,
+    jid, ts, why,
 };
 use crate::domain::judgement::{FilePresence, Target};
+use crate::domain::revision::{Revision, RevisionId};
 
 /// The record read back from the bytes it writes, and those bytes again.
 fn round_trip(judgement: Judgement) -> StoredJudgement {
@@ -241,6 +244,127 @@ fn an_object_of_another_version_is_refused() {
         StoredJudgement::decode(&bytes),
         Err(DecodeError::Inconsistent(_))
     ));
+}
+
+/// A CA proof for item 5 that records `change`.
+fn ca_recording(change: CaChange) -> Passed {
+    let Attestation::Ca {
+        item,
+        design,
+        revision,
+        tests,
+        ..
+    } = ca_passed(5, "i").attestation().clone()
+    else {
+        panic!("a CA");
+    };
+    Passed::for_test(Attestation::Ca {
+        item,
+        design,
+        revision,
+        tests,
+        change,
+    })
+}
+
+fn change_of(record: &StoredJudgement) -> CaChange {
+    let JudgementKind::Approve { passed, .. } = record.kind() else {
+        panic!("an approval");
+    };
+    passed.attestation().change().expect("a CA").clone()
+}
+
+#[test]
+fn what_a_ca_records_of_its_change_is_read_back_case_by_case() {
+    use crate::domain::integration::{ChangeFingerprint, FingerprintUnavailable, Hunk, HunkScheme};
+    let ann = judge("ann");
+    let rev = || Revision::Commit(RevisionId::from_validated("b1".into()).unwrap());
+    let fingerprint = ChangeFingerprint::of_hunks(
+        rev(),
+        rev(),
+        &[Hunk::new(
+            "src/a.rs".parse().unwrap(),
+            vec![],
+            vec!["let timeout = Duration::from_secs(30);".to_owned()],
+        )],
+        HunkScheme::CURRENT,
+    )
+    .unwrap();
+    let cases = [
+        CaChange::NotRecorded,
+        CaChange::NothingToFingerprint,
+        CaChange::Fingerprinted(fingerprint),
+    ]
+    .into_iter()
+    .chain(FingerprintUnavailable::ALL.map(CaChange::NotFingerprinted));
+    for (n, change) in (1u128..).zip(cases) {
+        let stored = round_trip(approve(
+            n,
+            &ann,
+            Visibility::Public,
+            ca_recording(change.clone()),
+        ));
+        assert_eq!(change_of(&stored), change);
+    }
+}
+
+#[test]
+fn a_ca_with_no_change_key_is_one_that_recorded_none() {
+    let record = approve(
+        1,
+        &judge("ann"),
+        Visibility::Public,
+        ca_recording(CaChange::NotRecorded),
+    );
+    let stored = round_trip(record);
+    assert_eq!(change_of(&stored), CaChange::NotRecorded);
+}
+
+#[test]
+fn a_change_of_a_kind_or_a_reason_this_build_does_not_know_is_refused() {
+    let record = approve(
+        1,
+        &judge("ann"),
+        Visibility::Public,
+        ca_recording(CaChange::NotFingerprinted(FingerprintUnavailable::Shallow)),
+    );
+    let edit = |key: &str, value: &str| {
+        edited(&record, &["body", "attestation", "change"], |change| {
+            change.insert(key.into(), Canon::str(value));
+        })
+    };
+    for bytes in [edit("kind", "partial"), edit("why", "elsewhere")] {
+        assert!(matches!(
+            StoredJudgement::decode(&bytes),
+            Err(DecodeError::Refused { .. })
+        ));
+    }
+}
+
+#[test]
+fn a_cm_names_the_cs_it_stands_on_as_an_event_or_as_a_judgement() {
+    let ann = judge("ann");
+    let on_event = round_trip(approve(
+        1,
+        &ann,
+        Visibility::Public,
+        cm_passed(1, "h", "cs"),
+    ));
+    let on_judgement = round_trip(approve(
+        2,
+        &ann,
+        Visibility::Public,
+        cm_passed_on(1, "h", jid(9)),
+    ));
+    let cs_of = |record: &StoredJudgement| match record.kind() {
+        JudgementKind::Approve { passed, .. } => match passed.attestation() {
+            Attestation::Cm { cs, .. } => *cs,
+            other => panic!("a CM, got {other:?}"),
+        },
+        other => panic!("an approval, got {other:?}"),
+    };
+    assert!(matches!(cs_of(&on_event), CsRef::Event(_)));
+    assert_eq!(cs_of(&on_judgement), CsRef::Judgement(jid(9)));
 }
 
 #[test]

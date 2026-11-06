@@ -39,8 +39,8 @@
 //! | CR | [`CrInput`] | the Finding's body and its label | the Finding at its hash |
 //! | CS | [`CsInput`] | each ground's state; the Spec's pins and hypotheses, as far as the [`GatePolicy`] demands them | the Spec at its contract hash, the hypothesis hash, every ground at its hash, the policy it passed under |
 //! | CI | [`CiInput`] | the Spec's state; the pin coverage | the Design at its hash, the Spec at its contract hash |
-//! | CA | [`CaInput`] | the Design's state; the pins in the tests, in both directions; the tests | the item at its hash, the Design at its hash, the revision, the outcome |
-//! | CM | [`CmInput`] | the CS approval that fixed the hypotheses; the Finding of a `fail-hyp` | the Spec at its hypothesis hash, that CS approval, the result |
+//! | CA | [`CaInput`] | the item's state and the Design's; the pins in the tests, in both directions; the tests | the item at its hash, the Design at its hash, the revision, the outcome, what version control said of the change ([`CaChange`]) |
+//! | CM | [`CmInput`] | what the ledgers say of the CS approval that fixed the hypotheses ([`CsFixing`]); the Finding of a `fail-hyp` | the Spec at its hypothesis hash, that CS approval, the result |
 //!
 //! # What a gate asks of the entity itself
 //!
@@ -91,15 +91,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::approval::{
-    ApprovalSet, Attestation, CmResult, CsFixing, Gate, GateBasis, Pinned, TestOutcome, TestsRun,
+    ApprovalSet, Attestation, CaChange, CmResult, CsRef, Gate, GateBasis, Pinned, TestOutcome,
+    TestsRun,
 };
 use super::boundary::{Crosses, CrossingText};
 use super::design::{Design, WorkItem};
-use super::evaluate::{Evaluated, ImplView, ItemEvaluation, ItemKey, States, Subject};
+use super::evaluate::{Evaluated, ImplView, ItemKey, States, Subject};
 use super::finding::{EvidenceLabel, Finding, FindingSource};
 use super::hash::{ContentHash, TextHash};
 use super::id::{DesignId, EntityId, FindingId, SpecId};
+use super::integration::Fingerprinting;
 use super::keyring::{PinKeyring, UpstreamHash};
+use super::ledger::CsFixing;
 use super::lint::{CheckViolation, UpstreamProblem, UpstreamReach, upstream_problems_reaching};
 use super::nonempty::NonEmptyVec;
 use super::policy::GatePolicy;
@@ -661,8 +664,8 @@ pub struct CaInput<'a> {
     pub key: &'a ItemKey,
     /// The item as the Design said when it was handed over.
     pub item: &'a WorkItem,
-    /// The item's evaluation: its state decides whether it can be approved at all.
-    pub evaluation: &'a ItemEvaluation,
+    /// The item's state: it decides whether it can be approved at all.
+    pub state: &'a EntityState,
     /// The Designs, as evaluated.
     pub designs: BTreeMap<DesignId, &'a Evaluated<Design>>,
     /// The pins that any Spec of the project declares.
@@ -675,9 +678,24 @@ pub struct CaInput<'a> {
     pub revision: RevisionId,
     /// What running the tests at that revision came to.
     pub tests: TestsRun,
+    /// What version control said of the fingerprint of the change at that revision.
+    pub fingerprint: FingerprintAsked,
     /// The hash of the normalized text of the Design's (the item's) file as it was read: the
     /// version checked, which a [`Passed`] keeps.
     pub text: TextHash,
+}
+
+/// Whether the check asked version control for the fingerprint of the change, and what
+/// it answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FingerprintAsked {
+    /// It asked, and this is the answer. The check records it once, as the
+    /// [`CaChange`] the table of [`ca::check`] says, and never refuses for it: an
+    /// approval is a person's judgement, and the fingerprint is a hint to the landing.
+    Asked(Fingerprinting),
+    /// It did not ask. Only the earlier model's path, which records no change, says
+    /// this ([`CaChange::NotRecorded`]); it goes with that model.
+    NotAsked,
 }
 
 /// CA, layer 1: the Design passed CI, is current and can be read in full here; the
@@ -689,8 +707,34 @@ pub mod ca {
     /// An approved Design that is Partial, through its Spec or further up, is a
     /// violation, for the same reason as at CI. An item is named by its number inside
     /// its Design, never by a mark, so it has nothing of its own that cannot be read.
+    ///
+    /// What the approval records of the change is decided here, once, from what
+    /// version control answered, and a lack of fingerprint never stops the gate:
+    ///
+    /// | version control said | the approval records |
+    /// |---|---|
+    /// | `Of(fingerprint)` | [`CaChange::Fingerprinted`] |
+    /// | `NothingToFingerprint` | [`CaChange::NothingToFingerprint`] |
+    /// | `Unavailable(why)` | [`CaChange::NotFingerprinted`] with the reason |
+    /// | (not asked: the earlier model) | [`CaChange::NotRecorded`] |
     pub fn check(input: CaInput<'_>) -> Checked {
         run(input, Mode::Whole)
+    }
+
+    /// The change an approval records, from what was asked of version control.
+    fn recorded(asked: FingerprintAsked) -> CaChange {
+        match asked {
+            FingerprintAsked::Asked(Fingerprinting::Of(fingerprint)) => {
+                CaChange::Fingerprinted(fingerprint)
+            }
+            FingerprintAsked::Asked(Fingerprinting::NothingToFingerprint) => {
+                CaChange::NothingToFingerprint
+            }
+            FingerprintAsked::Asked(Fingerprinting::Unavailable(why)) => {
+                CaChange::NotFingerprinted(why)
+            }
+            FingerprintAsked::NotAsked => CaChange::NotRecorded,
+        }
     }
 
     /// The check run on the corpus: the Design is pinned by the pin `pins` says
@@ -702,7 +746,7 @@ pub mod ca {
     }
 
     fn run(input: CaInput<'_>, mode: Mode<'_>) -> Checked {
-        if let Some(violations) = invalid_target(input.evaluation.state()) {
+        if let Some(violations) = invalid_target(input.state) {
             return Err(violations);
         }
         let CaInput {
@@ -714,6 +758,7 @@ pub mod ca {
             impl_view,
             revision,
             tests,
+            fingerprint,
             text,
             ..
         } = input;
@@ -776,7 +821,7 @@ pub mod ca {
                     design: Pinned::new(design.id(), pin),
                     revision: Revision::Commit(revision),
                     tests,
-                    fingerprint: None,
+                    change: recorded(fingerprint),
                 })
             },
             Gate::Ca,
@@ -791,8 +836,10 @@ pub mod ca {
 pub struct CmInput<'a> {
     /// The Spec that was measured.
     pub spec: &'a Evaluated<Spec>,
-    /// The approvals, for the CS approval that fixed the hypotheses.
-    pub ledger: &'a ApprovalSet,
+    /// The CS approval that fixed the hypotheses, as the ledgers say
+    /// ([`Ledgers::cs_fixing`](super::ledger::Ledgers::cs_fixing)): the one place
+    /// that links a measurement to the approval it is set against.
+    pub fixing: CsFixing,
     /// What the measurement showed.
     pub result: CmResult,
     /// For a `fail-hyp`, the Finding it names, as evaluated; none if it is not
@@ -803,48 +850,103 @@ pub struct CmInput<'a> {
     pub text: TextHash,
 }
 
+/// What CM reads from the event log of the earlier model.
+///
+/// The earlier model has no ledgers: the CS approval is found in its set of approvals,
+/// and the check finds it there. It goes with that model.
+#[derive(Debug, Clone)]
+pub struct LoggedCmInput<'a> {
+    /// The Spec that was measured.
+    pub spec: &'a Evaluated<Spec>,
+    /// The approvals, for the CS approval that fixed the hypotheses.
+    pub ledger: &'a ApprovalSet,
+    /// What the measurement showed.
+    pub result: CmResult,
+    /// For a `fail-hyp`, the Finding it names, as evaluated; none if it is not
+    /// there.
+    pub hyp_finding: Option<&'a Evaluated<Finding>>,
+    /// The hash of the normalized text of the Spec's file as it was read.
+    pub text: TextHash,
+}
+
 /// CM, layer 1: the CS approval that fixed the hypotheses exists, and fixed them as
 /// they are.
 pub mod cm {
     use super::*;
 
+    /// What the CS approval a measurement is set against came to, for either model.
+    enum Link {
+        /// It fixed the hypotheses as they are.
+        Fixed(CsRef),
+        /// There is one, and it fixed other hypotheses.
+        Changed(ContentHash),
+        /// There is none.
+        Missing,
+    }
+
     /// A `fail-hyp` also needs the Finding it names to be a measurement. The CS
-    /// approval is looked for in the whole set of approvals, with the duplicate
-    /// registrations folded, so one recorded before two branches merged still counts.
+    /// approval is not looked for here: [`CsFixing`] says what it came to, and this
+    /// only matches it.
     pub fn check(input: CmInput<'_>) -> Checked {
         let spec = target(input.spec)?;
+        let link = match input.fixing {
+            CsFixing::Fixed(cs) => Link::Fixed(CsRef::Judgement(cs)),
+            CsFixing::Changed { hyp, .. } => Link::Changed(hyp),
+            CsFixing::Missing => Link::Missing,
+        };
+        run(spec, link, input.result, input.hyp_finding, input.text)
+    }
+
+    /// The same check over the event log of the earlier model: the CS approval is
+    /// looked for in the whole set of approvals, with the duplicate registrations
+    /// folded, so one recorded before two branches merged still counts.
+    pub fn check_logged(input: LoggedCmInput<'_>) -> Checked {
+        let spec = target(input.spec)?;
+        let link = match input.ledger.cs_for_cm(spec.id().entity(), spec.hyp_hash()) {
+            None => Link::Missing,
+            Some(fixing) if fixing.hyp() != spec.hyp_hash() => Link::Changed(*fixing.hyp()),
+            Some(fixing) => Link::Fixed(CsRef::Event(fixing.event())),
+        };
+        run(spec, link, input.result, input.hyp_finding, input.text)
+    }
+
+    /// The check of a Spec that `target` let through.
+    fn run(
+        spec: &Spec,
+        link: Link,
+        result: CmResult,
+        hyp_finding: Option<&Evaluated<Finding>>,
+        text: TextHash,
+    ) -> Checked {
         let mut violations = Vec::new();
-        if let CmResult::FailHyp { finding } = &input.result {
-            let measured = input
-                .hyp_finding
+        if let CmResult::FailHyp { finding } = &result {
+            let measured = hyp_finding
                 .and_then(|evaluated| evaluated.entity())
                 .is_some_and(|f| matches!(f.source(), FindingSource::MeasuredData { .. }));
             if !measured {
                 violations.push(CheckViolation::MeasurementNotMeasuredData { finding: *finding });
             }
         }
-        let fixing: Option<CsFixing> = input.ledger.cs_for_cm(spec.id().entity(), spec.hyp_hash());
-        match &fixing {
-            None => violations.push(CheckViolation::CsApprovalNotFound),
-            Some(fixing) if fixing.hyp() != spec.hyp_hash() => {
-                violations.push(CheckViolation::HypothesisChanged {
-                    fixed: *fixing.hyp(),
-                    current: *spec.hyp_hash(),
-                });
-            }
-            Some(_) => {}
+        match &link {
+            Link::Missing => violations.push(CheckViolation::CsApprovalNotFound),
+            Link::Changed(fixed) => violations.push(CheckViolation::HypothesisChanged {
+                fixed: *fixed,
+                current: *spec.hyp_hash(),
+            }),
+            Link::Fixed(_) => {}
         }
         settle(
             violations,
-            || {
-                fixing.map(|fixing| Attestation::Cm {
+            || match link {
+                Link::Fixed(cs) => Some(Attestation::Cm {
                     spec: Pinned::new(spec.id(), *spec.hyp_hash()),
-                    cs: fixing.event(),
-                    result: input.result,
-                })
+                    cs,
+                    result,
+                }),
+                Link::Changed(_) | Link::Missing => None,
             },
             Gate::Cm,
-            input.text,
+            text,
             || unpinnable(Mode::Whole, spec.id().entity()),
         )
     }
@@ -862,13 +964,15 @@ mod tests {
     use crate::domain::classification::{ConflictedDoc, fold};
     use crate::domain::design::CoverageIssue;
     use crate::domain::design::test_support::{design, item, num};
+    use crate::domain::evaluate::ItemEvaluation;
     use crate::domain::evaluate::test_support::{NO_DESIGNS, NO_FINDINGS, NO_SPECS};
-    use crate::domain::evaluate::{Evaluator, Written, states_of};
+    use crate::domain::evaluate::{Evaluator, states_of};
     use crate::domain::event::test_support::{reclassify, register_doc};
     use crate::domain::event::{ClassChange, DocKind, Event};
     use crate::domain::finding::test_support::{finding, usage_source};
     use crate::domain::id::test_support::{did, eid, fid, iid, sid};
     use crate::domain::location::CodeLocation;
+    use crate::domain::naming::Written;
     use crate::domain::nonempty::NonBlank;
     use crate::domain::pin::MalformedPin;
     use crate::domain::spec::test_support::{hyps, pins, spec};
@@ -1467,14 +1571,88 @@ mod tests {
             text: read_text(),
             key: &key,
             item,
-            evaluation: &evaluation,
+            state: evaluation.state(),
             designs: w.world.design_refs(),
             declared: &declared_by(w),
             states: &states,
             impl_view: view,
             revision: RevisionId::from_validated("head".into()).unwrap(),
             tests,
+            fingerprint: FingerprintAsked::NotAsked,
         })
+    }
+
+    fn run_ca_asking(w: &CaWorld, asked: Fingerprinting) -> Checked {
+        let states = w.world.states();
+        let key = key(1);
+        let view = view(&["PIN-A"]);
+        let evaluation = evaluation_of(w, 1, &view);
+        ca::check(CaInput {
+            text: read_text(),
+            key: &key,
+            item: &w.design.items()[&num(1)],
+            state: evaluation.state(),
+            designs: w.world.design_refs(),
+            declared: &declared_by(w),
+            states: &states,
+            impl_view: &view,
+            revision: RevisionId::from_validated("head".into()).unwrap(),
+            tests: TestsRun::Finished(TestOutcome::Passed),
+            fingerprint: FingerprintAsked::Asked(asked),
+        })
+    }
+
+    fn recorded_change(checked: Checked) -> CaChange {
+        match passed(checked).attestation() {
+            Attestation::Ca { change, .. } => change.clone(),
+            other => panic!("a CA, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ca_records_what_version_control_said_of_the_change_and_never_refuses_for_it() {
+        use crate::domain::integration::{
+            ChangeFingerprint, FingerprintUnavailable, Hunk, HunkScheme,
+        };
+        let w = ca_world(true);
+        let fingerprint = ChangeFingerprint::of_hunks(
+            Revision::Commit(RevisionId::from_validated("b1".into()).unwrap()),
+            Revision::Commit(RevisionId::from_validated("t1".into()).unwrap()),
+            &[Hunk::new(
+                "src/a.rs".parse().unwrap(),
+                vec![],
+                vec!["let timeout = Duration::from_secs(30);".to_owned()],
+            )],
+            HunkScheme::CURRENT,
+        )
+        .unwrap();
+        assert_eq!(
+            recorded_change(run_ca_asking(&w, Fingerprinting::Of(fingerprint.clone()))),
+            CaChange::Fingerprinted(fingerprint)
+        );
+        assert_eq!(
+            recorded_change(run_ca_asking(&w, Fingerprinting::NothingToFingerprint)),
+            CaChange::NothingToFingerprint
+        );
+        for why in FingerprintUnavailable::ALL {
+            assert_eq!(
+                recorded_change(run_ca_asking(&w, Fingerprinting::Unavailable(why))),
+                CaChange::NotFingerprinted(why),
+                "{why:?}: an approval is a person's judgement, and this is a hint"
+            );
+        }
+        // The earlier model does not ask.
+        let it = w.design.items()[&num(1)].clone();
+        assert_eq!(
+            recorded_change(run_ca_with(
+                &w,
+                1,
+                &it,
+                &view(&["PIN-A"]),
+                TestsRun::Finished(TestOutcome::Passed)
+            )),
+            CaChange::NotRecorded
+        );
     }
 
     fn run_ca(w: &CaWorld, number: u32, pins: &[&str], tests: TestOutcome) -> Checked {
@@ -1650,13 +1828,14 @@ mod tests {
             text: read_text(),
             key: &key,
             item: &w.design.items()[&num(1)],
-            evaluation: &evaluation,
+            state: evaluation.state(),
             designs: w.world.design_refs(),
             declared: &declared_by(&w),
             states: &states,
             impl_view: &view,
             revision: RevisionId::from_validated("head".into()).unwrap(),
             tests: TestsRun::Finished(TestOutcome::Passed),
+            fingerprint: FingerprintAsked::NotAsked,
         }));
         assert!(
             matches!(&got[..], [CheckViolation::TargetInvalid { reasons }]
@@ -1761,13 +1940,14 @@ mod tests {
                 text: read_text(),
                 key: &key,
                 item: &d.items()[&num(1)],
-                evaluation: &evaluation,
+                state: evaluation.state(),
                 designs: designs.iter().map(|(id, ev)| (*id, ev)).collect(),
                 declared: &DeclaredPins::of(specs.values().filter_map(Evaluated::entity)),
                 states: &states,
                 impl_view: &view,
                 revision: RevisionId::from_validated("head".into()).unwrap(),
                 tests: TestsRun::Finished(TestOutcome::Passed),
+                fingerprint: FingerprintAsked::NotAsked,
             })),
             vec![upstream(21, UpstreamProblem::Unresolved)]
         );
@@ -1803,13 +1983,67 @@ mod tests {
         let world = World::new(&[&ground], &[s], &[], events);
         let l = ledger(events);
         let hyp = hyp_finding.map(|f| Evaluator::finding(f, &l, &[]));
-        cm::check(CmInput {
+        cm::check_logged(LoggedCmInput {
             text: read_text(),
             spec: &world.specs[&s.id()],
             ledger: &l,
             result,
             hyp_finding: hyp.as_ref(),
         })
+    }
+
+    /// CM against the ledgers' answer for the CS approval, whatever it is.
+    fn cm_against(s: &Spec, fixing: CsFixing, result: CmResult) -> Checked {
+        let ground = finding(1, "one");
+        let world = World::new(&[&ground], &[s], &[], &[]);
+        cm::check(CmInput {
+            text: read_text(),
+            spec: &world.specs[&s.id()],
+            fixing,
+            result,
+            hyp_finding: None,
+        })
+    }
+
+    #[test]
+    fn cm_only_matches_what_the_ledgers_say_of_the_cs_approval() {
+        use crate::domain::judgement::JudgementId;
+        let s = spec(11, &[1], &["PIN-A"]);
+        let cs = JudgementId::new(eid(77));
+
+        // Fixed: the measurement stands on that judgement.
+        let proof = passed(cm_against(&s, CsFixing::Fixed(cs), CmResult::Pass));
+        assert_eq!(
+            proof.attestation(),
+            &Attestation::Cm {
+                spec: Pinned::new(s.id(), *s.hyp_hash()),
+                cs: CsRef::Judgement(cs),
+                result: CmResult::Pass,
+            }
+        );
+
+        // Changed: the hypotheses are not the ones that were fixed.
+        let fixed = ContentHash::raw(b"other hypotheses");
+        assert_eq!(
+            violations(cm_against(
+                &s,
+                CsFixing::Changed {
+                    fixed: cs,
+                    hyp: fixed
+                },
+                CmResult::Pass
+            )),
+            vec![CheckViolation::HypothesisChanged {
+                fixed,
+                current: *s.hyp_hash()
+            }]
+        );
+
+        // Missing: there is nothing to set the measurement against.
+        assert_eq!(
+            violations(cm_against(&s, CsFixing::Missing, CmResult::Pass)),
+            vec![CheckViolation::CsApprovalNotFound]
+        );
     }
 
     #[test]
@@ -1826,7 +2060,7 @@ mod tests {
             passed.attestation(),
             &Attestation::Cm {
                 spec: Pinned::new(s.id(), *s.hyp_hash()),
-                cs: a_cs.id(),
+                cs: CsRef::Event(a_cs.id()),
                 result: CmResult::Pass,
             }
         );
@@ -1917,7 +2151,7 @@ mod tests {
         );
         let passed = passed(cm_of(&s, &[old, current.clone()], CmResult::Pass, None));
         assert!(matches!(passed.attestation(),
-            Attestation::Cm { cs, .. } if *cs == current.id()));
+            Attestation::Cm { cs, .. } if *cs == CsRef::Event(current.id())));
     }
 
     /// Two branches registered the same Spec file before they met. The one that
@@ -1937,14 +2171,16 @@ mod tests {
         let events = [first, second, a_cs.clone()];
         let l = ledger(&events);
         let world = World::new(&[&f1], &[&s], &[], &events);
-        let passed = passed(cm::check(CmInput {
+        let passed = passed(cm::check_logged(LoggedCmInput {
             text: read_text(),
             spec: &world.specs[&s.id()],
             ledger: &l,
             result: CmResult::Pass,
             hyp_finding: None,
         }));
-        assert!(matches!(passed.attestation(), Attestation::Cm { cs, .. } if *cs == a_cs.id()));
+        assert!(
+            matches!(passed.attestation(), Attestation::Cm { cs, .. } if *cs == CsRef::Event(a_cs.id()))
+        );
     }
 
     #[test]
@@ -1984,7 +2220,7 @@ mod tests {
         // The Spec's ground does not exist, so the Spec is Invalid.
         let s = spec(11, &[1], &["PIN-A"]);
         let world = World::new(&[], &[&s], &[], &[]);
-        let got = violations(cm::check(CmInput {
+        let got = violations(cm::check_logged(LoggedCmInput {
             text: read_text(),
             spec: &world.specs[&s.id()],
             ledger: &ledger(&[]),

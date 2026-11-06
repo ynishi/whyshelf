@@ -29,8 +29,8 @@ use crate::domain::approval::{Attestation, CmResult, Gate};
 use crate::domain::evaluate::Evaluated;
 use crate::domain::event::{EventId, RecordBody};
 use crate::domain::gate::{
-    self, CaInput, Checked, CiInput, CrInput, CsInput, Passed, Violations, ca, ci, cm, cr, cs,
-    invalid_target,
+    self, CaInput, Checked, CiInput, CrInput, CsInput, FingerprintAsked, Passed, Violations, ca,
+    ci, cm, cr, cs, invalid_target,
 };
 use crate::domain::hash::TextHash;
 use crate::domain::id::{DesignId, EntityId, FindingId, SpecId};
@@ -257,7 +257,7 @@ fn prepare_cm(model: &Model, target: &Ref, input: &CmInput) -> Result<Prepared, 
     Ok(Prepared {
         gate,
         target: id,
-        checked: cm::check(gate::CmInput {
+        checked: cm::check_logged(gate::LoggedCmInput {
             spec,
             ledger: model.ledger(),
             result,
@@ -316,13 +316,15 @@ impl<P: Ports> Workspace<P> {
             checked: ca::check(CaInput {
                 key: item.key(),
                 item: item.item(),
-                evaluation: item.evaluation(),
+                state: item.evaluation().state(),
                 designs,
                 declared: &declared,
                 states: &states,
                 impl_view: &impl_view,
                 revision,
                 tests,
+                // The earlier model records no change.
+                fingerprint: FingerprintAsked::NotAsked,
                 text,
             }),
         })

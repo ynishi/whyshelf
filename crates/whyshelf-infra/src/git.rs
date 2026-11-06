@@ -43,14 +43,15 @@ use tokio::process::Command;
 use whyshelf_core::app::config::{PinPattern, PinSearch};
 use whyshelf_core::app::ports::{
     Author, BaselineAnswer, BaselineQuery, CodeScanPort, PinScan, RevisionFactsPort, RevisionPort,
-    WorktreeRoot,
+    WorkTree, WorktreeRoot,
 };
 use whyshelf_core::app::raw::RawRevision;
 use whyshelf_core::domain::corpus::{GitPlace, Visibility};
-use whyshelf_core::domain::error::ValueError;
+use whyshelf_core::domain::error::{FingerprintError, ValueError};
 use whyshelf_core::domain::hash::HunkId;
 use whyshelf_core::domain::integration::{
-    BaselineFacts, ChangeFingerprint, Hunk, HunkScheme, UnknownWhy,
+    BaselineFacts, ChangeFingerprint, FingerprintUnavailable, Fingerprinting, Hunk, HunkScheme,
+    UnknownWhy,
 };
 use whyshelf_core::domain::judge::{Email, PersonName};
 use whyshelf_core::domain::knowable::Knowable;
@@ -98,6 +99,10 @@ pub enum GitError {
     /// A value Git gave was refused by the rule of its type.
     #[error("Git gave a value the domain refuses")]
     Value(#[source] ValueError),
+    /// The fingerprint of a change could not be built for a reason that is not an
+    /// absence of one.
+    #[error("the fingerprint of the change cannot be built")]
+    Fingerprint(#[source] FingerprintError),
     /// The pin pattern is not a regular expression.
     #[error("the pin pattern does not compile")]
     Pattern(#[source] regex::Error),
@@ -241,6 +246,14 @@ impl Git {
         }
         let printed = String::from_utf8_lossy(&finished.stdout).trim().to_owned();
         Ok(is_full_hash(&printed).then_some(printed))
+    }
+
+    /// Whether the directory is inside a work tree. `false` for a directory outside a
+    /// repository and for a bare one, which is an answer; only a `git` that cannot run
+    /// is an error.
+    pub(crate) async fn inside_work_tree(&self) -> Result<bool, GitError> {
+        let finished = self.finish(["rev-parse", "--is-inside-work-tree"]).await?;
+        Ok(finished.code == Some(0) && finished.stdout.trim_ascii() == b"true")
     }
 
     /// Whether the working tree has no change outside `.whyshelf/`.
@@ -669,6 +682,15 @@ impl GitFacts {
         })
     }
 
+    /// The same reason, as it is recorded beside an approval made in this clone.
+    async fn unavailable(&self) -> Result<FingerprintUnavailable, GitError> {
+        Ok(if self.is_shallow().await? {
+            FingerprintUnavailable::Shallow
+        } else {
+            FingerprintUnavailable::BaseMissing
+        })
+    }
+
     /// The commits of the baseline's first-parent line, newest first.
     async fn first_parent_line(&self, tip: &str) -> Result<Vec<String>, GitError> {
         let stdout = self.git.run(["rev-list", "--first-parent", tip]).await?;
@@ -974,28 +996,31 @@ impl RevisionFactsPort for GitFacts {
         ))
     }
 
-    async fn change_fingerprint(
-        &self,
-        approved: &Revision,
-    ) -> Result<Option<ChangeFingerprint>, GitError> {
+    async fn change_fingerprint(&self, approved: &Revision) -> Result<Fingerprinting, GitError> {
         let Revision::Commit(id) = approved else {
-            return Ok(None);
+            // A patch is a change that is not committed: there is no commit of it to
+            // cut against the baseline.
+            return Ok(Fingerprinting::Unavailable(
+                FingerprintUnavailable::NotCommitted,
+            ));
         };
         let rev = full_hash(id)?;
         let Some(tip) = self.git.commit_of(self.baseline.as_str()).await? else {
-            return Ok(None);
+            return Ok(Fingerprinting::Unavailable(
+                FingerprintUnavailable::BaselineUnresolved,
+            ));
         };
         let Some(approved) = self.git.commit_of(rev).await? else {
-            return Ok(None);
+            return Ok(Fingerprinting::Unavailable(self.unavailable().await?));
         };
         let line = self.first_parent_line(&tip).await?;
         let Some(nearest) = self.nearest_on_line(&line, &approved).await? else {
-            return Ok(None);
+            return Ok(Fingerprinting::Unavailable(self.unavailable().await?));
         };
         let base = &line[nearest];
         if *base == approved {
             // The revision is on the baseline: its change has landed by being there.
-            return Ok(None);
+            return Ok(Fingerprinting::NothingToFingerprint);
         }
 
         let mut args: Vec<&str> = vec!["-c", "core.quotepath=false", "diff"];
@@ -1013,13 +1038,33 @@ impl RevisionFactsPort for GitFacts {
                 .map(Revision::Commit)
                 .map_err(GitError::Value)
         };
-        Ok(ChangeFingerprint::of_hunks(
+        match ChangeFingerprint::of_hunks(
             revision(base)?,
             revision(&tip)?,
             &hunks,
             HunkScheme::CURRENT,
-        )
-        .ok())
+        ) {
+            Ok(fingerprint) => Ok(Fingerprinting::Of(fingerprint)),
+            // A change of no hunk (a merge that brought nothing, a mode change) has
+            // nothing to find in the baseline.
+            Err(FingerprintError::NoHunks) => Ok(Fingerprinting::NothingToFingerprint),
+            // The current scheme is one this build has, so this cannot arise; it is
+            // reported as it is and not read as an absence of a fingerprint.
+            Err(error @ FingerprintError::UnknownScheme { .. }) => {
+                Err(GitError::Fingerprint(error))
+            }
+        }
+    }
+
+    async fn work_tree(&self) -> Result<Knowable<WorkTree>, GitError> {
+        if !self.git.inside_work_tree().await? {
+            return Ok(Knowable::Unknown);
+        }
+        Ok(Knowable::Known(if self.git.is_clean().await? {
+            WorkTree::Clean
+        } else {
+            WorkTree::Dirty
+        }))
     }
 
     async fn author(&self, at: &Revision) -> Result<Knowable<Author>, GitError> {

@@ -123,7 +123,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::actor::Timestamp;
 use super::adoption;
-use super::approval::Gate;
+use super::approval::{Attestation, Gate};
 use super::corpus::{Corpus, Visibility};
 use super::error::{JudgementError, RevokeError};
 use super::hash::{ContentHash, TextHash};
@@ -326,6 +326,24 @@ pub enum ObjectReading {
     /// No purge, and the file is there.
     Present,
     /// No purge, and no file.
+    Missing,
+}
+
+/// What the CS approval a measurement is set against came to
+/// ([`Ledgers::cs_fixing`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CsFixing {
+    /// An unrevoked CS approval fixed the hypotheses as they are.
+    Fixed(JudgementId),
+    /// An unrevoked CS approval exists, and it fixed other hypotheses: they have
+    /// changed since.
+    Changed {
+        /// The CS approval, the one that decides among several.
+        fixed: JudgementId,
+        /// The `hyp_hash` it fixed.
+        hyp: ContentHash,
+    },
+    /// No unrevoked CS approval of the Spec exists.
     Missing,
 }
 
@@ -652,6 +670,40 @@ impl Ledgers {
     /// the CS approvals of that version is revoked, the measurement stands.
     pub fn is_measured(&self, spec: SpecId, hyp: &ContentHash) -> bool {
         self.is_approved(Gate::Cm, spec.entity(), hyp)
+    }
+
+    /// The CS approval a measurement of `spec` is set against: the one place that
+    /// links a CM to the CS that fixed its hypotheses.
+    ///
+    /// An unrevoked CS approval that fixed `hyp`, the hypothesis hash of the Spec
+    /// today, if there is one ([`CsFixing::Fixed`]); else any unrevoked CS approval of
+    /// the Spec, so that the check can say the hypotheses changed
+    /// ([`CsFixing::Changed`]); else none ([`CsFixing::Missing`]). Identifiers are
+    /// time-ordered (UUID v7), so the largest decides among equals: the latest approval
+    /// is the one in force, and the one a person is pointed at. An adoption does not fix hypotheses: it records
+    /// the contract only, so it is not looked at.
+    pub fn cs_fixing(&self, spec: SpecId, hyp: &ContentHash) -> CsFixing {
+        let fixings: Vec<(JudgementId, ContentHash)> = self
+            .approvals()
+            .filter(|approval| approval.gate() == Gate::Cs && approval.subject() == spec.entity())
+            .filter_map(|approval| match approval.judgement().kind() {
+                JudgementKind::Approve { passed, .. } => match passed.attestation() {
+                    Attestation::Cs { hyp: fixed, .. } => Some((approval.id(), *fixed)),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        if let Some((id, _)) = fixings.iter().filter(|(_, fixed)| fixed == hyp).max() {
+            return CsFixing::Fixed(*id);
+        }
+        match fixings.iter().max() {
+            Some((id, fixed)) => CsFixing::Changed {
+                fixed: *id,
+                hyp: *fixed,
+            },
+            None => CsFixing::Missing,
+        }
     }
 
     /// What the retirements of `target` come to, given whether its file is there.
@@ -2118,5 +2170,115 @@ mod tests {
         let after = public_only(vec![copied, publish]);
         assert_eq!(after.published_docs(), BTreeSet::from([docid(1)]));
         assert!(ledgers.published_docs().is_empty());
+    }
+
+    // --- the CS approval a measurement is set against ----------------------------
+
+    fn cs_record(n: u128, who: &Judge, origin: Visibility, spec: u128, hyp: &str) -> Judgement {
+        approve(n, who, origin, cs_passed(spec, "contract", hyp))
+    }
+
+    #[test]
+    fn a_measurement_is_set_against_the_cs_that_fixed_the_hypotheses_as_they_are() {
+        let hyp = hash_of("hyp-now");
+        let ledgers = public_only(vec![
+            cs_record(9, &ada(), Visibility::Public, 11, "hyp-old"),
+            cs_record(5, &ada(), Visibility::Public, 11, "hyp-now"),
+            cs_record(7, &grace(), Visibility::Public, 11, "hyp-now"),
+            // Another Spec's.
+            cs_record(1, &ada(), Visibility::Public, 12, "hyp-now"),
+        ]);
+        // The latest (largest) identifier of those that fixed them as they are decides.
+        assert_eq!(ledgers.cs_fixing(sid(11), &hyp), CsFixing::Fixed(jid(7)));
+    }
+
+    #[test]
+    fn hypotheses_that_changed_since_are_told_from_a_cs_that_is_not_there() {
+        let ledgers = public_only(vec![
+            cs_record(9, &ada(), Visibility::Public, 11, "hyp-b"),
+            cs_record(4, &ada(), Visibility::Public, 11, "hyp-a"),
+        ]);
+        // Only others were fixed: the latest identifier, and what it fixed.
+        assert_eq!(
+            ledgers.cs_fixing(sid(11), &hash_of("hyp-now")),
+            CsFixing::Changed {
+                fixed: jid(9),
+                hyp: hash_of("hyp-b")
+            }
+        );
+        assert_eq!(
+            ledgers.cs_fixing(sid(11), &hash_of("hyp-now")),
+            ledgers.cs_fixing(sid(11), &hash_of("hyp-elsewhere")),
+            "the answer does not depend on the hypotheses asked about, when none match"
+        );
+        // Nothing for this Spec at all.
+        assert_eq!(
+            ledgers.cs_fixing(sid(12), &hash_of("hyp-a")),
+            CsFixing::Missing
+        );
+        assert_eq!(
+            Ledgers::default().cs_fixing(sid(11), &hash_of("hyp-a")),
+            CsFixing::Missing
+        );
+    }
+
+    #[test]
+    fn a_revoked_cs_fixes_nothing_and_a_cr_or_a_cm_is_not_a_cs() {
+        let cs = cs_record(1, &ada(), Visibility::Public, 11, "hyp");
+        let revoked = revoke_ids(&public_only(vec![cs.clone()]), 2, &ada(), &[1], false)
+            .expect("a revocation");
+        let with_revocation = public_only(vec![cs, revoked]);
+        assert_eq!(
+            with_revocation.cs_fixing(sid(11), &hash_of("hyp")),
+            CsFixing::Missing
+        );
+
+        // Neither a Finding's approval nor a measurement fixes hypotheses.
+        let others = public_only(vec![
+            cr(1, &ada(), Visibility::Public, 11, "hyp"),
+            approve(2, &ada(), Visibility::Public, cm_passed(11, "hyp", "cs")),
+        ]);
+        assert_eq!(
+            others.cs_fixing(sid(11), &hash_of("hyp")),
+            CsFixing::Missing
+        );
+    }
+
+    #[test]
+    fn a_cs_in_either_ledger_fixes_the_hypotheses() {
+        let ledgers = pair(
+            Vec::new(),
+            vec![cs_record(3, &ada(), Visibility::Private, 11, "hyp")],
+        );
+        assert_eq!(
+            ledgers.cs_fixing(sid(11), &hash_of("hyp")),
+            CsFixing::Fixed(jid(3))
+        );
+    }
+
+    #[test]
+    fn a_cs_that_was_taken_in_as_an_adoption_does_not_fix_hypotheses() {
+        let contract = hash_of("contract");
+        let adoptable = Adoptable::for_test(
+            (Gate::Cs, eid(11), contract),
+            Vec::new(),
+            crate::domain::location::SourceUri::Citation(NonBlank::new("the old ledger").unwrap()),
+        );
+        let adopted = Judgement::adopt(
+            jid(2),
+            ts(),
+            ada(),
+            Visibility::Public,
+            adoptable,
+            object_of(&contract),
+        )
+        .unwrap();
+        let ledgers = public_only(vec![adopted]);
+        assert!(ledgers.is_approved(Gate::Cs, eid(11), &contract));
+        assert_eq!(
+            ledgers.cs_fixing(sid(11), &hash_of("hyp")),
+            CsFixing::Missing,
+            "an adoption records the contract only"
+        );
     }
 }

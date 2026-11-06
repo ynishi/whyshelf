@@ -3,11 +3,9 @@ use super::*;
 use std::collections::BTreeSet;
 
 use whyshelf_core::app::commit::record::{append_with_object, append_without_object, scan, store};
-use whyshelf_core::app::raw::NormalizedText;
+use whyshelf_core::app::raw::{NormalizedText, RawDocument, ReadFile};
 use whyshelf_core::domain::actor::Timestamp;
-use whyshelf_core::domain::corpus::{
-    Corpus, Document, Entity, FileFacts, GitPlace, Header, Location, Reading,
-};
+use whyshelf_core::domain::corpus::{Corpus, Entity, FileFacts, GitPlace, Header, Location};
 use whyshelf_core::domain::corpus_eval::{CorpusInput, evaluate_corpus};
 use whyshelf_core::domain::finding::{EvidenceLabel, Finding, FindingSource, Reproducibility};
 use whyshelf_core::domain::gate::{CrInput, cr};
@@ -18,6 +16,7 @@ use whyshelf_core::domain::keyring::PinKeyring;
 use whyshelf_core::domain::knowable::Knowable;
 use whyshelf_core::domain::ledger::{Ledger, Ledgers};
 use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::parsed::ParsedEntity;
 use whyshelf_core::domain::policy::GatePolicy;
 
 use crate::secret::RegexSecretScan;
@@ -72,7 +71,14 @@ impl World {
             ),
             whyshelf_core::domain::hash::BytesHash::of(text.as_str().as_bytes()),
         );
-        let reading = Reading::Document(Document::new(header, entity).unwrap());
+        let (reading, _) = RawDocument::new(
+            ReadFile::Document {
+                header,
+                entity: Box::new(ParsedEntity::Finding(finding.clone())),
+            },
+            text.clone(),
+        )
+        .into_parts();
         Self {
             corpus: Corpus::build([(facts, reading)], &BTreeSet::new()),
             finding,
@@ -94,7 +100,6 @@ impl World {
             ledgers: &ledgers,
             keyring: &keyring,
             policy: GatePolicy::default(),
-            written: &BTreeMap::new(),
         });
         let evaluated = evaluation.findings().get(&self.finding.id()).unwrap();
         let passed = cr::check(CrInput {

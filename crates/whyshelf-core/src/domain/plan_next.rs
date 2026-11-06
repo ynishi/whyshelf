@@ -231,6 +231,8 @@ impl NextAction {
     /// | `Approve`, `Reapprove` | a person's judgement at the gate; for CA also a clean working tree and passing tests |
     /// | `Measure` | a measurement |
     /// | `Adopt` | a person's confirmation: it cannot be taken back |
+    /// | `ResumePublish`, `AbortPublish` | a confirmation if the plan has a step that cannot be taken back: the plan decides ([`Need::ConfirmationIfIrreversible`]) |
+    /// | `Import` | nothing: the step only writes an `id:`, and an adoption is in the plan of an import a person asks for, whose own confirmation decides |
     /// | the others | nothing the tool does not have |
     pub fn needs(&self) -> Vec<Need> {
         match self {
@@ -243,11 +245,8 @@ impl NextAction {
             }
             Self::Measure => vec![Need::Measurement],
             Self::Adopt => vec![Need::HumanConfirmation],
-            Self::Edit(_)
-            | Self::Import
-            | Self::Retire
-            | Self::ResumePublish
-            | Self::AbortPublish => Vec::new(),
+            Self::ResumePublish | Self::AbortPublish => vec![Need::ConfirmationIfIrreversible],
+            Self::Edit(_) | Self::Import | Self::Retire => Vec::new(),
         }
     }
 }
@@ -314,6 +313,10 @@ pub enum Need {
     /// A person's confirmation, from outside the process, of something that cannot
     /// be taken back.
     HumanConfirmation,
+    /// A person's confirmation, from outside the process, if the plan of the step has
+    /// a part that cannot be taken back; the plan says (its `confirmation`), and the
+    /// step does not, since it is made before the plan is.
+    ConfirmationIfIrreversible,
 }
 
 /// What an entity is asked about, beside its state: its kind decides its gate and
@@ -616,29 +619,26 @@ pub fn import_steps(corpus: &Corpus) -> Vec<DoStep> {
 
 /// What a publication that stopped part way waits on.
 ///
-/// A copy not yet recorded as published is finished or undone: a choice. Finishing
-/// writes the records into the public ledger again from the start, which cannot be
-/// taken back, so it needs a person's confirmation. Once the publication is recorded
-/// there is one way on, finishing, and what it takes back is the private copy: that
-/// needs a confirmation only when the copy says something the public file does not.
+/// A copy not yet recorded as published is finished or undone: a choice. Once the
+/// publication is recorded there is one way on, finishing.
+///
+/// Whether either asks a person to confirm is the plan's to say, not this step's:
+/// finishing a copy writes the records into the public ledger again from the start,
+/// which cannot be taken back, and finishing a recorded one takes back a private copy
+/// that may say something the public file does not. The step says only that the plan
+/// decides ([`Need::ConfirmationIfIrreversible`]), so it cannot contradict the plan
+/// ([`PublicationPlan::confirmation`](super::publication::PublicationPlan::confirmation),
+/// [`AbortPlan::confirmation`](super::publication::AbortPlan::confirmation)).
 pub fn publication_step(publication: &PublishInProgress) -> NextStep {
     let target = EntityRef::Doc(publication.id());
     let resume = DoStep::new(NextAction::ResumePublish, target.clone());
     match publication.form() {
         PublishForm::FileCopied => NextStep::Choose(TwoOrMore::new(
-            resume.needing(Need::HumanConfirmation),
+            resume,
             DoStep::new(NextAction::AbortPublish, target),
             Vec::new(),
         )),
-        PublishForm::PrivateCopyLeft => {
-            let differs =
-                publication.public().bytes() != publication.private_copy().facts().bytes();
-            NextStep::Do(if differs {
-                resume.needing(Need::HumanConfirmation)
-            } else {
-                resume
-            })
-        }
+        PublishForm::PrivateCopyLeft => NextStep::Do(resume),
     }
 }
 
@@ -817,14 +817,14 @@ mod tests {
 
     fn spec_document(n: u128) -> Reading {
         let header = Header::new(docid(n), DocKind::Spec, None, BTreeSet::new(), None);
-        Reading::Document(
+        Reading::resolved(
             Document::new(header, Entity::Spec(spec_of(n, &[900], &["PIN-A"]))).unwrap(),
         )
     }
 
     fn design_document(n: u128, items: Vec<(u32, crate::domain::design::WorkItem)>) -> Reading {
         let header = Header::new(docid(n), DocKind::Design, None, BTreeSet::new(), None);
-        Reading::Document(Document::new(header, Entity::Design(design(n, 900, items))).unwrap())
+        Reading::resolved(Document::new(header, Entity::Design(design(n, 900, items))).unwrap())
     }
 
     fn corpus_cut_short(published: bool, private_bytes: &[u8]) -> Corpus {
@@ -1119,7 +1119,7 @@ mod tests {
         let landed = |hunks: bool| {
             Integration::decide([ApprovedChange::checked(
                 rev(),
-                Some(fingerprint.clone()),
+                crate::domain::approval::CaChange::Fingerprinted(fingerprint.clone()),
                 BaselineFacts::new(Knowable::Known(false), Knowable::Known(hunks)),
                 UnknownWhy::Shallow,
             )])
@@ -1424,26 +1424,23 @@ mod tests {
         assert_eq!(steps[0].action(), &NextAction::ResumePublish);
         assert_eq!(steps[1].action(), &NextAction::AbortPublish);
         assert!(steps.iter().all(|s| s.target() == &doc_target(1)));
-        // Resuming starts the records over, which cannot be taken back.
-        assert_eq!(steps[0].needs(), &[Need::HumanConfirmation]);
-        assert_eq!(steps[1].needs(), &[]);
+        // Whether a person is asked is the plan's to say, for both.
+        assert_eq!(steps[0].needs(), &[Need::ConfirmationIfIrreversible]);
+        assert_eq!(steps[1].needs(), &[Need::ConfirmationIfIrreversible]);
     }
 
     #[test]
-    fn a_publication_recorded_as_published_is_resumed_and_asks_only_for_a_copy_that_differs() {
-        let same = publication_steps(&corpus_cut_short(true, b"same"));
-        let NextStep::Do(resume) = &same[0] else {
-            panic!("a step");
-        };
-        assert_eq!(resume.action(), &NextAction::ResumePublish);
-        assert_eq!(resume.needs(), &[], "nothing is lost by taking a copy away");
-
-        let differs = publication_steps(&corpus_cut_short(true, b"edited"));
-        let NextStep::Do(resume) = &differs[0] else {
-            panic!("a step");
-        };
-        assert_eq!(resume.action(), &NextAction::ResumePublish);
-        assert_eq!(resume.needs(), &[Need::HumanConfirmation]);
+    fn a_publication_recorded_as_published_is_resumed_and_the_plan_decides_what_it_asks() {
+        for private in [&b"same"[..], &b"edited"[..]] {
+            let steps = publication_steps(&corpus_cut_short(true, private));
+            let NextStep::Do(resume) = &steps[0] else {
+                panic!("a step");
+            };
+            assert_eq!(resume.action(), &NextAction::ResumePublish);
+            // A step is made before the plan, so it cannot know whether the copy
+            // differs; it never says more than the plan will.
+            assert_eq!(resume.needs(), &[Need::ConfirmationIfIrreversible]);
+        }
     }
 
     #[test]
@@ -1531,14 +1528,20 @@ mod tests {
             (NextAction::Adopt, vec![Need::HumanConfirmation]),
             (NextAction::Import, vec![]),
             (NextAction::Retire, vec![]),
-            (NextAction::ResumePublish, vec![]),
-            (NextAction::AbortPublish, vec![]),
+            (
+                NextAction::ResumePublish,
+                vec![Need::ConfirmationIfIrreversible],
+            ),
+            (
+                NextAction::AbortPublish,
+                vec![Need::ConfirmationIfIrreversible],
+            ),
             (NextAction::Edit(EditFor::Restore), vec![]),
         ];
         for (action, needs) in table {
             assert_eq!(action.needs(), needs, "{}", kind(&action));
         }
-        let step = DoStep::new(NextAction::ResumePublish, doc_target(1))
+        let step = DoStep::new(NextAction::Retire, doc_target(1))
             .needing(Need::HumanConfirmation)
             .needing(Need::HumanConfirmation);
         assert_eq!(step.needs(), &[Need::HumanConfirmation], "said once");

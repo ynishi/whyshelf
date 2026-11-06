@@ -23,13 +23,16 @@
 //! ```
 //!
 //! Parsing Markdown or YAML is not done here. A [`Reading`] holds the value the
-//! adapter produced.
+//! adapter produced. Looking the references of a Spec and a Design up is done here, in
+//! [`Corpus::build`], and not by the adapter: what an alias names depends on the other
+//! files, and a rule that depends on them is the domain's ([`naming`](super::naming),
+//! [`parsed`](super::parsed)).
 //!
 //! # What a file can be
 //!
 //! | reading | the file is | kept as |
 //! |---|---|---|
-//! | [`Reading::Document`] | a document with an `id:` | a [`CorpusDocument`], valid or not |
+//! | [`Reading::Document`] | a document with an `id:` | a [`CorpusDocument`], valid or not; or an [`UnparsedFile`] when a reference it holds cannot be held (see [`parsed`](super::parsed)) |
 //! | [`Reading::Unidentified`] | a file of a known (or guessable) kind with no `id:` | an [`ImportCandidate`]; it is not a document |
 //! | [`Reading::Unparsed`] | a file that cannot be read | an [`UnparsedFile`] with its reasons, and the `id:` it writes if that could still be seen |
 //!
@@ -119,11 +122,13 @@ use super::design::{Design, ItemIssue};
 use super::error::DocumentError;
 use super::event::DocKind;
 use super::finding::Finding;
-use super::hash::BytesHash;
+use super::hash::{BytesHash, TextHash};
 use super::id::{Alias, DocId, EntityId};
 use super::knowable::Knowable;
 use super::location::RelPath;
+use super::naming::{Index, Resolver, Written};
 use super::nonempty::NonEmptyVec;
+use super::parsed::ParsedDocument;
 use super::spec::Spec;
 use super::state::UnparsedReason;
 use super::tag::Tag;
@@ -383,10 +388,13 @@ impl Document {
 }
 
 /// What reading one file gave.
+///
+/// A document is read as it is written, with its references still to be looked up
+/// ([`ParsedDocument`]); [`Corpus::build`] looks them up once it has every file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reading {
     /// The file is a document.
-    Document(Document),
+    Document(ParsedDocument),
     /// The file has no `id:`. It is not a document; it is a file that could be
     /// imported once an `id:` is written into it. `kind` is what the file shows of
     /// its kind, if that can be told.
@@ -403,6 +411,29 @@ pub enum Reading {
         /// Why the file cannot be read.
         reasons: NonEmptyVec<UnparsedReason>,
     },
+}
+
+#[cfg(test)]
+impl Reading {
+    /// A document whose references are identifiers already, written as such; the hash
+    /// of its text follows from what it says, so two documents that differ have texts
+    /// that differ.
+    pub(crate) fn resolved(document: Document) -> Self {
+        let text = TextHash::of(&format!("{document:?}"));
+        Self::Document(ParsedDocument::from_document(document, text))
+    }
+
+    /// The same, with the references to the `private` documents written behind a
+    /// `private:` mark, as a file does that stands on a document of the private root;
+    /// `None` marks every reference.
+    pub(crate) fn resolved_marking(document: Document, private: Option<&BTreeSet<DocId>>) -> Self {
+        let text = TextHash::of(&format!("{document:?}"));
+        let parsed = ParsedDocument::from_document(document, text);
+        Self::Document(match private {
+            Some(private) => parsed.with_private_marks_of(private),
+            None => parsed.with_private_marks(),
+        })
+    }
 }
 
 /// Why a document cannot be trusted as it stands.
@@ -489,6 +520,7 @@ impl Standing {
 pub struct CorpusDocument {
     facts: FileFacts,
     document: Document,
+    text: TextHash,
     standing: Standing,
 }
 
@@ -496,6 +528,15 @@ impl CorpusDocument {
     /// The facts about the file.
     pub fn facts(&self) -> &FileFacts {
         &self.facts
+    }
+
+    /// The hash of the normalized text the document was read from: the version a gate
+    /// is told it read and the key of the stored object of that version.
+    ///
+    /// Why not part of [`FileFacts`]: the facts are what is known before the file is
+    /// read, and the hash of the bytes there is another hash of another thing.
+    pub fn text(&self) -> TextHash {
+        self.text
     }
 
     /// Where the file is.
@@ -721,16 +762,21 @@ pub struct Corpus {
     publishing: Vec<PublishInProgress>,
     exposed: Vec<ExposedFile>,
     notices: Vec<Notice>,
+    index: Index,
+    written: BTreeMap<DocId, Written>,
 }
 
 /// A document file on its way to the corpus: not yet judged.
 struct Pending {
     facts: FileFacts,
     document: Document,
+    text: TextHash,
     reasons: Vec<Invalidity>,
 }
 
-type File = (FileFacts, Document);
+/// A document file whose references were looked up: where it is, what it says, and the
+/// hash of its text.
+type File = (FileFacts, Document, TextHash);
 
 /// The files that share one id, told by their number and their roots.
 enum Group {
@@ -771,25 +817,65 @@ impl Corpus {
     /// `published` is the set of document ids that have been recorded as published;
     /// it decides what a document in both a public and a private file is. The order
     /// of `readings` does not matter.
+    ///
+    /// The references of the documents are looked up here, and nowhere else:
+    ///
+    /// ```text
+    ///   readings --> Index (every header) --> Resolver --> entities, Written
+    /// ```
+    ///
+    /// A file whose reference cannot be held (an alias that names nothing, several, a
+    /// document of the wrong kind) is listed with the files that cannot be read
+    /// ([`Corpus::unparsed`]), under the `id:` it shows. The histories that explain a
+    /// rename are not available here, so a miss carries no hint.
     pub fn build(
         readings: impl IntoIterator<Item = (FileFacts, Reading)>,
         published: &BTreeSet<DocId>,
     ) -> Self {
-        let mut by_id: BTreeMap<DocId, Vec<File>> = BTreeMap::new();
+        let mut parsed: Vec<(FileFacts, ParsedDocument)> = Vec::new();
         let mut candidates = Vec::new();
         let mut unparsed = Vec::new();
         for (facts, reading) in readings {
             match reading {
-                Reading::Document(document) => {
-                    by_id
-                        .entry(document.id())
-                        .or_default()
-                        .push((facts, document));
-                }
+                Reading::Document(document) => parsed.push((facts, document)),
                 Reading::Unidentified { kind } => candidates.push(ImportCandidate { facts, kind }),
                 Reading::Unparsed { id, reasons } => {
                     unparsed.push(UnparsedFile { facts, id, reasons });
                 }
+            }
+        }
+
+        // Every header is indexed before any entity is built: a Spec holds the ids its
+        // grounds come to, so the grounds are looked up first.
+        let heard = Index::of_parsed(
+            parsed
+                .iter()
+                .map(|(facts, document)| (&facts.location, document)),
+            &unparsed,
+        );
+        let resolver = Resolver::new(&heard, Knowable::Unknown, Knowable::Unknown);
+        let mut by_id: BTreeMap<DocId, Vec<File>> = BTreeMap::new();
+        let mut written: BTreeMap<DocId, Written> = BTreeMap::new();
+        for (facts, document) in parsed {
+            let id = document.id();
+            let seen_from = resolver.seen_from(facts.location.visibility());
+            match document.settle(&seen_from, &heard) {
+                Ok(settled) => {
+                    if settled.written != Written::default() {
+                        let mine = written.entry(id).or_default();
+                        mine.unresolved.extend(settled.written.unresolved);
+                        mine.dangling.extend(settled.written.dangling);
+                    }
+                    by_id
+                        .entry(id)
+                        .or_default()
+                        .push((facts, settled.document, settled.text));
+                }
+                Err(reasons) => unparsed.push(UnparsedFile {
+                    facts,
+                    id: Some(id),
+                    reasons,
+                }),
             }
         }
         candidates.sort_by(|a, b| a.facts.location.cmp(&b.facts.location));
@@ -880,17 +966,23 @@ impl Corpus {
         exposed.sort_by(|a, b| a.location.cmp(&b.location));
         notices.sort_by(|a, b| a.location().cmp(b.location()));
 
-        let documents = pending
+        let documents: Vec<CorpusDocument> = pending
             .into_iter()
             .map(|file| CorpusDocument {
                 facts: file.facts,
                 document: file.document,
+                text: file.text,
                 standing: match non_empty(file.reasons) {
                     Some(reasons) => Standing::Invalid(reasons),
                     None => Standing::Valid,
                 },
             })
             .collect();
+        // The index of the documents the corpus holds and of the files it could not
+        // read, which the lookups after the build stand on. It leaves out what the
+        // lookups of the build saw and the corpus does not keep: the private copy of a
+        // publication cut short.
+        let index = Index::of_documents(&documents, &unparsed);
         Self {
             documents,
             candidates,
@@ -898,18 +990,21 @@ impl Corpus {
             publishing,
             exposed,
             notices,
+            index,
+            written,
         }
     }
 
     /// A file on its way to the corpus, with the reasons it has so far and those of
     /// the document's own content: the faults of the identity of a Design's items.
-    fn pending((facts, document): File, mut reasons: Vec<Invalidity>) -> Pending {
+    fn pending((facts, document, text): File, mut reasons: Vec<Invalidity>) -> Pending {
         if let Entity::Design(design) = document.entity() {
             reasons.extend(design.item_issues().into_iter().map(Invalidity::Item));
         }
         Pending {
             facts,
             document,
+            text,
             reasons,
         }
     }
@@ -1053,6 +1148,20 @@ impl Corpus {
     pub fn notices(&self) -> &[Notice] {
         &self.notices
     }
+
+    /// The index the references are looked up in: the ids, aliases, places and item
+    /// numbers of the documents this corpus holds, to build a
+    /// [`Resolver`] on.
+    pub fn index(&self) -> &Index {
+        &self.index
+    }
+
+    /// How each document wrote the upstream identifiers it holds that no state can
+    /// answer for, made while the references were looked up. A document not in the map
+    /// wrote none of the kind.
+    pub fn written(&self) -> &BTreeMap<DocId, Written> {
+        &self.written
+    }
 }
 
 #[cfg(test)]
@@ -1115,11 +1224,11 @@ mod tests {
     }
 
     fn doc(n: u128) -> Reading {
-        Reading::Document(doc_with(n, None))
+        Reading::resolved(doc_with(n, None))
     }
 
     fn aliased(n: u128, alias: &str) -> Reading {
-        Reading::Document(doc_with(n, Some(alias)))
+        Reading::resolved(doc_with(n, Some(alias)))
     }
 
     fn none() -> BTreeSet<DocId> {
@@ -1579,7 +1688,7 @@ mod tests {
     fn design_reading(n: u128, items: Vec<(u32, WorkItem)>) -> Reading {
         let design = design_of(10 + n, 1, items);
         let header = Header::new(docid(10 + n), DocKind::Design, None, BTreeSet::new(), None);
-        Reading::Document(Document::new(header, Entity::Design(design)).unwrap())
+        Reading::resolved(Document::new(header, Entity::Design(design)).unwrap())
     }
 
     #[test]

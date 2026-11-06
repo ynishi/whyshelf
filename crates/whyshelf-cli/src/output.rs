@@ -2083,7 +2083,7 @@ mod tests {
     /// none.
     #[test]
     fn an_approval_shows_the_revision_it_recorded() {
-        use whyshelf_core::domain::approval::{Attestation, Gate, Pinned, TestOutcome};
+        use whyshelf_core::domain::approval::{Attestation, CaChange, Gate, Pinned, TestOutcome};
         use whyshelf_core::domain::event::EventId;
         use whyshelf_core::domain::hash::ContentHash;
         use whyshelf_core::domain::id::{DesignId, ItemId};
@@ -2096,7 +2096,7 @@ mod tests {
             design: Pinned::new(DesignId::new(id(2)), hash.into()),
             revision: Revision::Commit(RevisionId::from_validated(old.to_owned()).unwrap()),
             tests: TestOutcome::Passed,
-            fingerprint: None,
+            change: CaChange::NotRecorded,
         };
         let event: EventId = format!("sha256:{}", "0".repeat(64)).parse().unwrap();
         let shown = |gate, attestation| {

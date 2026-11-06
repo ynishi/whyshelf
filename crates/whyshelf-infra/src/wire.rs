@@ -89,7 +89,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 use whyshelf_core::domain::actor::{Actor, Timestamp};
-use whyshelf_core::domain::approval::{Attestation, CmResult, Pinned, TestOutcome};
+use whyshelf_core::domain::approval::{Attestation, CaChange, CmResult, Pinned, TestOutcome};
 use whyshelf_core::domain::error::{EventError, ValueError};
 use whyshelf_core::domain::event::{
     ClassChange, ClassSnapshot, DocKind, DocRegistration, Event, EventBody, EventId, Publication,
@@ -318,11 +318,12 @@ enum AttestationV1 {
         design: PinnedV1,
         revision: RevisionV1,
         tests: TestsV1,
-        /// The hunks of the approved change. Absent when the approval records none,
-        /// so a CA written before fingerprints were recorded has the bytes it
-        /// always had. Boxed, as in the domain, so the other gates stay small.
+        /// What the approval records of the approved change. Absent when it records
+        /// nothing ([`CaChange::NotRecorded`]), so a CA written before fingerprints
+        /// were recorded has the bytes it always had. Boxed, as in the domain, so the
+        /// other gates stay small.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        change: Option<Box<FingerprintV1>>,
+        change: Option<Box<CaChangeV1>>,
     },
     #[serde(rename = "CM")]
     Cm {
@@ -359,6 +360,31 @@ impl Default for GatePolicyV1 {
 enum RevisionV1 {
     Commit { id: String },
     Patch { base: String, patch: String },
+}
+
+/// What a CA records of the change it approved (`CaChange`, but for the one case that
+/// writes no key). A tagged case has a `kind`; the fingerprint's own keys have none, as
+/// in the canonical form, so the two are told apart by it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+enum CaChangeV1 {
+    /// A case with a tag.
+    Tagged(TaggedCaChangeV1),
+    /// The change, cut into hunks.
+    Fingerprint(FingerprintV1),
+}
+
+/// The cases of `CaChange` that are a word and not a fingerprint.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum TaggedCaChangeV1 {
+    /// There was nothing to fingerprint.
+    Nothing,
+    /// The approver's clone could not cut the change into hunks.
+    Unavailable {
+        /// The name of the reason.
+        why: String,
+    },
 }
 
 /// The fingerprint of the change a CA approved (`ChangeFingerprint`). It is in the
@@ -488,6 +514,33 @@ fn fingerprint_dto(fingerprint: &ChangeFingerprint) -> FingerprintV1 {
     }
 }
 
+fn ca_change_dto(change: &CaChange) -> Option<CaChangeV1> {
+    match change {
+        CaChange::Fingerprinted(fingerprint) => {
+            Some(CaChangeV1::Fingerprint(fingerprint_dto(fingerprint)))
+        }
+        CaChange::NothingToFingerprint => Some(CaChangeV1::Tagged(TaggedCaChangeV1::Nothing)),
+        CaChange::NotFingerprinted(why) => {
+            Some(CaChangeV1::Tagged(TaggedCaChangeV1::Unavailable {
+                why: why.name().to_owned(),
+            }))
+        }
+        CaChange::NotRecorded => None,
+    }
+}
+
+fn ca_change_from(dto: &CaChangeV1) -> Result<CaChange, WireError> {
+    Ok(match dto {
+        CaChangeV1::Fingerprint(fingerprint) => {
+            CaChange::Fingerprinted(fingerprint_from(fingerprint)?)
+        }
+        CaChangeV1::Tagged(TaggedCaChangeV1::Nothing) => CaChange::NothingToFingerprint,
+        CaChangeV1::Tagged(TaggedCaChangeV1::Unavailable { why }) => {
+            CaChange::NotFingerprinted(parse_field("why", why)?)
+        }
+    })
+}
+
 fn attestation_dto(attestation: &Attestation) -> AttestationV1 {
     match attestation {
         Attestation::Cr { finding } => AttestationV1::Cr {
@@ -513,7 +566,7 @@ fn attestation_dto(attestation: &Attestation) -> AttestationV1 {
             design,
             revision,
             tests,
-            fingerprint,
+            change,
         } => AttestationV1::Ca {
             item: pinned_dto(item),
             design: upstream_dto(design),
@@ -522,9 +575,7 @@ fn attestation_dto(attestation: &Attestation) -> AttestationV1 {
                 TestOutcome::Passed => TestsV1::Passed,
                 TestOutcome::Failed => TestsV1::Failed,
             },
-            change: fingerprint
-                .as_ref()
-                .map(|fingerprint| Box::new(fingerprint_dto(fingerprint))),
+            change: ca_change_dto(change).map(Box::new),
         },
         Attestation::Cm { spec, cs, result } => AttestationV1::Cm {
             spec: pinned_dto(spec),
@@ -805,7 +856,11 @@ fn attestation_from(dto: &AttestationV1) -> Result<Attestation, WireError> {
                 TestsV1::Passed => TestOutcome::Passed,
                 TestsV1::Failed => TestOutcome::Failed,
             },
-            fingerprint: change.as_deref().map(fingerprint_from).transpose()?,
+            change: change
+                .as_deref()
+                .map(ca_change_from)
+                .transpose()?
+                .unwrap_or(CaChange::NotRecorded),
         },
         AttestationV1::Cm { spec, cs, result } => Attestation::Cm {
             spec: pinned_from("spec", spec, SpecId::new)?,
@@ -975,6 +1030,7 @@ pub fn decode(bytes: &[u8]) -> Result<Recorded, WireError> {
 mod tests {
     use super::*;
     use uuid::Uuid;
+    use whyshelf_core::domain::approval::CsRef;
 
     fn eid(n: u128) -> EntityId {
         let bits = (n & 0x0fff_ffff_ffff_ffff) | (0x7u128 << 76) | (0b10u128 << 62);
@@ -1140,7 +1196,7 @@ mod tests {
                 design: upstream(DesignId::new, 8, "d"),
                 revision: Revision::Commit(commit.clone()),
                 tests: TestOutcome::Passed,
-                fingerprint: None,
+                change: CaChange::NotRecorded,
             },
             Attestation::Ca {
                 item: pinned(ItemId::new, 9, "i"),
@@ -1150,30 +1206,30 @@ mod tests {
                     patch: h("patch"),
                 },
                 tests: TestOutcome::Failed,
-                fingerprint: None,
+                change: CaChange::NotRecorded,
             },
             Attestation::Ca {
                 item: pinned(ItemId::new, 9, "i"),
                 design: upstream(DesignId::new, 8, "d"),
                 revision: Revision::Commit(RevisionId::from_validated("c3".repeat(20)).unwrap()),
                 tests: TestOutcome::Passed,
-                fingerprint: Some(fingerprint()),
+                change: CaChange::Fingerprinted(fingerprint()),
             },
             Attestation::Cm {
                 spec: pinned(SpecId::new, 6, "hyp"),
-                cs: moved.id(),
+                cs: CsRef::Event(moved.id()),
                 result: CmResult::Pass,
             },
             Attestation::Cm {
                 spec: pinned(SpecId::new, 6, "hyp"),
-                cs: moved.id(),
+                cs: CsRef::Event(moved.id()),
                 result: CmResult::FailWiring {
                     item_hint: NonBlank::new("a retry item").unwrap(),
                 },
             },
             Attestation::Cm {
                 spec: pinned(SpecId::new, 6, "hyp"),
-                cs: moved.id(),
+                cs: CsRef::Event(moved.id()),
                 result: CmResult::FailHyp {
                     finding: FindingId::new(eid(10)),
                 },
@@ -1420,6 +1476,101 @@ mod tests {
         ));
     }
 
+    /// The cases of the change that are a word are written with their tag, and read
+    /// back to the same approval under the same identifier.
+    #[test]
+    fn a_ca_that_says_why_it_has_no_fingerprint_round_trips() {
+        use whyshelf_core::domain::approval::CaChange;
+        use whyshelf_core::domain::integration::FingerprintUnavailable;
+        let ca_with = |change: CaChange| {
+            let attestation = Attestation::Ca {
+                item: pinned(ItemId::new, 9, "i"),
+                design: upstream(DesignId::new, 8, "d"),
+                revision: Revision::Commit(RevisionId::from_validated("c3".repeat(20)).unwrap()),
+                tests: TestOutcome::Passed,
+                change,
+            };
+            Event::new(
+                attestation.subject(),
+                BTreeSet::new(),
+                EventBody::Approved {
+                    by: alice(),
+                    attestation,
+                },
+            )
+            .unwrap()
+        };
+        let cases = [(CaChange::NothingToFingerprint, "nothing", None)]
+            .into_iter()
+            .chain(FingerprintUnavailable::ALL.map(|why| {
+                (
+                    CaChange::NotFingerprinted(why),
+                    "unavailable",
+                    Some(why.name()),
+                )
+            }));
+        let mut ids = BTreeSet::new();
+        for (change, kind, why) in cases {
+            let event = ca_with(change.clone());
+            assert!(
+                ids.insert(event.id()),
+                "each case is an approval of its own"
+            );
+            let file: serde_json::Value =
+                serde_json::from_str(&encode(&event, &at()).unwrap()).unwrap();
+            assert_eq!(file["attestation"]["change"]["kind"], kind);
+            assert_eq!(
+                file["attestation"]["change"]
+                    .get("why")
+                    .and_then(|v| v.as_str()),
+                why
+            );
+            let back = decode(file.to_string().as_bytes()).unwrap();
+            assert_eq!(back.event(), &event);
+            let EventBody::Approved { attestation, .. } = back.event().body() else {
+                panic!("an approval");
+            };
+            assert_eq!(attestation.change(), Some(&change));
+        }
+        // A reason this build has no name for is refused, not read as another.
+        let event = ca_with(CaChange::NotFingerprinted(FingerprintUnavailable::Shallow));
+        let mut file: serde_json::Value =
+            serde_json::from_str(&encode(&event, &at()).unwrap()).unwrap();
+        file["attestation"]["change"]["why"] = serde_json::json!("elsewhere");
+        assert!(matches!(
+            decode(file.to_string().as_bytes()),
+            Err(WireError::Field { field: "why", .. })
+        ));
+    }
+
+    /// A CM names the CS approval it stands on by the form of what that is.
+    #[test]
+    fn a_cm_on_a_judgement_of_a_ledger_round_trips_and_is_not_an_event() {
+        use whyshelf_core::domain::judgement::JudgementId;
+        let on_judgement = Attestation::Cm {
+            spec: pinned(SpecId::new, 6, "hyp"),
+            cs: CsRef::Judgement(JudgementId::new(eid(70))),
+            result: CmResult::Pass,
+        };
+        let event = Event::new(
+            on_judgement.subject(),
+            BTreeSet::new(),
+            EventBody::Approved {
+                by: alice(),
+                attestation: on_judgement.clone(),
+            },
+        )
+        .unwrap();
+        let file: serde_json::Value =
+            serde_json::from_str(&encode(&event, &at()).unwrap()).unwrap();
+        assert_eq!(
+            file["attestation"]["cs"],
+            JudgementId::new(eid(70)).to_string()
+        );
+        let back = decode(file.to_string().as_bytes()).unwrap();
+        assert_eq!(back.event(), &event);
+    }
+
     /// A fingerprint made under a scheme this build does not have is read back whole,
     /// under the same identifier, and what it says of the landing is that it cannot be
     /// told: the file is not refused, and the approval is not read as another.
@@ -1444,7 +1595,7 @@ mod tests {
                 design: upstream(DesignId::new, 8, "d"),
                 revision: Revision::Commit(RevisionId::from_validated("c3".repeat(20)).unwrap()),
                 tests: TestOutcome::Passed,
-                fingerprint: Some(fingerprint),
+                change: CaChange::Fingerprinted(fingerprint),
             };
             Event::new(
                 attestation.subject(),
@@ -1479,7 +1630,7 @@ mod tests {
         // Its landing cannot be told, whatever the port says of the hunks.
         let verdict = Integration::decide([ApprovedChange::checked(
             Revision::Commit(RevisionId::from_validated("c3".repeat(20)).unwrap()),
-            Some(fingerprint.clone()),
+            CaChange::Fingerprinted(fingerprint.clone()),
             BaselineFacts::new(Knowable::Known(false), Knowable::Known(true)),
             UnknownWhy::Shallow,
         )]);

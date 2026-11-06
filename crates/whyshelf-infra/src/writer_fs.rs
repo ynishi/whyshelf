@@ -46,7 +46,11 @@
 //! | `rewrite` or `remove`, there is no file (or no directory on the way) | [`Write::ChangedUnderfoot`]: the file the caller read is gone |
 //! | `rewrite`, the file has two or more hard links | [`Write::MultipleLinks`] |
 //! | `rewrite`, the group cannot be kept and the original's mode gives the group any access | [`Write::CannotKeepGroup`] |
-//! | `rewrite`, the owner cannot be kept and is not our own | [`WriterError::CannotKeepOwner`] (the port has no answer for it) |
+//! | `rewrite`, the owner cannot be kept and is not our own | [`Write::CannotKeepOwner`] |
+//!
+//! A failure of a system call is none of these: it is a [`WriterError`] with one
+//! variant for each operation that failed (open, stat, read, create, write, chown,
+//! chmod, rename, unlink), so a caller can tell what was being done.
 //!
 //! # The replacement
 //!
@@ -99,17 +103,84 @@ pub enum WriterError {
         /// The path asked for.
         path: String,
     },
-    /// The replacement cannot be given the original's owner, and the original is
-    /// not our own file.
-    #[error("cannot keep the owner of {path} on a replacement")]
-    CannotKeepOwner {
-        /// The file.
+    /// A file or a directory on the way could not be opened.
+    #[error("cannot open {path}")]
+    Open {
+        /// The file the operation was for.
         path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
     },
-    /// A system call failed.
-    #[error("cannot write the file {path}")]
-    Io {
-        /// The file.
+    /// The state of a file could not be read (`fstat`, `fstatat`).
+    #[error("cannot read the state of {path}")]
+    Stat {
+        /// The file the operation was for.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// The bytes of a file could not be read.
+    #[error("cannot read {path}")]
+    Read {
+        /// The file the operation was for.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// A file or a directory could not be created: the file itself, a missing
+    /// directory on the way, or the temporary file of a replacement.
+    #[error("cannot create a file or a directory for {path}")]
+    Create {
+        /// The file the operation was for.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// The bytes could not be written, or made durable.
+    #[error("cannot write {path}")]
+    Write {
+        /// The file the operation was for.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// The replacement could not be given the owner or the group of the original
+    /// for a reason other than not being allowed to (that is a [`Write`] answer).
+    #[error("cannot set the owner or the group on the replacement of {path}")]
+    Chown {
+        /// The file the operation was for.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// The replacement could not be given the original's permission bits.
+    #[error("cannot set the permissions on the replacement of {path}")]
+    Chmod {
+        /// The file the operation was for.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// The replacement could not be renamed over the original.
+    #[error("cannot replace {path}")]
+    Rename {
+        /// The file the operation was for.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// The file could not be removed.
+    #[error("cannot remove {path}")]
+    Unlink {
+        /// The file the operation was for.
         path: PathBuf,
         /// The operating system's error.
         #[source]
@@ -177,17 +248,68 @@ impl Target {
         self.root.join(&self.rel)
     }
 
-    fn io(&self, errno: Errno) -> WriterError {
-        WriterError::Io {
+    // One constructor per operation, so that a failure says which call failed.
+
+    fn open_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Open {
             path: self.full(),
-            source: errno.into(),
+            source: source.into(),
         }
     }
 
-    fn io_std(&self, source: io::Error) -> WriterError {
-        WriterError::Io {
+    fn stat_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Stat {
             path: self.full(),
-            source,
+            source: source.into(),
+        }
+    }
+
+    fn read_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Read {
+            path: self.full(),
+            source: source.into(),
+        }
+    }
+
+    fn create_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Create {
+            path: self.full(),
+            source: source.into(),
+        }
+    }
+
+    fn write_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Write {
+            path: self.full(),
+            source: source.into(),
+        }
+    }
+
+    fn chown_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Chown {
+            path: self.full(),
+            source: source.into(),
+        }
+    }
+
+    fn chmod_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Chmod {
+            path: self.full(),
+            source: source.into(),
+        }
+    }
+
+    fn rename_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Rename {
+            path: self.full(),
+            source: source.into(),
+        }
+    }
+
+    fn unlink_failed(&self, source: impl Into<io::Error>) -> WriterError {
+        WriterError::Unlink {
+            path: self.full(),
+            source: source.into(),
         }
     }
 
@@ -252,7 +374,7 @@ fn walk(target: &Target, dirs: &[&str], make: bool) -> Result<Walk, WriterError>
         OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
         Mode::empty(),
     )
-    .map_err(|e| target.io(e))?;
+    .map_err(|e| target.open_failed(e))?;
     for name in dirs {
         let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
         let next = match openat(&dir, *name, flags, Mode::empty()) {
@@ -260,7 +382,7 @@ fn walk(target: &Target, dirs: &[&str], make: bool) -> Result<Walk, WriterError>
                 match mkdirat(&dir, *name, target.dir_mode()) {
                     // Another writer made it first: that is as good.
                     Ok(()) | Err(Errno::EXIST) => {}
-                    Err(e) => return Err(target.io(e)),
+                    Err(e) => return Err(target.create_failed(e)),
                 }
                 openat(&dir, *name, flags, Mode::empty())
             }
@@ -271,7 +393,7 @@ fn walk(target: &Target, dirs: &[&str], make: bool) -> Result<Walk, WriterError>
             Err(Errno::NOENT) => return Ok(Walk::Missing),
             // A symbolic link (`ELOOP`; `ENOTDIR` on some systems) or a file.
             Err(Errno::LOOP | Errno::NOTDIR) => return Ok(Walk::NotRegular),
-            Err(e) => return Err(target.io(e)),
+            Err(e) => return Err(target.open_failed(e)),
         };
     }
     Ok(Walk::Dir(dir))
@@ -314,9 +436,9 @@ fn open_existing(target: &Target, dir: BorrowedFd<'_>, name: &str) -> Result<Ope
         Err(Errno::NOENT) => return Ok(Opened::Missing),
         // A symbolic link; some systems say `EMLINK` or `NXIO` for other cases.
         Err(Errno::LOOP | Errno::MLINK | Errno::NXIO) => return Ok(Opened::NotRegular),
-        Err(e) => return Err(target.io(e)),
+        Err(e) => return Err(target.open_failed(e)),
     };
-    let stat = fstat(&fd).map_err(|e| target.io(e))?;
+    let stat = fstat(&fd).map_err(|e| target.stat_failed(e))?;
     if !is_regular(&stat) {
         return Ok(Opened::NotRegular);
     }
@@ -325,7 +447,8 @@ fn open_existing(target: &Target, dir: BorrowedFd<'_>, name: &str) -> Result<Ope
 
 fn read_all(target: &Target, file: &mut File) -> Result<Vec<u8>, WriterError> {
     let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes).map_err(|e| target.io_std(e))?;
+    file.read_to_end(&mut bytes)
+        .map_err(|e| target.read_failed(e))?;
     Ok(bytes)
 }
 
@@ -337,7 +460,7 @@ fn create_new(target: &Target, text: &[u8]) -> Result<Write, WriterError> {
         Walk::Dir(dir) => dir,
         Walk::NotRegular => return Ok(Write::NotRegularFile),
         // Made on the way, so only a race can leave one missing.
-        Walk::Missing => return Err(target.io(Errno::NOENT)),
+        Walk::Missing => return Err(target.open_failed(Errno::NOENT)),
     };
     let flags = OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC;
     let fd = match openat(&dir, name, flags, target.file_mode()) {
@@ -346,14 +469,14 @@ fn create_new(target: &Target, text: &[u8]) -> Result<Write, WriterError> {
         // what is there decides the answer.
         Err(Errno::EXIST) => return exists_or_not_regular(target, &dir, name),
         Err(Errno::LOOP) => return Ok(Write::NotRegularFile),
-        Err(e) => return Err(target.io(e)),
+        Err(e) => return Err(target.create_failed(e)),
     };
     let mut file = File::from(fd);
     if let Err(source) = file.write_all(text).and_then(|()| file.sync_all()) {
         // Do not leave half a file that the next attempt would call "exists".
         drop(file);
         let _ = unlinkat(&dir, name, AtFlags::empty());
-        return Err(target.io_std(source));
+        return Err(target.write_failed(source));
     }
     Ok(Write::Done)
 }
@@ -364,7 +487,7 @@ fn exists_or_not_regular(target: &Target, dir: &OwnedFd, name: &str) -> Result<W
         Ok(_) => Ok(Write::NotRegularFile),
         // Gone between the two calls: it was there, and it is the caller's to retry.
         Err(Errno::NOENT) => Ok(Write::Exists),
-        Err(e) => Err(target.io(e)),
+        Err(e) => Err(target.stat_failed(e)),
     }
 }
 
@@ -419,10 +542,10 @@ fn create_temp(target: &Target, dir: &OwnedFd) -> Result<(String, File), WriterE
         match openat(dir, name.as_str(), flags, Mode::from_raw_mode(0o600)) {
             Ok(fd) => return Ok((name, File::from(fd))),
             Err(Errno::EXIST) => {}
-            Err(e) => return Err(target.io(e)),
+            Err(e) => return Err(target.create_failed(e)),
         }
     }
-    Err(target.io(Errno::EXIST))
+    Err(target.create_failed(Errno::EXIST))
 }
 
 /// Fill the temporary file, give it the original's attributes, check once more, and
@@ -435,24 +558,22 @@ fn replace(
     tmp_name: &str,
     mut tmp: File,
 ) -> Result<Write, WriterError> {
-    tmp.write_all(text).map_err(|e| target.io_std(e))?;
+    tmp.write_all(text).map_err(|e| target.write_failed(e))?;
 
     // The owner first: it may clear set-user-ID bits that the mode then sets again.
     let uid = Uid::from_raw(original.stat.st_uid);
     // The temporary file is ours: its owner is who we are.
-    let ours = fstat(&tmp).map_err(|e| target.io(e))?.st_uid;
+    let ours = fstat(&tmp).map_err(|e| target.stat_failed(e))?.st_uid;
     match fchown(&tmp, Some(uid), None) {
         Ok(()) => {}
         // Our own file keeps its owner without being told to.
         Err(Errno::PERM) if original.stat.st_uid == ours => {}
-        Err(Errno::PERM) => {
-            return Err(WriterError::CannotKeepOwner {
-                path: target.full(),
-            });
-        }
-        Err(e) => return Err(target.io(e)),
+        // A person can mend this (the file is another user's), so it is an answer of
+        // the port and not a failure of the adapter.
+        Err(Errno::PERM) => return Ok(Write::CannotKeepOwner),
+        Err(e) => return Err(target.chown_failed(e)),
     }
-    let have = fstat(&tmp).map_err(|e| target.io(e))?;
+    let have = fstat(&tmp).map_err(|e| target.stat_failed(e))?;
     if have.st_gid != original.stat.st_gid {
         let gid = Gid::from_raw(original.stat.st_gid);
         match fchown(&tmp, None, Some(gid)) {
@@ -463,11 +584,12 @@ fn replace(
                     return Ok(Write::CannotKeepGroup);
                 }
             }
-            Err(e) => return Err(target.io(e)),
+            Err(e) => return Err(target.chown_failed(e)),
         }
     }
-    fchmod(&tmp, Mode::from_raw_mode(mode_of(original.stat) & 0o7777)).map_err(|e| target.io(e))?;
-    tmp.sync_all().map_err(|e| target.io_std(e))?;
+    fchmod(&tmp, Mode::from_raw_mode(mode_of(original.stat) & 0o7777))
+        .map_err(|e| target.chmod_failed(e))?;
+    tmp.sync_all().map_err(|e| target.write_failed(e))?;
 
     // Just before the rename: the same file, with the same bytes, still alone.
     let (mut again, now) = match open_existing(target, original.dir.as_fd(), original.name)? {
@@ -483,7 +605,8 @@ fn replace(
     if links(&now) >= 2 {
         return Ok(Write::MultipleLinks);
     }
-    renameat(original.dir, tmp_name, original.dir, original.name).map_err(|e| target.io(e))?;
+    renameat(original.dir, tmp_name, original.dir, original.name)
+        .map_err(|e| target.rename_failed(e))?;
     Ok(Write::Done)
 }
 
@@ -508,9 +631,9 @@ fn remove(target: &Target, expect: &BytesHash) -> Result<Write, WriterError> {
     match statat(&dir, name, AtFlags::SYMLINK_NOFOLLOW) {
         Ok(now) if same_file(&stat, &now) => {}
         Ok(_) | Err(Errno::NOENT) => return Ok(Write::ChangedUnderfoot),
-        Err(e) => return Err(target.io(e)),
+        Err(e) => return Err(target.stat_failed(e)),
     }
-    unlinkat(&dir, name, AtFlags::empty()).map_err(|e| target.io(e))?;
+    unlinkat(&dir, name, AtFlags::empty()).map_err(|e| target.unlink_failed(e))?;
     Ok(Write::Done)
 }
 

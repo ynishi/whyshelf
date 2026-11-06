@@ -249,11 +249,12 @@ impl Crosses for Attestation {
                 design,
                 revision,
                 tests: _,
-                fingerprint,
+                change,
             } => {
                 design.pin().cross_into(out);
                 revision.cross_into(out);
-                if let Some(fingerprint) = fingerprint {
+                // The other cases are a fixed word: they say nothing a reader could use.
+                if let Some(fingerprint) = change.fingerprint() {
                     fingerprint.cross_into(out);
                 }
             }
@@ -813,7 +814,7 @@ mod tests {
                 Location::new(visibility, path.parse().unwrap(), Knowable::Known(git)),
                 bytes,
             ),
-            Reading::Document(Document::new(header, entity).unwrap()),
+            Reading::resolved(Document::new(header, entity).unwrap()),
         )
     }
 

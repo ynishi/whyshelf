@@ -2,7 +2,7 @@
 //!
 //! A [`Judgement`](crate::domain::judgement::Judgement) says which version it keeps an object for ([`ObjectKey`]); it does
 //! not know the object was stored. That guarantee is not in the domain's type. It is
-//! kept by the one door into a ledger, [`LedgerStore::append`], taking only a
+//! kept by the one door into a ledger, [`LedgerAppend::append`], taking only a
 //! [`Recordable`], and by a [`Recordable`] with an object being made only from
 //! [`StoredObject`], which is made only from a text that passed the secret scan and
 //! that the object store reported stored.
@@ -16,7 +16,7 @@
 //!        |   gate read (Passed::text, Adoptable::text); the ledger is the one the
 //!        |   rule chooses
 //!        v
-//!     Scanned ------- ObjectStore::put ------> Put::Stored ----> StoredObject
+//!     Scanned ------- ObjectPut::put ------> Put::Stored ----> StoredObject
 //!                                              Put::Purged ----> Refusal::ObjectPurged
 //!        store(objects, &scanned) does the put and the reading of its answer
 //!
@@ -25,7 +25,7 @@
 //!     append_copied(ledger, &StoredJudgement, &PublicationPlan, private)  a publication's copy
 //!        |   each makes a Recordable (the checks below) and spends it
 //!        v
-//!     LedgerStore::append(&Recordable)
+//!     LedgerAppend::append(&Recordable)
 //! ```
 //!
 //! # Why the constructors are in this module's reach
@@ -145,7 +145,7 @@ use thiserror::Error;
 use crate::app::commit::Stop;
 use crate::app::error::AppError;
 use crate::app::outcome::Refusal;
-use crate::app::ports::{LedgerStore, ObjectStore, PortName, Put, SecretScanPort};
+use crate::app::ports::{LedgerAppend, ObjectPut, PortName, Put, SecretScanPort};
 use crate::app::raw::NormalizedText;
 use crate::domain::corpus::{Corpus, Visibility};
 use crate::domain::error::JudgementError;
@@ -294,7 +294,7 @@ impl StoredObject {
 
 /// A judgement that may be written to a ledger, with the ledger it is written to.
 ///
-/// The only argument of [`LedgerStore::append`]:
+/// The only argument of [`LedgerAppend::append`]:
 /// the ledger is inside, so a caller cannot ask for a record in the wrong one.
 ///
 /// The judgement is held as a [`StoredJudgement`], the form it has once written: what
@@ -438,12 +438,9 @@ pub(in crate::app::commit) fn stored(
     }
 }
 
-/// The step that stores a [`Scanned`] and reads the answer: [`ObjectStore::put`], then
+/// The step that stores a [`Scanned`] and reads the answer: [`ObjectPut::put`], then
 /// the evidence for [`Put::Stored`] or [`Refusal::ObjectPurged`] for [`Put::Purged`].
-pub async fn store<O: ObjectStore>(
-    objects: &O,
-    scanned: &Scanned<'_>,
-) -> Result<StoredObject, Stop> {
+pub async fn store<O: ObjectPut>(objects: &O, scanned: &Scanned<'_>) -> Result<StoredObject, Stop> {
     let put = objects
         .put(scanned)
         .await
@@ -454,7 +451,7 @@ pub async fn store<O: ObjectStore>(
 /// Write an approval or an adoption to its ledger, once its object is stored.
 ///
 /// The [`Recordable`] is made and spent here; it does not leave the commit step.
-pub async fn append_with_object<L: LedgerStore>(
+pub async fn append_with_object<L: LedgerAppend>(
     ledger: &L,
     judgement: ObjectJudgement,
     stored: &StoredObject,
@@ -469,7 +466,7 @@ pub async fn append_with_object<L: LedgerStore>(
 /// A ledger the rule cannot choose is a refusal, as at [`scan`]: it is a fact of the
 /// corpus (the target's files are under both roots, or nowhere), not a mistake of the
 /// caller.
-pub async fn append_without_object<L: LedgerStore>(
+pub async fn append_without_object<L: LedgerAppend>(
     ledger: &L,
     judgement: PlainJudgement,
     corpus: &Corpus,
@@ -485,7 +482,7 @@ pub async fn append_without_object<L: LedgerStore>(
 
 /// Write to the public ledger a record that a publication copies from the private
 /// one (`private`, as the plan was made from it).
-pub async fn append_copied<L: LedgerStore>(
+pub async fn append_copied<L: LedgerAppend>(
     ledger: &L,
     held: &StoredJudgement,
     plan: &PublicationPlan,
@@ -495,7 +492,7 @@ pub async fn append_copied<L: LedgerStore>(
     append(ledger, &record).await
 }
 
-async fn append<L: LedgerStore>(ledger: &L, record: &Recordable) -> Result<(), Stop> {
+async fn append<L: LedgerAppend>(ledger: &L, record: &Recordable) -> Result<(), Stop> {
     ledger
         .append(record)
         .await

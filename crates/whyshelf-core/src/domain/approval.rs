@@ -46,10 +46,10 @@
 //!
 //! A CA approval may also record the hunks of the change it approved
 //! ([`ChangeFingerprint`]), so that the change can be found in the baseline after
-//! the approved commit is gone. It is in the canonical form when there is one and
-//! left out when there is none, so an approval written before it existed has the
-//! identity it had and reads as "no fingerprint"; it is not what "Modified"
-//! compares.
+//! the approved commit is gone, or say why it did not ([`CaChange`]). The change is
+//! in the canonical form in a shape of its own for each case and left out for an
+//! approval written before it existed, so that approval has the identity it had and
+//! reads as "no fingerprint"; it is not what "Modified" compares.
 //!
 //! A CS approval also records the `hyp_hash` it fixed, so a later CM can find it
 //! ([`ApprovalSet::cs_for_cm`]), and the [`GatePolicy`] it passed under, so that an
@@ -112,15 +112,19 @@
 //! private store.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
+use std::str::FromStr;
 use std::time::Duration;
 
 use super::actor::Actor;
 use super::canon::{Canon, ToCanon};
 use super::classification::ClassificationView;
+use super::error::ValueError;
 use super::event::{DocKind, EntityKind, Event, EventBody, EventGraph, EventId};
 use super::hash::ContentHash;
 use super::id::{DesignId, EntityId, FindingId, ItemId, SpecId};
-use super::integration::ChangeFingerprint;
+use super::integration::{ChangeFingerprint, FingerprintUnavailable};
+use super::judgement::JudgementId;
 use super::keyring::UpstreamHash;
 use super::nonempty::{NonBlank, NonEmptyVec};
 use super::policy::GatePolicy;
@@ -348,8 +352,114 @@ pub enum UpstreamRecord {
         /// Its hash when the approval was made, plain or keyed.
         hash: UpstreamHash,
     },
-    /// An earlier approval event (for a CM, the CS that fixed the hypothesis).
+    /// An earlier approval event (for a CM, the CS that fixed the hypothesis), in the
+    /// event log. Only the earlier model writes one.
     Event(EventId),
+    /// An earlier judgement of a ledger (for a CM, the CS that fixed the hypothesis).
+    Judgement(JudgementId),
+}
+
+/// The CS approval a CM stands on.
+///
+/// The event log and the ledgers name an approval differently, and each model writes
+/// only its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CsRef {
+    /// An `Approved` event of the event log. The earlier model's, kept so that its
+    /// records are read as they were written; it goes with the earlier model.
+    Event(EventId),
+    /// A judgement of a ledger.
+    Judgement(JudgementId),
+}
+
+impl fmt::Display for CsRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Event(event) => fmt::Display::fmt(event, f),
+            Self::Judgement(judgement) => fmt::Display::fmt(judgement, f),
+        }
+    }
+}
+
+impl FromStr for CsRef {
+    type Err = ValueError;
+
+    /// Only the forms [`Display`](fmt::Display) writes: an event is `sha256:` and a
+    /// hash, a judgement is an identifier.
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if text.starts_with("sha256:") {
+            text.parse().map(Self::Event)
+        } else {
+            text.parse().map(Self::Judgement)
+        }
+    }
+}
+
+impl ToCanon for CsRef {
+    /// The two are told by their form (`sha256:` and a hash, or a UUID), so a record
+    /// written with an event keeps the canonical form, and so the identity, it had.
+    fn to_canon(&self) -> Canon {
+        match self {
+            Self::Event(event) => event.to_canon(),
+            Self::Judgement(judgement) => judgement.to_canon(),
+        }
+    }
+}
+
+/// What a CA approval records of the change it approved, so that the change can be
+/// found again in the baseline after the approved commit is gone.
+///
+/// Each case is a fact the approver's clone knew, and the four are not one: a clone
+/// that could not cut the change into hunks has told nothing of a change that has
+/// none. How each is read for the landing is
+/// [`integration`](super::integration)'s; this is how each is written.
+///
+/// | case | the `change` key of the canonical form | landing |
+/// |---|---|---|
+/// | [`Fingerprinted`](Self::Fingerprinted) | the fingerprint's map (its keys have no `kind`) | by hunks, then ancestry |
+/// | [`NothingToFingerprint`](Self::NothingToFingerprint) | `{"kind": "nothing"}` | by ancestry |
+/// | [`NotFingerprinted`](Self::NotFingerprinted) | `{"kind": "unavailable", "why": <name>}` | by ancestry, else unknown |
+/// | [`NotRecorded`](Self::NotRecorded) | no `change` key | as `NotFingerprinted` |
+///
+/// The `kind` key is what tells a tagged case from a fingerprint, so the map of a
+/// fingerprint must never get a key of that name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CaChange {
+    /// The approved change was cut into hunks.
+    Fingerprinted(ChangeFingerprint),
+    /// There was nothing to fingerprint: the revision is the baseline, or the change
+    /// has no hunk.
+    NothingToFingerprint,
+    /// The approver's clone could not cut the change into hunks, for this reason. It
+    /// is a fact about that clone and says nothing of the reader's.
+    NotFingerprinted(FingerprintUnavailable),
+    /// The approval was written before this was recorded: the event log's records,
+    /// which have no `change` key. It goes with the earlier model.
+    NotRecorded,
+}
+
+impl CaChange {
+    /// The fingerprint, when the change was cut into hunks.
+    pub fn fingerprint(&self) -> Option<&ChangeFingerprint> {
+        match self {
+            Self::Fingerprinted(fingerprint) => Some(fingerprint),
+            Self::NothingToFingerprint | Self::NotFingerprinted(_) | Self::NotRecorded => None,
+        }
+    }
+
+    /// The value of the `change` key of the canonical form; `None` for the one case
+    /// that leaves the key out.
+    fn canon_value(&self) -> Option<Canon> {
+        match self {
+            Self::Fingerprinted(fingerprint) => Some(fingerprint.to_canon()),
+            Self::NothingToFingerprint => Some(Canon::map([("kind", Canon::str("nothing"))])),
+            Self::NotFingerprinted(why) => Some(Canon::map([
+                ("kind", Canon::str("unavailable")),
+                ("why", Canon::str(why.name())),
+            ])),
+            Self::NotRecorded => None,
+        }
+    }
 }
 
 /// What a gate's approval says, one variant per gate.
@@ -393,17 +503,18 @@ pub enum Attestation {
         /// The outcome of the tests at that revision.
         tests: TestOutcome,
         /// The change that was approved, as hunks, so that it can be found in the
-        /// baseline after the approved commit is gone (a squash). None for an
-        /// approval written before this was recorded, and it reads as "no
-        /// fingerprint", not as an error; see [`integration`](super::integration).
-        fingerprint: Option<ChangeFingerprint>,
+        /// baseline after the approved commit is gone (a squash), or why it is not.
+        /// An approval written before this was recorded is
+        /// [`CaChange::NotRecorded`], and reads as "no fingerprint", not as an error;
+        /// see [`integration`](super::integration).
+        change: CaChange,
     },
     /// A measurement was read.
     Cm {
         /// The Spec at the `hyp_hash` that was measured.
         spec: Pinned<SpecId>,
         /// The CS approval that fixed that `hyp_hash`.
-        cs: EventId,
+        cs: CsRef,
         /// The result.
         result: CmResult,
     },
@@ -462,13 +573,18 @@ impl Attestation {
         }
     }
 
-    /// The fingerprint of the approved change: only a CA can have one, and one
-    /// written before fingerprints were recorded has none.
-    pub fn fingerprint(&self) -> Option<&ChangeFingerprint> {
+    /// What the approval recorded of the approved change: only a CA has it.
+    pub fn change(&self) -> Option<&CaChange> {
         match self {
-            Self::Ca { fingerprint, .. } => fingerprint.as_ref(),
+            Self::Ca { change, .. } => Some(change),
             Self::Cr { .. } | Self::Cs { .. } | Self::Ci { .. } | Self::Cm { .. } => None,
         }
+    }
+
+    /// The fingerprint of the approved change: only a CA can have one, and not every
+    /// CA does ([`CaChange`]).
+    pub fn fingerprint(&self) -> Option<&ChangeFingerprint> {
+        self.change().and_then(CaChange::fingerprint)
     }
 
     /// The upstream facts recorded (see the table of the module).
@@ -485,7 +601,10 @@ impl Attestation {
                 .collect(),
             Self::Ci { spec, .. } => vec![entity(spec.id.entity(), &spec.hash)],
             Self::Ca { design, .. } => vec![entity(design.id.entity(), &design.hash)],
-            Self::Cm { cs, .. } => vec![UpstreamRecord::Event(*cs)],
+            Self::Cm { cs, .. } => vec![match cs {
+                CsRef::Event(event) => UpstreamRecord::Event(*event),
+                CsRef::Judgement(judgement) => UpstreamRecord::Judgement(*judgement),
+            }],
         }
     }
 }
@@ -528,15 +647,14 @@ impl ToCanon for Attestation {
                 design,
                 revision,
                 tests,
-                fingerprint,
+                change,
             } => {
-                // Left out when there is none, like the default policy of a CS, so
-                // a CA written before fingerprints were recorded has the canonical
-                // form (and the identity) it had, and a fingerprint is never the
-                // same record as none.
-                let change = fingerprint
-                    .as_ref()
-                    .map(|fingerprint| ("change", fingerprint.to_canon()));
+                // Left out for `NotRecorded`, like the default policy of a CS, so a CA
+                // written before fingerprints were recorded has the canonical form
+                // (and the identity) it had, and a fingerprint is never the same
+                // record as none. The other cases are written, each in a form of its
+                // own ([`CaChange`]).
+                let change = change.canon_value().map(|value| ("change", value));
                 Canon::map(
                     [
                         gate,
@@ -597,14 +715,16 @@ impl ApprovalRecord {
     }
 }
 
-/// A CS approval and the hypothesis hash it fixed: what a CM is set against.
+/// A CS approval of the event log and the hypothesis hash it fixed: what a CM is set
+/// against in the earlier model. The ledgers' is
+/// [`CsFixing`](super::ledger::CsFixing).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CsFixing {
+pub struct EventCsFixing {
     event: EventId,
     hyp: ContentHash,
 }
 
-impl CsFixing {
+impl EventCsFixing {
     /// The CS approval.
     pub fn event(&self) -> EventId {
         self.event
@@ -734,13 +854,13 @@ impl ApprovalSet {
     ///
     /// Asked of the whole set, with the duplicate registrations folded: a CS
     /// recorded against an identifier that a merge made equal to this Spec's counts.
-    pub fn cs_for_cm(&self, spec: EntityId, hyp: &ContentHash) -> Option<CsFixing> {
+    pub fn cs_for_cm(&self, spec: EntityId, hyp: &ContentHash) -> Option<EventCsFixing> {
         let subject = self.canonical(spec);
-        let cs: Vec<CsFixing> = self
+        let cs: Vec<EventCsFixing> = self
             .active()
             .filter(|r| r.subject() == subject)
             .filter_map(|r| match r.attestation() {
-                Attestation::Cs { hyp: fixed, .. } => Some(CsFixing {
+                Attestation::Cs { hyp: fixed, .. } => Some(EventCsFixing {
                     event: r.event(),
                     hyp: *fixed,
                 }),
@@ -817,16 +937,16 @@ pub(crate) mod test_support {
             design: Pinned::new(did(d), (*design_hash).into()),
             revision: rev(revision),
             tests: TestOutcome::Passed,
-            fingerprint: None,
+            change: CaChange::NotRecorded,
         }
     }
 
     /// A CM that recorded a pass for the hypotheses `hyp` of Spec `s`, against the CS
-    /// approval `cs`.
+    /// approval `cs` of the event log.
     pub(crate) fn cm_pass(s: u128, hyp: &ContentHash, cs: EventId) -> Attestation {
         Attestation::Cm {
             spec: Pinned::new(sid(s), *hyp),
-            cs,
+            cs: CsRef::Event(cs),
             result: CmResult::Pass,
         }
     }
@@ -887,7 +1007,7 @@ mod tests {
             Gate::Ca => ca(5, &h(5), 4, &h(4), "r1"),
             Gate::Cm => Attestation::Cm {
                 spec: Pinned::new(sid(2), h(9)),
-                cs: approve(cs(2, &h(2), &h(9), &[(1, h(1))]), &[]).id(),
+                cs: CsRef::Event(approve(cs(2, &h(2), &h(9), &[(1, h(1))]), &[]).id()),
                 result: CmResult::Pass,
             },
         }
@@ -960,7 +1080,9 @@ mod tests {
                         .iter()
                         .map(|u| match u {
                             UpstreamRecord::Entity { id, .. } => *id,
-                            UpstreamRecord::Event(_) => panic!("grounds are entities"),
+                            UpstreamRecord::Event(_) | UpstreamRecord::Judgement(_) => {
+                                panic!("grounds are entities")
+                            }
                         })
                         .collect();
                     assert_eq!(ids, vec![fid(1).entity(), fid(3).entity()]);
@@ -1015,10 +1137,164 @@ mod tests {
                 design,
                 revision,
                 tests,
-                fingerprint,
+                change: fingerprint.map_or(CaChange::NotRecorded, CaChange::Fingerprinted),
             },
             other => other,
         }
+    }
+
+    /// The same CA with this record of the change.
+    fn ca_recording(change: CaChange) -> Attestation {
+        match ca(5, &h(5), 4, &h(4), "r1") {
+            Attestation::Ca {
+                item,
+                design,
+                revision,
+                tests,
+                ..
+            } => Attestation::Ca {
+                item,
+                design,
+                revision,
+                tests,
+                change,
+            },
+            other => other,
+        }
+    }
+
+    #[test]
+    fn each_case_of_the_change_has_a_canonical_form_of_its_own() {
+        use crate::domain::integration::FingerprintUnavailable;
+        let key = |attestation: &Attestation| match attestation.to_canon() {
+            Canon::Map(entries) => entries.get("change").cloned(),
+            other => panic!("a map, got {other:?}"),
+        };
+        let kind = |value: Option<Canon>| match value {
+            Some(Canon::Map(entries)) => entries.get("kind").cloned(),
+            other => panic!("a map, got {other:?}"),
+        };
+
+        // A fingerprint is the map it always was: it has no `kind`.
+        let fingerprinted = ca_with(Some("let timeout = 30;"));
+        assert_eq!(kind(key(&fingerprinted)), None);
+
+        // The others are told by their tag.
+        let nothing = key(&ca_recording(CaChange::NothingToFingerprint));
+        assert_eq!(nothing, Some(Canon::map([("kind", Canon::str("nothing"))])));
+        for why in FingerprintUnavailable::ALL {
+            let recorded = key(&ca_recording(CaChange::NotFingerprinted(why)));
+            assert_eq!(
+                recorded,
+                Some(Canon::map([
+                    ("kind", Canon::str("unavailable")),
+                    ("why", Canon::str(why.name())),
+                ])),
+                "{why:?}"
+            );
+        }
+
+        // The reasons are told from each other, and from the rest.
+        let all: Vec<Canon> = FingerprintUnavailable::ALL
+            .map(|why| ca_recording(CaChange::NotFingerprinted(why)).to_canon())
+            .into_iter()
+            .chain([
+                ca_recording(CaChange::NothingToFingerprint).to_canon(),
+                ca_recording(CaChange::NotRecorded).to_canon(),
+                fingerprinted.to_canon(),
+            ])
+            .collect();
+        for (i, a) in all.iter().enumerate() {
+            for b in &all[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+    }
+
+    #[test]
+    fn a_record_written_before_the_change_was_tagged_keeps_its_identity() {
+        // What a CA's canonical form was, written out by hand: with a fingerprint
+        // under `change`, and with no `change` key when none was recorded. The
+        // identity of an approval is a hash of it, so equal bytes are an equal id.
+        let by_hand = |change: Option<Canon>| {
+            let Attestation::Ca {
+                item,
+                design,
+                revision,
+                ..
+            } = ca(5, &h(5), 4, &h(4), "r1")
+            else {
+                panic!("a CA");
+            };
+            Canon::map(
+                [
+                    ("gate", Canon::str("CA")),
+                    ("target", item.to_canon()),
+                    ("design", design.to_canon()),
+                    ("revision", revision.to_canon()),
+                    ("tests", Canon::str("passed")),
+                ]
+                .into_iter()
+                .chain(change.map(|value| ("change", value))),
+            )
+        };
+        assert_eq!(
+            ca_recording(CaChange::NotRecorded).to_canon().to_bytes(),
+            by_hand(None).to_bytes()
+        );
+        let CaChange::Fingerprinted(fingerprint) = ca_change_of("let timeout = 30;") else {
+            panic!("a fingerprint");
+        };
+        assert_eq!(
+            ca_recording(CaChange::Fingerprinted(fingerprint.clone()))
+                .to_canon()
+                .to_bytes(),
+            by_hand(Some(fingerprint.to_canon())).to_bytes()
+        );
+    }
+
+    fn ca_change_of(line: &str) -> CaChange {
+        match ca_with(Some(line)) {
+            Attestation::Ca { change, .. } => change,
+            other => panic!("a CA, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_cs_reference_keeps_the_form_of_what_it_names() {
+        let event = approve(cs(2, &h(2), &h(9), &[(1, h(1))]), &[]).id();
+        let judgement = JudgementId::new(crate::domain::id::test_support::eid(7));
+        for cs in [CsRef::Event(event), CsRef::Judgement(judgement)] {
+            assert_eq!(cs.to_string().parse::<CsRef>(), Ok(cs));
+        }
+        // The two forms are told apart, and each is the text of what it names.
+        assert!(CsRef::Event(event).to_string().starts_with("sha256:"));
+        assert_eq!(
+            CsRef::Judgement(judgement).to_string(),
+            judgement.to_string()
+        );
+        assert_eq!(CsRef::Event(event).to_canon(), event.to_canon());
+        assert_eq!(CsRef::Judgement(judgement).to_canon(), judgement.to_canon());
+        assert!("not a reference".parse::<CsRef>().is_err());
+    }
+
+    #[test]
+    fn a_cm_records_which_kind_of_approval_it_stands_on() {
+        let event = approve(cs(2, &h(2), &h(9), &[(1, h(1))]), &[]).id();
+        let judgement = JudgementId::new(crate::domain::id::test_support::eid(7));
+        let cm = |cs| Attestation::Cm {
+            spec: Pinned::new(sid(2), h(9)),
+            cs,
+            result: CmResult::Pass,
+        };
+        assert_eq!(
+            cm(CsRef::Event(event)).upstream(),
+            vec![UpstreamRecord::Event(event)]
+        );
+        assert_eq!(
+            cm(CsRef::Judgement(judgement)).upstream(),
+            vec![UpstreamRecord::Judgement(judgement)]
+        );
     }
 
     #[test]

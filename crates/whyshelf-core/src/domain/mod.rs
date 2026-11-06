@@ -231,7 +231,8 @@
 //! | [`stored`] | a judgement read back from a ledger, and the one decoder of its canonical bytes; it can be read and kept in a ledger, and cannot start a new record |
 //! | [`state`], [`evaluate`] | derived state and how it is derived |
 //! | [`corpus_eval`] | the state of every document and item read from the files and the ledgers: presence, readiness, the basis of each approval |
-//! | [`naming`] | the one grammar of a reference (a command argument and a reference in a document), where each form is accepted, the lookup over the corpus (`Resolved`, `Ambiguous`, `Dangling` with a rename hint, `Unresolved`) and the lints of a reference in a document (`FragileItemRef`, `MarkStale`); the short id is [`id::ShortId`] |
+//! | [`naming`] | the one grammar of a reference (a command argument and a reference in a document), where each form is accepted, the lookup over an index of the headers (`Resolved`, `Ambiguous`, `Dangling` with a rename hint, `Unresolved` with its cause) and the lints of a reference in a document (`FragileItemRef`, `MarkStale`); the short id is [`id::ShortId`] |
+//! | [`parsed`] | a document as an adapter read it, before its references are looked up: the entity with the references as written and the hash of its text; what each kind of lookup comes to for the holder |
 //! | [`boundary`] | the text that crosses to the public side, listed from the fields of the types that cross ([`boundary::CrossingText`]), the leak check over it, and what it can say when the private root is absent or unused ([`boundary::PrivateRoot`]) |
 //! | [`publication`] | what publishing a document would do: the plan with its steps, the records and versions it copies and the ones it leaves, the leak check, the cut-short forms, and the digest a person confirms ([`publication::plan_publication`]) |
 //! | [`keyring`] | keys for the pins of private upstreams, and the keyed pins they make (the HMAC itself is in [`hash`]) |
@@ -272,6 +273,7 @@ pub mod location;
 pub mod naming;
 pub mod next;
 pub mod nonempty;
+pub mod parsed;
 pub mod pin;
 pub mod plan_next;
 pub mod policy;

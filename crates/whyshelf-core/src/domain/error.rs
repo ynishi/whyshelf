@@ -351,6 +351,16 @@ pub enum DocumentError {
     },
 }
 
+impl DocumentError {
+    /// The key of the file the disagreement is about: `kind` or `id`.
+    pub fn field(&self) -> &'static str {
+        match self {
+            Self::KindMismatch { .. } => "kind",
+            Self::IdMismatch { .. } => "id",
+        }
+    }
+}
+
 /// Why an item reference could not be resolved.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ItemRefError {
@@ -456,6 +466,20 @@ pub enum PublicationError {
     /// The document is public already, and no publication of it is open.
     #[error("{doc} is public already")]
     AlreadyPublic {
+        /// The document.
+        doc: DocId,
+    },
+    /// No publication of the document is open, so there is nothing to abort: the
+    /// document is in one root only.
+    #[error("no publication of {doc} is open")]
+    NoneOpen {
+        /// The document.
+        doc: DocId,
+    },
+    /// The publication has its `Published` record, which no revocation takes away, so
+    /// the only way on is to finish it: nothing of it is undone.
+    #[error("the publication of {doc} is already recorded: finish it, it cannot be aborted")]
+    AlreadyRecorded {
         /// The document.
         doc: DocId,
     },

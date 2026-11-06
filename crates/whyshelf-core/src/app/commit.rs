@@ -66,11 +66,11 @@
 //! values that this module's children make and nothing else can:
 //!
 //! ```text
-//!   text + judgement --scan--> Scanned --ObjectStore::put--> Put::Stored --> StoredObject
+//!   text + judgement --scan--> Scanned --ObjectPut::put--> Put::Stored --> StoredObject
 //!                      |                                      Put::Purged --> Refusal::ObjectPurged
 //!                      +-- a secret: Refusal::Secret
 //!
-//!   judgement + StoredObject ----------------> Recordable --> LedgerStore::append
+//!   judgement + StoredObject ----------------> Recordable --> LedgerAppend::append
 //!   judgement (revoke, retire, purge, published) ----------^
 //!   judgement read from the private ledger + plan ---------^   (a publication's copy)
 //!

@@ -62,9 +62,9 @@ use crate::domain::judge::Judge;
 use crate::domain::judgement::JudgementId;
 use crate::domain::lint::CheckViolation;
 use crate::domain::location::RelPath;
-use crate::domain::naming::{Named, Ref};
+use crate::domain::naming::{Named, Ref, UnresolvedWhy};
 use crate::domain::nonempty::NonEmptyVec;
-use crate::domain::publication::PlanDigest;
+use crate::domain::publication::ConfirmDigest;
 
 use crate::domain::boundary::Leak;
 
@@ -212,9 +212,9 @@ pub enum Refusal {
     #[error("the plan changed since it was confirmed: confirmed {confirmed}, now {now}")]
     ConfirmationStale {
         /// The digest the person confirmed.
-        confirmed: PlanDigest,
+        confirmed: ConfirmDigest,
         /// The digest of the plan made again just before the run.
-        now: PlanDigest,
+        now: ConfirmDigest,
     },
     /// A publication of this document stopped part way and is open.
     #[error("a publication of {0} is in progress: resume it or abort it")]
@@ -231,6 +231,24 @@ pub enum Refusal {
     /// The file's group cannot be kept on the replacement, and the group has access.
     #[error("the group of {0} cannot be kept on a replacement")]
     CannotKeepGroup(RelPath),
+    /// The file's owner cannot be kept on the replacement. A person can fix it (the
+    /// file is another user's, and this one may not give a file to its owner), so it is
+    /// a refusal, like the group's.
+    #[error("the owner of {0} cannot be kept on a replacement")]
+    CannotKeepOwner(RelPath),
+    /// Whether the working tree is clean cannot be told here (not a work tree, or the
+    /// tool that would say failed to answer), so it is not said to be dirty either.
+    #[error("whether the working tree is clean cannot be told here")]
+    WorkTreeUnknown,
+    /// The name given cannot be looked up here, which is not the same as nothing
+    /// having that name.
+    #[error("`{query}` cannot be looked up here: {why}")]
+    CannotNameHere {
+        /// The reference as given.
+        query: Ref,
+        /// Why it cannot be looked up.
+        why: UnresolvedWhy,
+    },
     /// The file's content when it was written is not the content it had when it was
     /// compared. Read it again and plan again.
     #[error("{0} changed while it was being written")]
@@ -319,6 +337,8 @@ impl From<PublicationError> for Refusal {
                 Self::EvidenceStale { expected, found }
             }
             PublicationError::NotFound { .. }
+            | PublicationError::NoneOpen { .. }
+            | PublicationError::AlreadyRecorded { .. }
             | PublicationError::AlreadyPublic { .. }
             | PublicationError::DocInvalid { .. }
             | PublicationError::DestinationDiffers { .. }
@@ -475,6 +495,66 @@ mod tests {
         );
         let other = PublicationError::NotFound { doc: docid(9) };
         assert_eq!(Refusal::from(other.clone()), Refusal::Publication(other));
+    }
+
+    #[test]
+    fn a_publication_with_nothing_open_to_abort_is_wrapped_as_it_is() {
+        let none_open = PublicationError::NoneOpen { doc: docid(9) };
+        assert_eq!(
+            Refusal::from(none_open.clone()),
+            Refusal::Publication(none_open)
+        );
+    }
+
+    #[test]
+    fn what_a_person_can_fix_in_a_file_or_a_tree_has_a_refusal_that_says_so() {
+        let at: RelPath = "docs/a.md".parse().expect("a path");
+        assert_eq!(
+            Refusal::CannotKeepOwner(at.clone()).to_string(),
+            "the owner of docs/a.md cannot be kept on a replacement"
+        );
+        // A tree that cannot be asked about is not said to be dirty.
+        assert_ne!(
+            Refusal::WorkTreeUnknown.to_string(),
+            Refusal::DirtyTree.to_string()
+        );
+        assert!(
+            !Refusal::WorkTreeUnknown
+                .to_string()
+                .contains("commit first")
+        );
+        // A name that cannot be looked up says why, and is not a miss.
+        let query: Ref = "private:0192f3a4-5b6c-7d8e-8f90-000000000001"
+            .parse()
+            .expect("a reference");
+        let refusal = Refusal::CannotNameHere {
+            query: query.clone(),
+            why: UnresolvedWhy::PrivateNotHere,
+        };
+        assert!(refusal.to_string().contains(&query.to_string()));
+        assert!(
+            refusal
+                .to_string()
+                .contains(&UnresolvedWhy::PrivateNotHere.to_string())
+        );
+    }
+
+    #[test]
+    fn a_confirmation_that_went_stale_names_both_digests() {
+        use crate::domain::publication::ConfirmDigest;
+        let refusal = Refusal::ConfirmationStale {
+            confirmed: ConfirmDigest::Abort(
+                crate::app::commit::fixtures::Aborting::of(b"x")
+                    .plan
+                    .digest(),
+            ),
+            now: ConfirmDigest::Abort(
+                crate::app::commit::fixtures::Aborting::of(b"other")
+                    .plan
+                    .digest(),
+            ),
+        };
+        assert!(refusal.to_string().starts_with("the plan changed since"));
     }
 
     #[test]

@@ -266,12 +266,13 @@ async fn an_unwritable_directory_is_an_error_and_leaves_no_temporary_file() {
         .rewrite(&public("a.md"), BytesHash::of(b"old"), b"new")
         .await;
     fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    assert!(matches!(result, Err(WriterError::Io { .. })));
+    // The temporary file of the replacement is what cannot be made.
+    assert!(matches!(result, Err(WriterError::Create { .. })));
     assert_eq!(fs::read(&path).unwrap(), b"old");
     assert_eq!(names(dir.path()), ["a.md"]);
 }
 
 // Not covered here, because it needs privileges: that `fchown` to another owner is
-// refused (`CannotKeepOwner`), and that a group the process is not in is refused
+// refused (`Write::CannotKeepOwner`), and that a group the process is not in is refused
 // (`CannotKeepGroup`) or let go when the group has no access. They are the two
 // `Errno::PERM` branches of `replace`.

@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::domain::actor::MeasuredAt;
-use crate::domain::corpus::Reading;
+use crate::domain::corpus::{Header, Reading};
 use crate::domain::design::{Crux, Design, WorkItem};
 use crate::domain::error::{EntityError, ValueError};
 use crate::domain::event::DocKind;
@@ -33,7 +33,9 @@ use crate::domain::front::{FileClassification, Guess};
 use crate::domain::hash::{ContentHash, TextHash};
 use crate::domain::id::{DesignId, DocId, FindingId, ItemNumber, SpecId};
 use crate::domain::location::{CodeLocation, RelPath, SourceUri};
+use crate::domain::naming::Ref as NamingRef;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::parsed::{ParsedDesign, ParsedDocument, ParsedEntity, ParsedSpec};
 use crate::domain::pin::{HypId, Hypothesis, PinContract, PinId};
 use crate::domain::reference::Ref;
 use crate::domain::revision::RevisionId;
@@ -101,6 +103,36 @@ impl NormalizedText {
     }
 }
 
+/// What an adapter made of the Markdown and the front matter of one file, before the
+/// text it was made from is put beside it.
+///
+/// It is a [`Reading`] without the hash of the text: an adapter says what the file is,
+/// and [`RawDocument::new`] is the one place that puts the hash of the text into it, so
+/// no adapter computes a [`TextHash`] and none can give one that does not match.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadFile {
+    /// The file is a document, with its references as written.
+    Document {
+        /// The classification keys of the file.
+        header: Header,
+        /// The entity the file holds. Boxed so that a file that is no document stays
+        /// small.
+        entity: Box<ParsedEntity>,
+    },
+    /// The file has no `id:`; `kind` is what the file shows of its kind, if anything.
+    Unidentified {
+        /// The kind the file shows, if any.
+        kind: Option<DocKind>,
+    },
+    /// The file cannot be read as a document, for these reasons.
+    Unparsed {
+        /// The `id:` the adapter could still see in the file.
+        id: Option<DocId>,
+        /// Why the file cannot be read.
+        reasons: NonEmptyVec<UnparsedReason>,
+    },
+}
+
 /// One file as a [`DocumentSource`](super::ports::DocumentSource) read it: what
 /// reading it gave, and its text.
 ///
@@ -118,7 +150,35 @@ pub struct RawDocument {
 
 impl RawDocument {
     /// The reading of a file and its normalized text.
-    pub fn new(reading: Reading, text: NormalizedText) -> Self {
+    ///
+    /// The [`TextHash`] of the text is made here, once, and goes into the reading of a
+    /// document: it is what a gate is told it read, and what the stored version is
+    /// keyed by.
+    ///
+    /// A header and an entity that disagree on the id or the kind are not a document.
+    /// The file is then `Unparsed`, with the `id:` it shows; an adapter that has
+    /// checked its own parts never meets this.
+    pub fn new(file: ReadFile, text: NormalizedText) -> Self {
+        let reading = match file {
+            ReadFile::Document { header, entity } => {
+                let id = header.id();
+                match ParsedDocument::new(header, *entity, text.text_hash()) {
+                    Ok(document) => Reading::Document(document),
+                    Err(error) => Reading::Unparsed {
+                        id: Some(id),
+                        reasons: NonEmptyVec::new(
+                            UnparsedReason::InvalidField {
+                                field: error.field().to_owned(),
+                                detail: error.to_string(),
+                            },
+                            Vec::new(),
+                        ),
+                    },
+                }
+            }
+            ReadFile::Unidentified { kind } => Reading::Unidentified { kind },
+            ReadFile::Unparsed { id, reasons } => Reading::Unparsed { id, reasons },
+        };
         Self { reading, text }
     }
 
@@ -322,6 +382,12 @@ impl RawSpec {
     pub fn build(self, id: SpecId, grounds: NonEmptyVec<FindingId>) -> Result<Spec, EntityError> {
         Spec::new(id, grounds, self.contract, self.pins, self.hyps)
     }
+
+    /// The Spec with its grounds read for the place a key is and still to be looked
+    /// up, in the order of [`RawSpec::grounds`]: what the corpus resolves.
+    pub fn into_parsed(self, id: SpecId, grounds: NonEmptyVec<NamingRef>) -> ParsedSpec {
+        ParsedSpec::new(id, grounds, self.contract, self.pins, self.hyps)
+    }
 }
 
 /// A parsed Design file whose Spec is not yet resolved.
@@ -346,6 +412,12 @@ impl RawDesign {
     /// Build the Design from the identifier its Spec resolved to.
     pub fn build(self, id: DesignId, spec: SpecId) -> Design {
         Design::new(id, spec, self.crux, self.items)
+    }
+
+    /// The Design with its Spec read for the place a key is and still to be looked up:
+    /// what the corpus resolves.
+    pub fn into_parsed(self, id: DesignId, spec: NamingRef) -> ParsedDesign {
+        ParsedDesign::new(id, spec, self.crux, self.items)
     }
 }
 

@@ -47,6 +47,23 @@
 //! file: the private root may be outside Git, and the difference is lost
 //! ([`PublicationPlan::private_copy_differs`]).
 //!
+//! # Whether a person is asked, and aborting
+//!
+//! Whether a run needs a person's confirmation is the plan's to say, in one place:
+//! [`PublicationPlan::confirmation`] and [`AbortPlan::confirmation`] return the digest to
+//! confirm ([`ConfirmDigest`]), or `None` when every step can be taken back; taking an
+//! earlier decision in always asks ([`Adoptable::confirmation`](super::adoption::Adoptable::confirmation)).
+//! A caller decides to ask from the plan's value and not from the steps or the
+//! next-step action, which is made before the plan is.
+//!
+//! [`plan_abort`] undoes a publication that stopped before its `Published` record was
+//! written ([`PublishForm::FileCopied`]); once it is, the only way on is finishing
+//! ([`PublicationError::AlreadyRecorded`]). It removes the public
+//! file, and the document is private again. It writes no record: the ledger only grows,
+//! a record step 1 copied stays there inert (counted, [`AbortPlan::left_in_public_ledger`]),
+//! and a `Published` cannot be revoked. It asks when the public file is not a copy of the
+//! private one, since what it says is lost with it.
+//!
 //! # The leak check
 //!
 //! Everything that would cross is checked ([`boundary`](super::boundary)): the records,
@@ -72,13 +89,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use super::adoption::AdoptDigest;
 use super::boundary::{
     CrossingText, DocumentText, ObjectText, PrivateNames, PrivateRoot, check_crossing,
 };
 use super::canon::{Canon, ToCanon};
 use super::corpus::{Corpus, Invalidity, PublishForm, Visibility};
 use super::error::{LeakRefusal, PublicationError};
-use super::hash::{BytesHash, ContentHash, HashKind, TextHash};
+use super::hash::{BytesHash, ContentHash, HashKind, TextHash, confirm_digest};
 use super::id::DocId;
 use super::judge::Judge;
 use super::judgement::{JudgementId, JudgementKind, ObjectKey};
@@ -241,29 +259,7 @@ impl<'a> Irreversible<'a> {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PlanDigest(ContentHash);
 
-impl PlanDigest {
-    /// The first 8 characters of the digest: what a person types back.
-    pub fn short(&self) -> String {
-        self.0.hex().chars().take(8).collect()
-    }
-
-    /// The whole digest.
-    pub fn hash(&self) -> &ContentHash {
-        &self.0
-    }
-}
-
-impl fmt::Debug for PlanDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PlanDigest({})", self.short())
-    }
-}
-
-impl fmt::Display for PlanDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
+confirm_digest!(PlanDigest);
 
 /// What publishing a document would do. It has no leak: it can be made no other way
 /// than by [`plan_publication`].
@@ -423,10 +419,251 @@ impl PublicationPlan {
         self.irreversible().is_some() || self.private_copy_differs()
     }
 
+    /// What a person is asked to confirm before a real run: the digest of this plan
+    /// when the run has a step that cannot be taken back, and `None` when every step
+    /// can (nothing is asked). The one place that says whether to ask, so a caller does
+    /// not decide it again from the steps.
+    pub fn confirmation(&self) -> Option<ConfirmDigest> {
+        self.needs_human_confirmation()
+            .then_some(ConfirmDigest::Plan(self.digest))
+    }
+
     /// The digest of the plan.
     pub fn digest(&self) -> PlanDigest {
         self.digest
     }
+}
+
+/// What a person types back to confirm something that cannot be taken back: the
+/// digest of the plan, of the adoption or of the abort.
+///
+/// One type for the three, so that the question put to a person and the check of the
+/// answer ([`HumanConfirmation::holds_for`](crate::app::commit::confirm::HumanConfirmation::holds_for))
+/// are about the same value, and a confirmation given for one kind of thing does not
+/// hold for another even if the bytes of the digests were alike.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfirmDigest {
+    /// A publication: see [`PlanDigest`].
+    Plan(PlanDigest),
+    /// Taking an earlier decision in: see [`AdoptDigest`].
+    Adopt(AdoptDigest),
+    /// Aborting a publication: see [`AbortDigest`].
+    Abort(AbortDigest),
+}
+
+impl ConfirmDigest {
+    /// The first 8 characters of the digest: what a person types back.
+    pub fn short(&self) -> String {
+        match self {
+            Self::Plan(digest) => digest.short(),
+            Self::Adopt(digest) => digest.short(),
+            Self::Abort(digest) => digest.short(),
+        }
+    }
+}
+
+impl fmt::Display for ConfirmDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Plan(digest) => fmt::Display::fmt(digest, f),
+            Self::Adopt(digest) => fmt::Display::fmt(digest, f),
+            Self::Abort(digest) => fmt::Display::fmt(digest, f),
+        }
+    }
+}
+
+/// The hash of what an abort does: what a person confirms, and what a run checks it
+/// against just before it starts. Kept apart from a [`PlanDigest`] by its own domain
+/// separation tag.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AbortDigest(ContentHash);
+
+confirm_digest!(AbortDigest);
+
+/// The one step of an abort.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AbortStep {
+    /// Remove the public file. The private file stays: it is the document again.
+    RemovePublicFile,
+}
+
+impl AbortStep {
+    /// The word for the step.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::RemovePublicFile => "remove-public-file",
+        }
+    }
+}
+
+/// What the application read, beside the corpus and the ledgers, to plan an abort.
+#[derive(Debug, Clone, Copy)]
+pub struct AbortEvidence<'a> {
+    /// The bytes of the public file that is to be removed. Their [`BytesHash`] must be
+    /// the one the corpus has for that file ([`PublicationError::EvidenceStale`]):
+    /// what is removed is what was read.
+    pub public_file: &'a [u8],
+}
+
+/// What aborting a publication that stopped part way would do: the public file goes,
+/// and the document is private again.
+///
+/// An abort writes no record. The ledger only grows, and a record that step 1 copied
+/// stays there inert ([`left_in_public_ledger`](Self::left_in_public_ledger)), as does a
+/// `Published` that no revocation can take away; what an abort undoes is the public
+/// file, which is all it plans. It can be made no other way than by [`plan_abort`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AbortPlan {
+    doc: DocId,
+    form: PublishForm,
+    public_file: RelPath,
+    expect: BytesHash,
+    private_file: BytesHash,
+    public_copy_differs: bool,
+    left_in_public_ledger: usize,
+    steps: Vec<AbortStep>,
+    digest: AbortDigest,
+}
+
+impl AbortPlan {
+    /// The document.
+    pub fn doc(&self) -> DocId {
+        self.doc
+    }
+
+    /// The point the publication stopped at.
+    pub fn form(&self) -> PublishForm {
+        self.form
+    }
+
+    /// The public file this plan removes.
+    pub fn public_file(&self) -> &RelPath {
+        &self.public_file
+    }
+
+    /// The bytes the public file has, which the removal is checked against.
+    pub fn expect(&self) -> BytesHash {
+        self.expect
+    }
+
+    /// The bytes of the private file, which stays.
+    pub fn private_file(&self) -> BytesHash {
+        self.private_file
+    }
+
+    /// Whether the public file differs from the private one: the difference is lost
+    /// with the file. Only a publication that stopped at [`PublishForm::FileCopied`]
+    /// can be aborted, and there the corpus pairs the two files only when their bytes
+    /// are equal, so this is always `false` today; it is kept so that the plan states
+    /// the fact it relies on.
+    pub fn public_copy_differs(&self) -> bool {
+        self.public_copy_differs
+    }
+
+    /// How many of the records a publication copies (the unrevoked approvals,
+    /// adoptions and retirements of the document) the public ledger already holds,
+    /// which an abort leaves where they are. Records a publication does not copy
+    /// (revoked ones, revocations, purges, a `Published`) are not counted.
+    pub fn left_in_public_ledger(&self) -> usize {
+        self.left_in_public_ledger
+    }
+
+    /// The steps to do, in order.
+    pub fn steps(&self) -> &[AbortStep] {
+        &self.steps
+    }
+
+    /// Whether a real run needs a person's confirmation: it does when the public file
+    /// is not a copy of the private one, since the difference is lost. A
+    /// [`PublishForm::FileCopied`] publication is the only abortable one and its files
+    /// are equal, so this is always `false` and [`confirmation`](Self::confirmation)
+    /// always `None` today; the shape stays for a form that could differ.
+    pub fn needs_human_confirmation(&self) -> bool {
+        self.public_copy_differs
+    }
+
+    /// What a person is asked to confirm before a real run: the digest of this plan
+    /// when a step cannot be taken back, and `None` when every step can.
+    pub fn confirmation(&self) -> Option<ConfirmDigest> {
+        self.needs_human_confirmation()
+            .then_some(ConfirmDigest::Abort(self.digest))
+    }
+
+    /// The digest of the plan.
+    pub fn digest(&self) -> AbortDigest {
+        self.digest
+    }
+}
+
+/// Plan the abort of the publication of `doc` that stopped part way.
+///
+/// It is made from what the corpus shows now, like [`plan_publication`], and refuses
+/// when no publication of the document is open ([`PublicationError::NoneOpen`]), when
+/// it is already recorded ([`PublicationError::AlreadyRecorded`]: once the `Published`
+/// record is written the only way on is finishing), when the document is invalid as it
+/// stands, or when the bytes given are not those of the
+/// public file ([`PublicationError::EvidenceStale`]). Nothing crosses, so there is no
+/// leak check: an abort takes a file away.
+pub fn plan_abort(
+    doc: DocId,
+    corpus: &Corpus,
+    ledgers: &Ledgers,
+    evidence: &AbortEvidence<'_>,
+) -> Result<AbortPlan, PublicationError> {
+    if corpus.by_id(&doc).is_empty() {
+        return Err(PublicationError::NotFound { doc });
+    }
+    let open = corpus
+        .publishing_of(&doc)
+        .ok_or(PublicationError::NoneOpen { doc })?;
+    if open.form() == PublishForm::PrivateCopyLeft {
+        return Err(PublicationError::AlreadyRecorded { doc });
+    }
+    let public_file = open.public().location().path().clone();
+    // The same standing as a publication has to be in: an invalid document stops it.
+    let at = locate(doc, corpus, &public_file)?;
+    let expect = open.public().bytes();
+    let found = BytesHash::of(evidence.public_file);
+    if found != expect {
+        return Err(PublicationError::EvidenceStale {
+            expected: expect,
+            found,
+        });
+    }
+    let public_copy_differs = at.form.private_copy_differs();
+    let (carried, _) = records_of(doc, ledgers);
+    let left_in_public_ledger = carried
+        .iter()
+        .filter(|record| ledgers.public().contains(&record.id()))
+        .count();
+    let steps = vec![AbortStep::RemovePublicFile];
+    let canon = Canon::map([
+        ("doc", doc.to_canon()),
+        ("form", Canon::str(at.form.name())),
+        ("public_file", public_file.to_canon()),
+        ("expect", Canon::str(expect.to_string())),
+        ("private_file", Canon::str(at.private_file.to_string())),
+        ("public_copy_differs", Canon::Bool(public_copy_differs)),
+        (
+            "left_in_public_ledger",
+            Canon::Int(i64::try_from(left_in_public_ledger).unwrap_or(i64::MAX)),
+        ),
+        (
+            "steps",
+            Canon::list(steps.iter().map(|step| Canon::str(step.name()))),
+        ),
+    ]);
+    Ok(AbortPlan {
+        doc,
+        form: open.form(),
+        public_file,
+        expect,
+        private_file: at.private_file,
+        public_copy_differs,
+        left_in_public_ledger,
+        steps,
+        digest: AbortDigest(ContentHash::of(HashKind::Abort, &canon)),
+    })
 }
 
 /// Where the document is, and what that makes of the plan.
@@ -751,7 +988,7 @@ mod tests {
                 Location::new(visibility, rel(path), Knowable::Known(git)),
                 BytesHash::of(bytes),
             ),
-            Reading::Document(Document::new(header, entity).unwrap()),
+            Reading::resolved(Document::new(header, entity).unwrap()),
         )
     }
 
@@ -1669,5 +1906,192 @@ mod tests {
         let plan = plan(&corpus, &ledgers_of(all)).unwrap();
         assert_eq!(plan.objects().len(), 3);
         assert!(plan.objects().contains(&object_of(&hash_of("d2"))));
+    }
+
+    // --- what a person is asked ---------------------------------------------------
+
+    #[test]
+    fn a_plan_asks_for_its_digest_exactly_when_a_step_cannot_be_taken_back() {
+        let ledgers = ledgers_of(records());
+        // Step 1 writes into the public ledger: asked.
+        let (corpus, _) = fresh();
+        let fresh_plan = plan(&corpus, &ledgers).unwrap();
+        assert_eq!(
+            fresh_plan.confirmation(),
+            Some(ConfirmDigest::Plan(fresh_plan.digest()))
+        );
+        // Only the private copy to remove, and it says what the public file does: not asked.
+        let same = plan(&cut_short(true, b"bytes"), &ledgers).unwrap();
+        assert_eq!(same.confirmation(), None);
+        // A copy that says something else is lost with it: asked.
+        let edited = plan(&cut_short(true, b"edited since"), &ledgers).unwrap();
+        assert_eq!(
+            edited.confirmation(),
+            Some(ConfirmDigest::Plan(edited.digest()))
+        );
+        // The answer is the plan's, and the helper agrees with it.
+        for plan in [&fresh_plan, &same, &edited] {
+            assert_eq!(
+                plan.confirmation().is_some(),
+                plan.needs_human_confirmation()
+            );
+        }
+    }
+
+    #[test]
+    fn a_digest_of_one_kind_is_not_a_digest_of_another() {
+        let (corpus, ledgers) = fresh();
+        let plan_digest = plan(&corpus, &ledgers).unwrap().digest();
+        let abort = AbortDigest(*plan_digest.hash());
+        assert_ne!(
+            ConfirmDigest::Plan(plan_digest),
+            ConfirmDigest::Abort(abort),
+            "the same bytes under two kinds are two confirmations"
+        );
+        assert_eq!(
+            ConfirmDigest::Plan(plan_digest).short(),
+            plan_digest.short()
+        );
+        assert_eq!(ConfirmDigest::Abort(abort).short(), abort.short());
+        assert_eq!(abort.short().len(), 8);
+        assert!(format!("{abort:?}").starts_with("AbortDigest("));
+        assert_eq!(abort.to_string(), abort.hash().to_string());
+    }
+
+    // --- aborting -----------------------------------------------------------------
+
+    fn abort_with(
+        corpus: &Corpus,
+        ledgers: &Ledgers,
+        public: &[u8],
+    ) -> Result<AbortPlan, PublicationError> {
+        plan_abort(
+            docid(DOC),
+            corpus,
+            ledgers,
+            &AbortEvidence {
+                public_file: public,
+            },
+        )
+    }
+
+    #[test]
+    fn an_abort_removes_the_public_file_and_asks_for_nothing_when_it_is_a_copy() {
+        let ledgers = ledgers_of(records());
+        let plan = abort_with(&cut_short(false, b"bytes"), &ledgers, b"bytes").unwrap();
+        assert_eq!(plan.doc(), docid(DOC));
+        assert_eq!(plan.form(), PublishForm::FileCopied);
+        assert_eq!(plan.public_file(), &rel("docs/d21.md"));
+        assert_eq!(plan.expect(), BytesHash::of(b"bytes"));
+        assert_eq!(plan.private_file(), BytesHash::of(b"bytes"));
+        assert_eq!(plan.steps(), [AbortStep::RemovePublicFile]);
+        assert_eq!(AbortStep::RemovePublicFile.name(), "remove-public-file");
+        assert!(!plan.public_copy_differs());
+        assert!(!plan.needs_human_confirmation());
+        assert_eq!(plan.confirmation(), None);
+        // Nothing was copied to the public ledger yet.
+        assert_eq!(plan.left_in_public_ledger(), 0);
+    }
+
+    #[test]
+    fn an_abort_leaves_what_was_copied_to_the_public_ledger_where_it_is_and_says_so() {
+        let all = records();
+        let copied = Ledgers::new(
+            Ledger::from_judgements([all[0].clone()]),
+            Ledger::from_judgements(all),
+        );
+        let plan = abort_with(&cut_short(false, b"bytes"), &copied, b"bytes").unwrap();
+        assert_eq!(plan.left_in_public_ledger(), 1);
+        // What is left is in what is confirmed.
+        let none = abort_with(
+            &cut_short(false, b"bytes"),
+            &ledgers_of(records()),
+            b"bytes",
+        )
+        .unwrap();
+        assert_ne!(plan.digest(), none.digest());
+    }
+
+    #[test]
+    fn an_abort_of_a_recorded_publication_is_refused_whatever_the_files_say() {
+        let ledgers = ledgers_of(records());
+        for private in [&b"bytes"[..], b"edited since"] {
+            assert_eq!(
+                abort_with(&cut_short(true, private), &ledgers, b"bytes"),
+                Err(PublicationError::AlreadyRecorded { doc: docid(DOC) })
+            );
+        }
+        assert!(
+            PublicationError::AlreadyRecorded { doc: docid(DOC) }
+                .to_string()
+                .contains("finish")
+        );
+    }
+
+    #[test]
+    fn an_abortable_publication_has_a_public_file_that_is_a_copy_so_it_never_asks() {
+        let ledgers = ledgers_of(records());
+        let same = abort_with(&cut_short(false, b"bytes"), &ledgers, b"bytes").unwrap();
+        assert_eq!(same.form(), PublishForm::FileCopied);
+        assert!(!same.public_copy_differs());
+        assert!(!same.needs_human_confirmation());
+        assert_eq!(same.confirmation(), None);
+
+        // A private file that says something else, not recorded, is no publication cut
+        // short at all.
+        assert_eq!(
+            abort_with(&cut_short(false, b"edited since"), &ledgers, b"bytes"),
+            Err(PublicationError::NoneOpen { doc: docid(DOC) })
+        );
+    }
+
+    #[test]
+    fn an_abort_is_refused_when_there_is_nothing_open_nothing_there_or_the_bytes_moved() {
+        let ledgers = ledgers_of(records());
+        // The document is in the private root only: nothing is open.
+        let (corpus, _) = fresh();
+        assert_eq!(
+            abort_with(&corpus, &ledgers, b"bytes"),
+            Err(PublicationError::NoneOpen { doc: docid(DOC) })
+        );
+        // No file has the id.
+        assert_eq!(
+            abort_with(&corpus_of(Vec::new()), &ledgers, b"bytes"),
+            Err(PublicationError::NotFound { doc: docid(DOC) })
+        );
+        // The bytes read are not those of the public file.
+        assert_eq!(
+            abort_with(&cut_short(false, b"bytes"), &ledgers, b"changed"),
+            Err(PublicationError::EvidenceStale {
+                expected: BytesHash::of(b"bytes"),
+                found: BytesHash::of(b"changed"),
+            })
+        );
+    }
+
+    #[test]
+    fn an_abort_follows_a_publication_that_the_corpus_cannot_trust() {
+        // The document is invalid for another reason than being exposed: stopped, as a
+        // publication is.
+        let ledgers = ledgers_of(records());
+        let public = file(
+            design_entity(),
+            Some("design/same"),
+            Visibility::Public,
+            "docs/d21.md",
+            b"bytes",
+        );
+        let other = file(
+            Entity::Finding(finding(2, "x")),
+            Some("design/same"),
+            Visibility::Public,
+            "docs/other.md",
+            b"x",
+        );
+        let corpus = Corpus::build([public, private_design(b"bytes"), other], &BTreeSet::new());
+        assert!(matches!(
+            abort_with(&corpus, &ledgers, b"bytes"),
+            Err(PublicationError::DocInvalid { .. })
+        ));
     }
 }

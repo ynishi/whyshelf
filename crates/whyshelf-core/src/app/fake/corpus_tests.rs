@@ -7,15 +7,20 @@ use crate::app::commit::fixtures::{
 use crate::app::commit::record::{append_with_object, scan, store};
 use crate::app::outcome::Refusal;
 use crate::app::ports::{
-    ActorSource, Author, BaselineAnswer, BaselineQuery, ConfirmPort, ConfirmPrompt, Confirmed,
-    CorpusPorts, CorruptRecord, DocumentSource, FileWriter, KeySource, LedgerStore, ObjectStore,
-    PlanSummary, PortName, Put, RecordProblem, RevisionFactsPort, Write,
+    ActorSource, Author, BaselineAnswer, BaselineQuery, ClockPort, ConfirmPort, ConfirmPrompt,
+    Confirmed, CorpusPorts, CorpusRead, CorruptRecord, DocumentSource, FileBytes, FileWriter,
+    KeySource, LedgerRead, ObjectPut, ObjectRead, PathProblem, PlanSummary, PortName, Put,
+    RecordProblem, RevisionFactsPort, UnreadablePath, WorkTree, Write,
 };
-use crate::app::raw::RawDocument;
-use crate::domain::corpus::{FileFacts, GitPlace, Location, Reading, Visibility};
+use crate::app::raw::{RawDocument, ReadFile};
+use crate::domain::boundary::PrivateRoot;
+use crate::domain::corpus::{FileFacts, GitPlace, Location, Visibility};
 use crate::domain::hash::{BytesHash, TextHash};
 use crate::domain::id::test_support::docid;
-use crate::domain::integration::{BaselineFacts, ChangeFingerprint, Hunk, HunkScheme, UnknownWhy};
+use crate::domain::integration::{
+    BaselineFacts, ChangeFingerprint, FingerprintUnavailable, Fingerprinting, Hunk, HunkScheme,
+    UnknownWhy,
+};
 use crate::domain::judge::test_support::{agent, judge};
 use crate::domain::judge::{Email, PersonName};
 use crate::domain::judgement::test_support::{cr_passed, jid, object_of, ts, why};
@@ -23,6 +28,7 @@ use crate::domain::judgement::{Judgement, JudgementKind};
 use crate::domain::keyring::PinKeyring;
 use crate::domain::knowable::Knowable;
 use crate::domain::location::RelPath;
+use crate::domain::publication::ConfirmDigest;
 use crate::domain::revision::{Revision, RevisionId};
 use crate::domain::stored::StoredJudgement;
 
@@ -37,7 +43,7 @@ fn at(root: Visibility, path: &str) -> Location {
 fn prompt() -> ConfirmPrompt {
     let plan = crate::app::commit::fixtures::Publishing::of(b"bytes").plan;
     ConfirmPrompt::new(
-        plan.digest(),
+        ConfirmDigest::Plan(plan.digest()),
         PlanSummary::new(crate::app::ports::ConfirmAction::Publish, 2),
     )
 }
@@ -279,7 +285,7 @@ fn the_person_answers_yes_no_or_unavailable_and_is_asked_what_the_prompt_says() 
     }
     assert_eq!(fake.asked(), vec![prompt; 3]);
 
-    fake.set_reply(Reply::TypesBack(prompt.plan()));
+    fake.set_reply(Reply::TypesBack(prompt.digest()));
     assert_eq!(block_on(fake.ask(&prompt)).expect("asked"), Confirmed::Yes);
 }
 
@@ -450,14 +456,62 @@ fn each_write_that_did_not_happen_has_a_refusal_with_the_path() {
 #[test]
 fn the_documents_are_listed_as_they_were_added() {
     let fake = FakeCorpus::new();
-    assert!(block_on(fake.list()).expect("list").is_empty());
+    assert!(block_on(fake.list()).expect("list").files().is_empty());
     let facts = FileFacts::new(at(Visibility::Public, "docs/a.md"), BytesHash::of(b"a"));
     let raw = RawDocument::new(
-        Reading::Unidentified { kind: None },
+        ReadFile::Unidentified { kind: None },
         crate::app::raw::NormalizedText::new("a\n".to_owned()),
     );
     fake.add_document(facts.clone(), raw.clone());
-    assert_eq!(block_on(fake.list()).expect("list"), vec![(facts, raw)]);
+    assert_eq!(
+        block_on(fake.list()).expect("list").files(),
+        [(facts, raw)].as_slice()
+    );
+}
+
+#[test]
+fn a_path_the_listing_could_not_name_comes_back_beside_the_files() {
+    let fake = FakeCorpus::new();
+    fake.add_unreadable_path("docs/\u{fffd}.md", PathProblem::NotUtf8);
+    let listing = block_on(fake.list()).expect("list");
+    assert!(listing.files().is_empty());
+    assert_eq!(
+        listing.unreadable(),
+        [UnreadablePath::new(
+            "docs/\u{fffd}.md".to_owned(),
+            PathProblem::NotUtf8
+        )]
+        .as_slice()
+    );
+}
+
+#[test]
+fn the_bytes_of_a_file_are_read_back_and_a_file_that_is_gone_says_so() {
+    let fake = FakeCorpus::new();
+    let place = at(Visibility::Public, "docs/a.md");
+    let facts = FileFacts::new(place.clone(), BytesHash::of(b"a"));
+    assert_eq!(
+        block_on(fake.bytes(&facts)).expect("bytes"),
+        FileBytes::Gone
+    );
+    fake.put_file(Visibility::Public, place.path(), b"a");
+    assert_eq!(
+        block_on(fake.bytes(&facts)).expect("bytes"),
+        FileBytes::Read(b"a".to_vec())
+    );
+}
+
+#[test]
+fn the_private_root_is_the_one_decision_the_person_set() {
+    let fake = FakeCorpus::new();
+    for root in [
+        PrivateRoot::NotUsedHere,
+        PrivateRoot::Present,
+        PrivateRoot::Absent,
+    ] {
+        fake.set_private_root(root);
+        assert_eq!(block_on(fake.private_root()).expect("root"), root);
+    }
 }
 
 #[test]
@@ -502,7 +556,7 @@ fn version_control_answers_what_it_was_told_and_unknown_otherwise() {
     );
     assert_eq!(
         block_on(fake.change_fingerprint(&commit)).expect("fingerprint"),
-        None
+        Fingerprinting::NothingToFingerprint
     );
     let fingerprint = ChangeFingerprint::of_hunks(
         commit.clone(),
@@ -515,11 +569,79 @@ fn version_control_answers_what_it_was_told_and_unknown_otherwise() {
         HunkScheme::CURRENT,
     )
     .expect("a fingerprint");
-    fake.set_fingerprint(Some(fingerprint.clone()));
+    fake.set_fingerprinting(Fingerprinting::Of(fingerprint.clone()));
     assert_eq!(
         block_on(fake.change_fingerprint(&commit)).expect("fingerprint"),
-        Some(fingerprint)
+        Fingerprinting::Of(fingerprint)
     );
+    fake.set_fingerprinting(Fingerprinting::Unavailable(FingerprintUnavailable::Shallow));
+    assert_eq!(
+        block_on(fake.change_fingerprint(&commit)).expect("fingerprint"),
+        Fingerprinting::Unavailable(FingerprintUnavailable::Shallow)
+    );
+}
+
+#[test]
+fn the_work_tree_is_clean_unless_told_otherwise_and_unknown_is_its_own_answer() {
+    let fake = FakeCorpus::new();
+    assert_eq!(
+        block_on(fake.work_tree()).expect("work tree"),
+        Knowable::Known(WorkTree::Clean)
+    );
+    for tree in [
+        Knowable::Known(WorkTree::Dirty),
+        Knowable::Unknown,
+        Knowable::Known(WorkTree::Clean),
+    ] {
+        fake.set_work_tree(tree);
+        assert_eq!(block_on(fake.work_tree()).expect("work tree"), tree);
+    }
+}
+
+#[test]
+fn a_file_whose_owner_cannot_be_kept_is_refused_as_the_group_is() {
+    let fake = FakeCorpus::new();
+    let place = at(Visibility::Public, "docs/a.md");
+    fake.put_file(Visibility::Public, place.path(), b"one");
+    fake.make_owner_unkeepable(Visibility::Public, place.path());
+    let expect = BytesHash::of(b"one");
+    assert_eq!(
+        block_on(fake.rewrite(&place, expect, b"two")).expect("write"),
+        Write::CannotKeepOwner
+    );
+    assert_eq!(
+        block_on(fake.remove(&place, expect)).expect("write"),
+        Write::CannotKeepOwner
+    );
+    assert_eq!(
+        fake.file(Visibility::Public, place.path()),
+        Some(b"one".to_vec())
+    );
+    assert_eq!(
+        Write::CannotKeepOwner.refusal(place.path()),
+        Some(Refusal::CannotKeepOwner(place.path().clone()))
+    );
+}
+
+#[test]
+fn the_ports_are_two_bundles_and_the_read_one_has_no_way_to_write() {
+    // A function generic over the read bundle can read everything a status needs...
+    async fn read_only<P: CorpusRead>(ports: &P) -> usize {
+        let files = ports.documents().list().await.map(|l| l.files().len());
+        let ledger = ports.ledger().read(Visibility::Public).await;
+        let text = ports
+            .objects()
+            .get(Visibility::Public, TextHash::of("x"))
+            .await;
+        files.unwrap_or(0) + usize::from(ledger.is_ok()) + usize::from(text.is_ok())
+    }
+    // ...and the write bundle is a read bundle with the rest on top.
+    async fn writes<P: CorpusPorts>(ports: &P) -> usize {
+        read_only(ports).await + usize::from(ports.time().now().await.is_ok())
+    }
+    let fake = FakeCorpus::new();
+    assert_eq!(block_on(read_only(&fake)), 2);
+    assert_eq!(block_on(writes(&fake)), 3);
 }
 
 #[test]
