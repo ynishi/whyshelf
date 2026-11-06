@@ -17,7 +17,11 @@ whyshelf-core = { path = "crates/whyshelf-core", version = "0.1.0" }
 whyshelf-infra = { path = "crates/whyshelf-infra", version = "0.1.0" }
 arch-lint = "0.11"
 thiserror = { version = "2.0", default-features = false, features = ["std"] }
-sha2 = { version = "=0.11.1", default-features = false }
+sha2 = { version = "=0.11.1", default-features = false, features = ["zeroize"] }
+# Security-critical: pinned like sha2, and on the same digest line as it. With
+# `zeroize` on both, a keyed HMAC's state is wiped when it is dropped.
+hmac = { version = "=0.13.0", default-features = false, features = ["zeroize"] }
+rustix = { version = "1.1", default-features = false, features = ["std", "fs"] }
 uuid = { version = "1.29", default-features = false, features = ["std"] }
 serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }

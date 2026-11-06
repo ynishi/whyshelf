@@ -330,7 +330,7 @@ impl PinKeyring {
             None => PinMatch::Unknown {
                 kid: pin.kid.clone(),
             },
-            Some(key) if PinMac::of(key, upstream, current) == pin.mac => PinMatch::Same,
+            Some(key) if pin.mac.verifies(key, upstream, current) => PinMatch::Same,
             Some(_) => PinMatch::Differs,
         }
     }

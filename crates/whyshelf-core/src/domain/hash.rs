@@ -44,12 +44,14 @@
 //! (`kid`), and what a missing key means, is in [`keyring`](super::keyring); the
 //! computation is here, with every other hash.
 //!
-//! The HMAC is built on SHA-256 as RFC 2104 defines it, over the one hash this
-//! workspace already depends on, and is tested against the vectors of RFC 4231.
+//! The HMAC is the RustCrypto `hmac` over SHA-256, tested here against the vectors of
+//! RFC 4231. A pin is checked by comparing MACs in constant time
+//! ([`PinMac::verifies`]), and a [`PinKey`]'s keyed state is wiped when it is dropped.
 
 use std::fmt;
 use std::str::FromStr;
 
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::{Digest, Sha256};
 
 use super::canon::Canon;
@@ -348,48 +350,44 @@ impl super::canon::ToCanon for HunkId {
     }
 }
 
-const SHA256_BLOCK: usize = 64;
-
 /// The fewest bytes a [`PinKey`] may have. A shorter key is a mistake (a password
 /// typed in, a truncated file), and HMAC would accept it all the same.
 const PIN_KEY_MIN: usize = 16;
 
-/// HMAC-SHA256 (RFC 2104) of the concatenation of `parts` under `key`.
-fn hmac_sha256(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
-    let mut block = [0u8; SHA256_BLOCK];
-    if key.len() > SHA256_BLOCK {
-        let digest: [u8; 32] = Sha256::digest(key).into();
-        block[..32].copy_from_slice(&digest);
-    } else {
-        block[..key.len()].copy_from_slice(key);
-    }
-    let mut inner = Sha256::new();
-    inner.update(block.map(|b| b ^ 0x36));
-    for part in parts {
-        inner.update(part);
-    }
-    let inner: [u8; 32] = inner.finalize().into();
-    let mut outer = Sha256::new();
-    outer.update(block.map(|b| b ^ 0x5c));
-    outer.update(inner);
-    outer.finalize().into()
-}
+type HmacSha256 = Hmac<Sha256>;
 
 /// The secret that keyed pins are computed under.
 ///
 /// A value passed in by the caller (the application reads it from the person's own
 /// data, outside the project). It prints as nothing and has no equality, so it
 /// cannot end up in a log or a comparison by accident.
+///
+/// It keeps the HMAC already keyed, not the bytes it was made from; that state is
+/// wiped when the key is dropped.
 #[derive(Clone)]
-pub struct PinKey(Vec<u8>);
+pub struct PinKey(HmacSha256);
 
 impl PinKey {
     /// A key from its bytes; at least 16 of them.
     pub fn new(bytes: &[u8]) -> Result<Self, ValueError> {
+        let too_short = ValueError::PinKeyTooShort { len: bytes.len() };
         if bytes.len() < PIN_KEY_MIN {
-            return Err(ValueError::PinKeyTooShort { len: bytes.len() });
+            return Err(too_short);
         }
-        Ok(Self(bytes.to_vec()))
+        // HMAC takes a key of any length (RFC 2104 hashes one longer than a block),
+        // so this refuses nothing the check above lets through.
+        <HmacSha256 as KeyInit>::new_from_slice(bytes)
+            .map(Self)
+            .map_err(|_| too_short)
+    }
+
+    /// The HMAC under this key, having read an upstream's identifier and hash.
+    fn keyed(&self, upstream: EntityId, hash: &ContentHash) -> HmacSha256 {
+        let mut mac = self.0.clone();
+        mac.update(&HashKind::PinMac.tag());
+        mac.update(upstream.as_uuid().as_bytes());
+        mac.update(&hash.0);
+        mac
     }
 }
 
@@ -410,14 +408,15 @@ pub struct PinMac([u8; 32]);
 impl PinMac {
     /// The MAC of `hash`, the content of the upstream `upstream`, under `key`.
     pub fn of(key: &PinKey, upstream: EntityId, hash: &ContentHash) -> Self {
-        Self(hmac_sha256(
-            &key.0,
-            &[
-                &HashKind::PinMac.tag(),
-                upstream.as_uuid().as_bytes(),
-                &hash.0,
-            ],
-        ))
+        Self(key.keyed(upstream, hash).finalize().into_bytes().into())
+    }
+
+    /// Whether this is the MAC of `hash`, the content of `upstream`, under `key`.
+    ///
+    /// The comparison takes the same time wherever the MACs differ, so how long a
+    /// check takes says nothing of how much of a pin was right.
+    pub fn verifies(&self, key: &PinKey, upstream: EntityId, hash: &ContentHash) -> bool {
+        key.keyed(upstream, hash).verify_slice(&self.0).is_ok()
     }
 
     /// The 64 lowercase hex characters of the MAC.
@@ -610,6 +609,15 @@ mod tests {
         );
     }
 
+    /// HMAC-SHA256 of the concatenation of `parts` under `key`, of any length.
+    fn hmac_sha256(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+        let mut mac = <HmacSha256 as KeyInit>::new_from_slice(key).unwrap();
+        for part in parts {
+            mac.update(part);
+        }
+        mac.finalize().into_bytes().into()
+    }
+
     fn mac_hex(key: &[u8], data: &[u8]) -> String {
         ContentHash(hmac_sha256(key, &[data])).hex()
     }
@@ -698,6 +706,18 @@ mod tests {
             PinMac::of(&key, id(1), &hash),
             PinMac::of(&key, id(2), &hash)
         );
+    }
+
+    #[test]
+    fn a_pin_mac_verifies_only_for_its_key_upstream_and_hash() {
+        let key = PinKey::new(b"0123456789abcdef").unwrap();
+        let other = PinKey::new(b"fedcba9876543210").unwrap();
+        let hash = ContentHash::raw(b"a private finding\n");
+        let mac = PinMac::of(&key, id(1), &hash);
+        assert!(mac.verifies(&key, id(1), &hash));
+        assert!(!mac.verifies(&other, id(1), &hash));
+        assert!(!mac.verifies(&key, id(2), &hash));
+        assert!(!mac.verifies(&key, id(1), &ContentHash::raw(b"edited\n")));
     }
 
     #[test]

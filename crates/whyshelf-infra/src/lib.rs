@@ -113,6 +113,8 @@ pub mod store_fs;
 pub mod test_run;
 pub mod user_settings;
 pub mod wire;
+#[cfg(unix)]
+pub mod writer_fs;
 
 use std::path::{Path, PathBuf};
 
