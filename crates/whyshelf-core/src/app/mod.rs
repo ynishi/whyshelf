@@ -202,6 +202,7 @@
 pub mod check;
 pub mod commit;
 pub mod config;
+pub mod corpus;
 pub mod error;
 pub mod ingest;
 pub mod model;
@@ -223,7 +224,7 @@ mod tests;
 
 pub use config::Config;
 pub use error::AppError;
-pub use outcome::{ExitClass, Outcome, Refusal};
+pub use outcome::{ExitClass, Miss, Outcome, Refusal};
 pub use ports::{CorpusPorts, CorpusRead, Ports};
 pub use subscriber::{CacheUpdater, MapExporter, SubscriberError, SubscriberWarning};
 

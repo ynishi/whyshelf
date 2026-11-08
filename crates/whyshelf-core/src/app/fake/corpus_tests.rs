@@ -685,3 +685,99 @@ fn the_fake_is_a_bundle_of_the_corpus_ports() {
     assert_eq!(who(&FakeCorpus::new()), TextHash::of("a bundle"));
     assert!(docid(1) == docid(1));
 }
+
+// --- what the tests of the use cases rely on ---------------------------------------
+
+#[test]
+fn every_write_method_is_counted_whether_or_not_it_succeeds_and_a_read_is_not() {
+    let fake = FakeCorpus::new();
+    let location = at(Visibility::Public, "a.md");
+    assert_eq!(fake.writes(), 0);
+    block_on(async {
+        let _ = fake.list().await;
+        let _ = fake.read(Visibility::Public).await;
+        let _ = fake.actor().await;
+    });
+    assert_eq!(fake.writes(), 0);
+
+    assert_eq!(
+        block_on(fake.create_new(&location, b"a")).expect("created"),
+        Write::Done
+    );
+    assert_eq!(
+        block_on(fake.rewrite(&location, BytesHash::of(b"a"), b"b")).expect("rewritten"),
+        Write::Done
+    );
+    assert_eq!(
+        block_on(fake.remove(&location, BytesHash::of(b"x"))).expect("not removed"),
+        Write::ChangedUnderfoot
+    );
+    assert_eq!(fake.writes(), 3);
+    fake.fail(PortName::Files);
+    assert!(block_on(fake.create_new(&location, b"a")).is_err());
+    assert_eq!(fake.writes(), 4);
+}
+
+#[test]
+fn a_failing_port_heals() {
+    let fake = FakeCorpus::new();
+    fake.fail(PortName::Actor);
+    assert!(block_on(fake.actor()).is_err());
+    fake.heal(PortName::Actor);
+    assert!(block_on(fake.actor()).is_ok());
+}
+
+#[test]
+fn a_removed_document_is_gone_from_the_listing_and_the_disk_and_a_lost_file_only_from_the_disk() {
+    let fake = FakeCorpus::new();
+    let entity = crate::domain::corpus::Entity::Finding(
+        crate::domain::finding::test_support::finding(1, "body"),
+    );
+    for name in ["a.md", "b.md"] {
+        crate::app::corpus::fixtures::place(
+            &fake,
+            Visibility::Public,
+            name,
+            crate::app::corpus::fixtures::raw_document(entity.clone(), name),
+        );
+    }
+    fake.remove_document(Visibility::Public, &rel("a.md"));
+    fake.lose_file(Visibility::Public, &rel("b.md"));
+
+    let listing = block_on(fake.list()).expect("a listing");
+    let [(kept, _)] = listing.files() else {
+        panic!("one document is left in the listing");
+    };
+    assert_eq!(kept.location().path(), &rel("b.md"));
+    assert_eq!(fake.file(Visibility::Public, &rel("a.md")), None);
+    assert_eq!(fake.file(Visibility::Public, &rel("b.md")), None);
+    assert_eq!(block_on(fake.bytes(kept)).expect("bytes"), FileBytes::Gone);
+}
+
+#[test]
+fn a_hook_runs_once_at_its_moment_and_not_before() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let fake = FakeCorpus::new();
+    fake.set_reply(Reply::Always(Confirmed::Yes));
+    let ran = Arc::new(AtomicUsize::new(0));
+    let (asked, rewritten) = (Arc::clone(&ran), Arc::clone(&ran));
+    fake.on_next_ask(move |_| {
+        asked.fetch_add(1, Ordering::SeqCst);
+    });
+    fake.on_next_rewrite(move |_| {
+        rewritten.fetch_add(10, Ordering::SeqCst);
+    });
+    assert_eq!(ran.load(Ordering::SeqCst), 0);
+
+    block_on(fake.ask(&prompt())).expect("an answer");
+    assert_eq!(ran.load(Ordering::SeqCst), 1);
+    block_on(fake.ask(&prompt())).expect("an answer");
+    assert_eq!(ran.load(Ordering::SeqCst), 1, "a hook runs once");
+
+    let location = at(Visibility::Public, "a.md");
+    fake.put_file(Visibility::Public, &location.path().clone(), b"a");
+    block_on(fake.rewrite(&location, BytesHash::of(b"a"), b"b")).expect("rewritten");
+    assert_eq!(ran.load(Ordering::SeqCst), 11);
+}

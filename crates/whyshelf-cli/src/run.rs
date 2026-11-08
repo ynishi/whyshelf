@@ -167,9 +167,12 @@ impl ExitStatus {
             // A port failed (a store that cannot be read, Git, the cache, a test run),
             // or the model broke a rule of its own. A command cannot run on data it
             // cannot read, which includes a file of a version this build does not read.
-            AppError::Port { .. } | AppError::Event(_) | AppError::ObjectMissing { .. } => {
-                Self::Failed
-            }
+            // The parts of a record that do not belong together are the tool's own
+            // mistake (no command of this build makes one yet).
+            AppError::Port { .. }
+            | AppError::Event(_)
+            | AppError::ObjectMissing { .. }
+            | AppError::Internal(_) => Self::Failed,
         }
     }
 }

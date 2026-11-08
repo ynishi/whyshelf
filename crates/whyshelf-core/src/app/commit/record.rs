@@ -26,6 +26,10 @@
 //!        |   each makes a Recordable (the checks below) and spends it
 //!        v
 //!     LedgerAppend::append(&Recordable)
+//!
+//!   a version a publication copies (its judgement is a record read back, which cannot
+//!   be split):
+//!     scan_copied(secret, text, key, &PublicationPlan) --> Scanned --> store --> ...
 //! ```
 //!
 //! # Why the constructors are in this module's reach
@@ -103,6 +107,18 @@
 //! }
 //! ```
 //!
+//! ```compile_fail,E0624
+//! use whyshelf_core::app::commit::record::Scanned;
+//! use whyshelf_core::app::raw::NormalizedText;
+//! use whyshelf_core::domain::judgement::ObjectKey;
+//! use whyshelf_core::domain::publication::PublicationPlan;
+//!
+//! // A text a publication copies is a `Scanned` only by `scan_copied`, which scans it.
+//! fn forged(text: &NormalizedText, key: ObjectKey, plan: &PublicationPlan) {
+//!     let _ = Scanned::copied(text, key, plan);
+//! }
+//! ```
+//!
 //! ```compile_fail,E0603
 //! use whyshelf_core::app::commit::record::{Scanned, StoredObject, stored};
 //! use whyshelf_core::app::ports::Put;
@@ -129,6 +145,7 @@
 //! | step | stops with |
 //! |---|---|
 //! | [`scan`] | [`Refusal::Secret`]; a ledger the rule cannot choose ([`Refusal::Judgement`]); a text that is not the version the gate read ([`ChainError::TextDiffers`]) |
+//! | [`scan_copied`] | [`Refusal::Secret`]; a version the plan does not copy ([`ChainError::ObjectNotInPlan`]); a text that is not that version ([`ChainError::TextDiffers`]) |
 //! | [`store`] | [`Refusal::ObjectPurged`] for [`Put::Purged`] |
 //! | `Recordable::with_object` ([`append_with_object`]) | an object or a ledger other than the judgement's ([`ChainError`]) |
 //! | `Recordable::without_object` ([`append_without_object`]) | a ledger the rule cannot choose ([`Refusal::Judgement`]) |
@@ -194,6 +211,12 @@ pub enum ChainError {
         /// The record.
         record: JudgementId,
     },
+    /// The version is not among those the plan copies.
+    #[error("the version {key:?} is not one the plan copies")]
+    ObjectNotInPlan {
+        /// The key (boxed: the error stays small).
+        key: Box<ObjectKey>,
+    },
     /// The record to copy is not, byte for byte, the one the private ledger holds.
     #[error("the record {record} is not the one the private ledger holds")]
     NotAsRead {
@@ -203,6 +226,20 @@ pub enum ChainError {
     /// The rule that chooses a ledger could not.
     #[error(transparent)]
     Placement(Box<JudgementError>),
+    /// A judgement that keeps an object (an approval, an adoption) was expected, and
+    /// the one made keeps none.
+    #[error("the judgement keeps no object, and an approval or an adoption was expected")]
+    NoObject,
+    /// A judgement that keeps no object (a revocation, a retirement, a purge, a
+    /// publication) was expected, and the one made keeps one.
+    #[error("the judgement keeps an object, and one that keeps none was expected")]
+    KeepsObject,
+    /// The read of the corpus holds no text with the hash the gate was told it read.
+    #[error("the corpus read holds no text {text}")]
+    TextNotRead {
+        /// The hash of the text the gate read.
+        text: TextHash,
+    },
 }
 
 impl From<JudgementError> for ChainError {
@@ -245,6 +282,33 @@ impl<'a> Scanned<'a> {
             text: text.as_str(),
             key,
             ledger,
+        })
+    }
+
+    /// A scanned text that a publication copies to the public object store.
+    ///
+    /// The caller has scanned `text`. The version must be one the plan copies, and the
+    /// text must be that version's ([`TextHash`] of the text equals the key's). The
+    /// ledger is the public one: a copy is a thing of the public side.
+    pub(in crate::app::commit) fn copied(
+        text: &'a NormalizedText,
+        key: ObjectKey,
+        plan: &PublicationPlan,
+    ) -> Result<Self, ChainError> {
+        if !plan.objects().contains(&key) {
+            return Err(ChainError::ObjectNotInPlan { key: Box::new(key) });
+        }
+        let found = TextHash::of(text.as_str());
+        if found != *key.text() {
+            return Err(ChainError::TextDiffers {
+                expected: *key.text(),
+                found,
+            });
+        }
+        Ok(Self {
+            text: text.as_str(),
+            key,
+            ledger: Visibility::Public,
         })
     }
 
@@ -409,18 +473,37 @@ pub async fn scan<'a, S: SecretScanPort>(
     text: &'a NormalizedText,
     judgement: &ObjectJudgement,
 ) -> Result<Scanned<'a>, Stop> {
-    let hits = secret
-        .scan(text)
-        .await
-        .map_err(AppError::port(PortName::SecretScan))?;
-    if let Some(refusal) = Refusal::secret(hits) {
-        return Err(Stop::Refused(refusal));
-    }
+    no_secret(secret, text).await?;
     let ledger = judgement
         .judgement()
         .ledger(corpus, ledgers)
         .map_err(|error| Stop::Refused(error.into()))?;
     Ok(Scanned::new(text, judgement, ledger)?)
+}
+
+/// The step that makes a [`Scanned`] of a text a publication copies: scan it for
+/// secrets again (it was scanned when it was first stored, on the private side), and tie
+/// it to the version the plan copies.
+pub async fn scan_copied<'a, S: SecretScanPort>(
+    secret: &S,
+    text: &'a NormalizedText,
+    key: ObjectKey,
+    plan: &PublicationPlan,
+) -> Result<Scanned<'a>, Stop> {
+    no_secret(secret, text).await?;
+    Ok(Scanned::copied(text, key, plan)?)
+}
+
+/// Scan a text for secrets: a hit is [`Refusal::Secret`].
+async fn no_secret<S: SecretScanPort>(secret: &S, text: &NormalizedText) -> Result<(), Stop> {
+    let hits = secret
+        .scan(text)
+        .await
+        .map_err(AppError::port(PortName::SecretScan))?;
+    match Refusal::secret(hits) {
+        Some(refusal) => Err(Stop::Refused(refusal)),
+        None => Ok(()),
+    }
 }
 
 /// Read the object store's answer to a put.

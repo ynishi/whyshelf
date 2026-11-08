@@ -4,7 +4,7 @@
 //! error when the answer is "no". A gate that finds something wrong, a
 //! precondition that does not hold and a name that matches nothing are results the
 //! caller has to show and act on, so they are values of [`Outcome`]; an error
-//! ([`AppError`](super::error::AppError)) is for a port that failed, and an argument
+//! ([`AppError`]) is for a port that failed, and an argument
 //! that could not be read is an error before any use case runs.
 //!
 //! ```text
@@ -12,21 +12,31 @@
 //!     Done(T)                      wrote, or read, what was asked
 //!     Violations(NonEmptyVec<..>)  a gate's machine check found these; nothing written
 //!     Refused(Refusal)             a precondition does not hold; nothing written
-//!     NotFound { query, .. }       the name given matches nothing (with the near ones)
+//!     NotFound { query, miss }     the name given matches nothing, or several (see [`Miss`])
 //! ```
+//!
+//! A name that cannot be looked up here at all (a `private:` document that may be
+//! someone else's, another project's document, a URL) is not a miss: it is a refusal
+//! ([`Refusal::CannotNameHere`]), and
+//! [`corpus::outcome_of`](super::corpus::outcome_of) is the one place that tells the
+//! four answers of a lookup apart.
 //!
 //! # One table for the exit
 //!
 //! The command line's exit code and the tool server's `isError` are decided from
-//! the class of an outcome, in the one function [`exit_class`], so the two surfaces
-//! cannot disagree on what a refusal is.
+//! what a use case returned, in the one function [`exit_class`], so the two surfaces
+//! cannot disagree on what a refusal is. A use case returns
+//! `Result<Outcome<T>, AppError>`: an outcome is an answer, an error is a failure of
+//! the tool.
 //!
-//! | outcome | [`ExitClass`] | [`is_error`](ExitClass::is_error) |
+//! | what the use case returned | [`ExitClass`] | [`is_error`](ExitClass::is_error) |
 //! |---|---|---|
-//! | [`Outcome::Done`] | [`Success`](ExitClass::Success) | no |
-//! | [`Outcome::Violations`] | [`Violations`](ExitClass::Violations) | yes |
-//! | [`Outcome::Refused`] | [`Refused`](ExitClass::Refused) | yes |
-//! | [`Outcome::NotFound`] | [`NotFound`](ExitClass::NotFound) | yes |
+//! | `Ok(`[`Outcome::Done`]`)` | [`Success`](ExitClass::Success) | no |
+//! | `Ok(`[`Outcome::Violations`]`)` | [`Violations`](ExitClass::Violations) | yes |
+//! | `Ok(`[`Outcome::Refused`]`)` | [`Refused`](ExitClass::Refused) | yes |
+//! | `Ok(`[`Outcome::NotFound`]`)` | [`NotFound`](ExitClass::NotFound) | yes |
+//! | `Err(`[`AppError::Internal`]`)` | [`Internal`](ExitClass::Internal) | yes |
+//! | `Err(` any other error `)` | [`Port`](ExitClass::Port) | yes |
 //!
 //! # Refusals and the domain's own
 //!
@@ -51,23 +61,28 @@
 //! ([`LeakRemedy`](crate::domain::publication::LeakRemedy)): taking the remedy
 //! away would leave the next step without its choice between fixing and aborting.
 
+use std::convert::Infallible;
+
 use thiserror::Error;
 
+use crate::domain::approval::Gate;
 use crate::domain::error::{
     AdoptionRefusal, JudgementError, LeakRefusal, PublicationError, RevokeError,
 };
 use crate::domain::hash::{BytesHash, TextHash};
 use crate::domain::id::DocId;
 use crate::domain::judge::Judge;
-use crate::domain::judgement::JudgementId;
+use crate::domain::judgement::{JudgementId, Target};
+use crate::domain::knowable::Knowable;
 use crate::domain::lint::CheckViolation;
 use crate::domain::location::RelPath;
-use crate::domain::naming::{Named, Ref, UnresolvedWhy};
+use crate::domain::naming::{Named, Ref, Rename, UnresolvedWhy};
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::publication::ConfirmDigest;
 
 use crate::domain::boundary::Leak;
 
+use super::error::AppError;
 use super::ports::SecretHit;
 
 /// What a use case gives back. See the module documentation.
@@ -80,21 +95,51 @@ pub enum Outcome<T> {
     Violations(NonEmptyVec<CheckViolation>),
     /// A precondition does not hold. Nothing was written.
     Refused(Refusal),
-    /// The name given matches nothing.
+    /// The name given matches nothing, or several.
     NotFound {
         /// The reference as given.
         query: Ref,
-        /// What it nearly matched, for the message to offer.
-        candidates: Vec<Named>,
+        /// How it missed.
+        miss: Miss,
     },
 }
 
-impl<T> Outcome<T> {
-    /// The class of the outcome: what the exit code and `isError` are decided from.
-    pub fn exit_class(&self) -> ExitClass {
-        exit_class(self)
-    }
+/// How a name that could be looked up here did not name one thing.
+///
+/// The two are different answers for the person: a name that matches nothing may be a
+/// name that used to belong to something (the hint), and a name that matches several
+/// is a choice to make (the candidates).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Miss {
+    /// Nothing has that name here.
+    Unmatched {
+        /// What the name used to belong to, when an earlier version says. `Unknown`
+        /// when the history that would say could not be read here: that is no
+        /// statement that no earlier name fits.
+        hint: Knowable<Option<Rename>>,
+    },
+    /// Several fit, and none is chosen.
+    Ambiguous(NonEmptyVec<Named>),
+}
 
+/// An outcome that stopped a use case: any outcome but [`Outcome::Done`], which has no
+/// value to carry. [`widen`](Outcome::widen) makes it the outcome of a use case of any
+/// value, so a step that can stop a use case does not have to know what it returns.
+pub type Stopped = Outcome<Infallible>;
+
+impl Outcome<Infallible> {
+    /// The same outcome as the outcome of a use case that returns a `T`.
+    pub fn widen<T>(self) -> Outcome<T> {
+        match self {
+            Self::Done(never) => match never {},
+            Self::Violations(violations) => Outcome::Violations(violations),
+            Self::Refused(refusal) => Outcome::Refused(refusal),
+            Self::NotFound { query, miss } => Outcome::NotFound { query, miss },
+        }
+    }
+}
+
+impl<T> Outcome<T> {
     /// Whether the use case did what was asked.
     pub fn is_done(&self) -> bool {
         matches!(self, Self::Done(_))
@@ -114,7 +159,7 @@ impl<T> Outcome<T> {
             Self::Done(value) => Outcome::Done(change(value)),
             Self::Violations(violations) => Outcome::Violations(violations),
             Self::Refused(refusal) => Outcome::Refused(refusal),
-            Self::NotFound { query, candidates } => Outcome::NotFound { query, candidates },
+            Self::NotFound { query, miss } => Outcome::NotFound { query, miss },
         }
     }
 }
@@ -134,8 +179,13 @@ pub enum ExitClass {
     Violations,
     /// A precondition did not hold.
     Refused,
-    /// A name matched nothing.
+    /// A name matched nothing, or several.
     NotFound,
+    /// The tool is wrong, not the person: the parts of a record did not belong
+    /// together ([`AppError::Internal`]).
+    Internal,
+    /// A port failed ([`AppError::Port`]), or another error of the tool.
+    Port,
 }
 
 impl ExitClass {
@@ -144,18 +194,24 @@ impl ExitClass {
     pub fn is_error(self) -> bool {
         match self {
             Self::Success => false,
-            Self::Violations | Self::Refused | Self::NotFound => true,
+            Self::Violations | Self::Refused | Self::NotFound | Self::Internal | Self::Port => true,
         }
     }
 }
 
-/// The one table from an outcome to its class. See the module documentation.
-pub fn exit_class<T>(outcome: &Outcome<T>) -> ExitClass {
-    match outcome {
-        Outcome::Done(_) => ExitClass::Success,
-        Outcome::Violations(_) => ExitClass::Violations,
-        Outcome::Refused(_) => ExitClass::Refused,
-        Outcome::NotFound { .. } => ExitClass::NotFound,
+/// The one table from what a use case returned to its class. See the module
+/// documentation.
+pub fn exit_class<T>(result: &Result<Outcome<T>, AppError>) -> ExitClass {
+    match result {
+        Ok(Outcome::Done(_)) => ExitClass::Success,
+        Ok(Outcome::Violations(_)) => ExitClass::Violations,
+        Ok(Outcome::Refused(_)) => ExitClass::Refused,
+        Ok(Outcome::NotFound { .. }) => ExitClass::NotFound,
+        Err(AppError::Internal(_)) => ExitClass::Internal,
+        // The other errors are the event-log use cases' own (a value that was
+        // refused, a reference that names nothing there). None of them is an answer,
+        // so a surface reports each as the tool's failure.
+        Err(_) => ExitClass::Port,
     }
 }
 
@@ -249,6 +305,18 @@ pub enum Refusal {
         /// Why it cannot be looked up.
         why: UnresolvedWhy,
     },
+    /// The gate does not judge what the name points at: CR judges a Finding, CS and
+    /// CM a Spec, CI a Design and CA an item.
+    #[error("{} does not judge {target}", gate.name())]
+    WrongTarget {
+        /// The gate.
+        gate: Gate,
+        /// What the name points at.
+        target: Target,
+    },
+    /// No place for an `id:` was found in the file, so it is left as it was.
+    #[error("no place for an `id:` was found in {0}")]
+    CannotPlaceId(RelPath),
     /// The file's content when it was written is not the content it had when it was
     /// compared. Read it again and plan again.
     #[error("{0} changed while it was being written")]
@@ -353,6 +421,8 @@ mod tests {
     use std::num::NonZeroU32;
 
     use super::*;
+    use crate::app::commit::record::ChainError;
+    use crate::app::ports::PortName;
     use crate::domain::boundary::{CrossingField, CrossingText, Leak, PrivateNames, PrivateRoot};
     use crate::domain::id::test_support::docid;
     use crate::domain::judge::test_support::judge;
@@ -368,26 +438,74 @@ mod tests {
         Ref::Id(docid(1))
     }
 
+    fn unmatched() -> Miss {
+        Miss::Unmatched {
+            hint: Knowable::Unknown,
+        }
+    }
+
     #[test]
-    fn each_outcome_has_one_class_and_only_success_is_not_an_error() {
-        let done: Outcome<u8> = Outcome::Done(1);
-        let violations: Outcome<u8> = Outcome::Violations(violation());
-        let refused: Outcome<u8> = Outcome::Refused(Refusal::DirtyTree);
-        let missing: Outcome<u8> = Outcome::NotFound {
-            query: query(),
-            candidates: Vec::new(),
+    fn each_result_has_one_class_and_only_success_is_not_an_error() {
+        let internal = AppError::Internal(ChainError::NoObject);
+        let port = AppError::Port {
+            port: PortName::Ledger,
+            source: Box::new(std::fmt::Error),
         };
-        let table = [
-            (done, ExitClass::Success, false),
-            (violations, ExitClass::Violations, true),
-            (refused, ExitClass::Refused, true),
-            (missing, ExitClass::NotFound, true),
+        let table: [(Result<Outcome<u8>, AppError>, ExitClass, bool); 6] = [
+            (Ok(Outcome::Done(1)), ExitClass::Success, false),
+            (
+                Ok(Outcome::Violations(violation())),
+                ExitClass::Violations,
+                true,
+            ),
+            (
+                Ok(Outcome::Refused(Refusal::DirtyTree)),
+                ExitClass::Refused,
+                true,
+            ),
+            (
+                Ok(Outcome::NotFound {
+                    query: query(),
+                    miss: unmatched(),
+                }),
+                ExitClass::NotFound,
+                true,
+            ),
+            (Err(internal), ExitClass::Internal, true),
+            (Err(port), ExitClass::Port, true),
         ];
-        for (outcome, class, error) in table {
-            assert_eq!(exit_class(&outcome), class);
-            assert_eq!(outcome.exit_class(), class);
+        for (result, class, error) in table {
+            assert_eq!(exit_class(&result), class);
             assert_eq!(class.is_error(), error);
         }
+    }
+
+    #[test]
+    fn an_error_of_the_event_log_use_cases_is_the_tools_failure_too() {
+        let result: Result<Outcome<u8>, AppError> = Err(AppError::NoActor);
+        assert_eq!(exit_class(&result), ExitClass::Port);
+    }
+
+    #[test]
+    fn widening_a_stopped_outcome_keeps_what_stopped_it() {
+        let violations: Stopped = Outcome::Violations(violation());
+        assert_eq!(violations.widen::<u8>(), Outcome::Violations(violation()));
+        let refused: Stopped = Outcome::Refused(Refusal::DirtyTree);
+        assert_eq!(
+            refused.widen::<String>(),
+            Outcome::Refused(Refusal::DirtyTree)
+        );
+        let missing: Stopped = Outcome::NotFound {
+            query: query(),
+            miss: unmatched(),
+        };
+        assert_eq!(
+            missing.widen::<u8>(),
+            Outcome::NotFound {
+                query: query(),
+                miss: unmatched()
+            }
+        );
     }
 
     #[test]
@@ -536,6 +654,21 @@ mod tests {
             refusal
                 .to_string()
                 .contains(&UnresolvedWhy::PrivateNotHere.to_string())
+        );
+    }
+
+    #[test]
+    fn a_gate_that_does_not_judge_the_target_and_a_file_with_no_place_for_an_id_say_so() {
+        use crate::domain::id::test_support::docid;
+        let wrong = Refusal::WrongTarget {
+            gate: Gate::Cs,
+            target: Target::Doc(docid(1)),
+        };
+        assert!(wrong.to_string().starts_with("CS does not judge"));
+        let at: RelPath = "docs/a.md".parse().expect("a path");
+        assert_eq!(
+            Refusal::CannotPlaceId(at).to_string(),
+            "no place for an `id:` was found in docs/a.md"
         );
     }
 

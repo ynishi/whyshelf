@@ -1019,6 +1019,8 @@ mod corpus_fake {
         authors: BTreeMap<Revision, Author>,
         places: BTreeMap<FileKey, GitPlace>,
         failing: BTreeSet<PortName>,
+        /// How many times a write method was called, whatever it came to.
+        writes: usize,
     }
 
     /// The ports of the corpus and the ledgers, in memory.
@@ -1038,6 +1040,25 @@ mod corpus_fake {
     pub(crate) struct FakeCorpus {
         state: Mutex<CorpusState>,
         shared: FakePorts,
+        on_ask: Mutex<Hook>,
+        on_rewrite: Mutex<Hook>,
+    }
+
+    /// Something that happens in the world at a moment of a use case: another editor at
+    /// work, a listing that a re-read would show differently. Held once.
+    #[derive(Default)]
+    struct Hook(Option<Action>);
+
+    type Action = Box<dyn FnOnce(&FakeCorpus) + Send>;
+
+    impl std::fmt::Debug for Hook {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(if self.0.is_some() {
+                "Hook(set)"
+            } else {
+                "Hook(none)"
+            })
+        }
     }
 
     fn key(location: &Location) -> FileKey {
@@ -1070,9 +1091,24 @@ mod corpus_fake {
                     authors: BTreeMap::new(),
                     places: BTreeMap::new(),
                     failing: BTreeSet::new(),
+                    writes: 0,
                 }),
                 shared: FakePorts::new(),
+                on_ask: Mutex::new(Hook::default()),
+                on_rewrite: Mutex::new(Hook::default()),
             }
+        }
+
+        /// Something happens in the world when the person is next asked, before the
+        /// answer is given: a file is edited, a record is added.
+        pub(crate) fn on_next_ask(&self, hook: impl FnOnce(&FakeCorpus) + Send + 'static) {
+            self.on_ask.lock().expect("the fake's lock").0 = Some(Box::new(hook));
+        }
+
+        /// Something happens in the world right after the next file is replaced: what a
+        /// listing made again would show of it.
+        pub(crate) fn on_next_rewrite(&self, hook: impl FnOnce(&FakeCorpus) + Send + 'static) {
+            self.on_rewrite.lock().expect("the fake's lock").0 = Some(Box::new(hook));
         }
 
         fn lock(&self) -> MutexGuard<'_, CorpusState> {
@@ -1091,10 +1127,37 @@ mod corpus_fake {
             Ok(())
         }
 
+        /// A write method was called: counted before it can fail, so that a read-only
+        /// use case is shown to call none.
+        fn wrote(&self, port: PortName) -> Result<(), FakeError> {
+            self.lock().writes += 1;
+            self.check(port)
+        }
+
+        /// How many times a write method (an append, a put, a create, a rewrite, a
+        /// removal) was called.
+        pub(crate) fn writes(&self) -> usize {
+            self.lock().writes
+        }
+
+        /// Stop making calls of this port fail.
+        pub(crate) fn heal(&self, port: PortName) {
+            self.lock().failing.remove(&port);
+        }
+
         // --- documents
 
         pub(crate) fn add_document(&self, facts: FileFacts, raw: RawDocument) {
             self.lock().documents.push((facts, raw));
+        }
+
+        /// The document at this place is gone, from the listing and from the disk.
+        pub(crate) fn remove_document(&self, root: Visibility, at: &RelPath) {
+            let mut s = self.lock();
+            s.documents.retain(|(facts, _)| {
+                !(facts.location().visibility() == root && facts.location().path() == at)
+            });
+            s.files.remove(&(root, at.clone()));
         }
 
         /// Make the listing find a path it cannot name.
@@ -1188,6 +1251,12 @@ mod corpus_fake {
                     owner_blocks: false,
                 },
             );
+        }
+
+        /// The file is gone from the disk while the listing still has it: it went after
+        /// the listing was made.
+        pub(crate) fn lose_file(&self, root: Visibility, at: &RelPath) {
+            self.lock().files.remove(&(root, at.clone()));
         }
 
         pub(crate) fn file(&self, root: Visibility, at: &RelPath) -> Option<Vec<u8>> {
@@ -1341,7 +1410,7 @@ mod corpus_fake {
             &self,
             record: &crate::app::commit::record::Recordable,
         ) -> Result<(), FakeError> {
-            self.check(PortName::Ledger)?;
+            self.wrote(PortName::Ledger)?;
             let mut s = self.lock();
             let judgement = record.judgement();
             let held = s.ledgers.entry(record.ledger()).or_default();
@@ -1361,7 +1430,7 @@ mod corpus_fake {
         type Error = FakeError;
 
         async fn put(&self, text: &Scanned<'_>) -> Result<Put, FakeError> {
-            self.check(PortName::Objects)?;
+            self.wrote(PortName::Objects)?;
             let mut s = self.lock();
             let hash = *text.key().text();
             if s.purged.contains(&(text.ledger(), hash)) {
@@ -1410,6 +1479,10 @@ mod corpus_fake {
 
         async fn ask(&self, prompt: &ConfirmPrompt) -> Result<Confirmed, FakeError> {
             self.check(PortName::Confirm)?;
+            let hook = self.on_ask.lock().expect("the fake's lock").0.take();
+            if let Some(hook) = hook {
+                hook(self);
+            }
             let mut s = self.lock();
             s.asked.push(*prompt);
             Ok(match s.reply {
@@ -1424,7 +1497,7 @@ mod corpus_fake {
         type Error = FakeError;
 
         async fn create_new(&self, at: &Location, text: &[u8]) -> Result<Write, FakeError> {
-            self.check(PortName::Files)?;
+            self.wrote(PortName::Files)?;
             let mut s = self.lock();
             if s.files.contains_key(&key(at)) {
                 return Ok(Write::Exists);
@@ -1448,11 +1521,15 @@ mod corpus_fake {
             expect: BytesHash,
             text: &[u8],
         ) -> Result<Write, FakeError> {
-            self.check(PortName::Files)?;
+            self.wrote(PortName::Files)?;
             match self.guarded(at, expect) {
                 Ok(Guard) => {
                     if let Some(file) = self.lock().files.get_mut(&key(at)) {
                         file.bytes = text.to_vec();
+                    }
+                    let hook = self.on_rewrite.lock().expect("the fake's lock").0.take();
+                    if let Some(hook) = hook {
+                        hook(self);
                     }
                     Ok(Write::Done)
                 }
@@ -1461,7 +1538,7 @@ mod corpus_fake {
         }
 
         async fn remove(&self, at: &Location, expect: BytesHash) -> Result<Write, FakeError> {
-            self.check(PortName::Files)?;
+            self.wrote(PortName::Files)?;
             match self.guarded(at, expect) {
                 Ok(Guard) => {
                     self.lock().files.remove(&key(at));

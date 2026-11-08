@@ -501,6 +501,89 @@ fn a_publications_copy_is_the_same_record_in_both_ledgers() {
     }
 }
 
+// --- scan_copied: a version a publication copies ------------------------------------
+
+/// The text a version of the fixture's plan is of.
+fn copied_text(key: &ObjectKey) -> NormalizedText {
+    NormalizedText::new(format!("text of {}", key.content()))
+}
+
+#[test]
+fn a_text_the_plan_copies_is_scanned_and_stored_in_the_public_store() {
+    let publishing = Publishing::of(b"bytes");
+    let key = publishing.plan.objects()[0];
+    let text = copied_text(&key);
+    let fake = FakeCorpus::new();
+    let evidence = block_on(async {
+        let scanned = scan_copied(&FakePorts::new(), &text, key, &publishing.plan).await?;
+        assert_eq!(scanned.ledger(), Visibility::Public);
+        assert_eq!(scanned.key(), key);
+        assert_eq!(scanned.text(), text.as_str());
+        store(&fake, &scanned).await
+    })
+    .expect("stored");
+    assert_eq!(evidence.ledger(), Visibility::Public);
+    assert!(fake.has_object(Visibility::Public, *key.text()));
+}
+
+#[test]
+fn a_copied_text_with_a_secret_is_refused_before_it_is_stored() {
+    let publishing = Publishing::of(b"bytes");
+    let key = publishing.plan.objects()[0];
+    let text = NormalizedText::new("AKIA-SECRET\n".to_owned());
+    let err = block_on(scan_copied(&FakePorts::new(), &text, key, &publishing.plan))
+        .expect_err("a secret");
+    assert!(matches!(err, Stop::Refused(Refusal::Secret(_))));
+}
+
+#[test]
+fn a_version_the_plan_does_not_copy_is_not_copied() {
+    let publishing = Publishing::of(b"bytes");
+    let other = ObjectKey::new(hash_of("other"), TextHash::of("other"));
+    let text = NormalizedText::new("other".to_owned());
+    let err = block_on(scan_copied(
+        &FakePorts::new(),
+        &text,
+        other,
+        &publishing.plan,
+    ))
+    .expect_err("not in the plan");
+    assert!(matches!(
+        err,
+        Stop::Broken(ChainError::ObjectNotInPlan { key }) if *key == other
+    ));
+}
+
+#[test]
+fn a_text_that_is_not_the_version_the_plan_copies_is_not_copied() {
+    let publishing = Publishing::of(b"bytes");
+    let key = publishing.plan.objects()[0];
+    let text = NormalizedText::new("not that version".to_owned());
+    let err = block_on(scan_copied(&FakePorts::new(), &text, key, &publishing.plan))
+        .expect_err("another text");
+    assert!(matches!(
+        err,
+        Stop::Broken(ChainError::TextDiffers { expected, found })
+            if expected == *key.text() && found == TextHash::of("not that version")
+    ));
+}
+
+#[test]
+fn the_mistakes_of_the_code_that_hands_over_the_wrong_judgement_or_text_say_so() {
+    assert!(ChainError::NoObject.to_string().contains("keeps no object"));
+    assert!(
+        ChainError::KeepsObject
+            .to_string()
+            .contains("keeps an object")
+    );
+    let text = TextHash::of("a");
+    assert!(
+        ChainError::TextNotRead { text }
+            .to_string()
+            .contains(&text.to_string())
+    );
+}
+
 #[test]
 fn a_failing_ledger_is_a_port_failure() {
     let fake = FakeCorpus::new();

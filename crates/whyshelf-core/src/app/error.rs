@@ -19,6 +19,7 @@ use crate::domain::location::RelPath;
 use crate::domain::reference::{ItemRef, Ref};
 use crate::domain::tag::VocabularyError;
 
+use super::commit::record::ChainError;
 use super::ports::{PortName, SecretHit};
 
 /// Why a use case failed.
@@ -33,6 +34,11 @@ pub enum AppError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+    /// The parts handed to a step of the evidence chain do not belong together: a
+    /// mistake in the code, not something the person did, so it is an error and never
+    /// an outcome ([`Outcome`](super::outcome::Outcome)).
+    #[error(transparent)]
+    Internal(#[from] ChainError),
     /// A value with rules was refused.
     #[error(transparent)]
     Value(#[from] ValueError),
