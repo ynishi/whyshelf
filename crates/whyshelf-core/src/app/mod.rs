@@ -213,6 +213,7 @@ pub mod query;
 pub mod raw;
 pub mod register;
 pub mod scaffold;
+pub mod shelf;
 pub mod store_contract;
 pub mod subscriber;
 pub mod view;

@@ -118,6 +118,10 @@ pub enum Sub {
     Migrate,
     /// Serve the commands as tools over standard input and output.
     Mcp,
+    /// Documents whose kinds the project declares in `.whyshelf/books.toml`: check,
+    /// status, get, trace, stale, judge, schema. Answers in JSON, needs no workspace.
+    #[command(subcommand)]
+    Books(crate::books::BooksCommand),
 }
 
 /// Arguments of `init`.
@@ -361,6 +365,8 @@ pub enum Action {
     Migrate,
     /// `mcp`: serve the commands as tools.
     Mcp,
+    /// `books ...`: a shelf of declared books, with no workspace.
+    Books(crate::books::BooksCommand),
     /// Everything else: a command on the workspace.
     Run(Command),
 }
@@ -461,6 +467,7 @@ impl Sub {
             Self::Schema(SchemaCommand::Output) => return Ok(Action::SchemaOutput),
             Self::Migrate => return Ok(Action::Migrate),
             Self::Mcp => return Ok(Action::Mcp),
+            Self::Books(command) => return Ok(Action::Books(command)),
             Self::Context => Command::Context,
             Self::Add(args) => args.into_command(),
             Self::Tag(args) => Command::Tag {

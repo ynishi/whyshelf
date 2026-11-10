@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794286753375,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e9417e937c515717990db4ed17437f59a1deb458",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "address": "f6cb259a5a8d83789537b427c16fa5dffba688e9",
+      "hash": "sha256:47590abbdbc9d25aad5eb6e15b5dab769a95fc6d35ecea687cd208b08df8395f",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-382f-717a-938e-9014e2c69bed"
+    }
+  ],
+  "id": "01a1c3d3-16b1-76a4-af94-25615a91e406",
+  "kind": "decision",
+  "reason": "Decided 2026-11-10 with the maintainer: files as artifacts, and an approval read back from version control.",
+  "revision": "395f4fe0d0382af6c79faa0ce0fd19c4410c848b",
+  "seen": "sha256:962bca42a4aed00f4aa03d4eb971854a0da11d55cb5a2a2bb9248c4fa40b7dad",
+  "seen_address": "77663e51c838e55f5feb16635d6ffdc244721230",
+  "subject": "01a1c3d2-fa37-74bf-bbd8-1dbc0e039102",
+  "v": 1,
+  "verb": "approve"
+}

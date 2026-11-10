@@ -3,6 +3,15 @@ all-features = false
 
 [advisories]
 version = 2
+# Each ignore names why it is safe for now and what removes it.
+ignore = [
+    # Bundled SQLite < 3.54 (libsqlite3-sys 0.38 via rusqlite 0.40 via rusqlite-isle 0.6).
+    # Exposed only when opening a database and its -wal written by a less trusted party;
+    # whyshelf opens only its own cache (.whyshelf/cache/index.db, not committed).
+    # Remove when rusqlite-isle 0.7 (rusqlite 0.41) is out:
+    # https://github.com/ynishi/rusqlite-isle/issues/2
+    { id = "RUSTSEC-2026-0459", reason = "waits for rusqlite-isle 0.7 (rusqlite 0.41); only our own cache DB is opened" },
+]
 
 [licenses]
 version = 2

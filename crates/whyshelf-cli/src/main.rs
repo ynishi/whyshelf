@@ -487,6 +487,7 @@
 
 mod actor;
 mod args;
+mod books;
 mod command;
 mod error;
 mod init;

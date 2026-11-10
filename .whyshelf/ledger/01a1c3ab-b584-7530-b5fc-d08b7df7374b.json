@@ -1,0 +1,30 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794284172507,
+  "expires": null,
+  "frame": [
+    {
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    }
+  ],
+  "id": "01a1c3ab-b584-7530-b5fc-d08b7df7374b",
+  "kind": "decision",
+  "reason": "First decisions of whyshelf's own requirements, kept in the repo.",
+  "seen": "sha256:b60dc0295376775317aeadb9163db6701fe53a561caf10aeda377a21d288aefc",
+  "subject": "01a1c332-3ad8-7753-b9e1-a7cd0b06ed77",
+  "v": 1,
+  "verb": "approve"
+}

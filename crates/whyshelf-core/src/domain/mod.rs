@@ -281,6 +281,7 @@ pub mod publication;
 pub mod query;
 pub mod reference;
 pub mod revision;
+pub mod shelf;
 pub mod spec;
 pub mod state;
 pub mod stored;

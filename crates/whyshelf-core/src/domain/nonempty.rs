@@ -63,6 +63,43 @@ impl<T> NonEmptyVec<T> {
         out.extend(self.tail);
         out
     }
+
+    /// The list with `item` after the last element.
+    pub fn push(&mut self, item: T) {
+        self.tail.push(item);
+    }
+
+    /// The list with `more` after the last element.
+    #[must_use]
+    pub fn extended(mut self, more: impl IntoIterator<Item = T>) -> Self {
+        self.tail.extend(more);
+        self
+    }
+
+    /// Each element turned into another, in order: still at least one.
+    pub fn map<U>(&self, mut f: impl FnMut(&T) -> U) -> NonEmptyVec<U> {
+        NonEmptyVec {
+            head: f(&self.head),
+            tail: self.tail.iter().map(f).collect(),
+        }
+    }
+
+    /// The elements of every list `f` gives, one after the other, in order: each
+    /// list has at least one element, so the whole has.
+    pub fn flat_map<'a, U: Clone + 'a>(
+        &'a self,
+        mut f: impl FnMut(&'a T) -> &'a NonEmptyVec<U>,
+    ) -> NonEmptyVec<U> {
+        let first = f(&self.head);
+        let mut tail = first.tail.clone();
+        for item in &self.tail {
+            tail.extend(f(item).iter().cloned());
+        }
+        NonEmptyVec {
+            head: first.head.clone(),
+            tail,
+        }
+    }
 }
 
 impl<T: ToCanon> ToCanon for NonEmptyVec<T> {
@@ -171,6 +208,36 @@ impl<T> TwoOrMore<T> {
     }
 }
 
+/// How many items there were, with the items kept: none, one, or two or more.
+///
+/// Why: a lookup that finds nothing, one thing or several answers three different
+/// questions, and the several are a [`TwoOrMore`], which cannot hold fewer. One
+/// reader of "how many" (`Count::of`) serves every such lookup, so none of them
+/// counts by hand.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Count<T> {
+    /// There were none.
+    None,
+    /// There was exactly one.
+    One(T),
+    /// There were two or more.
+    Many(TwoOrMore<T>),
+}
+
+impl<T> Count<T> {
+    /// The count of what `items` yields, in the order it yields them.
+    pub fn of(items: impl IntoIterator<Item = T>) -> Self {
+        let mut iter = items.into_iter();
+        match (iter.next(), iter.next()) {
+            (None, _) => Self::None,
+            (Some(only), None) => Self::One(only),
+            (Some(first), Some(second)) => {
+                Self::Many(TwoOrMore::new(first, second, iter.collect()))
+            }
+        }
+    }
+}
+
 /// A free text that has at least one non-white-space character.
 ///
 /// Used for the explanatory fields of an entity (an environment, a reason, a
@@ -252,6 +319,31 @@ mod tests {
         let three = TwoOrMore::new('a', 'b', vec!['c']);
         assert_eq!(three.len(), 3);
         assert_eq!(three.into_vec(), vec!['a', 'b', 'c']);
+    }
+
+    #[test]
+    fn a_list_can_be_extended_mapped_and_flattened_and_stays_in_order() {
+        let mut v = NonEmptyVec::new(1, vec![2]);
+        v.push(3);
+        let v = v.extended([4, 5]);
+        assert_eq!(v.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
+        let doubled = v.map(|n| n * 2);
+        assert_eq!(doubled.into_vec(), vec![2, 4, 6, 8, 10]);
+        let lists = NonEmptyVec::new(
+            NonEmptyVec::new('a', vec!['b']),
+            vec![NonEmptyVec::new('c', vec![])],
+        );
+        assert_eq!(lists.flat_map(|l| l).into_vec(), vec!['a', 'b', 'c']);
+    }
+
+    #[test]
+    fn a_count_tells_none_one_and_many_and_keeps_the_order() {
+        assert_eq!(Count::of(Vec::<u8>::new()), Count::None);
+        assert_eq!(Count::of([7]), Count::One(7));
+        assert_eq!(
+            Count::of([3, 1, 2]),
+            Count::Many(TwoOrMore::new(3, 1, vec![2]))
+        );
     }
 
     #[test]
