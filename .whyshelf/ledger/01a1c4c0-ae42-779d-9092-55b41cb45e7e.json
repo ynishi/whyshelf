@@ -1,0 +1,74 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b05de743c6ef4bb0bc80e0e2c2026a40a475e7d8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1cdac47178d7bf913a0e48320a5ce76bc5650a3368c16433dbea0b2015235c29",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "1b4f49f8462d5c1cb9f6595103f3c73a9e461dcc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d05a0dcfd64c7ffdce9cccf1a643dbc2e7533301b6888f8eabe0d0a5f5f4e144",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "dae01214db56739388d92de8b64a5fb6ff7803c5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4370b333e8686847ebea8bd5058575f80fb7c034de159fec0d86ef5b61b47087",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b924cb1e87a5dbac1e1736e6bc66cea0d31c99aa",
+      "hash": "sha256:538c2e4f4d40b38fd75ff7fb2cec0e67f4a23978e2fb3e496facc990db0ae52d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    }
+  ],
+  "id": "01a1c4c0-ae42-779d-9092-55b41cb45e7e",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:f6fda94a0e4db41e8e2a230bf5a9478f6f27ce730860c2fafb61bac373f4d07d",
+  "seen_address": "1dc546719f51cf1f4deaa5c8fa2dd1e7be8537f1",
+  "subject": "01a1c4ba-1606-7681-90fb-0d70558c8701",
+  "v": 1,
+  "verb": "approve"
+}

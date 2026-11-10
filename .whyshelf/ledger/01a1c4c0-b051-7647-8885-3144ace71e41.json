@@ -1,0 +1,74 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "acdae9e15ef512d896b9cf1430cfbb12e0b7b4cf",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f8d45e569d0fb27ae32fa36b13ed3d45fdf48d44deba73a3f644f94d96955513",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/successor_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "1b4f49f8462d5c1cb9f6595103f3c73a9e461dcc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d05a0dcfd64c7ffdce9cccf1a643dbc2e7533301b6888f8eabe0d0a5f5f4e144",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "4134880cc2d760ef4fbadba7eaa8e361d13b9d95",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a0a766e236f8ab142d3843f088b4805b34359f2b766255ae68d19afcf0c8e8ed",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "92e0481ab41cac64fea12f801b2ecdf10e079553",
+      "hash": "sha256:1dda50fa130dd674172897a990f00f6c93a4125ac5ccf2b12311ad1deb04bb39",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "16"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-136c-718f-b63c-ca159f35530a"
+    }
+  ],
+  "id": "01a1c4c0-b051-7647-8885-3144ace71e41",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:62e28915a39df3add6c802d96d0e5cc97dc6a9e7b049e93c9127a56fae6190d3",
+  "seen_address": "57846575dfc51d0e0f1e75845e64f50ca601c83a",
+  "subject": "01a1c4ba-17ad-715e-afe9-e9a4d2a848c2",
+  "v": 1,
+  "verb": "approve"
+}

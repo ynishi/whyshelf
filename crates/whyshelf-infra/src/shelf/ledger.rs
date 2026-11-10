@@ -395,4 +395,78 @@ mod tests {
         let result = JsonLedger::new(dir, ".whyshelf").read().await;
         assert!(matches!(result, Err(LedgerError::Name { .. })));
     }
+
+    fn revocation_of(id: u128, target: u128) -> Record {
+        Record::Revocation(Revocation::new(
+            jid(id),
+            NonEmptySet::from_set(BTreeSet::from([jid(target)])).unwrap(),
+            Actor::new("ana").unwrap(),
+            JudgedAt::new(1_700_000_000_000),
+            NonBlank::new("wrong file").unwrap(),
+        ))
+    }
+
+    /// The names of the files of a directory, sorted.
+    async fn names(dir: &Path) -> Vec<String> {
+        let mut names = Vec::new();
+        let mut entries = tokio::fs::read_dir(dir).await.unwrap();
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            names.push(entry.file_name().into_string().unwrap());
+        }
+        names.sort();
+        names
+    }
+
+    #[tokio::test]
+    async fn two_branches_add_two_files_and_the_same_record_is_the_same_file() {
+        // Two worktrees, each with its own ledger directory. Each writes a record of
+        // its own, and both write one record that is the same.
+        let root = tempfile::tempdir().unwrap();
+        let one = JsonLedger::new(root.path().join("one/.whyshelf/ledger"), ".whyshelf");
+        let other = JsonLedger::new(root.path().join("other/.whyshelf/ledger"), ".whyshelf");
+        let (own, theirs, same) = (
+            revocation_of(2, 1),
+            revocation_of(3, 1),
+            revocation_of(4, 1),
+        );
+        one.append(&own).await.unwrap();
+        one.append(&same).await.unwrap();
+        other.append(&theirs).await.unwrap();
+        other.append(&same).await.unwrap();
+
+        // Each file is named by the id of its record, so the records of the two
+        // branches are two files, and the same record is one name with one content.
+        let one_names = names(one.dir()).await;
+        let other_names = names(other.dir()).await;
+        assert_eq!(
+            one_names,
+            vec![format!("{}.json", jid(2)), format!("{}.json", jid(4))]
+        );
+        assert_eq!(
+            other_names,
+            vec![format!("{}.json", jid(3)), format!("{}.json", jid(4))]
+        );
+        let shared = format!("{}.json", jid(4));
+        assert_eq!(
+            tokio::fs::read(one.dir().join(&shared)).await.unwrap(),
+            tokio::fs::read(other.dir().join(&shared)).await.unwrap()
+        );
+
+        // The merge is the union of the files.
+        let merged = JsonLedger::new(root.path().join("merged/.whyshelf/ledger"), ".whyshelf");
+        tokio::fs::create_dir_all(merged.dir()).await.unwrap();
+        for ledger in [&one, &other] {
+            for name in names(ledger.dir()).await {
+                tokio::fs::copy(ledger.dir().join(&name), merged.dir().join(&name))
+                    .await
+                    .unwrap();
+            }
+        }
+        let read = merged.read().await.unwrap();
+        assert!(read.unreadable.is_empty());
+        assert_eq!(read.records.len(), 3);
+        for record in [&own, &theirs, &same] {
+            assert!(read.records.contains(record), "{record:?}");
+        }
+    }
 }

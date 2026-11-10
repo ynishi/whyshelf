@@ -206,15 +206,16 @@
 //! `{"id": ..., "key": ...}`; its `standing` is `pending`, `denied`, `deprecated`,
 //! `retired`, or for an approval `fresh`, `expired`, `stale` or `broken`; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a path) and a
-//! `detail` sentence; every
-//! answer carries `health` (files that are no document, cycles, records that
-//! contradict one another or cannot be read).
+//! `detail` sentence; every answer that reads the documents (`check` when the
+//! declaration can be used, `status`, `get`, `trace`, `stale`, `diff`) carries
+//! `health` (files that are no document, cycles, records that contradict one another
+//! or cannot be read). The answers of the writes and of `schema` carry none.
 //!
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!
 //! `new` answers `{"doc": {"id", "key"}, "file": ..., "unresolved_links": [{"link",
