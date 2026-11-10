@@ -224,7 +224,9 @@
 //! stderr; only `--help` and `--version` answer in text. A
 //! document is
 //! `{"id": ..., "key": ...}`; its `standing` is `pending`, `denied`, `deprecated`,
-//! `retired`, or for an approval `fresh`, `expired`, `stale` or `broken`; a cause has
+//! `retired`, or for an approval `fresh`, `expired`, `stale` or `broken`; its
+//! `decision` is the decision that stands (the record's `judgement` id, `actor`, `at`
+//! and `reason`, null when none was given), or null while it is pending; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a path) and a
 //! `detail` sentence; every answer that reads the documents (`check` when the
 //! declaration can be used, `status`, `get`, `trace`, `stale`, `diff`) carries

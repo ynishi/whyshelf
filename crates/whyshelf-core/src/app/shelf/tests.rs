@@ -181,6 +181,70 @@ fn a_denial_and_a_retirement_are_recorded_with_their_reasons() {
 }
 
 #[test]
+fn a_row_carries_the_decision_that_stands_with_who_when_and_why() {
+    let mut app = app(vec![fr(1, "slow", &[])]);
+    let row = block_on(app.get(&r("FR-1"))).unwrap().row;
+    assert_eq!(row.decision, None, "pending: no decision");
+
+    let mut approval = approve("FR-1");
+    approval.judgement = Judgement::Approve {
+        until: None,
+        reason: Some(NonBlank::new("as seen").unwrap()),
+    };
+    let approved = block_on(app.judge(approval)).unwrap();
+    let row = block_on(app.get(&r("FR-1"))).unwrap().row;
+    let decision = row.decision.expect("approved: a decision");
+    assert_eq!(decision.id(), approved.record.id());
+    assert_eq!(decision.reason().map(NonBlank::as_str), Some("as seen"));
+
+    // A later denial is the decision that stands, the one `declared` is read from.
+    let denied = block_on(app.judge(JudgeRequest {
+        judgement: Judgement::Deny { reason: None },
+        reference: r("FR-1"),
+        actor: None,
+    }))
+    .unwrap();
+    let row = block_on(app.get(&r("FR-1"))).unwrap().row;
+    let decision = row.decision.expect("denied: a decision");
+    assert_eq!(decision.id(), denied.record.id());
+    assert_eq!(decision.reason(), None);
+    assert!(
+        matches!(row.declared, DeclaredStatus::Denied { judgement } if judgement == decision.id())
+    );
+    assert!(
+        block_on(app.status())
+            .unwrap()
+            .rows
+            .iter()
+            .all(|row| row.decision.is_some())
+    );
+
+    // Withdrawing the denial brings the approval back as the decision that stands;
+    // withdrawing that too leaves none.
+    let revoke = || JudgeRequest {
+        judgement: Judgement::Revoke {
+            reason: NonBlank::new("withdrawn").unwrap(),
+        },
+        reference: r("FR-1"),
+        actor: None,
+    };
+    block_on(app.judge(revoke())).unwrap();
+    let row = block_on(app.get(&r("FR-1"))).unwrap().row;
+    assert_eq!(
+        row.decision.map(|d| d.id()),
+        Some(approved.record.id()),
+        "the approval stands again"
+    );
+    assert!(
+        matches!(row.declared, DeclaredStatus::Approved { judgement, .. } if judgement == approved.record.id())
+    );
+    block_on(app.judge(revoke())).unwrap();
+    let row = block_on(app.get(&r("FR-1"))).unwrap().row;
+    assert_eq!(row.decision, None);
+    assert_eq!(row.declared, DeclaredStatus::Pending);
+}
+
+#[test]
 fn an_approval_with_an_expiry_lapses_when_the_clock_reaches_it() {
     let mut app = app(vec![fr(1, "slow", &[])]);
     block_on(app.judge(JudgeRequest {

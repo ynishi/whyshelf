@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794314647491,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c57c-b7e0-722d-a645-ea76e2ea2136",
+  "kind": "decision",
+  "reason": "Rows show the decision that stands (#32); every statement checked against the code by a blind review, its findings fixed",
+  "revision": "386f223ebcf20b4eb2c36831150c6b5c99a85af7",
+  "seen": "sha256:2f39d0795d8381b1a41faa982ed14f3ebbf218de3e8fd8184ebe39026e7217fb",
+  "seen_address": "43593de46e33f3ca145048075d9f2518bcc923f0",
+  "subject": "01a1c577-2f17-71af-a099-beb15ae42212",
+  "v": 1,
+  "verb": "approve"
+}
