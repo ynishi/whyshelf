@@ -253,3 +253,100 @@ fn standing_of_a_listed_id_is_its_standing_and_of_an_unknown_id_is_pending() {
     assert!(assessment.notices_of(docid(77)).is_empty());
     assert!(assessment.notices_of(docid(1)).is_empty());
 }
+
+#[test]
+fn an_upstream_approved_again_then_edited_again_is_two_roots_below() {
+    // FR-2 approved on FR-1's first text; FR-1 then edited, approved again, and
+    // edited again. FR-2 saw a text the re-approval replaced, and FR-1 has an edit
+    // of its own since: two events.
+    let first = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
+    let second = shelf(vec![fr_titled(1, "second", &[]), fr(2, &["FR-1"])]);
+    let third = shelf(vec![fr_titled(1, "third", &[]), fr(2, &["FR-1"])]);
+    let mut records: Vec<Record> = vec![approve(&first, &ledger(Vec::new()), 1, 1001, 10, None)];
+    records.push(approve(&first, &ledger(records.clone()), 2, 1002, 10, None));
+    records.push(approve(
+        &second,
+        &ledger(records.clone()),
+        1,
+        1003,
+        20,
+        None,
+    ));
+    let assessment = assess(&third, &ledger(records), JudgedAt::new(100));
+
+    let roots = assessment.roots_of(docid(2));
+    assert!(
+        roots.iter().any(|r| r.path == vec![docid(2)]
+            && matches!(&r.cause, Cause::UpstreamChanged { pin, .. } if pin.target() == docid(1))),
+        "the text FR-2 saw was replaced: {roots:?}"
+    );
+    assert!(
+        roots
+            .iter()
+            .any(|r| r.path == vec![docid(2), docid(1)]
+                && matches!(r.cause, Cause::SelfChanged { .. })),
+        "FR-1's own edit since its approval: {roots:?}"
+    );
+    assert_eq!(roots.len(), 2, "{roots:?}");
+}
+
+/// FR-1 approved standing on FR-2 and FR-2 standing on FR-1 (a cycle of frames,
+/// across which no Via passes), FR-3 standing on both from outside, and FR-2 then
+/// edited.
+fn a_cycle_with_an_edited_member() -> Assessment {
+    let one = shelf(vec![fr(1, &["FR-2"]), fr(2, &[]), fr(3, &["FR-1", "FR-2"])]);
+    let other = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
+    let first = vec![
+        approve(&one, &ledger(vec![]), 1, 1001, 10, None),
+        approve(&other, &ledger(vec![]), 2, 1002, 10, None),
+    ];
+    let mut records = first.clone();
+    records.push(approve(&one, &ledger(first), 3, 1003, 10, None));
+    let now = shelf(vec![
+        fr(1, &["FR-2"]),
+        fr_titled(2, "edited", &[]),
+        fr(3, &["FR-1", "FR-2"]),
+    ]);
+    assess(&now, &ledger(records), JudgedAt::new(100))
+}
+
+fn roots_naming_the_edit_of_fr_2(roots: &[RootCause]) -> usize {
+    roots
+        .iter()
+        .filter(|r| match &r.cause {
+            Cause::SelfChanged { .. } => r.path.last() == Some(&docid(2)),
+            Cause::UpstreamChanged { pin, .. } => pin.target() == docid(2),
+            _ => false,
+        })
+        .count()
+}
+
+#[test]
+fn an_edit_inside_a_cycle_of_frames_is_a_root_of_the_member_that_pinned_it() {
+    let assessment = a_cycle_with_an_edited_member();
+    // With no Via to lead to FR-2, the change FR-1 sees is a root of FR-1 itself.
+    let roots = assessment.roots_of(docid(1));
+    assert_eq!(roots_naming_the_edit_of_fr_2(&roots), 1, "{roots:?}");
+    assert!(
+        roots
+            .iter()
+            .any(|r| matches!(r.cause, Cause::InCycle { .. }))
+    );
+}
+
+#[test]
+fn from_outside_a_cycle_one_edit_and_one_cycle_are_one_root_each() {
+    let assessment = a_cycle_with_an_edited_member();
+    // FR-3 reaches FR-2's edit directly and through FR-1, and the cycle through
+    // both members: each event is named once.
+    let roots = assessment.roots_of(docid(3));
+    assert_eq!(roots_naming_the_edit_of_fr_2(&roots), 1, "{roots:?}");
+    assert_eq!(
+        roots
+            .iter()
+            .filter(|r| matches!(r.cause, Cause::InCycle { .. }))
+            .count(),
+        1,
+        "{roots:?}"
+    );
+}

@@ -266,6 +266,30 @@ pub enum Cause {
 }
 
 impl Cause {
+    /// Where this cause starts, held by the document `holder`: the upstream a pin
+    /// names, the file an artifact pin names, the declaration for a comparison
+    /// changed, the cycle for a cycle, else the holder itself (its own text, links
+    /// or expiry). A `Via` starts nowhere of its own (it leads to its upstream's
+    /// causes). The one place an origin is assigned.
+    pub fn origin(&self, holder: DocId) -> Option<Origin> {
+        match self {
+            Self::Via { .. } => None,
+            Self::SelfChanged { .. }
+            | Self::SelfNotValid(_)
+            | Self::LinksChanged { .. }
+            | Self::ArtifactLinksChanged { .. }
+            | Self::Expired { .. } => Some(Origin::Doc(holder)),
+            Self::UpstreamNotValid { pin, .. }
+            | Self::UpstreamChanged { pin, .. }
+            | Self::UpstreamDeclared { pin, .. } => Some(Origin::Doc(pin.target())),
+            Self::ArtifactChanged { pin, .. }
+            | Self::ArtifactGone { pin }
+            | Self::ArtifactArrived { pin, .. } => Some(Origin::Artifact(pin.path().clone())),
+            Self::ArtifactComparisonChanged { .. } => Some(Origin::Declaration),
+            Self::InCycle { cycle } => Some(Origin::Cycle(*cycle)),
+        }
+    }
+
     /// How strongly this cause degrades an approval. The one place a strength is
     /// assigned.
     ///
@@ -528,6 +552,31 @@ pub struct RootCause {
     pub cause: Cause,
 }
 
+/// Where an event that degrades approvals starts. It names the thing, not what
+/// happened to it, so every approval one edit reaches is under one origin.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Origin {
+    /// A document: edited, invalid or gone, declared about, or holding a link or an
+    /// expiry of its own.
+    Doc(DocId),
+    /// A file a document pins: edited, gone or arrived.
+    Artifact(RelPath),
+    /// The declaration of the books: a link to files that now declares another
+    /// comparison than a pin was made with.
+    Declaration,
+    /// A cycle, one origin for all its members.
+    Cycle(CycleId),
+}
+
+/// One origin, with the approvals it degrades.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OriginGroup {
+    /// Where it starts.
+    pub origin: Origin,
+    /// The degraded approvals one of whose roots starts there.
+    pub degraded: BTreeSet<DocId>,
+}
+
 /// The standing of every document, and what is wrong around them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Assessment {
@@ -592,12 +641,74 @@ impl Assessment {
     /// from the hash this approval pinned to the hash it has now), the `Via` beside it
     /// leads to that edit and the `UpstreamChanged` is not a root of its own. When the
     /// upstream was approved again after the edit, it holds no such `SelfChanged`, and
-    /// the edit is a root: the approval below saw the older text.
+    /// the edit is a root: the approval below saw the older text. Nor is there a
+    /// `Via` across a cycle both are in, so there too the `UpstreamChanged` is a root.
+    /// When two ways up reach one event (the same edit, from the same hash to the
+    /// same hash, or the same cycle), it is named once.
     pub fn roots_of(&self, id: DocId) -> Vec<RootCause> {
         let mut roots = Vec::new();
         let mut visited = BTreeSet::new();
         self.collect_roots(id, vec![id], true, &mut visited, &mut roots);
+        // Two ways up can reach one event: a member of a cycle that sees an edit of
+        // another member from below, beside the edit reached directly; two members
+        // of one cycle, each in it. Of an edit the upstream's own `SelfChanged` is
+        // kept; of a cycle, the first found.
+        let edits: BTreeSet<(DocId, DocHash, DocHash)> = roots
+            .iter()
+            .filter_map(|root| match &root.cause {
+                Cause::SelfChanged { approved, now } => {
+                    root.path.last().map(|holder| (*holder, *approved, *now))
+                }
+                _ => None,
+            })
+            .collect();
+        let mut cycles = BTreeSet::new();
+        roots.retain(|root| match &root.cause {
+            Cause::UpstreamChanged { pin, now } => {
+                !edits.contains(&(pin.target(), *pin.hash(), *now))
+            }
+            Cause::InCycle { cycle } => cycles.insert(*cycle),
+            _ => true,
+        });
         roots
+    }
+
+    /// Where the degradations of the approvals start, each origin with every
+    /// degraded approval one of whose roots ([`Assessment::roots_of`]) starts there;
+    /// the origin that degrades the most first, then by origin. An approval with
+    /// roots at two origins is under both.
+    ///
+    /// The one place roots are grouped across documents: an edit of one file that
+    /// several approvals pin, or of one document seen from several below, is one
+    /// origin, read once.
+    pub fn origins(&self) -> Vec<OriginGroup> {
+        let mut by_origin: BTreeMap<Origin, BTreeSet<DocId>> = BTreeMap::new();
+        for (id, standing) in &self.standings {
+            if !matches!(standing, Standing::Approved(Freshness::Degraded(_))) {
+                continue;
+            }
+            for root in self.roots_of(*id) {
+                // A root's path runs from the document asked about to the one that
+                // holds the cause, and is never empty.
+                let Some(&holder) = root.path.last() else {
+                    continue;
+                };
+                if let Some(origin) = root.cause.origin(holder) {
+                    by_origin.entry(origin).or_default().insert(*id);
+                }
+            }
+        }
+        let mut groups: Vec<OriginGroup> = by_origin
+            .into_iter()
+            .map(|(origin, degraded)| OriginGroup { origin, degraded })
+            .collect();
+        groups.sort_by(|a, b| {
+            b.degraded
+                .len()
+                .cmp(&a.degraded.len())
+                .then_with(|| a.origin.cmp(&b.origin))
+        });
+        groups
     }
 
     fn collect_roots(
@@ -622,8 +733,12 @@ impl Assessment {
                 self.collect_roots(pin.target(), onward, false, visited, roots);
             } else if let Cause::UpstreamChanged { pin, now } = cause
                 && self.upstream_holds_edit(pin, now)
+                && degradation.causes().iter().any(
+                    |other| matches!(other, Cause::Via { pin: via, .. } if via.target() == pin.target()),
+                )
             {
                 // The same edit is a root further up, through the `Via` beside it.
+                // Inside a cycle no `Via` passes, and the change is a root here.
             } else if is_start || cause.severity() >= Severity::Stale {
                 roots.push(RootCause {
                     path: path.clone(),
@@ -1307,6 +1422,8 @@ mod comparison_tests;
 mod cover_tests;
 #[cfg(test)]
 mod notice_tests;
+#[cfg(test)]
+mod origin_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]
