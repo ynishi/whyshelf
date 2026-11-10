@@ -178,19 +178,30 @@ impl ExitStatus {
 }
 
 /// Parse the command line, run it, and say how it went.
+///
+/// `books ...` is taken out first: it opens no workspace, answers in JSON and gives
+/// its own exit status (by the same table, see [`crate::books`]).
 pub async fn main() -> ExitCode {
     let cli = Cli::parse();
-    let result = run(cli).await;
+    let root = cli.root.unwrap_or_else(|| PathBuf::from("."));
+    let result = match cli.command.into_action() {
+        Ok(Action::Books(command)) => return crate::books::run(root, command).await,
+        Ok(action) => run(root, cli.format, action).await,
+        Err(error) => Err(error),
+    };
     if let Err(error) = &result {
         eprintln!("{}", error.report());
     }
     ExitCode::from(ExitStatus::of(&result).code())
 }
 
-async fn run(cli: Cli) -> Result<Outcome, CliError> {
-    let root = cli.root.unwrap_or_else(|| PathBuf::from("."));
-    let format = cli.format;
-    match cli.command.into_action()? {
+async fn run(root: PathBuf, format: Format, action: Action) -> Result<Outcome, CliError> {
+    match action {
+        // Taken out by `main` before this is called; run it the same way if not.
+        Action::Books(command) => {
+            let _ = crate::books::run(root, command).await;
+            Ok(Outcome::Printed(Vec::new()))
+        }
         Action::Init(args) => {
             let lines = init(&root, &args).await?;
             print_lines(&lines);

@@ -99,6 +99,12 @@ pub enum HashKind {
     /// What aborting a publication will do: see
     /// [`AbortDigest`](super::publication::AbortDigest).
     Abort,
+    /// The content of a shelf document: the book it is in, its fields and its body
+    /// (see [`shelf`](super::shelf)).
+    ShelfDoc,
+    /// The canonical form of a record in a shelf's ledger of judgements (see
+    /// [`shelf`](super::shelf)).
+    ShelfJudgement,
 }
 
 impl HashKind {
@@ -121,6 +127,8 @@ impl HashKind {
             Self::Hunk => "hunk",
             Self::Adopt => "adopt",
             Self::Abort => "abort",
+            Self::ShelfDoc => "shelf-doc",
+            Self::ShelfJudgement => "shelf-judgement",
         }
     }
 
