@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::domain::shelf::artifact::LinePrefix;
+use crate::domain::shelf::fixtures_tests::spaces;
 
 /// A `compare` as written: its kind and the prefixes it ignores.
 type Written<'a> = Option<(&'a str, &'a [&'a str])>;
@@ -16,6 +17,7 @@ fn decl(target: LinkTargetDecl, compare: Option<(&str, &[&str])>) -> Vec<BookSch
         fields: Vec::new(),
         links: vec![LinkEntryDecl {
             name: "tests".to_owned(),
+            space: matches!(target, LinkTargetDecl::Artifact).then(|| "file".to_owned()),
             target,
             cardinality: Cardinality::Many,
             propagation: Propagation::Depends,
@@ -29,14 +31,14 @@ fn decl(target: LinkTargetDecl, compare: Option<(&str, &[&str])>) -> Vec<BookSch
 }
 
 fn comparison_of(compare: Option<(&str, &[&str])>) -> Comparison {
-    let schema = Schema::validate(decl(LinkTargetDecl::Artifact, compare)).unwrap();
+    let schema = Schema::validate(decl(LinkTargetDecl::Artifact, compare), &spaces()).unwrap();
     schema.book("a").unwrap().artifact_links()["tests"]
         .comparison
         .clone()
 }
 
 fn problem_of(target: LinkTargetDecl, compare: Option<(&str, &[&str])>) -> SchemaProblem {
-    let problems = Schema::validate(decl(target, compare))
+    let problems = Schema::validate(decl(target, compare), &spaces())
         .unwrap_err()
         .into_vec();
     assert_eq!(problems.len(), 1, "{problems:?}");

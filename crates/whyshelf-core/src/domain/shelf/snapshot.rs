@@ -30,7 +30,7 @@ use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 
-use super::artifact::{ArtifactState, Comparison, ContentAddress, Revision};
+use super::artifact::{ArtifactKey, ArtifactState, Comparison, ContentAddress, Revision};
 use super::build::{DocState, Shelf};
 use super::doc::{DocHash, DocKey};
 use super::ledger::{DecisionVerb, JudgedAt, JudgementId, Ledger};
@@ -57,19 +57,19 @@ pub enum ItemRole {
     Artifact {
         /// The link it was pinned through.
         link: EntryName,
-        /// Its path.
-        path: RelPath,
+        /// Its space and its name.
+        artifact: ArtifactKey,
         /// How its hash was made, so that the hash now is made the same way.
         comparison: Comparison,
     },
 }
 
 /// What the approval saw of an item: the hash it pinned.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SeenHash {
     /// A document, with this hash.
     Doc(DocHash),
-    /// An artifact, a file with this hash or none.
+    /// An artifact, there with this hash or not there.
     Artifact(ArtifactState),
 }
 
@@ -91,7 +91,8 @@ pub enum Retrieval {
     /// never kept where the address points, or is no longer there.
     AddressNotReadable(ContentAddress),
     /// The record keeps no address: it was made outside version control, by a
-    /// version that kept none, or the item had no file.
+    /// version that kept none, the adapter could name none, or the item was not
+    /// there.
     NoAddress,
 }
 
@@ -100,7 +101,7 @@ pub enum Retrieval {
 pub enum ItemNow {
     /// A document: its hash now, when it is valid.
     Doc(Option<DocHash>),
-    /// An artifact: a file with this hash, or none.
+    /// An artifact: there with this hash, not there, or not told now.
     Artifact(ArtifactState),
 }
 
@@ -135,7 +136,9 @@ impl SnapshotItem {
 
     /// Whether the item is not now what was approved: the hashes compared, as
     /// freshness compares them (rule A4). A document that is no valid document now
-    /// has changed; an artifact with no file then and none now has not. An edit
+    /// has changed; an artifact not there then and not there now has not; one its
+    /// adapter cannot tell about now is not known to be what was approved, and has
+    /// changed here (freshness tells it as a notice). An edit
     /// declared to keep the meaning has changed here (the content differs, which is
     /// what a diff shows) while freshness tells it as a notice.
     pub fn changed_from(&self, now: &ItemNow) -> bool {
@@ -195,7 +198,7 @@ impl Snapshot {
         items.extend(artifacts.iter().map(|pin| SnapshotItem {
             role: ItemRole::Artifact {
                 link: pin.link().clone(),
-                path: pin.path().clone(),
+                artifact: pin.artifact().clone(),
                 comparison: pin.comparison().clone(),
             },
             seen: SeenHash::Artifact(pin.seen().state()),
@@ -283,9 +286,9 @@ pub fn doc_now(shelf: &Shelf, id: DocId) -> DocNow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::shelf::artifact::ArtifactHash;
+    use crate::domain::shelf::artifact::{ArtifactHash, ArtifactReading, ArtifactReadings};
     use crate::domain::shelf::fixtures_tests::{
-        approve, docid, fr, fr_titled, ledger, shelf, shelf_with, sp_testing,
+        approve, docid, file_space, fr, fr_titled, ledger, name, shelf, shelf_with, sp_testing,
     };
     use crate::domain::shelf::ledger::{Decision, Record, frame_approve};
 
@@ -317,16 +320,21 @@ mod tests {
         let files = frame.files();
         assert!(files.iter().any(|f| f.as_str() == "specs/sp-2.md"));
         assert!(files.iter().any(|f| f.as_str() == "findings/fr-1.md"));
-        assert!(files.iter().any(|f| f.as_str() == "tests/a.rs"));
-        // No file, no address to ask for.
-        assert!(!files.iter().any(|f| f.as_str() == "tests/b.rs"));
+        // Only the files of documents: an artifact's address is its adapter's answer.
+        assert_eq!(files.len(), 2);
 
         let addresses: BTreeMap<RelPath, ContentAddress> = files
             .iter()
             .map(|f| (f.clone(), address(&format!("blob-{}", f.as_str().len()))))
             .collect();
+        let mut artifacts = ArtifactReadings::new();
+        for at in ["tests/a.rs", "tests/b.rs"] {
+            let mut reading = ArtifactReading::of_bytes(b"test", &BTreeSet::new(), None);
+            reading.set_address(address(&format!("blob-{at}")));
+            artifacts.insert(file_space(), name(at), reading);
+        }
         let revision = Revision::from_validated("c0ffee".to_owned()).unwrap();
-        let frame = frame.addressed(&addresses, Some(revision.clone()));
+        let frame = frame.addressed(&addresses, &artifacts, Some(revision.clone()));
         let record = Record::Decision(
             Decision::approve(
                 crate::domain::shelf::fixtures_tests::jid(1001),
@@ -349,8 +357,9 @@ mod tests {
         let absent = snap
             .items()
             .iter()
-            .find(|i| matches!(i.role(), ItemRole::Artifact { path, .. } if path.as_str() == "tests/b.rs"))
+            .find(|i| matches!(i.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() == "tests/b.rs"))
             .unwrap();
+        // Absent when pinned: no address, whatever the adapter answers now.
         assert_eq!(absent.address(), None);
         assert_eq!(absent.seen(), &SeenHash::Artifact(ArtifactState::Absent));
         assert_eq!(snap.addresses().len(), 3);
@@ -369,7 +378,7 @@ mod tests {
 
         let item = SnapshotItem {
             role: ItemRole::Subject { id: docid(1) },
-            seen: snap.items()[0].seen,
+            seen: snap.items()[0].seen.clone(),
             address: Some(address("abc")),
         };
         assert_eq!(
@@ -395,7 +404,7 @@ mod tests {
         let absent = SnapshotItem {
             role: ItemRole::Artifact {
                 link: EntryName::new("tests").unwrap(),
-                path: "t.rs".parse().unwrap(),
+                artifact: ArtifactKey::new(file_space(), name("t.rs")),
                 comparison: Comparison::Bytes,
             },
             seen: SeenHash::Artifact(ArtifactState::Absent),

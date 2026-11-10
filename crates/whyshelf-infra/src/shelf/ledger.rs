@@ -520,4 +520,44 @@ mod tests {
             assert!(read.records.contains(record), "{record:?}");
         }
     }
+
+    /// Every record of the repository's own ledger, written by every version so far
+    /// (before comparisons, before spaces), is written back exactly as it was stored:
+    /// its canonical form is the stored one, so its hash is the hash of what is
+    /// stored, and the file is named by its identity. Read-only.
+    #[tokio::test]
+    async fn every_record_of_the_repository_s_ledger_is_written_back_as_stored() {
+        use whyshelf_core::domain::hash::{ContentHash, HashKind};
+
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.whyshelf/ledger");
+        let mut entries = tokio::fs::read_dir(&dir).await.unwrap();
+        let mut seen = 0;
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            let path = entry.path();
+            if path.extension().is_none_or(|e| e != "json") {
+                continue;
+            }
+            let bytes = tokio::fs::read(&path).await.unwrap();
+            let stored = from_json(serde_json::from_slice::<Value>(&bytes).unwrap())
+                .unwrap_or_else(|e| {
+                    panic!("{}: {e:?}", path.display());
+                });
+            let record = decode(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            assert_eq!(record.to_canon(), stored, "{}", path.display());
+            assert_eq!(
+                *record.hash().hash(),
+                ContentHash::of(HashKind::ShelfJudgement, &stored),
+                "{}",
+                path.display()
+            );
+            assert_eq!(
+                path.file_stem().and_then(|s| s.to_str()),
+                Some(record.id().to_string().as_str()),
+                "{}",
+                path.display()
+            );
+            seen += 1;
+        }
+        assert!(seen > 0, "the repository has records in {}", dir.display());
+    }
 }

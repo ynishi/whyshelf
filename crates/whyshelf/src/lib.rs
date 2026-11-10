@@ -36,8 +36,8 @@
 //! requirement no decision serves, a decision no verification checks). A document no
 //! covering link reaches has a `not_covered` notice and is listed in `check`'s
 //! `uncovered`, which makes `check` not clean; its freshness is unchanged. A link to
-//! files cannot say it, and a link into its own book is met only by another document
-//! of that book.
+//! artifacts cannot say it, and a link into its own book is met only by another
+//! document of that book.
 //!
 //! The files:
 //!
@@ -64,28 +64,40 @@
 //! A document's hash covers its book, its fields and its body (not its key, its
 //! place or its links), so it can be renamed or moved and stay approved.
 //!
-//! ## Links to files that are no document
+//! ## Links to artifacts: things outside the documents
 //!
-//! A link may point at *artifacts*, files of the project that are no document (code,
-//! tests, data), with `target = "artifact"`; it `depends` or `informs`, never
-//! `replaces` (and no book can be called `artifact`). The sample's `design` book has
-//! one, `tests`, so a design names the tests that show it holds:
+//! A link may point at *artifacts*, things of the project outside the documents
+//! (code, tests, data), with `target = "artifact"`; it `depends` or `informs`, never
+//! `replaces` (and no book can be called `artifact`). Every such link names the
+//! *space* its names are in, with `space`: there is no space a link has when it names
+//! none, and a space no adapter offers is refused, as a declaration that cannot be
+//! used. The spaces offered, and what the names of each are, are listed on the page
+//! of `whyshelf_infra::shelf::artifact`. The sample's `design` book has one such
+//! link, `tests` in the space `file` (the files of the project, by their path), so a
+//! design names the tests that show it holds:
 //!
 //! ```text
 //!   tests: [crates/cache/tests/expiry.rs]      paths under the root, with `/`
 //! ```
 //!
-//! An approval pins, for each path of a `depends` link, the hash of the file (of its
-//! bytes, unless the link compares otherwise, below), or that no file was there: a
-//! path that has no file yet is the evidence not written yet, not a broken link.
-//! A path names a file only as written, ASCII case included, on every system: where
-//! the file system does not tell case apart, `justfile` still names no file
-//! `Justfile`, as for Git. Every path of a pending or approved document that names no file is
-//! told, since a wrong path is pinned as absent too: `check` lists it under `absent`
-//! (the check stays clean), `judge approve` under each judgement's `absent`, and its
-//! row has an `artifact_absent` notice. Afterwards:
+//! A text that is no name of the link's space makes the document invalid, with a
+//! problem that names the link, the text and why. For each name, its adapter answers
+//! one of four: the thing is there (with its hash), not there, it cannot tell now
+//! (with why), or the text is not a name. An approval pins, for each name of a
+//! `depends` link, the hash of what is there (of its bytes, unless the link compares
+//! otherwise, below), or that nothing was there: a name with nothing there yet is the
+//! evidence not written yet, not a broken link. A path names a file only as written,
+//! ASCII case included, on every system: where the file system does not tell case
+//! apart, `justfile` still names no file `Justfile`, as for Git. Every name of a
+//! pending or approved document with nothing there is told, since a wrong name is
+//! pinned as absent too: `check` lists it under `absent` (the check stays clean),
+//! `judge approve` under each judgement's `absent`, and its row has an
+//! `artifact_absent` notice. A name its adapter cannot tell about now is listed under
+//! `check`'s `unknown` (the check stays clean) with an `artifact_unknown` notice; an
+//! approval that would pin one is refused, and one already pinned changes nothing of
+//! the approval while it lasts. Afterwards:
 //!
-//! | the pinned file | now | the approval is |
+//! | the pinned artifact | now | the approval is |
 //! |---|---|---|
 //! | there, with hash A | there, with hash A | unchanged by it |
 //! | there, with hash A | there, with hash B | `stale` (`artifact_changed`) |
@@ -93,18 +105,31 @@
 //! | not there | not there | unchanged by it |
 //! | not there | there | `stale` (`artifact_arrived`): the evidence came, look again |
 //! | there, under one comparison | there, and the link now declares another | `stale` (`artifact_comparison_changed`): the hashes are not compared |
+//! | there or not | cannot be told now (its adapter says so, gives no answer, or was not asked for the link's comparison) | unchanged by it (`artifact_unknown` notice); in `diff`, `now: "unknown"` and `changed: true`, since it is not known to be what was approved |
 //!
-//! A path added to or taken from the link since is `links_changed` (`stale`). An
-//! `informs` link to a file changes no freshness.
+//! "Cannot be told" is never read as "not there": only the adapter's answer says
+//! that nothing is there. `diff` gives each artifact's `now` (`present`, `absent` or
+//! `unknown`), and so does the artifact target of `trace`.
 //!
-//! What of a file counts is declared per link, with `compare`:
+//! A name added to or taken from the link since is `links_changed` (`stale`). An
+//! `informs` link to an artifact changes no freshness. The same name in two spaces is
+//! two artifacts. Every answer that names an artifact gives its `space` beside the
+//! name. The name is in `artifact` in a cause, a notice and the declarations of
+//! `judge same`; in `path` and, the same, `name` in `check`'s `absent`, `judge
+//! approve`'s `absent`, a link target of `get` and `trace`, an origin of `stale`, and
+//! an item of `get --approved` and `diff`; and in `name` alone in `check`'s
+//! `unknown`. A `links_changed` cause of a link to artifacts gives `space` when every
+//! name added and removed is in one space (none when the link moved to another).
+//!
+//! What of an artifact counts is declared per link, with `compare`:
 //!
 //! ```text
 //!   [[book.link]]
 //!   name = "tests"
 //!   target = "artifact"
+//!   space = "file"
 //!   means = "depends"
-//!   compare = "lines"        # default "bytes": every byte counts
+//!   compare = "lines"        # default "bytes": every byte counts; "presence": only that it is there
 //!   ignore = ["//"]          # lines that start with these (after white space) do not count
 //! ```
 //!
@@ -113,24 +138,29 @@
 //! neither do the lines `ignore` names (`//` takes `//`, `///` and `//!` comments; `#`
 //! takes those of TOML, shell or Python). It knows no language: a comment at the end
 //! of a line of code still counts, and so does every byte that is not UTF-8 (a file
-//! that is no text is better compared as `bytes`). Each pin keeps the comparison its
-//! hash was made with. A link whose `compare` is changed afterwards makes the
-//! approvals that pinned a file through it `stale` (`artifact_comparison_changed`),
-//! and the hashes are not compared, since they were made differently: look again and
-//! approve. A file gone or come is told as such, whatever the comparison.
+//! that is no text is better compared as `bytes`). `presence` counts no content: an
+//! edit changes nothing, and only an artifact that comes or goes is told. Each pin
+//! keeps the comparison its hash was made with. A link whose `compare` is changed
+//! afterwards makes the approvals that pinned an artifact through it `stale`
+//! (`artifact_comparison_changed`), and the hashes are not compared, since they were
+//! made differently: look again and approve. An artifact gone or come is told as
+//! such, whatever the comparison.
 //!
 //! In a Git repository an approval also records, for the approved document, each
 //! upstream it pinned and each file, the Git blob its content is in, and the commit
 //! `HEAD` names (a hint). Freshness never reads either: it is decided by hashes, so a
 //! directory outside Git works the same, with nothing recorded to read back. The
-//! records of the ledger written before these were kept read back unchanged.
+//! records of the ledger written before these were kept read back unchanged, and so
+//! do those written before spaces were declared: a pin that names its file by `path`
+//! alone is a name in the space `file`.
 //!
 //! ## An edit that keeps the meaning
 //!
 //! Any change of a hash makes the approvals that pinned it stale, a typo fixed as
 //! much as a rule rewritten: whyshelf does not guess what an edit means. When a person
 //! has read an edit and it keeps the meaning, `judge same <ref>` (or `--artifact
-//! <path>` for a file) records that, with a reason. The declaration is of the edit
+//! <name>` for an artifact, in the one space the documents link the name in; a name
+//! linked in two spaces is refused) records that, with a reason. The declaration is of the edit
 //! from one earlier hash to the hash now: the one the document's own approval saw, or
 //! the only one approvals pinned, or the one `--from <hash>` names when they pinned
 //! several that do not mean the same (then, unnamed, it is refused with the list). It
@@ -163,21 +193,21 @@
 //!   whyshelf [--root <dir>] <command>
 //!
 //!   check                     the declaration, the documents and the ledger, what no covering
-//!                             link reaches, and the paths that name no file; exit 1 if anything
-//!                             is wrong (a path with no file is not)
+//!                             link reaches, the names with nothing there and those that cannot
+//!                             be told now; exit 1 if anything is wrong (neither of those is)
 //!   status                    every document: what was decided, and where it stands now
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   get <ref> --approved      what the approval that stands saw, with its content read back
 //!   trace <ref>               what it links to and what links to it, transitively
 //!   stale [--exit-code]       the approvals that no longer hold, strongest first, with their roots,
-//!                             and their origins: each document, file, cycle or the declaration where
+//!                             and their origins: each document, artifact, cycle or the declaration where
 //!                             they start, with the approvals it degrades
 //!                             (exit 1 with --exit-code when there is any)
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
 //!   judge deny|deprecate|retire <ref>... [--reason <text>]   (deprecate: [--successor <ref>])
 //!   judge revoke <ref>... --reason <text>
-//!   judge same <ref>... [--artifact <path>]... [--from <hash>] --reason <text>
+//!   judge same <ref>... [--artifact <name>]... [--from <hash>] --reason <text>
 //!                             the edits named keep the meaning: the approvals that pinned the
 //!                             hashes before them hold again, each with a notice
 //!   judge withdraw <record id>... --reason <text>
@@ -196,7 +226,8 @@
 //!   frames S-1 on F-1's new approval); it writes all of them, or none when one is
 //!   refused.
 //! - An approval is refused when the document is not valid, a `depends` link cannot
-//!   be followed, it would close a cycle, or a `depends` link names a document people
+//!   be followed, it would close a cycle, a `depends` link names an artifact its
+//!   adapter cannot tell about now, or a `depends` link names a document people
 //!   decided does not stand (denied, deprecated or retired: pin the successor). An
 //!   upstream that is only pending is accepted, and the approval is stale from the
 //!   start.
@@ -235,8 +266,8 @@
 //! `retired`, or for an approval `fresh`, `expired`, `stale` or `broken`; its
 //! `decision` is the decision that stands (the record's `judgement` id, `actor`, `at`
 //! and `reason`, null when none was given), or null while it is pending; a cause has
-//! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a path) and a
-//! `detail` sentence; every answer that reads the documents (`check` when the
+//! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
+//! its `space`) and a `detail` sentence; every answer that reads the documents (`check` when the
 //! declaration can be used, `status`, `get`, `trace`, `stale`, `diff`) carries
 //! `health` (files that are no document, cycles, records that contradict one another
 //! or cannot be read). The answers of the writes and of `schema` carry none.
@@ -245,7 +276,7 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!
 //! `new` answers `{"doc": {"id", "key"}, "file": ..., "unresolved_links": [{"link",

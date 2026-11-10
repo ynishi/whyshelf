@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794326110029,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c62b-9f62-735b-8d3e-be980baa3938",
+  "kind": "decision",
+  "reason": "Everything outside the documents is an artifact of a space, files one of them (#38); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "e54fbb6995c5a4cab6723c7bdfbf72c351c7545a",
+  "seen": "sha256:e6aeddb68fae890b4eaa07aebb0abde9e621e07b2fb6fb2f20f40969072a9069",
+  "seen_address": "0798da187638e8a1d034d9985d2276305208ff3f",
+  "subject": "01a1c60b-b96d-7418-b6c8-47ed062e7daa",
+  "v": 1,
+  "verb": "approve"
+}

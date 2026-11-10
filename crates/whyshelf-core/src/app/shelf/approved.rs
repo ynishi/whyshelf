@@ -15,23 +15,29 @@
 //!                                                 |
 //!   show_approved:  each item + SnapshotItem::retrieval
 //!   diff:           each item + retrieval + what it is now (doc_now, or the
-//!                   ArtifactSource for an artifact) + the bytes now
-//!                   + SnapshotItem::changed_from
+//!                   ArtifactSource for an artifact) + the bytes now (DocSource,
+//!                   or ArtifactSource) + SnapshotItem::changed_from
 //! ```
 //!
 //! [`ShelfRead`]: super::ShelfRead
 //! [`ContentStore`]: super::ports::ContentStore
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::location::RelPath;
-use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactState, ContentAddress};
-use crate::domain::shelf::snapshot::{ItemNow, ItemRole, Snapshot, SnapshotItem, doc_now};
+use crate::domain::shelf::artifact::{
+    ArtifactAsks, ArtifactReadings, ArtifactState, ContentAddress,
+};
+use crate::domain::shelf::snapshot::{
+    ItemNow, ItemRole, Retrieval, Snapshot, SnapshotItem, doc_now,
+};
 
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::{Loaded, View, load};
-use super::ports::{ArtifactSource, ContentStore, ShelfPort, ShelfRead, port};
+use super::ports::{
+    ArtifactSource, ContentOf, ContentStore, DocSource, ShelfPort, ShelfRead, port,
+};
 use super::read::identity;
 use super::report::{ApprovedItem, ApprovedReport, DiffItem, DiffReport};
 use crate::domain::shelf::lookup::Reference;
@@ -49,7 +55,7 @@ impl<P: ShelfRead> ShelfApp<P> {
             .iter()
             .map(|item| ApprovedItem {
                 item: item.clone(),
-                retrieval: item.retrieval(&readable),
+                retrieval: retrieval_of(item, &readable),
             })
             .collect();
         let assessment = loaded.assess();
@@ -76,49 +82,56 @@ impl<P: ShelfRead> ShelfApp<P> {
         let mut asks = ArtifactAsks::new();
         for item in snapshot.items() {
             if let ItemRole::Artifact {
-                path, comparison, ..
+                artifact,
+                comparison,
+                ..
             } = item.role()
             {
-                asks.entry(path.clone())
-                    .or_default()
-                    .insert(comparison.clone());
+                asks.ask(
+                    artifact.space().clone(),
+                    artifact.name().clone(),
+                    comparison.clone(),
+                );
             }
         }
         let artifacts_now = if asks.is_empty() {
-            BTreeMap::new()
+            ArtifactReadings::new()
         } else {
             self.ports
                 .artifacts()
-                .read_artifacts(&asks)
+                .resolve(&asks)
                 .await
                 .map_err(port(ShelfPort::Artifacts))?
         };
 
         let mut items = Vec::with_capacity(snapshot.items().len());
         for item in snapshot.items() {
-            let (now, file) = match item.role() {
+            let (now, file, current) = match item.role() {
                 ItemRole::Subject { id } | ItemRole::Upstream { target: id, .. } => {
                     let now = doc_now(&loaded.shelf, *id);
-                    (now.now, now.file)
+                    let current = match &now.file {
+                        Some(file) => self.doc_bytes(file).await?,
+                        None => None,
+                    };
+                    (now.now, now.file, current)
                 }
                 ItemRole::Artifact {
-                    path, comparison, ..
+                    artifact,
+                    comparison,
+                    ..
                 } => {
-                    let state = artifacts_now
-                        .get(path)
-                        .map_or(ArtifactState::Absent, |reading| reading.state(comparison));
-                    let file = matches!(state, ArtifactState::Present(_)).then(|| path.clone());
-                    (ItemNow::Artifact(state), file)
+                    let state = artifacts_now.state_of(artifact, comparison);
+                    let current = match state {
+                        ArtifactState::Present(_) => self
+                            .ports
+                            .artifacts()
+                            .current(artifact)
+                            .await
+                            .map_err(port(ShelfPort::Artifacts))?,
+                        ArtifactState::Absent | ArtifactState::Unknown(_) => None,
+                    };
+                    (ItemNow::Artifact(state), None, current)
                 }
-            };
-            let current = match &file {
-                Some(file) => self
-                    .ports
-                    .artifacts()
-                    .current(file)
-                    .await
-                    .map_err(port(ShelfPort::Artifacts))?,
-                None => None,
             };
             items.push(diff_item(item, &readable, now, file, current));
         }
@@ -137,6 +150,15 @@ impl<P: ShelfRead> ShelfApp<P> {
         })
     }
 
+    /// The bytes of a document's file now.
+    async fn doc_bytes(&self, file: &RelPath) -> Result<Option<Vec<u8>>, ShelfError> {
+        self.ports
+            .docs()
+            .current(file)
+            .await
+            .map_err(port(ShelfPort::Docs))
+    }
+
     /// The project, loaded, and the snapshot of the approval that stands about what
     /// the reference names.
     async fn approved(&self, reference: &Reference) -> Result<(Loaded, Snapshot), ShelfError> {
@@ -147,38 +169,69 @@ impl<P: ShelfRead> ShelfApp<P> {
         Ok((loaded, snapshot))
     }
 
-    /// The contents the store gives back for the addresses the snapshot keeps; an
-    /// address it cannot read is left out, which the domain reads as not readable.
-    async fn read_back(
-        &self,
-        snapshot: &Snapshot,
-    ) -> Result<BTreeMap<ContentAddress, Vec<u8>>, ShelfError> {
-        let mut readable = BTreeMap::new();
-        for address in snapshot.addresses() {
+    /// The contents the store gives back for the addresses the snapshot keeps, each
+    /// asked of the adapter that named it (an address is one adapter's: the same
+    /// address from the documents and from a space, or from two spaces, is two
+    /// contents); an address it cannot read is left out, which the domain reads as
+    /// not readable.
+    async fn read_back(&self, snapshot: &Snapshot) -> Result<Readable, ShelfError> {
+        let asked: BTreeSet<(ContentOf, ContentAddress)> = snapshot
+            .items()
+            .iter()
+            .filter_map(|item| Some((content_of(item), item.address()?.clone())))
+            .collect();
+        let mut readable = Readable::new();
+        for (of, address) in asked {
             let content = self
                 .ports
                 .store()
-                .read_back(&address)
+                .read_back(&of, &address)
                 .await
                 .map_err(port(ShelfPort::Store))?;
             if let Some(content) = content {
-                readable.insert(address, content);
+                readable.insert((of, address), content);
             }
         }
         Ok(readable)
     }
 }
 
+/// The contents read back, by whose they are and their address.
+type Readable = BTreeMap<(ContentOf, ContentAddress), Vec<u8>>;
+
+/// Whose content an item is: the adapter that named its address.
+fn content_of(item: &SnapshotItem) -> ContentOf {
+    match item.role() {
+        ItemRole::Subject { .. } | ItemRole::Upstream { .. } => ContentOf::Doc,
+        ItemRole::Artifact { artifact, .. } => ContentOf::Artifact(artifact.space().clone()),
+    }
+}
+
+/// What reading one item back came to ([`SnapshotItem::retrieval`]), given only the
+/// content its own adapter gave back for its address.
+fn retrieval_of(item: &SnapshotItem, readable: &Readable) -> Retrieval {
+    let own: BTreeMap<ContentAddress, Vec<u8>> = item
+        .address()
+        .and_then(|address| {
+            readable
+                .get(&(content_of(item), address.clone()))
+                .map(|content| (address.clone(), content.clone()))
+        })
+        .into_iter()
+        .collect();
+    item.retrieval(&own)
+}
+
 fn diff_item(
     item: &SnapshotItem,
-    readable: &BTreeMap<ContentAddress, Vec<u8>>,
+    readable: &Readable,
     now: ItemNow,
     file: Option<RelPath>,
     current: Option<Vec<u8>>,
 ) -> DiffItem {
     DiffItem {
         item: item.clone(),
-        approved: item.retrieval(readable),
+        approved: retrieval_of(item, readable),
         changed: item.changed_from(&now),
         now,
         file,

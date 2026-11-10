@@ -28,7 +28,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::TwoOrMore;
 
-use super::artifact::{Artifact, ArtifactState};
+use super::artifact::{Artifact, ArtifactKey, ArtifactState, Untold};
 use super::schema::{
     ArtifactLinkKind, ArtifactPropagation, BookName, EntryName, FieldWord, KeyForm, KeyProblem,
     LinkKind, Propagation,
@@ -224,12 +224,13 @@ impl Link {
 }
 
 /// One link to artifacts a book declares, as a document holds it: what kind of link
-/// it is, and the artifact each path written in it comes to (none when the document
+/// it is, and the artifact each name written in it comes to (none when the document
 /// wrote none).
 ///
-/// Every path is an [`Artifact`], a file or no file (rule A1): there is no
-/// "unresolved" artifact, because a file not written yet is still the evidence a
-/// document names. A text that is no path makes the document invalid instead.
+/// Every name is an [`Artifact`], there, absent or unknown (rule A1): there is no
+/// "unresolved" artifact, because a thing not written yet is still the evidence a
+/// document names. A text that is no name of the space makes the document invalid
+/// instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactLink {
     kind: ArtifactLinkKind,
@@ -241,13 +242,13 @@ impl ArtifactLink {
         Self { kind, artifacts }
     }
 
-    /// The kind the book declares: how many paths it holds and what it means for
-    /// freshness.
+    /// The kind the book declares: its space, how many names it holds and what it
+    /// means for freshness.
     pub fn kind(&self) -> &ArtifactLinkKind {
         &self.kind
     }
 
-    /// The artifact each path written in it comes to, in the order written.
+    /// The artifact each name written in it comes to, in the order written.
     pub fn artifacts(&self) -> &[Artifact] {
         &self.artifacts
     }
@@ -463,23 +464,40 @@ impl Doc {
     }
 
     /// The links to artifacts, by name: every one the book declares is there, with
-    /// no artifact in it when the document wrote no path.
+    /// no artifact in it when the document wrote no name.
     pub fn artifact_links(&self) -> &BTreeMap<EntryName, ArtifactLink> {
         &self.artifact_links
     }
 
-    /// The paths its links to artifacts write that name no file now, with the
-    /// link, by the name of the link and then in the order written. Which paths
-    /// name a file is what the adapter read, by the rule of the port that reads
-    /// artifacts. The one place such a path is found.
-    pub fn absent_artifacts(&self) -> Vec<(&EntryName, &RelPath)> {
+    /// The names its links to artifacts write that have nothing there now, with the
+    /// link, by the name of the link and then in the order written. Which names have
+    /// something there is what the adapter of the space answered, by its own rule.
+    /// The one place such a name is found.
+    pub fn absent_artifacts(&self) -> Vec<(&EntryName, &ArtifactKey)> {
         self.artifact_links
             .iter()
             .flat_map(|(name, link)| {
                 link.artifacts()
                     .iter()
                     .filter(|artifact| matches!(artifact.state(), ArtifactState::Absent))
-                    .map(move |artifact| (name, artifact.path()))
+                    .map(move |artifact| (name, artifact.key()))
+            })
+            .collect()
+    }
+
+    /// The names its links to artifacts write that cannot be told about now, with the
+    /// link and why, in the order of [`Doc::absent_artifacts`]. The one place such a
+    /// name is found.
+    pub fn unknown_artifacts(&self) -> Vec<(&EntryName, &ArtifactKey, &Untold)> {
+        self.artifact_links
+            .iter()
+            .flat_map(|(name, link)| {
+                link.artifacts()
+                    .iter()
+                    .filter_map(move |artifact| match artifact.state() {
+                        ArtifactState::Unknown(why) => Some((name, artifact.key(), why)),
+                        ArtifactState::Present(_) | ArtifactState::Absent => None,
+                    })
             })
             .collect()
     }

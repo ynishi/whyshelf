@@ -33,7 +33,7 @@ use super::load::{Loaded, View, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
     Absent, BookCount, BooksCheck, DownstreamEdge, GetReport, StaleEntry, StaleReport,
-    StatusReport, TraceReport, Uncovered, UpstreamEdge, UpstreamEnd,
+    StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
 };
 
 /// The identity a reference names, or why it names none.
@@ -121,11 +121,35 @@ impl<P: ShelfRead> ShelfApp<P> {
                     .notices_of(*id)
                     .iter()
                     .filter_map(move |notice| match notice {
-                        Notice::ArtifactAbsent { link, path } => Some(Absent {
+                        Notice::ArtifactAbsent { link, artifact } => Some(Absent {
                             doc: *id,
                             key: key.clone(),
                             link: link.clone(),
-                            path: path.clone(),
+                            artifact: artifact.clone(),
+                        }),
+                        _ => None,
+                    })
+            })
+            .collect();
+        let unknown = assessment
+            .standings()
+            .keys()
+            .flat_map(|id| {
+                let key = loaded.shelf.doc(*id).map(|doc| doc.key().clone());
+                assessment
+                    .notices_of(*id)
+                    .iter()
+                    .filter_map(move |notice| match notice {
+                        Notice::ArtifactUnknown {
+                            link,
+                            artifact,
+                            why,
+                        } => Some(Unknown {
+                            doc: *id,
+                            key: key.clone(),
+                            link: link.clone(),
+                            artifact: artifact.clone(),
+                            why: why.clone(),
                         }),
                         _ => None,
                     })
@@ -136,6 +160,7 @@ impl<P: ShelfRead> ShelfApp<P> {
             health: view.health(),
             uncovered,
             absent,
+            unknown,
         })
     }
 

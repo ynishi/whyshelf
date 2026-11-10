@@ -80,7 +80,7 @@ fn an_approval_records_the_addresses_of_what_it_stood_on_and_the_revision() {
         .iter()
         .map(|p| {
             (
-                p.path().as_str(),
+                p.name().as_str(),
                 matches!(
                     p.seen(),
                     PinnedArtifact::Present {
@@ -149,7 +149,7 @@ fn a_test_edited_after_the_approval_makes_it_stale_and_diff_shows_both_contents(
     let a = diff
         .items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Artifact { path, .. } if path.as_str() == "tests/a.rs"))
+        .find(|i| matches!(i.item.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() =="tests/a.rs"))
         .unwrap();
     assert!(a.changed);
     assert_eq!(a.approved, Retrieval::Read(b"assert!(fast);\n".to_vec()));
@@ -158,7 +158,7 @@ fn a_test_edited_after_the_approval_makes_it_stale_and_diff_shows_both_contents(
     let b = diff
         .items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Artifact { path, .. } if path.as_str() == "tests/b.rs"))
+        .find(|i| matches!(i.item.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() =="tests/b.rs"))
         .unwrap();
     assert!(!b.changed);
     assert_eq!(b.approved, Retrieval::NoAddress);
@@ -180,7 +180,7 @@ fn content_approved_and_never_committed_is_an_address_that_cannot_be_read() {
     let a = shown
         .items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Artifact { path, .. } if path.as_str() == "tests/a.rs"))
+        .find(|i| matches!(i.item.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() =="tests/a.rs"))
         .unwrap();
     assert!(matches!(a.retrieval, Retrieval::AddressNotReadable(_)));
 }

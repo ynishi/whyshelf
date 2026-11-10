@@ -52,8 +52,9 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonBlank, NonEmptySet, NonEmptyVec, TwoOrMore};
 
 use super::artifact::{
-    ArtifactHash, ArtifactState, Comparison, ComparisonProblem, ContentAddress, OpaqueProblem,
-    Revision,
+    ArtifactHash, ArtifactKey, ArtifactName, ArtifactNameProblem, ArtifactReading,
+    ArtifactReadings, ArtifactState, Comparison, ComparisonProblem, ContentAddress, OpaqueProblem,
+    Revision, Space, SpaceProblem, Untold,
 };
 use super::build::{DocFailure, DocState, FailureTag, Shelf};
 use super::doc::{DocHash, DocKey, LinkState, UnresolvedLink};
@@ -167,21 +168,23 @@ impl FramePin {
     }
 }
 
-/// What an approval saw at the path of an artifact it stands on: a file with this
-/// hash (and where its content can be read back, when that could be said), or no
-/// file.
+/// What an approval saw of an artifact it stands on: a thing there with this hash
+/// (and where its content can be read back, when that could be said), or nothing
+/// there.
 ///
-/// An absent file has no address by the type: there is nothing to read back.
+/// An absent artifact has no address by the type: there is nothing to read back. An
+/// artifact that could not be told about is never pinned: [`frame_approve`] refuses
+/// it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PinnedArtifact {
-    /// A file, with the hash of its content.
+    /// A thing there, with the hash of its content.
     Present {
         /// The hash.
         hash: ArtifactHash,
         /// Where the content can be read back, when it could be said.
         address: Option<ContentAddress>,
     },
-    /// No file was there (rule A2: an approval pins an absence too).
+    /// Nothing was there (rule A2: an approval pins an absence too).
     Absent,
 }
 
@@ -203,8 +206,28 @@ impl PinnedArtifact {
     }
 }
 
-/// What an approval stood on for one path of a `Depends` link to artifacts: the
-/// link, the path, and what was there (rule A2).
+/// How a record wrote the artifact of a pin or of a declaration, kept so that a
+/// record read back is written as it was stored, with the same record hash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum NameForm {
+    /// `space` and `name`: how a record is written.
+    Spaced,
+    /// `path` and no `space`: a record written before spaces existed. Its path is a
+    /// name in the space [`PATH_ONLY_SPACE`], which is what it was.
+    PathOnly,
+}
+
+/// The space a record written before spaces existed is read as naming its artifacts
+/// in: every artifact then was a file, named by its path, so a pin or a declaration
+/// with a `path` and no `space` is that path in this space. That is all it is: the
+/// domain has no default space (a declaration names its spaces itself, and a record
+/// made now writes its space), and the adapter that resolves the files takes its
+/// space's name from here, so an old record always names a space that adapter
+/// answers for.
+pub const PATH_ONLY_SPACE: &str = "file";
+
+/// What an approval stood on for one name of a `Depends` link to artifacts: the
+/// link, the space and the name, and what was there (rule A2).
 ///
 /// Its constructor is private to this module, like a [`FramePin`]'s: it is taken from
 /// an [`Artifact`](super::artifact::Artifact) of the document by [`frame_approve`],
@@ -212,11 +235,12 @@ impl PinnedArtifact {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ArtifactPin {
     link: EntryName,
-    path: RelPath,
+    artifact: ArtifactKey,
     seen: PinnedArtifact,
     /// How the hash in `seen` was made. A record written before comparisons existed
     /// has none, and is [`Comparison::Bytes`], as it was made.
     comparison: Comparison,
+    form: NameForm,
 }
 
 impl ArtifactPin {
@@ -230,9 +254,19 @@ impl ArtifactPin {
         &self.link
     }
 
-    /// The path of the artifact.
-    pub fn path(&self) -> &RelPath {
-        &self.path
+    /// The space and the name of the artifact.
+    pub fn artifact(&self) -> &ArtifactKey {
+        &self.artifact
+    }
+
+    /// The space of the artifact.
+    pub fn space(&self) -> &Space {
+        self.artifact.space()
+    }
+
+    /// The name of the artifact.
+    pub fn name(&self) -> &ArtifactName {
+        self.artifact.name()
     }
 
     /// What was there when it was pinned.
@@ -319,14 +353,14 @@ pub enum DecisionProblem {
         /// The document.
         target: DocId,
     },
-    /// An approval whose frame pins one path of one link to artifacts twice (with
-    /// two states): it cannot say which it saw.
-    #[error("an approval's frame pins `{link}` to `{path}` twice")]
+    /// An approval whose frame pins one artifact of one link twice (with two
+    /// states): it cannot say which it saw.
+    #[error("an approval's frame pins `{link}` to {artifact} twice")]
     ArtifactPinsTwice {
         /// The link.
         link: EntryName,
-        /// The path.
-        path: RelPath,
+        /// The artifact.
+        artifact: ArtifactKey,
     },
 }
 
@@ -349,27 +383,24 @@ pub struct ApproveFrame {
 }
 
 impl ApproveFrame {
-    /// The files whose [`ContentAddress`] the record can keep: the approved
-    /// document's, each pinned upstream's, and each pinned artifact that is there.
+    /// The files of documents whose [`ContentAddress`] the record can keep: the
+    /// approved document's and each pinned upstream's. (The address of a pinned
+    /// artifact is the one its adapter answered with its hash.)
     pub fn files(&self) -> BTreeSet<RelPath> {
         let mut files = BTreeSet::from([self.subject_file.clone()]);
         files.extend(self.upstream_files.values().cloned());
-        files.extend(
-            self.artifacts
-                .iter()
-                .filter(|pin| matches!(pin.seen, PinnedArtifact::Present { .. }))
-                .map(|pin| pin.path.clone()),
-        );
         files
     }
 
-    /// The frame with the addresses of its files, by path, and the revision it is
-    /// taken at (rule A5): the one place an address is put on an item of an
-    /// approval. A file with no address in `addresses` keeps none; an artifact that
-    /// is absent never has one. Nothing a freshness reads changes (A4).
+    /// The frame with the addresses of the files of its documents, by path, the
+    /// addresses of its artifacts, as `artifacts` answered them, and the revision it
+    /// is taken at (rule A5): the one place an address is put on an item of an
+    /// approval. An item with no address there keeps none; an artifact that is
+    /// absent never has one. Nothing a freshness reads changes (A4).
     pub fn addressed(
         mut self,
         addresses: &BTreeMap<RelPath, ContentAddress>,
+        artifacts: &ArtifactReadings,
         revision: Option<Revision>,
     ) -> Self {
         self.seen_address = addresses.get(&self.subject_file).cloned();
@@ -388,7 +419,10 @@ impl ApproveFrame {
             .into_iter()
             .map(|mut pin| {
                 if let PinnedArtifact::Present { address, .. } = &mut pin.seen {
-                    *address = addresses.get(&pin.path).cloned();
+                    *address = artifacts
+                        .of(&pin.artifact)
+                        .and_then(ArtifactReading::address)
+                        .cloned();
                 }
                 pin
             })
@@ -447,6 +481,19 @@ pub enum FrameRefusal {
         target: DocId,
         /// What was decided about it.
         status: NotStanding,
+    },
+    /// A `Depends` link names an artifact its adapter cannot tell about now: an
+    /// approval would stand on something nobody saw.
+    #[error(
+        "the link `{link}` names {artifact}, which cannot be told about now ({why}): an approval cannot stand on it"
+    )]
+    ArtifactUnknown {
+        /// The link.
+        link: EntryName,
+        /// The artifact.
+        artifact: ArtifactKey,
+        /// Why it cannot be told.
+        why: Untold,
     },
 }
 
@@ -551,12 +598,12 @@ impl Decision {
             ..
         } = &verb
         {
-            let mut paths = BTreeSet::new();
+            let mut pinned = BTreeSet::new();
             for pin in artifacts {
-                if !paths.insert((pin.link(), pin.path())) {
+                if !pinned.insert((pin.link(), pin.artifact())) {
                     return Err(DecisionProblem::ArtifactPinsTwice {
                         link: pin.link().clone(),
-                        path: pin.path().clone(),
+                        artifact: pin.artifact().clone(),
                     });
                 }
             }
@@ -663,6 +710,13 @@ pub enum Record {
 /// The hash of a record's canonical form, which tells two records of one id apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RecordHash(ContentHash);
+
+impl RecordHash {
+    /// The digest: of [`HashKind::ShelfJudgement`] over the canonical form.
+    pub fn hash(&self) -> &ContentHash {
+        &self.0
+    }
+}
 
 /// The version of the canonical form of a record.
 const VERSION: i64 = 1;
@@ -775,6 +829,12 @@ pub enum RecordProblem {
         /// What was found.
         found: String,
     },
+    /// The space of an artifact is no space.
+    #[error("the space of an artifact in the record is not one")]
+    BadSpace(#[source] SpaceProblem),
+    /// The name of an artifact is no name.
+    #[error("the name of an artifact in the record is not one")]
+    BadArtifactName(#[source] ArtifactNameProblem),
 }
 
 type CanonMap = BTreeMap<String, Canon>;
@@ -1131,10 +1191,10 @@ fn artifact_pin_canon(pin: &ArtifactPin) -> Canon {
     };
     let mut entries = vec![
         ("link", Canon::str(pin.link.as_str())),
-        ("path", Canon::str(pin.path.as_str())),
         ("state", Canon::str(state.as_str())),
         ("hash", hash),
     ];
+    push_artifact(&mut entries, &pin.artifact, pin.form);
     push_opaque(
         &mut entries,
         ADDRESS,
@@ -1189,16 +1249,58 @@ fn comparison_from(map: &CanonMap) -> Result<Comparison, RecordProblem> {
     }
 }
 
+/// The keys that name an artifact in a record made now.
+const SPACED_KEYS: [&str; 2] = ["space", "name"];
+/// The key that names an artifact in a record written before spaces existed.
+const PATH_KEY: &str = "path";
+
+/// Adds the artifact to the entries of a canonical form, in the form the record
+/// had: `space` and `name`, or, for a record read back that was written before
+/// spaces existed, `path` alone, so that it keeps its form and its hash.
+fn push_artifact(entries: &mut Vec<(&str, Canon)>, artifact: &ArtifactKey, form: NameForm) {
+    match form {
+        NameForm::Spaced => {
+            entries.push(("space", Canon::str(artifact.space().as_str())));
+            entries.push(("name", Canon::str(artifact.name().as_str())));
+        }
+        NameForm::PathOnly => entries.push((PATH_KEY, Canon::str(artifact.name().as_str()))),
+    }
+}
+
+/// The artifact a map names, and the form it is written in: `space` and `name`, or
+/// `path` and no `space` (a record written before spaces existed, whose path is a
+/// name in [`PATH_ONLY_SPACE`]). `others` are the keys the map has beside these,
+/// `optional` those it may have; both forms are checked to have no key beyond them.
+fn artifact_of(
+    map: &CanonMap,
+    others: &[&str],
+    optional: &[&str],
+) -> Result<(ArtifactKey, NameForm), RecordProblem> {
+    let name_of =
+        |key: &str| ArtifactName::new(text(map, key)?).map_err(RecordProblem::BadArtifactName);
+    if map.contains_key("space") || !map.contains_key(PATH_KEY) {
+        let required: Vec<&str> = others.iter().copied().chain(SPACED_KEYS).collect();
+        exact_with(map, &required, optional)?;
+        let space = Space::new(text(map, "space")?).map_err(RecordProblem::BadSpace)?;
+        Ok((ArtifactKey::new(space, name_of("name")?), NameForm::Spaced))
+    } else {
+        let required: Vec<&str> = others.iter().copied().chain([PATH_KEY]).collect();
+        exact_with(map, &required, optional)?;
+        let space = Space::new(PATH_ONLY_SPACE).map_err(RecordProblem::BadSpace)?;
+        Ok((
+            ArtifactKey::new(space, name_of(PATH_KEY)?),
+            NameForm::PathOnly,
+        ))
+    }
+}
+
 fn artifact_pin_from(canon: &Canon) -> Result<ArtifactPin, RecordProblem> {
     let Canon::Map(map) = canon else {
         return Err(wrong(ARTIFACTS, "a list of maps"));
     };
-    exact_with(map, &["link", "path", "state", "hash"], &[ADDRESS, COMPARE])?;
+    let (artifact, form) = artifact_of(map, &["link", "state", "hash"], &[ADDRESS, COMPARE])?;
     let comparison = comparison_from(map)?;
     let link = EntryName::new(text(map, "link")?).map_err(RecordProblem::BadName)?;
-    let path = text(map, "path")?
-        .parse::<RelPath>()
-        .map_err(|e| bad("path", e))?;
     let state = text(map, "state")?;
     let address = opaque_of(map, ADDRESS, ContentAddress::from_validated)?;
     let seen = match (ArtifactSeenState::parse(state), entry(map, "hash")?) {
@@ -1226,9 +1328,10 @@ fn artifact_pin_from(canon: &Canon) -> Result<ArtifactPin, RecordProblem> {
     };
     Ok(ArtifactPin {
         link,
-        path,
+        artifact,
         seen,
         comparison,
+        form,
     })
 }
 
@@ -1517,14 +1620,15 @@ fn same_meaning_canon(s: &SameMeaning) -> Canon {
             Canon::list(from.iter().map(|h| Canon::str(h.to_string()))),
             Canon::str(to.to_string()),
         ),
-        SameMeaningOf::Artifact { path, from, to } => (
-            Canon::map([
-                ("kind", Canon::str(SubjectKind::Artifact.as_str())),
-                ("path", Canon::str(path.as_str())),
-            ]),
-            Canon::list(from.iter().map(|h| Canon::str(h.to_string()))),
-            Canon::str(to.to_string()),
-        ),
+        SameMeaningOf::Artifact { artifact, from, to } => {
+            let mut subject = vec![("kind", Canon::str(SubjectKind::Artifact.as_str()))];
+            push_artifact(&mut subject, artifact, s.form);
+            (
+                Canon::map(subject),
+                Canon::list(from.iter().map(|h| Canon::str(h.to_string()))),
+                Canon::str(to.to_string()),
+            )
+        }
     };
     Canon::map([
         ("v", Canon::Int(VERSION)),
@@ -1570,10 +1674,10 @@ fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
     } = read_common(map, required_reason)?;
     let subject = submap(map, "subject")?;
     let kind = text(subject, "kind")?;
-    let of = match SubjectKind::parse(kind) {
+    let (of, form) = match SubjectKind::parse(kind) {
         Some(SubjectKind::Doc) => {
             exact(subject, &["kind", "id"])?;
-            SameMeaningOf::Doc {
+            let of = SameMeaningOf::Doc {
                 id: doc_id(subject, "id")?,
                 from: hashes_of(map, |s| {
                     s.parse::<ContentHash>()
@@ -1581,17 +1685,17 @@ fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
                         .map_err(|e| bad("from", e))
                 })?,
                 to: doc_hash(map, "to")?,
-            }
+            };
+            (of, NameForm::Spaced)
         }
         Some(SubjectKind::Artifact) => {
-            exact(subject, &["kind", "path"])?;
-            SameMeaningOf::Artifact {
-                path: text(subject, "path")?
-                    .parse::<RelPath>()
-                    .map_err(|e| bad("path", e))?,
+            let (artifact, form) = artifact_of(subject, &["kind"], &[])?;
+            let of = SameMeaningOf::Artifact {
+                artifact,
                 from: hashes_of(map, |s| artifact_hash_of(s, "from"))?,
                 to: artifact_hash_of(text(map, "to")?, "to")?,
-            }
+            };
+            (of, form)
         }
         None => {
             return Err(RecordProblem::UnknownSubjectKind {
@@ -1599,7 +1703,10 @@ fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
             });
         }
     };
-    SameMeaning::new(id, of, actor, at, reason).map_err(RecordProblem::SameMeaning)
+    let mut declared =
+        SameMeaning::new(id, of, actor, at, reason).map_err(RecordProblem::SameMeaning)?;
+    declared.form = form;
+    Ok(declared)
 }
 
 /// What the records of a ledger say about one document: the declared status.
@@ -1831,17 +1938,19 @@ impl Ledger {
         declared_way(edges, *a, *b)
     }
 
-    /// As [`Ledger::doc_same_meaning`], for the file at `path`.
+    /// As [`Ledger::doc_same_meaning`], for an artifact.
     pub fn artifact_same_meaning(
         &self,
-        path: &RelPath,
+        artifact: &ArtifactKey,
         a: &ArtifactHash,
         b: &ArtifactHash,
     ) -> Option<NonEmptyVec<JudgementId>> {
         let edges = self.same_meanings.values().flat_map(|s| match &s.of {
-            SameMeaningOf::Artifact { path: of, from, to } if of == path => {
-                from.iter().map(|f| (s.id, *f, *to)).collect::<Vec<_>>()
-            }
+            SameMeaningOf::Artifact {
+                artifact: of,
+                from,
+                to,
+            } if of == artifact => from.iter().map(|f| (s.id, *f, *to)).collect::<Vec<_>>(),
             _ => Vec::new(),
         });
         declared_way(edges, *a, *b)
@@ -2039,29 +2148,42 @@ pub fn frame_approve(
         }
     }
 
-    // Rule A2: every artifact a `Depends` link names is pinned as it is, a file or
-    // none. An artifact has no declared status, so nothing here refuses it.
-    // Each pin keeps the comparison its hash was made with, the link's.
-    let artifacts: BTreeSet<ArtifactPin> = doc
+    // Rule A2: every artifact a `Depends` link names is pinned as it is, there or
+    // not. An artifact has no declared status; the one thing refused for it is that
+    // its adapter cannot tell about it now, since the approval would stand on
+    // something nobody saw. Each pin keeps the comparison its hash was made with,
+    // the link's.
+    let mut artifacts: BTreeSet<ArtifactPin> = BTreeSet::new();
+    let depends = doc
         .artifact_links()
         .iter()
-        .filter(|(_, link)| link.kind().propagation == ArtifactPropagation::Depends)
-        .flat_map(|(name, link)| {
-            let comparison = &link.kind().comparison;
-            link.artifacts().iter().map(move |artifact| ArtifactPin {
-                link: name.clone(),
-                path: artifact.path().clone(),
-                seen: match artifact.state() {
-                    ArtifactState::Present(hash) => PinnedArtifact::Present {
-                        hash: *hash,
-                        address: None,
-                    },
-                    ArtifactState::Absent => PinnedArtifact::Absent,
+        .filter(|(_, link)| link.kind().propagation == ArtifactPropagation::Depends);
+    for (name, link) in depends {
+        let comparison = &link.kind().comparison;
+        for artifact in link.artifacts() {
+            let seen = match artifact.state() {
+                ArtifactState::Present(hash) => PinnedArtifact::Present {
+                    hash: *hash,
+                    address: None,
                 },
+                ArtifactState::Absent => PinnedArtifact::Absent,
+                ArtifactState::Unknown(why) => {
+                    return Err(FrameRefusal::ArtifactUnknown {
+                        link: name.clone(),
+                        artifact: artifact.key().clone(),
+                        why: why.clone(),
+                    });
+                }
+            };
+            artifacts.insert(ArtifactPin {
+                link: name.clone(),
+                artifact: artifact.key().clone(),
+                seen,
                 comparison: comparison.clone(),
-            })
-        })
-        .collect();
+                form: NameForm::Spaced,
+            });
+        }
+    }
 
     if let Some(cycle) = shelf.cycles().iter().find(|c| c.contains(id)) {
         return Err(FrameRefusal::InCycle(cycle.clone()));

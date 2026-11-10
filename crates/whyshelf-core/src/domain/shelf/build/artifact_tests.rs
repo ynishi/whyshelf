@@ -1,8 +1,9 @@
 //! Tests of the links to artifacts in a shelf (rule A1).
 
-use crate::domain::shelf::artifact::{ArtifactHash, ArtifactState};
+use crate::domain::shelf::artifact::{ArtifactHash, ArtifactReading, ArtifactState};
 use crate::domain::shelf::fixtures_tests::{
-    docid, fr, list, path, reading, schema, shelf, shelf_with, sp_testing, text,
+    docid, file_artifact, file_space, fr, list, name, reading, schema, shelf, shelf_answered,
+    shelf_with, sp_testing, text,
 };
 use crate::domain::shelf::schema::ArtifactPropagation;
 
@@ -24,8 +25,9 @@ fn a_path_is_an_artifact_there_or_not_and_never_a_link_that_cannot_be_followed()
     let seen: Vec<(&str, ArtifactState)> = tests
         .artifacts()
         .iter()
-        .map(|a| (a.path().as_str(), *a.state()))
+        .map(|a| (a.name().as_str(), a.state().clone()))
         .collect();
+    assert!(tests.artifacts().iter().all(|a| *a.space() == file_space()));
     assert_eq!(
         seen,
         [
@@ -45,16 +47,115 @@ fn a_path_is_an_artifact_there_or_not_and_never_a_link_that_cannot_be_followed()
 }
 
 #[test]
-fn a_text_that_is_no_path_makes_the_document_invalid() {
-    let s = shelf(vec![sp_testing(2, &[], &["/etc/passwd", "../up.rs"])]);
+fn a_text_the_adapter_says_is_no_name_makes_the_document_invalid() {
+    let no_path = || ArtifactReading::not_a_name(NonBlank::new("no path under the root").unwrap());
+    let s = shelf_answered(
+        vec![sp_testing(
+            2,
+            &[],
+            &["/etc/passwd", "../up.rs", "tests/a.rs"],
+        )],
+        &[
+            ("/etc/passwd", no_path()),
+            ("../up.rs", no_path()),
+            ("tests/a.rs", ArtifactReading::absent()),
+        ],
+    );
     let DocState::Invalid(files) = s.state_of(docid(2)) else {
-        panic!("a path out of the root makes the document invalid");
+        panic!("a text that is no name of the space makes the document invalid");
     };
     let problems: Vec<&DocProblem> = files.iter().flat_map(|f| f.problems().iter()).collect();
     assert_eq!(problems.len(), 2);
-    assert!(problems.iter().all(
-        |p| matches!(p, DocProblem::ArtifactPathInvalid { link, .. } if link.as_str() == "tests")
-    ));
+    assert!(problems.iter().all(|p| matches!(
+        p,
+        DocProblem::NotAnArtifactName { link, space, why, .. }
+            if link.as_str() == "tests" && *space == file_space()
+                && why.as_str() == "no path under the root"
+    )));
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.to_string().contains("`../up.rs` in the link `tests`"))
+    );
+}
+
+#[test]
+fn a_text_that_is_no_name_makes_the_document_invalid() {
+    let too_long = "a".repeat(crate::domain::shelf::artifact::NAME_MAX + 1);
+    let s = shelf(vec![sp_testing(2, &[], &["", &too_long, "a\tb"])]);
+    let DocState::Invalid(files) = s.state_of(docid(2)) else {
+        panic!("a text that is no name makes the document invalid");
+    };
+    let whys: Vec<ArtifactNameProblem> = files
+        .iter()
+        .flat_map(|f| f.problems().iter())
+        .filter_map(|p| match p {
+            DocProblem::ArtifactNameInvalid { link, why, .. } if link.as_str() == "tests" => {
+                Some(*why)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        whys,
+        [
+            ArtifactNameProblem::Empty,
+            ArtifactNameProblem::TooLong {
+                bytes: crate::domain::shelf::artifact::NAME_MAX + 1
+            },
+            ArtifactNameProblem::ControlChar
+        ]
+    );
+}
+
+#[test]
+fn a_name_the_adapter_gave_no_answer_for_cannot_be_told_and_is_never_absent() {
+    let s = Shelf::build(
+        &schema(),
+        vec![sp_testing(2, &[], &["tests/a.rs"])],
+        &ArtifactReadings::new(),
+    );
+    let doc = s.doc(docid(2)).unwrap();
+    assert!(doc.absent_artifacts().is_empty());
+    let unknown: Vec<_> = doc
+        .unknown_artifacts()
+        .into_iter()
+        .map(|(_, _, why)| why.clone())
+        .collect();
+    assert_eq!(unknown, [crate::domain::shelf::artifact::Untold::NoAnswer]);
+}
+
+#[test]
+fn a_name_the_adapter_cannot_tell_about_is_an_unknown_artifact_of_a_valid_document() {
+    let why = NonBlank::new("offline").unwrap();
+    let s = shelf_answered(
+        vec![sp_testing(2, &[], &["tests/a.rs", "tests/b.rs"])],
+        &[
+            ("tests/a.rs", ArtifactReading::cannot_tell(why.clone())),
+            ("tests/b.rs", ArtifactReading::absent()),
+        ],
+    );
+    let doc = s.doc(docid(2)).unwrap();
+    let unknown: Vec<_> = doc
+        .unknown_artifacts()
+        .into_iter()
+        .map(|(link, artifact, why)| (link.as_str(), artifact.clone(), why.clone()))
+        .collect();
+    assert_eq!(
+        unknown,
+        [(
+            "tests",
+            file_artifact("tests/a.rs"),
+            crate::domain::shelf::artifact::Untold::Said(why.clone())
+        )]
+    );
+    // The absent ones are another list.
+    let absent: Vec<_> = doc
+        .absent_artifacts()
+        .into_iter()
+        .map(|(_, artifact)| artifact.clone())
+        .collect();
+    assert_eq!(absent, [file_artifact("tests/b.rs")]);
 }
 
 #[test]
@@ -88,12 +189,20 @@ fn the_paths_to_read_are_those_the_files_under_a_book_write() {
         ),
     ];
     let asks = Shelf::artifact_asks(&schema(), &readings);
+    // Every name is asked, in its link's space: whether `/abs` is a name of the space
+    // is the adapter's answer.
     assert_eq!(
-        asks.keys().cloned().collect::<Vec<_>>(),
-        [path("tests/a.rs"), path("tests/b.rs")]
+        asks.iter()
+            .map(|(space, name, _)| (space.clone(), name.clone()))
+            .collect::<Vec<_>>(),
+        [
+            (file_space(), name("/abs")),
+            (file_space(), name("tests/a.rs")),
+            (file_space(), name("tests/b.rs"))
+        ]
     );
-    // Each path with the comparison of the link that writes it.
-    assert!(asks.values().all(|c| {
+    // Each name with the comparison of the link that writes it.
+    assert!(asks.iter().all(|(_, _, c)| {
         c.iter()
             .eq([&crate::domain::shelf::artifact::Comparison::Bytes])
     }));

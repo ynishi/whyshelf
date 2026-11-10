@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::domain::shelf::fixtures_tests::{
-    decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, text,
+    decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, spaces, text,
 };
 use crate::domain::shelf::graph::CycleId;
 use crate::domain::shelf::schema::Cardinality;
@@ -211,7 +211,7 @@ fn a_prefixed_key_that_could_be_hexadecimal_is_a_key() {
     d[0].key = crate::domain::shelf::schema::KeyPatternDecl::Prefixed {
         prefix: "CAFE".to_owned(),
     };
-    let schema = Schema::validate(d).unwrap();
+    let schema = Schema::validate(d, &spaces()).unwrap();
     let s = Shelf::build(
         &schema,
         vec![reading(
@@ -367,7 +367,7 @@ fn a_link_must_be_a_list_of_keys_within_its_cardinality() {
     // `grounds` of a spec: at least one. `base` of a finding: one at most.
     d[1].links[0].cardinality = Cardinality::AtLeastOne;
     d[0].links[0].cardinality = Cardinality::Optional;
-    let schema = Schema::validate(d).unwrap();
+    let schema = Schema::validate(d, &spaces()).unwrap();
     let s = Shelf::build(
         &schema,
         vec![
@@ -706,7 +706,7 @@ fn a_directory_that_is_moved_in_the_schema_moves_its_files_out() {
     let mut d = decls();
     d[0].dir = "findings-v2".to_owned();
     let moved = Shelf::build(
-        &Schema::validate(d).unwrap(),
+        &Schema::validate(d, &spaces()).unwrap(),
         vec![reading(
             "findings/a.md",
             1,

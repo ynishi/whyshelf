@@ -2,11 +2,14 @@
 
 use std::collections::BTreeMap;
 
-use crate::domain::shelf::artifact::{ArtifactHash, ContentAddress, Revision};
-use crate::domain::shelf::fixtures_tests::{
-    actor, docid, fr, jid, ledger, path, shelf_with, sp_testing,
+use crate::domain::nonempty::NonBlank;
+use crate::domain::shelf::artifact::{
+    ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
 };
-use crate::domain::shelf::ledger::{Decision, JudgedAt, Record, frame_approve};
+use crate::domain::shelf::fixtures_tests::{
+    actor, docid, file_artifact, fr, jid, ledger, shelf_answered, shelf_with, sp_testing,
+};
+use crate::domain::shelf::ledger::{Decision, FrameRefusal, JudgedAt, Record, frame_approve};
 
 use super::*;
 
@@ -37,7 +40,7 @@ fn approved_on(at_approval: &Shelf, addressed: bool) -> Ledger {
                 })
                 .collect();
             let revision = Revision::from_validated("r1".to_owned()).unwrap();
-            frame = frame.addressed(&addresses, Some(revision));
+            frame = frame.addressed(&addresses, &ArtifactReadings::new(), Some(revision));
         }
         records.push(Record::Decision(
             Decision::approve(
@@ -78,7 +81,7 @@ fn a_changed_artifact_makes_the_approval_stale_and_is_its_root() {
     let causes = causes_of(&assessment, 2);
     assert!(
         matches!(causes.as_slice(), [Cause::ArtifactChanged { pin, now }]
-            if pin.path() == &path("tests/a.rs") && *now == h("b")),
+            if pin.artifact() == &file_artifact("tests/a.rs") && *now == h("b")),
         "{causes:?}"
     );
     assert_eq!(causes[0].severity(), Severity::Stale);
@@ -141,12 +144,48 @@ fn a_path_written_or_dropped_since_is_a_change_of_the_links_to_artifacts() {
             },
         ] => {
             assert_eq!(link.as_str(), "tests");
-            assert_eq!(added, &vec![path("tests/b.rs")]);
-            assert_eq!(removed, &vec![path("tests/a.rs")]);
+            assert_eq!(added, &vec![file_artifact("tests/b.rs")]);
+            assert_eq!(removed, &vec![file_artifact("tests/a.rs")]);
         }
         other => panic!("{other:?}"),
     }
     assert_eq!(causes[0].severity(), Severity::Stale);
+}
+
+#[test]
+fn a_link_moved_to_another_space_names_each_artifact_in_its_own_space() {
+    use crate::domain::shelf::artifact::{ArtifactKey, Space};
+    use crate::domain::shelf::fixtures_tests::{decls, name, spaces};
+    use crate::domain::shelf::schema::Schema;
+
+    let then = spec_shelf(&["tests/a.rs"], &[("tests/a.rs", Some(h("a")))]);
+    let l = approved_on(&then, false);
+    // The declaration now puts `tests` in the space `other`, with the same name.
+    let mut moved = decls();
+    for link in &mut moved[1].links {
+        if link.name == "tests" {
+            link.space = Some("other".to_owned());
+        }
+    }
+    let schema = Schema::validate(moved, &spaces()).unwrap();
+    let other = Space::new("other").unwrap();
+    let readings = vec![fr(1, &[]), sp_testing(2, &["FR-1"], &["tests/a.rs"])];
+    let found: ArtifactReadings = [(
+        other.clone(),
+        name("tests/a.rs"),
+        ArtifactReading::of_bytes(b"a", &Default::default(), None),
+    )]
+    .into_iter()
+    .collect();
+    let now = Shelf::build(&schema, readings, &found);
+    let causes = causes_of(&assess(&now, &l, JudgedAt::new(100)), 2);
+    match causes.as_slice() {
+        [Cause::ArtifactLinksChanged { added, removed, .. }] => {
+            assert_eq!(added, &vec![ArtifactKey::new(other, name("tests/a.rs"))]);
+            assert_eq!(removed, &vec![file_artifact("tests/a.rs")]);
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 #[test]
@@ -180,6 +219,60 @@ fn addresses_and_revisions_never_change_a_freshness() {
             );
         }
     }
+}
+
+/// The shelf of FR-1 and SP-2 whose `tests/a.rs` its adapter cannot tell about now.
+fn untold() -> Shelf {
+    shelf_answered(
+        vec![fr(1, &[]), sp_testing(2, &["FR-1"], &["tests/a.rs"])],
+        &[(
+            "tests/a.rs",
+            ArtifactReading::cannot_tell(NonBlank::new("offline").unwrap()),
+        )],
+    )
+}
+
+#[test]
+fn a_pinned_artifact_that_cannot_be_told_now_is_a_notice_and_keeps_the_approval_fresh() {
+    for then in [
+        spec_shelf(&["tests/a.rs"], &[("tests/a.rs", Some(h("a")))]),
+        spec_shelf(&["tests/a.rs"], &[]),
+    ] {
+        let l = approved_on(&then, false);
+        let assessment = assess(&untold(), &l, JudgedAt::new(100));
+        assert!(causes_of(&assessment, 2).is_empty());
+        assert!(
+            assessment.notices_of(docid(2)).iter().any(|n| matches!(
+                n,
+                Notice::ArtifactUnknown { link, artifact, why }
+                    if link.as_str() == "tests" && *artifact == file_artifact("tests/a.rs")
+                        && why.as_str() == "offline"
+            )),
+            "{:?}",
+            assessment.notices_of(docid(2))
+        );
+    }
+}
+
+#[test]
+fn an_approval_on_an_artifact_that_cannot_be_told_now_is_refused() {
+    let s = untold();
+    let so_far = approved_on(&spec_shelf(&[], &[]), false);
+    let refusal = frame_approve(&s, &so_far, docid(2)).unwrap_err();
+    assert!(
+        matches!(&refusal, FrameRefusal::ArtifactUnknown { link, artifact, why }
+            if link.as_str() == "tests" && *artifact == file_artifact("tests/a.rs")
+                && why.as_str() == "offline"),
+        "{refusal:?}"
+    );
+    // A pending document with such a name has the notice too.
+    let assessment = assess(&s, &ledger(vec![]), JudgedAt::new(100));
+    assert!(
+        assessment
+            .notices_of(docid(2))
+            .iter()
+            .any(|n| matches!(n, Notice::ArtifactUnknown { .. }))
+    );
 }
 
 #[test]

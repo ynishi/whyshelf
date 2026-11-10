@@ -7,8 +7,8 @@ use std::collections::BTreeSet;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::artifact::Comparison;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, decls, docid, fr, jid, ledger, lines, list, path, reading, schema,
-    schema_of_lines, shelf_reading, sp_testing, text,
+    actor, approve, decls, docid, file_artifact, fr, jid, ledger, lines, list, name, reading,
+    schema, schema_of_lines, shelf_reading, sp_testing, spaces, text,
 };
 use crate::domain::shelf::ledger::{
     JudgedAt, Record, SameMeaning, SameMeaningOf, SameMeaningRefusal, SameMeaningTarget,
@@ -137,7 +137,7 @@ fn under_lines_a_change_of_code_is_a_change() {
     let causes = causes_of(&assess(&spec_shelf(&s, edited), &l, now()), 2);
     assert!(
         matches!(causes.as_slice(), [Cause::ArtifactChanged { pin, now }]
-            if pin.path() == &path("tests/a.rs")
+            if pin.artifact() == &file_artifact("tests/a.rs")
                 && *now == lines(&["//"]).fingerprint(edited)),
         "{causes:?}"
     );
@@ -151,7 +151,7 @@ fn a_declaration_of_the_same_meaning_holds_under_lines() {
     let of = frame_same_meaning(
         &edited,
         &ledger(records.clone()),
-        SameMeaningTarget::Artifact(path("tests/a.rs")),
+        SameMeaningTarget::Artifact(name("tests/a.rs")),
         None,
     )
     .unwrap();
@@ -193,12 +193,13 @@ fn schema_of_both() -> Schema {
                 target: LinkTargetDecl::Artifact,
                 cardinality: Cardinality::Many,
                 propagation: Propagation::Depends,
+                space: Some("file".to_owned()),
                 compare: None,
                 cover: false,
             });
         }
     }
-    Schema::validate(decls).unwrap()
+    Schema::validate(decls, &spaces()).unwrap()
 }
 
 /// SP-2 tests `src/a.rs` by its lines; the design `x` (identity 3) checks its bytes.
@@ -242,7 +243,7 @@ fn a_declaration_about_a_file_under_two_comparisons_keeps_each_link_s_edit() {
     let of = frame_same_meaning(
         &edited,
         &ledger(records.clone()),
-        SameMeaningTarget::Artifact(path("src/a.rs")),
+        SameMeaningTarget::Artifact(name("src/a.rs")),
         None,
     )
     .unwrap();
@@ -273,7 +274,7 @@ fn frame_of_a(
     frame_same_meaning(
         shelf,
         &ledger(records.to_vec()),
-        SameMeaningTarget::Artifact(path("src/a.rs")),
+        SameMeaningTarget::Artifact(name("src/a.rs")),
         named.map(|h| *h.hash()),
     )
 }
@@ -295,7 +296,7 @@ fn a_code_edit_under_two_comparisons_needs_the_earlier_hash_named_and_takes_its_
         assert_eq!(
             frame_of_a(&edited, &records, Some(earlier)),
             Ok(SameMeaningOf::Artifact {
-                path: path("src/a.rs"),
+                artifact: file_artifact("src/a.rs"),
                 from: NonEmptySet::from_set(BTreeSet::from([earlier])).unwrap(),
                 to: comparison.fingerprint(edited_bytes),
             }),
@@ -343,7 +344,7 @@ fn a_hash_pinned_under_a_comparison_no_link_declares_now_cannot_be_declared() {
     let records = approvals(&spec_shelf(&schema(), CODE), &[1, 2]);
     let now = spec_shelf(&schema_of_lines(&["//"]), b"fn a() {\n    two();\n}\n");
     let pinned = Comparison::Bytes.fingerprint(CODE);
-    let target = || SameMeaningTarget::Artifact(path("tests/a.rs"));
+    let target = || SameMeaningTarget::Artifact(name("tests/a.rs"));
     let l = ledger(records);
     assert_eq!(
         frame_same_meaning(&now, &l, target(), Some(*pinned.hash())),
@@ -382,7 +383,7 @@ fn a_changed_comparison_of_a_file_gone_is_gone_and_of_none_both_times_is_nothing
     let l = ledger(approvals(&spec_shelf(&bytes, CODE), &[1, 2]));
     let causes = causes_of(&assess(&no_file(&slashes), &l, now()), 2);
     assert!(
-        matches!(causes.as_slice(), [Cause::ArtifactGone { pin }] if pin.path() == &path("tests/a.rs")),
+        matches!(causes.as_slice(), [Cause::ArtifactGone { pin }] if pin.artifact() == &file_artifact("tests/a.rs")),
         "{causes:?}"
     );
     assert_eq!(causes[0].severity(), Severity::Broken);

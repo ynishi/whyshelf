@@ -1,7 +1,7 @@
 //! The commands, as clap types.
 
 use clap::{Args, Subcommand};
-use whyshelf_core::domain::location::RelPath;
+use whyshelf_core::domain::shelf::artifact::ArtifactName;
 use whyshelf_core::domain::shelf::lookup::Reference;
 
 /// The commands on the documents whose kinds the project declares in
@@ -130,9 +130,11 @@ pub enum Verb {
         /// The documents edited, in order.
         #[arg(num_args = 0.., required_unless_present = "artifacts")]
         references: Vec<Reference>,
-        /// A file that is no document, by its path under the root; may be repeated.
-        #[arg(long = "artifact", value_name = "PATH")]
-        artifacts: Vec<RelPath>,
+        /// An artifact, by its name as a link writes it (for the space `file`, its
+        /// path under the root), in the one space the documents link it in; may be
+        /// repeated.
+        #[arg(long = "artifact", value_name = "NAME")]
+        artifacts: Vec<ArtifactName>,
         /// The earlier hash the edit was read from (`sha256:...`), for one document or
         /// file, when approvals pinned several that do not mean the same.
         #[arg(long, value_name = "HASH")]
