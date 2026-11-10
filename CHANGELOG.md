@@ -34,11 +34,19 @@ and this project adheres to
 - `stale` answers `origins` too: each document, file, cycle or the
   declaration where the stale approvals start, with the approvals it
   degrades, so an edit of a file several approvals pin is read once (#34).
+- A path of a link to artifacts that names no file is told: `check` lists it
+  under `absent` (it stays clean), `judge approve` under each judgement's
+  `absent`, and its row has an `artifact_absent` notice (#36).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
 ### Fixed
 
+- A path names a file only as written, ASCII case included: on a file system that
+  does not tell case apart, `justfile` read the file `Justfile`, which Git and
+  CI on Linux do not find. An approval made there that pinned such a path is
+  now broken (`artifact_gone`) until the path is written as the file is named
+  (#36).
 - An upstream edited inside a cycle of frames, where no `Via` passes, is a
   root of the approval that pinned it; it was left out of the roots. An edit
   or a cycle reached two ways up is one root (#34).
