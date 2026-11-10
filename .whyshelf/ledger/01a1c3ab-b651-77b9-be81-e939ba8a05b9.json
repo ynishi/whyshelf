@@ -1,0 +1,46 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794284172863,
+  "expires": null,
+  "frame": [
+    {
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "hash": "sha256:47590abbdbc9d25aad5eb6e15b5dab769a95fc6d35ecea687cd208b08df8395f",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-382f-717a-938e-9014e2c69bed"
+    }
+  ],
+  "id": "01a1c3ab-b651-77b9-be81-e939ba8a05b9",
+  "kind": "decision",
+  "reason": "Agreed by the maintainer: refuse what a decision already says about an upstream; leave how it stands now to freshness.",
+  "seen": "sha256:c86fb3e8e2a0d311eeb0a1a592c121a346b12e250c787762fe7045076b2ff332",
+  "subject": "01a1c333-d435-7f4d-abb6-036e89451d8b",
+  "v": 1,
+  "verb": "approve"
+}

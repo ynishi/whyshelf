@@ -126,11 +126,15 @@ a human hand.
 
 ## Documentation
 
-Documentation lives in RustDoc only: crate and module docs (`//!`) and item docs
-(`///`), with diagrams as ASCII in code blocks tagged `text`. There is no `docs/`
-directory and no other prose document; concepts, design, file formats, settings,
-the command line, compatibility and known limits are in the rustdoc, beside the
-code they describe. `cargo doc` must be warning-free (`just rust-doc`, part of
+Requirements, decisions and verifications are whyshelf books: the documents
+under `books/`, declared in `.whyshelf/books.toml`, with one decision per file in
+`.whyshelf/ledger/`. Write them in public-safe English (see
+PUBLIC_DEVELOPMENT.md) and check them with `whyshelf books check`.
+
+Everything else is RustDoc: crate and module docs (`//!`) and item docs (`///`),
+with diagrams as ASCII in code blocks tagged `text`; concepts, file formats,
+settings, the command line, compatibility and known limits sit beside the code
+they describe. `cargo doc` must be warning-free (`just rust-doc`, part of
 `just check`). When two texts disagree the code wins, then the doc comment; a
 comment contradicting an issue is a finding about the issue.
 

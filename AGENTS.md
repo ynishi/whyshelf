@@ -6,9 +6,14 @@
 - Issue, branch, commit and PR conventions:
   [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security reports: [SECURITY.md](SECURITY.md)
-- Documentation lives in RustDoc only (crate and module docs, diagrams as ASCII
-  in code blocks tagged `text`); there is no `docs/` directory. `cargo doc` must be
-  warning-free (`just rust-doc`). Code documentation outranks stale issue text.
+- Where documents live:
+  - requirements, decisions and verifications: whyshelf books under `books/`
+    (declared in `.whyshelf/books.toml`, decisions in `.whyshelf/ledger/`);
+    check them with `whyshelf books check` and `whyshelf books stale`.
+  - everything else (concepts, file formats, the command line, the code):
+    RustDoc (crate and module docs, diagrams as ASCII in code blocks tagged
+    `text`). `cargo doc` must be warning-free (`just rust-doc`). Code
+    documentation outranks stale issue text.
 - Never work on `main`; one branch per issue, cut from `origin/main` after a
   fetch. `just worktree-new <type> <slug>` from the main checkout does that and
   runs `just branch-check`.

@@ -1,0 +1,89 @@
+# The books of whyshelf's own requirements, decisions and verifications.
+
+[[book]]
+name = "finding"            # what was seen: a root cause, evidence
+dir = "books/finding"
+key = { prefix = "F" }
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.field]]
+name = "source"
+type = "text"
+
+[[book]]
+name = "requirement"        # what is needed, and why
+dir = "books/requirement"
+key = { prefix = "REQ" }
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.link]]
+name = "grounds"            # informs: a finding fixed and retired must not break what it grounded
+target = "finding"
+means = "informs"
+[[book.link]]
+name = "replaces"
+target = "requirement"
+count = "optional"
+means = "replaces"
+
+[[book]]
+name = "decision"           # how it is met, and what was rejected
+dir = "books/decision"
+key = { prefix = "DEC" }
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.field]]
+name = "rejected"
+type = "list"
+[[book.field]]
+name = "revisit"
+type = "text"
+[[book.field]]
+name = "rustdoc"            # where the contract is written (rustdoc item paths)
+type = "list"
+[[book.link]]
+name = "serves"             # depends: a changed requirement makes the decision stale
+target = "requirement"
+count = "at-least-one"
+means = "depends"
+[[book.link]]
+name = "related"
+target = "decision"
+means = "informs"
+[[book.link]]
+name = "replaces"
+target = "decision"
+count = "optional"
+means = "replaces"
+
+[[book]]
+name = "verification"       # how a decision is checked
+dir = "books/verification"
+key = { prefix = "V" }
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.field]]
+name = "method"
+type = { enum = ["e2e", "unit", "review"] }
+required = true
+[[book.link]]
+name = "tests"              # depends: the test files that show it holds; editing one makes it stale
+target = "artifact"
+means = "depends"
+[[book.link]]
+name = "checks"             # depends: a changed decision makes its check stale
+target = "decision"
+count = "at-least-one"
+means = "depends"
+[[book.link]]
+name = "for"
+target = "requirement"
+means = "informs"

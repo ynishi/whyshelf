@@ -8,9 +8,10 @@ cargo install whyshelf-cli   # installs the `whyshelf` command
 
 ## Documentation
 
-The documentation is the RustDoc, and nothing else: concepts, the file formats,
-settings, the command line and its walkthrough, the tool server, compatibility and
-the known limitations. Build and read it with:
+The requirements, decisions and verifications of whyshelf itself are whyshelf
+books under `books/` (`whyshelf books status`). Everything else is the RustDoc:
+concepts, the file formats, settings, the command line and its walkthrough, the
+tool server, compatibility and the known limitations. Build and read it with:
 
 ```sh
 just rust-doc

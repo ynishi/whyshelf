@@ -1,0 +1,13 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794284172507,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c3ab-b555-73c9-9b6e-8f7d54ab5184",
+  "kind": "decision",
+  "reason": "First decisions of whyshelf's own requirements, kept in the repo.",
+  "seen": "sha256:0f0dc2ad41413994dc6572780a21a6417af6a2f38038b3c173d65af913147e1c",
+  "subject": "01a1c332-38d9-72fc-8ee9-4bc78bdcca4c",
+  "v": 1,
+  "verb": "approve"
+}
