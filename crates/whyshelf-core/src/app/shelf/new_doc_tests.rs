@@ -16,8 +16,102 @@ fn request(book: &str, key: Option<&str>, entries: &[(&str, &str)]) -> NewDocReq
             .iter()
             .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
             .collect(),
+        items: Vec::new(),
         body: "Body.\n".to_owned(),
     }
+}
+
+fn with_items(mut request: NewDocRequest, items: &[(&str, &str)]) -> NewDocRequest {
+    request.items = items
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect();
+    request
+}
+
+#[test]
+fn an_item_keeps_its_commas_and_follows_the_split_items_in_order() {
+    let fake = FakeShelf::new();
+    fake.decls.lock().unwrap().push(measures());
+    let mut app = ShelfApp::new(fake);
+    let req = with_items(
+        request("measure", None, &[("tags", "a, b")]),
+        &[("tags", "x, y: and z"), ("tags", "w")],
+    );
+    block_on(app.new_doc(req)).unwrap();
+    let readings = app.ports().readings.lock().unwrap().clone();
+    let crate::domain::shelf::build::DocReading::Parsed { entries, .. } = &readings[0] else {
+        panic!("parsed");
+    };
+    assert_eq!(
+        entries["tags"],
+        RawValue::List(vec![
+            "a".to_owned(),
+            "b".to_owned(),
+            "x, y: and z".to_owned(),
+            "w".to_owned()
+        ])
+    );
+}
+
+#[test]
+fn items_alone_make_the_list() {
+    let fake = FakeShelf::new();
+    fake.decls.lock().unwrap().push(measures());
+    let mut app = ShelfApp::new(fake);
+    block_on(app.new_doc(with_items(
+        request("measure", None, &[]),
+        &[("tags", "one, with a comma")],
+    )))
+    .unwrap();
+    let readings = app.ports().readings.lock().unwrap().clone();
+    let crate::domain::shelf::build::DocReading::Parsed { entries, .. } = &readings[0] else {
+        panic!("parsed");
+    };
+    assert_eq!(
+        entries["tags"],
+        RawValue::List(vec!["one, with a comma".to_owned()])
+    );
+}
+
+#[test]
+fn an_item_for_a_link_is_a_key_trimmed_and_an_empty_item_is_refused() {
+    let fake = FakeShelf::new().with_files(vec![fr(1, "a finding", &[])]);
+    let mut app = ShelfApp::new(fake);
+    block_on(app.new_doc(with_items(
+        request("spec", None, &[("title", "a spec")]),
+        &[("grounds", "  FR-1 ")],
+    )))
+    .unwrap();
+    let readings = app.ports().readings.lock().unwrap().clone();
+    let crate::domain::shelf::build::DocReading::Parsed { entries, .. } = readings.last().unwrap()
+    else {
+        panic!("parsed");
+    };
+    assert_eq!(entries["grounds"], RawValue::List(vec!["FR-1".to_owned()]));
+
+    let error = block_on(app.new_doc(with_items(
+        request("spec", None, &[("title", "another")]),
+        &[("grounds", "   ")],
+    )))
+    .unwrap_err();
+    assert!(matches!(&error, ShelfError::EmptyItem { name } if name == "grounds"));
+    assert_eq!(error.class(), ErrorClass::Request);
+}
+
+#[test]
+fn an_item_for_a_field_that_is_no_list_is_a_request_error_and_writes_nothing() {
+    let fake = FakeShelf::new();
+    fake.decls.lock().unwrap().push(measures());
+    let mut app = ShelfApp::new(fake);
+    let error = block_on(app.new_doc(with_items(
+        request("measure", None, &[]),
+        &[("note", "a, b")],
+    )))
+    .unwrap_err();
+    assert!(matches!(&error, ShelfError::ItemOfNoList { name } if name == "note"));
+    assert_eq!(error.class(), ErrorClass::Request);
+    assert_eq!(app.ports().created_count(), 0);
 }
 
 /// A book with a field of each type, keyed `M-<n>`.

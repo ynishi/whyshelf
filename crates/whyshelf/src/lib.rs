@@ -173,7 +173,7 @@
 //!                             hashes before them hold again, each with a notice
 //!   judge withdraw <record id>... --reason <text>
 //!                             take back decisions or declarations by the id of their record
-//!   new <book> [--title <text>] [--key <key>] [<entry>=<value>]... [--body <text>]
+//!   new <book> [--title <text>] [--key <key>] [<entry>=<value> | <entry>+=<item>]... [--body <text>]
 //!                             one new document, valid for its book, at <book dir>/<key>.md
 //!   schema                    the JSON Schema of the answer of every command
 //! ```
@@ -195,7 +195,10 @@
 //!   book, valid or not, so a key is never reused) unless `--key` gives one; a book
 //!   of slugs needs `--key`, and a key that is taken is refused. Each `<entry>` is
 //!   read by the book's declaration: a list field or a link takes `a,b` (links are
-//!   keys), a truth value `true` or `false`, a whole number its digits. The document
+//!   keys), or one item at a time with `<entry>+=<item>`, commas kept and white space
+//!   around it left out (after the items of `<entry>=`, in the order given; an empty
+//!   item is refused); a truth value
+//!   `true` or `false`, a whole number its digits. The document
 //!   is checked by the same rules as every file before anything is written (fields,
 //!   required fields, enum words, link names and counts, types), with every problem
 //!   listed; a link to a key no document has yet is allowed, and listed in

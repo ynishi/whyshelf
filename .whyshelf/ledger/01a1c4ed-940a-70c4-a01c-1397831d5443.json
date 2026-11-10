@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794305266677,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c4ed-940a-70c4-a01c-1397831d5443",
+  "kind": "decision",
+  "reason": "Issue #14: += gives one item as written with its commas; reviewed; V-4 and V-15 link the new tests of new; just check green",
+  "revision": "6adec8fa56d527552d3223cb5e9abd395f834c92",
+  "seen": "sha256:3b20f108762fda1115822639845bf81dbff1084fa99b00a80bdfe415ba27544a",
+  "seen_address": "9d0915239841952813b0a7b90a84ea97fbdda819",
+  "subject": "01a1c4e9-622e-731b-9a0f-905261af25a5",
+  "v": 1,
+  "verb": "approve"
+}
