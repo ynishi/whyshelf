@@ -1,8 +1,9 @@
 //! The use case that writes decisions to the ledger: `judge` (the ledger is also
 //! written by [`same_meaning`](super::ShelfApp::same_meaning), a declaration that an
 //! edit keeps the meaning, and by [`withdraw`](super::ShelfApp::withdraw), a
-//! revocation of records named by their identity; the other write,
-//! [`new_doc`](super::ShelfApp::new_doc), makes a document's file).
+//! revocation of records named by their identity; the other writes are
+//! [`new_doc`](super::ShelfApp::new_doc), which makes a document's file, and
+//! [`fmt`](super::ShelfApp::fmt), which writes documents' files over in the form).
 //!
 //! A judgement is made in five steps, and the application decides none of them:
 //!

@@ -23,9 +23,30 @@
 //!
 //! [`MarkdownDocs`] is also the [`DocWrite`] of a new document: [`render`] makes the
 //! text from the entries (a flat front matter, every text in double quotes, `id` and
-//! `key` first), and the file is created only where none is (`create_new`), with
-//! its directories. What [`render`] writes, [`read`] reads back into the same
-//! entries; a test holds the two together.
+//! `key` first, the whole text after the normalization rule), and the file is
+//! created only where none is (`create_new`), with its directories. What [`render`]
+//! writes, [`read`] reads back into the same entries; a test holds the two together.
+//!
+//! # Writing a document in the form
+//!
+//! The text [`render`] makes is the one form of a document, so what `new` writes is
+//! in it. [`form`] sets a file beside it ([`DocSource::forms`]): [`render`] of the
+//! entries and the body it reads, the whole text after the normalization rule
+//! ([`normalize`]). So the form also normalizes a body: its line endings become
+//! `\n`, white space at the end of its lines and blank lines at its end go, and it
+//! ends with one newline. [`read`] normalizes the whole text first, so this changes
+//! nothing it reads. A file whose text is that already is in the form; a file whose
+//! front matter cannot be read has no text in it; a file whose front matter holds a
+//! comment is told so ([`comment_line`]), because the form has no place for one;
+//! every other file is given its text in the form, with what that text reads as, for
+//! the use case to hold against the file's own reading, unless the user cannot
+//! write it or it has more than one link ([`Form::ReadOnly`], [`Form::Linked`]).
+//!
+//! [`MarkdownDocs`] is also the [`DocReplace`] that writes that text over the file:
+//! when the file still holds the bytes that were read, just before, and whole (a
+//! new file beside it, renamed over it), so the file is either as it was or in the
+//! form. It is the one write here that replaces a file; [`DocWrite::create`] never
+//! does.
 //!
 //! # Where the content of a document is kept
 //!
@@ -48,7 +69,9 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_norway::Value;
 use tokio::io::AsyncWriteExt;
-use whyshelf_core::app::shelf::{Creation, DocSource, DocWrite};
+use whyshelf_core::app::shelf::{
+    Creation, DocReplace, DocSource, DocWrite, FileForm, Form, Replacement,
+};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::location::RelPath;
@@ -61,8 +84,9 @@ use whyshelf_core::domain::shelf::schema::BookDir;
 
 use super::git::{Git, GitError};
 
-/// Why the documents could not be read at all. A file that is not a document is not
-/// an error: it is a reading that says why.
+/// Why the documents could not be read at all, or a document's file could not be
+/// written. A file that is not a document is not an error: it is a reading that
+/// says why.
 #[derive(Debug, thiserror::Error)]
 pub enum DocsError {
     /// A directory or a file could not be read.
@@ -70,6 +94,16 @@ pub enum DocsError {
     Io {
         /// The path.
         path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// A step of a write failed: what it was, with the path it failed on.
+    #[error("cannot {step}")]
+    Write {
+        /// The step, with its path (`create the temporary file <path>`, `rename
+        /// <path> over <path>`).
+        step: String,
         /// The operating system's error.
         #[source]
         source: io::Error,
@@ -117,27 +151,30 @@ impl DocSource for MarkdownDocs {
     type Error = DocsError;
 
     async fn read_docs(&self, dirs: &[BookDir]) -> Result<Vec<DocReading>, DocsError> {
-        let mut readings = Vec::new();
-        for dir in dirs {
-            for file in markdown_files(&self.root.join(dir.as_rel().as_str())).await? {
-                let origin = relative(&self.root, &file)?;
-                let text = tokio::fs::read(&file)
-                    .await
-                    .map_err(|source| DocsError::Io {
-                        path: file.clone(),
-                        source,
-                    })?;
-                readings.push(match String::from_utf8(text) {
-                    Ok(text) => read(origin, &text),
-                    Err(_) => DocReading::Unparsed {
-                        origin,
-                        id: ReadId::Unreadable,
-                        why: RawProblem::Syntax { line: None },
-                    },
-                });
+        Ok(self
+            .files_of(dirs)
+            .await?
+            .into_iter()
+            .map(|(origin, bytes)| match std::str::from_utf8(&bytes) {
+                Ok(text) => read(origin, text),
+                Err(_) => not_text(origin),
+            })
+            .collect())
+    }
+
+    async fn forms(&self, dirs: &[BookDir]) -> Result<Vec<FileForm>, DocsError> {
+        let mut forms = Vec::new();
+        for (origin, bytes) in self.files_of(dirs).await? {
+            let file = self.root.join(origin.as_str());
+            let mut found = form(origin, bytes);
+            if matches!(found.form, Form::Other { .. })
+                && let Some(kept) = kept_from_replacing(&file).await?
+            {
+                found.form = kept;
             }
+            forms.push(found);
         }
-        Ok(readings)
+        Ok(forms)
     }
 
     async fn current(&self, file: &RelPath) -> Result<Option<Vec<u8>>, DocsError> {
@@ -173,6 +210,83 @@ impl DocSource for MarkdownDocs {
         };
         Ok(there.into_iter().cloned().zip(names).collect())
     }
+}
+
+impl MarkdownDocs {
+    /// Every `.md` file under these directories, with its bytes, in the order of the
+    /// directories and, under each, a stable order.
+    async fn files_of(&self, dirs: &[BookDir]) -> Result<Vec<(RelPath, Vec<u8>)>, DocsError> {
+        let mut files = Vec::new();
+        for dir in dirs {
+            for file in markdown_files(&self.root.join(dir.as_rel().as_str())).await? {
+                let origin = relative(&self.root, &file)?;
+                let bytes = tokio::fs::read(&file)
+                    .await
+                    .map_err(|source| DocsError::Io {
+                        path: file.clone(),
+                        source,
+                    })?;
+                files.push((origin, bytes));
+            }
+        }
+        Ok(files)
+    }
+}
+
+/// The reading of a file that is not UTF-8 text.
+fn not_text(origin: RelPath) -> DocReading {
+    DocReading::Unparsed {
+        origin,
+        id: ReadId::Unreadable,
+        why: RawProblem::Syntax { line: None },
+    }
+}
+
+/// Why a file that is not in the form must still not be written over, if it must
+/// not, from the file's metadata:
+///
+/// - [`Form::Linked`]: it has more than one link (a hard link). The rename that
+///   replaces it would give this path a new file and leave the other links on the
+///   old one, so the two would part; and the new file would be the writer's, with
+///   none of the old one's owner or extended attributes. (Only on Unix, where the
+///   number of links is told.)
+/// - [`Form::ReadOnly`]: the user cannot write it. It is opened for writing, which
+///   changes nothing in it (no byte, no time); a refusal (no permission, or a file
+///   system mounted read-only) is the answer.
+async fn kept_from_replacing(file: &Path) -> Result<Option<Form>, DocsError> {
+    let failed = |source| DocsError::Io {
+        path: file.to_path_buf(),
+        source,
+    };
+    let meta = tokio::fs::metadata(file).await.map_err(failed)?;
+    if links(&meta) > 1 {
+        return Ok(Some(Form::Linked));
+    }
+    match tokio::fs::OpenOptions::new().write(true).open(file).await {
+        Ok(_) => Ok(None),
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::PermissionDenied | io::ErrorKind::ReadOnlyFilesystem
+            ) =>
+        {
+            Ok(Some(Form::ReadOnly))
+        }
+        Err(source) => Err(failed(source)),
+    }
+}
+
+/// How many links the file has.
+#[cfg(unix)]
+fn links(meta: &std::fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    meta.nlink()
+}
+
+/// How many links the file has: not told here, so one.
+#[cfg(not(unix))]
+fn links(_meta: &std::fs::Metadata) -> u64 {
+    1
 }
 
 /// Every `.md` file under `dir`, in a stable order. A directory that is not there
@@ -250,6 +364,79 @@ fn split_closing(rest: &str) -> Option<(&str, &str)> {
     for line in rest.split_inclusive('\n') {
         if line.trim_end_matches('\n') == "---" {
             return Some((&rest[..offset], &rest[offset + line.len()..]));
+        }
+        offset += line.len();
+    }
+    None
+}
+
+/// A file beside the one form ([`render`]): its reading, its bytes, and how it
+/// stands to the form (the module page, "Writing a document in the form").
+pub fn form(origin: RelPath, bytes: Vec<u8>) -> FileForm {
+    let Ok(text) = std::str::from_utf8(&bytes) else {
+        return FileForm {
+            reading: not_text(origin),
+            read: bytes,
+            form: Form::Unwritable,
+        };
+    };
+    let reading = read(origin.clone(), text);
+    let form = match &reading {
+        DocReading::Parsed { entries, body, .. } => {
+            let formed = render(entries, body);
+            if formed == text {
+                Form::InForm
+            } else if let Some(line) = comment_in(text) {
+                Form::Comment { line }
+            } else {
+                Form::Other {
+                    reads_as: read(origin, &formed),
+                    text: formed.into_bytes(),
+                }
+            }
+        }
+        DocReading::Unparsed { .. } => Form::Unwritable,
+    };
+    FileForm {
+        reading,
+        read: bytes,
+        form,
+    }
+}
+
+/// The line of the file the first comment of its front matter is on, if it holds
+/// one ([`comment_line`] of its front matter after the normalization rule).
+fn comment_in(text: &str) -> Option<u32> {
+    let text = normalize(text);
+    let (yaml, _) = split_closing(text.strip_prefix("---\n")?)?;
+    // The front matter starts on the second line of the file.
+    comment_line(yaml).map(|line| line.saturating_add(1))
+}
+
+/// The line (counted from 1) of the first YAML comment in a front matter, if it
+/// holds one: the one place the rule is written.
+///
+/// The rule goes by meaning, not by a guess at the grammar of YAML. A candidate is
+/// a `#` that begins a line or follows white space (a space or a tab). It is a
+/// comment when cutting the front matter from it to the end of its line leaves the
+/// reading unchanged: the same entries, with the same values. Cutting inside a
+/// quoted string leaves the string unclosed or shorter, and inside a block scalar
+/// (`|` or `>`) changes its text, so such a `#` is no comment. A front matter that
+/// cannot be read has none.
+pub fn comment_line(yaml: &str) -> Option<u32> {
+    let whole = entries(yaml).ok()?;
+    let mut offset = 0;
+    for (n, line) in yaml.split_inclusive('\n').enumerate() {
+        let end = line.trim_end_matches('\n').len();
+        let mut before: Option<char> = None;
+        for (at, c) in line.char_indices() {
+            if c == '#' && before.is_none_or(|b| b == ' ' || b == '\t') {
+                let cut = format!("{}{}", &yaml[..offset + at], &yaml[offset + end..]);
+                if entries(&cut).as_ref() == Ok(&whole) {
+                    return Some(u32::try_from(n + 1).unwrap_or(u32::MAX));
+                }
+            }
+            before = Some(c);
         }
         offset += line.len();
     }
@@ -408,12 +595,13 @@ impl DocWrite for MarkdownDocs {
         body: &str,
     ) -> Result<Creation, DocsError> {
         let file = self.root.join(path.as_str());
-        let io = |path: &Path| {
-            let path = path.to_path_buf();
-            move |source| DocsError::Io { path, source }
-        };
         if let Some(dir) = file.parent() {
-            tokio::fs::create_dir_all(dir).await.map_err(io(dir))?;
+            tokio::fs::create_dir_all(dir)
+                .await
+                .map_err(write_step(format!(
+                    "create the directory {}",
+                    dir.display()
+                )))?;
         }
         let mut out = match tokio::fs::OpenOptions::new()
             .write(true)
@@ -425,13 +613,99 @@ impl DocWrite for MarkdownDocs {
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 return Ok(Creation::AlreadyThere);
             }
-            Err(source) => return Err(DocsError::Io { path: file, source }),
+            Err(source) => {
+                return Err(write_step(format!("create {}", file.display()))(source));
+            }
         };
         out.write_all(render(entries, body).as_bytes())
             .await
-            .map_err(io(&file))?;
-        out.sync_all().await.map_err(io(&file))?;
+            .map_err(write_step(format!("write {}", file.display())))?;
+        out.sync_all()
+            .await
+            .map_err(write_step(format!("write {} to disk", file.display())))?;
         Ok(Creation::Created)
+    }
+}
+
+/// The error of a step of a write, told as the step with its path.
+fn write_step(step: String) -> impl FnOnce(io::Error) -> DocsError {
+    move |source| DocsError::Write { step, source }
+}
+
+/// Writes over a document's file after comparing it with the bytes read: the text goes
+/// into a new file beside it (a name starting with `.` and ending in `.tmp`, so it
+/// is never read as a document), with the file's permissions, and is renamed over
+/// it. A new file that cannot be written is removed.
+///
+/// The comparison and the rename are two steps: an edit saved to the file in the
+/// short time between them is overwritten, and a file removed in it is written
+/// again. A read-only file and one with more than one link are never given here:
+/// [`DocSource::forms`] leaves them alone ([`Form::ReadOnly`], [`Form::Linked`]).
+impl DocReplace for MarkdownDocs {
+    type Error = DocsError;
+
+    async fn replace_read(
+        &self,
+        path: &RelPath,
+        read: &[u8],
+        text: &[u8],
+    ) -> Result<Replacement, DocsError> {
+        let file = self.root.join(path.as_str());
+        match tokio::fs::read(&file).await {
+            Ok(now) if now == read => {}
+            Ok(_) => return Ok(Replacement::Changed),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok(Replacement::Changed);
+            }
+            Err(source) => {
+                return Err(DocsError::Io { path: file, source });
+            }
+        }
+        let permissions = tokio::fs::metadata(&file)
+            .await
+            .map_err(|source| DocsError::Io {
+                path: file.clone(),
+                source,
+            })?
+            .permissions();
+        let name = path.as_str().rsplit('/').next().unwrap_or(path.as_str());
+        let beside = file.with_file_name(format!(".{name}.{}.tmp", uuid::Uuid::now_v7()));
+        let shown = beside.display();
+        let written = async {
+            let mut out = tokio::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&beside)
+                .await
+                .map_err(write_step(format!("create the temporary file {shown}")))?;
+            out.write_all(text)
+                .await
+                .map_err(write_step(format!("write the temporary file {shown}")))?;
+            out.set_permissions(permissions)
+                .await
+                .map_err(write_step(format!(
+                    "give the temporary file {shown} the permissions of {}",
+                    file.display()
+                )))?;
+            out.sync_all().await.map_err(write_step(format!(
+                "write the temporary file {shown} to disk"
+            )))?;
+            drop(out);
+            tokio::fs::rename(&beside, &file)
+                .await
+                .map_err(write_step(format!(
+                    "rename {shown} over {}",
+                    file.display()
+                )))
+        }
+        .await;
+        if let Err(error) = written {
+            // The new file is not the document; whether it can be removed changes
+            // nothing of the error told.
+            let _ = tokio::fs::remove_file(&beside).await;
+            return Err(error);
+        }
+        Ok(Replacement::Replaced)
     }
 }
 
@@ -443,10 +717,17 @@ impl DocWrite for MarkdownDocs {
 /// character, so it is one line and is never read as a number, a truth value or
 /// null; a list is a flow sequence of such texts; a whole number and a truth value
 /// are written bare. A name is written bare when it is a plain lowercase word YAML
-/// would not read as anything but a text, and quoted otherwise. What this writes
-/// reads back into the same entries, and the body into itself after the
-/// normalization rule.
+/// would not read as anything but a text, and quoted otherwise. The whole text is
+/// then put through the normalization rule ([`normalize`]): `\n` line endings, no
+/// white space at the end of a line, no blank lines at the end, one final newline.
+/// So it is the one form of a document, whatever the body given, and reads back
+/// into the same entries and the body after the same rule.
 pub fn render(entries: &BTreeMap<String, RawValue>, body: &str) -> String {
+    normalize(&format!("{}{body}", render_front(entries)))
+}
+
+/// The front matter [`render`] writes, its two lines `---` included.
+fn render_front(entries: &BTreeMap<String, RawValue>) -> String {
     let mut out = String::from("---\n");
     let first = ["id", "key"];
     let ordered = first
@@ -464,10 +745,6 @@ pub fn render(entries: &BTreeMap<String, RawValue>, body: &str) -> String {
         out.push('\n');
     }
     out.push_str("---\n");
-    out.push_str(body);
-    if !body.is_empty() && !body.ends_with('\n') {
-        out.push('\n');
-    }
     out
 }
 
@@ -781,6 +1058,338 @@ mod tests {
             assert_eq!(back, entries, "{text}");
             assert_eq!(back_body, normalize(body), "{text}");
         }
+    }
+
+    /// Front matters written every way a person writes them, each with no comment.
+    const WRITTEN: [&str; 21] = [
+        "id: ID\nkey: S-1\ntext: |\n  a literal block\n  # with a hash line, which is text\n",
+        "id: ID\nkey: S-1\ntext: >-\n  a folded\n  block # and a hash\n",
+        "{id: ID, key: S-1, title: a flow mapping}\n",
+        "id: ID\nkey: S-1\ntitle: &t shared\nalso: *t\n",
+        "id: ID\nkey: S-1\ntitle: !!str 123\n",
+        "key: S-1\nid: ID\ntitle: Plain words, unquoted\n",
+        "id: ID\nkey: S-1\nserves: [REQ-2, REQ-5]\ngrounds: []\n",
+        "id: 'ID'\nkey: 'S-1'\ntitle: 'single, with ''quotes'''\n",
+        "id: ID\nkey: S-1\nlist:\n  - a\n  - b c\n",
+        "id: ID\nkey: S-1\nlist:\n- a\n- \"b\"\n",
+        "id: ID\nkey: S-1\ncount: 3\nok: true\nno: false\nneg: -7\n",
+        "id: ID\nkey: S-1\nversion: \"3\"\nword: \"true\"\nyes: yes\n",
+        "\"id\": ID\n'key': S-1\n\"Odd Name\": x\n",
+        "id: ID\nkey: S-1\nissues: [\"#30\", '#31']\ntitle: \"a # inside quotes\"\n",
+        "id: ID\nkey: S-1\ntitle: it's a#b, not a comment\n",
+        "id: ID\nkey: S-1\ntitle: folded\n  over two lines\n",
+        "id: ID\nkey: S-1\ntitle: \"a double\n  quoted # over lines\"\n",
+        "id:   ID   \nkey:\tS-1\ntitle:    spaced   \n",
+        "id: ID\nkey: S-1\nrejected: [\"JSON Lines: one record per line\", plain]\n",
+        "id: ID\nkey: S-1\nescaped: \"tab\\tand \\u00e9\"\n",
+        "id: ID\nkey: S-1\nflow: [a,b ,  c]\n",
+    ];
+
+    /// The bodies a file can have after its front matter.
+    const BODIES: [&str; 5] = [
+        "",
+        "Body.\n",
+        "Body.  \n\n\nMore.\t\n\n",
+        "No final newline",
+        "---\nnot front matter\n",
+    ];
+
+    #[test]
+    fn every_front_matter_renders_to_a_text_that_reads_as_the_file() {
+        for yaml in WRITTEN {
+            let yaml = yaml.replace("ID", ID);
+            for body in BODIES {
+                for text in [
+                    format!("---\n{yaml}---\n{body}"),
+                    format!("---\n{yaml}---\n{body}").replace('\n', "\r\n"),
+                    format!("--- \n{yaml}---\t\n{body}"),
+                ] {
+                    let FileForm {
+                        reading, form: got, ..
+                    } = form(origin(), text.clone().into_bytes());
+                    assert!(
+                        matches!(reading, DocReading::Parsed { .. }),
+                        "parsed: {text:?}"
+                    );
+                    let Form::Other {
+                        text: formed,
+                        reads_as,
+                    } = got
+                    else {
+                        panic!("not in the form: {text:?}: {got:?}");
+                    };
+                    assert_eq!(reads_as, reading, "{text:?}");
+                    let formed = String::from_utf8(formed).unwrap();
+                    // The whole text is normalized, the body with it.
+                    assert_eq!(formed, normalize(&formed), "{text:?}");
+                    assert!(!formed.contains('\r'), "{formed:?}");
+                    assert!(formed.ends_with(&normalize(body)), "{formed:?}");
+                    assert!(formed.starts_with(&format!("---\nid: \"{ID}\"\nkey: \"S-1\"\n")));
+                    // And the text in the form is in the form.
+                    assert_eq!(
+                        form(origin(), formed.clone().into_bytes()).form,
+                        Form::InForm,
+                        "{formed:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_crlf_file_and_a_body_with_trailing_white_space_are_written_normalized() {
+        let in_form = format!("---\nid: \"{ID}\"\nkey: \"S-1\"\n---\nBody.\n\nMore.\n");
+        for text in [
+            in_form.replace('\n', "\r\n"),
+            format!("---\nid: \"{ID}\"\nkey: \"S-1\"\n---\nBody.  \n\t\nMore.\t\n\n\n"),
+        ] {
+            let got = form(origin(), text.clone().into_bytes());
+            let Form::Other {
+                text: formed,
+                reads_as,
+            } = got.form
+            else {
+                panic!("not in the form: {text:?}");
+            };
+            assert_eq!(reads_as, got.reading, "{text:?}");
+            assert_eq!(String::from_utf8(formed.clone()).unwrap(), in_form);
+            let before = hash_of(got.reading);
+            assert_eq!(hash_of(read(origin(), &in_form)), before, "{text:?}");
+            assert_eq!(form(origin(), formed).form, Form::InForm);
+        }
+    }
+
+    /// The hash the domain gives the document of this reading, in a book of `docs/`.
+    fn hash_of(reading: DocReading) -> whyshelf_core::domain::shelf::doc::DocHash {
+        use whyshelf_core::domain::shelf::artifact::ArtifactReadings;
+        use whyshelf_core::domain::shelf::build::Shelf;
+        use whyshelf_core::domain::shelf::schema::{BookSchemaDecl, KeyPatternDecl, Schema};
+        let decls = vec![BookSchemaDecl {
+            name: "spec".to_owned(),
+            dir: "docs".to_owned(),
+            key: KeyPatternDecl::Prefixed {
+                prefix: "S".to_owned(),
+            },
+            description: None,
+            fields: Vec::new(),
+            links: Vec::new(),
+        }];
+        let schema = Schema::validate(decls, &BTreeSet::new()).expect("a sound declaration");
+        let shelf = Shelf::build(&schema, vec![reading], &ArtifactReadings::new());
+        let doc = shelf.docs().values().next().expect("one valid document");
+        *doc.hash()
+    }
+
+    #[test]
+    fn what_new_writes_is_in_the_form() {
+        let mut entries = BTreeMap::new();
+        entries.insert("id".to_owned(), RawValue::Text(ID.to_owned()));
+        entries.insert("key".to_owned(), RawValue::Text("V-4".to_owned()));
+        for (i, text) in TRICKY.iter().enumerate() {
+            entries.insert(format!("t{i}"), RawValue::Text((*text).to_owned()));
+        }
+        for body in [
+            "Body.\n",
+            "",
+            "No final newline",
+            "Trailing white space.  \n\t\nMore.\t\n\n\n",
+            "Carriage\r\nreturns\r\n",
+            "Lone\rreturn\n",
+            "  \n\t\n",
+            "\n\n\n",
+        ] {
+            let text = render(&entries, body);
+            assert_eq!(
+                form(origin(), text.clone().into_bytes()).form,
+                Form::InForm,
+                "{body:?}: {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_read_has_no_text_in_the_form() {
+        for bytes in [
+            b"no front matter\n".to_vec(),
+            format!("---\nid: {ID}\n").into_bytes(),
+            format!("---\nid: {ID}\nkey: a\nkey: b\n---\n").into_bytes(),
+            vec![
+                b'-', b'-', b'-', b'\n', 0xff, b'\n', b'-', b'-', b'-', b'\n',
+            ],
+        ] {
+            let got = form(origin(), bytes.clone());
+            assert!(matches!(got.reading, DocReading::Unparsed { .. }));
+            assert_eq!(got.form, Form::Unwritable);
+            assert_eq!(got.read, bytes);
+        }
+    }
+
+    #[test]
+    fn a_comment_is_found_and_a_hash_in_quotes_is_not() {
+        let found = [
+            ("# a whole line\nid: x\n", 1),
+            ("id: x\nkey: y # after a value\n", 2),
+            ("id: x\nlist: [a, b]  # after a list\n", 2),
+            ("id: x\ntitle: it's plain # and a comment\n", 2),
+            ("id: x\ntitle: \"quoted\" # after the quotes\n", 2),
+            ("id: x\ntitle: 'it''s' # after the quotes\n", 2),
+            ("id: x\n  # indented\n", 2),
+            ("id: x\ntitle:\tx\t#after a tab\n", 2),
+            ("id: x\nlist:\n  - a # in a block list\n", 3),
+            // A quote inside a plain text opens no string.
+            ("id: x\ntitle: a:'b # c'\n", 2),
+            ("id: x\ntitle: a-'b # c'\n", 2),
+            ("id: x\ntitle: x-\"y # z\"\n", 2),
+            ("id: x\ntitle: f['x # c']\n", 2),
+            // On a continuation line of a plain text over several lines.
+            ("id: x\ntitle: folded\n  over # two lines\n", 3),
+            // After a block scalar, at the indentation of the mapping.
+            ("id: x\ntext: |\n  a\n# after the block\n", 4),
+            // A real comment after a `#` that is not one.
+            ("id: x\ntitle: \"Issue #24\" # real\n", 2),
+        ];
+        for (yaml, line) in found {
+            assert_eq!(comment_line(yaml), Some(line), "{yaml:?}");
+        }
+        let none = [
+            "id: x\ntitle: \"a # b\"\n",
+            "id: x\ntitle: 'a # b'\n",
+            "id: x\ntitle: a#b\n",
+            "id: x\nissues: [\"#30\", '#31']\n",
+            "id: x\ntitle: \"over\n  # two lines\"\n",
+            "id: x\ntitle: \"an \\\" escaped # quote\"\n",
+            "id: x\ntitle: 'a ''quoted'' # word'\n",
+            "id: x\ntitle: \"Issue #24\"\n",
+            "id: x\ntitle: 'Issue #24'\n",
+            // Inside a block scalar a `#` is text.
+            "id: x\ntext: |\n  a\n  # not a comment\n",
+            "id: x\ntext: >\n  folded # text\n  more\n",
+            "id: x\ntext: |-\n  ends with #\n",
+            // A front matter that cannot be read has none.
+            "id: x\nid: y # twice\n",
+        ];
+        for yaml in none {
+            assert_eq!(comment_line(yaml), None, "{yaml:?}");
+        }
+    }
+
+    #[test]
+    fn a_file_with_a_comment_is_told_with_its_line() {
+        let text = format!("---\nid: {ID}\nkey: S-1 # the key\n---\nBody.\n");
+        assert_eq!(
+            form(origin(), text.into_bytes()).form,
+            Form::Comment { line: 3 }
+        );
+    }
+
+    #[tokio::test]
+    async fn replace_replaces_only_the_file_as_read_and_create_still_never_overwrites() {
+        let root = tempfile::tempdir().unwrap();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        let at: RelPath = "books/a.md".parse().unwrap();
+        let file = root.path().join(at.as_str());
+        tokio::fs::create_dir_all(file.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::write(&file, "old").await.unwrap();
+
+        assert_eq!(
+            docs.replace_read(&at, b"other", b"new").await.unwrap(),
+            Replacement::Changed
+        );
+        assert_eq!(tokio::fs::read(&file).await.unwrap(), b"old");
+
+        assert_eq!(
+            docs.replace_read(&at, b"old", b"new").await.unwrap(),
+            Replacement::Replaced
+        );
+        assert_eq!(tokio::fs::read(&file).await.unwrap(), b"new");
+        // Nothing is left beside it.
+        let mut entries = tokio::fs::read_dir(file.parent().unwrap()).await.unwrap();
+        let mut names = Vec::new();
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            names.push(entry.file_name());
+        }
+        assert_eq!(names, ["a.md"]);
+
+        let gone: RelPath = "books/gone.md".parse().unwrap();
+        assert_eq!(
+            docs.replace_read(&gone, b"", b"new").await.unwrap(),
+            Replacement::Changed
+        );
+        assert!(docs.current(&gone).await.unwrap().is_none());
+
+        assert_eq!(
+            docs.create(&at, &BTreeMap::new(), "Other.\n")
+                .await
+                .unwrap(),
+            Creation::AlreadyThere
+        );
+        assert_eq!(tokio::fs::read(&file).await.unwrap(), b"new");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_read_only_file_and_a_hard_link_are_kept_from_being_replaced() {
+        let root = tempfile::tempdir().unwrap();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        let dir = root.path().join("docs");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let unquoted = |n: u32| format!("---\nid: {ID}\nkey: S-{n}\n---\n");
+        for n in 1..=3 {
+            tokio::fs::write(dir.join(format!("{n}.md")), unquoted(n))
+                .await
+                .unwrap();
+        }
+        let read_only = dir.join("2.md");
+        let mut permissions = tokio::fs::metadata(&read_only).await.unwrap().permissions();
+        permissions.set_readonly(true);
+        tokio::fs::set_permissions(&read_only, permissions)
+            .await
+            .unwrap();
+        tokio::fs::hard_link(dir.join("3.md"), root.path().join("elsewhere"))
+            .await
+            .unwrap();
+        // A user the permissions do not hold back (root) can write it after all.
+        let writable_anyway = tokio::fs::OpenOptions::new()
+            .write(true)
+            .open(&read_only)
+            .await
+            .is_ok();
+
+        let forms = docs.forms(&[BookDir::new("docs").unwrap()]).await.unwrap();
+        let got: Vec<&Form> = forms.iter().map(|f| &f.form).collect();
+        assert!(matches!(got[0], Form::Other { .. }), "{got:?}");
+        if !writable_anyway {
+            assert_eq!(*got[1], Form::ReadOnly);
+        }
+        assert_eq!(*got[2], Form::Linked);
+        // Telling changed nothing.
+        for n in 1..=3 {
+            assert_eq!(
+                tokio::fs::read_to_string(dir.join(format!("{n}.md")))
+                    .await
+                    .unwrap(),
+                unquoted(n)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_write_that_fails_names_its_step_and_path() {
+        let root = tempfile::tempdir().unwrap();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        // A directory where the file would be: the document's directory is a file.
+        tokio::fs::write(root.path().join("books"), "a file")
+            .await
+            .unwrap();
+        let at: RelPath = "books/a.md".parse().unwrap();
+        let error = docs.create(&at, &BTreeMap::new(), "").await.unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.starts_with("cannot create the directory ") && message.ends_with("books"),
+            "{message}"
+        );
     }
 
     #[tokio::test]

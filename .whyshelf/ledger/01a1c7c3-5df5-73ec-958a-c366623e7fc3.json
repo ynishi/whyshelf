@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b339e0a461cd96faa575677034bdbc19241b9d83",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fac835f43d08893200b85a7678748db34b3bbc4cef6edc01c9309bc50b8f36f7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "842dd0defa97d5267380af7739c43d540a3a8b24",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bcc9446c036fa0dd6142bbb279adf666098ebbb15d17978aeebd62305385f88e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794352831373,
+  "expires": null,
+  "frame": [
+    {
+      "address": "da9032def055fc8f6a38d45583eae70d26c36b31",
+      "hash": "sha256:2e6f8fbd9581adcd9a7f4fb3b99744ca2e3937ccac0448d8fa78e74f52c1ca5f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "52"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+    }
+  ],
+  "id": "01a1c7c3-5df5-73ec-958a-c366623e7fc3",
+  "kind": "decision",
+  "reason": "Every document is put in one form without changing what it reads as (#44); checked by two rounds of blind review over about 110 kinds of front matter, every finding fixed",
+  "revision": "6777de26b11433b74ac2aa5cae504ff6d91efd77",
+  "seen": "sha256:4cc7cf9e3ad8b44953649ea0f523268c1e3196959072b3da6e8bd94e4a80bdf9",
+  "seen_address": "48b5909bf7e7847e0540a31b7acafc7b31ec908f",
+  "subject": "01a1c7ad-001a-777b-8fe2-cc8909aaffa0",
+  "v": 1,
+  "verb": "approve"
+}

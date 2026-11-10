@@ -234,6 +234,9 @@
 //!                             take back decisions or declarations by the id of their record
 //!   new <book> [--title <text>] [--key <key>] [<entry>=<value> | <entry>+=<item>]... [--body <text>]
 //!                             one new document, valid for its book, at <book dir>/<key>.md
+//!   fmt [--check]             every document's file in the one form `new` writes, where that
+//!                             changes no reading of it; --check writes nothing, and exits 1
+//!                             when a file is not in the form, or would be left alone
 //!   schema                    the JSON Schema of the answer of every command
 //! ```
 //!
@@ -290,10 +293,38 @@
 //!   required fields, enum words, link names and counts, types), with every problem
 //!   listed; a link to a key no document has yet is allowed, and listed in
 //!   `unresolved_links`. The identity is a new UUID v7.
-//! - Only `judge` and `new` write: `judge` one new file per decision or declaration, `new` one new
-//!   document's file, never in place of a file that is there; every other command
-//!   only reads and creates nothing. Who judges is `--actor`, else `WHYSHELF_ACTOR`,
-//!   else Git's `user.name`; never a committed file.
+//! - `fmt` writes each document's file in the one form `new` writes: a flat front
+//!   matter with `id` and `key` first and the other entries by name, every text in
+//!   double quotes, and then the body, the whole text normalized as every file is
+//!   read (line endings `\n`, no white space at the end of a line, no blank lines
+//!   at the end, one final newline), so a body's line endings and trailing white
+//!   space are normalized too; the hash is taken after the same rule. A file is
+//!   written only when its text in the form reads back as exactly what the file
+//!   reads as now (the same entries, the same body), so no hash and no approval
+//!   changes; the check is made on every file, on every run. A file already in the
+//!   form is not written; `new` writes this form, so what it writes is in it. A
+//!   file whose front matter cannot be read, one whose front matter holds a YAML
+//!   comment (the form would lose it; the rule is on
+//!   `whyshelf_infra::shelf::docs::comment_line`), one whose text in the form would
+//!   read otherwise, one the user cannot write, one with more than one link (a hard
+//!   link, which a file written in its place would not keep), and one that changed
+//!   between the reading and the write are left as they are, each listed with why
+//!   and written as a line on stderr, `warning: <file> is left as it is: <why>`;
+//!   the others are still written, and `fmt` exits 0. A file is compared with what
+//!   was read just before it is replaced, and is replaced whole; an edit saved in
+//!   the short time between the two is overwritten, and a file removed in it is
+//!   written again. The file written in its place keeps the permissions, not the
+//!   owner or extended attributes, and a directory the user cannot write is
+//!   found only when the write fails. A run that fails part way leaves the first
+//!   files written, each a sound file of its own. `fmt --check` writes nothing, lists the files `fmt`
+//!   would write and, apart, those it would leave alone, and exits 1 when there is
+//!   any of either: a file left alone is not in the form either.
+//! - Only `judge`, `new` and `fmt` write: `judge` one new file per decision or
+//!   declaration, `new` one new document's file, never in place of a file that is
+//!   there, and `fmt` over documents' files that are there, as above; every other
+//!   command, `fmt --check` among them, only reads and creates nothing. Who judges
+//!   is `--actor`, else `WHYSHELF_ACTOR`, else Git's `user.name`; never a committed
+//!   file.
 //! - None of these commands needs a Git repository. Git is used, when it is there,
 //!   to name and read back the content an approval saw and to keep `HEAD` as a hint
 //!   of the revision; its `user.name`, read even outside a repository, says who
@@ -322,7 +353,7 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
+//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written) |
 //! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!
@@ -370,6 +401,16 @@
 //! "request" | "failed", "messages": [...], "candidates": [...], "problems": [...]}`
 //! (`problems`: each problem of a declaration that cannot be used, or of a new
 //! document that would be invalid) and the same chain goes to stderr.
+//!
+//! `fmt` answers `{"rewritten": [...], "in_form": <count>, "not_in_form": null,
+//! "left_alone": [{"file", "reason", "line", "detail"}]}`, the files by their path
+//! under the root; `fmt --check` answers the same with `rewritten` empty and
+//! `not_in_form` the files `fmt` would write. `in_form` is a count, not a list: it
+//! is most files, and nothing is to be done about them. A `reason` is `unparsed`,
+//! `comment` (with its `line` in the file), `reads_otherwise`, `read_only`,
+//! `linked` or `changed`. A
+//! declaration that cannot be used is exit 2, as for every reading command, and a
+//! file that cannot be read or written exit 3.
 //!
 //! ## Not yet in books
 //!

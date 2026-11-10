@@ -23,7 +23,7 @@
 //! | file | port | module |
 //! |---|---|---|
 //! | `.whyshelf/books.toml` | [`BookSchemaSource`] | [`books`] |
-//! | the Markdown files of the books | [`DocSource`], [`DocWrite`] | [`docs`] |
+//! | the Markdown files of the books | [`DocSource`], [`DocWrite`], [`DocReplace`] | [`docs`] |
 //! | `.whyshelf/ledger/<id>.json` | [`LedgerRead`], [`LedgerAppend`] | [`ledger`] |
 //! | what links to artifacts name, by space | [`ArtifactSource`] | [`artifact`] |
 //! | content kept by address, read back by the adapter of the documents or of the space | [`ContentStore`] | [`Project`], to [`docs`] or [`artifact`] |
@@ -43,13 +43,17 @@
 //! [`Project`] bundles them for a project root, as one value the command line hands
 //! to [`ShelfApp`](whyshelf_core::app::shelf::ShelfApp).
 //!
-//! Only `judge` and `new` write, each one new file: `judge` a record, `new` a
-//! document (create-only, never in place of a file that is there). Reading never
+//! Only `judge`, `new` and `fmt` write. `judge` and `new` each write one new file:
+//! `judge` a record, `new` a document (create-only, never in place of a file that is
+//! there). `fmt` writes over documents' files that are there, each in the one form,
+//! after comparing it with what was read, and whole ([`DocReplace`]); an edit
+//! saved between the comparison and the write is overwritten. Reading never
 //! creates a directory or a file.
 //!
 //! [`BookSchemaSource`]: whyshelf_core::app::shelf::BookSchemaSource
 //! [`DocSource`]: whyshelf_core::app::shelf::DocSource
 //! [`DocWrite`]: whyshelf_core::app::shelf::DocWrite
+//! [`DocReplace`]: whyshelf_core::app::shelf::DocReplace
 //! [`LedgerRead`]: whyshelf_core::app::shelf::LedgerRead
 //! [`LedgerAppend`]: whyshelf_core::app::shelf::LedgerAppend
 //! [`Clock`]: whyshelf_core::app::shelf::Clock
@@ -173,12 +177,17 @@ impl ShelfWrite for Project {
     type Actor = ProjectActor;
     type Revisions = Git;
     type DocWriter = MarkdownDocs;
+    type DocReplacer = MarkdownDocs;
 
     fn revisions(&self) -> &Git {
         &self.git
     }
 
     fn doc_writer(&self) -> &MarkdownDocs {
+        &self.docs
+    }
+
+    fn doc_replacer(&self) -> &MarkdownDocs {
         &self.docs
     }
 

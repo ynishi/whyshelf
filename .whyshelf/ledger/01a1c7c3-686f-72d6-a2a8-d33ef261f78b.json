@@ -1,0 +1,156 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b1496af4d4f3cf3ceed1e192ecb49bc72e94d2d3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f5c28888eb130ef7af0346d401ccb8c93d06690f728561145eea183512305a86",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c16a4ffe53bf7abd156be742abb3c766855e8782",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a7394e0256b28ffd8092d6595c0bad258df42d60505e3f7d0f5d0e4a9c22c612",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "69df4d6dc7b23ca94a4713567877995d09836e28",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ff546c47a9697d3c4224f6591f1e2a537da1d740b973811b0a5f662feab43c5b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/unheld_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "31240718cb55a8ac20d8159d2ca9ed0d5e87272c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a735368e355e89d2eda20cad4f36b2b6004328810b2ceeb946807c9af021290c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/doc.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "842dd0defa97d5267380af7739c43d540a3a8b24",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bcc9446c036fa0dd6142bbb279adf666098ebbb15d17978aeebd62305385f88e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794352833728,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ed9e63d504f61c14776d2f618cb0e4f5d959360b",
+      "hash": "sha256:81cd9e7aa3f869f2ede121a6b992bbb667cae15c9fd90b2aa2da4113ea099539",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    },
+    {
+      "address": "c06e8164aa78931dd54e3e884d8016a3735fdbde",
+      "hash": "sha256:47114a4be98886db6d360ff246ff82048c89eba19b48fe17ce59d059cf0e9c9d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "36"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ea98-7060-acb2-b3c19c484a89"
+    },
+    {
+      "address": "9f352c6a4d92d536917018027df6979787312f66",
+      "hash": "sha256:7a3dcfaf28b358b173a663ec583c4760949fd4ab9dd1d9ad7a9e7514cf6d2d43",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "37"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ede0-77df-9261-99dde9095582"
+    },
+    {
+      "address": "8296963d236b11cbfaa914fbec39151acd418a9f",
+      "hash": "sha256:466ff1fad900d4d2ccd9ed751d50194d83fca7e7119dafab8ecc3afa02fd8cd2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "38"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-f0b8-7358-973e-9c8cf9148148"
+    }
+  ],
+  "id": "01a1c7c3-686f-72d6-a2a8-d33ef261f78b",
+  "kind": "decision",
+  "reason": "REQ-5 and DEC-29 now count fmt among the writes, V-15 and V-22 are restated, and shared tests changed for #44; checked by a blind review",
+  "revision": "6777de26b11433b74ac2aa5cae504ff6d91efd77",
+  "seen": "sha256:7b0c37e86042e1db02f284434425558a48c59aa36f73661e458f948879624f6c",
+  "seen_address": "4718a8c456fc4de16ebfdb99e3ac2b0d356b05e1",
+  "subject": "01a1c4ba-1606-7681-90fb-0d70558c8701",
+  "v": 1,
+  "verb": "approve"
+}
