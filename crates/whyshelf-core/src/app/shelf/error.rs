@@ -14,7 +14,9 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem};
-use crate::domain::shelf::ledger::{DecisionProblem, FrameRefusal};
+use crate::domain::shelf::ledger::{
+    DecisionProblem, FrameRefusal, SameMeaningProblem, SameMeaningRefusal, WithdrawRefusal,
+};
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
 
@@ -82,6 +84,17 @@ pub enum ShelfError {
     /// The decision breaks an invariant of a decision.
     #[error("the decision is not sound")]
     Decision(#[from] DecisionProblem),
+    /// The edit cannot be declared to keep the meaning: the document is not valid,
+    /// the file is not linked or not there, or no approval pinned another hash of it.
+    #[error("the declaration of the same meaning is refused")]
+    SameMeaningRefused(#[from] SameMeaningRefusal),
+    /// The declaration breaks an invariant of a declaration.
+    #[error("the declaration of the same meaning is not sound")]
+    SameMeaning(#[from] SameMeaningProblem),
+    /// A record named to be withdrawn is no decision or declaration, or is already
+    /// withdrawn.
+    #[error("the withdrawal is refused")]
+    Withdraw(#[from] WithdrawRefusal),
     /// A decision about a document that no decision stands about cannot be revoked.
     #[error("no decision stands about {subject}, so there is nothing to revoke")]
     NothingToRevoke {
@@ -168,7 +181,25 @@ impl ShelfError {
             | Self::NewDoc(_)
             | Self::EntryTwice { .. }
             | Self::FileTaken { .. } => ErrorClass::Request,
-            Self::Refused(_) | Self::Decision(_) => ErrorClass::Refused,
+            // As a reference that names nothing and a revocation of nothing: a path or
+            // a hash that names nothing pinned, an earlier hash that cannot be told
+            // without being named, nothing left to declare or to withdraw.
+            Self::SameMeaningRefused(
+                SameMeaningRefusal::ArtifactNotLinked { .. }
+                | SameMeaningRefusal::NotPinned { .. }
+                | SameMeaningRefusal::SeveralEarlier { .. }
+                | SameMeaningRefusal::NothingToDeclare,
+            )
+            | Self::Withdraw(
+                WithdrawRefusal::Unknown { .. } | WithdrawRefusal::AlreadyWithdrawn { .. },
+            ) => ErrorClass::Request,
+            // As a judgement the model refuses: no valid document, no file.
+            Self::Refused(_)
+            | Self::Decision(_)
+            | Self::SameMeaningRefused(
+                SameMeaningRefusal::DocNotValid { .. } | SameMeaningRefusal::ArtifactAbsent { .. },
+            )
+            | Self::SameMeaning(_) => ErrorClass::Refused,
             Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,
         }
     }

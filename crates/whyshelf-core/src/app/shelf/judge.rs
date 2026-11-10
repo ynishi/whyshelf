@@ -1,4 +1,7 @@
-//! The use case that writes to the ledger: `judge` (the other write,
+//! The use case that writes decisions to the ledger: `judge` (the ledger is also
+//! written by [`same_meaning`](super::ShelfApp::same_meaning), a declaration that an
+//! edit keeps the meaning, and by [`withdraw`](super::ShelfApp::withdraw), a
+//! revocation of records named by their identity; the other write,
 //! [`new_doc`](super::ShelfApp::new_doc), makes a document's file).
 //!
 //! A judgement is made in five steps, and the application decides none of them:
@@ -108,8 +111,8 @@ pub struct JudgeRequest {
 }
 
 impl<P: ShelfWrite> ShelfApp<P> {
-    /// Make a judgement and append it to the ledger. The only use case that writes to
-    /// the ledger.
+    /// Make a judgement and append it to the ledger. The only use case that writes a
+    /// decision.
     ///
     /// A judgement the model refuses (a document that is not valid, a link that
     /// cannot be followed, a cycle, an expiry that is not in the future, nothing to

@@ -1,0 +1,16 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794293806607,
+  "from": [
+    "sha256:4df59e31254091f5f8586bc0d926dc284a681cf204e473edf08c7547cef56e97"
+  ],
+  "id": "01a1c43e-b621-71b5-a88d-d335a045307b",
+  "kind": "same_meaning",
+  "reason": "A match arm of a test helper also names the new kind of record; what the tests check is unchanged",
+  "subject": {
+    "kind": "artifact",
+    "path": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs"
+  },
+  "to": "sha256:fd77bd033d5b7b6650f844ac08d7207dfed5d7e4eb6f7b0a79d232c5579897cc",
+  "v": 1
+}
