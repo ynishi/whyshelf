@@ -218,7 +218,10 @@
 //!
 //! Every command prints one JSON document on stdout, with a `version` field (now
 //! `1`; within a version the shape only grows: new fields, new words in a field of
-//! words); `schema` prints the JSON Schema of each, made from the same types. A
+//! words); `schema` prints the JSON Schema of each, made from the same types.
+//! Arguments that are no command (an unknown command, a missing value, none at all)
+//! are answered too, with the error of a request and exit 2, and their text on
+//! stderr; only `--help` and `--version` answer in text. A
 //! document is
 //! `{"id": ..., "key": ...}`; its `standing` is `pending`, `denied`, `deprecated`,
 //! `retired`, or for an approval `fresh`, `expired`, `stale` or `broken`; a cause has

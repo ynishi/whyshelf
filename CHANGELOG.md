@@ -33,6 +33,9 @@ and this project adheres to
 
 ### Fixed
 
+- A wrong argument, or none, is answered with the error JSON of a request and
+  exit 2, as every wrong request is; only `--help` and `--version` answer in
+  text, and there is no `help` command (#28).
 - Statements of the books and of the documentation that the code does not
   hold, found by a blind evaluation, and a test of the ledger that checked
   nothing (#26).

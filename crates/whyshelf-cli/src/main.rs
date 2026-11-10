@@ -22,7 +22,10 @@ use args::Cli;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => return books::refuse_arguments(&error),
+    };
     let root = cli.root.unwrap_or_else(|| PathBuf::from("."));
     books::run(root, cli.command).await
 }
