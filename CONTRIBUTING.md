@@ -14,8 +14,8 @@ own setup goes where the tree does not track it — for Claude Code, a
 ## The loop
 
 ```text
-issue -> just worktree-new -> implement -> just check
-      -> review locally -> commit
+issue -> just worktree-new -> books (pending) -> implement -> just check
+      -> review locally (blind) -> judge approve -> commit
       -> git fetch origin -> just pre-push
       -> write the PR body to a file -> hand over push / PR
 ```
@@ -83,14 +83,25 @@ Refs #<issue>
 ## Review
 
 Review the change locally before it goes up, by a person or by an AI agent —
-whichever you have. Ask three questions of every diff:
+whichever you have. Ask four questions of every diff:
 
 1. Does it do what its issue asked?
 2. May everything in it be published?
    ([PUBLIC_DEVELOPMENT.md](PUBLIC_DEVELOPMENT.md#agent-publication-check))
 3. Are the comments beside the code still true?
+4. Is every sentence of the books it touches true of the code (DEC-25)?
 
-Say in the PR body who or what reviewed it, or that nobody did.
+Review blind: give the reviewer the issue and the branch, not a summary of the
+change, which keeps the review inside the summary. The reviewer starts from
+whyshelf — `status`, `stale` and `check`, then `get` and `trace` of the documents
+that name the issue (or, for a change of code alone, of the documents whose
+`rustdoc` or `tests` name the changed files), and `get --approved` and `diff` of
+the approved ones — follows their `rustdoc` items and `tests` into the code, and
+reads the diff for what the documents did not lead to. This is the one place the
+procedure is written.
+
+Say in the PR body who or what reviewed it, that it was blind, and what it found,
+or that nobody did.
 
 ## Pull requests
 
@@ -130,6 +141,38 @@ Requirements, decisions and verifications are whyshelf books: the documents
 under `books/`, declared in `.whyshelf/books.toml`, with one decision per file in
 `.whyshelf/ledger/`. Write them in public-safe English (see
 PUBLIC_DEVELOPMENT.md) and check them with `whyshelf check`.
+
+### Working with the books
+
+| book | what goes in it |
+| --- | --- |
+| `finding` | what was seen: the problem behind an issue, with the issue in `source` |
+| `requirement` | what is needed and why; `grounds` names its findings, `issues` its issues |
+| `decision` | what was chosen, what was `rejected`, when to `revisit`, and the `rustdoc` items that state the rule |
+| `verification` | how a decision is checked: a `method` (`unit`, `e2e` or `review`, always given) and the `tests` that check it |
+
+A change goes through the books before the code:
+
+```text
+issue -> finding -> requirement / decision / verification (pending)
+      -> code and tests -> just check -> blind review -> judge approve
+      -> commit (the ledger records too) -> just pre-push -> PR (Closes #<issue>)
+```
+
+- Write a document with `whyshelf new <book> --title <text> <entry>=<value>`;
+  give a list item that holds a comma with `<entry>+=<item>`.
+- A bug against a promise the books already make needs no new requirement or
+  decision: add the finding, correct the decision it breaks, and extend the
+  verification's tests.
+- `serves` and `checks` cover their books, so `whyshelf check` fails while a
+  requirement has no decision or a decision has no verification.
+- After the review, the author approves the new documents and what the change
+  made stale in one `judge approve`, upstream first, with a reason that names
+  the review and says why it holds. An edit that keeps the meaning (a typo, a
+  struct literal that gained a field) can be declared with `judge same`
+  instead. The records in `.whyshelf/ledger/` are committed with the change.
+- `whyshelf stale` and `whyshelf check` are clean before a PR goes up. Neither
+  `just check` nor CI runs them: run them by hand.
 
 Everything else is RustDoc: crate and module docs (`//!`) and item docs (`///`),
 with diagrams as ASCII in code blocks tagged `text`; concepts, file formats,

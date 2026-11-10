@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794307149329,
+  "expires": null,
+  "frame": [
+    {
+      "address": "71c3eac2277a5a1dbbf0b24f7ca7716b23c0e995",
+      "hash": "sha256:137ac01d8ad0e9b2a0a3a852f887b35e6abf2a40d63fc13193c3d18f199a2abd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "25"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c502-6097-722a-b119-3a584d66a0b3"
+    }
+  ],
+  "id": "01a1c50a-514a-71cc-bf9f-87e079ebe601",
+  "kind": "decision",
+  "reason": "Issue #17: a blind review that started from whyshelf read the change, and its findings are fixed",
+  "revision": "3b18d886309f2f7e4cd162c9e63b74bd0c87d03c",
+  "seen": "sha256:cf9340220397eef1cb56d7850f421f73c2b8a4472241ca3af654fa0f5aefeb67",
+  "seen_address": "56edd27943049653959982a741005f4633449ab5",
+  "subject": "01a1c502-6585-75d5-abda-1bbc11d0ad6e",
+  "v": 1,
+  "verb": "approve"
+}
