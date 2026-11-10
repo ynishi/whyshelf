@@ -37,6 +37,11 @@ and this project adheres to
 - A path of a link to artifacts that names no file is told: `check` lists it
   under `absent` (it stays clean), `judge approve` under each judgement's
   `absent`, and its row has an `artifact_absent` notice (#36).
+- `whyshelf map` answers what the declaration says, every book and every link
+  in its order, with a drawing of them; a book may say what it is for with
+  `description`, one line (#39). Answers that list books, fields or links
+  (`check`'s `books`, the missing entries of an invalid document, `not_covered`
+  notices) now follow the declaration's order, not the order of the names.
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
