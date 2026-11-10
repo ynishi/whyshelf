@@ -624,6 +624,13 @@ pub struct LinkKind {
     pub cardinality: Cardinality,
     /// What the link means for freshness.
     pub propagation: Propagation,
+    /// Whether every pending or approved document of the target book is expected to
+    /// be reached by this link from a pending or approved document (`cover = true`).
+    /// One that is not is a [`Notice::NotCovered`](super::freshness::Notice::NotCovered)
+    /// on it, and is listed by a check of the books; its freshness is unchanged. A
+    /// link into its own book is met only by another document of that book, so the
+    /// first of a chain of `depends` links within one book can never be reached.
+    pub cover: bool,
 }
 
 /// The declaration of one book, checked.
@@ -751,6 +758,9 @@ pub struct LinkEntryDecl {
     /// (`bytes` or `lines`) and the prefixes of the lines `lines` leaves out. `None`
     /// is `bytes`.
     pub compare: Option<CompareDecl>,
+    /// For a link into a book: whether every document of the target book is
+    /// expected to be reached by it (`cover = true`). Refused on a link to artifacts.
+    pub cover: bool,
 }
 
 /// What of a file a link to artifacts compares, as declared.
@@ -939,6 +949,16 @@ pub enum SchemaProblem {
         /// The link.
         link: EntryName,
     },
+    /// `cover` on a link to artifacts: only a document can be expected to be reached.
+    #[error(
+        "book `{book}`: the link `{link}` points at artifacts, and only a link into a book takes `cover`"
+    )]
+    CoverOnArtifactLink {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+    },
     /// A `compare` that is no comparison.
     #[error("book `{book}`: the `compare` of the link `{link}` is not one")]
     BadComparison {
@@ -987,6 +1007,7 @@ struct DraftLink {
     target: BookName,
     cardinality: Cardinality,
     propagation: Propagation,
+    cover: bool,
 }
 
 impl Draft {
@@ -1028,6 +1049,7 @@ impl Draft {
                     target_key,
                     cardinality: link.cardinality,
                     propagation: link.propagation,
+                    cover: link.cover,
                 };
                 Some((name, kind))
             })
@@ -1252,10 +1274,18 @@ fn read_links(
                     target,
                     cardinality: entry.cardinality,
                     propagation: entry.propagation,
+                    cover: entry.cover,
                 };
                 links.entry(name).or_insert(link);
             }
             None => {
+                if entry.cover {
+                    problems.push(SchemaProblem::CoverOnArtifactLink {
+                        book: book.to_owned(),
+                        link: name,
+                    });
+                    continue;
+                }
                 let comparison = match &entry.compare {
                     None => Comparison::Bytes,
                     Some(decl) => match Comparison::parse(&decl.kind, &decl.ignore) {
@@ -1439,5 +1469,7 @@ impl Schema {
 
 #[cfg(test)]
 mod comparison_tests;
+#[cfg(test)]
+mod cover_tests;
 #[cfg(test)]
 mod tests;

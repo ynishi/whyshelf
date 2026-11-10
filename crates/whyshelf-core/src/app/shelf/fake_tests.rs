@@ -84,6 +84,7 @@ fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
         cardinality: Cardinality::Many,
         propagation,
         compare: None,
+        cover: false,
     }
 }
 
@@ -118,6 +119,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
                     cardinality: Cardinality::Many,
                     propagation: Propagation::Depends,
                     compare: None,
+                    cover: false,
                 },
             ],
         },

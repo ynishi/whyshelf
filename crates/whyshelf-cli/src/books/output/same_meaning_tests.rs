@@ -58,6 +58,7 @@ fn schema() -> Schema {
         cardinality: Cardinality::Many,
         propagation: Propagation::Depends,
         compare: None,
+        cover: false,
     };
     let book = |name: &str, dir: &str, prefix: &str, links| BookSchemaDecl {
         name: name.to_owned(),

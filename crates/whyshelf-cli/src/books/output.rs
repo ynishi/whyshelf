@@ -94,7 +94,8 @@ pub struct CauseOut {
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct NoticeOut {
     /// What kind (`informs_not_fresh`, `informs_unresolved`, `upstream_expired`,
-    /// `self_same_meaning`, `upstream_same_meaning`, `artifact_same_meaning`).
+    /// `self_same_meaning`, `upstream_same_meaning`, `artifact_same_meaning`,
+    /// `not_covered`).
     pub kind: &'static str,
     /// The link; empty for a notice about the document itself.
     pub link: String,
@@ -190,6 +191,20 @@ pub struct BooksCheckOut {
     pub books: Vec<BookOut>,
     /// What is wrong around the documents.
     pub health: Option<HealthOut>,
+    /// The documents a covering link (`cover = true`) is expected to reach and does
+    /// not; any makes `clean` false.
+    pub uncovered: Vec<UncoveredOut>,
+}
+
+/// A document a covering link is expected to reach and does not.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct UncoveredOut {
+    /// The document.
+    pub doc: DocRef,
+    /// The book whose link is expected to reach it.
+    pub book: String,
+    /// The link.
+    pub link: String,
 }
 
 /// The answer of `status`.
@@ -852,6 +867,16 @@ impl Namer<'_> {
                     pin.path()
                 ),
             },
+            Notice::NotCovered { book, link } => NoticeOut {
+                kind: "not_covered",
+                link: link.to_string(),
+                target: None,
+                artifact: None,
+                declared: Vec::new(),
+                detail: format!(
+                    "no document of `{book}` reaches this one through `{link}`, which is declared to cover its book"
+                ),
+            },
         }
     }
 
@@ -995,8 +1020,13 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             schema_problems: problems.iter().map(ToString::to_string).collect(),
             books: Vec::new(),
             health: None,
+            uncovered: Vec::new(),
         },
-        BooksCheck::Checked { books, health } => {
+        BooksCheck::Checked {
+            books,
+            health,
+            uncovered,
+        } => {
             let names = Names::default();
             BooksCheckOut {
                 clean: check.is_clean(),
@@ -1011,6 +1041,17 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                     })
                     .collect(),
                 health: Some(Namer(&names).health(health)),
+                uncovered: uncovered
+                    .iter()
+                    .map(|u| UncoveredOut {
+                        doc: DocRef {
+                            id: u.doc.to_string(),
+                            key: u.key.as_ref().map(ToString::to_string),
+                        },
+                        book: u.book.to_string(),
+                        link: u.link.to_string(),
+                    })
+                    .collect(),
             }
         }
     }
@@ -1439,6 +1480,8 @@ fn join<T: std::fmt::Display>(items: impl Iterator<Item = T>) -> String {
 
 #[cfg(test)]
 mod comparison_tests;
+#[cfg(test)]
+mod cover_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 

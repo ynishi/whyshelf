@@ -104,15 +104,35 @@ pub enum BooksCheck {
         books: Vec<BookCount>,
         /// What is wrong around them.
         health: Health,
+        /// The documents a covering link is expected to reach and does not (the
+        /// [`Notice::NotCovered`](crate::domain::shelf::freshness::Notice::NotCovered)
+        /// notices of every document).
+        uncovered: Vec<Uncovered>,
     },
 }
 
+/// A document a covering link is expected to reach and does not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Uncovered {
+    /// The document.
+    pub doc: DocId,
+    /// Its key.
+    pub key: Option<DocKey>,
+    /// The book whose link is expected to reach it.
+    pub book: BookName,
+    /// The link.
+    pub link: EntryName,
+}
+
 impl BooksCheck {
-    /// Whether the check found nothing.
+    /// Whether the check found nothing: a sound declaration, a clean health, and no
+    /// document a covering link fails to reach.
     pub fn is_clean(&self) -> bool {
         match self {
             Self::SchemaInvalid(_) => false,
-            Self::Checked { health, .. } => health.is_clean(),
+            Self::Checked {
+                health, uncovered, ..
+            } => health.is_clean() && uncovered.is_empty(),
         }
     }
 }
