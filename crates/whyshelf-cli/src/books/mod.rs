@@ -1,9 +1,7 @@
 //! `whyshelf books ...`: the commands on a shelf of books, over
 //! [`whyshelf_core::app::shelf`] and the adapters of `whyshelf_infra::shelf`.
 //!
-//! A shelf needs no workspace: no `.whyshelf.toml`, no Git revision, no cache. The
-//! command is taken out before the workspace of the other commands is opened
-//! ([`crate::run`]), and answers in JSON always.
+//! Every command answers in JSON.
 //!
 //! ```text
 //!   books <cmd> --> Project (infra::shelf) --> ShelfApp (app::shelf) --> report
@@ -17,7 +15,7 @@
 //! a difference is made here, by [`textdiff`], from the two contents the use case
 //! gives as values.
 //!
-//! The exit status follows the table of the other commands ([`crate::run`]):
+//! The exit status:
 //!
 //! | exit | meaning |
 //! |---|---|

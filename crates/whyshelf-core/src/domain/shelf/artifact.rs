@@ -250,7 +250,10 @@ mod tests {
         let bytes = b"fn main() {}\n";
         let artifact = ArtifactHash::of_content(bytes);
         assert_eq!(artifact, ArtifactHash::of_content(bytes));
-        assert_ne!(*artifact.hash(), ContentHash::export(bytes));
+        assert_ne!(
+            *artifact.hash(),
+            ContentHash::of_bytes(HashKind::ShelfDoc, bytes)
+        );
         assert_ne!(artifact, ArtifactHash::of_content(b"fn main() { }\n"));
     }
 

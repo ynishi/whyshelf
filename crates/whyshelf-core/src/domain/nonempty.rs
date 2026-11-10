@@ -1,19 +1,18 @@
 //! Values that cannot be empty: a list with at least one element, a text with
 //! at least one visible character.
 //!
-//! The rule "a Spec without grounds is refused" is held by a type, not by a
-//! check somebody must remember to call.
+//! A rule such as "a refused document has at least one problem" is held by a
+//! type, not by a check somebody must remember to call.
 
 use std::collections::BTreeSet;
 use std::fmt;
 
-use super::canon::{Canon, ToCanon};
 use super::error::ValueError;
 
 /// A list with at least one element.
 ///
-/// Why: a Spec must name its Findings and a Crux must name a rejected option.
-/// With this type the empty case is impossible to represent.
+/// Why: a refused document has at least one problem, and a stale judgement at
+/// least one cause. With this type the empty case is impossible to represent.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NonEmptyVec<T> {
     head: T,
@@ -102,16 +101,10 @@ impl<T> NonEmptyVec<T> {
     }
 }
 
-impl<T: ToCanon> ToCanon for NonEmptyVec<T> {
-    fn to_canon(&self) -> Canon {
-        Canon::list(self.iter().map(ToCanon::to_canon))
-    }
-}
-
 /// A set with at least one element.
 ///
-/// Why: a fingerprint of a change that holds no hunk says nothing, and a set of
-/// pins is only worth naming while it is not empty. Like [`NonEmptyVec`], the empty
+/// Why: a set of things that is only worth naming while it is not empty says
+/// nothing when it is. Like [`NonEmptyVec`], the empty
 /// case cannot be represented; unlike it, each element is held once, in its own
 /// order.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -150,12 +143,6 @@ impl<T: Ord> NonEmptySet<T> {
     /// The elements as a plain set.
     pub fn as_set(&self) -> &BTreeSet<T> {
         &self.0
-    }
-}
-
-impl<T: Ord + ToCanon> ToCanon for NonEmptySet<T> {
-    fn to_canon(&self) -> Canon {
-        Canon::list(self.0.iter().map(ToCanon::to_canon))
     }
 }
 
@@ -240,8 +227,7 @@ impl<T> Count<T> {
 
 /// A free text that has at least one non-white-space character.
 ///
-/// Used for the explanatory fields of an entity (an environment, a reason, a
-/// summary), where any wording is allowed but silence is not. The text is kept
+/// Used for explanatory texts (a reason, a summary), where any wording is allowed but silence is not. The text is kept
 /// as given, including inner line breaks.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NonBlank(String);
@@ -266,12 +252,6 @@ impl NonBlank {
 impl fmt::Display for NonBlank {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
-    }
-}
-
-impl ToCanon for NonBlank {
-    fn to_canon(&self) -> Canon {
-        Canon::str(self.0.as_str())
     }
 }
 
