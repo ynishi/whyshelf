@@ -16,14 +16,18 @@
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
 //! | [`judge`](ShelfApp::judge) | **yes** | [`Judged`]: the record that was appended, with the addresses of what an approval stood on and the revision |
+//! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
 //!
 //! # Reading and writing
 //!
 //! A use case that reads takes `&self` and is generic over [`ShelfRead`], which has no
-//! way to write. [`judge`](ShelfApp::judge) takes `&mut self` and [`ShelfWrite`]: the
-//! writes of one program run one at a time, by the type. Two processes can still
-//! write at once; that is safe because a record is a file of its own named by its own
-//! identity and a write never replaces a file that is there (see the adapter).
+//! way to write. [`judge`](ShelfApp::judge) and [`new_doc`](ShelfApp::new_doc) take
+//! `&mut self` and [`ShelfWrite`]: the writes of one program run one at a time, by the
+//! type. Two processes can still write at once; that is safe because a record is a
+//! file of its own named by its own identity, and neither write replaces a file that
+//! is there (see the adapter). Two processes that make a new document of one book at
+//! once can be given the same next key: the second finds the file there, and writes
+//! nothing.
 //!
 //! # Every answer carries what the model noticed
 //!
@@ -38,6 +42,7 @@ mod approved;
 mod error;
 mod judge;
 mod load;
+mod new_doc;
 pub mod ports;
 mod read;
 mod report;
@@ -47,14 +52,17 @@ mod artifact_tests;
 #[cfg(test)]
 mod fake_tests;
 #[cfg(test)]
+mod new_doc_tests;
+#[cfg(test)]
 mod tests;
 
 pub use error::{ErrorClass, ShelfError};
 pub use judge::{JudgeRequest, Judgement};
+pub use new_doc::{Created, NewDocRequest};
 pub use ports::{
-    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentStore, DocSource, IdSource,
-    LedgerAppend, LedgerContents, LedgerRead, RevisionSource, ShelfPort, ShelfRead, ShelfWrite,
-    UnreadableRecord, UnreadableWhy,
+    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentStore, Creation, DocSource,
+    DocWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, RevisionSource, ShelfPort,
+    ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
 };
 pub use report::{
     ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport, DownstreamEdge,

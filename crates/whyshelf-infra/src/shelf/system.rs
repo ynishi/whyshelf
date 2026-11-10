@@ -3,7 +3,7 @@
 //! | adapter | port | from |
 //! |---|---|---|
 //! | [`SystemClock`] | [`Clock`] | the system time, in unix milliseconds |
-//! | [`UuidV7Ids`] | [`IdSource`] | a UUID v7 (sorts by creation, the surrogate key of a record) |
+//! | [`UuidV7Ids`] | [`IdSource`] | a UUID v7 (sorts by creation, the surrogate key of a record and the identity of a new document) |
 //! | [`ProjectActor`] | [`ActorSource`] | the name the caller took from `WHYSHELF_ACTOR`, else Git's `user.name` of the project |
 //!
 //! Who acts is never read from a file that is committed: a committed file would let
@@ -15,7 +15,7 @@ use uuid::Uuid;
 use whyshelf_core::app::shelf::{ActorSource, Clock, IdSource};
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::error::ValueError;
-use whyshelf_core::domain::id::EntityId;
+use whyshelf_core::domain::id::{DocId, EntityId};
 use whyshelf_core::domain::shelf::ledger::{JudgedAt, JudgementId};
 
 /// The system clock.
@@ -63,6 +63,12 @@ impl IdSource for UuidV7Ids {
     async fn new_judgement_id(&self) -> Result<JudgementId, IdError> {
         EntityId::new(Uuid::now_v7())
             .map(JudgementId::new)
+            .map_err(IdError)
+    }
+
+    async fn new_doc_id(&self) -> Result<DocId, IdError> {
+        EntityId::new(Uuid::now_v7())
+            .map(DocId::new)
             .map_err(IdError)
     }
 }
@@ -143,5 +149,9 @@ mod tests {
         let b = UuidV7Ids.new_judgement_id().await.unwrap();
         assert_eq!(a.entity().as_uuid().get_version_num(), 7);
         assert_ne!(a, b);
+        let d = UuidV7Ids.new_doc_id().await.unwrap();
+        let e = UuidV7Ids.new_doc_id().await.unwrap();
+        assert_eq!(d.entity().as_uuid().get_version_num(), 7);
+        assert_ne!(d, e);
     }
 }

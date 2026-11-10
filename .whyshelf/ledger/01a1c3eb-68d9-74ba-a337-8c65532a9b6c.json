@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794288347177,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7a0fa8445db99cc2b3aa9bccdd872eebc1637040",
+      "hash": "sha256:9d1ae80161aeaff8ad8f262133a0496e0ee423bf34e93f076cca8209bfcf9330",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    }
+  ],
+  "id": "01a1c3eb-68d9-74ba-a337-8c65532a9b6c",
+  "kind": "decision",
+  "reason": "REQ-5 now names new as the second writer; DEC-8 and V-4 record and check books new (made with books new itself).",
+  "revision": "5628f0edf773136b88c79a21259cfb7c02229437",
+  "seen": "sha256:5ef18cb93d39e750b0d2d99d3d3925744e95185d01bd0870e9ac920239200906",
+  "seen_address": "4a71fe22320141420208f818183c29bc218d8453",
+  "subject": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900",
+  "v": 1,
+  "verb": "approve"
+}
