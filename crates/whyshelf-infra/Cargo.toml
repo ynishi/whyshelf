@@ -1,6 +1,6 @@
 [package]
 name = "whyshelf-infra"
-description = "Adapters of whyshelf: Git, file system, SQLite and clock implementations of the whyshelf-core ports"
+description = "Adapters of whyshelf: file system, Git and clock implementations of the whyshelf-core ports"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,22 +13,14 @@ readme.workspace = true
 [dependencies]
 whyshelf-core.workspace = true
 thiserror.workspace = true
-uuid = { workspace = true, features = ["v4", "v7"] }
+uuid = { workspace = true, features = ["v7"] }
 serde.workspace = true
 serde_json.workspace = true
-schemars.workspace = true
 serde_norway.workspace = true
 toml.workspace = true
-rusqlite-isle.workspace = true
-rusqlite.workspace = true
 jiff.workspace = true
-walkdir.workspace = true
-regex.workspace = true
-tokio = { workspace = true, features = ["process", "fs", "sync", "rt", "time", "io-util"] }
+tokio = { workspace = true, features = ["process", "fs", "io-util"] }
 
 [dev-dependencies]
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
-
-[target."cfg(unix)".dependencies]
-rustix.workspace = true

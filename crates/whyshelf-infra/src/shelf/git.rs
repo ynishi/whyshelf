@@ -19,7 +19,7 @@
 //! The hash of a file never needs Git, so freshness works the same in any directory.
 //! Outside a repository, or with no `git` to run, there is no address and no
 //! revision (`None`), and that is no error: a record made there keeps none, and
-//! `show --approved` says the content cannot be read back because there is no
+//! `get --approved` says the content cannot be read back because there is no
 //! address. Content that was approved and never committed has a name Git does not
 //! hold: it reads back as not readable, which is the truth.
 //!

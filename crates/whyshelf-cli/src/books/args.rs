@@ -1,9 +1,9 @@
-//! The arguments of `whyshelf books ...`, as clap types.
+//! The commands, as clap types.
 
 use clap::{Args, Subcommand};
 use whyshelf_core::domain::shelf::lookup::Reference;
 
-/// The commands on a shelf of books: documents whose kinds the project declares in
+/// The commands on the documents whose kinds the project declares in
 /// `.whyshelf/books.toml`.
 #[derive(Debug, Subcommand)]
 pub enum BooksCommand {
@@ -16,6 +16,11 @@ pub enum BooksCommand {
     Get {
         /// A key (`S-1`, `spec:S-1`), an identifier or a short identifier.
         reference: Reference,
+        /// Show what the approval that stands saw instead: the document, the
+        /// upstreams and the artifacts, each with its content as it was approved, or
+        /// why that cannot be read back.
+        #[arg(long)]
+        approved: bool,
     },
     /// What a document links to and what links to it, transitively.
     Trace {
@@ -24,17 +29,6 @@ pub enum BooksCommand {
     },
     /// The approvals that no longer hold, with where each starts to fail.
     Stale,
-    /// What the approval that stands about a document saw: the document, the
-    /// upstreams and the artifacts, each with its content as it was approved, or why
-    /// that cannot be read back.
-    Show {
-        /// A key, an identifier or a short identifier.
-        reference: Reference,
-        /// Show what the approval saw (the only view `show` has; `get` shows the
-        /// document now).
-        #[arg(long, required = true)]
-        approved: bool,
-    },
     /// Each item of the approval that stands about a document, as it was approved and
     /// as it is now, with a line diff where both are text.
     Diff {
@@ -63,7 +57,7 @@ pub enum BooksCommand {
         #[arg(long)]
         body: Option<String>,
     },
-    /// The JSON Schema of the answer of every `books` command.
+    /// The JSON Schema of the answer of every command.
     Schema,
 }
 

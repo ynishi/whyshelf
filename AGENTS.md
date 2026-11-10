@@ -7,9 +7,9 @@
   [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security reports: [SECURITY.md](SECURITY.md)
 - Where documents live:
-  - requirements, decisions and verifications: whyshelf books under `books/`
+  - requirements, decisions and verifications: whyshelf under `books/`
     (declared in `.whyshelf/books.toml`, decisions in `.whyshelf/ledger/`);
-    check them with `whyshelf books check` and `whyshelf books stale`.
+    check them with `whyshelf check` and `whyshelf stale`.
   - everything else (concepts, file formats, the command line, the code):
     RustDoc (crate and module docs, diagrams as ASCII in code blocks tagged
     `text`). `cargo doc` must be warning-free (`just rust-doc`). Code

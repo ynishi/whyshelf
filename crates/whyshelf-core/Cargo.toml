@@ -1,6 +1,6 @@
 [package]
 name = "whyshelf-core"
-description = "Core (SDK) of whyshelf: Ground specs in findings: hash-pinned Finding -> Spec -> Design -> Impl with event-sourced approvals"
+description = "Core (SDK) of whyshelf: books of documents whose kinds a project declares, and whether each decision about them still holds"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,7 +14,6 @@ readme.workspace = true
 thiserror.workspace = true
 sha2.workspace = true
 uuid.workspace = true
-hmac.workspace = true
 
 [dev-dependencies]
 arch-lint.workspace = true

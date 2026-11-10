@@ -1,6 +1,6 @@
 # whyshelf
 
-Ground specs in findings: hash-pinned Finding -> Spec -> Design -> Impl with event-sourced approvals
+Books of documents whose kinds a project declares, linked to the files they stand on, and whether each decision about them still holds
 
 ```sh
 cargo install whyshelf-cli   # installs the `whyshelf` command
@@ -9,18 +9,17 @@ cargo install whyshelf-cli   # installs the `whyshelf` command
 ## Documentation
 
 The requirements, decisions and verifications of whyshelf itself are whyshelf
-books under `books/` (`whyshelf books status`). Everything else is the RustDoc:
-concepts, the file formats, settings, the command line and its walkthrough, the
-tool server, compatibility and the known limitations. Build and read it with:
+books under `books/` (`whyshelf status`). Everything else is the RustDoc:
+the model, the file formats, the command line, its output and exit status.
+Build and read it with:
 
 ```sh
 just rust-doc
 ```
 
 Cargo prints the path of each page it generates. Start at the `whyshelf` crate
-page, which has a map from each topic to the module that documents it. The
-command line's guide is the page of the `whyshelf` binary (the `whyshelf-cli`
-crate), built as the second step.
+page, which is the manual. The page of the `whyshelf` binary (the `whyshelf-cli`
+crate) is built as the second step.
 
 ## Crates
 
@@ -28,8 +27,8 @@ crate), built as the second step.
 |---|---|---|
 | `whyshelf` | Umbrella: the name users depend on. Re-exports the core; the adapters behind the `infra` feature. | `-core`, `-infra` (optional) |
 | `whyshelf-core` | Core (SDK): `domain` (pure rules and types), `app` (use cases and their ports). No I/O crate. | — |
-| `whyshelf-infra` | Adapters of the ports: Git, file system, SQLite, clock, Markdown / YAML parsing. | `-core` |
-| `whyshelf-cli` | The `whyshelf` command: CLI and the MCP server (`whyshelf mcp`). | `-core`, `-infra` |
+| `whyshelf-infra` | Adapters of the ports: file system, Git, clock, TOML / YAML front matter / JSON. | `-core` |
+| `whyshelf-cli` | The `whyshelf` command. | `-core`, `-infra` |
 
 The layer rules inside the core are in `arch-lint.toml` and run with `cargo test`.
 The rule between crates is the `[dependencies]` table: the core never depends on an I/O crate.

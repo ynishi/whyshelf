@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1fcbfdc941648cb072cd587b4f40205353df5223",
+      "hash": "sha256:8665ba745f4d2dac9d05417954b4864e289998b849779fda9b6eff7d146e418c",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "b6ffa3575ab195c63b824fe1da831ad710d72450",
+      "hash": "sha256:08b39daa9bd2ff1bd77ed6004e1c41372fb22a79817e0d447b77062bad5149ae",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "dae01214db56739388d92de8b64a5fb6ff7803c5",
+      "hash": "sha256:823555015cd1b8649a8af771223b94987a513ece32a19ae1e23533047bfde6c8",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794291024352,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0c1da251f014da0123f269519906d9f63704ff74",
+      "hash": "sha256:4bbdea6cedc6635a13154d62b28f134576e339a600894cf270e32533886c239a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    }
+  ],
+  "id": "01a1c414-4248-75ff-a7d0-188cfe1dba1c",
+  "kind": "decision",
+  "reason": "Command names flattened (whyshelf books <cmd> -> whyshelf <cmd>); DEC-8's text and a doc comment in git.rs changed only that name.",
+  "revision": "ac3f49fa37677517c7ed3e89e69a9cfe5d84a620",
+  "seen": "sha256:9663feb4fb2ddf1e9a369edf1cc54e8c72aa3c05f3eabb7b6ccb2e5995341c58",
+  "seen_address": "86e392ffed0e76fe2fe350c2350ebdf06973657e",
+  "subject": "01a1c3eb-4d0e-77f5-b895-ad9aa697cad0",
+  "v": 1,
+  "verb": "approve"
+}
