@@ -52,8 +52,8 @@ use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::artifact::{ArtifactAsks, ContentAddress};
 use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
-    ApproveFrame, Decision, DeclaredStatus, JudgedAt, JudgementId, Ledger, PresentFrame, Record,
-    RetireFrame, Revocation, frame_approve, frame_present, frame_retire,
+    ApproveFrame, Decision, DecisionVerb, DeclaredStatus, JudgedAt, JudgementId, Ledger,
+    PresentFrame, Record, RetireFrame, Revocation, frame_approve, frame_present, frame_retire,
 };
 use crate::domain::shelf::lookup::Reference;
 
@@ -250,11 +250,27 @@ impl<P: ShelfWrite> ShelfApp<P> {
             }
         };
 
+        // An approval pins a path of a depends link with no file as absent; say so,
+        // since a wrong path is pinned in the same way as evidence not written yet.
+        let absent = match &record {
+            Record::Decision(decision)
+                if matches!(decision.verb(), DecisionVerb::Approve { .. }) =>
+            {
+                loaded.shelf.doc(subject).map_or_else(Vec::new, |doc| {
+                    doc.absent_artifacts()
+                        .into_iter()
+                        .map(|(link, path)| (link.clone(), path.clone()))
+                        .collect()
+                })
+            }
+            _ => Vec::new(),
+        };
         Ok(Judged {
             record,
             subject,
             key,
             successors,
+            absent,
         })
     }
 

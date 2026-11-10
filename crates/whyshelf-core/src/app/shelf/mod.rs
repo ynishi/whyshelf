@@ -81,9 +81,9 @@ pub use ports::{
     ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
 };
 pub use report::{
-    ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport, DownstreamEdge,
-    GetReport, Health, Judged, Names, Row, StaleEntry, StaleReport, StatusReport, TraceReport,
-    Uncovered, UpstreamEdge, UpstreamEnd,
+    Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
+    DownstreamEdge, GetReport, Health, Judged, Names, Row, StaleEntry, StaleReport, StatusReport,
+    TraceReport, Uncovered, UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use withdraw::WithdrawRequest;

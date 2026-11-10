@@ -78,7 +78,12 @@
 //! An approval pins, for each path of a `depends` link, the hash of the file (of its
 //! bytes, unless the link compares otherwise, below), or that no file was there: a
 //! path that has no file yet is the evidence not written yet, not a broken link.
-//! Afterwards:
+//! A path names a file only as written, ASCII case included, on every system: where
+//! the file system does not tell case apart, `justfile` still names no file
+//! `Justfile`, as for Git. Every path of a pending or approved document that names no file is
+//! told, since a wrong path is pinned as absent too: `check` lists it under `absent`
+//! (the check stays clean), `judge approve` under each judgement's `absent`, and its
+//! row has an `artifact_absent` notice. Afterwards:
 //!
 //! | the pinned file | now | the approval is |
 //! |---|---|---|
@@ -157,8 +162,9 @@
 //! ```text
 //!   whyshelf [--root <dir>] <command>
 //!
-//!   check                     the declaration, the documents and the ledger, and what no covering
-//!                             link reaches; exit 1 if anything is wrong
+//!   check                     the declaration, the documents and the ledger, what no covering
+//!                             link reaches, and the paths that name no file; exit 1 if anything
+//!                             is wrong (a path with no file is not)
 //!   status                    every document: what was decided, and where it stands now
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   get <ref> --approved      what the approval that stands saw, with its content read back

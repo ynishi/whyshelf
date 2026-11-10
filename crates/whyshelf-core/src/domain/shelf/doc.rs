@@ -28,7 +28,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::TwoOrMore;
 
-use super::artifact::Artifact;
+use super::artifact::{Artifact, ArtifactState};
 use super::schema::{
     ArtifactLinkKind, ArtifactPropagation, BookName, EntryName, FieldWord, KeyForm, KeyProblem,
     LinkKind, Propagation,
@@ -466,6 +466,22 @@ impl Doc {
     /// no artifact in it when the document wrote no path.
     pub fn artifact_links(&self) -> &BTreeMap<EntryName, ArtifactLink> {
         &self.artifact_links
+    }
+
+    /// The paths its links to artifacts write that name no file now, with the
+    /// link, by the name of the link and then in the order written. Which paths
+    /// name a file is what the adapter read, by the rule of the port that reads
+    /// artifacts. The one place such a path is found.
+    pub fn absent_artifacts(&self) -> Vec<(&EntryName, &RelPath)> {
+        self.artifact_links
+            .iter()
+            .flat_map(|(name, link)| {
+                link.artifacts()
+                    .iter()
+                    .filter(|artifact| matches!(artifact.state(), ArtifactState::Absent))
+                    .map(move |artifact| (name, artifact.path()))
+            })
+            .collect()
     }
 
     /// The links to artifacts of one meaning for freshness, by name: the one place

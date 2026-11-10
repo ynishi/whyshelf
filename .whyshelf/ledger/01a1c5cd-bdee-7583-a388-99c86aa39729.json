@@ -1,0 +1,151 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "dd52ddb1c15878b73abee3a8af50de93b2f7dc4a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0343353487bbe89cf6fbaf27db52dab051368927cc2e0f80b766d0df01cff545",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "7ef0bd2f9a49a4ad551a4acfe8b7b0a9b9d5e0af",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bc5886c4e2177b79e426c07528c35a55d6625ae248a5e421106e589a90c9229c",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output.rs",
+      "state": "present"
+    },
+    {
+      "address": "9b3393adbe31f161e1380d5ffd50ac0b136d052e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d9c73a6abbb9d0581104ab84f5a3a96b38f1a987ed21f7139b4815263d29d20",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "cf0b7a983b21ad7068ea149d2ec4bd006106baac",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f1bd370980a9718f812a1e7cc80191515eb0cc3f7a8d2862f4486a802a15bb73",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "0b3ff7fd3e36b9a63d069054494e455932a3dba0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f06599ea1e7eec12c3f5e8122140b3d7e06da3ad920ad84d9c8f0b4a61cdb8d3",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/tests/command_line.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794319957132,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1b87bc28bf8099cb7ccbadd2a10c0f2bb5aec6c4",
+      "hash": "sha256:29a9e797a7b663f15d704ddd576bd48c5e4ca4de5b3b33c81c1d8ae843ed2fdf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "30"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d626-73e6-9e17-45d0aef14328"
+    },
+    {
+      "address": "a0fd6d7c9569173efcc54a424e59fc4fb1320f63",
+      "hash": "sha256:43b7be0c15e5f03f546deba6051a6077e27f2f5adab430f35a7f76d3d6c136d2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d99a-72ad-86a3-e75931d0b50a"
+    },
+    {
+      "address": "ec2f4abc7c0b28d7a26689284802a8b803d178f6",
+      "hash": "sha256:f28a92d28151052d0295cfdce49cbacc12b1e8538962cb1c6e8c81a0f78e8a59",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "32"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dcde-76e2-a624-77aadb435255"
+    },
+    {
+      "address": "6f28577fcdcd7643bcc0f019a252dcb8119a2519",
+      "hash": "sha256:fe4740e46cbad70d6f05091089b73287fc44d5b974f31fd827c38c18d1f02125",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce"
+    }
+  ],
+  "id": "01a1c5cd-bdee-7583-a388-99c86aa39729",
+  "kind": "decision",
+  "reason": "Code and tests these verifications name changed for #36 (absent paths, case); their tests still check what they say, checked by a blind review",
+  "revision": "dee0eb16050d3127b3a65cd27adff7039ed14388",
+  "seen": "sha256:01cd51c2fbf7e85fc4c0d4adfbe935bf065d8c0e1bee5e3d8838653e89b9d8a8",
+  "seen_address": "66e473f02ebb1bfded663559e07fe70e47fd189f",
+  "subject": "01a1c4ba-1a9f-7201-9b7f-62a0f1be9e14",
+  "v": 1,
+  "verb": "approve"
+}

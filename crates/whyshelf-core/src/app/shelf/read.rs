@@ -32,8 +32,8 @@ use super::error::ShelfError;
 use super::load::{Loaded, View, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
-    BookCount, BooksCheck, DownstreamEdge, GetReport, StaleEntry, StaleReport, StatusReport,
-    TraceReport, Uncovered, UpstreamEdge, UpstreamEnd,
+    Absent, BookCount, BooksCheck, DownstreamEdge, GetReport, StaleEntry, StaleReport,
+    StatusReport, TraceReport, Uncovered, UpstreamEdge, UpstreamEnd,
 };
 
 /// The identity a reference names, or why it names none.
@@ -112,10 +112,30 @@ impl<P: ShelfRead> ShelfApp<P> {
                     })
             })
             .collect();
+        let absent = assessment
+            .standings()
+            .keys()
+            .flat_map(|id| {
+                let key = loaded.shelf.doc(*id).map(|doc| doc.key().clone());
+                assessment
+                    .notices_of(*id)
+                    .iter()
+                    .filter_map(move |notice| match notice {
+                        Notice::ArtifactAbsent { link, path } => Some(Absent {
+                            doc: *id,
+                            key: key.clone(),
+                            link: link.clone(),
+                            path: path.clone(),
+                        }),
+                        _ => None,
+                    })
+            })
+            .collect();
         Ok(BooksCheck::Checked {
             books,
             health: view.health(),
             uncovered,
+            absent,
         })
     }
 

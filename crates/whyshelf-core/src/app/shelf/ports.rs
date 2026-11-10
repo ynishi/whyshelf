@@ -265,8 +265,13 @@ pub trait ArtifactSource: Send + Sync {
     /// [`ArtifactReading::of_bytes`](crate::domain::shelf::artifact::ArtifactReading::of_bytes)
     /// from the bytes read, and where its content can be read back (when the adapter
     /// can say: outside version control it cannot, and that is no error), or no file.
-    /// Every path asked about has an answer. An error is for what stops the reading
-    /// itself (a file that is there and cannot be read).
+    /// Every path asked about has an answer. A path names a file only as written: one that
+    /// differs from the name of an entry of its directory in ASCII case only names
+    /// no file, on every system, as for Git (a file system that does not tell case
+    /// apart would open it). A name that differs in a non-ASCII letter's case, or
+    /// that the system stores in another form (macOS keeps some non-ASCII names
+    /// decomposed), is left to the system. An error is for what
+    /// stops the reading itself (a file that is there and cannot be read).
     fn read_artifacts(
         &self,
         asks: &ArtifactAsks,

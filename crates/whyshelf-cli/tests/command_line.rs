@@ -29,6 +29,11 @@ struct Project(PathBuf);
 
 impl Project {
     fn new(name: &str) -> Self {
+        Self::with(name, BOOKS, NOTE)
+    }
+
+    /// A project with this declaration of books and this text as `notes/N-1.md`.
+    fn with(name: &str, books: &str, note: &str) -> Self {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("a clock after 1970")
@@ -37,8 +42,8 @@ impl Project {
             std::env::temp_dir().join(format!("whyshelf-{name}-{}-{nanos}", std::process::id()));
         fs::create_dir_all(dir.join(".whyshelf")).unwrap();
         fs::create_dir_all(dir.join("notes")).unwrap();
-        fs::write(dir.join(".whyshelf/books.toml"), BOOKS).unwrap();
-        fs::write(dir.join("notes/N-1.md"), NOTE).unwrap();
+        fs::write(dir.join(".whyshelf/books.toml"), books).unwrap();
+        fs::write(dir.join("notes/N-1.md"), note).unwrap();
         Self(dir)
     }
 
@@ -211,6 +216,60 @@ fn the_actor_comes_from_the_variable() {
     let answer = json(&output);
     assert_eq!(answer["version"], 1);
     assert_eq!(answer["judged"][0]["record"]["actor"], "tester");
+}
+
+#[test]
+fn a_path_that_names_no_file_is_told_and_case_counts() {
+    let books = format!(
+        "{BOOKS}[[book.link]]\nname = \"files\"\ntarget = \"artifact\"\nmeans = \"depends\"\n"
+    );
+    let note = NOTE.replace(
+        "title: \"A note\"\n",
+        "title: \"A note\"\nfiles: [\"Justfile\", \"justfile\", \"later.rs\"]\n",
+    );
+    let project = Project::with("absent", &books, &note);
+    fs::write(project.0.join("Justfile"), "check:\n").unwrap();
+
+    let told = |answer: &serde_json::Value, field: &str| -> Vec<String> {
+        answer[field]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["path"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let check = json(&project.run(&["check"]));
+    assert_eq!(check["clean"], true, "absent paths leave the check clean");
+    assert_eq!(told(&check, "absent"), ["justfile", "later.rs"]);
+    assert!(
+        check["absent"][0]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("case included")
+    );
+
+    let approved = json(&project.run(&["judge", "approve", "N-1"]));
+    assert_eq!(
+        told(&approved["judged"][0], "absent"),
+        ["justfile", "later.rs"]
+    );
+
+    let in_notices = |notices: &serde_json::Value| -> Vec<String> {
+        notices
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|n| n["kind"] == "artifact_absent")
+            .map(|n| n["artifact"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let got = json(&project.run(&["get", "N-1"]));
+    assert_eq!(in_notices(&got["row"]["notices"]), ["justfile", "later.rs"]);
+    let status = json(&project.run(&["status"]));
+    assert_eq!(
+        in_notices(&status["docs"][0]["notices"]),
+        ["justfile", "later.rs"]
+    );
 }
 
 #[test]

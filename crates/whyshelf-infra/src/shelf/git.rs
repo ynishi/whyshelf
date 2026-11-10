@@ -8,7 +8,8 @@
 //! | [`ContentStore`] | the content of a blob, by its name | `git cat-file blob <name>` |
 //!
 //! ```text
-//!   path ──tokio::fs::read──► bytes ──ArtifactReading::of_bytes──► a hash per comparison asked (always)
+//!   path ──tokio::fs::read──► bytes, kept when no part of the path names an entry in another case only
+//!                               ──ArtifactReading::of_bytes──► a hash per comparison asked (always)
 //!                               └──git hash-object──► blob name ──► ContentAddress (in a repository)
 //!   HEAD ──git rev-parse──► commit ──► Revision                                   (in a repository)
 //!   ContentAddress ──git cat-file blob──► bytes, or not readable
@@ -124,11 +125,38 @@ impl GitArtifacts {
             path: full.clone(),
             source,
         };
-        match tokio::fs::read(&full).await {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(e) if is_absent(&e) => Ok(None),
-            Err(e) => Err(io_error(e)),
+        let bytes = match tokio::fs::read(&full).await {
+            Ok(bytes) => bytes,
+            Err(e) if is_absent(&e) => return Ok(None),
+            Err(e) => return Err(io_error(e)),
+        };
+        if self.named_as_written(path).await {
+            Ok(Some(bytes))
+        } else {
+            Ok(None)
         }
+    }
+
+    /// Whether a path that opened names the file as written (the rule of
+    /// [`ArtifactSource::read_artifacts`]): no part of it is the name of an entry of
+    /// its directory in another ASCII case only. A directory that cannot be listed
+    /// says nothing against the path, which opened.
+    async fn named_as_written(&self, path: &RelPath) -> bool {
+        let mut dir = self.root.clone();
+        for part in path.as_str().split('/') {
+            let Ok(mut entries) = tokio::fs::read_dir(&dir).await else {
+                return true;
+            };
+            let mut names = Vec::new();
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                names.push(entry.file_name());
+            }
+            if part_names_entry(part, names.iter().map(|n| n.as_os_str())) == PartName::OtherCase {
+                return false;
+            }
+            dir.push(part);
+        }
+        true
     }
 
     /// The blob names of these files, in order, or none outside a repository.
@@ -164,6 +192,40 @@ impl GitArtifacts {
             });
         }
         Ok(Some(names))
+    }
+}
+
+/// What the entries of a directory say about one part of a path that opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PartName {
+    /// An entry has the name as written.
+    Written,
+    /// No entry has it, and one has it in another ASCII case only: a file system that
+    /// does not tell case apart opened it, and Git and one that does would not.
+    OtherCase,
+    /// Neither: a name the system stores in another form (macOS keeps some
+    /// non-ASCII names decomposed), which it opened and Git names as written.
+    Unknown,
+}
+
+/// The one place a part of a path is held against the names of its directory.
+fn part_names_entry<'a>(part: &str, names: impl Iterator<Item = &'a std::ffi::OsStr>) -> PartName {
+    let mut other_case = false;
+    for name in names {
+        if name == part {
+            return PartName::Written;
+        }
+        if name
+            .to_str()
+            .is_some_and(|name| name.eq_ignore_ascii_case(part))
+        {
+            other_case = true;
+        }
+    }
+    if other_case {
+        PartName::OtherCase
+    } else {
+        PartName::Unknown
     }
 }
 
@@ -350,6 +412,61 @@ mod tests {
             Some(&b"one\n"[..])
         );
         assert_eq!(source.current(&p("tests/none.rs")).await.unwrap(), None);
+    }
+
+    #[test]
+    fn a_part_is_held_against_the_names_of_its_directory() {
+        use std::ffi::OsStr;
+        let names = |all: &'static [&'static str]| all.iter().map(OsStr::new);
+        assert_eq!(
+            part_names_entry("Justfile", names(&["a", "Justfile"])),
+            PartName::Written
+        );
+        assert_eq!(
+            part_names_entry("justfile", names(&["a", "Justfile"])),
+            PartName::OtherCase
+        );
+        // Both spellings there: the one written is a file of its own.
+        assert_eq!(
+            part_names_entry("justfile", names(&["Justfile", "justfile"])),
+            PartName::Written
+        );
+        // A name stored decomposed (e + U+0301) against the composed one written.
+        assert_eq!(
+            part_names_entry("caf\u{e9}", names(&["cafe\u{301}"])),
+            PartName::Unknown
+        );
+        assert_eq!(part_names_entry("x", names(&[])), PartName::Unknown);
+    }
+
+    #[tokio::test]
+    async fn a_path_that_differs_from_the_name_only_in_case_is_no_file() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "Justfile", "check:\n").await;
+        write(dir.path(), "Tests/a.rs", "one\n").await;
+        let source = GitArtifacts::new(dir.path().to_path_buf());
+        let found = source
+            .read_artifacts(&bytes_of(&[
+                "justfile",
+                "tests/a.rs",
+                "Tests/A.rs",
+                "Justfile",
+            ]))
+            .await
+            .unwrap();
+        for wrong in ["justfile", "tests/a.rs", "Tests/A.rs"] {
+            assert_eq!(
+                found.get(&p(wrong)),
+                Some(&ArtifactReading::absent()),
+                "{wrong}"
+            );
+        }
+        assert!(
+            found
+                .get(&p("Justfile"))
+                .is_some_and(ArtifactReading::is_present)
+        );
+        assert_eq!(source.current(&p("justfile")).await.unwrap(), None);
     }
 
     #[tokio::test]
