@@ -13,7 +13,9 @@ use clap::Parser;
 /// the files they stand on, judged, and checked for whether each judgement still
 /// holds.
 #[derive(Debug, Parser)]
-#[command(name = "whyshelf", version, about)]
+// No `help` command: only `--help` and `--version` answer in text, and every other
+// argument is a command or a wrong request answered in JSON.
+#[command(name = "whyshelf", version, about, disable_help_subcommand = true)]
 pub struct Cli {
     /// The project root (default: the current directory).
     #[arg(long, global = true, value_name = "DIR")]

@@ -77,6 +77,46 @@ enum Exit {
     Failed = 3,
 }
 
+/// The answer to arguments that are no command: `--help` and `--version` as the
+/// text they are, with exit 0; any other as the error JSON of a request on stdout,
+/// its text on stderr, and exit 2, as every wrong request is answered.
+pub fn refuse_arguments(error: &clap::Error) -> ExitCode {
+    use clap::error::ErrorKind;
+    match error.kind() {
+        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
+            // clap writes help to stdout; a failure to write it is no answer to give.
+            let _ = error.print();
+            ExitCode::from(Exit::Ok as u8)
+        }
+        _ => {
+            let text = error.render().to_string();
+            eprint!("{text}");
+            // The sentence is what comes before the usage and the tip, on one line.
+            let message = text
+                .lines()
+                .take_while(|line| !line.starts_with("Usage:"))
+                .map(str::trim)
+                .filter(|line| {
+                    !line.is_empty()
+                        && !line.starts_with("tip:")
+                        && !line.starts_with("For more information")
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            let message = message.trim_start_matches("error: ").to_owned();
+            let message = if message.is_empty()
+                || error.kind() == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+            {
+                "a command is needed (see --help)".to_owned()
+            } else {
+                message
+            };
+            print(&output::usage(message));
+            ExitCode::from(Exit::Request as u8)
+        }
+    }
+}
+
 /// Run a command on the project at `root`.
 pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
     let project = Project::new(root, std::env::var(ACTOR_VAR).ok());
