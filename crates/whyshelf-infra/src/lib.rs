@@ -108,6 +108,7 @@ pub mod markdown;
 pub mod parse;
 pub mod scaffold;
 pub mod secret;
+pub mod shelf;
 pub mod status_md;
 pub mod store_fs;
 pub mod test_run;

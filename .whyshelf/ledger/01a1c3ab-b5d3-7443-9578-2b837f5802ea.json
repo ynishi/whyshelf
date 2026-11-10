@@ -1,0 +1,30 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794284172507,
+  "expires": null,
+  "frame": [
+    {
+      "hash": "sha256:b60dc0295376775317aeadb9163db6701fe53a561caf10aeda377a21d288aefc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3ad8-7753-b9e1-a7cd0b06ed77"
+    }
+  ],
+  "id": "01a1c3ab-b5d3-7443-9578-2b837f5802ea",
+  "kind": "decision",
+  "reason": "First decisions of whyshelf's own requirements, kept in the repo.",
+  "seen": "sha256:0396a3e5faef43e4d06059b8d76d13ca074d78acb97b29861646624439ad6319",
+  "subject": "01a1c332-3e2b-7840-9c1e-c6aebdf917a0",
+  "v": 1,
+  "verb": "approve"
+}
