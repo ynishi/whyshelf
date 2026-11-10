@@ -30,6 +30,15 @@
 //! | `informs` | the target is worth reading: one that does not hold is a notice, never a staleness |
 //! | `replaces` | the document takes the place of the target, and is its successor when the target is deprecated |
 //!
+//! A link into a book may also say `cover = true`: every pending or approved
+//! document of the target book is expected to be reached by it, from a pending or
+//! approved document. A project uses it to see a hole in its chain of reasons (a
+//! requirement no decision serves, a decision no verification checks). A document no
+//! covering link reaches has a `not_covered` notice and is listed in `check`'s
+//! `uncovered`, which makes `check` not clean; its freshness is unchanged. A link to
+//! files cannot say it, and a link into its own book is met only by another document
+//! of that book.
+//!
 //! The files:
 //!
 //! ```text
@@ -148,7 +157,8 @@
 //! ```text
 //!   whyshelf [--root <dir>] <command>
 //!
-//!   check                     the declaration, the documents and the ledger; exit 1 if anything is wrong
+//!   check                     the declaration, the documents and the ledger, and what no covering
+//!                             link reaches; exit 1 if anything is wrong
 //!   status                    every document: what was decided, and where it stands now
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   get <ref> --approved      what the approval that stands saw, with its content read back

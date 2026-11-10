@@ -95,7 +95,7 @@ use super::graph::{Cycle, CycleId};
 use super::ledger::{
     ArtifactPin, DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem,
 };
-use super::schema::{ArtifactPropagation, EntryName, Propagation};
+use super::schema::{ArtifactPropagation, BookName, EntryName, Propagation};
 
 /// The documents that take the place of a deprecated one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -474,6 +474,17 @@ pub enum Notice {
         pin: FramePin,
         /// When it was to lapse.
         since: JudgedAt,
+    },
+    /// A link of a book declares that it covers this document's book
+    /// (`cover = true`), and no pending or approved document of that book reaches
+    /// this one through it: a hole in the chain of reasons. The document's freshness
+    /// is unchanged. (A link of a book into itself is met only by another document
+    /// of that book.)
+    NotCovered {
+        /// The book whose link is expected to reach this document.
+        book: BookName,
+        /// The link.
+        link: EntryName,
     },
     /// The document is not what was approved, and people declared that the edit
     /// keeps the meaning: no [`Cause::SelfChanged`].
@@ -1146,6 +1157,61 @@ fn already_said(unresolved: &UnresolvedLink, lost_here: &[(&FramePin, FailureTag
     }
 }
 
+/// What the covering links of the books expect, and what they reach.
+struct ExpectedReach<'s> {
+    /// For each target book, the (book, link) pairs that declare they cover it.
+    expectations: BTreeMap<&'s BookName, Vec<(&'s BookName, &'s EntryName)>>,
+    /// Each document a covering link reaches from a document that stands, with the
+    /// (book, link) it was reached through.
+    reached: BTreeSet<(DocId, BookName, EntryName)>,
+}
+
+/// Whether a document counts for coverage: pending or approved, at any freshness.
+/// What was denied, deprecated or retired neither reaches nor is expected to be
+/// reached.
+fn stands(standing: Option<&Standing>) -> bool {
+    matches!(standing, Some(Standing::Pending | Standing::Approved(_)))
+}
+
+/// The expectations of the covering links (`cover = true`) and the documents they
+/// reach: the one place a covering link is read.
+fn expected_reach<'s>(
+    shelf: &'s Shelf,
+    standings: &BTreeMap<DocId, Standing>,
+) -> ExpectedReach<'s> {
+    let mut expectations: BTreeMap<&BookName, Vec<(&BookName, &EntryName)>> = BTreeMap::new();
+    for (book, schema) in shelf.schema().books() {
+        for (name, kind) in schema.links() {
+            if kind.cover {
+                expectations
+                    .entry(&kind.target)
+                    .or_default()
+                    .push((book, name));
+            }
+        }
+    }
+    let mut reached = BTreeSet::new();
+    for doc in shelf.docs().values() {
+        if !stands(standings.get(&doc.id())) {
+            continue;
+        }
+        for (name, link) in doc.links() {
+            if !link.kind().cover {
+                continue;
+            }
+            for state in link.states() {
+                if let LinkState::Resolved(target) = state {
+                    reached.insert((target.id(), doc.key().book.clone(), name.clone()));
+                }
+            }
+        }
+    }
+    ExpectedReach {
+        expectations,
+        reached,
+    }
+}
+
 /// The notices of the valid documents. They change no freshness.
 ///
 /// | case | notice |
@@ -1154,8 +1220,10 @@ fn already_said(unresolved: &UnresolvedLink, lost_here: &[(&FramePin, FailureTag
 /// | an `Informs` link cannot be followed | `InformsUnresolved` |
 /// | a pinned upstream's causes include `Expired` | `UpstreamExpired` |
 /// | a `Replaces` link | none |
+/// | a pending or approved document of a book a covering link points into, that no pending or approved document reaches through it | `NotCovered` |
 ///
-/// They are given whatever the document's own standing is. To them are added, first,
+/// They are given whatever the document's own standing is, except `NotCovered`: a
+/// document denied, deprecated or retired is not expected to be reached. To them are added, first,
 /// the notices of an approval's edits that a declaration kept from being causes
 /// (`SelfSameMeaning`, `UpstreamSameMeaning`, `ArtifactSameMeaning`): those are made
 /// where the hashes are compared, so only an approved document has them.
@@ -1166,8 +1234,27 @@ fn collect_notices(
     mut same_meaning: BTreeMap<DocId, Vec<Notice>>,
 ) -> BTreeMap<DocId, Vec<Notice>> {
     let mut all = BTreeMap::new();
+    let expected = expected_reach(cx.shelf, standings);
     for doc in cx.shelf.docs().values() {
         let mut notices = same_meaning.remove(&doc.id()).unwrap_or_default();
+        if stands(standings.get(&doc.id())) {
+            for (book, link) in expected
+                .expectations
+                .get(&doc.key().book)
+                .into_iter()
+                .flatten()
+            {
+                if !expected
+                    .reached
+                    .contains(&(doc.id(), (*book).clone(), (*link).clone()))
+                {
+                    notices.push(Notice::NotCovered {
+                        book: (*book).clone(),
+                        link: (*link).clone(),
+                    });
+                }
+            }
+        }
         for (link, states) in doc.links_of(Propagation::Informs) {
             for state in states {
                 match state {
@@ -1216,6 +1303,8 @@ fn collect_notices(
 mod artifact_tests;
 #[cfg(test)]
 mod comparison_tests;
+#[cfg(test)]
+mod cover_tests;
 #[cfg(test)]
 mod notice_tests;
 #[cfg(test)]

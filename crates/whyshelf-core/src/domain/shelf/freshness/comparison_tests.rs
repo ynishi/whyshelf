@@ -194,6 +194,7 @@ fn schema_of_both() -> Schema {
                 cardinality: Cardinality::Many,
                 propagation: Propagation::Depends,
                 compare: None,
+                cover: false,
             });
         }
     }
