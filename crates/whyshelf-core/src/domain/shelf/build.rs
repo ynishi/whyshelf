@@ -320,7 +320,10 @@ pub enum DocProblem {
         /// The entry.
         name: String,
     },
-    /// A required field is missing.
+    /// A required field is missing. The missing entries of a document are told
+    /// with these first, in the order the declaration writes the fields, then with
+    /// [`DocProblem::LinkCount`]s of no key, for the links into books and then the
+    /// links to artifacts, each in the order the declaration writes them.
     #[error("the required field `{field}` is missing")]
     FieldMissing {
         /// The field.
@@ -962,7 +965,10 @@ fn read_entries(
 }
 
 /// What the book requires and the entries leave out: a required field, and a link
-/// whose cardinality does not admit none.
+/// whose cardinality does not admit none. The problems come in this order: every
+/// [`DocProblem::FieldMissing`], in the order the declaration writes the fields,
+/// then every [`DocProblem::LinkCount`] of a link into a book, then of a link to
+/// artifacts, each in the order the declaration writes the links.
 fn check_required(
     book: &BookSchema,
     entries: &BTreeMap<String, RawValue>,

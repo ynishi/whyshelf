@@ -145,12 +145,9 @@ PUBLIC_DEVELOPMENT.md) and check them with `whyshelf check`.
 
 ### Working with the books
 
-| book | what goes in it |
-| --- | --- |
-| `finding` | what was seen: the problem behind an issue, with the issue in `source` |
-| `requirement` | what is needed and why; `grounds` names its findings, `issues` its issues |
-| `decision` | what was chosen, what was `rejected`, when to `revisit`, and the `rustdoc` items that state the rule |
-| `verification` | how a decision is checked: a `method` (`unit`, `e2e` or `review`, always given) and the `tests` that check it |
+`whyshelf map` answers the books, their fields and the links between them, as
+`.whyshelf/books.toml` declares them; its `diagram` draws the books and the
+links.
 
 A change goes through the books before the code:
 
@@ -160,6 +157,11 @@ issue -> finding -> requirement / decision / verification (pending)
       -> commit (the ledger records too) -> just pre-push -> PR (Closes #<issue>)
 ```
 
+- Conventions of these books that the declaration does not state: a finding
+  gives the issue it came from in `source`; a requirement and a decision name
+  their issues in `issues`; a decision says in `revisit` when to look at it
+  again, and names in `rustdoc` the items whose docs state its rule; a
+  verification's `method` `e2e` is for tests that run the binary.
 - Write a document with `whyshelf new <book> --title <text> <entry>=<value>`;
   give a list item that holds a comma with `<entry>+=<item>`.
 - A bug against a promise the books already make needs no new requirement or

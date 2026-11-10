@@ -1,9 +1,10 @@
 # The books of whyshelf's own requirements, decisions and verifications.
 
 [[book]]
-name = "finding"            # what was seen: a root cause, evidence
+name = "finding"
 dir = "books/finding"
 key = { prefix = "F" }
+description = "what was seen: a root cause, evidence"
 [[book.field]]
 name = "title"
 type = "text"
@@ -13,9 +14,10 @@ name = "source"
 type = "text"
 
 [[book]]
-name = "requirement"        # what is needed, and why
+name = "requirement"
 dir = "books/requirement"
 key = { prefix = "REQ" }
+description = "what is needed, and why"
 [[book.field]]
 name = "title"
 type = "text"
@@ -34,9 +36,10 @@ count = "optional"
 means = "replaces"
 
 [[book]]
-name = "decision"           # how it is met, and what was rejected
+name = "decision"
 dir = "books/decision"
 key = { prefix = "DEC" }
+description = "how it is met, and what was rejected"
 [[book.field]]
 name = "title"
 type = "text"
@@ -70,9 +73,10 @@ count = "optional"
 means = "replaces"
 
 [[book]]
-name = "verification"       # how a decision is checked
+name = "verification"
 dir = "books/verification"
 key = { prefix = "V" }
+description = "how a decision is checked"
 [[book.field]]
 name = "title"
 type = "text"

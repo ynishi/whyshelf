@@ -6,7 +6,7 @@ use crate::domain::shelf::freshness::{Cause, Freshness, Severity, Standing};
 use crate::domain::shelf::ledger::{DeclaredStatus, JudgedAt, Record};
 
 use super::fake_tests::{FakeShelf, block_on, decls, docid, fr, sp};
-use super::{BooksCheck, ErrorClass, JudgeRequest, Judgement, ShelfApp, ShelfError};
+use super::{BooksCheck, ErrorClass, JudgeRequest, Judgement, MapReport, ShelfApp, ShelfError};
 use crate::domain::shelf::build::DocPresence;
 use crate::domain::shelf::lookup::Reference;
 
@@ -55,6 +55,54 @@ fn books_check_of_an_unsound_declaration_is_an_answer_and_reads_nothing_else() {
         BooksCheck::SchemaInvalid(problems) => assert!(!problems.is_empty()),
         other => panic!("expected an invalid declaration, got {other:?}"),
     }
+}
+
+#[test]
+fn map_answers_the_declaration_in_its_order() {
+    let app = app(vec![fr(1, "slow", &[])]);
+    // Declared out of the order of their names, so the answer cannot be in that
+    // order by chance.
+    let mut reversed = decls();
+    reversed.reverse();
+    *app.ports().decls.lock().unwrap() = reversed;
+    let MapReport::Mapped(map) = block_on(app.map()).unwrap() else {
+        panic!("the declaration is sound");
+    };
+    let books: Vec<&str> = map.books.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(books, ["spec", "finding"]);
+    let holders: Vec<&str> = map.links.iter().map(|l| l.from.as_str()).collect();
+    assert_eq!(holders.first(), Some(&"spec"));
+    assert!(!map.links.is_empty());
+    assert_eq!(block_on(app.map()).unwrap(), MapReport::Mapped(map));
+    assert_eq!(app.ports().artifact_read_count(), 0);
+}
+
+#[test]
+fn books_check_lists_the_books_in_the_order_of_the_declaration() {
+    let app = app(vec![fr(1, "slow", &[])]);
+    let mut reversed = decls();
+    reversed.reverse();
+    *app.ports().decls.lock().unwrap() = reversed;
+    let BooksCheck::Checked { books, .. } = block_on(app.books_check()).unwrap() else {
+        panic!("the declaration is sound");
+    };
+    let names: Vec<&str> = books.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["spec", "finding"]);
+}
+
+#[test]
+fn map_of_an_unsound_declaration_is_its_problems_as_check_answers_them() {
+    let app = app(vec![fr(1, "slow", &[])]);
+    let mut twice = decls();
+    twice.push(decls().remove(0));
+    *app.ports().decls.lock().unwrap() = twice;
+    let BooksCheck::SchemaInvalid(checked) = block_on(app.books_check()).unwrap() else {
+        panic!("expected an invalid declaration");
+    };
+    assert_eq!(
+        block_on(app.map()).unwrap(),
+        MapReport::SchemaInvalid(checked)
+    );
 }
 
 #[test]

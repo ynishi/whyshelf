@@ -21,6 +21,7 @@ use crate::domain::shelf::freshness::{
 };
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{Decision, DeclaredStatus, LedgerProblem, Record};
+use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::schema::{BookDir, BookName, EntryName, Propagation, SchemaProblem};
 use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
 
@@ -43,7 +44,10 @@ impl Names {
 /// What is wrong around the documents, as the shelf and the ledger set it aside.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Health {
-    /// Every file that could not be made a valid document, with why.
+    /// Every file that could not be made a valid document, with why. Those whose
+    /// front matter or identity could not be read follow the order the books'
+    /// directories are read in, which is the order the declaration writes the
+    /// books.
     pub invalid: Vec<InvalidDoc>,
     /// The cycles among the links of the documents and among the frames of the
     /// approvals.
@@ -108,7 +112,7 @@ pub enum BooksCheck {
     SchemaInvalid(NonEmptyVec<SchemaProblem>),
     /// The declaration is sound; the documents and the ledger were read.
     Checked {
-        /// Each book, counted.
+        /// Each book, counted, in the order the declaration writes them.
         books: Vec<BookCount>,
         /// What is wrong around them.
         health: Health,
@@ -181,6 +185,15 @@ impl BooksCheck {
             } => health.is_clean() && uncovered.is_empty(),
         }
     }
+}
+
+/// The result of `map`: what the declaration says, or why it cannot be used.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MapReport {
+    /// The declaration of the books is not sound, as `check` answers it.
+    SchemaInvalid(NonEmptyVec<SchemaProblem>),
+    /// The declaration is sound: its books and links, in its order.
+    Mapped(ShelfMap),
 }
 
 /// The result of `status`: every document with what was decided and where it stands.

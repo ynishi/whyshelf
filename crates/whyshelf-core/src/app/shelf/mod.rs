@@ -9,6 +9,7 @@
 //! | use case | writes? | answer |
 //! |---|---|---|
 //! | [`books_check`](ShelfApp::books_check) | no | [`BooksCheck`]: the problems of the declaration, or the faults around the documents |
+//! | [`map`](ShelfApp::map) | no | [`MapReport`]: the problems of the declaration, or its books and links (nothing else is read) |
 //! | [`status`](ShelfApp::status) | no | [`StatusReport`]: every document's declared status and standing |
 //! | [`get`](ShelfApp::get) | no | [`GetReport`]: one document, its standing, notices and root causes |
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
@@ -84,8 +85,8 @@ pub use ports::{
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
-    DownstreamEdge, GetReport, Health, Judged, Names, Row, StaleEntry, StaleReport, StatusReport,
-    TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
+    DownstreamEdge, GetReport, Health, Judged, MapReport, Names, Row, StaleEntry, StaleReport,
+    StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use withdraw::WithdrawRequest;

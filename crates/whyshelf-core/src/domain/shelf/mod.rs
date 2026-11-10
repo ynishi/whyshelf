@@ -15,6 +15,8 @@
 //!   schema    ──► artifact                             Schema::validate ──► Schema
 //!                                                        (BookSchemaDecl and the spaces
 //!                                                        offered in; declared once)
+//!   map       ──► schema, artifact                     ShelfMap::of ──► ShelfMap (the books and
+//!                                                        links as declared, in order)
 //!   artifact                                           Space, ArtifactName, Comparison::
 //!                                                        fingerprint, ArtifactReading (the four
 //!                                                        answers), ContentAddress, Revision
@@ -62,6 +64,7 @@
 //! | judgement | the one place | what it returns |
 //! |---|---|---|
 //! | is the declaration sound | [`Schema::validate`] | the [`Schema`], or all its problems |
+//! | what the declaration says, book by book and link by link | [`ShelfMap::of`], from the [`Schema`] alone, in the order of the declaration | a [`ShelfMap`] |
 //! | which book a file is in | `Schema::membership` (visible to the shelf's modules only) | a `Membership` |
 //! | the grammar of a key | [`KeyPattern::parse`] | a [`KeyForm`], or a [`KeyProblem`] |
 //! | a key in a book | `Shelf::find_key` (the same) | a `KeyHit` |
@@ -213,6 +216,8 @@
 //! [`SnapshotItem::retrieval`]: snapshot::SnapshotItem::retrieval
 //! [`SnapshotItem::changed_from`]: snapshot::SnapshotItem::changed_from
 //! [`Retrieval`]: snapshot::Retrieval
+//! [`ShelfMap::of`]: map::ShelfMap::of
+//! [`ShelfMap`]: map::ShelfMap
 //! [`Schema::validate`]: schema::Schema::validate
 //! [`Schema`]: schema::Schema
 //! [`KeyPattern::parse`]: schema::KeyPattern::parse
@@ -306,6 +311,7 @@ pub mod freshness;
 pub mod graph;
 pub mod ledger;
 pub mod lookup;
+pub mod map;
 pub mod schema;
 pub mod snapshot;
 pub mod trace;

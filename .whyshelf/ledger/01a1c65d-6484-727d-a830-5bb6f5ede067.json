@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e1664c304f91b5905b767cbda00cf36910849eeb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a10b2b08ce59b99cd628c1b36e94cfbdaba7fa559d4d62dc0030f0e139e11e23",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6ed618300394aa8cef676ab4f5ade2fb12c21819",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:91f25fe4f3f2e3edae699c91009364954f909c49a7125fdf79635fc8851832e7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "414f68604863ec21b8c197741a8c91d56fee748e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b06de71b8b68ce1e7f4df142feece7e5fab021f71271ff740c01e35d731744fb",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794329371393,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7bbfeb560c708d2332037c3c673f81031f030e54",
+      "hash": "sha256:da5824c39e86e69afad60e05aa9f930192817a141c268c0f15fc84cc1098feb2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "11"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-11d9-7657-8910-6240e23765d9"
+    }
+  ],
+  "id": "01a1c65d-6484-727d-a830-5bb6f5ede067",
+  "kind": "decision",
+  "reason": "Tests in shared files changed for #39 (map, declaration order, description); they still check what these verifications say, checked by a blind review",
+  "revision": "07756c31f025d11b6906f87b5aa586031581d0ed",
+  "seen": "sha256:f57eaad50aacfed8c625ef6780227805030ca254ebfcf07af9ff3a997627b6fa",
+  "seen_address": "006702fc871add4f3625d91c1b785d1ee2c23bc6",
+  "subject": "01a1c4ba-15af-74cf-8ea9-0f39eda83aa0",
+  "v": 1,
+  "verb": "approve"
+}

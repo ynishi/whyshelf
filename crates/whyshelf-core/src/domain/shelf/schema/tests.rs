@@ -20,6 +20,7 @@ fn book(name: &str, dir: &str, prefix: &str) -> BookSchemaDecl {
         key: KeyPatternDecl::Prefixed {
             prefix: prefix.to_owned(),
         },
+        description: None,
         fields: Vec::new(),
         links: Vec::new(),
     }
@@ -324,7 +325,12 @@ fn a_link_to_artifacts_names_a_space_the_adapters_offer() {
     };
     let schema = validate(with_space(Some("other"))).unwrap();
     assert_eq!(
-        schema.book("one").unwrap().artifact_links()["tests"]
+        schema
+            .book("one")
+            .unwrap()
+            .artifact_links()
+            .get("tests")
+            .unwrap()
             .space
             .as_str(),
         "other"
@@ -605,4 +611,121 @@ fn a_book_dir_knows_what_is_under_it() {
     assert!(sub.overlaps(&docs));
     assert!(docs.overlaps(&docs));
     assert!(!docs.overlaps(&BookDir::new("other").unwrap()));
+}
+
+#[test]
+fn a_description_is_kept_as_written() {
+    let decls = vec![BookSchemaDecl {
+        description: Some("what was seen, and how it is known".to_owned()),
+        ..book("a", "a", "A")
+    }];
+    let schema = validate(decls).unwrap();
+    assert_eq!(
+        schema.book("a").unwrap().description().map(|d| d.as_str()),
+        Some("what was seen, and how it is known")
+    );
+    // A character that shows nothing beside a visible one is kept, as written.
+    assert!(BookDescription::new("a\u{200B}b").is_ok());
+    assert!(BookDescription::new("  indented, with spaces  ").is_ok());
+    let none = validate(vec![book("a", "a", "A")]).unwrap();
+    assert_eq!(none.book("a").unwrap().description(), None);
+}
+
+#[test]
+fn a_blank_or_two_line_description_is_refused() {
+    for (text, why) in [
+        ("", DescriptionProblem::Blank),
+        ("  \t ", DescriptionProblem::Blank),
+        ("one line\nand another", DescriptionProblem::MoreThanOneLine),
+        ("one line\r\n", DescriptionProblem::MoreThanOneLine),
+        ("one\u{2028}two", DescriptionProblem::MoreThanOneLine),
+        ("one\u{2029}two", DescriptionProblem::MoreThanOneLine),
+        ("one\u{85}two", DescriptionProblem::MoreThanOneLine),
+        ("\u{200B}", DescriptionProblem::Blank),
+        (
+            " \u{200C}\u{200D}\u{2060}\u{FEFF} ",
+            DescriptionProblem::Blank,
+        ),
+        ("\u{B}\u{C}", DescriptionProblem::Blank),
+        ("a\tb", DescriptionProblem::ControlCharacter { ch: '\t' }),
+        (
+            "abc \u{202E}fed",
+            DescriptionProblem::ControlCharacter { ch: '\u{202E}' },
+        ),
+        (
+            "a\u{2067}b",
+            DescriptionProblem::ControlCharacter { ch: '\u{2067}' },
+        ),
+        (
+            "a\u{B}b",
+            DescriptionProblem::ControlCharacter { ch: '\u{B}' },
+        ),
+        (
+            "a\u{C}b",
+            DescriptionProblem::ControlCharacter { ch: '\u{C}' },
+        ),
+        (
+            "red \u{1B}[31m",
+            DescriptionProblem::ControlCharacter { ch: '\u{1B}' },
+        ),
+        (
+            "a\u{0}b",
+            DescriptionProblem::ControlCharacter { ch: '\u{0}' },
+        ),
+        (
+            "a\u{9B}b",
+            DescriptionProblem::ControlCharacter { ch: '\u{9B}' },
+        ),
+    ] {
+        let decls = vec![BookSchemaDecl {
+            description: Some(text.to_owned()),
+            ..book("a", "a", "A")
+        }];
+        assert_eq!(
+            problems_of(decls),
+            [SchemaProblem::BadDescription {
+                book: "a".to_owned(),
+                why,
+            }],
+            "{text:?}"
+        );
+    }
+}
+
+#[test]
+fn the_order_of_the_declaration_is_kept() {
+    let decls = vec![
+        BookSchemaDecl {
+            fields: vec![text_field("zeta"), text_field("alpha")],
+            links: vec![
+                link_to("up", "b", Propagation::Informs),
+                LinkEntryDecl {
+                    target: LinkTargetDecl::Artifact,
+                    space: Some("file".to_owned()),
+                    ..link_to("code", "b", Propagation::Informs)
+                },
+                link_to("also", "b", Propagation::Informs),
+            ],
+            ..book("z", "z", "Z")
+        },
+        book("b", "b", "B"),
+    ];
+    let schema = validate(decls).unwrap();
+    let books: Vec<&str> = schema.books().keys().map(BookName::as_str).collect();
+    assert_eq!(books, ["z", "b"]);
+    assert!(schema.book("b").is_some() && schema.book("a").is_none());
+    let z = schema.book("z").unwrap();
+    let fields: Vec<&str> = z.fields().keys().map(EntryName::as_str).collect();
+    assert_eq!(fields, ["zeta", "alpha"]);
+    let links: Vec<(&str, bool)> = z
+        .all_links()
+        .iter()
+        .map(|(n, l)| (n.as_str(), matches!(l, DeclaredLink::Artifact(_))))
+        .collect();
+    assert_eq!(links, [("up", false), ("code", true), ("also", false)]);
+    // The links into books and to artifacts are views of that one list.
+    let into_books: Vec<&str> = z.links().keys().map(EntryName::as_str).collect();
+    assert_eq!(into_books, ["up", "also"]);
+    assert!(z.artifact_links().contains_key("code") && !z.links().contains_key("code"));
+    assert_eq!(z.artifact_links().len(), 1);
 }

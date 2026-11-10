@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794329369924,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11bc9c136097621264f69d36c6bdb21c4dfbfd4a",
+      "hash": "sha256:0f0dc2ad41413994dc6572780a21a6417af6a2f38038b3c173d65af913147e1c",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "4"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-38d9-72fc-8ee9-4bc78bdcca4c"
+    },
+    {
+      "address": "c752992eb26ef669fdfde81f89c0601b34a0c1d4",
+      "hash": "sha256:906c0c05ec14517e6669a694c62440f90b0592dc00b907811ddebcffcb6ad2c3",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "16"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c64b-b366-71e7-b2ca-bb80bda8da0c"
+    }
+  ],
+  "id": "01a1c65d-5e1d-733b-9a29-fec8d51269e3",
+  "kind": "decision",
+  "reason": "How the books relate is answered from the declaration by whyshelf map (#39); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "07756c31f025d11b6906f87b5aa586031581d0ed",
+  "seen": "sha256:44384a821945e1074a5299e54915512c9d2efa8056b2084c043799d3730012e8",
+  "seen_address": "bac0999d408e1c279c43992dc2812b698e24ee5e",
+  "subject": "01a1c64b-b4b9-723c-b0d7-3a6afd9617d3",
+  "v": 1,
+  "verb": "approve"
+}
