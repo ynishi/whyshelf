@@ -163,7 +163,8 @@
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   get <ref> --approved      what the approval that stands saw, with its content read back
 //!   trace <ref>               what it links to and what links to it, transitively
-//!   stale                     the approvals that no longer hold, strongest first, with their roots
+//!   stale [--exit-code]       the approvals that no longer hold, strongest first, with their roots
+//!                             (exit 1 with --exit-code when there is any)
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
 //!   judge deny|deprecate|retire <ref>... [--reason <text>]   (deprecate: [--successor <ref>])
@@ -227,7 +228,7 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
+//! | 1 | `check` found something wrong, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
 //! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!

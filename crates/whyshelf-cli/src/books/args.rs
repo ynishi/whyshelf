@@ -29,7 +29,12 @@ pub enum BooksCommand {
         reference: Reference,
     },
     /// The approvals that no longer hold, with where each starts to fail.
-    Stale,
+    Stale {
+        /// Exit 1 when any approval does not hold (as `git diff --exit-code`), so a
+        /// script or CI can fail on it; without it the exit is 0.
+        #[arg(long)]
+        exit_code: bool,
+    },
     /// Each item of the approval that stands about a document, as it was approved and
     /// as it is now, with a line diff where both are text.
     Diff {

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794310388723,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c53b-bc0b-70cd-a64d-d18564d2088b",
+  "kind": "decision",
+  "reason": "Issue #24: stale --exit-code and just books; a blind review tried the gate on a copy and found the Justfile path case, now fixed; just check green",
+  "revision": "ca466e45c5b9d186a7ae8e048d1c16e65c5b6216",
+  "seen": "sha256:2930bf292161141ec1850f51e8861a00dd5b9be847d68a01f23ab11dd34ec253",
+  "seen_address": "ac626397cf643c5fc2c9525141da367da1a2f1bb",
+  "subject": "01a1c532-6441-7003-93fc-8de4d359a93e",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,61 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "ef72fbcf8b1439787ec2f1911021513d4571c88f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7b121547f6f47eff5bdb948d03ae29929f51f6991999f03fd168e588b2985d6e",
+      "link": "tests",
+      "path": "Justfile",
+      "state": "present"
+    },
+    {
+      "address": "e8c77d2bccb79fe24bbb5d537911a0cdfa2063a6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f4aba6ad0b00a14f11229271a4cfc8a12417f5082803f70ad869e4862f5894aa",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/tests/stale_exit_code.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794310388723,
+  "expires": null,
+  "frame": [
+    {
+      "address": "99ef684caaf0e4d5f0814c5005d7eb56962568fd",
+      "hash": "sha256:5a5ee29221c5ea57a665401c1fc1306261b86c1e57a9a94e11361452b445afbf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "26"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c532-68dc-71dd-a7c8-35e9618f81f6"
+    }
+  ],
+  "id": "01a1c53b-bce8-7562-9fe6-5c5e891e7be1",
+  "kind": "decision",
+  "reason": "Issue #24: stale --exit-code and just books; a blind review tried the gate on a copy and found the Justfile path case, now fixed; just check green",
+  "revision": "ca466e45c5b9d186a7ae8e048d1c16e65c5b6216",
+  "seen": "sha256:6a6f5dee52c7ebbf455eb2959af6b272c17bdb72c1aeec3d072bd1a4e22b507b",
+  "seen_address": "c60c113623b71299fe23faeb7c9dfebaf1780c35",
+  "subject": "01a1c532-6b46-7549-a494-9b3bfa21561d",
+  "v": 1,
+  "verb": "approve"
+}
