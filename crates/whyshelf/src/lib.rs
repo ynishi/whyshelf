@@ -163,7 +163,9 @@
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   get <ref> --approved      what the approval that stands saw, with its content read back
 //!   trace <ref>               what it links to and what links to it, transitively
-//!   stale [--exit-code]       the approvals that no longer hold, strongest first, with their roots
+//!   stale [--exit-code]       the approvals that no longer hold, strongest first, with their roots,
+//!                             and their origins: each document, file, cycle or the declaration where
+//!                             they start, with the approvals it degrades
 //!                             (exit 1 with --exit-code when there is any)
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]

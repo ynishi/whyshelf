@@ -234,6 +234,7 @@ impl<P: ShelfRead> ShelfApp<P> {
         entries.sort_by(|a, b| b.level.cmp(&a.level).then(a.row.id.cmp(&b.row.id)));
         Ok(StaleReport {
             entries,
+            origins: assessment.origins(),
             names: loaded.names(),
             health: view.health(),
         })
