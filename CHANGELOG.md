@@ -46,6 +46,12 @@ and this project adheres to
   (`isolated`), then those with no link in or out where the declaration lets
   one be; documents decided against are listed apart. It is a question, not a
   rule, and never fails the check (#47).
+- `cover` takes a strength: `true` or `"error"` fails `check` as before, and
+  `"warn"` lists the documents the link does not reach and leaves `check`
+  clean, with a warning line on stderr for each. `check`'s `uncovered` and the
+  `not_covered` notice gain `severity`, and `map`'s links `cover_severity`. A
+  quoted `cover = "true"` is now a problem of the declaration, not a failure
+  to read it (#49).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
