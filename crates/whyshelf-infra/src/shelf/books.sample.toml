@@ -4,9 +4,10 @@
 # chain it wants. Copy it to `.whyshelf/books.toml` and change what you need.
 
 [[book]]
-name = "finding"            # what was seen or measured, and how it is known
+name = "finding"
 dir = "docs/findings"
 key = { prefix = "F" }      # F-1, F-2, F-LATENCY
+description = "what was seen or measured, and how it is known"
 
 [[book.field]]
 name = "title"
@@ -23,9 +24,10 @@ name = "source"
 type = "text"
 
 [[book]]
-name = "spec"               # what must hold
+name = "spec"
 dir = "docs/specs"
 key = { prefix = "S" }
+description = "what must hold"
 
 [[book.field]]
 name = "title"
@@ -49,9 +51,10 @@ count = "optional"
 means = "replaces"
 
 [[book]]
-name = "design"             # how it is built, and why not another way
+name = "design"
 dir = "docs/designs"
 key = { prefix = "D" }
+description = "how it is built, and why not another way"
 
 [[book.field]]
 name = "title"

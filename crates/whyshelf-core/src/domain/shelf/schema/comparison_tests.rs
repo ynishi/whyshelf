@@ -14,6 +14,7 @@ fn decl(target: LinkTargetDecl, compare: Option<(&str, &[&str])>) -> Vec<BookSch
         name: "a".to_owned(),
         dir: "a".to_owned(),
         key: KeyPatternDecl::Slug,
+        description: None,
         fields: Vec::new(),
         links: vec![LinkEntryDecl {
             name: "tests".to_owned(),
@@ -32,7 +33,12 @@ fn decl(target: LinkTargetDecl, compare: Option<(&str, &[&str])>) -> Vec<BookSch
 
 fn comparison_of(compare: Option<(&str, &[&str])>) -> Comparison {
     let schema = Schema::validate(decl(LinkTargetDecl::Artifact, compare), &spaces()).unwrap();
-    schema.book("a").unwrap().artifact_links()["tests"]
+    schema
+        .book("a")
+        .unwrap()
+        .artifact_links()
+        .get("tests")
+        .unwrap()
         .comparison
         .clone()
 }

@@ -127,6 +127,7 @@ fn measures() -> BookSchemaDecl {
         key: KeyPatternDecl::Prefixed {
             prefix: "M".to_owned(),
         },
+        description: None,
         fields: vec![
             field("count", FieldTypeDecl::Integer),
             field("flag", FieldTypeDecl::Bool),

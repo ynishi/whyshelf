@@ -102,6 +102,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
             key: KeyPatternDecl::Prefixed {
                 prefix: "FR".to_owned(),
             },
+            description: None,
             fields: vec![field("title", FieldTypeDecl::Text, FieldPresence::Required)],
             links: vec![link("base", "finding", Propagation::Depends)],
         },
@@ -111,6 +112,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
             key: KeyPatternDecl::Prefixed {
                 prefix: "SP".to_owned(),
             },
+            description: None,
             fields: vec![field("title", FieldTypeDecl::Text, FieldPresence::Required)],
             links: vec![
                 link("grounds", "finding", Propagation::Depends),
