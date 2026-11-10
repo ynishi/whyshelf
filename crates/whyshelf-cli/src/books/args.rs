@@ -59,8 +59,8 @@ pub enum BooksCommand {
         /// A key, an identifier or a short identifier.
         reference: Reference,
     },
-    /// Record a judgement about a document (it and `new` are the only ones of these
-    /// that write).
+    /// Record a judgement about a document (it, `new` and `fmt` are the only ones of
+    /// these that write).
     #[command(subcommand)]
     Judge(Verb),
     /// Create one new document, valid for its book, at `<book dir>/<key>.md` (never
@@ -82,6 +82,16 @@ pub enum BooksCommand {
         /// The body.
         #[arg(long)]
         body: Option<String>,
+    },
+    /// Write every document's file in the one form `new` writes (`id` and `key`
+    /// first, every text in double quotes, the whole text normalized as it is read:
+    /// `\n` line endings, no trailing white space), when that changes no
+    /// reading of it; a file it cannot write so is left as it is, and listed with why.
+    Fmt {
+        /// Write nothing: list the files not in the form, those it would write and
+        /// those it would leave alone apart, and exit 1 when there is any of either.
+        #[arg(long)]
+        check: bool,
     },
     /// The JSON Schema of the answer of every command.
     Schema,

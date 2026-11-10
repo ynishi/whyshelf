@@ -20,13 +20,15 @@
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
+//! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written) |
 //! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
 //! | 3 | the run failed (a file could not be read or written) |
 //!
-//! `new` is the one command that writes a document. Its values arrive as text and
-//! are given to the use case as text; the use case reads them by the book's
+//! `new` is the one command that writes a new document. Its values arrive as text
+//! and are given to the use case as text; the use case reads them by the book's
 //! declaration, and the domain judges the document before anything is written.
+//! `fmt` is the one command that writes over a document's file, in the form `new`
+//! writes, and only when that changes no reading of it.
 
 // `ShelfError` and the refusals of the domain hold lists of problems; they are
 // returned once, at the end of a command, so their size costs nothing.
@@ -195,6 +197,24 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             .diff(&reference)
             .await
             .map(|r| print(&output::diff(&r))),
+        BooksCommand::Fmt { check } => {
+            let mut app = ShelfApp::new(project);
+            let report = if check {
+                app.fmt_check().await
+            } else {
+                app.fmt().await
+            };
+            report.map(|r| {
+                let exit = print(&output::fmt(&r, check));
+                for warning in output::fmt_warnings(&r) {
+                    eprintln!("{warning}");
+                }
+                match exit {
+                    Exit::Ok if check && !r.all_in_form() => Exit::Stopped,
+                    other => other,
+                }
+            })
+        }
         BooksCommand::New {
             book,
             title,

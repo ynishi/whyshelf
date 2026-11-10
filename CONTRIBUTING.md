@@ -167,7 +167,9 @@ issue -> finding -> requirement / decision / verification (pending)
   verification has one method: one that rests on both kinds of test is two
   verifications, one of each, each checking the decisions its own tests reach.
 - Write a document with `whyshelf new <book> --title <text> <entry>=<value>`;
-  give a list item that holds a comma with `<entry>+=<item>`.
+  give a list item that holds a comma with `<entry>+=<item>`. A document edited
+  by hand is put back in the one form with `whyshelf fmt`, which changes
+  nothing it reads as; `just check` fails while a file is not in the form.
 - A bug against a promise the books already make needs no new requirement or
   decision: add the finding, ground it on the requirement whose promise it
   found broken, correct the decision it breaks, and extend the verification's

@@ -10,10 +10,12 @@ default:
 # Everything a change owes before it is handed over.
 check: rust-fmt-check rust-clippy rust-test rust-doc deny books
 
-# The repository's own books are sound, and every approval in them still holds
-# (DEC-26). The answer is printed only when it fails the recipe.
+# The repository's own books are sound, every document is in the one form
+# (DEC-52), and every approval in them still holds (DEC-26). The answer is
+# printed only when it fails the recipe.
 books:
     @out="$(cargo run -q -p whyshelf-cli -- --root . check)" || { printf '%s\n' "$out"; exit 1; }
+    @out="$(cargo run -q -p whyshelf-cli -- --root . fmt --check)" || { printf '%s\n' "$out"; exit 1; }
     @out="$(cargo run -q -p whyshelf-cli -- --root . stale --exit-code)" || { printf '%s\n' "$out"; exit 1; }
 
 rust-fmt-check:

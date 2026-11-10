@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "708b006a5bbf284f03d0b2c4a6eda8138634cdfe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c88b192a51b3681a896e883358d8a402a92f297c45dbad41d77d524805bd2e58",
+      "link": "tests",
+      "name": "Justfile",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e8c77d2bccb79fe24bbb5d537911a0cdfa2063a6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f4aba6ad0b00a14f11229271a4cfc8a12417f5082803f70ad869e4862f5894aa",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stale_exit_code.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794352833728,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c47fec0a2854eced2e368aa728ca93b8e5788829",
+      "hash": "sha256:5a5ee29221c5ea57a665401c1fc1306261b86c1e57a9a94e11361452b445afbf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "26"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c532-68dc-71dd-a7c8-35e9618f81f6"
+    }
+  ],
+  "id": "01a1c7c3-6c7e-74b5-9155-241e79ecc10c",
+  "kind": "decision",
+  "reason": "REQ-5 and DEC-29 now count fmt among the writes, V-15 and V-22 are restated, and shared tests changed for #44; checked by a blind review",
+  "revision": "6777de26b11433b74ac2aa5cae504ff6d91efd77",
+  "seen": "sha256:a7283b58789bd65e97866818dc2a6baa34475ba446e570d6e0d47a6549ac4562",
+  "seen_address": "a4ec3e26f2ff838143110cc2b588cc8effca6636",
+  "subject": "01a1c532-6b46-7549-a494-9b3bfa21561d",
+  "v": 1,
+  "verb": "approve"
+}
