@@ -103,6 +103,12 @@ pub enum ShelfError {
     /// A run of judgements with none in it.
     #[error("no document to judge was named")]
     NothingRequested,
+    /// What an approval saw was asked of a document no approval stands about.
+    #[error("no approval stands about {subject}, so there is nothing it saw")]
+    NotApproved {
+        /// The document.
+        subject: DocId,
+    },
 }
 
 /// What kind of trouble an error is, for a surface to decide how to end.
@@ -131,7 +137,8 @@ impl ShelfError {
             | Self::NotAKeyOfAnyBook { .. }
             | Self::NothingToRevoke { .. }
             | Self::NotASuccessor { .. }
-            | Self::NothingRequested => ErrorClass::Request,
+            | Self::NothingRequested
+            | Self::NotApproved { .. } => ErrorClass::Request,
             Self::Refused(_) | Self::Decision(_) => ErrorClass::Refused,
             Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,
         }

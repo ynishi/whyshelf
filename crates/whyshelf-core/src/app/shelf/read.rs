@@ -162,6 +162,7 @@ impl<P: ShelfRead> ShelfApp<P> {
                 to: match edge.end {
                     LinkEnd::Doc(target) => UpstreamEnd::Doc(Box::new(view.row(target))),
                     LinkEnd::Unresolved(unresolved) => UpstreamEnd::Unresolved(unresolved),
+                    LinkEnd::Artifact(artifact) => UpstreamEnd::Artifact(artifact),
                 },
             })
             .collect();
@@ -176,8 +177,8 @@ impl<P: ShelfRead> ShelfApp<P> {
                     depth: edge.depth,
                     holder: Box::new(view.row(edge.holder)),
                 }),
-                // A walk down only follows resolved links.
-                LinkEnd::Unresolved(_) => None,
+                // A walk down only follows resolved links to documents.
+                LinkEnd::Unresolved(_) | LinkEnd::Artifact(_) => None,
             })
             .collect();
         Ok(TraceReport {

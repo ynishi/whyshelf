@@ -11,13 +11,19 @@
 //!                                         output::* (serde) -> stdout, exit status
 //! ```
 //!
+//! `show --approved` and `diff` only read: they bring back the content an approval
+//! saw (through Git, by the address the record kept) for a person to read, and
+//! never put anything back in place; that is Git's work and a person's. The text of
+//! a difference is made here, by [`textdiff`], from the two contents the use case
+//! gives as values.
+//!
 //! The exit status follows the table of the other commands ([`crate::run`]):
 //!
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `books check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `show --approved` or `diff` of a document no approval stands about) |
 //! | 3 | the run failed (a file could not be read or written) |
 
 // `ShelfError` and the refusals of the domain hold lists of problems; they are
@@ -26,6 +32,7 @@
 
 pub mod args;
 pub mod output;
+pub mod textdiff;
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -81,6 +88,15 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             .stale()
             .await
             .map(|r| print(&output::stale(&r))),
+        // `--approved` is required by the arguments, so `show` has this one view.
+        BooksCommand::Show { reference, .. } => ShelfApp::new(project)
+            .show_approved(&reference)
+            .await
+            .map(|r| print(&output::approved(&r))),
+        BooksCommand::Diff { reference } => ShelfApp::new(project)
+            .diff(&reference)
+            .await
+            .map(|r| print(&output::diff(&r))),
         BooksCommand::Judge(verb) => match judge_requests(verb) {
             Ok(requests) => ShelfApp::new(project)
                 .judge_all(requests)

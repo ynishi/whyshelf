@@ -72,3 +72,8 @@ means = "depends"
 name = "see"                # findings worth reading, which do not make it stale
 target = "finding"
 means = "informs"
+
+[[book.link]]
+name = "tests"              # the tests that show it holds: files, by path; editing one makes it stale
+target = "artifact"
+means = "depends"

@@ -14,6 +14,12 @@
 //!   record    ---- LedgerAppend::append ----------> the ledger (create-only)
 //! ```
 //!
+//! An approval is given, between the frame and the record, the address of each file
+//! it stands on and the revision now ([`ApproveFrame::addressed`], rule A5): the
+//! addresses of the artifacts from the load, those of the documents' files from the
+//! [`ArtifactSource`], the revision from the [`RevisionSource`]. None of them changes
+//! what is refused.
+//!
 //! The time, the identity of the record and the actor are fetched only after every
 //! check has passed, so a refused judgement uses none of them. The write is the last
 //! step, so a refusal writes nothing.
@@ -32,10 +38,12 @@
 //! [`Successors::of`]: crate::domain::shelf::freshness::Successors::of
 //! [`Ledger::status_of`]: crate::domain::shelf::ledger::Ledger::status_of
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::actor::Actor;
+use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
+use crate::domain::shelf::artifact::ContentAddress;
 use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
     ApproveFrame, Decision, DeclaredStatus, JudgedAt, JudgementId, Ledger, PresentFrame, Record,
@@ -46,7 +54,10 @@ use crate::domain::shelf::lookup::Reference;
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
-use super::ports::{ActorSource, IdSource, LedgerAppend, ShelfPort, ShelfWrite, port};
+use super::ports::{
+    ActorSource, ArtifactSource, IdSource, LedgerAppend, RevisionSource, ShelfPort, ShelfWrite,
+    port,
+};
 use super::read::identity;
 use super::report::Judged;
 
@@ -217,6 +228,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
 
         let record = match plan {
             Plan::Approve(frame, until) => {
+                let frame = self.addressed(loaded, frame).await?;
                 Record::Decision(Decision::approve(id, frame, until, actor, now, reason)?)
             }
             Plan::Deny(frame) => Record::Decision(Decision::deny(id, frame, actor, now, reason)?),
@@ -237,5 +249,52 @@ impl<P: ShelfWrite> ShelfApp<P> {
             key,
             successors,
         })
+    }
+
+    /// The frame of an approval with the address of each file it stands on and the
+    /// revision now (rule A5); which address goes on which item is the domain's
+    /// ([`ApproveFrame::addressed`]).
+    ///
+    /// The address of an artifact is the one read with its hash when the project was
+    /// loaded, so the two are of one reading; the files of the documents are asked
+    /// for now. An adapter that can say no address (outside version control) leaves
+    /// the record without one, and that is no error.
+    async fn addressed(
+        &self,
+        loaded: &Loaded,
+        frame: ApproveFrame,
+    ) -> Result<ApproveFrame, ShelfError> {
+        let mut addresses: BTreeMap<RelPath, ContentAddress> = BTreeMap::new();
+        let mut ask = Vec::new();
+        for file in frame.files() {
+            match loaded.artifacts.get(&file) {
+                Some(reading) => {
+                    if let Some(address) = reading.address() {
+                        addresses.insert(file, address.clone());
+                    }
+                }
+                None => ask.push(file),
+            }
+        }
+        if !ask.is_empty() {
+            let found = self
+                .ports
+                .artifacts()
+                .read_artifacts(&ask)
+                .await
+                .map_err(port(ShelfPort::Artifacts))?;
+            for (file, reading) in found {
+                if let Some(address) = reading.address() {
+                    addresses.insert(file, address.clone());
+                }
+            }
+        }
+        let revision = self
+            .ports
+            .revisions()
+            .revision()
+            .await
+            .map_err(port(ShelfPort::Revision))?;
+        Ok(frame.addressed(&addresses, revision))
     }
 }

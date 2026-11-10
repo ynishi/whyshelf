@@ -566,7 +566,47 @@ pub enum Propagation {
     Replaces,
 }
 
-/// A kind of link a book declares.
+/// What a link to an artifact (a file that is no document) means for freshness: one
+/// of the two meanings of [`Propagation`] a file can have.
+///
+/// There is no `Replaces`: a file takes no document's place, so a declaration that
+/// says so is refused ([`SchemaProblem::ArtifactReplaces`]) and the type cannot hold
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtifactPropagation {
+    /// The document stands on the file: an approval pins what is there (rule A2),
+    /// and a change makes the approval stale (A3).
+    Depends,
+    /// The document points at the file for information; it changes no freshness.
+    Informs,
+}
+
+impl ArtifactPropagation {
+    /// The meaning as a [`Propagation`], for an answer that lists every link.
+    pub fn propagation(self) -> Propagation {
+        match self {
+            Self::Depends => Propagation::Depends,
+            Self::Informs => Propagation::Informs,
+        }
+    }
+}
+
+/// A kind of link a book declares to artifacts: files of the project that are no
+/// document, named by their path under the root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactLinkKind {
+    /// How many paths a document writes.
+    pub cardinality: Cardinality,
+    /// What the link means for freshness.
+    pub propagation: ArtifactPropagation,
+}
+
+/// The name no book can have: the word a declaration uses for the target of a link to
+/// a file that is no document (`target = "artifact"`), so that the word never names a
+/// book as well.
+pub const ARTIFACT_TARGET: &str = "artifact";
+
+/// A kind of link a book declares to another book.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkKind {
     /// The book the link points into.
@@ -589,6 +629,7 @@ pub struct BookSchema {
     key: KeyPattern,
     fields: BTreeMap<EntryName, FieldDecl>,
     links: BTreeMap<EntryName, LinkKind>,
+    artifact_links: BTreeMap<EntryName, ArtifactLinkKind>,
 }
 
 impl BookSchema {
@@ -612,9 +653,15 @@ impl BookSchema {
         &self.fields
     }
 
-    /// The links of the book, by name.
+    /// The links of the book into books, by name.
     pub fn links(&self) -> &BTreeMap<EntryName, LinkKind> {
         &self.links
+    }
+
+    /// The links of the book to artifacts, by name. A name is a link into a book or
+    /// a link to artifacts, never both.
+    pub fn artifact_links(&self) -> &BTreeMap<EntryName, ArtifactLinkKind> {
+        &self.artifact_links
     }
 }
 
@@ -674,13 +721,23 @@ pub struct FieldEntryDecl {
     pub presence: FieldPresence,
 }
 
+/// What a declared link points at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LinkTargetDecl {
+    /// Documents of the book of this name, as written.
+    Book(String),
+    /// Files of the project that are no document, by path (an adapter reads it from
+    /// the word [`ARTIFACT_TARGET`]).
+    Artifact,
+}
+
 /// A link as declared.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkEntryDecl {
     /// The name of the link.
     pub name: String,
-    /// The book it points into.
-    pub target: String,
+    /// What it points at.
+    pub target: LinkTargetDecl,
     /// How many links a document holds.
     pub cardinality: Cardinality,
     /// What the link means for freshness.
@@ -840,6 +897,20 @@ pub enum SchemaProblem {
         /// The book it points into.
         target: BookName,
     },
+    /// A link to artifacts that says it replaces them: a file takes no document's
+    /// place, so such a link `depends` or `informs`.
+    #[error(
+        "book `{book}`: the link `{link}` points at artifacts, so it depends or informs and does not replace"
+    )]
+    ArtifactReplaces {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+    },
+    /// A book named with the word a link uses for artifacts.
+    #[error("`{ARTIFACT_TARGET}` is the target of a link to artifacts and cannot name a book")]
+    ReservedBookName,
 }
 
 /// Whether a file belongs to a book: what `Schema::membership` answers.
@@ -867,6 +938,7 @@ struct Draft {
     key: Option<KeyPattern>,
     fields: BTreeMap<EntryName, FieldDecl>,
     links: BTreeMap<EntryName, DraftLink>,
+    artifact_links: BTreeMap<EntryName, ArtifactLinkKind>,
     clean: bool,
 }
 
@@ -886,7 +958,7 @@ impl Draft {
         let dir = read_dir(&label, &decl.dir, problems);
         let key = read_key_pattern(&label, &decl.key, problems);
         let fields = read_fields(&label, decl.fields, problems);
-        let links = read_links(&label, decl.links, &fields, problems);
+        let (links, artifact_links) = read_links(&label, decl.links, &fields, problems);
         Self {
             label,
             name,
@@ -894,6 +966,7 @@ impl Draft {
             key,
             fields,
             links,
+            artifact_links,
             clean: problems.len() == first_problem,
         }
     }
@@ -926,11 +999,16 @@ impl Draft {
             key: self.key?,
             fields: self.fields,
             links,
+            artifact_links: self.artifact_links,
         })
     }
 }
 
 fn read_book_name(text: &str, problems: &mut Vec<SchemaProblem>) -> Option<BookName> {
+    if text == ARTIFACT_TARGET {
+        problems.push(SchemaProblem::ReservedBookName);
+        return None;
+    }
     match BookName::new(text) {
         Ok(name) => Some(name),
         Err(why) => {
@@ -1063,15 +1141,21 @@ fn read_field_type(
     }
 }
 
-/// The links of a book; one that breaks a rule is reported and left out. `fields`
-/// are the fields already read, for a name that is both.
+/// The links of a book, into books and to artifacts; one that breaks a rule is
+/// reported and left out. `fields` are the fields already read, for a name that is
+/// both. A name is one link, whichever its target: a name written twice is reported
+/// whether the two point at books or at artifacts.
 fn read_links(
     book: &str,
     entries: Vec<LinkEntryDecl>,
     fields: &BTreeMap<EntryName, FieldDecl>,
     problems: &mut Vec<SchemaProblem>,
-) -> BTreeMap<EntryName, DraftLink> {
+) -> (
+    BTreeMap<EntryName, DraftLink>,
+    BTreeMap<EntryName, ArtifactLinkKind>,
+) {
     let mut links = BTreeMap::new();
+    let mut artifact_links = BTreeMap::new();
     for entry in entries {
         let name = match EntryName::new(&entry.name) {
             Ok(name) => name,
@@ -1086,19 +1170,22 @@ fn read_links(
                 continue;
             }
         };
-        let target = match BookName::new(&entry.target) {
-            Ok(target) => target,
-            Err(why) => {
-                problems.push(SchemaProblem::BadName {
-                    place: NamePlace::LinkTarget {
-                        book: book.to_owned(),
-                        link: entry.name,
-                    },
-                    text: entry.target,
-                    why,
-                });
-                continue;
-            }
+        let target = match entry.target {
+            LinkTargetDecl::Artifact => None,
+            LinkTargetDecl::Book(target) => match BookName::new(&target) {
+                Ok(target) => Some(target),
+                Err(why) => {
+                    problems.push(SchemaProblem::BadName {
+                        place: NamePlace::LinkTarget {
+                            book: book.to_owned(),
+                            link: entry.name,
+                        },
+                        text: target,
+                        why,
+                    });
+                    continue;
+                }
+            },
         };
         if fields.contains_key(&name) {
             problems.push(SchemaProblem::NameCollision {
@@ -1106,19 +1193,43 @@ fn read_links(
                 name: name.clone(),
             });
         }
-        let link = DraftLink {
-            target,
-            cardinality: entry.cardinality,
-            propagation: entry.propagation,
-        };
-        if links.insert(name.clone(), link).is_some() {
+        let taken = links.contains_key(&name) || artifact_links.contains_key(&name);
+        if taken {
             problems.push(SchemaProblem::DuplicateLink {
                 book: book.to_owned(),
-                name,
+                name: name.clone(),
             });
         }
+        match target {
+            Some(target) => {
+                let link = DraftLink {
+                    target,
+                    cardinality: entry.cardinality,
+                    propagation: entry.propagation,
+                };
+                links.entry(name).or_insert(link);
+            }
+            None => {
+                let propagation = match entry.propagation {
+                    Propagation::Depends => ArtifactPropagation::Depends,
+                    Propagation::Informs => ArtifactPropagation::Informs,
+                    Propagation::Replaces => {
+                        problems.push(SchemaProblem::ArtifactReplaces {
+                            book: book.to_owned(),
+                            link: name,
+                        });
+                        continue;
+                    }
+                };
+                let link = ArtifactLinkKind {
+                    cardinality: entry.cardinality,
+                    propagation,
+                };
+                artifact_links.entry(name).or_insert(link);
+            }
+        }
     }
-    links
+    (links, artifact_links)
 }
 
 /// The names of the books declared, each once; a name written twice is reported
@@ -1208,7 +1319,8 @@ impl Schema {
     /// reserved name, a book, a field or a link declared twice, a name that is both
     /// a field and a link, a link into a book that is not declared, an enum with no
     /// word, two books that use one key prefix, two directories that are the same or
-    /// nest, and a `Replaces` link that leaves its own book. A [`Schema`] exists
+    /// nest, a `Replaces` link that leaves its own book, a link to artifacts that
+    /// replaces, and a book named [`ARTIFACT_TARGET`]. A [`Schema`] exists
     /// only when there is none, so nothing after this re-checks a declaration.
     // The problems are the answer, read once per run; it is not a hot path.
     #[allow(clippy::result_large_err)]

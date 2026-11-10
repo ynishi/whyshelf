@@ -318,6 +318,45 @@ mod tests {
         ));
     }
 
+    /// An approval as a file of the first version holds it: no `artifacts`, no
+    /// `seen_address`, no `revision`, a pin with no `address`.
+    const FIRST_VERSION_APPROVAL: &str = r#"{
+  "v": 1,
+  "kind": "decision",
+  "verb": "approve",
+  "id": "00000000-0000-7000-8000-000000000003",
+  "subject": "00000000-0000-7000-8000-000000000002",
+  "actor": "ana",
+  "at": 1700000000000,
+  "reason": null,
+  "seen": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "frame": [
+    {
+      "link": "grounds",
+      "target": "00000000-0000-7000-8000-000000000001",
+      "key": {
+        "book": "finding",
+        "form": { "kind": "prefixed", "prefix": "F", "tail": { "kind": "number", "value": "1" } }
+      },
+      "hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "expires": null
+}"#;
+
+    #[test]
+    fn a_record_of_the_first_version_reads_back_unchanged() {
+        let record = decode(FIRST_VERSION_APPROVAL.as_bytes()).unwrap();
+        let original: Value = serde_json::from_str(FIRST_VERSION_APPROVAL).unwrap();
+        assert_eq!(to_json(&record.to_canon()), original);
+        assert_eq!(
+            record.hash(),
+            Record::from_canon(&from_json(original).unwrap())
+                .unwrap()
+                .hash()
+        );
+    }
+
     #[test]
     fn a_float_has_no_canonical_form() {
         let value: Value = serde_json::from_str("[1.5]").unwrap();

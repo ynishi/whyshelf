@@ -50,8 +50,21 @@
 //! - for each `Depends` link name, the set of what it names now against what the
 //!   frame pinned ([`Cause::LinksChanged`]), leaving out what an edge rule already
 //!   said about the same upstream (matched by key, not by count);
+//! - for each pinned artifact still written under its link, rule A3: a file whose
+//!   hash differs is [`Cause::ArtifactChanged`], a file that went is
+//!   [`Cause::ArtifactGone`], a file that came where there was none is
+//!   [`Cause::ArtifactArrived`], and no file then and none now is nothing; for each
+//!   `Depends` link to artifacts, the paths it writes now against those pinned
+//!   ([`Cause::ArtifactLinksChanged`]);
 //! - a cycle the document is in, among links or among frames;
 //! - an expiry: `now >= expires`.
+//!
+//! Freshness is decided by hashes alone (rule A4): the [`ContentAddress`] a pin may
+//! carry and the [`Revision`] of a record are never read here, so a project outside
+//! any version control has the same freshness as one inside.
+//!
+//! [`ContentAddress`]: super::artifact::ContentAddress
+//! [`Revision`]: super::artifact::Revision
 //!
 //! Every fact is said once. Notices ([`Notice`]) are what is worth knowing and does
 //! not change a freshness: they come from `collect_notices`'s table.
@@ -59,13 +72,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
+use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 
+use super::artifact::{ArtifactHash, ArtifactState};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
 use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
 use super::graph::{Cycle, CycleId};
-use super::ledger::{DeclaredStatus, FramePin, JudgedAt, Ledger, LedgerProblem};
-use super::schema::{EntryName, Propagation};
+use super::ledger::{ArtifactPin, DeclaredStatus, FramePin, JudgedAt, Ledger, LedgerProblem};
+use super::schema::{ArtifactPropagation, EntryName, Propagation};
 
 /// The documents that take the place of a deprecated one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,6 +199,36 @@ pub enum Cause {
         /// upstream another cause already says is gone, invalid or unknown).
         unresolved: Vec<UnresolvedLink>,
     },
+    /// A pinned artifact's file is there and is not what was pinned (rule A3).
+    ArtifactChanged {
+        /// The pin.
+        pin: ArtifactPin,
+        /// The hash it has now.
+        now: ArtifactHash,
+    },
+    /// A pinned artifact had a file when it was pinned and has none now (rule A3).
+    ArtifactGone {
+        /// The pin.
+        pin: ArtifactPin,
+    },
+    /// A pinned artifact had no file when it was pinned and has one now: the
+    /// evidence came, so look again (rule A3).
+    ArtifactArrived {
+        /// The pin.
+        pin: ArtifactPin,
+        /// The hash it has now.
+        now: ArtifactHash,
+    },
+    /// What a `Depends` link to artifacts names now is not what the approval pinned
+    /// for it: paths written since, and paths pinned that it no longer writes.
+    ArtifactLinksChanged {
+        /// The link.
+        link: EntryName,
+        /// Paths it writes now that were not pinned.
+        added: Vec<RelPath>,
+        /// Paths that were pinned and that it no longer writes.
+        removed: Vec<RelPath>,
+    },
     /// The document is in a cycle.
     InCycle {
         /// The cycle, which says whether it is among links or among frames.
@@ -209,12 +254,23 @@ impl Cause {
     /// | `UpstreamDeclared` of `Denied`, `Retired`, or of `Deprecated` with none | `Broken` |
     /// | `Via` | the strength it carries (`Stale` or `Broken`; an upstream that is only `Expired` makes no `Via`) |
     /// | `LinksChanged` | `Broken` when some key cannot be followed, otherwise `Stale` |
+    /// | `ArtifactChanged`, `ArtifactArrived`, `ArtifactLinksChanged` | `Stale` |
+    /// | `ArtifactGone` | `Broken` |
     /// | `InCycle` | `Broken` |
     /// | `Expired` | `Expired` |
+    ///
+    /// A pinned artifact that had no file and still has none is no cause at all (rule
+    /// A3), so it has no row.
     pub fn severity(&self) -> Severity {
         match self {
-            Self::SelfChanged { .. } | Self::UpstreamChanged { .. } => Severity::Stale,
-            Self::SelfNotValid(_) | Self::UpstreamNotValid { .. } => Severity::Broken,
+            Self::SelfChanged { .. }
+            | Self::UpstreamChanged { .. }
+            | Self::ArtifactChanged { .. }
+            | Self::ArtifactArrived { .. }
+            | Self::ArtifactLinksChanged { .. } => Severity::Stale,
+            Self::SelfNotValid(_) | Self::UpstreamNotValid { .. } | Self::ArtifactGone { .. } => {
+                Severity::Broken
+            }
             Self::UpstreamDeclared { status, .. } => match status {
                 UpstreamStatus::Pending
                 | UpstreamStatus::Deprecated {
@@ -627,9 +683,20 @@ fn stand_in_order(cx: &Cx<'_>, ledger: &Ledger, order: Vec<DocId>) -> Standings 
             DeclaredStatus::Approved {
                 seen,
                 frame,
+                artifacts,
                 expires,
                 ..
-            } => Standing::Approved(freshness_of(cx, id, seen, frame, *expires, &standings)),
+            } => Standing::Approved(freshness_of(
+                cx,
+                id,
+                Pinned {
+                    seen,
+                    frame,
+                    artifacts,
+                },
+                *expires,
+                &standings,
+            )),
         };
         standings.insert(id, standing);
         statuses.insert(id, status);
@@ -651,17 +718,29 @@ fn invalid_files(shelf: &Shelf) -> Vec<InvalidDoc> {
         .collect()
 }
 
+/// What an approval pinned: the hash it saw, the upstreams and the artifacts.
+struct Pinned<'a> {
+    seen: &'a DocHash,
+    frame: &'a BTreeSet<FramePin>,
+    artifacts: &'a BTreeSet<ArtifactPin>,
+}
+
 fn freshness_of(
     cx: &Cx<'_>,
     id: DocId,
-    seen: &DocHash,
-    frame: &BTreeSet<FramePin>,
+    pinned: Pinned<'_>,
     expires: Option<JudgedAt>,
     standings: &BTreeMap<DocId, Standing>,
 ) -> Freshness {
     let mut causes = Vec::new();
     match cx.shelf.state_of(id).valid_or_failure() {
-        Ok(doc) => valid_causes(cx, doc, seen, frame, standings, &mut causes),
+        Ok(doc) => {
+            valid_causes(cx, doc, pinned.seen, pinned.frame, standings, &mut causes);
+            causes.extend(artifact_causes(doc, pinned.artifacts));
+            if let Some(ids) = cx.in_cycle.get(&doc.id()) {
+                causes.extend(ids.iter().map(|cycle| Cause::InCycle { cycle: *cycle }));
+            }
+        }
         Err(failure) => causes.push(Cause::SelfNotValid(failure)),
     }
     if let Some(since) = expires
@@ -693,10 +772,76 @@ fn valid_causes(
     }
 
     causes.extend(link_changes(doc, frame, &lost));
+}
 
-    if let Some(ids) = cx.in_cycle.get(&doc.id()) {
-        causes.extend(ids.iter().map(|cycle| Cause::InCycle { cycle: *cycle }));
+/// The causes the pinned artifacts of a valid document add (rule A3), and the change
+/// of what its `Depends` links to artifacts name.
+///
+/// Only the [`ArtifactState`] is compared: an address in a pin is never read (A4).
+/// A path still written under the link it was pinned for is compared with what is
+/// there now; a pinned path no longer written, and a path written that was not
+/// pinned, are an [`Cause::ArtifactLinksChanged`] of that link.
+fn artifact_causes(doc: &Doc, pinned: &BTreeSet<ArtifactPin>) -> Vec<Cause> {
+    let current: BTreeMap<(&EntryName, &RelPath), &ArtifactState> = doc
+        .artifact_links_of(ArtifactPropagation::Depends)
+        .into_iter()
+        .flat_map(|(link, artifacts)| {
+            artifacts
+                .iter()
+                .map(move |artifact| ((link, artifact.path()), artifact.state()))
+        })
+        .collect();
+
+    let mut causes = Vec::new();
+    for pin in pinned {
+        let Some(now) = current.get(&(pin.link(), pin.path())) else {
+            continue;
+        };
+        match (pin.seen().state(), **now) {
+            (ArtifactState::Present(then), ArtifactState::Present(now)) if then != now => {
+                causes.push(Cause::ArtifactChanged {
+                    pin: pin.clone(),
+                    now,
+                });
+            }
+            (ArtifactState::Present(_), ArtifactState::Absent) => {
+                causes.push(Cause::ArtifactGone { pin: pin.clone() });
+            }
+            (ArtifactState::Absent, ArtifactState::Present(now)) => {
+                causes.push(Cause::ArtifactArrived {
+                    pin: pin.clone(),
+                    now,
+                });
+            }
+            (ArtifactState::Present(_), ArtifactState::Present(_))
+            | (ArtifactState::Absent, ArtifactState::Absent) => {}
+        }
     }
+
+    let mut names: BTreeSet<&EntryName> = pinned.iter().map(ArtifactPin::link).collect();
+    names.extend(current.keys().map(|(link, _)| *link));
+    for name in names {
+        let was: BTreeSet<&RelPath> = pinned
+            .iter()
+            .filter(|p| p.link() == name)
+            .map(ArtifactPin::path)
+            .collect();
+        let is: BTreeSet<&RelPath> = current
+            .keys()
+            .filter(|(link, _)| *link == name)
+            .map(|(_, path)| *path)
+            .collect();
+        let added: Vec<RelPath> = is.difference(&was).map(|p| (*p).clone()).collect();
+        let removed: Vec<RelPath> = was.difference(&is).map(|p| (*p).clone()).collect();
+        if !added.is_empty() || !removed.is_empty() {
+            causes.push(Cause::ArtifactLinksChanged {
+                link: name.clone(),
+                added,
+                removed,
+            });
+        }
+    }
+    causes
 }
 
 /// The causes one pin of the frame of a valid document adds: its upstream is no
@@ -928,5 +1073,7 @@ fn collect_notices(
     all
 }
 
+#[cfg(test)]
+mod artifact_tests;
 #[cfg(test)]
 mod tests;

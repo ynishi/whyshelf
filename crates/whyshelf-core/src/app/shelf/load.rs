@@ -11,15 +11,23 @@
 //!                                         |  dirs of the books
 //!   DocSource <---------------------------+
 //!        |
-//!        v  readings
-//!   Shelf::build --------+
+//!        v  readings --Shelf::artifact_paths--> ArtifactSource (hash, address?, or absent)
+//!        |                                            |
+//!        v                                            v  ArtifactReadings
+//!   Shelf::build <------------------------------------+
+//!        |
+//!        +---------------+
 //!                        +--> Loaded --assess--> Assessment --> View --> reports
 //!   LedgerRead -> Ledger::build
 //!   Clock ---------------------------------------^ (now)
+//!
+//!   (no path written in a link to artifacts: the ArtifactSource is not asked)
 //! ```
 
 use crate::domain::id::DocId;
+use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::Shelf;
 use crate::domain::shelf::freshness::{Assessment, assess};
 use crate::domain::shelf::ledger::{JudgedAt, Ledger, Record};
@@ -27,7 +35,8 @@ use crate::domain::shelf::schema::{BookDir, Schema, SchemaProblem};
 
 use super::error::ShelfError;
 use super::ports::{
-    BookSchemaSource, Clock, DocSource, LedgerRead, ShelfPort, ShelfRead, UnreadableRecord, port,
+    ArtifactSource, BookSchemaSource, Clock, DocSource, LedgerRead, ShelfPort, ShelfRead,
+    UnreadableRecord, port,
 };
 use super::report::{Health, Names, Row};
 
@@ -40,6 +49,10 @@ pub(super) struct Loaded {
     /// again with the ones it adds.
     pub(super) records: Vec<Record>,
     pub(super) unreadable: Vec<UnreadableRecord>,
+    /// What the artifact source found at the paths the documents link to, with the
+    /// addresses: a judgement keeps the address of what it pinned from here, so the
+    /// address and the hash are of one reading.
+    pub(super) artifacts: ArtifactReadings,
     pub(super) now: JudgedAt,
 }
 
@@ -76,7 +89,19 @@ pub(super) async fn load_with<P: ShelfRead>(
         .read_docs(&dirs)
         .await
         .map_err(port(ShelfPort::Docs))?;
-    let shelf = Shelf::build(schema, readings);
+    let paths: Vec<RelPath> = Shelf::artifact_paths(schema, &readings)
+        .into_iter()
+        .collect();
+    let artifacts = if paths.is_empty() {
+        ArtifactReadings::new()
+    } else {
+        ports
+            .artifacts()
+            .read_artifacts(&paths)
+            .await
+            .map_err(port(ShelfPort::Artifacts))?
+    };
+    let shelf = Shelf::build(schema, readings, &artifacts);
     let contents = ports
         .ledger()
         .read()
@@ -89,6 +114,7 @@ pub(super) async fn load_with<P: ShelfRead>(
         ledger,
         records: contents.records,
         unreadable: contents.unreadable,
+        artifacts,
         now,
     })
 }

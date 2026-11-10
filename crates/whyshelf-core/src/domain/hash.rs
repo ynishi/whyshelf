@@ -105,6 +105,10 @@ pub enum HashKind {
     /// The canonical form of a record in a shelf's ledger of judgements (see
     /// [`shelf`](super::shelf)).
     ShelfJudgement,
+    /// The bytes of a file of a project that is no document of a shelf (code, a
+    /// test, data), as an approval pins it (see
+    /// [`shelf::artifact`](super::shelf::artifact)).
+    ShelfArtifact,
 }
 
 impl HashKind {
@@ -129,6 +133,7 @@ impl HashKind {
             Self::Abort => "abort",
             Self::ShelfDoc => "shelf-doc",
             Self::ShelfJudgement => "shelf-judgement",
+            Self::ShelfArtifact => "shelf-artifact",
         }
     }
 

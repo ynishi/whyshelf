@@ -11,6 +11,8 @@
 //!   <root>/.whyshelf/books.toml        --books-->  Vec<BookSchemaDecl>
 //!   <root>/<book dir>/**/*.md          --docs--->  Vec<DocReading>
 //!   <root>/.whyshelf/ledger/<id>.json  <-ledger->  Record (through Canon)
+//!   <root>/<path an artifact link names> --git-->  ArtifactReadings (hash, blob name?)
+//!   Git: HEAD, blobs                   --git--->  Revision, content read back
 //!   system clock, UUID v7, actor       --system->  JudgedAt, JudgementId, Actor
 //! ```
 //!
@@ -19,7 +21,18 @@
 //! | `.whyshelf/books.toml` | [`BookSchemaSource`] | [`books`] |
 //! | the Markdown files of the books | [`DocSource`] | [`docs`] |
 //! | `.whyshelf/ledger/<id>.json` | [`LedgerRead`], [`LedgerAppend`] | [`ledger`] |
+//! | the files links to artifacts name, and Git | [`ArtifactSource`], [`ContentStore`], [`RevisionSource`] | [`git`] |
 //! | none | [`Clock`], [`IdSource`], [`ActorSource`] | [`system`] |
+//!
+//! Git's words (blob, commit, `HEAD`) are this crate's alone: the domain holds an
+//! opaque [`ContentAddress`] and [`Revision`], and nothing but [`git`] knows they are
+//! Git's.
+//!
+//! [`ArtifactSource`]: whyshelf_core::app::shelf::ArtifactSource
+//! [`ContentStore`]: whyshelf_core::app::shelf::ContentStore
+//! [`RevisionSource`]: whyshelf_core::app::shelf::RevisionSource
+//! [`ContentAddress`]: whyshelf_core::domain::shelf::artifact::ContentAddress
+//! [`Revision`]: whyshelf_core::domain::shelf::artifact::Revision
 //!
 //! [`Project`] bundles them for a project root, as one value the command line hands
 //! to [`ShelfApp`](whyshelf_core::app::shelf::ShelfApp).
@@ -37,6 +50,7 @@
 
 pub mod books;
 pub mod docs;
+pub mod git;
 pub mod ledger;
 pub mod system;
 
@@ -46,6 +60,7 @@ use whyshelf_core::app::shelf::{ShelfRead, ShelfWrite};
 
 use books::BooksToml;
 use docs::MarkdownDocs;
+use git::GitArtifacts;
 use ledger::JsonLedger;
 use system::{ProjectActor, SystemClock, UuidV7Ids};
 
@@ -61,6 +76,7 @@ pub struct Project {
     clock: SystemClock,
     ids: UuidV7Ids,
     actor: ProjectActor,
+    git: GitArtifacts,
 }
 
 impl Project {
@@ -75,6 +91,7 @@ impl Project {
             ledger: JsonLedger::new(root.join(WHYSHELF_DIR).join("ledger"), WHYSHELF_DIR),
             clock: SystemClock,
             ids: UuidV7Ids,
+            git: GitArtifacts::new(root.clone()),
             actor: ProjectActor::new(root, actor),
         }
     }
@@ -90,6 +107,16 @@ impl ShelfRead for Project {
     type Docs = MarkdownDocs;
     type Ledger = JsonLedger;
     type Clock = SystemClock;
+    type Artifacts = GitArtifacts;
+    type Store = GitArtifacts;
+
+    fn artifacts(&self) -> &GitArtifacts {
+        &self.git
+    }
+
+    fn store(&self) -> &GitArtifacts {
+        &self.git
+    }
 
     fn schemas(&self) -> &BooksToml {
         &self.books
@@ -112,6 +139,11 @@ impl ShelfWrite for Project {
     type Append = JsonLedger;
     type Ids = UuidV7Ids;
     type Actor = ProjectActor;
+    type Revisions = GitArtifacts;
+
+    fn revisions(&self) -> &GitArtifacts {
+        &self.git
+    }
 
     fn append(&self) -> &JsonLedger {
         &self.ledger

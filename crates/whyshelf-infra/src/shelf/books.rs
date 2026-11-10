@@ -21,7 +21,16 @@
 //! target = "finding"
 //! count = "at-least-one"           # "one", "optional", "many" (default), "at-least-one"
 //! means = "depends"                # "depends", "informs", "replaces"
+//!
+//! [[book.link]]
+//! name = "tests"
+//! target = "artifact"              # files that are no document, by path under the root
+//! means = "depends"                # "depends" or "informs" (an artifact replaces nothing)
 //! ```
+//!
+//! The word `artifact` as a target is read here into
+//! [`LinkTargetDecl::Artifact`]; the domain refuses a book of that name, so the word
+//! never names both.
 //!
 //! This module reads the text and its shape; whether the books make sense (names,
 //! directories that overlap, links to a book that is not declared) is
@@ -35,8 +44,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use whyshelf_core::app::shelf::BookSchemaSource;
 use whyshelf_core::domain::shelf::schema::{
-    BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl, KeyPatternDecl,
-    LinkEntryDecl, Propagation,
+    ARTIFACT_TARGET, BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl,
+    KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation,
 };
 
 /// A declaration of a Finding -> Spec -> Design chain, as a project could write it.
@@ -260,7 +269,11 @@ impl BookDto {
                 .into_iter()
                 .map(|l| LinkEntryDecl {
                     name: l.name,
-                    target: l.target,
+                    target: if l.target == ARTIFACT_TARGET {
+                        LinkTargetDecl::Artifact
+                    } else {
+                        LinkTargetDecl::Book(l.target)
+                    },
                     cardinality: match l.count {
                         CountWord::One => Cardinality::One,
                         CountWord::Optional => Cardinality::Optional,
@@ -334,6 +347,18 @@ means = "informs"
     }
 
     #[test]
+    fn the_target_artifact_is_a_link_to_files_and_not_to_a_book() {
+        let decls = parse(
+            "[[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [[book.link]]\nname='tests'\ntarget='artifact'\nmeans='depends'\n",
+        )
+        .unwrap();
+        assert_eq!(decls[0].links[0].target, LinkTargetDecl::Artifact);
+        let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
+        assert_eq!(schema.book("a").unwrap().artifact_links().len(), 1);
+    }
+
+    #[test]
     fn a_key_the_shape_does_not_know_is_refused() {
         assert!(parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\ncolour='red'\n").is_err());
         assert!(parse("[[book]]\nname='a'\ndir='a'\nkey='uuid'\n").is_err());
@@ -352,6 +377,8 @@ means = "informs"
         assert_eq!(names, ["finding", "spec", "design"]);
         let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
         assert_eq!(schema.books().len(), 3);
+        let design = schema.book("design").unwrap();
+        assert!(design.artifact_links().contains_key("tests"));
     }
 
     #[tokio::test]

@@ -18,15 +18,19 @@
 //! | [`Clock`] | now, as a [`JudgedAt`] |
 //! | [`IdSource`] | the identity of a new record |
 //! | [`ActorSource`] | who is acting |
+//! | [`ArtifactSource`] | for each path a document links to: the hash of the file and where its content can be read back, or no file; and the bytes of a file now |
+//! | [`ContentStore`] | content read back by its [`ContentAddress`], or "not readable" |
+//! | [`RevisionSource`] | the point of the project's history now, if there is one |
 //!
 //! The ports are bundled in two traits, so that a use case that only reads is generic
 //! over a type that has nothing to write with:
 //!
 //! ```text
-//!   ShelfRead   BookSchemaSource  DocSource  LedgerRead  Clock
+//!   ShelfRead   BookSchemaSource  DocSource  LedgerRead  Clock  ArtifactSource  ContentStore
 //!        ^
-//!        |      what `books check`, `status`, `get`, `trace` and `stale` are generic over
-//!   ShelfWrite  + LedgerAppend  IdSource  ActorSource
+//!        |      what `books check`, `status`, `get`, `trace`, `stale`, `show --approved`
+//!        |      and `diff` are generic over
+//!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource
 //!               what `judge` is generic over
 //! ```
 
@@ -38,6 +42,7 @@ use thiserror::Error;
 
 use crate::domain::actor::Actor;
 use crate::domain::location::RelPath;
+use crate::domain::shelf::artifact::{ArtifactReadings, ContentAddress, Revision};
 use crate::domain::shelf::build::DocReading;
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record, RecordProblem};
 use crate::domain::shelf::schema::{BookDir, BookSchemaDecl};
@@ -61,6 +66,12 @@ pub enum ShelfPort {
     Ids,
     /// [`ActorSource`].
     Actor,
+    /// [`ArtifactSource`].
+    Artifacts,
+    /// [`ContentStore`].
+    Store,
+    /// [`RevisionSource`].
+    Revision,
 }
 
 impl fmt::Display for ShelfPort {
@@ -73,6 +84,9 @@ impl fmt::Display for ShelfPort {
             Self::Clock => "clock",
             Self::Ids => "id",
             Self::Actor => "actor",
+            Self::Artifacts => "artifact",
+            Self::Store => "content store",
+            Self::Revision => "revision",
         })
     }
 }
@@ -199,6 +213,59 @@ pub trait ActorSource: Send + Sync {
     fn actor(&self) -> impl Future<Output = Result<Actor, Self::Error>> + Send;
 }
 
+/// The files of a project that are no document, read by path: what is there now.
+///
+/// The adapter decides what of a file the [`ArtifactHash`] covers (it hands the bytes
+/// it chose to [`ArtifactHash::of_content`]) and what a [`ContentAddress`] is; the
+/// domain only compares them.
+///
+/// [`ArtifactHash`]: crate::domain::shelf::artifact::ArtifactHash
+/// [`ArtifactHash::of_content`]: crate::domain::shelf::artifact::ArtifactHash::of_content
+pub trait ArtifactSource: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// For each path: the hash of the file and where its content can be read back
+    /// (when the adapter can say: outside version control it cannot, and that is no
+    /// error), or no file. Every path asked about has an answer. An error is for what
+    /// stops the reading itself (a file that is there and cannot be read).
+    fn read_artifacts(
+        &self,
+        paths: &[RelPath],
+    ) -> impl Future<Output = Result<ArtifactReadings, Self::Error>> + Send;
+
+    /// The bytes of the file at `path` as they are now, or none when no file is
+    /// there: what `diff` sets beside the content that was approved.
+    fn current(
+        &self,
+        path: &RelPath,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
+}
+
+/// Content read back by its address, as it was when the address was taken.
+pub trait ContentStore: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// The content at `address`, or none when nothing can be read through it (it was
+    /// never kept, or is kept no longer). An error is for a store that cannot be
+    /// asked at all.
+    fn read_back(
+        &self,
+        address: &ContentAddress,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
+}
+
+/// The point of the project's history the work is at, as a hint for a record.
+pub trait RevisionSource: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// The revision now, or none when the project has no history the adapter can
+    /// name (outside version control, or before it has any history).
+    fn revision(&self) -> impl Future<Output = Result<Option<Revision>, Self::Error>> + Send;
+}
+
 /// The ports that a use case that only reads is generic over.
 ///
 /// One trait with accessors, so that an adapter's types are bundled once.
@@ -211,6 +278,10 @@ pub trait ShelfRead: Send + Sync {
     type Ledger: LedgerRead;
     /// The clock.
     type Clock: Clock;
+    /// The files that are no document.
+    type Artifacts: ArtifactSource;
+    /// The content that was approved, read back.
+    type Store: ContentStore;
 
     /// The source of the declarations.
     fn schemas(&self) -> &Self::Schemas;
@@ -220,9 +291,13 @@ pub trait ShelfRead: Send + Sync {
     fn ledger(&self) -> &Self::Ledger;
     /// The clock.
     fn clock(&self) -> &Self::Clock;
+    /// The source of the artifacts.
+    fn artifacts(&self) -> &Self::Artifacts;
+    /// The store content is read back from.
+    fn store(&self) -> &Self::Store;
 }
 
-/// The ports that `judge` is generic over: everything a read has, and the three
+/// The ports that `judge` is generic over: everything a read has, and the four
 /// things only a judgement needs.
 pub trait ShelfWrite: ShelfRead {
     /// The ledger, to append to.
@@ -231,6 +306,8 @@ pub trait ShelfWrite: ShelfRead {
     type Ids: IdSource;
     /// The acting person.
     type Actor: ActorSource;
+    /// The revision an approval is made at.
+    type Revisions: RevisionSource;
 
     /// The ledger, to write.
     fn append(&self) -> &Self::Append;
@@ -238,6 +315,8 @@ pub trait ShelfWrite: ShelfRead {
     fn ids(&self) -> &Self::Ids;
     /// The acting person.
     fn actor_source(&self) -> &Self::Actor;
+    /// The source of the revision.
+    fn revisions(&self) -> &Self::Revisions;
 }
 
 /// Turn a port's failure into the error of a use case, keeping the cause.

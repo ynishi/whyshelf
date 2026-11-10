@@ -19,9 +19,17 @@
 //!      │           5  index of keys        (valid and readable-invalid files), with
 //!      │                                   the hash of each valid one
 //!      │           6  each valid Doc, once: every link the book declares, with its
-//!      │                                   kind, resolved through the index
+//!      │                                   kind, resolved through the index; every
+//!      │                                   path of a link to artifacts made an
+//!      │                                   Artifact from the ArtifactReadings (A1)
 //!      └────────►  7  link cycles          (strongly connected components)
 //! ```
+//!
+//! The paths a link to artifacts writes are read before the build, by
+//! [`Shelf::artifact_paths`], so that an adapter can look at those files first: a
+//! path is read once, by one reader, for both. A path that has no file is an
+//! [`Artifact`] that is absent, not a link that cannot be followed (rule A1); a text
+//! that is no path is a [`DocProblem::ArtifactPathInvalid`].
 //!
 //! Two questions about a shelf have one entry each, and everything else asks them:
 //! `Shelf::find_key` answers what a key in a book comes to (the build of a link
@@ -40,14 +48,15 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonEmptyVec, TwoOrMore};
 
+use super::artifact::{Artifact, ArtifactReading, ArtifactReadings, ArtifactState};
 use super::doc::{
-    Doc, DocDraft, DocHash, DocKey, FieldValue, Link, LinkState, ResolvedLink, UnresolvedLink,
-    UnresolvedWhy,
+    ArtifactLink, Doc, DocDraft, DocHash, DocKey, FieldValue, Link, LinkState, ResolvedLink,
+    UnresolvedLink, UnresolvedWhy,
 };
 use super::graph::{Cycle, CycleSource, cycles_of};
 use super::schema::{
-    BookName, BookSchema, Cardinality, EntryName, FieldPresence, FieldType, FieldWord, ID_ENTRY,
-    KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
+    ArtifactLinkKind, BookName, BookSchema, Cardinality, EntryName, FieldPresence, FieldType,
+    FieldWord, ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
 };
 
 /// A value of the front matter, as the adapter's YAML parser gave it: not yet
@@ -245,6 +254,18 @@ pub enum DocProblem {
         link: EntryName,
         /// What was written.
         found: RawKind,
+    },
+    /// A text written in a link to artifacts that is no path under the root (an
+    /// absolute path, one that climbs out with `..`, an empty segment).
+    #[error("`{written}` in the link `{link}` is not a path under the root of the project")]
+    ArtifactPathInvalid {
+        /// The link.
+        link: EntryName,
+        /// What was written.
+        written: String,
+        /// Why it is no path.
+        #[source]
+        source: ValueError,
     },
     /// A link with a number of keys its cardinality does not admit.
     #[error("the link `{link}` has {found} key(s), which {cardinality:?} does not admit")]
@@ -579,6 +600,13 @@ struct WrittenLink {
     keys: Vec<String>,
 }
 
+/// One link to artifacts a book declares, as a file wrote it: its kind, and the
+/// paths written in it, each already read as a path.
+struct WrittenArtifacts {
+    kind: ArtifactLinkKind,
+    paths: Vec<RelPath>,
+}
+
 /// A file after its form is read, before the shelf looks at the files together.
 struct Candidate {
     origin: RelPath,
@@ -587,8 +615,10 @@ struct Candidate {
     /// adds to it.
     problems: Vec<DocProblem>,
     fields: BTreeMap<EntryName, FieldValue>,
-    /// Every link the book declares, with what the file wrote in it.
+    /// Every link into a book the book declares, with what the file wrote in it.
     links: BTreeMap<EntryName, WrittenLink>,
+    /// Every link to artifacts the book declares, with the paths the file wrote.
+    artifact_links: BTreeMap<EntryName, WrittenArtifacts>,
     body: String,
 }
 
@@ -598,6 +628,7 @@ enum Judged {
     Valid {
         draft: DocDraft,
         links: BTreeMap<EntryName, WrittenLink>,
+        artifact_links: BTreeMap<EntryName, WrittenArtifacts>,
     },
     Invalid {
         id: IdSeen,
@@ -613,6 +644,7 @@ impl Candidate {
             problems: Vec::new(),
             fields: BTreeMap::new(),
             links: BTreeMap::new(),
+            artifact_links: BTreeMap::new(),
             body: String::new(),
         }
     }
@@ -654,7 +686,11 @@ impl Candidate {
             read_key(book, entries.get(KEY_ENTRY)),
         );
         let mut problems = Vec::new();
-        let (fields, written) = read_entries(book, entries, &mut problems);
+        let Entries {
+            fields,
+            links: written,
+            artifacts,
+        } = read_entries(book, entries, &mut problems);
         check_required(book, entries, &mut problems);
         Self {
             origin,
@@ -662,6 +698,7 @@ impl Candidate {
             problems,
             fields,
             links: written_links(book, written),
+            artifact_links: written_artifacts(book, artifacts),
             body,
         }
     }
@@ -675,6 +712,7 @@ impl Candidate {
             problems,
             fields,
             links,
+            artifact_links,
             body,
         } = self;
         match identity {
@@ -682,6 +720,7 @@ impl Candidate {
                 Err(_) => Judged::Valid {
                     draft: DocDraft::new(id, key, origin, fields, body),
                     links,
+                    artifact_links,
                 },
                 Ok(problems) => Judged::Invalid {
                     id: IdSeen::Read(id),
@@ -704,18 +743,32 @@ impl Candidate {
     }
 }
 
-/// The fields of a file, and the keys written in each link, from every entry but
-/// `id` and `key`; what is wrong with an entry goes to `problems`.
+/// What the entries of a front matter come to, beside the identity and the key.
+struct Entries {
+    fields: BTreeMap<EntryName, FieldValue>,
+    /// The keys written in each link into a book.
+    links: BTreeMap<EntryName, Vec<String>>,
+    /// The paths written in each link to artifacts.
+    artifacts: BTreeMap<EntryName, Vec<RelPath>>,
+}
+
+/// A text written in a link to artifacts, read as a path under the root: the one
+/// reader of it, which both [`Shelf::artifact_paths`] and the build use.
+fn artifact_path(text: &str) -> Result<RelPath, ValueError> {
+    text.parse::<RelPath>()
+}
+
+/// The fields of a file, the keys written in each link and the paths written in each
+/// link to artifacts, from every entry but `id` and `key`; what is wrong with an entry
+/// goes to `problems`.
 fn read_entries(
     book: &BookSchema,
     entries: &BTreeMap<String, RawValue>,
     problems: &mut Vec<DocProblem>,
-) -> (
-    BTreeMap<EntryName, FieldValue>,
-    BTreeMap<EntryName, Vec<String>>,
-) {
+) -> Entries {
     let mut fields = BTreeMap::new();
     let mut written = BTreeMap::new();
+    let mut artifacts = BTreeMap::new();
     for (name, raw) in entries {
         if name == ID_ENTRY || name == KEY_ENTRY {
             continue;
@@ -742,11 +795,41 @@ fn read_entries(
                     found: other.kind(),
                 }),
             }
+        } else if let Some((link, kind)) = book.artifact_links().get_key_value(name.as_str()) {
+            match raw {
+                RawValue::List(texts) if kind.cardinality.admits(texts.len()) => {
+                    let mut paths = Vec::new();
+                    for text in texts {
+                        match artifact_path(text) {
+                            Ok(path) => paths.push(path),
+                            Err(source) => problems.push(DocProblem::ArtifactPathInvalid {
+                                link: link.clone(),
+                                written: text.clone(),
+                                source,
+                            }),
+                        }
+                    }
+                    artifacts.insert(link.clone(), paths);
+                }
+                RawValue::List(texts) => problems.push(DocProblem::LinkCount {
+                    link: link.clone(),
+                    cardinality: kind.cardinality,
+                    found: texts.len(),
+                }),
+                other => problems.push(DocProblem::LinkNotList {
+                    link: link.clone(),
+                    found: other.kind(),
+                }),
+            }
         } else {
             problems.push(DocProblem::UnknownEntry { name: name.clone() });
         }
     }
-    (fields, written)
+    Entries {
+        fields,
+        links: written,
+        artifacts,
+    }
 }
 
 /// What the book requires and the entries leave out: a required field, and a link
@@ -763,15 +846,65 @@ fn check_required(
             });
         }
     }
-    for (link, kind) in book.links() {
-        if !entries.contains_key(link.as_str()) && !kind.cardinality.admits(0) {
+    let cardinalities = book
+        .links()
+        .iter()
+        .map(|(link, kind)| (link, kind.cardinality))
+        .chain(
+            book.artifact_links()
+                .iter()
+                .map(|(link, kind)| (link, kind.cardinality)),
+        );
+    for (link, cardinality) in cardinalities {
+        if !entries.contains_key(link.as_str()) && !cardinality.admits(0) {
             problems.push(DocProblem::LinkCount {
                 link: link.clone(),
-                cardinality: kind.cardinality,
+                cardinality,
                 found: 0,
             });
         }
     }
+}
+
+/// Every link to artifacts the book declares, with the paths the file wrote in it.
+fn written_artifacts(
+    book: &BookSchema,
+    mut written: BTreeMap<EntryName, Vec<RelPath>>,
+) -> BTreeMap<EntryName, WrittenArtifacts> {
+    book.artifact_links()
+        .iter()
+        .map(|(name, kind)| {
+            let link = WrittenArtifacts {
+                kind: kind.clone(),
+                paths: written.remove(name).unwrap_or_default(),
+            };
+            (name.clone(), link)
+        })
+        .collect()
+}
+
+/// The links to artifacts of a valid document, each path made an [`Artifact`] from
+/// what the adapter found there (rule A1): a path with no reading is a path with no
+/// file, never a link that cannot be followed.
+fn resolve_artifacts(
+    found: &ArtifactReadings,
+    written: BTreeMap<EntryName, WrittenArtifacts>,
+) -> BTreeMap<EntryName, ArtifactLink> {
+    written
+        .into_iter()
+        .map(|(name, WrittenArtifacts { kind, paths })| {
+            let artifacts = paths
+                .into_iter()
+                .map(|path| {
+                    let state = found
+                        .get(&path)
+                        .map_or(ArtifactState::Absent, ArtifactReading::state);
+                    Artifact::new(path, state)
+                })
+                .collect();
+            (name, ArtifactLink::new(kind, artifacts))
+        })
+        .collect()
 }
 
 /// Every link the book declares, with the keys the file wrote in it.
@@ -925,11 +1058,39 @@ pub struct Shelf {
 }
 
 impl Shelf {
-    /// A shelf from the schema and what an adapter read.
+    /// The paths the files write in their links to artifacts: what an adapter is to
+    /// read before [`Shelf::build`], so that each becomes an [`Artifact`].
+    ///
+    /// A text that is no path is left out here (the build makes it a
+    /// [`DocProblem::ArtifactPathInvalid`]); a file under no book writes none.
+    pub fn artifact_paths(schema: &Schema, readings: &[DocReading]) -> BTreeSet<RelPath> {
+        let mut paths = BTreeSet::new();
+        for reading in readings {
+            let DocReading::Parsed {
+                origin, entries, ..
+            } = reading
+            else {
+                continue;
+            };
+            let Membership::In(book) = schema.membership(origin) else {
+                continue;
+            };
+            for name in book.artifact_links().keys() {
+                if let Some(RawValue::List(texts)) = entries.get(name.as_str()) {
+                    paths.extend(texts.iter().filter_map(|t| artifact_path(t).ok()));
+                }
+            }
+        }
+        paths
+    }
+
+    /// A shelf from the schema, what an adapter read of the documents, and what it
+    /// found at the paths [`Shelf::artifact_paths`] named.
     ///
     /// The one place a [`Doc`] is made. It never fails; see the module page for the
-    /// order of the steps.
-    pub fn build(schema: &Schema, readings: Vec<DocReading>) -> Self {
+    /// order of the steps. A path written in a link to artifacts with no entry in
+    /// `artifacts` is a path with no file.
+    pub fn build(schema: &Schema, readings: Vec<DocReading>, artifacts: &ArtifactReadings) -> Self {
         let candidates = flag_duplicates(
             readings
                 .into_iter()
@@ -948,14 +1109,15 @@ impl Shelf {
             keys,
             valid: drafts
                 .iter()
-                .map(|(draft, _)| (draft.id(), *draft.hash()))
+                .map(|(draft, _, _)| (draft.id(), *draft.hash()))
                 .collect(),
         };
         let docs: BTreeMap<DocId, Doc> = drafts
             .into_iter()
-            .map(|(draft, written)| {
+            .map(|(draft, written, paths)| {
                 let links = resolve_links(&index, written);
-                (draft.id(), Doc::new(draft, links))
+                let artifact_links = resolve_artifacts(artifacts, paths);
+                (draft.id(), Doc::new(draft, links, artifact_links))
             })
             .collect();
 
@@ -1108,8 +1270,14 @@ impl Shelf {
 /// The files judged, by where each goes in the shelf.
 #[derive(Default)]
 struct Sorted {
-    /// The valid ones, to be made whole, with the keys written in their links.
-    drafts: Vec<(DocDraft, BTreeMap<EntryName, WrittenLink>)>,
+    /// The valid ones, to be made whole, with the keys written in their links and the
+    /// paths written in their links to artifacts.
+    #[allow(clippy::type_complexity)]
+    drafts: Vec<(
+        DocDraft,
+        BTreeMap<EntryName, WrittenLink>,
+        BTreeMap<EntryName, WrittenArtifacts>,
+    )>,
     /// The invalid ones whose identity was read, grouped by identity.
     invalid: BTreeMap<DocId, NonEmptyVec<InvalidDoc>>,
     /// The invalid ones whose identity could not be read.
@@ -1124,7 +1292,11 @@ impl Sorted {
         let mut sorted = Self::default();
         for candidate in candidates {
             match candidate.judge() {
-                Judged::Valid { draft, links } => sorted.drafts.push((draft, links)),
+                Judged::Valid {
+                    draft,
+                    links,
+                    artifact_links,
+                } => sorted.drafts.push((draft, links, artifact_links)),
                 Judged::Invalid {
                     id: IdSeen::Read(id),
                     file,
@@ -1230,5 +1402,7 @@ fn origins_but(
     NonEmptyVec::from_vec(origins).ok()
 }
 
+#[cfg(test)]
+mod artifact_tests;
 #[cfg(test)]
 mod tests;

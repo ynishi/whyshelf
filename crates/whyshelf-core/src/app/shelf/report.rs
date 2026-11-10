@@ -13,12 +13,16 @@ use std::collections::BTreeMap;
 
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::shelf::artifact::Artifact;
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
 use crate::domain::shelf::freshness::{Notice, RootCause, Severity, Standing, Successors};
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{DeclaredStatus, LedgerProblem, Record};
 use crate::domain::shelf::schema::{BookDir, BookName, EntryName, Propagation, SchemaProblem};
+use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
+
+use crate::domain::location::RelPath;
 
 use super::ports::UnreadableRecord;
 
@@ -146,6 +150,8 @@ pub enum UpstreamEnd {
     Doc(Box<Row>),
     /// A key that cannot be followed.
     Unresolved(UnresolvedLink),
+    /// A file that is no document, there or not.
+    Artifact(Artifact),
 }
 
 /// One link followed upstream: `from` holds `link`, and it comes to `to`.
@@ -209,6 +215,63 @@ pub struct StaleEntry {
 pub struct StaleReport {
     /// The documents, the strongest degradation first.
     pub entries: Vec<StaleEntry>,
+    /// The keys of the valid documents.
+    pub names: Names,
+    /// What is wrong around them.
+    pub health: Health,
+}
+
+/// One item of what an approval saw, with what reading its content back came to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovedItem {
+    /// The item: what it is in the approval, its hash and its address.
+    pub item: SnapshotItem,
+    /// The content as it was approved, or why it could not be read back.
+    pub retrieval: Retrieval,
+}
+
+/// The result of `show --approved`: what the approval that stands saw.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovedReport {
+    /// The document as the answers show it now.
+    pub row: Row,
+    /// What the approval saw.
+    pub snapshot: Snapshot,
+    /// Each item of it, in the order of the snapshot, with its content.
+    pub items: Vec<ApprovedItem>,
+    /// The keys of the valid documents.
+    pub names: Names,
+    /// What is wrong around them.
+    pub health: Health,
+}
+
+/// One item of an approval set beside what it is now: values, not a text (the text
+/// of a difference is the surface's work).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffItem {
+    /// The item as it was approved.
+    pub item: SnapshotItem,
+    /// The content as it was approved, or why it could not be read back.
+    pub approved: Retrieval,
+    /// What it is now, by hash.
+    pub now: ItemNow,
+    /// The file that holds it now, if one does.
+    pub file: Option<RelPath>,
+    /// The bytes of that file now; none when no file is there.
+    pub current: Option<Vec<u8>>,
+    /// Whether it is not what was approved ([`SnapshotItem::changed_from`]).
+    pub changed: bool,
+}
+
+/// The result of `diff`: each item of the approval that stands, then and now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffReport {
+    /// The document as the answers show it now.
+    pub row: Row,
+    /// What the approval saw.
+    pub snapshot: Snapshot,
+    /// Each item, then and now, in the order of the snapshot.
+    pub items: Vec<DiffItem>,
     /// The keys of the valid documents.
     pub names: Names,
     /// What is wrong around them.

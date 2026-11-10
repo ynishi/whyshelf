@@ -24,6 +24,23 @@ pub enum BooksCommand {
     },
     /// The approvals that no longer hold, with where each starts to fail.
     Stale,
+    /// What the approval that stands about a document saw: the document, the
+    /// upstreams and the artifacts, each with its content as it was approved, or why
+    /// that cannot be read back.
+    Show {
+        /// A key, an identifier or a short identifier.
+        reference: Reference,
+        /// Show what the approval saw (the only view `show` has; `get` shows the
+        /// document now).
+        #[arg(long, required = true)]
+        approved: bool,
+    },
+    /// Each item of the approval that stands about a document, as it was approved and
+    /// as it is now, with a line diff where both are text.
+    Diff {
+        /// A key, an identifier or a short identifier.
+        reference: Reference,
+    },
     /// Record a judgement about a document (the only one of these that writes).
     #[command(subcommand)]
     Judge(Verb),

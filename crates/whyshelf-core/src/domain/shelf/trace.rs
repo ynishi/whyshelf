@@ -11,12 +11,14 @@
 //! ```
 //!
 //! A link that cannot be followed is an edge too, upstream, so an answer shows where
-//! the trail breaks.
+//! the trail breaks. A link to an artifact is an edge upstream that ends there: the
+//! file links to nothing, and nothing is walked down from it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
 
+use super::artifact::Artifact;
 use super::build::Shelf;
 use super::doc::{LinkState, UnresolvedLink};
 use super::schema::{EntryName, Propagation};
@@ -28,6 +30,9 @@ pub enum LinkEnd {
     Doc(DocId),
     /// A key that cannot be followed.
     Unresolved(UnresolvedLink),
+    /// A file that is no document, there or not. The walk ends at it: an artifact
+    /// links to nothing.
+    Artifact(Artifact),
 }
 
 /// One link: `holder` holds `link`, which names `end`.
@@ -93,6 +98,17 @@ fn out_edges(shelf: &Shelf, id: DocId) -> Vec<LinkEdge> {
             });
         }
     }
+    for (name, link) in doc.artifact_links() {
+        for artifact in link.artifacts() {
+            edges.push(LinkEdge {
+                holder: id,
+                link: name.clone(),
+                propagation: link.kind().propagation.propagation(),
+                end: LinkEnd::Artifact(artifact.clone()),
+                depth: 0,
+            });
+        }
+    }
     edges
 }
 
@@ -100,7 +116,7 @@ fn out_edges(shelf: &Shelf, id: DocId) -> Vec<LinkEdge> {
 fn far_up(edge: &LinkEdge) -> Option<DocId> {
     match edge.end {
         LinkEnd::Doc(target) => Some(target),
-        LinkEnd::Unresolved(_) => None,
+        LinkEnd::Unresolved(_) | LinkEnd::Artifact(_) => None,
     }
 }
 
@@ -191,6 +207,46 @@ mod tests {
     }
 
     #[test]
+    fn a_link_to_an_artifact_is_an_edge_upstream_that_ends_there() {
+        use crate::domain::shelf::artifact::{ArtifactHash, ArtifactState};
+        use crate::domain::shelf::fixtures_tests::{shelf_with, sp_testing};
+        let hash = ArtifactHash::of_content(b"t");
+        let s = shelf_with(
+            vec![
+                fr(1, &[]),
+                sp_testing(2, &["FR-1"], &["tests/a.rs", "tests/b.rs"]),
+            ],
+            &[("tests/a.rs", Some(hash))],
+        );
+        let up = trace(&s, docid(2)).upstream;
+        let artifacts: Vec<(&str, ArtifactState, Propagation)> = up
+            .iter()
+            .filter_map(|e| match &e.end {
+                LinkEnd::Artifact(a) => Some((a.path().as_str(), *a.state(), e.propagation)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            artifacts,
+            vec![
+                (
+                    "tests/a.rs",
+                    ArtifactState::Present(hash),
+                    Propagation::Depends
+                ),
+                ("tests/b.rs", ArtifactState::Absent, Propagation::Depends),
+            ]
+        );
+        assert_eq!(up.len(), 3);
+        assert!(
+            trace(&s, docid(1))
+                .downstream
+                .iter()
+                .all(|e| e.holder == docid(2))
+        );
+    }
+
+    #[test]
     fn a_diamond_expands_each_document_once_and_lists_each_edge_once() {
         // 4 -> 2, 4 -> 3, 2 -> 1, 3 -> 1
         let s = shelf(vec![
@@ -205,7 +261,7 @@ mod tests {
             .iter()
             .map(|e| match e.end {
                 LinkEnd::Doc(t) => (e.holder, t, e.depth),
-                LinkEnd::Unresolved(_) => panic!("every link resolves"),
+                LinkEnd::Unresolved(_) | LinkEnd::Artifact(_) => panic!("every link resolves"),
             })
             .collect();
         assert_eq!(up.len(), 4);
@@ -221,7 +277,9 @@ mod tests {
             .iter()
             .map(|e| match e.end {
                 LinkEnd::Doc(t) => (e.holder, t),
-                LinkEnd::Unresolved(_) => panic!("downstream ends are documents"),
+                LinkEnd::Unresolved(_) | LinkEnd::Artifact(_) => {
+                    panic!("downstream ends are documents")
+                }
             })
             .collect();
         assert_eq!(down.len(), 4);

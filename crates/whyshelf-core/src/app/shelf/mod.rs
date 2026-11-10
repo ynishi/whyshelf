@@ -13,7 +13,9 @@
 //! | [`get`](ShelfApp::get) | no | [`GetReport`]: one document, its standing, notices and root causes |
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
 //! | [`stale`](ShelfApp::stale) | no | [`StaleReport`]: the approvals that no longer hold, with where they start to fail |
-//! | [`judge`](ShelfApp::judge) | **yes** | [`Judged`]: the record that was appended |
+//! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
+//! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
+//! | [`judge`](ShelfApp::judge) | **yes** | [`Judged`]: the record that was appended, with the addresses of what an approval stood on and the revision |
 //!
 //! # Reading and writing
 //!
@@ -32,6 +34,7 @@
 //! and the files of the ledger that are no record. None is a failure of the use case,
 //! and none is left out.
 
+mod approved;
 mod error;
 mod judge;
 mod load;
@@ -40,6 +43,8 @@ mod read;
 mod report;
 
 #[cfg(test)]
+mod artifact_tests;
+#[cfg(test)]
 mod fake_tests;
 #[cfg(test)]
 mod tests;
@@ -47,12 +52,14 @@ mod tests;
 pub use error::{ErrorClass, ShelfError};
 pub use judge::{JudgeRequest, Judgement};
 pub use ports::{
-    ActorSource, BookSchemaSource, Clock, DocSource, IdSource, LedgerAppend, LedgerContents,
-    LedgerRead, ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
+    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentStore, DocSource, IdSource,
+    LedgerAppend, LedgerContents, LedgerRead, RevisionSource, ShelfPort, ShelfRead, ShelfWrite,
+    UnreadableRecord, UnreadableWhy,
 };
 pub use report::{
-    BookCount, BooksCheck, DownstreamEdge, GetReport, Health, Judged, Names, Row, StaleEntry,
-    StaleReport, StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
+    ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport, DownstreamEdge,
+    GetReport, Health, Judged, Names, Row, StaleEntry, StaleReport, StatusReport, TraceReport,
+    UpstreamEdge, UpstreamEnd,
 };
 
 /// The use cases of a shelf over a bundle of ports.

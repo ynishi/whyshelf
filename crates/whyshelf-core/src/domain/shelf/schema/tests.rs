@@ -30,7 +30,7 @@ fn text_field(name: &str) -> FieldEntryDecl {
 fn link_to(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
     LinkEntryDecl {
         name: name.to_owned(),
-        target: target.to_owned(),
+        target: LinkTargetDecl::Book(target.to_owned()),
         cardinality: Cardinality::Many,
         propagation,
     }
@@ -290,6 +290,69 @@ fn a_replaces_link_must_stay_in_its_book() {
     let mut own = book("one", "a", "AA");
     own.links = vec![link_to("next", "one", Propagation::Replaces)];
     assert!(Schema::validate(vec![own]).is_ok());
+}
+
+fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
+    LinkEntryDecl {
+        name: name.to_owned(),
+        target: LinkTargetDecl::Artifact,
+        cardinality: Cardinality::Many,
+        propagation,
+    }
+}
+
+#[test]
+fn a_link_to_artifacts_depends_or_informs_and_is_kept_apart_from_links_into_books() {
+    let mut a = book("one", "a", "AA");
+    a.links = vec![
+        artifact_link("tests", Propagation::Depends),
+        artifact_link("code", Propagation::Informs),
+        link_to("up", "one", Propagation::Depends),
+    ];
+    let schema = Schema::validate(vec![a]).unwrap();
+    let one = schema.book("one").unwrap();
+    assert_eq!(one.links().len(), 1);
+    assert_eq!(one.artifact_links().len(), 2);
+    assert_eq!(
+        one.artifact_links().get("tests").unwrap().propagation,
+        ArtifactPropagation::Depends
+    );
+    assert_eq!(
+        one.artifact_links().get("code").unwrap().propagation,
+        ArtifactPropagation::Informs
+    );
+}
+
+#[test]
+fn a_link_to_artifacts_that_replaces_is_refused() {
+    let mut a = book("one", "a", "AA");
+    a.links = vec![artifact_link("old", Propagation::Replaces)];
+    let problems = problems_of(vec![a]);
+    assert!(matches!(
+        problems.as_slice(),
+        [SchemaProblem::ArtifactReplaces { link, .. }] if link.as_str() == "old"
+    ));
+}
+
+#[test]
+fn a_name_is_one_link_whether_it_points_at_a_book_or_at_artifacts() {
+    let mut a = book("one", "a", "AA");
+    a.links = vec![
+        link_to("up", "one", Propagation::Depends),
+        artifact_link("up", Propagation::Depends),
+    ];
+    assert!(matches!(
+        problems_of(vec![a]).as_slice(),
+        [SchemaProblem::DuplicateLink { .. }]
+    ));
+}
+
+#[test]
+fn no_book_is_named_with_the_word_for_artifacts() {
+    assert!(matches!(
+        problems_of(vec![book(ARTIFACT_TARGET, "a", "AA")]).as_slice(),
+        [SchemaProblem::ReservedBookName]
+    ));
 }
 
 #[test]

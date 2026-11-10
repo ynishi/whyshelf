@@ -38,8 +38,10 @@ fn an_approval_keeps_the_hash_it_saw_and_the_latest_decision_stands() {
             judgement,
             seen: approved,
             frame,
+            artifacts,
             expires,
         } => {
+            assert!(artifacts.is_empty());
             assert_eq!(judgement, jid(1001));
             assert_eq!(approved, seen);
             assert!(frame.is_empty());

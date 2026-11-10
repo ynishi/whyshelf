@@ -7,6 +7,8 @@
 //!                                    related    -> finding  Many  Informs
 //!                                    supersedes -> finding  Many  Replaces
 //!   spec     specs/      SP-<n>      grounds    -> finding  Many  Depends
+//!                                    tests      -> artifact Many  Depends
+//!                                    code       -> artifact Many  Informs
 //!   design   designs/    <slug>      specs      -> spec     Many  Depends
 //! ```
 
@@ -18,13 +20,14 @@ use crate::domain::actor::Actor;
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
 
+use super::artifact::{ArtifactHash, ArtifactReading, ArtifactReadings};
 use super::build::{DocReading, RawValue, Shelf};
 use super::ledger::{
     Decision, JudgedAt, JudgementId, Ledger, Record, frame_approve, frame_present, frame_retire,
 };
 use super::schema::{
     BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl, KeyPatternDecl,
-    LinkEntryDecl, Propagation, Schema,
+    LinkEntryDecl, LinkTargetDecl, Propagation, Schema,
 };
 
 /// A UUID v7 identifier from a small number.
@@ -68,7 +71,16 @@ fn field(name: &str, ty: FieldTypeDecl, presence: FieldPresence) -> FieldEntryDe
 fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
     LinkEntryDecl {
         name: name.to_owned(),
-        target: target.to_owned(),
+        target: LinkTargetDecl::Book(target.to_owned()),
+        cardinality: Cardinality::Many,
+        propagation,
+    }
+}
+
+fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
+    LinkEntryDecl {
+        name: name.to_owned(),
+        target: LinkTargetDecl::Artifact,
         cardinality: Cardinality::Many,
         propagation,
     }
@@ -108,7 +120,11 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
                 prefix: "SP".to_owned(),
             },
             fields: vec![field("title", FieldTypeDecl::Text, FieldPresence::Required)],
-            links: vec![link("grounds", "finding", Propagation::Depends)],
+            links: vec![
+                link("grounds", "finding", Propagation::Depends),
+                artifact_link("tests", Propagation::Depends),
+                artifact_link("code", Propagation::Informs),
+            ],
         },
         BookSchemaDecl {
             name: "design".to_owned(),
@@ -162,7 +178,41 @@ pub(super) fn fr_titled(n: u128, title: &str, base: &[&str]) -> DocReading {
 }
 
 pub(super) fn shelf(readings: Vec<DocReading>) -> Shelf {
-    Shelf::build(&schema(), readings)
+    Shelf::build(&schema(), readings, &ArtifactReadings::new())
+}
+
+/// A shelf whose artifacts are these paths: a file with this hash, or none.
+pub(super) fn shelf_with(
+    readings: Vec<DocReading>,
+    artifacts: &[(&str, Option<ArtifactHash>)],
+) -> Shelf {
+    let found: ArtifactReadings = artifacts
+        .iter()
+        .map(|(p, hash)| {
+            let reading = match hash {
+                Some(hash) => ArtifactReading::Present {
+                    hash: *hash,
+                    address: None,
+                },
+                None => ArtifactReading::Absent,
+            };
+            (path(p), reading)
+        })
+        .collect();
+    Shelf::build(&schema(), readings, &found)
+}
+
+/// A spec `SP-<n>` with identity `n`, grounded in these findings and tested by these
+/// paths (its `tests` link to artifacts).
+pub(super) fn sp_testing(n: u128, grounds: &[&str], tests: &[&str]) -> DocReading {
+    let mut extra = vec![("title", text("spec"))];
+    if !grounds.is_empty() {
+        extra.push(("grounds", list(grounds)));
+    }
+    if !tests.is_empty() {
+        extra.push(("tests", list(tests)));
+    }
+    reading(&format!("specs/sp-{n}.md"), n, &format!("SP-{n}"), &extra)
 }
 
 pub(super) fn ledger(records: Vec<Record>) -> Ledger {

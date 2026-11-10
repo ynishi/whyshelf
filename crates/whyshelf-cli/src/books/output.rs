@@ -9,10 +9,17 @@ use schemars::{JsonSchema, Schema, schema_for};
 use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
-    BooksCheck, DownstreamEdge, ErrorClass, GetReport, Health, Judged, Names, Row, ShelfError,
-    StaleReport, StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
+    ApprovedReport, BooksCheck, DiffItem, DiffReport, DownstreamEdge, ErrorClass, GetReport,
+    Health, Judged, Names, Row, ShelfError, StaleReport, StatusReport, TraceReport, UpstreamEdge,
+    UpstreamEnd,
 };
+use whyshelf_core::domain::shelf::snapshot::{
+    ItemNow, ItemRole, Retrieval, SeenHash, SnapshotItem,
+};
+
+use super::textdiff;
 use whyshelf_core::domain::id::DocId;
+use whyshelf_core::domain::shelf::artifact::Artifact;
 use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence};
 use whyshelf_core::domain::shelf::doc::{
     Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy,
@@ -21,7 +28,7 @@ use whyshelf_core::domain::shelf::freshness::{
     Cause, Freshness, FreshnessLevel, Notice, RootCause, Severity, Standing, StandingKind,
     Successors, UpstreamStatus,
 };
-use whyshelf_core::domain::shelf::ledger::{DeclaredStatus, FramePin};
+use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin};
 use whyshelf_core::domain::shelf::schema::Propagation;
 use whyshelf_infra::shelf::ledger::to_json;
 
@@ -73,6 +80,9 @@ pub struct CauseOut {
     pub upstream: Option<DocRef>,
     /// The link it was reached through, if any.
     pub link: Option<String>,
+    /// The path of the artifact the cause names, if it names one
+    /// (`artifact_changed`, `artifact_gone`, `artifact_arrived`).
+    pub artifact: Option<String>,
     /// A sentence for a person.
     pub detail: String,
 }
@@ -216,6 +226,13 @@ pub enum LinkTargetOut {
         /// Why.
         why: String,
     },
+    /// A file that is no document (a link with `target = "artifact"`).
+    Artifact {
+        /// Its path under the root.
+        path: String,
+        /// The hash of its content now; none when no file is there.
+        hash: Option<String>,
+    },
 }
 
 /// A document's content.
@@ -290,6 +307,102 @@ pub struct StaleOut {
     pub health: HealthOut,
 }
 
+/// What an item of an approval is, and which document or file it names.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ItemOut {
+    /// `subject` (the approved document), `upstream` (a document it stood on) or
+    /// `artifact` (a file it stood on).
+    pub role: &'static str,
+    /// The document, for a subject or an upstream (an upstream's key is the one it
+    /// had when it was pinned).
+    pub doc: Option<DocRef>,
+    /// The link it was pinned through, for an upstream or an artifact.
+    pub link: Option<String>,
+    /// The path, for an artifact.
+    pub path: Option<String>,
+    /// The hash the approval pinned; none for an artifact that had no file.
+    pub approved_hash: Option<String>,
+    /// Where its content, as it was approved, can be read back; none when the record
+    /// keeps no address.
+    pub address: Option<String>,
+}
+
+/// Whether the content of an item, as it was approved, came back.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct RetrievalOut {
+    /// `read`, `address_not_readable` (an address, and nothing behind it: the content
+    /// was never committed, or is not in this clone) or `no_address` (the record
+    /// keeps none: made outside Git, by an older version, or no file was there).
+    pub state: &'static str,
+    /// The content, when it was read and is UTF-8 text.
+    pub text: Option<String>,
+    /// How many bytes were read.
+    pub bytes: Option<usize>,
+}
+
+/// One item of `books show --approved`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ApprovedItemOut {
+    /// What it is.
+    pub item: ItemOut,
+    /// Its content as it was approved, or why not.
+    pub retrieval: RetrievalOut,
+}
+
+/// The answer of `books show <ref> --approved`: what the approval that stands saw.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ApprovedOut {
+    /// The document, as every answer shows it now.
+    pub row: RowOut,
+    /// The approval (its record's id).
+    pub judgement: String,
+    /// Who approved.
+    pub actor: String,
+    /// When (unix milliseconds).
+    pub at: i64,
+    /// The commit the approval was made at, when the record keeps one (a hint).
+    pub revision: Option<String>,
+    /// The approved document first, then each upstream, then each artifact.
+    pub items: Vec<ApprovedItemOut>,
+    /// What is wrong around the documents.
+    pub health: HealthOut,
+}
+
+/// One item of `books diff`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffItemOut {
+    /// What it is, with the hash that was approved.
+    pub item: ItemOut,
+    /// The hash it has now; none when it is no valid document, or no file is there.
+    pub current_hash: Option<String>,
+    /// Whether the hash is not the one approved.
+    pub changed: bool,
+    /// The file that holds it now, if one does.
+    pub file: Option<String>,
+    /// Whether the approved content came back: `read`, `address_not_readable`,
+    /// `no_address` (the content itself is in `diff`).
+    pub retrieval: &'static str,
+    /// The unified diff from the approved content to the file now, when both are
+    /// UTF-8 text (empty when they are the same); none otherwise.
+    pub diff: Option<String>,
+}
+
+/// The answer of `books diff <ref>`: each item of the approval that stands, then and
+/// now.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DiffOut {
+    /// The document, as every answer shows it now.
+    pub row: RowOut,
+    /// The approval (its record's id).
+    pub judgement: String,
+    /// The commit the approval was made at, when the record keeps one (a hint).
+    pub revision: Option<String>,
+    /// The approved document first, then each upstream, then each artifact.
+    pub items: Vec<DiffItemOut>,
+    /// What is wrong around the documents.
+    pub health: HealthOut,
+}
+
 /// The answer of `books judge`: every record written, in the order the documents
 /// were named.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -338,6 +451,8 @@ pub fn schemas() -> SchemasOut {
     put("books get", schema_for!(GetOut));
     put("books trace", schema_for!(TraceOut));
     put("books stale", schema_for!(StaleOut));
+    put("books show --approved", schema_for!(ApprovedOut));
+    put("books diff", schema_for!(DiffOut));
     put("books judge", schema_for!(JudgedAllOut));
     put("error", schema_for!(ErrorOut));
     SchemasOut { outputs }
@@ -397,6 +512,15 @@ impl Namer<'_> {
             severity,
             upstream: upstream.map(|p| self.pin(p)),
             link: upstream.map(|p| p.link().to_string()),
+            artifact: None,
+            detail,
+        };
+        let artifact = |kind, pin: &ArtifactPin, detail: String| CauseOut {
+            kind,
+            severity,
+            upstream: None,
+            link: Some(pin.link().to_string()),
+            artifact: Some(pin.path().to_string()),
             detail,
         };
         match cause {
@@ -478,11 +602,52 @@ impl Namer<'_> {
                 severity,
                 upstream: None,
                 link: Some(link.to_string()),
+                artifact: None,
                 detail: format!(
                     "the link `{link}` changed since the approval: {} added, {} removed, {} unresolved",
                     added.len(),
                     removed.len(),
                     unresolved.len()
+                ),
+            },
+            Cause::ArtifactChanged { pin, now } => artifact(
+                "artifact_changed",
+                pin,
+                format!(
+                    "`{}` changed since the approval pinned it ({} -> {now})",
+                    pin.path(),
+                    pinned_hash(pin)
+                ),
+            ),
+            Cause::ArtifactGone { pin } => artifact(
+                "artifact_gone",
+                pin,
+                format!("`{}` was there when it was pinned and is gone", pin.path()),
+            ),
+            Cause::ArtifactArrived { pin, now } => artifact(
+                "artifact_arrived",
+                pin,
+                format!(
+                    "`{}` was not there when it was pinned and is now ({now}): look again",
+                    pin.path()
+                ),
+            ),
+            Cause::ArtifactLinksChanged {
+                link,
+                added,
+                removed,
+            } => CauseOut {
+                kind: "links_changed",
+                severity,
+                upstream: None,
+                link: Some(link.to_string()),
+                artifact: None,
+                detail: format!(
+                    "the link `{link}` to artifacts changed since the approval: {} added ({}), {} removed ({})",
+                    added.len(),
+                    join(added.iter()),
+                    removed.len(),
+                    join(removed.iter())
                 ),
             },
             Cause::InCycle { .. } => out(
@@ -617,6 +782,10 @@ impl Namer<'_> {
                     name: name.to_string(),
                     targets: link.states().iter().map(|s| self.target(s)).collect(),
                 })
+                .chain(doc.artifact_links().iter().map(|(name, link)| LinkOut {
+                    name: name.to_string(),
+                    targets: link.artifacts().iter().map(artifact_target).collect(),
+                }))
                 .collect(),
             body: doc.body().to_owned(),
         }
@@ -631,6 +800,7 @@ impl Namer<'_> {
                 Some(self::standing(row.standing.kind())),
             ),
             UpstreamEnd::Unresolved(u) => (self.target(&LinkState::Unresolved(u.clone())), None),
+            UpstreamEnd::Artifact(a) => (artifact_target(a), None),
         };
         EdgeOut {
             from: self.doc(edge.from),
@@ -733,6 +903,133 @@ pub fn stale(report: &StaleReport) -> StaleOut {
             })
             .collect(),
         health: namer.health(&report.health),
+    }
+}
+
+impl Namer<'_> {
+    fn item(&self, item: &SnapshotItem) -> ItemOut {
+        let (role, doc, link, path) = match item.role() {
+            ItemRole::Subject { id } => ("subject", Some(self.doc(*id)), None, None),
+            ItemRole::Upstream { link, target, key } => (
+                "upstream",
+                Some(DocRef {
+                    id: target.to_string(),
+                    key: Some(key.to_string()),
+                }),
+                Some(link.to_string()),
+                None,
+            ),
+            ItemRole::Artifact { link, path } => (
+                "artifact",
+                None,
+                Some(link.to_string()),
+                Some(path.to_string()),
+            ),
+        };
+        let approved_hash = match item.seen() {
+            SeenHash::Doc(hash) => Some(hash.to_string()),
+            SeenHash::Artifact(state) => state.hash().map(ToString::to_string),
+        };
+        ItemOut {
+            role,
+            doc,
+            link,
+            path,
+            approved_hash,
+            address: item.address().map(ToString::to_string),
+        }
+    }
+}
+
+fn retrieval_word(retrieval: &Retrieval) -> &'static str {
+    match retrieval {
+        Retrieval::Read(_) => "read",
+        Retrieval::AddressNotReadable(_) => "address_not_readable",
+        Retrieval::NoAddress => "no_address",
+    }
+}
+
+fn retrieval(retrieval: &Retrieval) -> RetrievalOut {
+    let read = match retrieval {
+        Retrieval::Read(bytes) => Some(bytes),
+        Retrieval::AddressNotReadable(_) | Retrieval::NoAddress => None,
+    };
+    RetrievalOut {
+        state: retrieval_word(retrieval),
+        text: read.and_then(|b| std::str::from_utf8(b).ok().map(str::to_owned)),
+        bytes: read.map(Vec::len),
+    }
+}
+
+/// The answer of `books show <ref> --approved`.
+pub fn approved(report: &ApprovedReport) -> ApprovedOut {
+    let namer = Namer(&report.names);
+    ApprovedOut {
+        row: namer.row(&report.row),
+        judgement: report.snapshot.judgement().to_string(),
+        actor: report.snapshot.actor().as_str().to_owned(),
+        at: report.snapshot.at().millis(),
+        revision: report.snapshot.revision().map(ToString::to_string),
+        items: report
+            .items
+            .iter()
+            .map(|i| ApprovedItemOut {
+                item: namer.item(&i.item),
+                retrieval: retrieval(&i.retrieval),
+            })
+            .collect(),
+        health: namer.health(&report.health),
+    }
+}
+
+/// The answer of `books diff <ref>`.
+pub fn diff(report: &DiffReport) -> DiffOut {
+    let namer = Namer(&report.names);
+    DiffOut {
+        row: namer.row(&report.row),
+        judgement: report.snapshot.judgement().to_string(),
+        revision: report.snapshot.revision().map(ToString::to_string),
+        items: report.items.iter().map(|i| diff_item(&namer, i)).collect(),
+        health: namer.health(&report.health),
+    }
+}
+
+fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
+    let out = namer.item(&item.item);
+    let current_hash = match &item.now {
+        ItemNow::Doc(hash) => hash.map(|h| h.to_string()),
+        ItemNow::Artifact(state) => state.hash().map(ToString::to_string),
+    };
+    let approved_text = match &item.approved {
+        Retrieval::Read(bytes) => std::str::from_utf8(bytes).ok(),
+        Retrieval::AddressNotReadable(_) | Retrieval::NoAddress => None,
+    };
+    let current_text = item
+        .current
+        .as_deref()
+        .and_then(|b| std::str::from_utf8(b).ok());
+    let label = out
+        .path
+        .clone()
+        .or_else(|| item.file.as_ref().map(ToString::to_string))
+        .or_else(|| out.doc.as_ref().and_then(|d| d.key.clone()))
+        .unwrap_or_default();
+    let diff = match (approved_text, current_text) {
+        (Some(then), Some(now)) => Some(textdiff::unified(
+            then,
+            now,
+            &format!("approved/{label}"),
+            &format!("now/{label}"),
+        )),
+        _ => None,
+    };
+    DiffItemOut {
+        current_hash,
+        changed: item.changed,
+        file: item.file.as_ref().map(ToString::to_string),
+        retrieval: retrieval_word(&item.approved),
+        diff,
+        item: out,
     }
 }
 
@@ -868,6 +1165,66 @@ fn field(value: &FieldValue) -> Value {
     }
 }
 
+fn artifact_target(artifact: &Artifact) -> LinkTargetOut {
+    LinkTargetOut::Artifact {
+        path: artifact.path().to_string(),
+        hash: artifact.state().hash().map(ToString::to_string),
+    }
+}
+
+/// The hash an artifact pin kept, or `absent`.
+fn pinned_hash(pin: &ArtifactPin) -> String {
+    pin.seen()
+        .state()
+        .hash()
+        .map_or_else(|| "absent".to_owned(), ToString::to_string)
+}
+
 fn join<T: std::fmt::Display>(items: impl Iterator<Item = T>) -> String {
     items.map(|i| i.to_string()).collect::<Vec<_>>().join("; ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_schema_covers_every_answer_including_show_and_diff() {
+        let outputs = schemas().outputs;
+        for command in [
+            "books check",
+            "books status",
+            "books get",
+            "books trace",
+            "books stale",
+            "books show --approved",
+            "books diff",
+            "books judge",
+            "error",
+        ] {
+            assert!(outputs.contains_key(command), "{command}");
+        }
+        let diff = serde_json::to_string(&outputs["books diff"]).unwrap();
+        for field in ["approved_hash", "current_hash", "retrieval", "diff"] {
+            assert!(diff.contains(field), "{field}");
+        }
+        // A cause names the artifact it is about, beside the fields it had.
+        let stale = serde_json::to_string(&outputs["books stale"]).unwrap();
+        for field in ["kind", "severity", "upstream", "link", "detail", "artifact"] {
+            assert!(stale.contains(&format!("\"{field}\"")), "{field}");
+        }
+    }
+
+    #[test]
+    fn a_retrieval_shows_text_only_when_it_was_read_as_utf8() {
+        let read = retrieval(&Retrieval::Read(b"text\n".to_vec()));
+        assert_eq!(
+            (read.state, read.text.as_deref(), read.bytes),
+            ("read", Some("text\n"), Some(5))
+        );
+        let binary = retrieval(&Retrieval::Read(vec![0xff, 0xfe]));
+        assert_eq!((binary.text, binary.bytes), (None, Some(2)));
+        let none = retrieval(&Retrieval::NoAddress);
+        assert_eq!((none.state, none.bytes), ("no_address", None));
+    }
 }

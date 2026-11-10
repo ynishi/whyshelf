@@ -220,6 +220,7 @@ fn a_prefixed_key_that_could_be_hexadecimal_is_a_key() {
             "CAFE-1234",
             &[("title", text("t"))],
         )],
+        &Default::default(),
     );
     assert!(s.doc(docid(1)).is_some());
 }
@@ -385,6 +386,7 @@ fn a_link_must_be_a_list_of_keys_within_its_cardinality() {
             ),
             reading("findings/d.md", 4, "FR-4", &[("title", text("t"))]),
         ],
+        &Default::default(),
     );
     assert!(matches!(
         problems_of(&s, 1).as_slice(),
@@ -691,6 +693,7 @@ fn a_directory_that_is_moved_in_the_schema_moves_its_files_out() {
             "FR-1",
             &[("title", text("title"))],
         )],
+        &Default::default(),
     );
     assert_eq!(problems_of(&moved, 1), vec![DocProblem::OutsideBooks]);
 }

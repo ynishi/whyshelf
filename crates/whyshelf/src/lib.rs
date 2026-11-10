@@ -61,6 +61,50 @@
 //! A document's hash covers its book, its fields and its body (not its key, its
 //! place or its links), so it can be renamed or moved and stay approved.
 //!
+//! ## Links to files that are no document
+//!
+//! A link may point at *artifacts*, files of the project that are no document (code,
+//! tests, data), with `target = "artifact"`; it `depends` or `informs`, never
+//! `replaces` (and no book can be called `artifact`). The sample's `design` book has
+//! one, `tests`, so a design names the tests that show it holds:
+//!
+//! ```text
+//!   tests: [crates/cache/tests/expiry.rs]      paths under the root, with `/`
+//! ```
+//!
+//! An approval pins, for each path of a `depends` link, the hash of the file's bytes,
+//! or that no file was there: a path that has no file yet is the evidence not
+//! written yet, not a broken link. Afterwards:
+//!
+//! | the pinned file | now | the approval is |
+//! |---|---|---|
+//! | there, with hash A | there, with hash A | unchanged by it |
+//! | there, with hash A | there, with hash B | `stale` (`artifact_changed`) |
+//! | there | gone | `broken` (`artifact_gone`) |
+//! | not there | not there | unchanged by it |
+//! | not there | there | `stale` (`artifact_arrived`): the evidence came, look again |
+//!
+//! A path added to or taken from the link since is `links_changed` (`stale`). An
+//! `informs` link to a file changes no freshness.
+//!
+//! In a Git repository an approval also records, for the approved document, each
+//! upstream it pinned and each file, the Git blob its content is in, and the commit
+//! `HEAD` names (a hint). Freshness never reads either: it is decided by hashes, so a
+//! directory outside Git works the same, with nothing recorded to read back. The
+//! records of the ledger written before these were kept read back unchanged.
+//!
+//! ## What an approval saw
+//!
+//! `books show <ref> --approved` lists what the approval that stands saw (the
+//! document, its upstreams and its files), each with its content as it was approved,
+//! read back from Git, or why it cannot be: `no_address` (made outside Git, by an
+//! older version, or no file was there) or `address_not_readable` (the content was
+//! never committed, or is not in this clone). `books diff <ref>` sets each beside
+//! the file now: the approved and current hash, whether it changed, and a unified
+//! line diff when both are text. Both only read; putting a file back as it was is
+//! Git's work (`git checkout`) and yours. A release is a Git tag: check it out and
+//! `books status` says what held then, because freshness is derived, never stored.
+//!
 //! ## Commands
 //!
 //! ```text
@@ -71,6 +115,8 @@
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   trace <ref>               what it links to and what links to it, transitively
 //!   stale                     the approvals that no longer hold, strongest first, with their roots
+//!   show <ref> --approved     what the approval that stands saw, with its content read back
+//!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
 //!   judge deny|deprecate|retire <ref>... [--reason <text>]   (deprecate: [--successor <ref>])
 //!   judge revoke <ref>... --reason <text>
@@ -93,7 +139,9 @@
 //! - Only `judge` writes, one new file per decision; every other command only reads
 //!   and creates nothing. Who judges is `--actor`, else `WHYSHELF_ACTOR`, else Git's
 //!   `user.name`; never a committed file.
-//! - None of these commands needs `.whyshelf.toml`, a Git revision or the cache.
+//! - None of these commands needs `.whyshelf.toml`, a Git revision or the cache. Git
+//!   is used, when it is there, only to name and read back the content an approval
+//!   saw.
 //!
 //! ## Output and exit status
 //!
@@ -101,7 +149,8 @@
 //! the JSON Schema of each, made from the same types. A document is
 //! `{"id": ..., "key": ...}`; its `standing` is `pending`, `denied`, `deprecated`,
 //! `retired`, or for an approval `fresh`, `expired`, `stale` or `broken`; a cause has
-//! a `kind`, a `severity`, the `upstream` it names and a `detail` sentence; every
+//! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a path) and a
+//! `detail` sentence; every
 //! answer carries `health` (files that are no document, cycles, records that
 //! contradict one another or cannot be read).
 //!
@@ -109,7 +158,7 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `books check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, or a declaration that cannot be used |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, or `show --approved` / `diff` of a document no approval stands about |
 //! | 3 | the run failed: a file could not be read or written |
 //!
 //! On 1 (a refusal), 2 and 3 the JSON is `{"error": "refused" | "request" | "failed",

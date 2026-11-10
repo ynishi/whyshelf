@@ -28,7 +28,11 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::TwoOrMore;
 
-use super::schema::{BookName, EntryName, FieldWord, KeyForm, KeyProblem, LinkKind, Propagation};
+use super::artifact::Artifact;
+use super::schema::{
+    ArtifactLinkKind, ArtifactPropagation, BookName, EntryName, FieldWord, KeyForm, KeyProblem,
+    LinkKind, Propagation,
+};
 
 /// The key of a document: its book, and its key in the grammar of that book.
 ///
@@ -219,6 +223,36 @@ impl Link {
     }
 }
 
+/// One link to artifacts a book declares, as a document holds it: what kind of link
+/// it is, and the artifact each path written in it comes to (none when the document
+/// wrote none).
+///
+/// Every path is an [`Artifact`], a file or no file (rule A1): there is no
+/// "unresolved" artifact, because a file not written yet is still the evidence a
+/// document names. A text that is no path makes the document invalid instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactLink {
+    kind: ArtifactLinkKind,
+    artifacts: Vec<Artifact>,
+}
+
+impl ArtifactLink {
+    pub(super) fn new(kind: ArtifactLinkKind, artifacts: Vec<Artifact>) -> Self {
+        Self { kind, artifacts }
+    }
+
+    /// The kind the book declares: how many paths it holds and what it means for
+    /// freshness.
+    pub fn kind(&self) -> &ArtifactLinkKind {
+        &self.kind
+    }
+
+    /// The artifact each path written in it comes to, in the order written.
+    pub fn artifacts(&self) -> &[Artifact] {
+        &self.artifacts
+    }
+}
+
 /// The hash of a document, which says whether it changed.
 ///
 /// It covers the name of the book, the fields and the body. It does not cover the
@@ -264,6 +298,7 @@ pub struct Doc {
     origin: RelPath,
     fields: BTreeMap<EntryName, FieldValue>,
     links: BTreeMap<EntryName, Link>,
+    artifact_links: BTreeMap<EntryName, ArtifactLink>,
     body: String,
     hash: DocHash,
 }
@@ -336,8 +371,13 @@ fn hash_doc(book: &BookName, fields: &BTreeMap<EntryName, FieldValue>, body: &st
 
 impl Doc {
     /// A document, whole: the draft (with the hash computed from it) and every link
-    /// the book declares, already resolved. The one place a `Doc` is made.
-    pub(super) fn new(draft: DocDraft, links: BTreeMap<EntryName, Link>) -> Self {
+    /// the book declares, already resolved, into books and to artifacts. The one
+    /// place a `Doc` is made.
+    pub(super) fn new(
+        draft: DocDraft,
+        links: BTreeMap<EntryName, Link>,
+        artifact_links: BTreeMap<EntryName, ArtifactLink>,
+    ) -> Self {
         let DocDraft {
             id,
             key,
@@ -352,6 +392,7 @@ impl Doc {
             origin,
             fields,
             links,
+            artifact_links,
             body,
             hash,
         }
@@ -392,6 +433,25 @@ impl Doc {
             .iter()
             .filter(|(_, link)| link.kind.propagation == propagation)
             .map(|(name, link)| (name, link.states()))
+            .collect()
+    }
+
+    /// The links to artifacts, by name: every one the book declares is there, with
+    /// no artifact in it when the document wrote no path.
+    pub fn artifact_links(&self) -> &BTreeMap<EntryName, ArtifactLink> {
+        &self.artifact_links
+    }
+
+    /// The links to artifacts of one meaning for freshness, by name: the one place
+    /// they are sorted by their [`ArtifactPropagation`].
+    pub fn artifact_links_of(
+        &self,
+        propagation: ArtifactPropagation,
+    ) -> Vec<(&EntryName, &[Artifact])> {
+        self.artifact_links
+            .iter()
+            .filter(|(_, link)| link.kind.propagation == propagation)
+            .map(|(name, link)| (name, link.artifacts()))
             .collect()
     }
 

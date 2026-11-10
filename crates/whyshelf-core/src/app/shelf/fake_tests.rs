@@ -2,7 +2,8 @@
 //!
 //! One struct, [`FakeShelf`], implements every port and both bundles, so a test holds
 //! the world in one place: the declarations, the readings of the files, the records
-//! of the ledger. It counts what was written, so a test of a read can say that
+//! of the ledger, the files that are no document, the contents that were "committed"
+//! and the revision. It counts what was written, so a test of a read can say that
 //! nothing was.
 
 use std::future::Future;
@@ -19,13 +20,18 @@ use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record};
 use crate::domain::shelf::schema::{
     BookDir, BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl,
-    KeyPatternDecl, LinkEntryDecl, Propagation,
+    KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation,
 };
 
 use super::ports::{
-    ActorSource, BookSchemaSource, Clock, DocSource, IdSource, LedgerAppend, LedgerContents,
-    LedgerRead, ShelfRead, ShelfWrite, UnreadableRecord,
+    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentStore, DocSource, IdSource,
+    LedgerAppend, LedgerContents, LedgerRead, RevisionSource, ShelfRead, ShelfWrite,
+    UnreadableRecord,
 };
+use crate::domain::shelf::artifact::{
+    ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
+};
+use std::collections::BTreeMap;
 
 /// Drive a future to completion on the current thread. The fakes never wait.
 pub(super) fn block_on<F: Future>(future: F) -> F::Output {
@@ -74,7 +80,7 @@ fn field(name: &str, ty: FieldTypeDecl, presence: FieldPresence) -> FieldEntryDe
 fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
     LinkEntryDecl {
         name: name.to_owned(),
-        target: target.to_owned(),
+        target: LinkTargetDecl::Book(target.to_owned()),
         cardinality: Cardinality::Many,
         propagation,
     }
@@ -105,6 +111,12 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
                 link("grounds", "finding", Propagation::Depends),
                 link("related", "finding", Propagation::Informs),
                 link("supersedes", "spec", Propagation::Replaces),
+                LinkEntryDecl {
+                    name: "tests".to_owned(),
+                    target: LinkTargetDecl::Artifact,
+                    cardinality: Cardinality::Many,
+                    propagation: Propagation::Depends,
+                },
             ],
         },
     ]
@@ -157,6 +169,18 @@ pub(super) fn sp(n: u128, title: &str, grounds: &[&str]) -> DocReading {
     )
 }
 
+/// A spec `SP-<n>` with identity `n`, grounded in these findings and tested by these
+/// files.
+pub(super) fn sp_tested(n: u128, title: &str, grounds: &[&str], tests: &[&str]) -> DocReading {
+    file(
+        &format!("specs/sp-{n}.md"),
+        n,
+        &format!("SP-{n}"),
+        title,
+        &[("grounds", grounds), ("tests", tests)],
+    )
+}
+
 /// The world the ports show.
 #[derive(Debug)]
 pub(super) struct FakeShelf {
@@ -169,6 +193,25 @@ pub(super) struct FakeShelf {
     pub(super) actor: Option<Actor>,
     pub(super) appends: Mutex<usize>,
     pub(super) failing: Option<&'static str>,
+    /// The bytes of the files that are no document (and of a document's file, when a
+    /// test wants its address), by path: the working tree.
+    pub(super) files: Mutex<BTreeMap<RelPath, Vec<u8>>>,
+    /// The contents that can be read back by address: what was "committed".
+    pub(super) committed: Mutex<BTreeMap<ContentAddress, Vec<u8>>>,
+    /// The revision now.
+    pub(super) revision: Mutex<Option<Revision>>,
+    /// Whether the fake can name addresses (false is a project outside version
+    /// control).
+    pub(super) versioned: bool,
+    /// How many times the artifacts were read.
+    pub(super) artifact_reads: Mutex<usize>,
+}
+
+/// The address the fake gives a content: its hash, cut short, so equal contents
+/// share one, as in a content-addressed store.
+pub(super) fn fake_address(bytes: &[u8]) -> ContentAddress {
+    let hex = ArtifactHash::of_content(bytes).hash().hex();
+    ContentAddress::from_validated(format!("fake-{}", &hex[..16])).expect("an opaque value")
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -188,7 +231,38 @@ impl FakeShelf {
             actor: Some(Actor::new("alice").expect("a name")),
             appends: Mutex::new(0),
             failing: None,
+            files: Mutex::new(BTreeMap::new()),
+            committed: Mutex::new(BTreeMap::new()),
+            revision: Mutex::new(None),
+            versioned: true,
+            artifact_reads: Mutex::new(0),
         }
+    }
+
+    /// Write a file that is no document (or the bytes of a document's file).
+    pub(super) fn put_file(&self, at: &str, bytes: &[u8]) {
+        lock(&self.files).insert(path(at), bytes.to_vec());
+    }
+
+    /// Delete such a file.
+    pub(super) fn remove_file(&self, at: &str) {
+        lock(&self.files).remove(&path(at));
+    }
+
+    /// Keep every file as it is now, so its content can be read back by address, and
+    /// move the revision on.
+    pub(super) fn commit(&self, revision: &str) {
+        let files = lock(&self.files).clone();
+        let mut committed = lock(&self.committed);
+        for bytes in files.values() {
+            committed.insert(fake_address(bytes), bytes.clone());
+        }
+        *lock(&self.revision) =
+            Some(Revision::from_validated(revision.to_owned()).expect("an opaque value"));
+    }
+
+    pub(super) fn artifact_read_count(&self) -> usize {
+        *lock(&self.artifact_reads)
     }
 
     /// The files of the project, replacing what was there.
@@ -301,11 +375,69 @@ impl ActorSource for FakeShelf {
     }
 }
 
+impl ArtifactSource for FakeShelf {
+    type Error = FakeError;
+
+    async fn read_artifacts(&self, paths: &[RelPath]) -> Result<ArtifactReadings, FakeError> {
+        self.check()?;
+        *lock(&self.artifact_reads) += 1;
+        let files = lock(&self.files);
+        Ok(paths
+            .iter()
+            .map(|p| {
+                let reading = match files.get(p) {
+                    Some(bytes) => ArtifactReading::Present {
+                        hash: ArtifactHash::of_content(bytes),
+                        address: self.versioned.then(|| fake_address(bytes)),
+                    },
+                    None => ArtifactReading::Absent,
+                };
+                (p.clone(), reading)
+            })
+            .collect())
+    }
+
+    async fn current(&self, at: &RelPath) -> Result<Option<Vec<u8>>, FakeError> {
+        self.check()?;
+        Ok(lock(&self.files).get(at).cloned())
+    }
+}
+
+impl ContentStore for FakeShelf {
+    type Error = FakeError;
+
+    async fn read_back(&self, address: &ContentAddress) -> Result<Option<Vec<u8>>, FakeError> {
+        self.check()?;
+        Ok(lock(&self.committed).get(address).cloned())
+    }
+}
+
+impl RevisionSource for FakeShelf {
+    type Error = FakeError;
+
+    async fn revision(&self) -> Result<Option<Revision>, FakeError> {
+        Ok(if self.versioned {
+            lock(&self.revision).clone()
+        } else {
+            None
+        })
+    }
+}
+
 impl ShelfRead for FakeShelf {
     type Schemas = Self;
     type Docs = Self;
     type Ledger = Self;
     type Clock = Self;
+    type Artifacts = Self;
+    type Store = Self;
+
+    fn artifacts(&self) -> &Self {
+        self
+    }
+    fn store(&self) -> &Self {
+        self
+    }
 
     fn schemas(&self) -> &Self {
         self
@@ -325,6 +457,11 @@ impl ShelfWrite for FakeShelf {
     type Append = Self;
     type Ids = Self;
     type Actor = Self;
+    type Revisions = Self;
+
+    fn revisions(&self) -> &Self {
+        self
+    }
 
     fn append(&self) -> &Self {
         self

@@ -14,18 +14,27 @@
 //!
 //!   schema                                             Schema::validate ──► Schema
 //!                                                        (BookSchemaDecl in; declared once)
-//!   doc       ──► schema                               DocDraft, Doc::new ──► Doc, with its Links
+//!   artifact                                           ArtifactHash::of_content, ContentAddress,
+//!                                                        Revision (opaque), Artifact
+//!                                                        (a file that is no document)
+//!   doc       ──► schema, artifact                     DocDraft, Doc::new ──► Doc, with its Links
+//!                                                        and its ArtifactLinks
 //!   graph                                              cycles_of ──► Cycle; components
-//!   build     ──► schema, doc, graph                   Shelf::build ──► Shelf
-//!                                                        (DocReading in; what the files are:
-//!                                                         valid Docs, InvalidDocs, link cycles)
-//!   ledger    ──► schema, doc, graph, build            Ledger::build ──► Ledger, FrameGraph
+//!   build     ──► schema, artifact, doc, graph         Shelf::artifact_paths ──► the paths to read
+//!                                                      Shelf::build ──► Shelf
+//!                                                        (DocReading and ArtifactReadings in: valid
+//!                                                         Docs, InvalidDocs, link cycles)
+//!   ledger    ──► schema, artifact, doc, graph, build  Ledger::build ──► Ledger, FrameGraph
 //!                                                        (Record in; what people decided)
 //!                                                      frame_approve / frame_present / frame_retire
+//!                                                        └─► ApproveFrame::addressed
 //!                                                        └─► Decision::approve / deny / deprecate / retire
 //!   lookup    ──► schema, build, ledger                resolve ──► Resolution  (what a person typed)
-//!   trace     ──► schema, doc, build                   trace ──► Trace         (the links, up and down)
-//!   freshness ──► schema, doc, graph, build, ledger    assess ──► Assessment   (whether it still holds)
+//!   trace     ──► schema, artifact, doc, build         trace ──► Trace         (the links, up and down)
+//!   freshness ──► schema, artifact, doc, graph,        assess ──► Assessment   (whether it still holds)
+//!                 build, ledger
+//!   snapshot  ──► artifact, doc, build, ledger         Snapshot::of ──► Snapshot (what an approval saw),
+//!                                                        SnapshotItem::retrieval ──► Retrieval
 //! ```
 //!
 //! Each arrow points from a module to what it uses, and nothing points back: a
@@ -72,15 +81,38 @@
 //! | a contradiction among records | [`Ledger::build`] | [`LedgerProblem`]s |
 //! | what was decided | [`Ledger::status_of`] | a [`DeclaredStatus`] |
 //! | what a person typed | [`resolve`] | a [`Resolution`] (an identity only the ledger knows has an [`Absence`], which cannot be invalid) |
+//! | which paths a document's links to artifacts name (A1) | [`Shelf::artifact_paths`], before the build, and [`Shelf::build`], which makes each path an [`Artifact`] that is there or absent (never unresolved); a text that is no path is a [`DocProblem::ArtifactPathInvalid`] | the paths; an [`Artifact`] |
+//! | what an artifact's hash covers | the adapter, which hands the bytes it chose to [`ArtifactHash::of_content`] | an [`ArtifactHash`] |
+//! | the form of a content address and of a revision (A7) | the adapter, then `from_validated` ([`ContentAddress::from_validated`], [`Revision::from_validated`]) checks only that it is not empty and has no space | an opaque value |
+//! | a link to artifacts never replaces | [`Schema::validate`] ([`SchemaProblem::ArtifactReplaces`]); the type [`ArtifactPropagation`] has no `Replaces` | an [`ArtifactLinkKind`] |
+//! | a pin of an artifact (A2) | the private constructor of [`ArtifactPin`]: [`frame_approve`] pins every artifact of a `Depends` link as it is, a file or none, and refuses nothing for it | an [`ArtifactPin`] with a [`PinnedArtifact`] |
+//! | which address goes on which item of an approval (A5) | [`ApproveFrame::addressed`], from the files the frame knows ([`ApproveFrame::files`]) | the frame, with the addresses and the revision |
+//! | which records keep addresses and a revision, and how a record without them reads (A5) | [`Record::to_canon`] / [`Record::from_canon`]: optional keys, left out when empty | a [`Record`] |
 //! | how strong a cause is | [`Cause::severity`] | a [`Severity`] |
+//! | what a pinned artifact makes of an approval (A3), with hashes only (A4) | `artifact_causes` in `freshness.rs`, called by [`assess`] | [`Cause::ArtifactChanged`], [`Cause::ArtifactGone`], [`Cause::ArtifactArrived`], [`Cause::ArtifactLinksChanged`] |
+//! | what an approval that stands saw | [`Snapshot::of`], from [`Ledger::standing_decision`] (which [`Ledger::status_of`] reads too) | a [`Snapshot`] of [`SnapshotItem`]s |
+//! | whether the content of an item came back (A6) | [`SnapshotItem::retrieval`] | a [`Retrieval`]: read, an address that cannot be read, or no address |
+//! | whether an item of a snapshot changed | [`SnapshotItem::changed_from`], by hash | a truth value |
 //! | the level of a freshness | [`Degradation::level`], computed from the causes; [`Freshness::from_causes`] is the only maker of a [`Degradation`] | a [`Severity`] |
 //! | freshness, propagation, notices | [`assess`] | an [`Assessment`] |
 //! | where one identity stands, listed or not | [`Assessment::standing_of`] | a [`Standing`] |
 //! | where a degradation starts | [`Assessment::roots_of`] | [`RootCause`]s |
 //!
-//! One of these cannot be enforced by visibility alone: `DocHash::restore` is visible
-//! to the whole module (the hash is computed in `doc.rs` and read back in
-//! `ledger.rs`), so the rule is a name: `restore` only where a record is read back.
+//! Two of these cannot be enforced by visibility alone: `DocHash::restore` and
+//! `ArtifactHash::restore` are visible to the whole module (the hash is made in
+//! `doc.rs` or by an adapter, and read back in `ledger.rs`), so the rule is a name:
+//! `restore` only where a record is read back.
+//!
+//! # Files that are no document
+//!
+//! A book may link to *artifacts* (`target = "artifact"`): code, tests, data, named
+//! by their path. An approval pins what is at each path of a `Depends` link, a hash
+//! or "no file", the way it pins an upstream document, and freshness compares the
+//! same way, by hash only. Beside each hash, a record may keep a
+//! [`ContentAddress`] where the content can be read back later, and a
+//! [`Revision`], both opaque: the domain knows no version control, and a project
+//! outside one has the same freshness. What an approval saw is a [`Snapshot`], and
+//! whether its content came back is a [`Retrieval`].
 //!
 //! # What a hash covers
 //!
@@ -126,6 +158,34 @@
 //! [`RelPath`]: crate::domain::location::RelPath
 //! [`Actor`]: crate::domain::actor::Actor
 //! [`ValueError`]: crate::domain::error::ValueError
+//! [`Shelf::artifact_paths`]: build::Shelf::artifact_paths
+//! [`Artifact`]: artifact::Artifact
+//! [`ArtifactHash`]: artifact::ArtifactHash
+//! [`ArtifactHash::of_content`]: artifact::ArtifactHash::of_content
+//! [`ContentAddress`]: artifact::ContentAddress
+//! [`ContentAddress::from_validated`]: artifact::ContentAddress::from_validated
+//! [`Revision`]: artifact::Revision
+//! [`Revision::from_validated`]: artifact::Revision::from_validated
+//! [`DocProblem::ArtifactPathInvalid`]: build::DocProblem::ArtifactPathInvalid
+//! [`SchemaProblem::ArtifactReplaces`]: schema::SchemaProblem::ArtifactReplaces
+//! [`ArtifactPropagation`]: schema::ArtifactPropagation
+//! [`ArtifactLinkKind`]: schema::ArtifactLinkKind
+//! [`ArtifactPin`]: ledger::ArtifactPin
+//! [`PinnedArtifact`]: ledger::PinnedArtifact
+//! [`ApproveFrame::addressed`]: ledger::ApproveFrame::addressed
+//! [`ApproveFrame::files`]: ledger::ApproveFrame::files
+//! [`Record::to_canon`]: ledger::Record::to_canon
+//! [`Ledger::standing_decision`]: ledger::Ledger::standing_decision
+//! [`Cause::ArtifactChanged`]: freshness::Cause::ArtifactChanged
+//! [`Cause::ArtifactGone`]: freshness::Cause::ArtifactGone
+//! [`Cause::ArtifactArrived`]: freshness::Cause::ArtifactArrived
+//! [`Cause::ArtifactLinksChanged`]: freshness::Cause::ArtifactLinksChanged
+//! [`Snapshot`]: snapshot::Snapshot
+//! [`Snapshot::of`]: snapshot::Snapshot::of
+//! [`SnapshotItem`]: snapshot::SnapshotItem
+//! [`SnapshotItem::retrieval`]: snapshot::SnapshotItem::retrieval
+//! [`SnapshotItem::changed_from`]: snapshot::SnapshotItem::changed_from
+//! [`Retrieval`]: snapshot::Retrieval
 //! [`Schema::validate`]: schema::Schema::validate
 //! [`Schema`]: schema::Schema
 //! [`KeyPattern::parse`]: schema::KeyPattern::parse
@@ -204,6 +264,7 @@
 //! [`Standing`]: freshness::Standing
 //! [`RootCause`]: freshness::RootCause
 
+pub mod artifact;
 pub mod build;
 pub mod doc;
 pub mod freshness;
@@ -211,6 +272,7 @@ pub mod graph;
 pub mod ledger;
 pub mod lookup;
 pub mod schema;
+pub mod snapshot;
 pub mod trace;
 
 #[cfg(test)]
