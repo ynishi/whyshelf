@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "ef72fbcf8b1439787ec2f1911021513d4571c88f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7b121547f6f47eff5bdb948d03ae29929f51f6991999f03fd168e588b2985d6e",
+      "link": "tests",
+      "name": "Justfile",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e8c77d2bccb79fe24bbb5d537911a0cdfa2063a6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f4aba6ad0b00a14f11229271a4cfc8a12417f5082803f70ad869e4862f5894aa",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stale_exit_code.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794346884287,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c47fec0a2854eced2e368aa728ca93b8e5788829",
+      "hash": "sha256:5a5ee29221c5ea57a665401c1fc1306261b86c1e57a9a94e11361452b445afbf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "26"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c532-68dc-71dd-a7c8-35e9618f81f6"
+    }
+  ],
+  "id": "01a1c768-9dad-75ae-8023-c5a169860781",
+  "kind": "decision",
+  "reason": "Restated to name only the unit tests they rest on (#45), the tests of the binary moved to e2e verifications; checked by a blind review",
+  "revision": "cefa153fab8e2e7607b033f364e925f87bfa83a8",
+  "seen": "sha256:5ef095c17836a68b395cbd15ca0f62b7465e1766320e0551cae0d8a3ff727e84",
+  "seen_address": "6eea28893a947a2fda35cb36534857d09e1918b8",
+  "subject": "01a1c532-6b46-7549-a494-9b3bfa21561d",
+  "v": 1,
+  "verb": "approve"
+}

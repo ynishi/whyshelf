@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794346883332,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c768-9917-763c-8174-f81a40ed260c",
+  "kind": "decision",
+  "reason": "Tests of the binary are given to e2e verifications (#45); checked against the tests by a blind review, every finding fixed",
+  "revision": "cefa153fab8e2e7607b033f364e925f87bfa83a8",
+  "seen": "sha256:9aa463ae72be45b5f26b093460d48b762e849f442ab52042642672565dfc1b34",
+  "seen_address": "2165c51388aafd00d4154d9b807382d7e17e3d02",
+  "subject": "01a1c765-1e83-7185-ae71-cf97092f293f",
+  "v": 1,
+  "verb": "approve"
+}
