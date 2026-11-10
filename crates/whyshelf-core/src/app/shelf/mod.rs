@@ -18,6 +18,7 @@
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
 //! | [`judge`](ShelfApp::judge) | **yes** | [`Judged`]: the record that was appended, with the addresses of what an approval stood on and the revision |
+//! | [`approve_stale`](ShelfApp::approve_stale) | **yes** | [`StaleApproved`]: the approvals made again, upstream first and in one run, of every expired or stale one that would hold once made, and those left out, each with why |
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
@@ -25,7 +26,8 @@
 //! # Reading and writing
 //!
 //! A use case that reads takes `&self` and is generic over [`ShelfRead`], which has no
-//! way to write. [`judge`](ShelfApp::judge), [`same_meaning`](ShelfApp::same_meaning),
+//! way to write. [`judge`](ShelfApp::judge),
+//! [`approve_stale`](ShelfApp::approve_stale), [`same_meaning`](ShelfApp::same_meaning),
 //! [`withdraw`](ShelfApp::withdraw) and [`new_doc`](ShelfApp::new_doc) take
 //! `&mut self` and [`ShelfWrite`]: the writes of one program run one at a time, by the
 //! type. Two processes can still write at once; that is safe because a record is a
@@ -44,6 +46,7 @@
 //! and the files of the ledger that are no record. None is a failure of the use case,
 //! and none is left out.
 
+mod approve_stale;
 mod approved;
 mod error;
 mod judge;
@@ -58,6 +61,8 @@ mod withdraw;
 
 #[cfg(test)]
 mod actor_tests;
+#[cfg(test)]
+mod approve_stale_tests;
 #[cfg(test)]
 mod artifact_tests;
 #[cfg(test)]
@@ -79,6 +84,7 @@ mod tests;
 #[cfg(test)]
 mod unlinked_tests;
 
+pub use approve_stale::{ApproveStaleRequest, LeftOut, LeftOutWhy, StaleApproved};
 pub use error::{ErrorClass, ShelfError};
 pub use judge::{JudgeRequest, Judgement};
 pub use new_doc::{Created, NewDocRequest};

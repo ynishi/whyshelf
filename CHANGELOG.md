@@ -52,6 +52,11 @@ and this project adheres to
   `not_covered` notice gain `severity`, and `map`'s links `cover_severity`. A
   quoted `cover = "true"` is now a problem of the declaration, not a failure
   to read it (#49).
+- `judge approve --stale --reason <text>` approves again, in one run and
+  upstream first by the links, every approval that is expired or stale and
+  would hold once approved. The rest are left out, listed under `left_out` with
+  why (`broken`, `refused`, `stands_on`) and warned of on stderr; pending
+  documents are not touched (#41).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794335417061,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c6b9-a350-7114-9a2d-bac0707c1c28",
+  "kind": "decision",
+  "reason": "What a change made stale is approved again in one step (#41); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "7ae791da635ea877c9c8051db05e49fc6b6cdc62",
+  "seen": "sha256:665cc53a4d4f74d28db81b7538b987de5e1845ab18bcd77117dc4cb4fe848add",
+  "seen_address": "dd0569f50df65c8e603d65945b732663f342f60a",
+  "subject": "01a1c6a9-7783-7239-aa91-3d22bdc409e0",
+  "v": 1,
+  "verb": "approve"
+}

@@ -174,11 +174,15 @@ issue -> finding -> requirement / decision / verification (pending)
   `check`, with a warning line on stderr that `just check` shows, and leaves it
   clean. `whyshelf unlinked` lists the documents nothing links, whatever is
   covered.
-- After the review, the author approves the new documents and what the change
-  made stale in one `judge approve`, upstream first, with a reason that names
-  the review and says why it holds. An edit that keeps the meaning (a typo, a
-  struct literal that gained a field) can be declared with `judge same`
-  instead. The records in `.whyshelf/ledger/` are committed with the change.
+- After the review, the author approves the new documents in one `judge
+  approve`, upstream first, and then what the change made stale with
+  `judge approve --stale`, each with a reason that names the review and says why
+  it holds. `--stale` takes the order from the links, and leaves out, each with
+  a warning, what is broken or would not hold once approved again: mend what
+  its reason names, or look at it again, then approve it with `judge approve`.
+  An edit that keeps the meaning (a typo, a struct literal that
+  gained a field) can be declared with `judge same` instead. The records in
+  `.whyshelf/ledger/` are committed with the change.
 - `whyshelf check` is clean and `whyshelf stale` is empty before a PR goes up:
   `just check`, and so CI, fails otherwise (`just books`). An approval made with
   `--until` fails it once it expires. Pending documents pass it; approve them.

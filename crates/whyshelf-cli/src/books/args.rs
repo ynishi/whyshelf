@@ -108,9 +108,25 @@ pub struct Common {
 pub enum Verb {
     /// The document is sound as it is now.
     Approve {
-        /// The document and why.
-        #[command(flatten)]
-        common: Common,
+        /// The documents, as for every verb ([`Common::references`]); none with
+        /// --stale.
+        #[arg(
+            num_args = 1..,
+            required_unless_present = "stale",
+            conflicts_with = "stale"
+        )]
+        references: Vec<Reference>,
+        /// Approve again, in one run and upstream first by the links, every approval
+        /// that is expired or stale and would hold once approved; the rest are left
+        /// out, each with a warning on stderr (needs --reason, takes no document).
+        #[arg(long, requires = "reason")]
+        stale: bool,
+        /// Why.
+        #[arg(long)]
+        reason: Option<String>,
+        /// Who judges (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
+        #[arg(long)]
+        actor: Option<String>,
         /// When the approval lapses (RFC 3339, or a date).
         #[arg(long)]
         until: Option<String>,
