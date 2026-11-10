@@ -136,12 +136,93 @@ pub enum RawProblem {
     #[error("the front matter is not a mapping")]
     NotAMapping,
     /// A value that is none of a text, a whole number, a truth value and a list of
-    /// texts (a nested mapping, a floating point number).
-    #[error("the value of `{key}` is of a kind a front matter does not hold")]
+    /// texts, with the kind it was read as.
+    #[error("the value of `{key}` is {kind}, which a front matter does not hold{}", kind.hint())]
     UnsupportedValue {
         /// The key.
         key: String,
+        /// What the value was read as.
+        kind: UnheldKind,
     },
+}
+
+/// What a value of a front matter was read as when it is none of the kinds a front
+/// matter holds (a text, a whole number, a truth value, a list of texts).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnheldKind {
+    /// No value (`key:` with nothing after it, or `null`).
+    Null,
+    /// A number written with a decimal point or an exponent (`1.5`, `1.0`, `1e3`).
+    Float,
+    /// A whole number too large for the integers a front matter holds (64-bit,
+    /// signed).
+    TooLarge,
+    /// A mapping (`key: {a: 1}`, or an indented block of `a: b`).
+    Mapping,
+    /// A value with a YAML tag (`!tag`).
+    Tagged,
+    /// A list with an item that is no text.
+    Item(UnheldItem),
+}
+
+/// What an item of a list was read as when it is no text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnheldItem {
+    /// No value.
+    Null,
+    /// A truth value.
+    Bool,
+    /// A number.
+    Number,
+    /// A mapping: an item written `a: b` without quotes.
+    Mapping,
+    /// A list in the list.
+    List,
+    /// A value with a YAML tag.
+    Tagged,
+}
+
+impl std::fmt::Display for UnheldKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let item = |kind| format!("a list with an item that is {kind}");
+        let text = match self {
+            Self::Null => "no value".to_owned(),
+            Self::Float => "a number written with a decimal point or an exponent".to_owned(),
+            Self::TooLarge => "a whole number above the largest one (2^63 - 1)".to_owned(),
+            Self::Mapping => "a mapping".to_owned(),
+            Self::Tagged => "a tagged value".to_owned(),
+            Self::Item(UnheldItem::Null) => item("no value"),
+            Self::Item(UnheldItem::Bool) => item("a truth value"),
+            Self::Item(UnheldItem::Number) => item("a number"),
+            Self::Item(UnheldItem::Mapping) => item("a mapping"),
+            Self::Item(UnheldItem::List) => item("a list"),
+            Self::Item(UnheldItem::Tagged) => item("a tagged value"),
+        };
+        f.write_str(&text)
+    }
+}
+
+impl UnheldKind {
+    /// How a value of this kind is usually meant to be written, as the end of a
+    /// sentence: the usual cause and the way out, or nothing.
+    pub fn hint(&self) -> &'static str {
+        match self {
+            Self::Item(UnheldItem::Mapping) => {
+                ": an item written with `: ` is read as a mapping; put it in quotes"
+            }
+            Self::Item(UnheldItem::Bool | UnheldItem::Number) => {
+                ": a list holds texts; put the item in quotes"
+            }
+            Self::Float => {
+                ": write a whole number with digits only, or put the number in quotes as a text"
+            }
+            Self::TooLarge => ": put the number in quotes as a text",
+            Self::Null => ": write a value, or leave the key out",
+            Self::Item(UnheldItem::Null) => ": write the item, or take it out",
+            Self::Mapping => ": the values are flat; write a text or a list of texts",
+            Self::Tagged | Self::Item(UnheldItem::List | UnheldItem::Tagged) => "",
+        }
+    }
 }
 
 /// The identity a file that could not be parsed still shows.
@@ -1439,3 +1520,5 @@ mod comparison_tests;
 mod new_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unheld_tests;

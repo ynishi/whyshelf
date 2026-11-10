@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794306263574,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f6cb259a5a8d83789537b427c16fa5dffba688e9",
+      "hash": "sha256:47590abbdbc9d25aad5eb6e15b5dab769a95fc6d35ecea687cd208b08df8395f",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-382f-717a-938e-9014e2c69bed"
+    },
+    {
+      "address": "55caec0db41d7ace38636bc3417988db1d4944ab",
+      "hash": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    }
+  ],
+  "id": "01a1c4fc-ca8b-744a-afd7-c779bf090091",
+  "kind": "decision",
+  "reason": "Issue #15: a value is told with its kind; two reviews, one blind; the tests of docs.rs and of each kind's words pass; just check green",
+  "revision": "4b6a05238793f846617130207f0084b29b01c969",
+  "seen": "sha256:a34c53b9c15a728b3b3bb9836673cd9106f270ef827e5d7d65c6378fc409abb6",
+  "seen_address": "66a7ea8ddcdce6f21f4c5c856c441b4cb73beb17",
+  "subject": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46",
+  "v": 1,
+  "verb": "approve"
+}

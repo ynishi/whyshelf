@@ -47,7 +47,9 @@ use whyshelf_core::app::shelf::{Creation, DocSource, DocWrite};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::shelf::build::{DocReading, RawProblem, RawValue, ReadId};
+use whyshelf_core::domain::shelf::build::{
+    DocReading, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind,
+};
 use whyshelf_core::domain::shelf::schema::BookDir;
 
 /// Why the documents could not be read at all. A file that is not a document is not
@@ -236,8 +238,10 @@ fn entries(yaml: &str) -> Result<BTreeMap<String, RawValue>, RawProblem> {
         let Value::String(key) = key else {
             return Err(RawProblem::NotAMapping);
         };
-        let raw =
-            raw_value(value).ok_or_else(|| RawProblem::UnsupportedValue { key: key.clone() })?;
+        let raw = raw_value(value).map_err(|kind| RawProblem::UnsupportedValue {
+            key: key.clone(),
+            kind,
+        })?;
         out.insert(key, raw);
     }
     Ok(out)
@@ -325,20 +329,31 @@ impl<'de> Deserialize<'de> for Front {
 }
 
 /// A value of a front matter, if it is a kind a front matter holds.
-fn raw_value(value: Value) -> Option<RawValue> {
+fn raw_value(value: Value) -> Result<RawValue, UnheldKind> {
     match value {
-        Value::String(text) => Some(RawValue::Text(text)),
-        Value::Bool(b) => Some(RawValue::Bool(b)),
-        Value::Number(n) => n.as_i64().map(RawValue::Integer),
+        Value::String(text) => Ok(RawValue::Text(text)),
+        Value::Bool(b) => Ok(RawValue::Bool(b)),
+        Value::Number(n) => match n.as_i64() {
+            Some(i) => Ok(RawValue::Integer(i)),
+            None if n.is_f64() => Err(UnheldKind::Float),
+            None => Err(UnheldKind::TooLarge),
+        },
         Value::Sequence(items) => items
             .into_iter()
             .map(|item| match item {
-                Value::String(text) => Some(text),
-                _ => None,
+                Value::String(text) => Ok(text),
+                Value::Null => Err(UnheldKind::Item(UnheldItem::Null)),
+                Value::Bool(_) => Err(UnheldKind::Item(UnheldItem::Bool)),
+                Value::Number(_) => Err(UnheldKind::Item(UnheldItem::Number)),
+                Value::Mapping(_) => Err(UnheldKind::Item(UnheldItem::Mapping)),
+                Value::Sequence(_) => Err(UnheldKind::Item(UnheldItem::List)),
+                Value::Tagged(_) => Err(UnheldKind::Item(UnheldItem::Tagged)),
             })
-            .collect::<Option<Vec<_>>>()
+            .collect::<Result<Vec<_>, _>>()
             .map(RawValue::List),
-        Value::Null | Value::Mapping(_) | Value::Tagged(_) => None,
+        Value::Null => Err(UnheldKind::Null),
+        Value::Mapping(_) => Err(UnheldKind::Mapping),
+        Value::Tagged(_) => Err(UnheldKind::Tagged),
     }
 }
 
@@ -540,9 +555,60 @@ mod tests {
         assert_eq!(
             why,
             RawProblem::UnsupportedValue {
-                key: "nested".to_owned()
+                key: "nested".to_owned(),
+                kind: UnheldKind::Mapping,
             }
         );
+    }
+
+    #[test]
+    fn each_kind_a_front_matter_does_not_hold_is_named() {
+        let cases = [
+            ("v:", UnheldKind::Null),
+            ("v: 1.5", UnheldKind::Float),
+            ("v: 1.0", UnheldKind::Float),
+            ("v: 1e3", UnheldKind::Float),
+            ("v: 18446744073709551615", UnheldKind::TooLarge),
+            ("v: {a: 1}", UnheldKind::Mapping),
+            ("v: !x a", UnheldKind::Tagged),
+            ("v: [a, ~]", UnheldKind::Item(UnheldItem::Null)),
+            ("v: [a, true]", UnheldKind::Item(UnheldItem::Bool)),
+            ("v: [a, 3]", UnheldKind::Item(UnheldItem::Number)),
+            (
+                "v: [JSON Lines: one record per line]",
+                UnheldKind::Item(UnheldItem::Mapping),
+            ),
+            ("v: [a, [b]]", UnheldKind::Item(UnheldItem::List)),
+            ("v: [a, !x b]", UnheldKind::Item(UnheldItem::Tagged)),
+        ];
+        for (line, kind) in cases {
+            let text = format!("---\nid: {ID}\n{line}\n---\n");
+            let DocReading::Unparsed { why, .. } = read(origin(), &text) else {
+                panic!("unparsed: {line}");
+            };
+            assert_eq!(
+                why,
+                RawProblem::UnsupportedValue {
+                    key: "v".to_owned(),
+                    kind,
+                },
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_item_read_as_a_mapping_is_told_to_be_quoted() {
+        let text = format!("---\nid: {ID}\nrejected: [JSON Lines: one record per line]\n---\n");
+        let DocReading::Unparsed { why, .. } = read(origin(), &text) else {
+            panic!("unparsed");
+        };
+        let message = why.to_string();
+        assert!(
+            message.contains("a list with an item that is a mapping"),
+            "{message}"
+        );
+        assert!(message.contains("put it in quotes"), "{message}");
     }
 
     #[test]
