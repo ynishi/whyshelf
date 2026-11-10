@@ -53,7 +53,9 @@ already have is equally fine; that choice is your setup's.
 `just check` is the definition of green, and CI runs it and nothing else. It
 formats, lints with warnings denied, tests (the architecture rules in
 `arch-lint.toml` and the doctests included), builds the documentation with
-warnings denied (`just rust-doc`), and runs `cargo deny`.
+warnings denied (`just rust-doc`), runs `cargo deny`, and checks the
+repository's own books (`just books`: `whyshelf check` is clean and no approval
+is stale).
 
 Report what was actually run. "I did not verify X" is a usable report; a green
 claim resting on a recipe nobody ran is not.
@@ -171,8 +173,12 @@ issue -> finding -> requirement / decision / verification (pending)
   the review and says why it holds. An edit that keeps the meaning (a typo, a
   struct literal that gained a field) can be declared with `judge same`
   instead. The records in `.whyshelf/ledger/` are committed with the change.
-- `whyshelf stale` and `whyshelf check` are clean before a PR goes up. Neither
-  `just check` nor CI runs them: run them by hand.
+- `whyshelf check` is clean and `whyshelf stale` is empty before a PR goes up:
+  `just check`, and so CI, fails otherwise (`just books`). An approval made with
+  `--until` fails it once it expires. Pending documents pass it; approve them.
+- A path in a link is compared as written, case included: write it as Git
+  tracks it (`Justfile`, not `justfile`), or it is absent on a system that tells
+  case apart.
 
 Everything else is RustDoc: crate and module docs (`//!`) and item docs (`///`),
 with diagrams as ASCII in code blocks tagged `text`; concepts, file formats,

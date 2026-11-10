@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794310388723,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e9417e937c515717990db4ed17437f59a1deb458",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "address": "506bffb88deb3f7867e1389c1dd8e17e131565d9",
+      "hash": "sha256:74a75042c5f67aad20a2140eabf2b07750e2afcf7caa003baf93dc8b6de49487",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4d3-a2e6-7651-a588-ca95e98cfe67"
+    }
+  ],
+  "id": "01a1c53b-bc80-74eb-94b2-1371632ca26d",
+  "kind": "decision",
+  "reason": "Issue #24: stale --exit-code and just books; a blind review tried the gate on a copy and found the Justfile path case, now fixed; just check green",
+  "revision": "ca466e45c5b9d186a7ae8e048d1c16e65c5b6216",
+  "seen": "sha256:5a5ee29221c5ea57a665401c1fc1306261b86c1e57a9a94e11361452b445afbf",
+  "seen_address": "99ef684caaf0e4d5f0814c5005d7eb56962568fd",
+  "subject": "01a1c532-68dc-71dd-a7c8-35e9618f81f6",
+  "v": 1,
+  "verb": "approve"
+}
