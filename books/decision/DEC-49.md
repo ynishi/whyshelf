@@ -2,7 +2,7 @@
 id: "01a1c671-1d95-725c-bd74-8b605650d16c"
 key: "DEC-49"
 issues: ["#47"]
-rejected: ["Use cover as the only way to find them: it is a rule that fails the check, and some books are not expected to be covered", "List every document with no incoming or no outgoing link: the books no link can reach, or that declare no link, fill the lists and bury the isolated ones", "Count a link from a document decided against as reaching: a document decided against would hide a live one, which cover refuses too", "Call it orphans: other traceability tools use the word for a broken link"]
+rejected: ["Use cover as the only way to find them: it is a rule a project declares for a whole link, and some books are not expected to be covered", "List every document with no incoming or no outgoing link: the books no link can reach, or that declare no link, fill the lists and bury the isolated ones", "Count a link from a document decided against as reaching: a document decided against would hide a live one, which cover refuses too", "Call it orphans: other traceability tools use the word for a broken link"]
 related: ["DEC-23", "DEC-18"]
 rustdoc: ["whyshelf_core::domain::shelf::trace::Linkage", "whyshelf_core::domain::shelf::trace::linkage", "whyshelf_core::app::shelf::UnlinkedReport", "whyshelf"]
 serves: ["REQ-17", "REQ-12"]

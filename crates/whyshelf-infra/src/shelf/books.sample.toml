@@ -43,6 +43,7 @@ name = "grounds"            # a spec stands on its findings: a changed finding m
 target = "finding"
 count = "at-least-one"
 means = "depends"
+cover = "warn"              # every finding is expected to ground a spec; one not yet may stand
 
 [[book.link]]
 name = "replaces"           # a spec that takes the place of an older one

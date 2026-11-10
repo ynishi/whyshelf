@@ -42,7 +42,7 @@ fn link_to(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl 
         propagation,
         space: None,
         compare: None,
-        cover: false,
+        cover: None,
     }
 }
 
@@ -310,7 +310,7 @@ fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
         propagation,
         space: Some("file".to_owned()),
         compare: None,
-        cover: false,
+        cover: None,
     }
 }
 

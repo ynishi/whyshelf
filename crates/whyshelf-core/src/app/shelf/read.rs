@@ -105,11 +105,16 @@ impl<P: ShelfRead> ShelfApp<P> {
                     .notices_of(*id)
                     .iter()
                     .filter_map(move |notice| match notice {
-                        Notice::NotCovered { book, link } => Some(Uncovered {
+                        Notice::NotCovered {
+                            book,
+                            link,
+                            severity,
+                        } => Some(Uncovered {
                             doc: *id,
                             key: key.clone(),
                             book: book.clone(),
                             link: link.clone(),
+                            severity: *severity,
                         }),
                         _ => None,
                     })

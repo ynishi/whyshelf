@@ -49,7 +49,7 @@ fn code_link(space: Option<&str>) -> LinkEntryDecl {
         propagation: Propagation::Depends,
         space: space.map(str::to_owned),
         compare: None,
-        cover: false,
+        cover: None,
     }
 }
 

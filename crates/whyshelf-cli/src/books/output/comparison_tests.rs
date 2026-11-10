@@ -55,7 +55,7 @@ fn schema(compare: Option<CompareDecl>) -> Schema {
                 propagation: Propagation::Depends,
                 space: Some("file".to_owned()),
                 compare,
-                cover: false,
+                cover: None,
             }],
         }],
         &BTreeSet::from([Space::new("file").unwrap()]),

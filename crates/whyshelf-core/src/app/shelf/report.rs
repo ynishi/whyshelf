@@ -22,7 +22,9 @@ use crate::domain::shelf::freshness::{
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{Decision, DeclaredStatus, LedgerProblem, Record};
 use crate::domain::shelf::map::ShelfMap;
-use crate::domain::shelf::schema::{BookDir, BookName, EntryName, Propagation, SchemaProblem};
+use crate::domain::shelf::schema::{
+    BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
+};
 use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
 
 use crate::domain::location::RelPath;
@@ -118,7 +120,8 @@ pub enum BooksCheck {
         health: Health,
         /// The documents a covering link is expected to reach and does not (the
         /// [`Notice::NotCovered`](crate::domain::shelf::freshness::Notice::NotCovered)
-        /// notices of every document).
+        /// notices of every document), of either strength;
+        /// [`is_clean`](BooksCheck::is_clean) says which of them fail the check.
         uncovered: Vec<Uncovered>,
         /// The names of pending and approved documents with nothing there (the
         /// [`Notice::ArtifactAbsent`](crate::domain::shelf::freshness::Notice::ArtifactAbsent)
@@ -172,17 +175,28 @@ pub struct Uncovered {
     pub book: BookName,
     /// The link.
     pub link: EntryName,
+    /// How strongly the link expects to reach it.
+    pub severity: CoverSeverity,
 }
 
 impl BooksCheck {
-    /// Whether the check found nothing: a sound declaration, a clean health, and no
-    /// document a covering link fails to reach.
+    /// Whether the check found nothing wrong: a sound declaration, a clean health,
+    /// and no document a covering link of strength
+    /// [`Error`](CoverSeverity::Error) fails to reach. A document a link of
+    /// strength [`Warn`](CoverSeverity::Warn) fails to reach is listed in
+    /// `uncovered` with its strength and leaves the check clean, as `absent` and
+    /// `unknown` do.
     pub fn is_clean(&self) -> bool {
         match self {
             Self::SchemaInvalid(_) => false,
             Self::Checked {
                 health, uncovered, ..
-            } => health.is_clean() && uncovered.is_empty(),
+            } => {
+                health.is_clean()
+                    && uncovered
+                        .iter()
+                        .all(|gap| gap.severity != CoverSeverity::Error)
+            }
         }
     }
 }

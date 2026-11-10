@@ -95,7 +95,7 @@ use super::graph::{Cycle, CycleId};
 use super::ledger::{
     ArtifactPin, DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem,
 };
-use super::schema::{ArtifactPropagation, BookName, EntryName, Propagation};
+use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
 
 /// The documents that take the place of a deprecated one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -507,16 +507,19 @@ pub enum Notice {
         since: JudgedAt,
     },
     /// A link of a book declares that it covers this document's book
-    /// (`cover = true`), and no pending or approved document of that book reaches
-    /// this one through it: a hole in the chain of reasons. The document's freshness
-    /// is unchanged. (A link of a book into itself is met only by another document
-    /// of that book.) The notices of one document come in the order the
-    /// declaration writes the books, and their links.
+    /// ([`LinkKind::cover`](super::schema::LinkKind::cover)), and no pending or
+    /// approved document of that book reaches this one through it: a hole in the
+    /// chain of reasons. The document's freshness is unchanged, whatever the
+    /// strength. (A link of a book into itself is met only by another document of
+    /// that book.) The notices of one document come in the order the declaration
+    /// writes the books, and their links.
     NotCovered {
         /// The book whose link is expected to reach this document.
         book: BookName,
         /// The link.
         link: EntryName,
+        /// How strongly the link expects to reach it.
+        severity: CoverSeverity,
     },
     /// A name a link to artifacts writes has nothing there now
     /// ([`Doc::absent_artifacts`]): the evidence is not written yet, or the name is
@@ -1313,8 +1316,9 @@ fn already_said(unresolved: &UnresolvedLink, lost_here: &[(&FramePin, FailureTag
 
 /// What the covering links of the books expect, and what they reach.
 struct ExpectedReach<'s> {
-    /// For each target book, the (book, link) pairs that declare they cover it.
-    expectations: BTreeMap<&'s BookName, Vec<(&'s BookName, &'s EntryName)>>,
+    /// For each target book, the (book, link) pairs that declare they cover it, with
+    /// the strength each declares.
+    expectations: BTreeMap<&'s BookName, Vec<(&'s BookName, &'s EntryName, CoverSeverity)>>,
     /// Each document a covering link reaches from a document that stands, with the
     /// (book, link) it was reached through.
     reached: BTreeSet<(DocId, BookName, EntryName)>,
@@ -1327,20 +1331,23 @@ fn stands(standing: Option<&Standing>) -> bool {
     standing.is_some_and(Standing::stands)
 }
 
-/// The expectations of the covering links (`cover = true`) and the documents they
-/// reach: the one place a covering link is read.
+/// The expectations of the covering links (a [`LinkKind::cover`] of some strength)
+/// and the documents they reach: the one place a covering link is read.
+///
+/// [`LinkKind::cover`]: super::schema::LinkKind::cover
 fn expected_reach<'s>(
     shelf: &'s Shelf,
     standings: &BTreeMap<DocId, Standing>,
 ) -> ExpectedReach<'s> {
-    let mut expectations: BTreeMap<&BookName, Vec<(&BookName, &EntryName)>> = BTreeMap::new();
+    let mut expectations: BTreeMap<&BookName, Vec<(&BookName, &EntryName, CoverSeverity)>> =
+        BTreeMap::new();
     for (book, schema) in shelf.schema().books() {
         for (name, kind) in schema.links() {
-            if kind.cover {
+            if let Some(severity) = kind.cover {
                 expectations
                     .entry(&kind.target)
                     .or_default()
-                    .push((book, name));
+                    .push((book, name, severity));
             }
         }
     }
@@ -1350,7 +1357,7 @@ fn expected_reach<'s>(
             continue;
         }
         for (name, link) in doc.links() {
-            if !link.kind().cover {
+            if link.kind().cover.is_none() {
                 continue;
             }
             for state in link.states() {
@@ -1395,7 +1402,7 @@ fn collect_notices(
     for doc in cx.shelf.docs().values() {
         let mut notices = same_meaning.remove(&doc.id()).unwrap_or_default();
         if stands(standings.get(&doc.id())) {
-            for (book, link) in expected
+            for (book, link, severity) in expected
                 .expectations
                 .get(&doc.key().book)
                 .into_iter()
@@ -1408,6 +1415,7 @@ fn collect_notices(
                     notices.push(Notice::NotCovered {
                         book: (*book).clone(),
                         link: (*link).clone(),
+                        severity: *severity,
                     });
                 }
             }
