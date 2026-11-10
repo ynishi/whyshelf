@@ -9,7 +9,7 @@
 //!
 //! ```text
 //!   <root>/.whyshelf/books.toml        --books-->  Vec<BookSchemaDecl>
-//!   <root>/<book dir>/**/*.md          --docs--->  Vec<DocReading>
+//!   <root>/<book dir>/**/*.md          <-docs--->  Vec<DocReading>; a new <key>.md
 //!   <root>/.whyshelf/ledger/<id>.json  <-ledger->  Record (through Canon)
 //!   <root>/<path an artifact link names> --git-->  ArtifactReadings (hash, blob name?)
 //!   Git: HEAD, blobs                   --git--->  Revision, content read back
@@ -19,7 +19,7 @@
 //! | file | port | module |
 //! |---|---|---|
 //! | `.whyshelf/books.toml` | [`BookSchemaSource`] | [`books`] |
-//! | the Markdown files of the books | [`DocSource`] | [`docs`] |
+//! | the Markdown files of the books | [`DocSource`], [`DocWrite`] | [`docs`] |
 //! | `.whyshelf/ledger/<id>.json` | [`LedgerRead`], [`LedgerAppend`] | [`ledger`] |
 //! | the files links to artifacts name, and Git | [`ArtifactSource`], [`ContentStore`], [`RevisionSource`] | [`git`] |
 //! | none | [`Clock`], [`IdSource`], [`ActorSource`] | [`system`] |
@@ -37,11 +37,13 @@
 //! [`Project`] bundles them for a project root, as one value the command line hands
 //! to [`ShelfApp`](whyshelf_core::app::shelf::ShelfApp).
 //!
-//! Only `judge` writes, and only one file: a new record. Reading never creates a
-//! directory or a file.
+//! Only `judge` and `new` write, each one new file: `judge` a record, `new` a
+//! document (create-only, never in place of a file that is there). Reading never
+//! creates a directory or a file.
 //!
 //! [`BookSchemaSource`]: whyshelf_core::app::shelf::BookSchemaSource
 //! [`DocSource`]: whyshelf_core::app::shelf::DocSource
+//! [`DocWrite`]: whyshelf_core::app::shelf::DocWrite
 //! [`LedgerRead`]: whyshelf_core::app::shelf::LedgerRead
 //! [`LedgerAppend`]: whyshelf_core::app::shelf::LedgerAppend
 //! [`Clock`]: whyshelf_core::app::shelf::Clock
@@ -140,9 +142,14 @@ impl ShelfWrite for Project {
     type Ids = UuidV7Ids;
     type Actor = ProjectActor;
     type Revisions = GitArtifacts;
+    type DocWriter = MarkdownDocs;
 
     fn revisions(&self) -> &GitArtifacts {
         &self.git
+    }
+
+    fn doc_writer(&self) -> &MarkdownDocs {
+        &self.docs
     }
 
     fn append(&self) -> &JsonLedger {

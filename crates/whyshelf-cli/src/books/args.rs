@@ -41,9 +41,28 @@ pub enum BooksCommand {
         /// A key, an identifier or a short identifier.
         reference: Reference,
     },
-    /// Record a judgement about a document (the only one of these that writes).
+    /// Record a judgement about a document (it and `new` are the only ones of these
+    /// that write).
     #[command(subcommand)]
     Judge(Verb),
+    /// Create one new document, valid for its book, at `<book dir>/<key>.md` (never
+    /// in place of a file that is there).
+    New {
+        /// The book.
+        book: String,
+        /// The title (the entry `title`).
+        #[arg(long)]
+        title: String,
+        /// The key (default: the book's next number; a book of slugs needs one).
+        #[arg(long)]
+        key: Option<String>,
+        /// More entries, `<entry>=<value>`. A list field or a link takes `a,b`; a
+        /// truth value `true` or `false`; a whole number its digits. Links are keys.
+        entries: Vec<String>,
+        /// The body.
+        #[arg(long)]
+        body: Option<String>,
+    },
     /// The JSON Schema of the answer of every `books` command.
     Schema,
 }
