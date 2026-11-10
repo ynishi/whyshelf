@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794352833728,
+  "expires": null,
+  "frame": [
+    {
+      "address": "80b7ca88aa572685d4aa25aa6a50260a271f8243",
+      "hash": "sha256:36a8f23657089860a548249154b9d58c9d02474608ce556359475db853a351c9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    },
+    {
+      "address": "49c669d08382b661ed89f07ca8a93903574ad043",
+      "hash": "sha256:a1dcd5c46145cc74010c34f544e8f6418476c764f5d01e1864c5f1b90083b824",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "19"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c7ac-ef6b-72b1-aca0-3902188dfed0"
+    }
+  ],
+  "id": "01a1c7c3-76e2-73d2-8bdc-39878919136e",
+  "kind": "decision",
+  "reason": "REQ-5 and DEC-29 now count fmt among the writes, V-15 and V-22 are restated, and shared tests changed for #44; checked by a blind review",
+  "revision": "6777de26b11433b74ac2aa5cae504ff6d91efd77",
+  "seen": "sha256:2e6f8fbd9581adcd9a7f4fb3b99744ca2e3937ccac0448d8fa78e74f52c1ca5f",
+  "seen_address": "da9032def055fc8f6a38d45583eae70d26c36b31",
+  "subject": "01a1c7ac-f6cd-72dd-9c19-683d45100164",
+  "v": 1,
+  "verb": "approve"
+}

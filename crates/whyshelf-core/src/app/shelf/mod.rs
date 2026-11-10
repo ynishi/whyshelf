@@ -22,19 +22,25 @@
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
+//! | [`fmt_check`](ShelfApp::fmt_check) | no | [`FmtReport`]: the documents' files not in the one form, those in it, and those `fmt` would leave as they are, each with why |
+//! | [`fmt`](ShelfApp::fmt) | **yes** | [`FmtReport`]: the files written over in the one form, those in it already, and those left as they are, each with why |
 //!
 //! # Reading and writing
 //!
 //! A use case that reads takes `&self` and is generic over [`ShelfRead`], which has no
 //! way to write. [`judge`](ShelfApp::judge),
 //! [`approve_stale`](ShelfApp::approve_stale), [`same_meaning`](ShelfApp::same_meaning),
-//! [`withdraw`](ShelfApp::withdraw) and [`new_doc`](ShelfApp::new_doc) take
-//! `&mut self` and [`ShelfWrite`]: the writes of one program run one at a time, by the
-//! type. Two processes can still write at once; that is safe because a record is a
-//! file of its own named by its own identity, and neither write replaces a file that
-//! is there (see the adapter). Two processes that make a new document of one book at
-//! once can be given the same next key: the second finds the file there, and writes
-//! nothing.
+//! [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc) and
+//! [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
+//! program run one at a time, by the type. Two processes can still write at once;
+//! that is safe because a record is a file of its own named by its own identity, and
+//! no write but `fmt`'s replaces a file that is there (see the adapter). Two
+//! processes that make a new document of one book at once can be given the same next
+//! key: the second finds the file there, and writes nothing. `fmt` compares a file
+//! with what was read just before it replaces it, so an edit made after the reading
+//! is left as it is; one saved in the short time between that comparison and the
+//! replacement is overwritten, and a file removed in it is written again
+//! ([`DocReplace::replace_read`]).
 //!
 //! # Every answer carries what the model noticed
 //!
@@ -49,6 +55,7 @@
 mod approve_stale;
 mod approved;
 mod error;
+mod fmt;
 mod judge;
 mod load;
 mod new_doc;
@@ -72,6 +79,8 @@ mod cover_tests;
 #[cfg(test)]
 mod fake_tests;
 #[cfg(test)]
+mod fmt_tests;
+#[cfg(test)]
 mod new_doc_tests;
 #[cfg(test)]
 mod same_meaning_tests;
@@ -86,12 +95,14 @@ mod unlinked_tests;
 
 pub use approve_stale::{ApproveStaleRequest, LeftOut, LeftOutWhy, StaleApproved};
 pub use error::{ErrorClass, ShelfError};
+pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
 pub use judge::{JudgeRequest, Judgement};
 pub use new_doc::{Created, NewDocRequest};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DocSource, DocWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, RevisionSource,
-    ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
+    DocReplace, DocSource, DocWrite, FileForm, Form, IdSource, LedgerAppend, LedgerContents,
+    LedgerRead, Replacement, RevisionSource, ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord,
+    UnreadableWhy,
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,

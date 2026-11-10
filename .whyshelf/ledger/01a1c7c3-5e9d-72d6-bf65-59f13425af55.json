@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a5130ab4b8e9b77faf6de907ee9d4f8ffdb29302",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a33cdde86bceae4fa9588db6baed8a4c14f3a4ee7b2d9e5171047a3891b01bc2",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794352831373,
+  "expires": null,
+  "frame": [
+    {
+      "address": "da9032def055fc8f6a38d45583eae70d26c36b31",
+      "hash": "sha256:2e6f8fbd9581adcd9a7f4fb3b99744ca2e3937ccac0448d8fa78e74f52c1ca5f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "52"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+    }
+  ],
+  "id": "01a1c7c3-5e9d-72d6-bf65-59f13425af55",
+  "kind": "decision",
+  "reason": "Every document is put in one form without changing what it reads as (#44); checked by two rounds of blind review over about 110 kinds of front matter, every finding fixed",
+  "revision": "6777de26b11433b74ac2aa5cae504ff6d91efd77",
+  "seen": "sha256:63d12d81fd2c0463b8556a8ef48b5ad322a900889692c7fd937f76dfd9b7ca2d",
+  "seen_address": "23d2d2594f68a2049aa9122a34a03dc39b4d668b",
+  "subject": "01a1c7ad-0a7f-7355-b2db-c8107c1a1177",
+  "v": 1,
+  "verb": "approve"
+}

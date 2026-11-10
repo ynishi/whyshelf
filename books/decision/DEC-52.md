@@ -1,0 +1,11 @@
+---
+id: "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+key: "DEC-52"
+issues: ["#44"]
+rejected: ["Rewrite every file whatever it reads back as: a value written in a form the renderer does not keep would change, and so would its hash", "Rewrite a file that holds a comment: the comment would be lost", "Tell a comment by the grammar of YAML: a quote inside a plain scalar was taken for a string, and a real comment was lost", "Rewrite a file with more than one link, or one that cannot be written: the links would part, and the owner and extended attributes would be lost", "Let new overwrite to rewrite a file: new would lose its promise never to write over a file"]
+related: ["DEC-8", "DEC-37", "DEC-27"]
+rustdoc: ["whyshelf_core::app::shelf::ShelfApp::fmt", "whyshelf_core::app::shelf::ports::DocReplace", "whyshelf_infra::shelf::docs::comment_line", "whyshelf"]
+serves: ["REQ-19", "REQ-5"]
+title: "fmt rewrites a file in the form new writes only when it reads back the same, and fmt --check only lists"
+---
+The form is the whole text the documents' adapter writes, id and key first and every text in double quotes, normalized by the domain's rule (DEC-37); new writes in it, so what new writes is in the form. fmt writes a file in the form only when that text reads back as exactly the reading the file has now, so no hash changes; a file already in the form is not written. A file is left as it is and named, on stderr too, when its front matter cannot be read, when it holds a comment (a # at the start of a line or after a space or tab whose cut to the end of its line leaves the reading the same), when its form would read otherwise, when it cannot be opened for writing, when it has more than one link, or when it changed since it was read. fmt replaces a file through a port of its own, after comparing it with the bytes read, by a temporary file and a rename; an edit saved between the comparison and the rename is overwritten, the replaced file keeps its permissions but not its owner or extended attributes, and new still never writes over a file. A write that fails part way can leave the first files written, each whole. fmt --check writes nothing, and exits 1 when any file is not in the form or would be left alone.

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794352831373,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c7c3-5bb5-777b-a192-bbce3e885c93",
+  "kind": "decision",
+  "reason": "Every document is put in one form without changing what it reads as (#44); checked by two rounds of blind review over about 110 kinds of front matter, every finding fixed",
+  "revision": "6777de26b11433b74ac2aa5cae504ff6d91efd77",
+  "seen": "sha256:cd544ca046d011d714375ce7bfb8aecf1789d9e7518e8c6cedc079a6e2861482",
+  "seen_address": "6e9f7c2a866d0ead99c637c45638baaf39f82c9d",
+  "subject": "01a1c7ac-e64c-728d-8ef2-542f8fc4d38f",
+  "v": 1,
+  "verb": "approve"
+}
