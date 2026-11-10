@@ -19,6 +19,14 @@
 //! can still be read, so that a broken file is an invalid document with an identity
 //! and not a hole.
 //!
+//! # Writing a new document
+//!
+//! [`MarkdownDocs`] is also the [`DocWrite`] of a new document: [`render`] makes the
+//! text from the entries (a flat front matter, every text in double quotes, `id` and
+//! `key` first), and the file is created only where none is (`create_new`), with
+//! its directories. What [`render`] writes, [`read`] reads back into the same
+//! entries; a test holds the two together.
+//!
 //! # The one normalization rule
 //!
 //! Before anything is read, line breaks become LF, the spaces and tabs at the end of
@@ -34,7 +42,8 @@ use std::fmt;
 use serde::Deserialize;
 use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_norway::Value;
-use whyshelf_core::app::shelf::DocSource;
+use tokio::io::AsyncWriteExt;
+use whyshelf_core::app::shelf::{Creation, DocSource, DocWrite};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::location::RelPath;
@@ -333,6 +342,126 @@ fn raw_value(value: Value) -> Option<RawValue> {
     }
 }
 
+impl DocWrite for MarkdownDocs {
+    type Error = DocsError;
+
+    async fn create(
+        &self,
+        path: &RelPath,
+        entries: &BTreeMap<String, RawValue>,
+        body: &str,
+    ) -> Result<Creation, DocsError> {
+        let file = self.root.join(path.as_str());
+        let io = |path: &Path| {
+            let path = path.to_path_buf();
+            move |source| DocsError::Io { path, source }
+        };
+        if let Some(dir) = file.parent() {
+            tokio::fs::create_dir_all(dir).await.map_err(io(dir))?;
+        }
+        let mut out = match tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&file)
+            .await
+        {
+            Ok(out) => out,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                return Ok(Creation::AlreadyThere);
+            }
+            Err(source) => return Err(DocsError::Io { path: file, source }),
+        };
+        out.write_all(render(entries, body).as_bytes())
+            .await
+            .map_err(io(&file))?;
+        out.sync_all().await.map_err(io(&file))?;
+        Ok(Creation::Created)
+    }
+}
+
+/// The text of a document: the front matter, then the body.
+///
+/// The front matter is the flat form [`read`] reads: one `name: value` line per
+/// entry, `id` first, then `key`, then the rest by name. A text is always in double
+/// quotes, with `\` escapes for a quote, a backslash and every control or line-break
+/// character, so it is one line and is never read as a number, a truth value or
+/// null; a list is a flow sequence of such texts; a whole number and a truth value
+/// are written bare. A name is written bare when it is a plain lowercase word YAML
+/// would not read as anything but a text, and quoted otherwise. What this writes
+/// reads back into the same entries, and the body into itself after the
+/// normalization rule.
+pub fn render(entries: &BTreeMap<String, RawValue>, body: &str) -> String {
+    let mut out = String::from("---\n");
+    let first = ["id", "key"];
+    let ordered = first
+        .iter()
+        .filter_map(|name| entries.get_key_value(*name))
+        .chain(
+            entries
+                .iter()
+                .filter(|(name, _)| !first.contains(&name.as_str())),
+        );
+    for (name, value) in ordered {
+        out.push_str(&yaml_name(name));
+        out.push_str(": ");
+        out.push_str(&yaml_value(value));
+        out.push('\n');
+    }
+    out.push_str("---\n");
+    out.push_str(body);
+    if !body.is_empty() && !body.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
+/// The words YAML may read as something other than a text.
+const YAML_WORDS: [&str; 10] = [
+    "y", "n", "yes", "no", "on", "off", "true", "false", "null", "~",
+];
+
+fn yaml_name(name: &str) -> String {
+    let plain = name.starts_with(|c: char| c.is_ascii_lowercase())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+        && !YAML_WORDS.contains(&name);
+    if plain { name.to_owned() } else { quoted(name) }
+}
+
+fn yaml_value(value: &RawValue) -> String {
+    match value {
+        RawValue::Text(text) => quoted(text),
+        RawValue::Integer(n) => n.to_string(),
+        RawValue::Bool(b) => b.to_string(),
+        RawValue::List(items) => {
+            let items: Vec<String> = items.iter().map(|item| quoted(item)).collect();
+            format!("[{}]", items.join(", "))
+        }
+    }
+}
+
+/// A text as a YAML double-quoted scalar on one line.
+fn quoted(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            c if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}' | '\u{feff}') => {
+                out.push_str(&format!("\\u{:04X}", u32::from(c)));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// The `id:` a text shows, found by looking at its lines only: for a file that could
 /// not be read. `None` when no line gives one, and when the lines give two (a merge
 /// conflict that left both sides does not say which is the document's).
@@ -475,6 +604,111 @@ mod tests {
                 key: "a".to_owned()
             }
         );
+    }
+
+    /// Texts YAML could take for something else, or that need an escape.
+    const TRICKY: [&str; 22] = [
+        "",
+        "plain",
+        "with \"quotes\" and \\ backslash",
+        "two\nlines\r\nand a tab\t",
+        " leading and trailing ",
+        "key: value # not a comment",
+        "---",
+        "- a list?",
+        "[not, a, list]",
+        "{not: a map}",
+        "null",
+        "~",
+        "true",
+        "no",
+        "123",
+        "-7",
+        "1e3",
+        "0x1F",
+        "日本語と emoji 🦀",
+        "\u{1}\u{7f}\u{85}\u{2028}\u{2029}\u{feff}",
+        "'single'",
+        "&anchor *alias !tag %directive @at `tick`",
+    ];
+
+    #[test]
+    fn what_is_rendered_reads_back_into_the_same_entries() {
+        let mut entries = BTreeMap::new();
+        entries.insert("id".to_owned(), RawValue::Text(ID.to_owned()));
+        entries.insert("key".to_owned(), RawValue::Text("V-4".to_owned()));
+        for (i, text) in TRICKY.iter().enumerate() {
+            entries.insert(format!("t{i}"), RawValue::Text((*text).to_owned()));
+        }
+        entries.insert(
+            "all".to_owned(),
+            RawValue::List(TRICKY.iter().map(|t| (*t).to_owned()).collect()),
+        );
+        entries.insert("none".to_owned(), RawValue::List(Vec::new()));
+        entries.insert("min".to_owned(), RawValue::Integer(i64::MIN));
+        entries.insert("max".to_owned(), RawValue::Integer(i64::MAX));
+        entries.insert("zero".to_owned(), RawValue::Integer(0));
+        entries.insert("yes".to_owned(), RawValue::Bool(true));
+        entries.insert("off".to_owned(), RawValue::Bool(false));
+        entries.insert(
+            "123".to_owned(),
+            RawValue::Text("a name that is a number".to_owned()),
+        );
+        entries.insert("Odd Name".to_owned(), RawValue::Text("x".to_owned()));
+        for body in [
+            "",
+            "Body.",
+            "Body.  \n\n\nMore.\t\n\n",
+            "---\nnot front matter\n",
+        ] {
+            let text = render(&entries, body);
+            assert!(text.starts_with(&format!("---\nid: \"{ID}\"\nkey: \"V-4\"\n")));
+            let DocReading::Parsed {
+                entries: back,
+                body: back_body,
+                ..
+            } = read(origin(), &text)
+            else {
+                panic!("parsed: {text}");
+            };
+            assert_eq!(back, entries, "{text}");
+            assert_eq!(back_body, normalize(body), "{text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_new_file_is_created_with_its_directories_and_never_replaced() {
+        let root = tempfile::tempdir().unwrap();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        let at: RelPath = "books/design/cache/timeout.md".parse().unwrap();
+        let mut entries = BTreeMap::new();
+        entries.insert("id".to_owned(), RawValue::Text(ID.to_owned()));
+        entries.insert("key".to_owned(), RawValue::Text("cache/timeout".to_owned()));
+        entries.insert("title".to_owned(), RawValue::Text("T".to_owned()));
+        assert_eq!(
+            docs.create(&at, &entries, "Body.\n").await.unwrap(),
+            Creation::Created
+        );
+        let file = root.path().join(at.as_str());
+        let written = tokio::fs::read_to_string(&file).await.unwrap();
+        assert_eq!(
+            written,
+            format!("---\nid: \"{ID}\"\nkey: \"cache/timeout\"\ntitle: \"T\"\n---\nBody.\n")
+        );
+
+        let other = BTreeMap::new();
+        assert_eq!(
+            docs.create(&at, &other, "Other.\n").await.unwrap(),
+            Creation::AlreadyThere
+        );
+        assert_eq!(tokio::fs::read_to_string(&file).await.unwrap(), written);
+
+        let dirs = [BookDir::new("books/design").unwrap()];
+        let readings = docs.read_docs(&dirs).await.unwrap();
+        let [DocReading::Parsed { entries: back, .. }] = readings.as_slice() else {
+            panic!("one parsed file");
+        };
+        assert_eq!(*back, entries);
     }
 
     #[tokio::test]

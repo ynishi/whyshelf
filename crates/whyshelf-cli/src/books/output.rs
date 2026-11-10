@@ -9,10 +9,11 @@ use schemars::{JsonSchema, Schema, schema_for};
 use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
-    ApprovedReport, BooksCheck, DiffItem, DiffReport, DownstreamEdge, ErrorClass, GetReport,
-    Health, Judged, Names, Row, ShelfError, StaleReport, StatusReport, TraceReport, UpstreamEdge,
-    UpstreamEnd,
+    ApprovedReport, BooksCheck, Created, DiffItem, DiffReport, DownstreamEdge, ErrorClass,
+    GetReport, Health, Judged, Names, Row, ShelfError, StaleReport, StatusReport, TraceReport,
+    UpstreamEdge, UpstreamEnd,
 };
+use whyshelf_core::domain::shelf::build::NewDocProblem;
 use whyshelf_core::domain::shelf::snapshot::{
     ItemNow, ItemRole, Retrieval, SeenHash, SnapshotItem,
 };
@@ -422,6 +423,29 @@ pub struct JudgedOut {
     pub successors: Vec<DocRef>,
 }
 
+/// A key written in a link of a new document that no valid document answers to now.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct UnresolvedOut {
+    /// The link.
+    pub link: String,
+    /// The key as written.
+    pub written: String,
+    /// Why it cannot be followed.
+    pub why: String,
+}
+
+/// The answer of `books new`: the document written.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct CreatedOut {
+    /// The document.
+    pub doc: DocRef,
+    /// Its file, relative to the project root.
+    pub file: String,
+    /// The keys of its links that cannot be followed yet (the document is valid with
+    /// them; each is a notice).
+    pub unresolved_links: Vec<UnresolvedOut>,
+}
+
 /// The answer when a command gives none.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct ErrorOut {
@@ -431,6 +455,10 @@ pub struct ErrorOut {
     pub messages: Vec<String>,
     /// The documents a reference could be, when it names more than one.
     pub candidates: Vec<String>,
+    /// Each problem, one per item, when the error has a list of them: the problems
+    /// of a declaration that cannot be used, or of a new document that would be
+    /// invalid.
+    pub problems: Vec<String>,
 }
 
 /// The JSON Schema of every answer.
@@ -454,6 +482,7 @@ pub fn schemas() -> SchemasOut {
     put("books show --approved", schema_for!(ApprovedOut));
     put("books diff", schema_for!(DiffOut));
     put("books judge", schema_for!(JudgedAllOut));
+    put("books new", schema_for!(CreatedOut));
     put("error", schema_for!(ErrorOut));
     SchemasOut { outputs }
 }
@@ -1071,6 +1100,13 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
             }
             _ => Vec::new(),
         },
+        problems: match error {
+            ShelfError::Schema(problems) => problems.iter().map(ToString::to_string).collect(),
+            ShelfError::NewDoc(NewDocProblem::Invalid(problems)) => {
+                problems.iter().map(ToString::to_string).collect()
+            }
+            _ => Vec::new(),
+        },
     }
 }
 
@@ -1080,6 +1116,29 @@ pub fn usage(message: String) -> ErrorOut {
         error: "request",
         messages: vec![message],
         candidates: Vec::new(),
+        problems: Vec::new(),
+    }
+}
+
+/// The answer of `books new`.
+pub fn created(created: &Created) -> CreatedOut {
+    let names = Names::default();
+    let namer = Namer(&names);
+    CreatedOut {
+        doc: DocRef {
+            id: created.id.to_string(),
+            key: Some(created.key.to_string()),
+        },
+        file: created.file.to_string(),
+        unresolved_links: created
+            .unresolved
+            .iter()
+            .map(|(link, unresolved)| UnresolvedOut {
+                link: link.to_string(),
+                written: unresolved.written().to_owned(),
+                why: namer.unresolved(unresolved),
+            })
+            .collect(),
     }
 }
 
@@ -1200,10 +1259,17 @@ mod tests {
             "books show --approved",
             "books diff",
             "books judge",
+            "books new",
             "error",
         ] {
             assert!(outputs.contains_key(command), "{command}");
         }
+        let new = serde_json::to_string(&outputs["books new"]).unwrap();
+        for field in ["doc", "file", "unresolved_links", "written", "why"] {
+            assert!(new.contains(&format!("\"{field}\"")), "{field}");
+        }
+        let error = serde_json::to_string(&outputs["error"]).unwrap();
+        assert!(error.contains("\"problems\""));
         let diff = serde_json::to_string(&outputs["books diff"]).unwrap();
         for field in ["approved_hash", "current_hash", "retrieval", "diff"] {
             assert!(diff.contains(field), "{field}");

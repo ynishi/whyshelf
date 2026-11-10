@@ -24,6 +24,9 @@
 //!                                                      Shelf::build ──► Shelf
 //!                                                        (DocReading and ArtifactReadings in: valid
 //!                                                         Docs, InvalidDocs, link cycles)
+//!                                                      Shelf::next_key / claim_key ──► NewKey
+//!                                                      Shelf::check_new ──► NewDoc
+//!                                                        (a document not written yet)
 //!   ledger    ──► schema, artifact, doc, graph, build  Ledger::build ──► Ledger, FrameGraph
 //!                                                        (Record in; what people decided)
 //!                                                      frame_approve / frame_present / frame_retire
@@ -66,6 +69,10 @@
 //! | a link | [`Shelf::build`], once: the written key read in the target book's grammar and looked up in the index `Shelf::find_key` reads | a [`LinkState`]: a [`ResolvedLink`] with the target's id, key and hash, or an [`UnresolvedLink`] with the target book and the key it read as |
 //! | what an identity is now | [`Shelf::state_of`], and [`DocState::valid_or_failure`] / [`DocState::presence`] into an owned form | a [`DocState`], a [`DocFailure`] (the one "not valid", carried by refusals and causes; its [`FailureTag`] kept by a retirement), a [`DocPresence`] |
 //! | how many files each book holds | [`Shelf::tally_by_book`] (through `Schema::membership`) | a [`BookTally`] per book |
+//! | which keys of a book are taken | [`Shelf::build`], once: every key a file of the book writes in its grammar, valid or not, identity read or not | read by the two entries below only |
+//! | the next key of a book | [`Shelf::next_key`]: the highest number taken plus one (`PREFIX-1` when none; a name tail is no number), the text read by [`KeyPattern::parse`] | a [`NewKey`], or a [`NextKeyProblem`] (a book of slugs has none) |
+//! | a key given for a new document | [`Shelf::claim_key`]: read by [`KeyPattern::parse`], and not taken | a [`NewKey`], or a [`ClaimKeyProblem`] |
+//! | whether a new document would be valid | [`Shelf::check_new`], which hands the would-be file `<book dir>/<key>.md` to the same reader and judgement [`Shelf::build`] uses and resolves its links in the same index (no second validator) | a [`NewDoc`] with its unresolved links, or a [`NewDocProblem`] with every [`DocProblem`] |
 //! | the links around a document, up and down | [`trace`](trace::trace) | a [`Trace`] of [`LinkEdge`]s |
 //! | which links have which meaning | [`Doc::links_of`], from the [`Link`]s of the document (each carries its [`LinkKind`]) | the links of one [`Propagation`] |
 //! | what a hash covers | `hash_doc` in `doc.rs`, private, called by `DocDraft::new` only | a [`DocHash`] (made by `DocHash::computed`, private to `doc.rs`) |
@@ -148,6 +155,11 @@
 //!   [`Cause::UpstreamNotValid`] of [`DocFailure::Unknown`]: the model does not
 //!   claim a document is gone when it may be in a file it could not read.
 //! - **Incremental reading is out of scope.** [`Shelf::build`] takes every file.
+//! - **A key in a file that cannot be parsed is not seen.** A file whose front
+//!   matter is no mapping shows no key, so [`Shelf::next_key`] and
+//!   [`Shelf::claim_key`] cannot count it; the file `<key>.md` itself is never
+//!   replaced, and a duplicate key that results is told by the build when the file
+//!   is mended.
 //!
 //! [`ContentHash`]: crate::domain::hash::ContentHash
 //! [`HashKind`]: crate::domain::hash::HashKind
@@ -193,6 +205,14 @@
 //! [`KeyProblem`]: schema::KeyProblem
 //! [`Propagation`]: schema::Propagation
 //! [`Shelf::build`]: build::Shelf::build
+//! [`Shelf::next_key`]: build::Shelf::next_key
+//! [`Shelf::claim_key`]: build::Shelf::claim_key
+//! [`Shelf::check_new`]: build::Shelf::check_new
+//! [`NewKey`]: build::NewKey
+//! [`NewDoc`]: build::NewDoc
+//! [`NextKeyProblem`]: build::NextKeyProblem
+//! [`ClaimKeyProblem`]: build::ClaimKeyProblem
+//! [`NewDocProblem`]: build::NewDocProblem
 //! [`Shelf::state_of`]: build::Shelf::state_of
 //! [`Shelf::replacers_of`]: build::Shelf::replacers_of
 //! [`DocReading::Unparsed`]: build::DocReading::Unparsed

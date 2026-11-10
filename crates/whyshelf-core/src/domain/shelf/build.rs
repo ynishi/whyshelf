@@ -37,6 +37,11 @@
 //! typed calls it), and [`Shelf::state_of`] answers
 //! what an identity comes to now (a valid document, an invalid one, gone, or not
 //! knowable because some file could not even be read for its id).
+//!
+//! A document that is not written yet is asked of a built shelf too
+//! ([`Shelf::next_key`], [`Shelf::claim_key`], [`Shelf::check_new`]): the keys it may
+//! take are those no file of its book writes, and it is judged by steps 1, 2, 4 and 6
+//! above, the same code, on the file it would be.
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
@@ -58,6 +63,10 @@ use super::schema::{
     ArtifactLinkKind, BookName, BookSchema, Cardinality, EntryName, FieldPresence, FieldType,
     FieldWord, ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
 };
+
+mod new;
+
+pub use new::{ClaimKeyProblem, NewDoc, NewDocProblem, NewKey, NextKeyProblem};
 
 /// A value of the front matter, as the adapter's YAML parser gave it: not yet
 /// checked against a field's type.
@@ -611,6 +620,9 @@ struct WrittenArtifacts {
 struct Candidate {
     origin: RelPath,
     identity: Identity,
+    /// The key the file writes, when it fits the book's grammar, whether or not the
+    /// identity could be read: what makes a key taken for a new document.
+    written_key: Option<DocKey>,
     /// What is wrong beyond the identity and the key; the check of the files together
     /// adds to it.
     problems: Vec<DocProblem>,
@@ -641,6 +653,7 @@ impl Candidate {
         Self {
             origin,
             identity: Identity::unusable(id, problem),
+            written_key: None,
             problems: Vec::new(),
             fields: BTreeMap::new(),
             links: BTreeMap::new(),
@@ -681,10 +694,9 @@ impl Candidate {
         entries: &BTreeMap<String, RawValue>,
         body: String,
     ) -> Self {
-        let identity = Identity::of(
-            read_id(entries.get(ID_ENTRY)),
-            read_key(book, entries.get(KEY_ENTRY)),
-        );
+        let key = read_key(book, entries.get(KEY_ENTRY));
+        let written_key = key.as_ref().ok().cloned();
+        let identity = Identity::of(read_id(entries.get(ID_ENTRY)), key);
         let mut problems = Vec::new();
         let Entries {
             fields,
@@ -695,6 +707,7 @@ impl Candidate {
         Self {
             origin,
             identity,
+            written_key,
             problems,
             fields,
             links: written_links(book, written),
@@ -709,6 +722,7 @@ impl Candidate {
         let Self {
             origin,
             identity,
+            written_key: _,
             problems,
             fields,
             links,
@@ -1054,6 +1068,10 @@ pub struct Shelf {
     unreadable: Vec<InvalidDoc>,
     anonymous: Vec<InvalidDoc>,
     index: KeyIndex,
+    /// Every key a file of a book writes in the book's grammar, valid file or not,
+    /// identity read or not: the keys a new document cannot take, and the numbers
+    /// the next key counts from.
+    written_keys: BTreeSet<DocKey>,
     cycles: Vec<Cycle>,
 }
 
@@ -1098,6 +1116,10 @@ impl Shelf {
                 .collect(),
         );
         let keys = keys_of(&candidates);
+        let written_keys = candidates
+            .iter()
+            .filter_map(|c| c.written_key.clone())
+            .collect();
         let Sorted {
             drafts,
             invalid,
@@ -1129,6 +1151,7 @@ impl Shelf {
             unreadable,
             anonymous,
             index,
+            written_keys,
             cycles,
         }
     }
@@ -1404,5 +1427,7 @@ fn origins_but(
 
 #[cfg(test)]
 mod artifact_tests;
+#[cfg(test)]
+mod new_tests;
 #[cfg(test)]
 mod tests;

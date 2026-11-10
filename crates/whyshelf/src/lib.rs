@@ -120,6 +120,8 @@
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
 //!   judge deny|deprecate|retire <ref>... [--reason <text>]   (deprecate: [--successor <ref>])
 //!   judge revoke <ref>... --reason <text>
+//!   new <book> --title <text> [--key <key>] [<entry>=<value>]... [--body <text>]
+//!                             one new document, valid for its book, at <book dir>/<key>.md
 //!   schema                    the JSON Schema of the answer of every books command
 //! ```
 //!
@@ -136,9 +138,19 @@
 //!   decided does not stand (denied, deprecated or retired: pin the successor). An
 //!   upstream that is only pending is accepted, and the approval is stale from the
 //!   start.
-//! - Only `judge` writes, one new file per decision; every other command only reads
-//!   and creates nothing. Who judges is `--actor`, else `WHYSHELF_ACTOR`, else Git's
-//!   `user.name`; never a committed file.
+//! - `new` takes the book's next key (`V-4` after `V-3`, counting every file of the
+//!   book, valid or not, so a key is never reused) unless `--key` gives one; a book
+//!   of slugs needs `--key`, and a key that is taken is refused. Each `<entry>` is
+//!   read by the book's declaration: a list field or a link takes `a,b` (links are
+//!   keys), a truth value `true` or `false`, a whole number its digits. The document
+//!   is checked by the same rules as every file before anything is written (fields,
+//!   required fields, enum words, link names and counts, types), with every problem
+//!   listed; a link to a key no document has yet is allowed, and listed in
+//!   `unresolved_links`. The identity is a new UUID v7.
+//! - Only `judge` and `new` write: `judge` one new file per decision, `new` one new
+//!   document's file, never in place of a file that is there; every other command
+//!   only reads and creates nothing. Who judges is `--actor`, else `WHYSHELF_ACTOR`,
+//!   else Git's `user.name`; never a committed file.
 //! - None of these commands needs `.whyshelf.toml`, a Git revision or the cache. Git
 //!   is used, when it is there, only to name and read back the content an approval
 //!   saw.
@@ -158,11 +170,14 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `books check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, or `show --approved` / `diff` of a document no approval stands about |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `show --approved` / `diff` of a document no approval stands about, or for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path |
 //! | 3 | the run failed: a file could not be read or written |
 //!
-//! On 1 (a refusal), 2 and 3 the JSON is `{"error": "refused" | "request" | "failed",
-//! "messages": [...], "candidates": [...]}` and the same chain goes to stderr.
+//! `new` answers `{"doc": {"id", "key"}, "file": ..., "unresolved_links": [{"link",
+//! "written", "why"}]}`. On 1 (a refusal), 2 and 3 the JSON is `{"error": "refused" |
+//! "request" | "failed", "messages": [...], "candidates": [...], "problems": [...]}`
+//! (`problems`: each problem of a declaration that cannot be used, or of a new
+//! document that would be invalid) and the same chain goes to stderr.
 //!
 //! ## Not yet in books
 //!
