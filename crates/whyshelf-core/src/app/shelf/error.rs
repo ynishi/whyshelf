@@ -13,7 +13,8 @@ use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::ledger::{DecisionProblem, FrameRefusal};
-use crate::domain::shelf::schema::SchemaProblem;
+use crate::domain::shelf::lookup::Reference;
+use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
 
 use super::ports::ShelfPort;
 
@@ -36,16 +37,41 @@ pub enum ShelfError {
     /// The reference names nothing: no document, and no record of the ledger.
     #[error("`{reference}` names no document")]
     NotFound {
-        /// The reference as typed.
-        reference: String,
+        /// The reference.
+        reference: Reference,
     },
     /// The reference names more than one document.
     #[error("`{reference}` names {} documents", candidates.len())]
     Ambiguous {
-        /// The reference as typed.
-        reference: String,
+        /// The reference.
+        reference: Reference,
         /// The documents it could be.
         candidates: TwoOrMore<DocId>,
+    },
+    /// The reference names a book that is not declared.
+    #[error("`{reference}`: there is no book `{book}`")]
+    UnknownBook {
+        /// The reference.
+        reference: Reference,
+        /// The book it names.
+        book: BookName,
+    },
+    /// The reference writes a key that the book's grammar refuses.
+    #[error("`{reference}` is not a key of the book `{book}`")]
+    NotAKeyOf {
+        /// The reference.
+        reference: Reference,
+        /// The book.
+        book: BookName,
+        /// Why the grammar refuses it.
+        #[source]
+        problem: KeyProblem,
+    },
+    /// The reference is a key alone that no book's grammar accepts.
+    #[error("`{reference}` is not a key of any book")]
+    NotAKeyOfAnyBook {
+        /// The reference.
+        reference: Reference,
     },
     /// The document cannot be judged as asked: it is not valid, a link it stands on
     /// cannot be followed, or it is in a cycle.
@@ -74,6 +100,9 @@ pub enum ShelfError {
         /// The one named.
         successor: DocId,
     },
+    /// A run of judgements with none in it.
+    #[error("no document to judge was named")]
+    NothingRequested,
 }
 
 /// What kind of trouble an error is, for a surface to decide how to end.
@@ -97,8 +126,12 @@ impl ShelfError {
             Self::Schema(_)
             | Self::NotFound { .. }
             | Self::Ambiguous { .. }
+            | Self::UnknownBook { .. }
+            | Self::NotAKeyOf { .. }
+            | Self::NotAKeyOfAnyBook { .. }
             | Self::NothingToRevoke { .. }
-            | Self::NotASuccessor { .. } => ErrorClass::Request,
+            | Self::NotASuccessor { .. }
+            | Self::NothingRequested => ErrorClass::Request,
             Self::Refused(_) | Self::Decision(_) => ErrorClass::Refused,
             Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,
         }

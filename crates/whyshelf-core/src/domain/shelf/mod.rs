@@ -10,22 +10,29 @@
 //! # The pieces
 //!
 //! ```text
-//!   BookSchemaDecl ─► schema    Schema::validate ──► Schema           (declared once)
-//!                         │
-//!   DocReading ──────► doc, build   Shelf::build ──► Shelf            (what the files are)
-//!                         │                           valid Docs, InvalidDocs, link cycles
-//!   Record ──────────► ledger   Ledger::build ──► Ledger              (what people decided)
-//!                         │                           DeclaredStatus, FrameGraph
-//!                         │          frame_approve / frame_present / frame_retire
-//!                         │            └─► Decision::approve / deny / deprecate / retire
-//!                         ├─► lookup     resolve ──► Resolution       (what a person typed)
-//!                         └─► freshness  assess ──► Assessment        (whether it still holds)
+//!   module       uses                                  entry ──► what it makes
+//!
+//!   schema                                             Schema::validate ──► Schema
+//!                                                        (BookSchemaDecl in; declared once)
+//!   doc       ──► schema                               DocDraft, Doc::new ──► Doc, with its Links
+//!   graph                                              cycles_of ──► Cycle; components
+//!   build     ──► schema, doc, graph                   Shelf::build ──► Shelf
+//!                                                        (DocReading in; what the files are:
+//!                                                         valid Docs, InvalidDocs, link cycles)
+//!   ledger    ──► schema, doc, graph, build            Ledger::build ──► Ledger, FrameGraph
+//!                                                        (Record in; what people decided)
+//!                                                      frame_approve / frame_present / frame_retire
+//!                                                        └─► Decision::approve / deny / deprecate / retire
+//!   lookup    ──► schema, build, ledger                resolve ──► Resolution  (what a person typed)
+//!   trace     ──► schema, doc, build                   trace ──► Trace         (the links, up and down)
+//!   freshness ──► schema, doc, graph, build, ledger    assess ──► Assessment   (whether it still holds)
 //! ```
 //!
 //! Each arrow points from a module to what it uses, and nothing points back: a
-//! schema knows no document, a document no ledger, a ledger no freshness. The
-//! problem and refusal types are in the module that makes them (there is no shared
-//! error module, which would turn that around).
+//! schema knows no document, a document no shelf, a graph no document at all (only
+//! identities), a ledger no freshness. The problem and refusal types are in the
+//! module that makes them (there is no shared error module, which would turn that
+//! around).
 //!
 //! The documents are read, and the ledger's records are turned into JSON and back,
 //! by adapters; this module sees only values. It has no file, process,
@@ -41,19 +48,22 @@
 //! | judgement | the one place | what it returns |
 //! |---|---|---|
 //! | is the declaration sound | [`Schema::validate`] | the [`Schema`], or all its problems |
-//! | which book a file is in | [`Schema::membership`] | [`Membership`] |
+//! | which book a file is in | `Schema::membership` (visible to the shelf's modules only) | a `Membership` |
 //! | the grammar of a key | [`KeyPattern::parse`] | a [`KeyForm`], or a [`KeyProblem`] |
-//! | a key in a book | [`Shelf::find_key`] | a [`KeyHit`] |
+//! | a key in a book | `Shelf::find_key` (the same) | a `KeyHit` |
 //! | a file that cannot be read | the adapter's parser makes a [`DocReading::Unparsed`] and [`Shelf::build`] turns it into a [`DocProblem::Unreadable`] | a [`RawProblem`] |
-//! | the entries of a front matter | [`Shelf::build`] | [`FieldValue`]s and [`LinkState`]s, or [`DocProblem`]s |
-//! | the form and validity of a document | [`Shelf::build`] | a valid [`Doc`] or an [`InvalidDoc`] |
-//! | a link | [`Shelf::build`] (through `find_key`) | a [`LinkState`] |
-//! | what an identity is now | [`Shelf::state_of`], and [`DocState::valid_or_kind`] into an owned form | a [`DocState`] |
-//! | which links have which meaning | [`Shelf::links_of`] | the links of one [`Propagation`] |
-//! | what a hash covers | `hash_doc` in `build.rs`, private | a [`DocHash`] (made by `DocHash::computed`) |
-//! | a hash or a pin read from a record | `DocHash::restore`, `FramePin::restore` | called by [`Record::from_canon`] only |
-//! | cycles among links | [`Shelf::build`] | [`Cycle`]s of [`CycleSource::Links`] |
-//! | the graph of frames and its cycles | [`Ledger::frame_graph`] | a [`FrameGraph`], [`Cycle`]s of [`CycleSource::Frames`] |
+//! | the entries of a front matter | [`Shelf::build`] | [`FieldValue`]s and the keys written in each [`Link`], or [`DocProblem`]s |
+//! | the form and validity of a document | [`Shelf::build`], which makes each valid [`Doc`] once, whole, with every link its book declares | a valid [`Doc`] or an [`InvalidDoc`] |
+//! | a link | [`Shelf::build`], once: the written key read in the target book's grammar and looked up in the index `Shelf::find_key` reads | a [`LinkState`]: a [`ResolvedLink`] with the target's id, key and hash, or an [`UnresolvedLink`] with the target book and the key it read as |
+//! | what an identity is now | [`Shelf::state_of`], and [`DocState::valid_or_failure`] / [`DocState::presence`] into an owned form | a [`DocState`], a [`DocFailure`] (the one "not valid", carried by refusals and causes; its [`FailureTag`] kept by a retirement), a [`DocPresence`] |
+//! | how many files each book holds | [`Shelf::tally_by_book`] (through `Schema::membership`) | a [`BookTally`] per book |
+//! | the links around a document, up and down | [`trace`](trace::trace) | a [`Trace`] of [`LinkEdge`]s |
+//! | which links have which meaning | [`Doc::links_of`], from the [`Link`]s of the document (each carries its [`LinkKind`]) | the links of one [`Propagation`] |
+//! | what a hash covers | `hash_doc` in `doc.rs`, private, called by `DocDraft::new` only | a [`DocHash`] (made by `DocHash::computed`, private to `doc.rs`) |
+//! | a hash read from a record | `DocHash::restore` | called by [`Record::from_canon`] only |
+//! | a pin | the private constructor of [`FramePin`] in `ledger.rs`: [`frame_approve`] takes it from a [`ResolvedLink`] as it is, [`Record::from_canon`] reads it back | a [`FramePin`] |
+//! | cycles, in either graph | `graph::cycles_of` (and `graph::components` for the order upstream first), called by [`Shelf::build`] and by the `FrameGraph` that `Ledger::frame_graph` makes | [`Cycle`]s of [`CycleSource::Links`] or [`CycleSource::Frames`] |
+//! | the graph of frames | `Ledger::frame_graph` (visible to the shelf's modules only) | a `FrameGraph` |
 //! | who replaces whom (a fact of links) | [`Shelf::replacers_of`] | the candidates |
 //! | who succeeds whom (a verdict) | [`Successors::of`] | [`Successors`] |
 //! | the facts a decision stands on | [`frame_approve`], [`frame_present`], [`frame_retire`] | an [`ApproveFrame`], a [`PresentFrame`], a [`RetireFrame`], or a [`FrameRefusal`] |
@@ -61,16 +71,16 @@
 //! | reading a record back | [`Record::from_canon`] | a [`Record`] or a [`RecordProblem`] |
 //! | a contradiction among records | [`Ledger::build`] | [`LedgerProblem`]s |
 //! | what was decided | [`Ledger::status_of`] | a [`DeclaredStatus`] |
-//! | what a person typed | [`resolve`] | a [`Resolution`] |
+//! | what a person typed | [`resolve`] | a [`Resolution`] (an identity only the ledger knows has an [`Absence`], which cannot be invalid) |
 //! | how strong a cause is | [`Cause::severity`] | a [`Severity`] |
-//! | the level of a freshness | [`Freshness::from_causes`] | a [`Freshness`] |
+//! | the level of a freshness | [`Degradation::level`], computed from the causes; [`Freshness::from_causes`] is the only maker of a [`Degradation`] | a [`Severity`] |
 //! | freshness, propagation, notices | [`assess`] | an [`Assessment`] |
+//! | where one identity stands, listed or not | [`Assessment::standing_of`] | a [`Standing`] |
 //! | where a degradation starts | [`Assessment::roots_of`] | [`RootCause`]s |
 //!
-//! Two of these cannot be enforced by visibility alone: `DocHash::computed` and
-//! `DocHash::restore` (and the two of [`FramePin`]) are visible to the whole module,
-//! so the rule is a name. `computed` and `taken` are called when a document is read
-//! and when an approval is framed; `restore` only where a record is read back.
+//! One of these cannot be enforced by visibility alone: `DocHash::restore` is visible
+//! to the whole module (the hash is computed in `doc.rs` and read back in
+//! `ledger.rs`), so the rule is a name: `restore` only where a record is read back.
 //!
 //! # What a hash covers
 //!
@@ -84,8 +94,9 @@
 //! # Where freshness is read
 //!
 //! [`assess`] reads the strength of a cause from [`Cause::severity`] and the level of
-//! a freshness from [`Freshness::from_causes`]; the rules that find causes are in the
-//! module page of [`freshness`].
+//! a freshness from [`Degradation::level`], which [`Freshness::from_causes`] makes
+//! from the causes; the rules that find causes are in the module page of
+//! [`freshness`].
 //!
 //! # Known limitations
 //!
@@ -101,9 +112,9 @@
 //!   which is why a bare key can be [`Resolution::Ambiguous`].
 //! - **An identity in an unreadable file.** When some file's `id:` cannot be read,
 //!   an identity no readable file carries is [`DocState::Unknown`], not
-//!   [`DocState::Gone`], and what stands on it is [`Cause::SelfUnknown`] or
-//!   [`Cause::UpstreamUnknown`]: the model does not claim a document is gone when
-//!   it may be in a file it could not read.
+//!   [`DocState::Gone`], and what stands on it is [`Cause::SelfNotValid`] or
+//!   [`Cause::UpstreamNotValid`] of [`DocFailure::Unknown`]: the model does not
+//!   claim a document is gone when it may be in a file it could not read.
 //! - **Incremental reading is out of scope.** [`Shelf::build`] takes every file.
 //!
 //! [`ContentHash`]: crate::domain::hash::ContentHash
@@ -117,42 +128,49 @@
 //! [`ValueError`]: crate::domain::error::ValueError
 //! [`Schema::validate`]: schema::Schema::validate
 //! [`Schema`]: schema::Schema
-//! [`Schema::membership`]: schema::Schema::membership
-//! [`Membership`]: schema::Membership
 //! [`KeyPattern::parse`]: schema::KeyPattern::parse
 //! [`KeyForm`]: schema::KeyForm
 //! [`KeyProblem`]: schema::KeyProblem
 //! [`Propagation`]: schema::Propagation
-//! [`Shelf::find_key`]: build::Shelf::find_key
 //! [`Shelf::build`]: build::Shelf::build
 //! [`Shelf::state_of`]: build::Shelf::state_of
-//! [`Shelf::links_of`]: build::Shelf::links_of
 //! [`Shelf::replacers_of`]: build::Shelf::replacers_of
-//! [`KeyHit`]: build::KeyHit
 //! [`DocReading::Unparsed`]: build::DocReading::Unparsed
 //! [`DocProblem::Unreadable`]: build::DocProblem::Unreadable
 //! [`DocProblem`]: build::DocProblem
 //! [`RawProblem`]: build::RawProblem
 //! [`InvalidDoc`]: build::InvalidDoc
 //! [`DocState`]: build::DocState
-//! [`DocState::valid_or_kind`]: build::DocState::valid_or_kind
+//! [`DocState::valid_or_failure`]: build::DocState::valid_or_failure
+//! [`DocState::presence`]: build::DocState::presence
+//! [`DocFailure`]: build::DocFailure
+//! [`DocFailure::Unknown`]: build::DocFailure::Unknown
+//! [`FailureTag`]: build::FailureTag
+//! [`DocPresence`]: build::DocPresence
+//! [`Shelf::tally_by_book`]: build::Shelf::tally_by_book
+//! [`BookTally`]: build::BookTally
+//! [`Trace`]: trace::Trace
+//! [`LinkEdge`]: trace::LinkEdge
 //! [`DocState::Unknown`]: build::DocState::Unknown
 //! [`DocState::Gone`]: build::DocState::Gone
-//! [`Cycle`]: build::Cycle
-//! [`CycleSource::Links`]: build::CycleSource::Links
-//! [`CycleSource::Frames`]: build::CycleSource::Frames
+//! [`Cycle`]: graph::Cycle
+//! [`CycleSource::Links`]: graph::CycleSource::Links
+//! [`CycleSource::Frames`]: graph::CycleSource::Frames
 //! [`Doc`]: doc::Doc
 //! [`DocHash`]: doc::DocHash
-//! [`FramePin`]: doc::FramePin
+//! [`FramePin`]: ledger::FramePin
 //! [`FieldValue`]: doc::FieldValue
 //! [`LinkState`]: doc::LinkState
+//! [`ResolvedLink`]: doc::ResolvedLink
+//! [`UnresolvedLink`]: doc::UnresolvedLink
+//! [`Link`]: doc::Link
+//! [`Doc::links_of`]: doc::Doc::links_of
+//! [`LinkKind`]: schema::LinkKind
 //! [`Record::from_canon`]: ledger::Record::from_canon
 //! [`Record`]: ledger::Record
 //! [`RecordProblem`]: ledger::RecordProblem
-//! [`Ledger::frame_graph`]: ledger::Ledger::frame_graph
 //! [`Ledger::build`]: ledger::Ledger::build
 //! [`Ledger::status_of`]: ledger::Ledger::status_of
-//! [`FrameGraph`]: ledger::FrameGraph
 //! [`frame_approve`]: ledger::frame_approve
 //! [`frame_present`]: ledger::frame_present
 //! [`frame_retire`]: ledger::frame_retire
@@ -167,26 +185,33 @@
 //! [`resolve`]: lookup::resolve
 //! [`Resolution`]: lookup::Resolution
 //! [`Resolution::Ambiguous`]: lookup::Resolution::Ambiguous
+//! [`Absence`]: lookup::Absence
 //! [`Successors::of`]: freshness::Successors::of
 //! [`Successors`]: freshness::Successors
 //! [`Cause::severity`]: freshness::Cause::severity
 //! [`Cause::LinksChanged`]: freshness::Cause::LinksChanged
-//! [`Cause::SelfUnknown`]: freshness::Cause::SelfUnknown
-//! [`Cause::UpstreamUnknown`]: freshness::Cause::UpstreamUnknown
+//! [`Cause::SelfNotValid`]: freshness::Cause::SelfNotValid
+//! [`Cause::UpstreamNotValid`]: freshness::Cause::UpstreamNotValid
 //! [`Severity`]: freshness::Severity
 //! [`Freshness::from_causes`]: freshness::Freshness::from_causes
+//! [`Degradation`]: freshness::Degradation
+//! [`Degradation::level`]: freshness::Degradation::level
 //! [`Freshness`]: freshness::Freshness
 //! [`assess`]: freshness::assess
 //! [`Assessment`]: freshness::Assessment
 //! [`Assessment::roots_of`]: freshness::Assessment::roots_of
+//! [`Assessment::standing_of`]: freshness::Assessment::standing_of
+//! [`Standing`]: freshness::Standing
 //! [`RootCause`]: freshness::RootCause
 
 pub mod build;
 pub mod doc;
 pub mod freshness;
+pub mod graph;
 pub mod ledger;
 pub mod lookup;
 pub mod schema;
+pub mod trace;
 
 #[cfg(test)]
 mod fixtures_tests;

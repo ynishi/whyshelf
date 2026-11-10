@@ -40,7 +40,7 @@ fn link_to(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl 
 fn a_sound_declaration_makes_a_schema() {
     let schema = Schema::validate(decls()).unwrap();
     assert_eq!(schema.books().len(), 3);
-    let finding = schema.book_named("finding").unwrap();
+    let finding = schema.book("finding").unwrap();
     assert_eq!(finding.name().as_str(), "finding");
     assert_eq!(finding.dir().to_string(), "findings");
     assert_eq!(finding.fields().len(), 6);
@@ -319,18 +319,10 @@ fn every_problem_is_returned_at_once() {
 fn membership_is_the_book_whose_directory_a_file_is_under() {
     let schema = Schema::validate(decls()).unwrap();
     let of = |p: &str| schema.membership(&path(p));
-    assert_eq!(
-        of("findings/fr-1.md"),
-        Membership::In(BookName::new("finding").unwrap())
-    );
-    assert_eq!(
-        of("findings/deep/er/fr-1.md"),
-        Membership::In(BookName::new("finding").unwrap())
-    );
-    assert_eq!(
-        of("designs/x.md"),
-        Membership::In(BookName::new("design").unwrap())
-    );
+    let book = |name: &str| Membership::In(schema.book(name).unwrap());
+    assert_eq!(of("findings/fr-1.md"), book("finding"));
+    assert_eq!(of("findings/deep/er/fr-1.md"), book("finding"));
+    assert_eq!(of("designs/x.md"), book("design"));
     assert_eq!(of("readme.md"), Membership::Outside);
     assert_eq!(of("findings"), Membership::Outside);
     assert_eq!(of("findings-old/fr-1.md"), Membership::Outside);

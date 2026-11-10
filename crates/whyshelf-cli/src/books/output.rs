@@ -9,18 +9,19 @@ use schemars::{JsonSchema, Schema, schema_for};
 use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
-    BooksCheck, DownstreamEdge, ErrorClass, GetReport, Health, Judged, Names, Presence, Row,
-    ShelfError, StaleReport, StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
+    BooksCheck, DownstreamEdge, ErrorClass, GetReport, Health, Judged, Names, Row, ShelfError,
+    StaleReport, StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::id::DocId;
+use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence};
 use whyshelf_core::domain::shelf::doc::{
-    Doc, FieldValue, FramePin, LinkState, UnresolvedLink, UnresolvedWhy,
+    Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy,
 };
 use whyshelf_core::domain::shelf::freshness::{
     Cause, Freshness, FreshnessLevel, Notice, RootCause, Severity, Standing, StandingKind,
     Successors, UpstreamStatus,
 };
-use whyshelf_core::domain::shelf::ledger::DeclaredStatus;
+use whyshelf_core::domain::shelf::ledger::{DeclaredStatus, FramePin};
 use whyshelf_core::domain::shelf::schema::Propagation;
 use whyshelf_infra::shelf::ledger::to_json;
 
@@ -289,7 +290,15 @@ pub struct StaleOut {
     pub health: HealthOut,
 }
 
-/// The answer of `books judge`.
+/// The answer of `books judge`: every record written, in the order the documents
+/// were named.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct JudgedAllOut {
+    /// The judgements.
+    pub judged: Vec<JudgedOut>,
+}
+
+/// One judgement written.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct JudgedOut {
     /// The document judged.
@@ -329,7 +338,7 @@ pub fn schemas() -> SchemasOut {
     put("books get", schema_for!(GetOut));
     put("books trace", schema_for!(TraceOut));
     put("books stale", schema_for!(StaleOut));
-    put("books judge", schema_for!(JudgedOut));
+    put("books judge", schema_for!(JudgedAllOut));
     put("error", schema_for!(ErrorOut));
     SchemasOut { outputs }
 }
@@ -356,9 +365,10 @@ impl Namer<'_> {
         let (declared, expires) = declared(&row.declared);
         let (successors, causes) = match &row.standing {
             Standing::Deprecated { successors } => (self.successors(successors), Vec::new()),
-            Standing::Approved(Freshness::Degraded { causes, .. }) => {
-                (Vec::new(), causes.iter().map(|c| self.cause(c)).collect())
-            }
+            Standing::Approved(Freshness::Degraded(degradation)) => (
+                Vec::new(),
+                degradation.causes().iter().map(|c| self.cause(c)).collect(),
+            ),
             _ => (Vec::new(), Vec::new()),
         };
         RowOut {
@@ -395,13 +405,15 @@ impl Namer<'_> {
                 None,
                 format!("the document changed since it was approved ({approved} -> {now})"),
             ),
-            Cause::SelfInvalid { problems } => out(
+            Cause::SelfNotValid(DocFailure::Invalid(problems)) => out(
                 "self_invalid",
                 None,
                 format!("the document is invalid: {}", join(problems.iter())),
             ),
-            Cause::SelfGone => out("self_gone", None, "no file carries the document".to_owned()),
-            Cause::SelfUnknown { unreadable } => out(
+            Cause::SelfNotValid(DocFailure::Gone) => {
+                out("self_gone", None, "no file carries the document".to_owned())
+            }
+            Cause::SelfNotValid(DocFailure::Unknown(unreadable)) => out(
                 "self_unknown",
                 None,
                 format!(
@@ -409,15 +421,22 @@ impl Namer<'_> {
                     join(unreadable.iter())
                 ),
             ),
-            Cause::UpstreamGone { pin } => {
-                out("upstream_gone", Some(pin), format!("{} is gone", pin.key()))
-            }
-            Cause::UpstreamInvalid { pin } => out(
+            Cause::UpstreamNotValid {
+                pin,
+                failure: DocFailure::Gone,
+            } => out("upstream_gone", Some(pin), format!("{} is gone", pin.key())),
+            Cause::UpstreamNotValid {
+                pin,
+                failure: DocFailure::Invalid(_),
+            } => out(
                 "upstream_invalid",
                 Some(pin),
                 format!("{} is invalid", pin.key()),
             ),
-            Cause::UpstreamUnknown { pin, unreadable } => out(
+            Cause::UpstreamNotValid {
+                pin,
+                failure: DocFailure::Unknown(unreadable),
+            } => out(
                 "upstream_unknown",
                 Some(pin),
                 format!(
@@ -574,8 +593,8 @@ impl Namer<'_> {
 
     fn target(&self, state: &LinkState) -> LinkTargetOut {
         match state {
-            LinkState::Resolved { target } => LinkTargetOut::Resolved {
-                doc: self.doc(*target),
+            LinkState::Resolved(target) => LinkTargetOut::Resolved {
+                doc: self.doc(target.id()),
             },
             LinkState::Unresolved(u) => LinkTargetOut::Unresolved {
                 written: u.written().to_owned(),
@@ -594,9 +613,9 @@ impl Namer<'_> {
             links: doc
                 .links()
                 .iter()
-                .map(|(name, states)| LinkOut {
+                .map(|(name, link)| LinkOut {
                     name: name.to_string(),
-                    targets: states.iter().map(|s| self.target(s)).collect(),
+                    targets: link.states().iter().map(|s| self.target(s)).collect(),
                 })
                 .collect(),
             body: doc.body().to_owned(),
@@ -656,8 +675,8 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                     .map(|b| BookOut {
                         name: b.name.to_string(),
                         dir: b.dir.as_rel().to_string(),
-                        valid: b.valid,
-                        invalid: b.invalid,
+                        valid: b.tally.valid,
+                        invalid: b.tally.invalid,
                     })
                     .collect(),
                 health: Some(Namer(&names).health(health)),
@@ -718,20 +737,25 @@ pub fn stale(report: &StaleReport) -> StaleOut {
 }
 
 /// The answer of `books judge`.
-pub fn judged(judged: &Judged) -> JudgedOut {
+pub fn judged(all: &[Judged]) -> JudgedAllOut {
     let names = Names::default();
     let namer = Namer(&names);
-    JudgedOut {
-        doc: DocRef {
-            id: judged.subject.to_string(),
-            key: judged.key.as_ref().map(ToString::to_string),
-        },
-        record: to_json(&judged.record.to_canon()),
-        successors: judged
-            .successors
-            .as_ref()
-            .map(|s| namer.successors(s))
-            .unwrap_or_default(),
+    JudgedAllOut {
+        judged: all
+            .iter()
+            .map(|judged| JudgedOut {
+                doc: DocRef {
+                    id: judged.subject.to_string(),
+                    key: judged.key.as_ref().map(ToString::to_string),
+                },
+                record: to_json(&judged.record.to_canon()),
+                successors: judged
+                    .successors
+                    .as_ref()
+                    .map(|s| namer.successors(s))
+                    .unwrap_or_default(),
+            })
+            .collect(),
     }
 }
 
@@ -762,18 +786,18 @@ pub fn usage(message: String) -> ErrorOut {
     }
 }
 
-fn presence(presence: &Presence) -> PresenceOut {
+fn presence(presence: &DocPresence) -> PresenceOut {
     match presence {
-        Presence::Valid { origin, hash, .. } => PresenceOut::Valid {
+        DocPresence::Valid { origin, hash, .. } => PresenceOut::Valid {
             file: origin.to_string(),
             hash: hash.to_string(),
         },
-        Presence::Invalid { files, problems } => PresenceOut::Invalid {
+        DocPresence::Invalid { files, problems } => PresenceOut::Invalid {
             files: files.iter().map(ToString::to_string).collect(),
             problems: problems.iter().map(ToString::to_string).collect(),
         },
-        Presence::Gone => PresenceOut::Gone,
-        Presence::Unknown { unreadable } => PresenceOut::Unknown {
+        DocPresence::Gone => PresenceOut::Gone,
+        DocPresence::Unknown { unreadable } => PresenceOut::Unknown {
             unreadable: unreadable.iter().map(ToString::to_string).collect(),
         },
     }

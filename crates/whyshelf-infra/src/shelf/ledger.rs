@@ -25,6 +25,7 @@ use whyshelf_core::app::shelf::{
     LedgerAppend, LedgerContents, LedgerRead, UnreadableRecord, UnreadableWhy,
 };
 use whyshelf_core::domain::canon::Canon;
+use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::ledger::Record;
 
@@ -46,17 +47,41 @@ pub enum LedgerError {
         /// The file.
         path: PathBuf,
     },
+    /// A file of the ledger has a name that is not a path of the project (not
+    /// UTF-8, or a name a relative path refuses), so it cannot be reported by name
+    /// as a file that is no record. The read stops and says so, rather than skip a
+    /// file that may hold a decision.
+    #[error("{} has a name that is not a relative path", .path.display())]
+    Name {
+        /// The path.
+        path: PathBuf,
+        /// Why the domain refused it, when it was the domain.
+        #[source]
+        source: Option<ValueError>,
+    },
     /// A record's canonical form has no JSON form (a bug of this program).
     #[error("a record could not be written as JSON")]
     Json(#[source] serde_json::Error),
+}
+
+/// Why a JSON value has no canonical form.
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum NotCanon {
+    /// A number that is not a whole number of 64 bits.
+    #[error("{number} is not a whole number of 64 bits")]
+    Float {
+        /// The number as the JSON wrote it.
+        number: serde_json::Number,
+    },
 }
 
 /// The ledger in a directory of JSON files.
 #[derive(Debug, Clone)]
 pub struct JsonLedger {
     dir: PathBuf,
-    /// The directory as the project names it, for the paths of the files that are no
-    /// record (`.whyshelf/ledger`).
+    /// The directory as the project names it (`.whyshelf/ledger`), as text: the
+    /// path of every file that is no record is made from it, and it is checked as a
+    /// [`RelPath`] when the ledger is read, so a bad one is an error of the read.
     rel: String,
 }
 
@@ -80,6 +105,11 @@ impl JsonLedger {
     }
 }
 
+/// Reading looks at the files of the directory that end in `.json` and at nothing
+/// else: a file with another extension (a note, an editor's backup) is not a
+/// record and is skipped on purpose. Every `.json` file is a record or an
+/// [`UnreadableRecord`]; one whose name cannot be reported fails the read with
+/// [`LedgerError::Name`]. None is dropped.
 impl LedgerRead for JsonLedger {
     type Error = LedgerError;
 
@@ -95,6 +125,10 @@ impl LedgerRead for JsonLedger {
                 });
             }
         };
+        let rel: RelPath = self.rel.parse().map_err(|e| LedgerError::Name {
+            path: self.dir.clone(),
+            source: Some(e),
+        })?;
         let mut files = Vec::new();
         while let Some(entry) = entries.next_entry().await.map_err(self.io(&self.dir))? {
             let path = entry.path();
@@ -108,14 +142,18 @@ impl LedgerRead for JsonLedger {
             match decode(&bytes) {
                 Ok(record) => contents.records.push(record),
                 Err(why) => {
-                    let name = path
+                    let name = |source| LedgerError::Name {
+                        path: path.clone(),
+                        source,
+                    };
+                    let segment = path
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .unwrap_or_default();
-                    let file = format!("{}/{name}", self.rel).parse::<RelPath>();
-                    if let Ok(file) = file {
-                        contents.unreadable.push(UnreadableRecord { file, why });
-                    }
+                        .ok_or_else(|| name(None))?;
+                    let file = format!("{rel}/{segment}")
+                        .parse::<RelPath>()
+                        .map_err(|e| name(Some(e)))?;
+                    contents.unreadable.push(UnreadableRecord { file, why });
                 }
             }
         }
@@ -159,7 +197,9 @@ pub fn decode(bytes: &[u8]) -> Result<Record, UnreadableWhy> {
     let value: Value = serde_json::from_str(text).map_err(|e| UnreadableWhy::NotJson {
         detail: e.to_string(),
     })?;
-    let canon = from_json(value).map_err(|detail| UnreadableWhy::NotJson { detail })?;
+    let canon = from_json(value).map_err(|NotCanon::Float { number }| UnreadableWhy::NotWhole {
+        number: number.to_string(),
+    })?;
     Record::from_canon(&canon).map_err(UnreadableWhy::NotARecord)
 }
 
@@ -179,14 +219,11 @@ pub fn to_json(canon: &Canon) -> Value {
 
 /// The canonical value a JSON value is the form of. A number that is not a whole
 /// number of 64 bits has none.
-pub fn from_json(value: Value) -> Result<Canon, String> {
+pub fn from_json(value: Value) -> Result<Canon, NotCanon> {
     Ok(match value {
         Value::Null => Canon::Null,
         Value::Bool(b) => Canon::Bool(b),
-        Value::Number(n) => Canon::Int(
-            n.as_i64()
-                .ok_or_else(|| format!("{n} is not a whole number of 64 bits"))?,
-        ),
+        Value::Number(n) => Canon::Int(n.as_i64().ok_or(NotCanon::Float { number: n })?),
         Value::String(s) => Canon::Str(s),
         Value::Array(items) => {
             Canon::List(items.into_iter().map(from_json).collect::<Result<_, _>>()?)
@@ -269,13 +306,53 @@ mod tests {
         assert!(read.records.is_empty());
         assert_eq!(read.unreadable.len(), 2);
         assert_eq!(read.unreadable[0].file.as_str(), ".whyshelf/ledger/x.json");
-        assert!(matches!(
+        assert_eq!(
             read.unreadable[0].why,
-            UnreadableWhy::NotJson { .. }
-        ));
+            UnreadableWhy::NotWhole {
+                number: "1.5".to_owned()
+            }
+        );
         assert!(matches!(
             read.unreadable[1].why,
             UnreadableWhy::NotARecord(_)
         ));
+    }
+
+    #[test]
+    fn a_float_has_no_canonical_form() {
+        let value: Value = serde_json::from_str("[1.5]").unwrap();
+        assert!(matches!(from_json(value), Err(NotCanon::Float { .. })));
+    }
+
+    #[tokio::test]
+    async fn only_json_files_are_looked_at_and_a_syntax_error_is_reported() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join(".whyshelf/ledger");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        tokio::fs::write(dir.join("a.json"), "{").await.unwrap();
+        tokio::fs::write(dir.join("notes.txt"), "{").await.unwrap();
+        let read = JsonLedger::new(dir, ".whyshelf").read().await.unwrap();
+        assert_eq!(read.unreadable.len(), 1);
+        assert!(matches!(
+            read.unreadable[0].why,
+            UnreadableWhy::NotJson { .. }
+        ));
+    }
+
+    // Linux file systems take any bytes in a name; APFS (macOS) refuses a name that
+    // is not UTF-8, so the file cannot be made there.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_file_whose_name_is_not_utf8_is_not_dropped() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join(".whyshelf/ledger");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let name = OsStr::from_bytes(b"\xff\xfe.json");
+        tokio::fs::write(dir.join(name), "{}").await.unwrap();
+        let result = JsonLedger::new(dir, ".whyshelf").read().await;
+        assert!(matches!(result, Err(LedgerError::Name { .. })));
     }
 }

@@ -1,6 +1,7 @@
 //! The arguments of `whyshelf books ...`, as clap types.
 
 use clap::{Args, Subcommand};
+use whyshelf_core::domain::shelf::lookup::Reference;
 
 /// The commands on a shelf of books: documents whose kinds the project declares in
 /// `.whyshelf/books.toml`.
@@ -14,12 +15,12 @@ pub enum BooksCommand {
     /// One document in full, with where its approval stops holding.
     Get {
         /// A key (`S-1`, `spec:S-1`), an identifier or a short identifier.
-        reference: String,
+        reference: Reference,
     },
     /// What a document links to and what links to it, transitively.
     Trace {
         /// A key, an identifier or a short identifier.
-        reference: String,
+        reference: Reference,
     },
     /// The approvals that no longer hold, with where each starts to fail.
     Stale,
@@ -33,8 +34,11 @@ pub enum BooksCommand {
 /// What every verb takes.
 #[derive(Debug, Args)]
 pub struct Common {
-    /// The document: a key, an identifier or a short identifier.
-    pub reference: String,
+    /// The documents, in order: keys, identifiers or short identifiers. They are
+    /// judged one after another on one reading of the project, upstream first as
+    /// written, and written all together, or none when one is refused.
+    #[arg(required = true, num_args = 1..)]
+    pub references: Vec<Reference>,
     /// Why.
     #[arg(long)]
     pub reason: Option<String>,
@@ -68,7 +72,7 @@ pub enum Verb {
         common: Common,
         /// A document that replaces it (checked against its `replaces` links).
         #[arg(long)]
-        successor: Option<String>,
+        successor: Option<Reference>,
     },
     /// The document is no longer kept.
     Retire {

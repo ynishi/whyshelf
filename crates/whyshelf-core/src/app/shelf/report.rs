@@ -12,11 +12,11 @@
 use std::collections::BTreeMap;
 
 use crate::domain::id::DocId;
-use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
-use crate::domain::shelf::build::{Cycle, DocProblem, InvalidDoc};
-use crate::domain::shelf::doc::{Doc, DocHash, DocKey, UnresolvedLink};
+use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc};
+use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
 use crate::domain::shelf::freshness::{Notice, RootCause, Severity, Standing, Successors};
+use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{DeclaredStatus, LedgerProblem, Record};
 use crate::domain::shelf::schema::{BookDir, BookName, EntryName, Propagation, SchemaProblem};
 
@@ -58,42 +58,16 @@ impl Health {
     }
 }
 
-/// What the shelf has for an identity now.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Presence {
-    /// A valid document.
-    Valid {
-        /// Its key.
-        key: DocKey,
-        /// The file.
-        origin: RelPath,
-        /// Its hash now.
-        hash: DocHash,
-    },
-    /// One or more files carry the identity, and they are invalid.
-    Invalid {
-        /// The files.
-        files: Vec<RelPath>,
-        /// Every problem of every file.
-        problems: NonEmptyVec<DocProblem>,
-    },
-    /// No file carries it.
-    Gone,
-    /// No file is known to carry it, but some file's identity could not be read.
-    Unknown {
-        /// The files whose identity could not be read.
-        unreadable: NonEmptyVec<RelPath>,
-    },
-}
-
 /// A document as the answers show it: what it is, what was decided about it, where
 /// it stands, and what is worth knowing that changes nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
     /// The identity.
     pub id: DocId,
-    /// What the shelf has for it.
-    pub presence: Presence,
+    /// What the shelf has for it ([`DocState::presence`]).
+    ///
+    /// [`DocState::presence`]: crate::domain::shelf::build::DocState::presence
+    pub presence: DocPresence,
     /// What the ledger says people decided.
     pub declared: DeclaredStatus,
     /// Where it stands now, with the causes when an approval does not hold.
@@ -102,17 +76,17 @@ pub struct Row {
     pub notices: Vec<Notice>,
 }
 
-/// One book of a checked shelf, counted.
+/// One book of a checked shelf, counted ([`Shelf::tally_by_book`]).
+///
+/// [`Shelf::tally_by_book`]: crate::domain::shelf::build::Shelf::tally_by_book
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BookCount {
     /// The book.
     pub name: BookName,
     /// Its directory.
     pub dir: BookDir,
-    /// How many valid documents it holds.
-    pub valid: usize,
-    /// How many files under it are not valid documents.
-    pub invalid: usize,
+    /// What it holds.
+    pub tally: BookTally,
 }
 
 /// The result of `books check`.

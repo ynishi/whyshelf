@@ -30,10 +30,11 @@
 //! constructor, and the reader of the canonical form, goes through one private
 //! function, `Decision::assemble`, which holds the invariants of a decision.
 //!
-//! # Two clocks
+//! # The clock
 //!
 //! [`JudgedAt`] is unix milliseconds and has an order, which "the latest decision"
-//! and an expiry need. It is a number of milliseconds, not a text.
+//! and an expiry need. It is a number of milliseconds, not a text. The domain has no
+//! clock of its own: the caller passes in each time.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -45,13 +46,14 @@ use crate::domain::canon::Canon;
 use crate::domain::error::ValueError;
 use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::id::{DocId, EntityId};
-use crate::domain::nonempty::{NonBlank, NonEmptySet, TwoOrMore};
+use crate::domain::nonempty::{Count, NonBlank, NonEmptySet, TwoOrMore};
 
-use super::build::{Cycle, CycleSource, DocStateKind, Shelf, components, cycles_of};
-use super::doc::{DocHash, DocKey, FramePin, LinkState, UnresolvedLink};
+use super::build::{DocFailure, DocState, FailureTag, Shelf};
+use super::doc::{DocHash, DocKey, LinkState, UnresolvedLink};
+use super::graph::{Cycle, CycleSource, components, cycles_of};
 use super::schema::{
-    BookName, EntryName, KeyForm, KeyName, KeyPrefix, KeyProblem, KeyTail, NameProblem,
-    Propagation, Slug,
+    BookName, EntryName, KeyForm, KeyPrefix, KeyProblem, KeyTail, NameProblem, Propagation, Slug,
+    parse_tail,
 };
 
 /// The identity of a record: a UUID v7 the caller supplies.
@@ -92,21 +94,67 @@ impl JudgedAt {
     }
 }
 
+/// What an approval stood on for one link: the upstream it named, the key it had
+/// then and the hash it had then.
+///
+/// The key is kept so that an upstream that has since gone can be told from a link
+/// that is written wrong now: both are a miss in the shelf, and only the key says
+/// whether they are the same one. It is not part of any hash.
+///
+/// Its constructor is private to this module: a pin is taken from a resolved link by
+/// [`frame_approve`], or read back from a record by [`Record::from_canon`], and by
+/// nothing else.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FramePin {
+    link: EntryName,
+    target: DocId,
+    key: DocKey,
+    hash: DocHash,
+}
+
+impl FramePin {
+    fn new(link: EntryName, target: DocId, key: DocKey, hash: DocHash) -> Self {
+        Self {
+            link,
+            target,
+            key,
+            hash,
+        }
+    }
+
+    /// The link of the approved document the pin was taken for.
+    pub fn link(&self) -> &EntryName {
+        &self.link
+    }
+
+    /// The upstream.
+    pub fn target(&self) -> DocId {
+        self.target
+    }
+
+    /// The key the upstream had when it was pinned.
+    pub fn key(&self) -> &DocKey {
+        &self.key
+    }
+
+    /// The hash the upstream had when it was pinned.
+    pub fn hash(&self) -> &DocHash {
+        &self.hash
+    }
+}
+
 /// What a retirement saw of the document it retires.
 ///
 /// A document can be retired when its file is gone, or broken, or cannot be told
-/// about; then there is no hash to see, and the record says which of these it was.
+/// about; then there is no hash to see, and the record says which of these it was
+/// (the [`FailureTag`] of the [`DocFailure`], without
+/// what it carries).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Seen {
     /// The document was valid, with this hash.
     At(DocHash),
-    /// The document's files were invalid.
-    Invalid,
-    /// There was no file for it.
-    Gone,
-    /// It could not be told whether there was a file (see
-    /// [`DocState::Unknown`](super::build::DocState::Unknown)).
-    Unknown,
+    /// The document was not valid, in this way.
+    Not(FailureTag),
 }
 
 /// What a decision does.
@@ -156,6 +204,15 @@ pub enum DecisionProblem {
     /// An approval that stands on the document it approves.
     #[error("an approval's frame does not name the approved document")]
     FrameNamesSubject,
+    /// An approval whose frame pins one link to one document twice (with two
+    /// hashes): it cannot say which it saw.
+    #[error("an approval's frame pins `{link}` to {target} twice")]
+    FramePinsTwice {
+        /// The link.
+        link: EntryName,
+        /// The document.
+        target: DocId,
+    },
 }
 
 /// The facts an approval stands on, taken by [`frame_approve`].
@@ -166,40 +223,11 @@ pub struct ApproveFrame {
     frame: BTreeSet<FramePin>,
 }
 
-impl ApproveFrame {
-    /// The document.
-    pub fn subject(&self) -> DocId {
-        self.subject
-    }
-
-    /// Its hash.
-    pub fn seen(&self) -> &DocHash {
-        &self.seen
-    }
-
-    /// The upstreams it stands on.
-    pub fn frame(&self) -> &BTreeSet<FramePin> {
-        &self.frame
-    }
-}
-
 /// The facts a denial or a deprecation stands on, taken by [`frame_present`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PresentFrame {
     subject: DocId,
     seen: DocHash,
-}
-
-impl PresentFrame {
-    /// The document.
-    pub fn subject(&self) -> DocId {
-        self.subject
-    }
-
-    /// Its hash.
-    pub fn seen(&self) -> &DocHash {
-        &self.seen
-    }
 }
 
 /// The facts a retirement stands on, taken by [`frame_retire`].
@@ -209,24 +237,12 @@ pub struct RetireFrame {
     seen: Seen,
 }
 
-impl RetireFrame {
-    /// The document.
-    pub fn subject(&self) -> DocId {
-        self.subject
-    }
-
-    /// What was seen of it.
-    pub fn seen(&self) -> &Seen {
-        &self.seen
-    }
-}
-
 /// Why a frame cannot be taken. It owns what it says, so it is a `'static` error.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum FrameRefusal {
     /// The document is not valid, so there is nothing sound to judge.
     #[error("the document is not valid: {0:?}")]
-    NotValid(DocStateKind),
+    NotValid(DocFailure),
     /// A `Depends` link of the document cannot be followed, so an approval would
     /// stand on nothing.
     #[error("the link `{link}` cannot be followed: {unresolved:?}")]
@@ -240,6 +256,32 @@ pub enum FrameRefusal {
     /// approvals, which this approval would close. Which one the cycle's id says.
     #[error("the document is in a cycle: {0:?}")]
     InCycle(Cycle),
+    /// A `Depends` link names a document people decided does not stand. An approval
+    /// pinned to it would not hold from the start; a deprecated one is to be
+    /// replaced, so pin its successor.
+    #[error("the link `{link}` names {target}, which is {status}: an approval cannot stand on it")]
+    UpstreamNotStanding {
+        /// The link.
+        link: EntryName,
+        /// The document it names.
+        target: DocId,
+        /// What was decided about it.
+        status: NotStanding,
+    },
+}
+
+/// A decision that leaves a document not standing, so nothing can be approved on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum NotStanding {
+    /// Refused.
+    #[error("denied")]
+    Denied,
+    /// To be replaced.
+    #[error("deprecated")]
+    Deprecated,
+    /// No longer kept.
+    #[error("retired")]
+    Retired,
 }
 
 /// A decision about a document.
@@ -328,6 +370,15 @@ impl Decision {
             if frame.iter().any(|pin| pin.target() == subject) {
                 return Err(DecisionProblem::FrameNamesSubject);
             }
+            let mut seen = BTreeSet::new();
+            for pin in frame {
+                if !seen.insert((pin.link(), pin.target())) {
+                    return Err(DecisionProblem::FramePinsTwice {
+                        link: pin.link().clone(),
+                        target: pin.target(),
+                    });
+                }
+            }
         }
         Ok(Self {
             id,
@@ -337,36 +388,6 @@ impl Decision {
             at,
             reason,
         })
-    }
-
-    /// The identity of the record.
-    pub fn id(&self) -> JudgementId {
-        self.id
-    }
-
-    /// The document it is about.
-    pub fn subject(&self) -> DocId {
-        self.subject
-    }
-
-    /// What it does.
-    pub fn verb(&self) -> &DecisionVerb {
-        &self.verb
-    }
-
-    /// Who made it.
-    pub fn actor(&self) -> &Actor {
-        &self.actor
-    }
-
-    /// When it was made.
-    pub fn at(&self) -> JudgedAt {
-        self.at
-    }
-
-    /// Why, when it says.
-    pub fn reason(&self) -> Option<&NonBlank> {
-        self.reason.as_ref()
     }
 }
 
@@ -398,31 +419,6 @@ impl Revocation {
             reason,
         }
     }
-
-    /// The identity of the record.
-    pub fn id(&self) -> JudgementId {
-        self.id
-    }
-
-    /// The decisions it withdraws.
-    pub fn targets(&self) -> &NonEmptySet<JudgementId> {
-        &self.targets
-    }
-
-    /// Who made it.
-    pub fn actor(&self) -> &Actor {
-        &self.actor
-    }
-
-    /// When it was made.
-    pub fn at(&self) -> JudgedAt {
-        self.at
-    }
-
-    /// Why.
-    pub fn reason(&self) -> &NonBlank {
-        &self.reason
-    }
 }
 
 /// One record of the ledger.
@@ -437,13 +433,6 @@ pub enum Record {
 /// The hash of a record's canonical form, which tells two records of one id apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RecordHash(ContentHash);
-
-impl RecordHash {
-    /// The digest.
-    pub fn hash(&self) -> &ContentHash {
-        &self.0
-    }
-}
 
 /// The version of the canonical form of a record.
 const VERSION: i64 = 1;
@@ -483,6 +472,13 @@ pub enum RecordProblem {
     /// A `kind` that is neither `decision` nor `revocation`.
     #[error("`{found}` is not a kind of record")]
     UnknownKind {
+        /// What was found.
+        found: String,
+    },
+    /// A `kind` of a key in a frame that this reader does not know: of the key, or of
+    /// its tail.
+    #[error("`{found}` is not a kind of key")]
+    UnknownKeyKind {
         /// What was found.
         found: String,
     },
@@ -603,66 +599,155 @@ fn judgement_id_of(raw: &str, key: &str) -> Result<JudgementId, RecordProblem> {
         .map_err(|e| bad(key, e))
 }
 
+/// A closed set of words of the canonical form, each with its one spelling. `as_str`
+/// writes it and `parse` reads it, both from the one table, so the two ends of the
+/// form cannot disagree about a word and no code compares a text with a literal.
+macro_rules! tags {
+    ($(#[$meta:meta])* $name:ident { $($variant:ident => $text:literal),+ $(,)? }) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum $name {
+            $($variant),+
+        }
+
+        impl $name {
+            const fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $text),+
+                }
+            }
+
+            fn parse(text: &str) -> Option<Self> {
+                match text {
+                    $($text => Some(Self::$variant),)+
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
+tags!(
+    /// The `kind` of a record.
+    RecordKind {
+        Decision => "decision",
+        Revocation => "revocation",
+    }
+);
+
+tags!(
+    /// The `verb` of a decision.
+    Verb {
+        Approve => "approve",
+        Deny => "deny",
+        Deprecate => "deprecate",
+        Retire => "retire",
+    }
+);
+
+tags!(
+    /// The `state` of what a retirement saw.
+    SeenState {
+        At => "at",
+        Invalid => "invalid",
+        Gone => "gone",
+        Unknown => "unknown",
+    }
+);
+
+tags!(
+    /// The `kind` of a key in a frame.
+    KeyFormKind {
+        Prefixed => "prefixed",
+        Slug => "slug",
+    }
+);
+
+tags!(
+    /// The `kind` of the tail of a prefixed key.
+    TailKind {
+        Number => "number",
+        Name => "name",
+    }
+);
+
+impl Verb {
+    fn of(verb: &DecisionVerb) -> Self {
+        match verb {
+            DecisionVerb::Approve { .. } => Self::Approve,
+            DecisionVerb::Deny { .. } => Self::Deny,
+            DecisionVerb::Deprecate { .. } => Self::Deprecate,
+            DecisionVerb::Retire { .. } => Self::Retire,
+        }
+    }
+}
+
 fn key_form_canon(form: &KeyForm) -> Canon {
     match form {
         KeyForm::Prefixed { prefix, tail } => {
             let tail = match tail {
                 KeyTail::Number(n) => Canon::map([
-                    ("kind", Canon::str("number")),
+                    ("kind", Canon::str(TailKind::Number.as_str())),
                     // A `u64` may not fit the `i64` a canonical integer is, so the
                     // number is kept as its text.
                     ("value", Canon::str(n.to_string())),
                 ]),
                 KeyTail::Name(name) => Canon::map([
-                    ("kind", Canon::str("name")),
+                    ("kind", Canon::str(TailKind::Name.as_str())),
                     ("value", Canon::str(name.as_str())),
                 ]),
             };
             Canon::map([
-                ("kind", Canon::str("prefixed")),
+                ("kind", Canon::str(KeyFormKind::Prefixed.as_str())),
                 ("prefix", Canon::str(prefix.as_str())),
                 ("tail", tail),
             ])
         }
         KeyForm::Slug(slug) => Canon::map([
-            ("kind", Canon::str("slug")),
+            ("kind", Canon::str(KeyFormKind::Slug.as_str())),
             ("value", Canon::str(slug.as_str())),
         ]),
     }
 }
 
 fn key_form_from(map: &CanonMap) -> Result<KeyForm, RecordProblem> {
-    match text(map, "kind")? {
-        "slug" => {
+    let kind = text(map, "kind")?;
+    match KeyFormKind::parse(kind) {
+        Some(KeyFormKind::Slug) => {
             exact(map, &["kind", "value"])?;
             Slug::new(text(map, "value")?)
                 .map(KeyForm::Slug)
                 .map_err(RecordProblem::BadKey)
         }
-        "prefixed" => {
+        Some(KeyFormKind::Prefixed) => {
             exact(map, &["kind", "prefix", "tail"])?;
             let prefix = KeyPrefix::new(text(map, "prefix")?).map_err(RecordProblem::BadKey)?;
             let tail = submap(map, "tail")?;
             exact(tail, &["kind", "value"])?;
             let value = text(tail, "value")?;
-            let tail = match text(tail, "kind")? {
-                "number" => value
-                    .parse::<u64>()
-                    .ok()
-                    .filter(|n| n.to_string() == value)
-                    .map(KeyTail::Number)
-                    .ok_or_else(|| wrong("value", "a number written as a key writes it")),
-                "name" => KeyName::new(value)
-                    .map(KeyTail::Name)
-                    .map_err(RecordProblem::BadKey),
-                other => Err(RecordProblem::UnknownKind {
-                    found: other.to_owned(),
-                }),
-            }?;
+            // The tail is read by the grammar's own reader, so a record holds no key
+            // a document could not have (a number with a leading zero, or too long).
+            let read = parse_tail(value).map_err(RecordProblem::BadKey)?;
+            let tail_kind = text(tail, "kind")?;
+            let tail = match (TailKind::parse(tail_kind), read) {
+                (Some(TailKind::Number), tail @ KeyTail::Number(_))
+                | (Some(TailKind::Name), tail @ KeyTail::Name(_)) => tail,
+                (Some(_), _) => {
+                    return Err(wrong(
+                        "value",
+                        "the kind of the tail is the kind its text reads as",
+                    ));
+                }
+                (None, _) => {
+                    return Err(RecordProblem::UnknownKeyKind {
+                        found: tail_kind.to_owned(),
+                    });
+                }
+            };
             Ok(KeyForm::Prefixed { prefix, tail })
         }
-        other => Err(RecordProblem::UnknownKind {
-            found: other.to_owned(),
+        None => Err(RecordProblem::UnknownKeyKind {
+            found: kind.to_owned(),
         }),
     }
 }
@@ -694,36 +779,41 @@ fn pin_from(canon: &Canon) -> Result<FramePin, RecordProblem> {
     let book = BookName::new(text(key, "book")?).map_err(RecordProblem::BadName)?;
     let form = key_form_from(submap(key, "form")?)?;
     let hash = doc_hash(map, "hash")?;
-    Ok(FramePin::restore(link, target, DocKey { book, form }, hash))
+    Ok(FramePin::new(link, target, DocKey { book, form }, hash))
 }
 
 fn seen_canon(seen: &Seen) -> Canon {
     let (state, hash) = match seen {
-        Seen::At(hash) => ("at", Canon::str(hash.to_string())),
-        Seen::Invalid => ("invalid", Canon::Null),
-        Seen::Gone => ("gone", Canon::Null),
-        Seen::Unknown => ("unknown", Canon::Null),
+        Seen::At(hash) => (SeenState::At, Canon::str(hash.to_string())),
+        Seen::Not(FailureTag::Invalid) => (SeenState::Invalid, Canon::Null),
+        Seen::Not(FailureTag::Gone) => (SeenState::Gone, Canon::Null),
+        Seen::Not(FailureTag::Unknown) => (SeenState::Unknown, Canon::Null),
     };
-    Canon::map([("state", Canon::str(state)), ("hash", hash)])
+    Canon::map([("state", Canon::str(state.as_str())), ("hash", hash)])
 }
 
 fn seen_from(map: &CanonMap) -> Result<Seen, RecordProblem> {
     exact(map, &["state", "hash"])?;
-    match (text(map, "state")?, entry(map, "hash")?) {
-        ("at", _) => doc_hash(map, "hash").map(Seen::At),
-        ("invalid", Canon::Null) => Ok(Seen::Invalid),
-        ("gone", Canon::Null) => Ok(Seen::Gone),
-        ("unknown", Canon::Null) => Ok(Seen::Unknown),
-        ("invalid" | "gone" | "unknown", _) => Err(wrong("hash", "null")),
-        (other, _) => Err(RecordProblem::UnknownSeen {
-            found: other.to_owned(),
+    let state = text(map, "state")?;
+    match (SeenState::parse(state), entry(map, "hash")?) {
+        (Some(SeenState::At), _) => doc_hash(map, "hash").map(Seen::At),
+        (Some(SeenState::Invalid), Canon::Null) => Ok(Seen::Not(FailureTag::Invalid)),
+        (Some(SeenState::Gone), Canon::Null) => Ok(Seen::Not(FailureTag::Gone)),
+        (Some(SeenState::Unknown), Canon::Null) => Ok(Seen::Not(FailureTag::Unknown)),
+        (Some(_), _) => Err(wrong("hash", "null")),
+        (None, _) => Err(RecordProblem::UnknownSeen {
+            found: state.to_owned(),
         }),
     }
 }
 
+/// The keys every decision has, besides the ones its verb adds.
 const DECISION_KEYS: [&str; 8] = [
     "v", "kind", "id", "subject", "verb", "actor", "at", "reason",
 ];
+
+/// The keys a revocation has, and no more.
+const REVOCATION_KEYS: [&str; 7] = ["v", "kind", "id", "targets", "actor", "at", "reason"];
 
 impl Record {
     /// The identity of the record.
@@ -741,7 +831,7 @@ impl Record {
             Self::Decision(d) => decision_canon(d),
             Self::Revocation(r) => Canon::map([
                 ("v", Canon::Int(VERSION)),
-                ("kind", Canon::str("revocation")),
+                ("kind", Canon::str(RecordKind::Revocation.as_str())),
                 ("id", Canon::str(r.id.to_string())),
                 (
                     "targets",
@@ -759,8 +849,8 @@ impl Record {
     /// Refuses a form that is not a map, a version it does not know, a key too many
     /// or too few for the kind (and the verb) of the record, a verb it does not
     /// know, an identifier that is not a UUID v7, and a decision that
-    /// `Decision::assemble` refuses. The hashes and the frame it reads are restored
-    /// with `DocHash::restore` and `FramePin::restore`.
+    /// `Decision::assemble` refuses. The hashes it reads are restored with
+    /// `DocHash::restore`, the one place a hash is made from a record.
     pub fn from_canon(canon: &Canon) -> Result<Self, RecordProblem> {
         let Canon::Map(map) = canon else {
             return Err(RecordProblem::NotAMap);
@@ -769,11 +859,12 @@ impl Record {
             VERSION => {}
             found => return Err(RecordProblem::UnknownVersion { found }),
         }
-        match text(map, "kind")? {
-            "decision" => decision_from(map).map(Self::Decision),
-            "revocation" => revocation_from(map).map(Self::Revocation),
-            other => Err(RecordProblem::UnknownKind {
-                found: other.to_owned(),
+        let kind = text(map, "kind")?;
+        match RecordKind::parse(kind) {
+            Some(RecordKind::Decision) => decision_from(map).map(Self::Decision),
+            Some(RecordKind::Revocation) => revocation_from(map).map(Self::Revocation),
+            None => Err(RecordProblem::UnknownKind {
+                found: kind.to_owned(),
             }),
         }
     }
@@ -787,7 +878,8 @@ impl Record {
 fn decision_canon(d: &Decision) -> Canon {
     let mut entries: Vec<(&str, Canon)> = vec![
         ("v", Canon::Int(VERSION)),
-        ("kind", Canon::str("decision")),
+        ("kind", Canon::str(RecordKind::Decision.as_str())),
+        ("verb", Canon::str(Verb::of(&d.verb).as_str())),
         ("id", Canon::str(d.id.to_string())),
         ("subject", Canon::str(d.subject.to_string())),
         ("actor", Canon::str(d.actor.as_str())),
@@ -805,52 +897,79 @@ fn decision_canon(d: &Decision) -> Canon {
             frame,
             expires,
         } => {
-            entries.push(("verb", Canon::str("approve")));
             entries.push(("seen", Canon::str(seen.to_string())));
             entries.push(("frame", Canon::list(frame.iter().map(pin_canon))));
             entries.push(("expires", expires.map_or(Canon::Null, |e| Canon::Int(e.0))));
         }
-        DecisionVerb::Deny { seen } => {
-            entries.push(("verb", Canon::str("deny")));
+        DecisionVerb::Deny { seen } | DecisionVerb::Deprecate { seen } => {
             entries.push(("seen", Canon::str(seen.to_string())));
         }
-        DecisionVerb::Deprecate { seen } => {
-            entries.push(("verb", Canon::str("deprecate")));
-            entries.push(("seen", Canon::str(seen.to_string())));
-        }
-        DecisionVerb::Retire { seen } => {
-            entries.push(("verb", Canon::str("retire")));
-            entries.push(("seen", seen_canon(seen)));
-        }
+        DecisionVerb::Retire { seen } => entries.push(("seen", seen_canon(seen))),
     }
     Canon::map(entries)
 }
 
+/// The fields a decision and a revocation have in the same way, read in this order.
+struct Common<R> {
+    id: JudgementId,
+    actor: Actor,
+    at: JudgedAt,
+    reason: R,
+}
+
+/// The `id`, `actor` and `at` of a record, and its `reason` as `reason` reads it (a
+/// decision may have none, a revocation must give one).
+fn read_common<R>(
+    map: &CanonMap,
+    reason: impl FnOnce(&CanonMap) -> Result<R, RecordProblem>,
+) -> Result<Common<R>, RecordProblem> {
+    Ok(Common {
+        id: judgement_id_of(text(map, "id")?, "id")?,
+        actor: Actor::new(text(map, "actor")?).map_err(|e| bad("actor", e))?,
+        at: JudgedAt(int(map, "at")?),
+        reason: reason(map)?,
+    })
+}
+
+/// The `reason` of a decision: a text, or null for none.
+fn optional_reason(map: &CanonMap) -> Result<Option<NonBlank>, RecordProblem> {
+    match entry(map, "reason")? {
+        Canon::Null => Ok(None),
+        Canon::Str(s) => NonBlank::new(s.as_str())
+            .map(Some)
+            .map_err(|e| bad("reason", e)),
+        _ => Err(wrong("reason", "a text or null")),
+    }
+}
+
+/// The `reason` of a revocation: a text, always.
+fn required_reason(map: &CanonMap) -> Result<NonBlank, RecordProblem> {
+    NonBlank::new(text(map, "reason")?).map_err(|e| bad("reason", e))
+}
+
 fn decision_from(map: &CanonMap) -> Result<Decision, RecordProblem> {
     let verb_name = text(map, "verb")?;
-    let extra: &[&str] = match verb_name {
-        "approve" => &["seen", "frame", "expires"],
-        "deny" | "deprecate" | "retire" => &["seen"],
-        other => {
-            return Err(RecordProblem::UnknownVerb {
-                found: other.to_owned(),
-            });
-        }
+    let Some(verb) = Verb::parse(verb_name) else {
+        return Err(RecordProblem::UnknownVerb {
+            found: verb_name.to_owned(),
+        });
+    };
+    let extra: &[&str] = match verb {
+        Verb::Approve => &["seen", "frame", "expires"],
+        Verb::Deny | Verb::Deprecate | Verb::Retire => &["seen"],
     };
     let keys: Vec<&str> = DECISION_KEYS.iter().chain(extra).copied().collect();
     exact(map, &keys)?;
 
-    let id = judgement_id_of(text(map, "id")?, "id")?;
+    let Common {
+        id,
+        actor,
+        at,
+        reason,
+    } = read_common(map, optional_reason)?;
     let subject = doc_id(map, "subject")?;
-    let actor = Actor::new(text(map, "actor")?).map_err(|e| bad("actor", e))?;
-    let at = JudgedAt(int(map, "at")?);
-    let reason = match entry(map, "reason")? {
-        Canon::Null => None,
-        Canon::Str(s) => Some(NonBlank::new(s.as_str()).map_err(|e| bad("reason", e))?),
-        _ => return Err(wrong("reason", "a text or null")),
-    };
-    let verb = match verb_name {
-        "approve" => {
+    let verb = match verb {
+        Verb::Approve => {
             let frame = items(map, "frame")?
                 .iter()
                 .map(pin_from)
@@ -866,13 +985,13 @@ fn decision_from(map: &CanonMap) -> Result<Decision, RecordProblem> {
                 expires,
             }
         }
-        "deny" => DecisionVerb::Deny {
+        Verb::Deny => DecisionVerb::Deny {
             seen: doc_hash(map, "seen")?,
         },
-        "deprecate" => DecisionVerb::Deprecate {
+        Verb::Deprecate => DecisionVerb::Deprecate {
             seen: doc_hash(map, "seen")?,
         },
-        _ => DecisionVerb::Retire {
+        Verb::Retire => DecisionVerb::Retire {
             seen: seen_from(submap(map, "seen")?)?,
         },
     };
@@ -880,11 +999,13 @@ fn decision_from(map: &CanonMap) -> Result<Decision, RecordProblem> {
 }
 
 fn revocation_from(map: &CanonMap) -> Result<Revocation, RecordProblem> {
-    exact(
-        map,
-        &["v", "kind", "id", "targets", "actor", "at", "reason"],
-    )?;
-    let id = judgement_id_of(text(map, "id")?, "id")?;
+    exact(map, &REVOCATION_KEYS)?;
+    let Common {
+        id,
+        actor,
+        at,
+        reason,
+    } = read_common(map, required_reason)?;
     let targets = items(map, "targets")?
         .iter()
         .map(|c| match c {
@@ -893,9 +1014,6 @@ fn revocation_from(map: &CanonMap) -> Result<Revocation, RecordProblem> {
         })
         .collect::<Result<BTreeSet<_>, _>>()?;
     let targets = NonEmptySet::from_set(targets).map_err(|_| RecordProblem::EmptyTargets)?;
-    let actor = Actor::new(text(map, "actor")?).map_err(|e| bad("actor", e))?;
-    let at = JudgedAt(int(map, "at")?);
-    let reason = NonBlank::new(text(map, "reason")?).map_err(|e| bad("reason", e))?;
     Ok(Revocation::new(id, targets, actor, at, reason))
 }
 
@@ -936,7 +1054,10 @@ pub enum DeclaredStatus {
 }
 
 /// A contradiction among the records, which the ledger sets aside.
-// A problem is rare and read once; the variants are kept flat for the sake of the match.
+// `Conflict` holds two or more whole records inline (the enum is as large as that), and
+// the other variants hold two identifiers. A ledger has few problems, so the size costs
+// little, and boxing the records would only add an allocation per conflict and a deref
+// in each match.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LedgerProblem {
@@ -974,6 +1095,90 @@ pub enum LedgerProblem {
     },
 }
 
+/// The records grouped by identity: those that stand alone, and the identities whose
+/// records conflict.
+struct Grouped {
+    decisions: BTreeMap<JudgementId, Decision>,
+    revocations: BTreeMap<JudgementId, Revocation>,
+    conflicted: BTreeSet<JudgementId>,
+    /// The conflicts.
+    problems: Vec<LedgerProblem>,
+}
+
+impl Grouped {
+    /// The same record twice is one record; two different ones with one id conflict,
+    /// and neither is kept.
+    fn of(records: Vec<Record>) -> Self {
+        let mut by_id: BTreeMap<JudgementId, BTreeMap<RecordHash, Record>> = BTreeMap::new();
+        for record in records {
+            by_id
+                .entry(record.id())
+                .or_default()
+                .insert(record.hash(), record);
+        }
+
+        let mut grouped = Self {
+            decisions: BTreeMap::new(),
+            revocations: BTreeMap::new(),
+            conflicted: BTreeSet::new(),
+            problems: Vec::new(),
+        };
+        for (id, group) in by_id {
+            match Count::of(group.into_values()) {
+                Count::None => {}
+                Count::One(Record::Decision(d)) => {
+                    grouped.decisions.insert(id, d);
+                }
+                Count::One(Record::Revocation(r)) => {
+                    grouped.revocations.insert(id, r);
+                }
+                Count::Many(records) => {
+                    grouped.conflicted.insert(id);
+                    grouped
+                        .problems
+                        .push(LedgerProblem::Conflict { id, records });
+                }
+            }
+        }
+        grouped
+    }
+}
+
+/// The decisions the revocations withdraw. A revocation of a conflict, of a
+/// revocation or of what is not there withdraws nothing for that target and is
+/// reported in `problems`.
+fn revoked_by(
+    revocations: &BTreeMap<JudgementId, Revocation>,
+    decisions: &BTreeMap<JudgementId, Decision>,
+    conflicted: &BTreeSet<JudgementId>,
+    problems: &mut Vec<LedgerProblem>,
+) -> BTreeSet<JudgementId> {
+    let mut revoked = BTreeSet::new();
+    for (id, revocation) in revocations {
+        for target in revocation.targets.iter().copied() {
+            if conflicted.contains(&target) {
+                problems.push(LedgerProblem::RevokesConflicted {
+                    revocation: *id,
+                    target,
+                });
+            } else if revocations.contains_key(&target) {
+                problems.push(LedgerProblem::RevokesRevocation {
+                    revocation: *id,
+                    target,
+                });
+            } else if decisions.contains_key(&target) {
+                revoked.insert(target);
+            } else {
+                problems.push(LedgerProblem::RevokesUnknown {
+                    revocation: *id,
+                    target,
+                });
+            }
+        }
+    }
+    revoked
+}
+
 /// The records of a project, with their contradictions set aside.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ledger {
@@ -993,64 +1198,13 @@ impl Ledger {
     /// a conflict is set aside for that one target only. A revocation of decisions of
     /// several subjects, or of someone else's, is allowed.
     pub fn build(records: Vec<Record>) -> Self {
-        let mut by_id: BTreeMap<JudgementId, BTreeMap<RecordHash, Record>> = BTreeMap::new();
-        for record in records {
-            by_id
-                .entry(record.id())
-                .or_default()
-                .insert(record.hash(), record);
-        }
-
-        let mut problems = Vec::new();
-        let mut conflicted = BTreeSet::new();
-        let mut decisions = BTreeMap::new();
-        let mut revocations = BTreeMap::new();
-        for (id, group) in by_id {
-            let mut group = group.into_values();
-            match (group.next(), group.next()) {
-                (Some(only), None) => match only {
-                    Record::Decision(d) => {
-                        decisions.insert(id, d);
-                    }
-                    Record::Revocation(r) => {
-                        revocations.insert(id, r);
-                    }
-                },
-                (Some(first), Some(second)) => {
-                    conflicted.insert(id);
-                    problems.push(LedgerProblem::Conflict {
-                        id,
-                        records: TwoOrMore::new(first, second, group.collect()),
-                    });
-                }
-                (None, _) => {}
-            }
-        }
-
-        let mut revoked = BTreeSet::new();
-        for (id, revocation) in &revocations {
-            for target in revocation.targets.iter().copied() {
-                if conflicted.contains(&target) {
-                    problems.push(LedgerProblem::RevokesConflicted {
-                        revocation: *id,
-                        target,
-                    });
-                } else if revocations.contains_key(&target) {
-                    problems.push(LedgerProblem::RevokesRevocation {
-                        revocation: *id,
-                        target,
-                    });
-                } else if decisions.contains_key(&target) {
-                    revoked.insert(target);
-                } else {
-                    problems.push(LedgerProblem::RevokesUnknown {
-                        revocation: *id,
-                        target,
-                    });
-                }
-            }
-        }
-
+        let Grouped {
+            decisions,
+            revocations,
+            conflicted,
+            mut problems,
+        } = Grouped::of(records);
+        let revoked = revoked_by(&revocations, &decisions, &conflicted, &mut problems);
         let subjects = decisions.values().map(|d| d.subject).collect();
         Self {
             decisions,
@@ -1105,7 +1259,7 @@ impl Ledger {
     ///
     /// The one place it is made: freshness reads its order and its cycles from it,
     /// and [`frame_approve`] asks it whether a new approval would close a cycle.
-    pub fn frame_graph(&self) -> FrameGraph {
+    pub(super) fn frame_graph(&self) -> FrameGraph {
         let mut edges: BTreeMap<DocId, BTreeSet<DocId>> = BTreeMap::new();
         for subject in &self.subjects {
             if let DeclaredStatus::Approved { frame, .. } = self.status_of(*subject) {
@@ -1126,13 +1280,13 @@ impl Ledger {
 /// approval stands on what it saw, and a link rewritten since is a change to tell
 /// of, not a path to follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FrameGraph {
+pub(super) struct FrameGraph {
     edges: BTreeMap<DocId, BTreeSet<DocId>>,
 }
 
 impl FrameGraph {
     /// The cycles among the frames, as [`CycleSource::Frames`].
-    pub fn cycles(&self) -> Vec<Cycle> {
+    pub(super) fn cycles(&self) -> Vec<Cycle> {
         cycles_of(CycleSource::Frames, &self.edges)
     }
 
@@ -1140,7 +1294,7 @@ impl FrameGraph {
     /// make, when it would make one that `subject` is in.
     ///
     /// An existing cycle that does not include `subject` is not its concern.
-    pub fn would_cycle(&self, subject: DocId, targets: &BTreeSet<DocId>) -> Option<Cycle> {
+    pub(super) fn would_cycle(&self, subject: DocId, targets: &BTreeSet<DocId>) -> Option<Cycle> {
         let mut edges = self.edges.clone();
         edges.insert(subject, targets.clone());
         cycles_of(CycleSource::Frames, &edges)
@@ -1150,18 +1304,27 @@ impl FrameGraph {
 
     /// The documents of the graph taken in components, upstream first: a component
     /// comes after every component it points at.
-    pub fn components(&self) -> Vec<Vec<DocId>> {
+    pub(super) fn components(&self) -> Vec<Vec<DocId>> {
         components(&self.edges)
     }
 }
 
 /// The frame of an approval of `id`: the facts it would stand on.
 ///
-/// Refuses when the document is not valid, when a `Depends` link cannot be followed,
-/// when the document is in a cycle of links, and when the approval would close a
-/// cycle among the frames of approvals. An upstream that is itself only pending is
-/// not a refusal: the approval is then stale from the start, which freshness says.
-// The refusal is the answer and is read once; it is not a hot path.
+/// Refuses when the document is not valid, when a `Depends` link cannot be followed
+/// (a link to a document that is not valid is one: the build leaves it unresolved),
+/// when it names a document people decided does not stand (denied, deprecated or
+/// retired: an approval on it would not hold from the start), when the document is
+/// in a cycle of links, and when the approval would close a cycle among the frames
+/// of approvals. A resolved link carries the key and hash of what it names, and the
+/// pin is taken from it as it is.
+///
+/// One rule decides what is refused here and what is left to freshness: what a
+/// decision already says about an upstream refuses; how the upstream stands *now*
+/// (an upstream that is only pending, or approved and itself degraded) does not,
+/// because it can change without anyone deciding anything about this document. Such
+/// an approval is stale (or worse) from the start, and freshness says so.
+// The refusal is the answer and is asked once per judgement; it is not a hot path.
 #[allow(clippy::result_large_err)]
 pub fn frame_approve(
     shelf: &Shelf,
@@ -1170,11 +1333,11 @@ pub fn frame_approve(
 ) -> Result<ApproveFrame, FrameRefusal> {
     let doc = shelf
         .state_of(id)
-        .valid_or_kind()
+        .valid_or_failure()
         .map_err(FrameRefusal::NotValid)?;
 
     let mut pins = BTreeSet::new();
-    for (link, states) in shelf.links_of(doc, Propagation::Depends) {
+    for (link, states) in doc.links_of(Propagation::Depends) {
         for state in states {
             match state {
                 LinkState::Unresolved(unresolved) => {
@@ -1183,15 +1346,27 @@ pub fn frame_approve(
                         unresolved: unresolved.clone(),
                     });
                 }
-                LinkState::Resolved { target } => {
-                    if let Some(upstream) = shelf.doc(*target) {
-                        pins.insert(FramePin::taken(
-                            link.clone(),
-                            *target,
-                            upstream.key().clone(),
-                            *upstream.hash(),
-                        ));
+                LinkState::Resolved(upstream) => {
+                    let target = upstream.id();
+                    let not_standing = match ledger.status_of(target) {
+                        DeclaredStatus::Denied { .. } => Some(NotStanding::Denied),
+                        DeclaredStatus::Deprecated { .. } => Some(NotStanding::Deprecated),
+                        DeclaredStatus::Retired { .. } => Some(NotStanding::Retired),
+                        DeclaredStatus::Pending | DeclaredStatus::Approved { .. } => None,
+                    };
+                    if let Some(status) = not_standing {
+                        return Err(FrameRefusal::UpstreamNotStanding {
+                            link: link.clone(),
+                            target,
+                            status,
+                        });
                     }
+                    pins.insert(FramePin::new(
+                        link.clone(),
+                        target,
+                        upstream.key().clone(),
+                        *upstream.hash(),
+                    ));
                 }
             }
         }
@@ -1214,12 +1389,12 @@ pub fn frame_approve(
 /// The frame of a denial or a deprecation of `id`: the hash it would see.
 ///
 /// Refuses when the document is not valid.
-// The refusal is the answer and is read once; it is not a hot path.
+// The refusal is the answer and is asked once per judgement; it is not a hot path.
 #[allow(clippy::result_large_err)]
 pub fn frame_present(shelf: &Shelf, id: DocId) -> Result<PresentFrame, FrameRefusal> {
     let doc = shelf
         .state_of(id)
-        .valid_or_kind()
+        .valid_or_failure()
         .map_err(FrameRefusal::NotValid)?;
     Ok(PresentFrame {
         subject: id,
@@ -1230,11 +1405,11 @@ pub fn frame_present(shelf: &Shelf, id: DocId) -> Result<PresentFrame, FrameRefu
 /// The frame of a retirement of `id`: what is seen of the document now, whatever it
 /// is. It does not fail: a document can be retired after its file is gone.
 pub fn frame_retire(shelf: &Shelf, id: DocId) -> RetireFrame {
-    let seen = match shelf.state_of(id).valid_or_kind() {
-        Ok(doc) => Seen::At(*doc.hash()),
-        Err(DocStateKind::Invalid(_)) => Seen::Invalid,
-        Err(DocStateKind::Unknown(_)) => Seen::Unknown,
-        Err(DocStateKind::Gone) => Seen::Gone,
+    let seen = match shelf.state_of(id) {
+        DocState::Valid(doc) => Seen::At(*doc.hash()),
+        DocState::Invalid(_) => Seen::Not(FailureTag::Invalid),
+        DocState::Gone => Seen::Not(FailureTag::Gone),
+        DocState::Unknown { .. } => Seen::Not(FailureTag::Unknown),
     };
     RetireFrame { subject: id, seen }
 }

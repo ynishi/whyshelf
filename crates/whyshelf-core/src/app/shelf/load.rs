@@ -20,22 +20,25 @@
 
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonEmptyVec;
-use crate::domain::shelf::build::{DocState, DocStateKind, Shelf};
-use crate::domain::shelf::freshness::{Assessment, Standing, assess};
-use crate::domain::shelf::ledger::{JudgedAt, Ledger};
+use crate::domain::shelf::build::Shelf;
+use crate::domain::shelf::freshness::{Assessment, assess};
+use crate::domain::shelf::ledger::{JudgedAt, Ledger, Record};
 use crate::domain::shelf::schema::{BookDir, Schema, SchemaProblem};
 
 use super::error::ShelfError;
 use super::ports::{
     BookSchemaSource, Clock, DocSource, LedgerRead, ShelfPort, ShelfRead, UnreadableRecord, port,
 };
-use super::report::{Health, Names, Presence, Row};
+use super::report::{Health, Names, Row};
 
 /// What the ports gave, built by the domain.
 #[derive(Debug)]
 pub(super) struct Loaded {
     pub(super) shelf: Shelf,
     pub(super) ledger: Ledger,
+    /// The records the ledger was built from, so that a run of judgements can build it
+    /// again with the ones it adds.
+    pub(super) records: Vec<Record>,
     pub(super) unreadable: Vec<UnreadableRecord>,
     pub(super) now: JudgedAt,
 }
@@ -79,11 +82,12 @@ pub(super) async fn load_with<P: ShelfRead>(
         .read()
         .await
         .map_err(port(ShelfPort::LedgerRead))?;
-    let ledger = Ledger::build(contents.records);
+    let ledger = Ledger::build(contents.records.clone());
     let now = ports.clock().now().await.map_err(port(ShelfPort::Clock))?;
     Ok(Loaded {
         shelf,
         ledger,
+        records: contents.records,
         unreadable: contents.unreadable,
         now,
     })
@@ -124,50 +128,17 @@ impl<'a> View<'a> {
         }
     }
 
-    /// What the shelf has for an identity now, from [`Shelf::state_of`] and
-    /// [`DocState::valid_or_kind`].
-    pub(super) fn presence(&self, id: DocId) -> Presence {
-        let state = self.loaded.shelf.state_of(id);
-        match state.valid_or_kind() {
-            Ok(doc) => Presence::Valid {
-                key: doc.key().clone(),
-                origin: doc.origin().clone(),
-                hash: *doc.hash(),
-            },
-            Err(DocStateKind::Invalid(problems)) => Presence::Invalid {
-                files: match &state {
-                    DocState::Invalid(docs) => docs.iter().map(|d| d.origin().clone()).collect(),
-                    _ => Vec::new(),
-                },
-                problems,
-            },
-            Err(DocStateKind::Gone) => Presence::Gone,
-            Err(DocStateKind::Unknown(unreadable)) => Presence::Unknown { unreadable },
-        }
-    }
-
-    /// An identity as the answers show it.
-    ///
-    /// An identity the assessment does not list has no file and no record, so what
-    /// stands about it is what [`Ledger::status_of`] says of an identity with no
-    /// decision: it is pending.
+    /// An identity as the answers show it: each part is one entry of the domain
+    /// ([`DocState::presence`](crate::domain::shelf::build::DocState::presence),
+    /// [`Ledger::status_of`], [`Assessment::standing_of`],
+    /// [`Assessment::notices_of`]), and nothing is decided here.
     pub(super) fn row(&self, id: DocId) -> Row {
         Row {
             id,
-            presence: self.presence(id),
+            presence: self.loaded.shelf.state_of(id).presence(),
             declared: self.loaded.ledger.status_of(id),
-            standing: self
-                .assessment
-                .standings()
-                .get(&id)
-                .cloned()
-                .unwrap_or(Standing::Pending),
-            notices: self
-                .assessment
-                .notices()
-                .get(&id)
-                .cloned()
-                .unwrap_or_default(),
+            standing: self.assessment.standing_of(id),
+            notices: self.assessment.notices_of(id).to_vec(),
         }
     }
 }

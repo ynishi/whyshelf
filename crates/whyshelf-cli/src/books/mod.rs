@@ -81,9 +81,9 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             .stale()
             .await
             .map(|r| print(&output::stale(&r))),
-        BooksCommand::Judge(verb) => match judge_request(verb) {
-            Ok(request) => ShelfApp::new(project)
-                .judge(request)
+        BooksCommand::Judge(verb) => match judge_requests(verb) {
+            Ok(requests) => ShelfApp::new(project)
+                .judge_all(requests)
                 .await
                 .map(|r| print(&output::judged(&r))),
             Err(message) => {
@@ -100,8 +100,9 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
     ExitCode::from(exit as u8)
 }
 
-/// The request of a `judge` command, or why the arguments are not one.
-fn judge_request(verb: Verb) -> Result<JudgeRequest, String> {
+/// The requests of a `judge` command, one per document named, or why the arguments
+/// are not one.
+fn judge_requests(verb: Verb) -> Result<Vec<JudgeRequest>, String> {
     let reason = |text: &Option<String>| {
         text.as_deref()
             .map(|t| NonBlank::new(t).map_err(|e| format!("--reason: {e}")))
@@ -148,11 +149,15 @@ fn judge_request(verb: Verb) -> Result<JudgeRequest, String> {
         .actor
         .map(|a| Actor::new(&a).map_err(|e| format!("--actor `{a}`: {e}")))
         .transpose()?;
-    Ok(JudgeRequest {
-        judgement,
-        reference: common.reference,
-        actor,
-    })
+    Ok(common
+        .references
+        .into_iter()
+        .map(|reference| JudgeRequest {
+            judgement: judgement.clone(),
+            reference,
+            actor: actor.clone(),
+        })
+        .collect())
 }
 
 /// Print an answer as one JSON document on stdout.

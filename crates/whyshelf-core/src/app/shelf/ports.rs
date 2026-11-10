@@ -113,12 +113,18 @@ pub enum UnreadableWhy {
     /// The bytes are not UTF-8 text.
     #[error("the file is not UTF-8 text")]
     NotText,
-    /// The text is not a JSON document the canonical form can be made from (it holds
-    /// a number that is not a whole number of 64 bits, or a key written twice).
+    /// The text is not JSON.
     #[error("the file is not a record in JSON: {detail}")]
     NotJson {
-        /// What the parser said.
+        /// What the parser said (its own wording, for a person to read).
         detail: String,
+    },
+    /// The JSON holds a number that is not a whole number of 64 bits, which the
+    /// canonical form has no place for.
+    #[error("the file holds the number {number}, which is not a whole number of 64 bits")]
+    NotWhole {
+        /// The number as written.
+        number: String,
     },
     /// The form is well made and is not a record.
     #[error("the file is not a record")]

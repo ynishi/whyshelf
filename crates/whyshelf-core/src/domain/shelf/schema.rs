@@ -21,16 +21,26 @@ use thiserror::Error;
 use crate::domain::error::ValueError;
 use crate::domain::id::ShortId;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
+use crate::domain::nonempty::{Count, NonEmptySet, NonEmptyVec, TwoOrMore};
 
+/// The most characters of the name of a book, a field, a link or an enum word.
 const NAME_MAX: usize = 64;
+/// The most characters of a name in the tail of a key (`FR-LATENCY-BUDGET`): its own
+/// limit, which happens to be the same as the one of a name of a field.
+const KEY_NAME_MAX: usize = 64;
+/// The most characters of the prefix of a book's keys.
 const PREFIX_MAX: usize = 16;
 const NUMBER_MAX_DIGITS: usize = 19;
 const SLUG_MAX: usize = 128;
 
+/// The entry of a front matter that holds the identity of a document.
+pub(super) const ID_ENTRY: &str = "id";
+/// The entry of a front matter that holds the key of a document.
+pub(super) const KEY_ENTRY: &str = "key";
+
 /// The names the front matter keeps for itself: a field or a link cannot be called
 /// one of them.
-const RESERVED: [&str; 2] = ["id", "key"];
+const RESERVED: [&str; 2] = [ID_ENTRY, KEY_ENTRY];
 
 /// Why a text is not a name of a book, a field, a link or an enum word.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -141,7 +151,7 @@ name_type!(
 /// The directory of a book, relative to the project root.
 ///
 /// A file belongs to a book when it is under the directory of that book (see
-/// [`Schema::membership`]). Two books cannot share a directory or nest one in the
+/// `Schema::membership`). Two books cannot share a directory or nest one in the
 /// other, so a file belongs to at most one.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BookDir(RelPath);
@@ -193,7 +203,7 @@ pub enum KeyProblem {
     /// The part before the first `-` is not capital letters and digits starting with
     /// a letter, 1 to 16 of them.
     #[error(
-        "`{text}` is not a key prefix: 1 to 16 capital letters and digits, starting with a letter"
+        "`{text}` is not a key prefix: 1 to {PREFIX_MAX} capital letters and digits, starting with a letter"
     )]
     BadPrefix {
         /// The prefix as written.
@@ -222,7 +232,7 @@ pub enum KeyProblem {
     /// A tail that is neither a number nor a name (capital letter first, then capital
     /// letters, digits, `-` and `_`, up to 64).
     #[error(
-        "`{text}` is neither a number nor a name: capital letter first, then capital letters, digits, `-` and `_`, up to 64"
+        "`{text}` is neither a number nor a name: capital letter first, then capital letters, digits, `-` and `_`, up to {KEY_NAME_MAX}"
     )]
     BadTail {
         /// The tail as written.
@@ -299,7 +309,7 @@ impl KeyName {
         let mut chars = text.chars();
         let shaped = chars.next().is_some_and(|c| c.is_ascii_uppercase())
             && chars.all(|c| is_upper_or_digit(c) || c == '-' || c == '_')
-            && text.len() <= NAME_MAX;
+            && text.len() <= KEY_NAME_MAX;
         if shaped {
             Ok(Self(text.to_owned()))
         } else {
@@ -458,7 +468,9 @@ impl KeyPattern {
     }
 }
 
-fn parse_tail(text: &str) -> Result<KeyTail, KeyProblem> {
+/// The tail of a prefixed key: the one reader of its grammar, shared by
+/// [`KeyPattern::parse`] and the reader of a record.
+pub(super) fn parse_tail(text: &str) -> Result<KeyTail, KeyProblem> {
     if !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()) {
         if text.starts_with('0') {
             return Err(KeyProblem::NumberLeadingZero);
@@ -530,7 +542,7 @@ pub enum Cardinality {
 
 impl Cardinality {
     /// Whether a document may write `count` links of this kind.
-    pub fn admits(self, count: usize) -> bool {
+    pub(super) fn admits(self, count: usize) -> bool {
         match self {
             Self::One => count == 1,
             Self::Optional => count <= 1,
@@ -559,6 +571,10 @@ pub enum Propagation {
 pub struct LinkKind {
     /// The book the link points into.
     pub target: BookName,
+    /// The grammar of the keys of that book, put here by [`Schema::validate`] (which
+    /// has refused a link into a book it does not declare), so that a key written in
+    /// the link is read without asking the schema for the book again.
+    pub(super) target_key: KeyPattern,
     /// How many links a document holds.
     pub cardinality: Cardinality,
     /// What the link means for freshness.
@@ -826,11 +842,11 @@ pub enum SchemaProblem {
     },
 }
 
-/// Whether a file belongs to a book.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Membership {
+/// Whether a file belongs to a book: what `Schema::membership` answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Membership<'a> {
     /// The file is under the directory of this book.
-    In(BookName),
+    In(&'a BookSchema),
     /// The file is under no book's directory.
     Outside,
 }
@@ -850,200 +866,27 @@ struct Draft {
     dir: Option<BookDir>,
     key: Option<KeyPattern>,
     fields: BTreeMap<EntryName, FieldDecl>,
-    links: BTreeMap<EntryName, LinkKind>,
+    links: BTreeMap<EntryName, DraftLink>,
     clean: bool,
+}
+
+/// A link of a draft: what is read of the declaration, before the books are known
+/// together (the grammar of the target's keys is added when they are).
+struct DraftLink {
+    target: BookName,
+    cardinality: Cardinality,
+    propagation: Propagation,
 }
 
 impl Draft {
     fn read(decl: BookSchemaDecl, problems: &mut Vec<SchemaProblem>) -> Self {
         let label = decl.name.clone();
         let first_problem = problems.len();
-        let fail = |problem: SchemaProblem, problems: &mut Vec<SchemaProblem>| {
-            problems.push(problem);
-        };
-
-        let name = match BookName::new(&decl.name) {
-            Ok(name) => Some(name),
-            Err(why) => {
-                fail(
-                    SchemaProblem::BadName {
-                        place: NamePlace::Book,
-                        text: decl.name.clone(),
-                        why,
-                    },
-                    problems,
-                );
-                None
-            }
-        };
-        let dir = match BookDir::new(&decl.dir) {
-            Ok(dir) => Some(dir),
-            Err(source) => {
-                fail(
-                    SchemaProblem::BadDir {
-                        book: label.clone(),
-                        source,
-                    },
-                    problems,
-                );
-                None
-            }
-        };
-        let key = match &decl.key {
-            KeyPatternDecl::Slug => Some(KeyPattern::Slug),
-            KeyPatternDecl::Prefixed { prefix } => match KeyPrefix::new(prefix) {
-                Ok(prefix) => Some(KeyPattern::Prefixed(prefix)),
-                Err(why) => {
-                    fail(
-                        SchemaProblem::BadKeyPrefix {
-                            book: label.clone(),
-                            why,
-                        },
-                        problems,
-                    );
-                    None
-                }
-            },
-        };
-
-        let mut fields = BTreeMap::new();
-        for entry in decl.fields {
-            let field_name = match EntryName::new(&entry.name) {
-                Ok(n) => n,
-                Err(why) => {
-                    fail(
-                        SchemaProblem::BadName {
-                            place: NamePlace::Field {
-                                book: label.clone(),
-                            },
-                            text: entry.name,
-                            why,
-                        },
-                        problems,
-                    );
-                    continue;
-                }
-            };
-            let ty = match entry.ty {
-                FieldTypeDecl::Text => FieldType::Text,
-                FieldTypeDecl::Integer => FieldType::Integer,
-                FieldTypeDecl::Bool => FieldType::Bool,
-                FieldTypeDecl::TextList => FieldType::TextList,
-                FieldTypeDecl::Enum(words) => {
-                    let mut set = BTreeSet::new();
-                    let before_words = problems.len();
-                    for word in words {
-                        match FieldWord::new(&word) {
-                            Ok(w) => {
-                                set.insert(w);
-                            }
-                            Err(why) => fail(
-                                SchemaProblem::BadName {
-                                    place: NamePlace::EnumWord {
-                                        book: label.clone(),
-                                        field: entry.name.clone(),
-                                    },
-                                    text: word,
-                                    why,
-                                },
-                                problems,
-                            ),
-                        }
-                    }
-                    match NonEmptySet::from_set(set) {
-                        Ok(set) => FieldType::Enum(set),
-                        Err(_) => {
-                            // A word that broke the grammar was reported above; an
-                            // enum that listed nothing at all is the problem here.
-                            if problems.len() == before_words {
-                                fail(
-                                    SchemaProblem::EmptyEnum {
-                                        book: label.clone(),
-                                        field: entry.name.clone(),
-                                    },
-                                    problems,
-                                );
-                            }
-                            continue;
-                        }
-                    }
-                }
-            };
-            let decl = FieldDecl {
-                ty,
-                presence: entry.presence,
-            };
-            if fields.insert(field_name.clone(), decl).is_some() {
-                fail(
-                    SchemaProblem::DuplicateField {
-                        book: label.clone(),
-                        name: field_name,
-                    },
-                    problems,
-                );
-            }
-        }
-
-        let mut links = BTreeMap::new();
-        for entry in decl.links {
-            let link_name = match EntryName::new(&entry.name) {
-                Ok(n) => n,
-                Err(why) => {
-                    fail(
-                        SchemaProblem::BadName {
-                            place: NamePlace::Link {
-                                book: label.clone(),
-                            },
-                            text: entry.name,
-                            why,
-                        },
-                        problems,
-                    );
-                    continue;
-                }
-            };
-            let target = match BookName::new(&entry.target) {
-                Ok(t) => t,
-                Err(why) => {
-                    fail(
-                        SchemaProblem::BadName {
-                            place: NamePlace::LinkTarget {
-                                book: label.clone(),
-                                link: entry.name,
-                            },
-                            text: entry.target,
-                            why,
-                        },
-                        problems,
-                    );
-                    continue;
-                }
-            };
-            if fields.contains_key(&link_name) {
-                fail(
-                    SchemaProblem::NameCollision {
-                        book: label.clone(),
-                        name: link_name.clone(),
-                    },
-                    problems,
-                );
-            }
-            let kind = LinkKind {
-                target,
-                cardinality: entry.cardinality,
-                propagation: entry.propagation,
-            };
-            if links.insert(link_name.clone(), kind).is_some() {
-                fail(
-                    SchemaProblem::DuplicateLink {
-                        book: label.clone(),
-                        name: link_name,
-                    },
-                    problems,
-                );
-            }
-        }
-
+        let name = read_book_name(&decl.name, problems);
+        let dir = read_dir(&label, &decl.dir, problems);
+        let key = read_key_pattern(&label, &decl.key, problems);
+        let fields = read_fields(&label, decl.fields, problems);
+        let links = read_links(&label, decl.links, &fields, problems);
         Self {
             label,
             name,
@@ -1055,17 +898,306 @@ impl Draft {
         }
     }
 
-    fn into_schema(self) -> Option<BookSchema> {
+    /// The book, when the declaration had no problem of its own. `key_of` gives the
+    /// grammar of the keys of every book whose name and key were read; a link into
+    /// a book that is not there was refused before, so a clean draft finds its
+    /// targets.
+    fn into_schema(self, key_of: &BTreeMap<BookName, KeyPattern>) -> Option<BookSchema> {
         if !self.clean {
             return None;
         }
+        let links = self
+            .links
+            .into_iter()
+            .map(|(name, link)| {
+                let target_key = key_of.get(&link.target)?.clone();
+                let kind = LinkKind {
+                    target: link.target,
+                    target_key,
+                    cardinality: link.cardinality,
+                    propagation: link.propagation,
+                };
+                Some((name, kind))
+            })
+            .collect::<Option<_>>()?;
         Some(BookSchema {
             name: self.name?,
             dir: self.dir?,
             key: self.key?,
             fields: self.fields,
-            links: self.links,
+            links,
         })
+    }
+}
+
+fn read_book_name(text: &str, problems: &mut Vec<SchemaProblem>) -> Option<BookName> {
+    match BookName::new(text) {
+        Ok(name) => Some(name),
+        Err(why) => {
+            problems.push(SchemaProblem::BadName {
+                place: NamePlace::Book,
+                text: text.to_owned(),
+                why,
+            });
+            None
+        }
+    }
+}
+
+fn read_dir(book: &str, text: &str, problems: &mut Vec<SchemaProblem>) -> Option<BookDir> {
+    match BookDir::new(text) {
+        Ok(dir) => Some(dir),
+        Err(source) => {
+            problems.push(SchemaProblem::BadDir {
+                book: book.to_owned(),
+                source,
+            });
+            None
+        }
+    }
+}
+
+fn read_key_pattern(
+    book: &str,
+    decl: &KeyPatternDecl,
+    problems: &mut Vec<SchemaProblem>,
+) -> Option<KeyPattern> {
+    match decl {
+        KeyPatternDecl::Slug => Some(KeyPattern::Slug),
+        KeyPatternDecl::Prefixed { prefix } => match KeyPrefix::new(prefix) {
+            Ok(prefix) => Some(KeyPattern::Prefixed(prefix)),
+            Err(why) => {
+                problems.push(SchemaProblem::BadKeyPrefix {
+                    book: book.to_owned(),
+                    why,
+                });
+                None
+            }
+        },
+    }
+}
+
+/// The fields of a book; one that breaks a rule is reported and left out.
+fn read_fields(
+    book: &str,
+    entries: Vec<FieldEntryDecl>,
+    problems: &mut Vec<SchemaProblem>,
+) -> BTreeMap<EntryName, FieldDecl> {
+    let mut fields = BTreeMap::new();
+    for entry in entries {
+        let name = match EntryName::new(&entry.name) {
+            Ok(name) => name,
+            Err(why) => {
+                problems.push(SchemaProblem::BadName {
+                    place: NamePlace::Field {
+                        book: book.to_owned(),
+                    },
+                    text: entry.name,
+                    why,
+                });
+                continue;
+            }
+        };
+        let Some(ty) = read_field_type(book, &entry.name, entry.ty, problems) else {
+            continue;
+        };
+        let decl = FieldDecl {
+            ty,
+            presence: entry.presence,
+        };
+        if fields.insert(name.clone(), decl).is_some() {
+            problems.push(SchemaProblem::DuplicateField {
+                book: book.to_owned(),
+                name,
+            });
+        }
+    }
+    fields
+}
+
+/// The type of a field; none when it is an enum that cannot be made (the problem is
+/// reported).
+fn read_field_type(
+    book: &str,
+    field: &str,
+    ty: FieldTypeDecl,
+    problems: &mut Vec<SchemaProblem>,
+) -> Option<FieldType> {
+    let words = match ty {
+        FieldTypeDecl::Text => return Some(FieldType::Text),
+        FieldTypeDecl::Integer => return Some(FieldType::Integer),
+        FieldTypeDecl::Bool => return Some(FieldType::Bool),
+        FieldTypeDecl::TextList => return Some(FieldType::TextList),
+        FieldTypeDecl::Enum(words) => words,
+    };
+    let mut set = BTreeSet::new();
+    let before_words = problems.len();
+    for word in words {
+        match FieldWord::new(&word) {
+            Ok(word) => {
+                set.insert(word);
+            }
+            Err(why) => problems.push(SchemaProblem::BadName {
+                place: NamePlace::EnumWord {
+                    book: book.to_owned(),
+                    field: field.to_owned(),
+                },
+                text: word,
+                why,
+            }),
+        }
+    }
+    match NonEmptySet::from_set(set) {
+        Ok(set) => Some(FieldType::Enum(set)),
+        Err(_) => {
+            // A word that broke the grammar was reported above; an enum that listed
+            // nothing at all is the problem here.
+            if problems.len() == before_words {
+                problems.push(SchemaProblem::EmptyEnum {
+                    book: book.to_owned(),
+                    field: field.to_owned(),
+                });
+            }
+            None
+        }
+    }
+}
+
+/// The links of a book; one that breaks a rule is reported and left out. `fields`
+/// are the fields already read, for a name that is both.
+fn read_links(
+    book: &str,
+    entries: Vec<LinkEntryDecl>,
+    fields: &BTreeMap<EntryName, FieldDecl>,
+    problems: &mut Vec<SchemaProblem>,
+) -> BTreeMap<EntryName, DraftLink> {
+    let mut links = BTreeMap::new();
+    for entry in entries {
+        let name = match EntryName::new(&entry.name) {
+            Ok(name) => name,
+            Err(why) => {
+                problems.push(SchemaProblem::BadName {
+                    place: NamePlace::Link {
+                        book: book.to_owned(),
+                    },
+                    text: entry.name,
+                    why,
+                });
+                continue;
+            }
+        };
+        let target = match BookName::new(&entry.target) {
+            Ok(target) => target,
+            Err(why) => {
+                problems.push(SchemaProblem::BadName {
+                    place: NamePlace::LinkTarget {
+                        book: book.to_owned(),
+                        link: entry.name,
+                    },
+                    text: entry.target,
+                    why,
+                });
+                continue;
+            }
+        };
+        if fields.contains_key(&name) {
+            problems.push(SchemaProblem::NameCollision {
+                book: book.to_owned(),
+                name: name.clone(),
+            });
+        }
+        let link = DraftLink {
+            target,
+            cardinality: entry.cardinality,
+            propagation: entry.propagation,
+        };
+        if links.insert(name.clone(), link).is_some() {
+            problems.push(SchemaProblem::DuplicateLink {
+                book: book.to_owned(),
+                name,
+            });
+        }
+    }
+    links
+}
+
+/// The names of the books declared, each once; a name written twice is reported
+/// (once, however many times it is written).
+fn declared_names<'a>(
+    drafts: &'a [Draft],
+    problems: &mut Vec<SchemaProblem>,
+) -> BTreeSet<&'a BookName> {
+    let mut seen = BTreeSet::new();
+    let mut reported = BTreeSet::new();
+    for name in drafts.iter().filter_map(|d| d.name.as_ref()) {
+        if !seen.insert(name) && reported.insert(name) {
+            problems.push(SchemaProblem::DuplicateBook { name: name.clone() });
+        }
+    }
+    seen
+}
+
+/// A link into a book that is not declared, and a `Replaces` link that leaves its
+/// own book.
+fn check_links(
+    drafts: &[Draft],
+    declared: &BTreeSet<&BookName>,
+    problems: &mut Vec<SchemaProblem>,
+) {
+    for draft in drafts {
+        for (link, kind) in &draft.links {
+            if !declared.contains(&kind.target) {
+                problems.push(SchemaProblem::UnknownLinkTarget {
+                    book: draft.label.clone(),
+                    link: link.clone(),
+                    target: kind.target.clone(),
+                });
+            }
+            if kind.propagation == Propagation::Replaces
+                && draft.name.as_ref().is_some_and(|own| *own != kind.target)
+            {
+                problems.push(SchemaProblem::ReplacesForeign {
+                    book: draft.label.clone(),
+                    link: link.clone(),
+                    target: kind.target.clone(),
+                });
+            }
+        }
+    }
+}
+
+/// Two or more books that use one key prefix.
+fn check_prefixes(drafts: &[Draft], problems: &mut Vec<SchemaProblem>) {
+    let mut by_prefix: BTreeMap<&KeyPrefix, BTreeSet<&BookName>> = BTreeMap::new();
+    for draft in drafts {
+        if let (Some(name), Some(KeyPattern::Prefixed(prefix))) = (&draft.name, &draft.key) {
+            by_prefix.entry(prefix).or_default().insert(name);
+        }
+    }
+    for (prefix, books) in by_prefix {
+        if let Count::Many(books) = Count::of(books.into_iter().cloned()) {
+            problems.push(SchemaProblem::PrefixClash {
+                prefix: prefix.clone(),
+                books,
+            });
+        }
+    }
+}
+
+/// Two books whose directories are the same or nest.
+fn check_dirs(drafts: &[Draft], problems: &mut Vec<SchemaProblem>) {
+    for (i, a) in drafts.iter().enumerate() {
+        for b in &drafts[i + 1..] {
+            if let (Some(an), Some(ad), Some(bn), Some(bd)) = (&a.name, &a.dir, &b.name, &b.dir)
+                && an != bn
+                && ad.overlaps(bd)
+            {
+                problems.push(SchemaProblem::DirOverlap {
+                    first: an.clone(),
+                    second: bn.clone(),
+                });
+            }
+        }
     }
 }
 
@@ -1087,72 +1219,21 @@ impl Schema {
             .map(|decl| Draft::read(decl, &mut problems))
             .collect();
 
-        let mut seen = BTreeSet::new();
-        let mut reported = BTreeSet::new();
-        for name in drafts.iter().filter_map(|d| d.name.as_ref()) {
-            if !seen.insert(name) && reported.insert(name) {
-                problems.push(SchemaProblem::DuplicateBook { name: name.clone() });
-            }
-        }
+        let declared = declared_names(&drafts, &mut problems);
+        check_links(&drafts, &declared, &mut problems);
+        check_prefixes(&drafts, &mut problems);
+        check_dirs(&drafts, &mut problems);
 
-        for draft in &drafts {
-            for (link, kind) in &draft.links {
-                if !seen.contains(&kind.target) {
-                    problems.push(SchemaProblem::UnknownLinkTarget {
-                        book: draft.label.clone(),
-                        link: link.clone(),
-                        target: kind.target.clone(),
-                    });
-                }
-                if kind.propagation == Propagation::Replaces
-                    && draft.name.as_ref().is_some_and(|own| *own != kind.target)
-                {
-                    problems.push(SchemaProblem::ReplacesForeign {
-                        book: draft.label.clone(),
-                        link: link.clone(),
-                        target: kind.target.clone(),
-                    });
-                }
-            }
+        if let Ok(problems) = NonEmptyVec::from_vec(problems) {
+            return Err(problems);
         }
-
-        let mut by_prefix: BTreeMap<&KeyPrefix, BTreeSet<&BookName>> = BTreeMap::new();
-        for draft in &drafts {
-            if let (Some(name), Some(KeyPattern::Prefixed(prefix))) = (&draft.name, &draft.key) {
-                by_prefix.entry(prefix).or_default().insert(name);
-            }
-        }
-        for (prefix, books) in by_prefix {
-            let mut books = books.into_iter().cloned();
-            if let (Some(first), Some(second)) = (books.next(), books.next()) {
-                problems.push(SchemaProblem::PrefixClash {
-                    prefix: prefix.clone(),
-                    books: TwoOrMore::new(first, second, books.collect()),
-                });
-            }
-        }
-
-        for (i, a) in drafts.iter().enumerate() {
-            for b in &drafts[i + 1..] {
-                if let (Some(an), Some(ad), Some(bn), Some(bd)) = (&a.name, &a.dir, &b.name, &b.dir)
-                    && an != bn
-                    && ad.overlaps(bd)
-                {
-                    problems.push(SchemaProblem::DirOverlap {
-                        first: an.clone(),
-                        second: bn.clone(),
-                    });
-                }
-            }
-        }
-
-        let mut iter = problems.into_iter();
-        if let Some(head) = iter.next() {
-            return Err(NonEmptyVec::new(head, iter.collect()));
-        }
+        let key_of: BTreeMap<BookName, KeyPattern> = drafts
+            .iter()
+            .filter_map(|d| Some((d.name.clone()?, d.key.clone()?)))
+            .collect();
         let books = drafts
             .into_iter()
-            .filter_map(Draft::into_schema)
+            .filter_map(|draft| draft.into_schema(&key_of))
             .map(|book| (book.name.clone(), book))
             .collect();
         Ok(Self { books })
@@ -1161,23 +1242,20 @@ impl Schema {
     /// The book a file belongs to: the one whose directory it is under.
     ///
     /// The one entry of the question; the shelf asks it of every file it reads.
-    pub fn membership(&self, path: &RelPath) -> Membership {
+    pub(super) fn membership(&self, path: &RelPath) -> Membership<'_> {
         self.books
             .values()
             .find(|book| book.dir.contains(path))
-            .map_or(Membership::Outside, |book| {
-                Membership::In(book.name.clone())
-            })
+            .map_or(Membership::Outside, Membership::In)
     }
 
-    /// A book by name.
-    pub fn book(&self, name: &BookName) -> Option<&BookSchema> {
+    /// A book by name, given as a [`BookName`] or as the text of one.
+    pub fn book<Q>(&self, name: &Q) -> Option<&BookSchema>
+    where
+        BookName: Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
         self.books.get(name)
-    }
-
-    /// A book by the text of its name (what a person typed).
-    pub fn book_named(&self, text: &str) -> Option<&BookSchema> {
-        self.books.get(text)
     }
 
     /// The books, by name.

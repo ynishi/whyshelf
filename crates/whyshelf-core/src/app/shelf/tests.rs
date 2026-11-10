@@ -1,14 +1,21 @@
 //! Tests of the use cases of the shelf, over the in-memory fake.
 
+use crate::domain::canon::Canon;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::freshness::{Cause, Freshness, Severity, Standing};
 use crate::domain::shelf::ledger::{DeclaredStatus, JudgedAt, Record};
 
 use super::fake_tests::{FakeShelf, block_on, decls, docid, fr, sp};
-use super::{BooksCheck, ErrorClass, JudgeRequest, Judgement, Presence, ShelfApp, ShelfError};
+use super::{BooksCheck, ErrorClass, JudgeRequest, Judgement, ShelfApp, ShelfError};
+use crate::domain::shelf::build::DocPresence;
+use crate::domain::shelf::lookup::Reference;
 
 fn app(files: Vec<crate::domain::shelf::build::DocReading>) -> ShelfApp<FakeShelf> {
     ShelfApp::new(FakeShelf::new().with_files(files))
+}
+
+fn r(text: &str) -> Reference {
+    text.parse().unwrap()
 }
 
 fn approve(reference: &str) -> JudgeRequest {
@@ -17,7 +24,7 @@ fn approve(reference: &str) -> JudgeRequest {
             until: None,
             reason: None,
         },
-        reference: reference.to_owned(),
+        reference: r(reference),
         actor: None,
     }
 }
@@ -34,7 +41,7 @@ fn books_check_of_a_sound_shelf_is_clean_and_counts_the_documents() {
     assert!(
         books
             .iter()
-            .all(|book| book.valid == 1 && book.invalid == 0)
+            .all(|book| book.tally.valid == 1 && book.tally.invalid == 0)
     );
 }
 
@@ -68,13 +75,21 @@ fn status_lists_every_document_pending_before_any_decision() {
 #[test]
 fn get_finds_a_document_by_its_key_and_says_what_is_not_there() {
     let app = app(vec![fr(1, "slow", &[])]);
-    let report = block_on(app.get("FR-1")).unwrap();
+    let report = block_on(app.get(&r("FR-1"))).unwrap();
     assert_eq!(report.row.id, docid(1));
-    assert!(matches!(report.row.presence, Presence::Valid { .. }));
+    assert!(matches!(report.row.presence, DocPresence::Valid { .. }));
     assert!(report.doc.is_some());
 
-    let err = block_on(app.get("FR-99")).unwrap_err();
+    let err = block_on(app.get(&r("FR-99"))).unwrap_err();
     assert!(matches!(err, ShelfError::NotFound { .. }));
+    assert_eq!(err.class(), ErrorClass::Request);
+}
+
+#[test]
+fn get_of_a_book_nobody_declared_is_an_unknown_book() {
+    let app = app(vec![fr(1, "slow", &[])]);
+    let err = block_on(app.get(&r("nobook:X-1"))).unwrap_err();
+    assert!(matches!(&err, ShelfError::UnknownBook { book, .. } if book.as_str() == "nobook"));
     assert_eq!(err.class(), ErrorClass::Request);
 }
 
@@ -82,7 +97,7 @@ fn get_finds_a_document_by_its_key_and_says_what_is_not_there() {
 fn get_of_a_short_id_two_documents_end_with_is_ambiguous() {
     let other = 0x1_0000_0001;
     let app = app(vec![fr(1, "slow", &[]), fr(other, "fast", &[])]);
-    let err = block_on(app.get("00000001")).unwrap_err();
+    let err = block_on(app.get(&r("00000001"))).unwrap_err();
     match err {
         ShelfError::Ambiguous { candidates, .. } => assert_eq!(candidates.len(), 2),
         other => panic!("expected an ambiguous reference, got {other:?}"),
@@ -100,7 +115,7 @@ fn an_approval_is_appended_and_holds_until_an_upstream_is_edited() {
 
     let report = block_on(app.stale()).unwrap();
     assert!(report.entries.is_empty());
-    let row = block_on(app.get("SP-2")).unwrap().row;
+    let row = block_on(app.get(&r("SP-2"))).unwrap().row;
     assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
 
     // The finding is edited: its approval no longer holds, and the spec that stands
@@ -115,10 +130,11 @@ fn an_approval_is_appended_and_holds_until_an_upstream_is_edited() {
         .iter()
         .find(|e| e.row.id == docid(2))
         .unwrap();
-    let Standing::Approved(Freshness::Degraded { level, causes }) = &spec.row.standing else {
+    let Standing::Approved(Freshness::Degraded(degradation)) = &spec.row.standing else {
         panic!("the approval of the spec should be degraded");
     };
-    assert_eq!(*level, Severity::Stale);
+    let causes = degradation.causes();
+    assert_eq!(degradation.level(), Severity::Stale);
     assert!(causes.iter().any(
         |cause| matches!(cause, Cause::UpstreamChanged { pin, .. } if pin.target() == docid(1))
     ));
@@ -149,16 +165,19 @@ fn a_denial_and_a_retirement_are_recorded_with_their_reasons() {
         judgement: Judgement::Deny {
             reason: Some(reason),
         },
-        reference: "FR-1".to_owned(),
+        reference: r("FR-1"),
         actor: None,
     }))
     .unwrap();
-    let row = block_on(app.get("FR-1")).unwrap().row;
+    let row = block_on(app.get(&r("FR-1"))).unwrap().row;
     assert_eq!(row.standing, Standing::Denied);
     assert!(matches!(row.declared, DeclaredStatus::Denied { .. }));
     let records = app.ports().records();
     assert_eq!(records.len(), 1);
-    assert!(matches!(&records[0], Record::Decision(d) if d.reason().is_some()));
+    assert!(matches!(&records[0], Record::Decision(_)));
+    assert!(
+        matches!(records[0].to_canon(), Canon::Map(m) if matches!(m.get("reason"), Some(Canon::Str(_))))
+    );
 }
 
 #[test]
@@ -169,11 +188,11 @@ fn an_approval_with_an_expiry_lapses_when_the_clock_reaches_it() {
             until: Some(JudgedAt::new(2000)),
             reason: None,
         },
-        reference: "FR-1".to_owned(),
+        reference: r("FR-1"),
         actor: None,
     }))
     .unwrap();
-    let held = block_on(app.get("FR-1")).unwrap().row;
+    let held = block_on(app.get(&r("FR-1"))).unwrap().row;
     assert_eq!(held.standing, Standing::Approved(Freshness::Fresh));
 
     app.ports().set_now(3000);
@@ -189,7 +208,7 @@ fn revoke_withdraws_the_standing_decision_and_needs_one() {
         judgement: Judgement::Revoke {
             reason: NonBlank::new(why).unwrap(),
         },
-        reference: "FR-1".to_owned(),
+        reference: r("FR-1"),
         actor: None,
     };
     let err = block_on(app.judge(revoke("changed my mind"))).unwrap_err();
@@ -199,9 +218,54 @@ fn revoke_withdraws_the_standing_decision_and_needs_one() {
     block_on(app.judge(approve("FR-1"))).unwrap();
     let judged = block_on(app.judge(revoke("changed my mind"))).unwrap();
     assert!(matches!(judged.record, Record::Revocation(_)));
-    let row = block_on(app.get("FR-1")).unwrap().row;
+    let row = block_on(app.get(&r("FR-1"))).unwrap().row;
     assert_eq!(row.standing, Standing::Pending);
     assert_eq!(app.ports().record_count(), 2);
+}
+
+#[test]
+fn judge_all_approves_an_upstream_and_its_downstream_in_one_run() {
+    let mut app = app(vec![fr(1, "slow", &[]), sp(2, "cache", &["FR-1"])]);
+    let judged = block_on(app.judge_all(vec![approve("FR-1"), approve("SP-2")])).unwrap();
+    assert_eq!(judged.len(), 2);
+    assert_eq!(judged[0].subject, docid(1));
+    assert_eq!(judged[1].subject, docid(2));
+    assert_eq!(app.ports().append_count(), 2);
+    assert_eq!(app.ports().record_count(), 2);
+
+    // The spec was framed on the approval of the finding made one step before it, so
+    // it holds, and it is told when that finding is edited.
+    let row = block_on(app.get(&r("SP-2"))).unwrap().row;
+    assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
+    assert!(block_on(app.stale()).unwrap().entries.is_empty());
+    app.ports().edit(fr(1, "slower", &[]), 1);
+    let ids: Vec<_> = block_on(app.stale())
+        .unwrap()
+        .entries
+        .iter()
+        .map(|e| e.row.id)
+        .collect();
+    assert_eq!(ids, vec![docid(1), docid(2)]);
+}
+
+#[test]
+fn judge_all_writes_nothing_when_a_later_request_is_refused() {
+    let mut app = app(vec![fr(1, "slow", &[]), sp(2, "cache", &["FR-1"])]);
+    let err = block_on(app.judge_all(vec![approve("FR-1"), approve("SP-9")])).unwrap_err();
+    assert!(matches!(err, ShelfError::NotFound { .. }));
+    assert_eq!(app.ports().append_count(), 0);
+    assert_eq!(app.ports().record_count(), 0);
+    // The first, alone, was sound: the refusal is the second's.
+    block_on(app.judge(approve("FR-1"))).unwrap();
+    assert_eq!(app.ports().record_count(), 1);
+}
+
+#[test]
+fn judge_all_of_nothing_is_an_empty_run_that_writes_nothing() {
+    let mut app = app(vec![fr(1, "slow", &[])]);
+    let judged = block_on(app.judge_all(vec![])).unwrap();
+    assert!(judged.is_empty());
+    assert_eq!(app.ports().append_count(), 0);
 }
 
 #[test]

@@ -51,8 +51,8 @@ pub use ports::{
     LedgerRead, ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
 };
 pub use report::{
-    BookCount, BooksCheck, DownstreamEdge, GetReport, Health, Judged, Names, Presence, Row,
-    StaleEntry, StaleReport, StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
+    BookCount, BooksCheck, DownstreamEdge, GetReport, Health, Judged, Names, Row, StaleEntry,
+    StaleReport, StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
 };
 
 /// The use cases of a shelf over a bundle of ports.

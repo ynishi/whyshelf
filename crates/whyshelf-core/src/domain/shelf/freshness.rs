@@ -11,13 +11,14 @@
 //! where the document is now: only an approval has a [`Freshness`], and an approval
 //! that no longer holds is [`Degraded`](Freshness::Degraded) with the [`Cause`]s that
 //! say why, each a single fact. How strong a cause is is
-//! [`Cause::severity`]'s table, and the level of a freshness is the strongest of its
-//! causes ([`Freshness::from_causes`]); no other place assigns either.
+//! [`Cause::severity`]'s table, and the level of a [`Degradation`] is the strongest
+//! of its causes, computed from them ([`Degradation::level`]); no other place assigns
+//! either, and [`Freshness::from_causes`] is the only maker of a degradation.
 //!
 //! # The graph it travels
 //!
 //! Staleness travels along the *frames* of approvals (what each approval pinned), in
-//! the order of [`Ledger::frame_graph`], upstream first. It does not travel along the
+//! the order of the ledger's graph of frames, upstream first. It does not travel along the
 //! links the shelf holds now: an approval stands on what it saw, and a link rewritten
 //! since is told by [`Cause::LinksChanged`], not followed.
 //!
@@ -53,18 +54,18 @@
 //! - an expiry: `now >= expires`.
 //!
 //! Every fact is said once. Notices ([`Notice`]) are what is worth knowing and does
-//! not change a freshness: they come from `notices_of`'s table.
+//! not change a freshness: they come from `collect_notices`'s table.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
-use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 
-use super::build::{Cycle, CycleId, DocProblem, DocStateKind, InvalidDoc, Shelf};
-use super::doc::{Doc, DocHash, DocKey, FramePin, LinkState, UnresolvedLink, UnresolvedWhy};
-use super::ledger::{DeclaredStatus, JudgedAt, Ledger, LedgerProblem};
-use super::schema::{BookName, EntryName, Propagation};
+use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
+use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
+use super::graph::{Cycle, CycleId};
+use super::ledger::{DeclaredStatus, FramePin, JudgedAt, Ledger, LedgerProblem};
+use super::schema::{EntryName, Propagation};
 
 /// The documents that take the place of a deprecated one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,36 +139,16 @@ pub enum Cause {
         /// The hash it has now.
         now: DocHash,
     },
-    /// The document's files are invalid: every problem of every file with its
-    /// identity.
-    SelfInvalid {
-        /// The problems.
-        problems: NonEmptyVec<DocProblem>,
-    },
-    /// No file has the document's identity.
-    SelfGone,
-    /// No file is known to have the identity, but some file's identity could not be
-    /// read.
-    SelfUnknown {
-        /// The files whose identity could not be read.
-        unreadable: NonEmptyVec<RelPath>,
-    },
-    /// A pinned upstream has no file.
-    UpstreamGone {
+    /// The document itself is no valid document now: its files are invalid (with
+    /// every problem of every file with its identity), no file has it, or it cannot
+    /// be told whether one has.
+    SelfNotValid(DocFailure),
+    /// A pinned upstream is no valid document now, in the same three ways.
+    UpstreamNotValid {
         /// The pin.
         pin: FramePin,
-    },
-    /// A pinned upstream is invalid.
-    UpstreamInvalid {
-        /// The pin.
-        pin: FramePin,
-    },
-    /// It cannot be told whether a pinned upstream has a file.
-    UpstreamUnknown {
-        /// The pin.
-        pin: FramePin,
-        /// The files whose identity could not be read.
-        unreadable: NonEmptyVec<RelPath>,
+        /// Why it is not valid.
+        failure: DocFailure,
     },
     /// A pinned upstream is not what was pinned.
     UpstreamChanged {
@@ -222,8 +203,8 @@ impl Cause {
     /// | cause | strength |
     /// |---|---|
     /// | `SelfChanged`, `UpstreamChanged` | `Stale` |
-    /// | `SelfInvalid`, `SelfGone`, `SelfUnknown` | `Broken` |
-    /// | `UpstreamGone`, `UpstreamInvalid`, `UpstreamUnknown` | `Broken` |
+    /// | `SelfNotValid` (invalid, gone or unknown) | `Broken` |
+    /// | `UpstreamNotValid` (invalid, gone or unknown) | `Broken` |
     /// | `UpstreamDeclared` of `Pending`, or of `Deprecated` with successors | `Stale` |
     /// | `UpstreamDeclared` of `Denied`, `Retired`, or of `Deprecated` with none | `Broken` |
     /// | `Via` | the strength it carries (`Stale` or `Broken`; an upstream that is only `Expired` makes no `Via`) |
@@ -233,12 +214,7 @@ impl Cause {
     pub fn severity(&self) -> Severity {
         match self {
             Self::SelfChanged { .. } | Self::UpstreamChanged { .. } => Severity::Stale,
-            Self::SelfInvalid { .. } | Self::SelfGone | Self::SelfUnknown { .. } => {
-                Severity::Broken
-            }
-            Self::UpstreamGone { .. }
-            | Self::UpstreamInvalid { .. }
-            | Self::UpstreamUnknown { .. } => Severity::Broken,
+            Self::SelfNotValid(_) | Self::UpstreamNotValid { .. } => Severity::Broken,
             Self::UpstreamDeclared { status, .. } => match status {
                 UpstreamStatus::Pending
                 | UpstreamStatus::Deprecated {
@@ -264,33 +240,56 @@ impl Cause {
     }
 }
 
+/// Why an approval does not hold: one or more causes, and the level they come to.
+///
+/// The causes are private and the level is computed from them, so a degradation
+/// cannot claim a level its causes do not have. [`Freshness::from_causes`] is the
+/// only way to make one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Degradation {
+    causes: NonEmptyVec<Cause>,
+}
+
+impl Degradation {
+    /// The strongest [`Cause::severity`] among the causes.
+    pub fn level(&self) -> Severity {
+        let first = self.causes.first().severity();
+        self.causes
+            .iter()
+            .map(Cause::severity)
+            .fold(first, Severity::max)
+    }
+
+    /// The causes, in the order they were found.
+    pub fn causes(&self) -> &NonEmptyVec<Cause> {
+        &self.causes
+    }
+}
+
 /// Whether an approval holds.
-// `Fresh` is the common value and carries nothing; boxing the causes would put an
-// allocation in every reading of a degraded one.
+// `Degraded` holds its first `Cause` inline (the enum is as large as that), and `Fresh`
+// holds nothing. There is one `Freshness` per approved document, kept in a map by
+// `assess`: the cost is the size of the largest variant once per document, and boxing
+// the causes would trade it for an allocation in each degraded approval and a deref at
+// each access to its causes.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Freshness {
     /// It holds.
     Fresh,
     /// It does not, for these causes, at the level of the strongest.
-    Degraded {
-        /// The strongest severity among the causes.
-        level: Severity,
-        /// The causes.
-        causes: NonEmptyVec<Cause>,
-    },
+    Degraded(Degradation),
 }
 
 impl Freshness {
     /// The freshness of an approval with these causes: `Fresh` when there are none,
     /// otherwise degraded at the strongest of them.
     ///
-    /// The only place a level is made.
+    /// The only place a [`Degradation`] is made.
     pub fn from_causes(causes: Vec<Cause>) -> Self {
-        let level = causes.iter().map(Cause::severity).max();
-        match (level, NonEmptyVec::from_vec(causes)) {
-            (Some(level), Ok(causes)) => Self::Degraded { level, causes },
-            _ => Self::Fresh,
+        match NonEmptyVec::from_vec(causes) {
+            Ok(causes) => Self::Degraded(Degradation { causes }),
+            Err(_) => Self::Fresh,
         }
     }
 
@@ -298,7 +297,7 @@ impl Freshness {
     pub fn level(&self) -> FreshnessLevel {
         match self {
             Self::Fresh => FreshnessLevel::Fresh,
-            Self::Degraded { level, .. } => match level {
+            Self::Degraded(degradation) => match degradation.level() {
                 Severity::Expired => FreshnessLevel::Expired,
                 Severity::Stale => FreshnessLevel::Stale,
                 Severity::Broken => FreshnessLevel::Broken,
@@ -321,6 +320,9 @@ pub enum FreshnessLevel {
 }
 
 /// Where a document stands: what was decided, and for an approval whether it holds.
+// As for `Freshness`, which `Approved` holds inline: one `Standing` per document, and
+// boxing the approval would add an allocation to each one.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Standing {
     /// No decision stands.
@@ -421,9 +423,22 @@ impl Assessment {
         &self.standings
     }
 
-    /// The notices of each document that has any.
-    pub fn notices(&self) -> &BTreeMap<DocId, Vec<Notice>> {
-        &self.notices
+    /// Where one identity stands: the one answer for any identity, listed or not.
+    ///
+    /// The assessment lists every identity the ledger or the shelf knows. One it does
+    /// not list has no file and no record, so no one decided anything about it: it is
+    /// [`Standing::Pending`], as [`Ledger::status_of`] says of an identity with no
+    /// decision.
+    pub fn standing_of(&self, id: DocId) -> Standing {
+        self.standings
+            .get(&id)
+            .cloned()
+            .unwrap_or(Standing::Pending)
+    }
+
+    /// The notices about one identity; none when it has none or is not listed.
+    pub fn notices_of(&self, id: DocId) -> &[Notice] {
+        self.notices.get(&id).map_or(&[], Vec::as_slice)
     }
 
     /// The cycles among links and among frames.
@@ -449,6 +464,13 @@ impl Assessment {
     /// (a `Via` is made only when the upstream is, so an expiry that does not
     /// propagate is not a root). A document is visited once, so a diamond of
     /// upstreams returns its root once and a large graph cannot make a large answer.
+    ///
+    /// One event is one root. An `UpstreamChanged` is the edit of the upstream seen
+    /// from below; when the upstream's own causes hold the same edit (a `SelfChanged`
+    /// from the hash this approval pinned to the hash it has now), the `Via` beside it
+    /// leads to that edit and the `UpstreamChanged` is not a root of its own. When the
+    /// upstream was approved again after the edit, it holds no such `SelfChanged`, and
+    /// the edit is a root: the approval below saw the older text.
     pub fn roots_of(&self, id: DocId) -> Vec<RootCause> {
         let mut roots = Vec::new();
         let mut visited = BTreeSet::new();
@@ -467,15 +489,19 @@ impl Assessment {
         if !visited.insert(id) {
             return;
         }
-        let Some(Standing::Approved(Freshness::Degraded { causes, .. })) = self.standings.get(&id)
+        let Some(Standing::Approved(Freshness::Degraded(degradation))) = self.standings.get(&id)
         else {
             return;
         };
-        for cause in causes.iter() {
+        for cause in degradation.causes().iter() {
             if let Cause::Via { pin, .. } = cause {
                 let mut onward = path.clone();
                 onward.push(pin.target());
                 self.collect_roots(pin.target(), onward, false, visited, roots);
+            } else if let Cause::UpstreamChanged { pin, now } = cause
+                && self.upstream_holds_edit(pin, now)
+            {
+                // The same edit is a root further up, through the `Via` beside it.
             } else if is_start || cause.severity() >= Severity::Stale {
                 roots.push(RootCause {
                     path: path.clone(),
@@ -484,23 +510,35 @@ impl Assessment {
             }
         }
     }
-}
 
-/// Which way a pinned upstream was lost, for the exclusions of the link rule.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Lost {
-    Gone,
-    Invalid,
-    Unknown,
+    /// Whether the upstream `pin` names counts, among its own causes, the edit from
+    /// the pinned hash to `now`.
+    fn upstream_holds_edit(&self, pin: &FramePin, now: &DocHash) -> bool {
+        let Some(Standing::Approved(Freshness::Degraded(degradation))) =
+            self.standings.get(&pin.target())
+        else {
+            return false;
+        };
+        degradation.causes().iter().any(|cause| {
+            matches!(cause, Cause::SelfChanged { approved, now: then }
+                if approved == pin.hash() && then == now)
+        })
+    }
 }
 
 /// What `assess` reads while it works.
 struct Cx<'a> {
     shelf: &'a Shelf,
-    ledger: &'a Ledger,
     now: JudgedAt,
     in_cycle: BTreeMap<DocId, Vec<CycleId>>,
     component: BTreeMap<DocId, usize>,
+}
+
+/// The standings, and the declared statuses they were made from, of every document.
+struct Standings {
+    standings: BTreeMap<DocId, Standing>,
+    /// What each was read as, once: a notice asks it again of nobody.
+    statuses: BTreeMap<DocId, DeclaredStatus>,
 }
 
 /// The standing of every document, from the shelf and the ledger, at `now`.
@@ -511,27 +549,52 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt) -> Assessment {
     let graph = ledger.frame_graph();
     let mut cycles: Vec<Cycle> = shelf.cycles().to_vec();
     cycles.extend(graph.cycles());
+    let components = graph.components();
+    let cx = Cx {
+        shelf,
+        now,
+        in_cycle: cycle_ids_by_member(&cycles),
+        component: component_of_each(&components),
+    };
+
+    let order = travel_order(shelf, ledger, components);
+    let Standings {
+        standings,
+        statuses,
+    } = stand_in_order(&cx, ledger, order);
+    let notices = collect_notices(&cx, &standings, &statuses);
+    Assessment {
+        standings,
+        notices,
+        cycles,
+        invalid: invalid_files(shelf),
+        ledger_problems: ledger.problems().to_vec(),
+    }
+}
+
+/// The cycles each document is a member of.
+fn cycle_ids_by_member(cycles: &[Cycle]) -> BTreeMap<DocId, Vec<CycleId>> {
     let mut in_cycle: BTreeMap<DocId, Vec<CycleId>> = BTreeMap::new();
-    for cycle in &cycles {
+    for cycle in cycles {
         for member in cycle.ids() {
             in_cycle.entry(member).or_default().push(cycle.id());
         }
     }
+    in_cycle
+}
 
-    let components = graph.components();
-    let component: BTreeMap<DocId, usize> = components
+/// The place in the components of the frame graph of each document that is in it.
+fn component_of_each(components: &[Vec<DocId>]) -> BTreeMap<DocId, usize> {
+    components
         .iter()
         .enumerate()
         .flat_map(|(i, members)| members.iter().map(move |id| (*id, i)))
-        .collect();
-    let cx = Cx {
-        shelf,
-        ledger,
-        now,
-        in_cycle,
-        component,
-    };
+        .collect()
+}
 
+/// The order the documents are judged in: those of the frame graph upstream first,
+/// then every other identity the ledger or the shelf knows.
+fn travel_order(shelf: &Shelf, ledger: &Ledger, components: Vec<Vec<DocId>>) -> Vec<DocId> {
     let ids: BTreeSet<DocId> = ledger
         .subjects()
         .iter()
@@ -545,14 +608,20 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt) -> Assessment {
         .collect();
     let ordered: BTreeSet<DocId> = order.iter().copied().collect();
     order.extend(ids.iter().filter(|id| !ordered.contains(*id)).copied());
+    order
+}
 
+/// The standing of each document in `order`, an approval after what it stands on.
+fn stand_in_order(cx: &Cx<'_>, ledger: &Ledger, order: Vec<DocId>) -> Standings {
     let mut standings: BTreeMap<DocId, Standing> = BTreeMap::new();
+    let mut statuses = BTreeMap::new();
     for id in order {
-        let standing = match ledger.status_of(id) {
+        let status = ledger.status_of(id);
+        let standing = match &status {
             DeclaredStatus::Pending => Standing::Pending,
             DeclaredStatus::Denied { .. } => Standing::Denied,
             DeclaredStatus::Deprecated { .. } => Standing::Deprecated {
-                successors: Successors::of(shelf, ledger, id),
+                successors: Successors::of(cx.shelf, ledger, id),
             },
             DeclaredStatus::Retired { .. } => Standing::Retired,
             DeclaredStatus::Approved {
@@ -560,25 +629,26 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt) -> Assessment {
                 frame,
                 expires,
                 ..
-            } => Standing::Approved(freshness_of(&cx, id, &seen, &frame, expires, &standings)),
+            } => Standing::Approved(freshness_of(cx, id, seen, frame, *expires, &standings)),
         };
         standings.insert(id, standing);
+        statuses.insert(id, status);
     }
+    Standings {
+        standings,
+        statuses,
+    }
+}
 
-    let notices = notices_of(&cx, &standings);
-    let invalid = shelf
+/// Every invalid file, whether or not its identity could be read.
+fn invalid_files(shelf: &Shelf) -> Vec<InvalidDoc> {
+    shelf
         .invalid()
         .values()
         .flat_map(|docs| docs.iter().cloned())
         .chain(shelf.unreadable().iter().cloned())
-        .collect();
-    Assessment {
-        standings,
-        notices,
-        cycles,
-        invalid,
-        ledger_problems: ledger.problems().to_vec(),
-    }
+        .chain(shelf.anonymous().iter().cloned())
+        .collect()
 }
 
 fn freshness_of(
@@ -590,11 +660,9 @@ fn freshness_of(
     standings: &BTreeMap<DocId, Standing>,
 ) -> Freshness {
     let mut causes = Vec::new();
-    match cx.shelf.state_of(id).valid_or_kind() {
+    match cx.shelf.state_of(id).valid_or_failure() {
         Ok(doc) => valid_causes(cx, doc, seen, frame, standings, &mut causes),
-        Err(DocStateKind::Gone) => causes.push(Cause::SelfGone),
-        Err(DocStateKind::Invalid(problems)) => causes.push(Cause::SelfInvalid { problems }),
-        Err(DocStateKind::Unknown(unreadable)) => causes.push(Cause::SelfUnknown { unreadable }),
+        Err(failure) => causes.push(Cause::SelfNotValid(failure)),
     }
     if let Some(since) = expires
         && cx.now >= since
@@ -619,173 +687,177 @@ fn valid_causes(
         });
     }
 
-    let mut lost: Vec<(&FramePin, Lost)> = Vec::new();
+    let mut lost: Vec<(&FramePin, FailureTag)> = Vec::new();
     for pin in frame {
-        let target = pin.target();
-        match cx.shelf.state_of(target).valid_or_kind() {
-            Err(DocStateKind::Gone) => {
-                causes.push(Cause::UpstreamGone { pin: pin.clone() });
-                lost.push((pin, Lost::Gone));
-            }
-            Err(DocStateKind::Invalid(_)) => {
-                causes.push(Cause::UpstreamInvalid { pin: pin.clone() });
-                lost.push((pin, Lost::Invalid));
-            }
-            Err(DocStateKind::Unknown(unreadable)) => {
-                causes.push(Cause::UpstreamUnknown {
-                    pin: pin.clone(),
-                    unreadable,
-                });
-                lost.push((pin, Lost::Unknown));
-            }
-            Ok(upstream) => {
-                if upstream.hash() != pin.hash() {
-                    causes.push(Cause::UpstreamChanged {
-                        pin: pin.clone(),
-                        now: *upstream.hash(),
-                    });
-                }
-                let same_cycle = cx
-                    .component
-                    .get(&target)
-                    .is_some_and(|c| cx.component.get(&doc.id()) == Some(c));
-                match standings.get(&target) {
-                    Some(Standing::Pending) => causes.push(declared(pin, UpstreamStatus::Pending)),
-                    Some(Standing::Denied) => causes.push(declared(pin, UpstreamStatus::Denied)),
-                    Some(Standing::Retired) => causes.push(declared(pin, UpstreamStatus::Retired)),
-                    Some(Standing::Deprecated { successors }) => causes.push(declared(
-                        pin,
-                        UpstreamStatus::Deprecated {
-                            successors: successors.clone(),
-                        },
-                    )),
-                    Some(Standing::Approved(Freshness::Degraded { level, .. }))
-                        if *level >= Severity::Stale && !same_cycle =>
-                    {
-                        causes.push(Cause::Via {
-                            pin: pin.clone(),
-                            severity: *level,
-                        });
-                    }
-                    Some(Standing::Approved(_)) | None => {}
-                }
-            }
-        }
+        pin_causes(cx, doc, pin, standings, causes, &mut lost);
     }
 
-    causes.extend(link_changes(cx, doc, frame, &lost));
+    causes.extend(link_changes(doc, frame, &lost));
 
     if let Some(ids) = cx.in_cycle.get(&doc.id()) {
         causes.extend(ids.iter().map(|cycle| Cause::InCycle { cycle: *cycle }));
     }
 }
 
-fn declared(pin: &FramePin, status: UpstreamStatus) -> Cause {
-    Cause::UpstreamDeclared {
+/// The causes one pin of the frame of a valid document adds: its upstream is no
+/// valid document (then that is the cause alone, and the pin is `lost`), or every
+/// rule that applies to the upstream that is one.
+fn pin_causes<'p>(
+    cx: &Cx<'_>,
+    doc: &Doc,
+    pin: &'p FramePin,
+    standings: &BTreeMap<DocId, Standing>,
+    causes: &mut Vec<Cause>,
+    lost: &mut Vec<(&'p FramePin, FailureTag)>,
+) {
+    let target = pin.target();
+    match cx.shelf.state_of(target).valid_or_failure() {
+        Err(failure) => {
+            lost.push((pin, failure.tag()));
+            causes.push(Cause::UpstreamNotValid {
+                pin: pin.clone(),
+                failure,
+            });
+        }
+        Ok(upstream) => {
+            if upstream.hash() != pin.hash() {
+                causes.push(Cause::UpstreamChanged {
+                    pin: pin.clone(),
+                    now: *upstream.hash(),
+                });
+            }
+            let same_cycle = cx
+                .component
+                .get(&target)
+                .is_some_and(|c| cx.component.get(&doc.id()) == Some(c));
+            causes.extend(standing_cause(pin, standings.get(&target), same_cycle));
+        }
+    }
+}
+
+/// What the standing of a pinned upstream makes of an approval: its declared status
+/// when that is not an approval, or a `Via` when the approval is itself stale or
+/// broken (not across a cycle both are in, where no `Via` passes).
+fn standing_cause(pin: &FramePin, upstream: Option<&Standing>, same_cycle: bool) -> Option<Cause> {
+    let declared = |status| Cause::UpstreamDeclared {
         pin: pin.clone(),
         status,
+    };
+    match upstream {
+        Some(Standing::Pending) => Some(declared(UpstreamStatus::Pending)),
+        Some(Standing::Denied) => Some(declared(UpstreamStatus::Denied)),
+        Some(Standing::Retired) => Some(declared(UpstreamStatus::Retired)),
+        Some(Standing::Deprecated { successors }) => Some(declared(UpstreamStatus::Deprecated {
+            successors: successors.clone(),
+        })),
+        Some(Standing::Approved(Freshness::Degraded(degradation)))
+            if degradation.level() >= Severity::Stale && !same_cycle =>
+        {
+            Some(Cause::Via {
+                pin: pin.clone(),
+                severity: degradation.level(),
+            })
+        }
+        Some(Standing::Approved(_)) | None => None,
     }
 }
 
 /// The `LinksChanged` causes of a document: for each `Depends` link name (those of
-/// the frame and those of the schema now), what it names now against what the frame
-/// pinned.
+/// the frame and those the document holds now), what it names now against what the
+/// frame pinned.
 ///
 /// A pinned upstream an edge rule has already said is gone, invalid or unknown is not
-/// said again as removed, and a key written now that is that upstream's (matched by
-/// the key the pin kept) is not said again as unresolved.
+/// said again as removed, and a key written now that is that upstream's (the key the
+/// build read it as, matched with the key the pin kept) is not said again as
+/// unresolved.
 fn link_changes(
-    cx: &Cx<'_>,
     doc: &Doc,
     frame: &BTreeSet<FramePin>,
-    lost: &[(&FramePin, Lost)],
+    lost: &[(&FramePin, FailureTag)],
 ) -> Vec<Cause> {
-    let current = cx.shelf.links_of(doc, Propagation::Depends);
+    let current = doc.links_of(Propagation::Depends);
     let mut names: BTreeSet<&EntryName> = frame.iter().map(FramePin::link).collect();
     names.extend(current.iter().map(|(name, _)| *name));
 
-    let mut changes = Vec::new();
-    for name in names {
-        let states: &[LinkState] = current
-            .iter()
-            .find(|(n, _)| *n == name)
-            .map_or(&[], |(_, states)| *states);
-        let pinned: BTreeSet<DocId> = frame
-            .iter()
-            .filter(|p| p.link() == name)
-            .map(FramePin::target)
-            .collect();
-        let resolved: BTreeSet<DocId> = states
-            .iter()
-            .filter_map(|s| match s {
-                LinkState::Resolved { target } => Some(*target),
-                LinkState::Unresolved(_) => None,
-            })
-            .collect();
-        let lost_here: Vec<(&FramePin, Lost)> = lost
-            .iter()
-            .filter(|(p, _)| p.link() == name)
-            .copied()
-            .collect();
-
-        let added: Vec<DocId> = resolved.difference(&pinned).copied().collect();
-        let removed: Vec<DocId> = pinned
-            .difference(&resolved)
-            .filter(|t| !lost_here.iter().any(|(p, _)| p.target() == **t))
-            .copied()
-            .collect();
-        let target_book = cx
-            .shelf
-            .schema()
-            .book(&doc.key().book)
-            .and_then(|book| book.links().get(name))
-            .map(|kind| &kind.target);
-        let unresolved: Vec<UnresolvedLink> = states
-            .iter()
-            .filter_map(|s| match s {
-                LinkState::Unresolved(u) => Some(u),
-                LinkState::Resolved { .. } => None,
-            })
-            .filter(|u| !already_said(cx, target_book, u, &lost_here))
-            .cloned()
-            .collect();
-
-        if !(added.is_empty() && removed.is_empty() && unresolved.is_empty()) {
-            changes.push(Cause::LinksChanged {
-                link: name.clone(),
-                added,
-                removed,
-                unresolved,
-            });
-        }
-    }
-    changes
+    names
+        .into_iter()
+        .filter_map(|name| {
+            let states: &[LinkState] = current
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map_or(&[], |(_, states)| *states);
+            link_change(name, states, frame, lost)
+        })
+        .collect()
 }
 
-/// Whether an edge rule has already said what an unresolved link says.
-fn already_said(
-    cx: &Cx<'_>,
-    target_book: Option<&BookName>,
-    unresolved: &UnresolvedLink,
-    lost_here: &[(&FramePin, Lost)],
-) -> bool {
-    let by_key = target_book
-        .and_then(|book| {
-            let pattern = cx.shelf.schema().book(book)?.key();
-            let form = pattern.parse(unresolved.written()).ok()?;
-            Some(DocKey {
-                book: book.clone(),
-                form,
-            })
+/// The `LinksChanged` cause of one link name, when what `states` name now is not what
+/// the frame pinned for it.
+fn link_change(
+    name: &EntryName,
+    states: &[LinkState],
+    frame: &BTreeSet<FramePin>,
+    lost: &[(&FramePin, FailureTag)],
+) -> Option<Cause> {
+    let pinned: BTreeSet<DocId> = frame
+        .iter()
+        .filter(|p| p.link() == name)
+        .map(FramePin::target)
+        .collect();
+    let resolved: BTreeSet<DocId> = states
+        .iter()
+        .filter_map(|s| match s {
+            LinkState::Resolved(target) => Some(target.id()),
+            LinkState::Unresolved(_) => None,
         })
-        .is_some_and(|key| lost_here.iter().any(|(p, _)| *p.key() == key));
+        .collect();
+    let lost_here: Vec<(&FramePin, FailureTag)> = lost
+        .iter()
+        .filter(|(p, _)| p.link() == name)
+        .copied()
+        .collect();
+
+    let added: Vec<DocId> = resolved.difference(&pinned).copied().collect();
+    let removed: Vec<DocId> = pinned
+        .difference(&resolved)
+        .filter(|t| !lost_here.iter().any(|(p, _)| p.target() == **t))
+        .copied()
+        .collect();
+    let unresolved: Vec<UnresolvedLink> = states
+        .iter()
+        .filter_map(|s| match s {
+            LinkState::Unresolved(u) => Some(u),
+            LinkState::Resolved(_) => None,
+        })
+        .filter(|u| !already_said(u, &lost_here))
+        .cloned()
+        .collect();
+
+    if added.is_empty() && removed.is_empty() && unresolved.is_empty() {
+        return None;
+    }
+    Some(Cause::LinksChanged {
+        link: name.clone(),
+        added,
+        removed,
+        unresolved,
+    })
+}
+
+/// Whether an edge rule has already said what an unresolved link says: the key the
+/// build read the link as is a lost pin's key, or the document it names is a lost
+/// pin that is invalid. Fields are compared; the written text is not read again.
+fn already_said(unresolved: &UnresolvedLink, lost_here: &[(&FramePin, FailureTag)]) -> bool {
+    let by_key = unresolved
+        .key()
+        .is_some_and(|key| lost_here.iter().any(|(p, _)| p.key() == key));
     if by_key {
         return true;
     }
     let invalid_target = |t: &DocId| {
         lost_here
             .iter()
-            .any(|(p, how)| *how == Lost::Invalid && p.target() == *t)
+            .any(|(p, how)| *how == FailureTag::Invalid && p.target() == *t)
     };
     match unresolved.why() {
         UnresolvedWhy::TargetInvalid(t) => invalid_target(t),
@@ -804,21 +876,25 @@ fn already_said(
 /// | a `Replaces` link | none |
 ///
 /// They are given whatever the document's own standing is.
-fn notices_of(cx: &Cx<'_>, standings: &BTreeMap<DocId, Standing>) -> BTreeMap<DocId, Vec<Notice>> {
+fn collect_notices(
+    cx: &Cx<'_>,
+    standings: &BTreeMap<DocId, Standing>,
+    statuses: &BTreeMap<DocId, DeclaredStatus>,
+) -> BTreeMap<DocId, Vec<Notice>> {
     let mut all = BTreeMap::new();
     for doc in cx.shelf.docs().values() {
         let mut notices = Vec::new();
-        for (link, states) in cx.shelf.links_of(doc, Propagation::Informs) {
+        for (link, states) in doc.links_of(Propagation::Informs) {
             for state in states {
                 match state {
-                    LinkState::Resolved { target } => {
-                        let standing = standings.get(target).map(Standing::kind);
+                    LinkState::Resolved(target) => {
+                        let standing = standings.get(&target.id()).map(Standing::kind);
                         if let Some(standing) = standing
                             && standing != StandingKind::Approved(FreshnessLevel::Fresh)
                         {
                             notices.push(Notice::InformsNotFresh {
                                 link: link.clone(),
-                                target: *target,
+                                target: target.id(),
                                 standing,
                             });
                         }
@@ -830,12 +906,12 @@ fn notices_of(cx: &Cx<'_>, standings: &BTreeMap<DocId, Standing>) -> BTreeMap<Do
                 }
             }
         }
-        if let DeclaredStatus::Approved { frame, .. } = cx.ledger.status_of(doc.id()) {
-            for pin in &frame {
-                if let Some(Standing::Approved(Freshness::Degraded { causes, .. })) =
+        if let Some(DeclaredStatus::Approved { frame, .. }) = statuses.get(&doc.id()) {
+            for pin in frame {
+                if let Some(Standing::Approved(Freshness::Degraded(degradation))) =
                     standings.get(&pin.target())
                 {
-                    notices.extend(causes.iter().filter_map(|cause| match cause {
+                    notices.extend(degradation.causes().iter().filter_map(|cause| match cause {
                         Cause::Expired { since } => Some(Notice::UpstreamExpired {
                             pin: pin.clone(),
                             since: *since,

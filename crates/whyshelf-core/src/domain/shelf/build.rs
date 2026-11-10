@@ -12,34 +12,42 @@
 //!   DocReading ──► 0  Unparsed?            ──► InvalidDoc (Unreadable)
 //!      │           1  Schema::membership   ──► InvalidDoc (OutsideBooks)
 //!      │           2  the form of the file:  id, key, entries, fields, links
-//!      │              same id twice, same key twice in a book
-//!      │           3  index of keys        (valid and readable-invalid files)
-//!      │           4  links resolved       through Shelf::find_key
-//!      │           5  hash                 (book, fields, body)
-//!      └────────►  6  link cycles          (strongly connected components)
+//!      │           3  same id twice, same key twice in a book
+//!      │           4  each file judged, once: a valid one has its hash made
+//!      │              (DocDraft::new: book, fields, body), any other is an
+//!      │              InvalidDoc with every problem found above
+//!      │           5  index of keys        (valid and readable-invalid files), with
+//!      │                                   the hash of each valid one
+//!      │           6  each valid Doc, once: every link the book declares, with its
+//!      │                                   kind, resolved through the index
+//!      └────────►  7  link cycles          (strongly connected components)
 //! ```
 //!
 //! Two questions about a shelf have one entry each, and everything else asks them:
-//! [`Shelf::find_key`] answers what a key in a book comes to (the build of a link and
-//! the lookup of what a person typed both call it), and [`Shelf::state_of`] answers
+//! `Shelf::find_key` answers what a key in a book comes to (the build of a link
+//! reads the same index before the shelf exists, and the lookup of what a person
+//! typed calls it), and [`Shelf::state_of`] answers
 //! what an identity comes to now (a valid document, an invalid one, gone, or not
 //! knowable because some file could not even be read for its id).
 
+use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 
 use thiserror::Error;
 
-use crate::domain::canon::Canon;
 use crate::domain::error::ValueError;
-use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
+use crate::domain::nonempty::{Count, NonEmptyVec, TwoOrMore};
 
-use super::doc::{Doc, DocHash, DocKey, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy};
+use super::doc::{
+    Doc, DocDraft, DocHash, DocKey, FieldValue, Link, LinkState, ResolvedLink, UnresolvedLink,
+    UnresolvedWhy,
+};
+use super::graph::{Cycle, CycleSource, cycles_of};
 use super::schema::{
-    BookName, BookSchema, Cardinality, EntryName, FieldPresence, FieldType, FieldWord, KeyForm,
-    KeyProblem, Membership, Propagation, Schema,
+    BookName, BookSchema, Cardinality, EntryName, FieldPresence, FieldType, FieldWord, ID_ENTRY,
+    KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
 };
 
 /// A value of the front matter, as the adapter's YAML parser gave it: not yet
@@ -87,6 +95,12 @@ impl RawValue {
 /// show a key that was written twice.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RawProblem {
+    /// The file does not start with a `---` line, so it has no front matter.
+    #[error("the file has no front matter: it must start with a line `---`")]
+    NoFrontMatter,
+    /// The front matter is opened by `---` and never closed.
+    #[error("the front matter is not closed: add a line `---` after the last entry")]
+    Unclosed,
     /// The front matter is not YAML. The line is there when the parser says it.
     #[error("the front matter is not valid YAML")]
     Syntax {
@@ -269,9 +283,9 @@ impl InvalidDoc {
     }
 }
 
-/// What a key in a book comes to.
+/// What a key in a book comes to: what `Shelf::find_key` answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KeyHit {
+pub(super) enum KeyHit {
     /// One valid document has it.
     Valid(DocId),
     /// One document has it, and it is invalid.
@@ -300,267 +314,305 @@ pub enum DocState<'a> {
     },
 }
 
-/// What [`DocState`] is when it is a failure, owned so that a refusal or a cause
-/// can keep it.
+/// Why an identity is no valid document now: the owned form of a [`DocState`] that
+/// is not valid, so that a refusal or a cause can keep it.
+///
+/// The one type of "not valid": a refusal of a frame, the causes of freshness on the
+/// document itself and on an upstream all carry it, and a retirement keeps its
+/// [`tag`](Self::tag).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DocStateKind {
+pub enum DocFailure {
     /// Invalid, with every problem of every file that carries the identity.
     Invalid(NonEmptyVec<DocProblem>),
     /// Not there.
     Gone,
-    /// Not knowable.
+    /// Not knowable: the files whose identity could not be read.
     Unknown(NonEmptyVec<RelPath>),
+}
+
+/// Which of the three a [`DocFailure`] is, without what it carries: what a record
+/// keeps of a document it retired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureTag {
+    /// [`DocFailure::Invalid`].
+    Invalid,
+    /// [`DocFailure::Gone`].
+    Gone,
+    /// [`DocFailure::Unknown`].
+    Unknown,
+}
+
+impl DocFailure {
+    /// Which of the three it is.
+    pub fn tag(&self) -> FailureTag {
+        match self {
+            Self::Invalid(_) => FailureTag::Invalid,
+            Self::Gone => FailureTag::Gone,
+            Self::Unknown(_) => FailureTag::Unknown,
+        }
+    }
+}
+
+/// What an identity comes to now, owned and with the files it was found in: what an
+/// answer shows of a document.
+///
+/// The owned form of a whole [`DocState`] (where [`DocFailure`] is the owned form of
+/// a failure only), made by [`DocState::presence`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DocPresence {
+    /// A valid document.
+    Valid {
+        /// Its key.
+        key: DocKey,
+        /// Its file.
+        origin: RelPath,
+        /// Its hash now.
+        hash: DocHash,
+    },
+    /// One or more files carry the identity, and they are invalid.
+    Invalid {
+        /// The files.
+        files: NonEmptyVec<RelPath>,
+        /// Every problem of every file.
+        problems: NonEmptyVec<DocProblem>,
+    },
+    /// No file carries it.
+    Gone,
+    /// No file is known to carry it, but some file's identity could not be read.
+    Unknown {
+        /// The files whose identity could not be read.
+        unreadable: NonEmptyVec<RelPath>,
+    },
+}
+
+/// The files of one book, counted ([`Shelf::tally_by_book`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BookTally {
+    /// Valid documents.
+    pub valid: usize,
+    /// Files under the book that are no valid document.
+    pub invalid: usize,
+}
+
+/// Every problem of every file that carries one identity, first file first.
+fn all_problems(docs: &NonEmptyVec<InvalidDoc>) -> NonEmptyVec<DocProblem> {
+    docs.flat_map(InvalidDoc::problems)
 }
 
 impl<'a> DocState<'a> {
     /// The valid document, or the owned form of why there is none.
     ///
-    /// The one place a [`DocState`] becomes a [`DocStateKind`]; [`to_kind`] and the
-    /// frames of the ledger take it from here.
-    ///
-    /// [`to_kind`]: Self::to_kind
-    // The error is the answer (why the document is not valid), and it is not a hot path.
+    /// The one place a [`DocState`] becomes a [`DocFailure`]; the frames of the
+    /// ledger and freshness take it from here. A caller that only asks which of the
+    /// four a state is (and would drop what a failure carries) matches the
+    /// [`DocState`] itself, so no problem is cloned for nothing.
+    // `assess` asks this for every approved document and every pin, so the cost was
+    // weighed: the failure is the answer, kept as it is by a refusal or a cause, and
+    // boxing it would add an allocation to each failure and a deref to each match, to
+    // save copying a few words on the way out. A failure is the rare case.
     #[allow(clippy::result_large_err)]
-    pub fn valid_or_kind(&self) -> Result<&'a Doc, DocStateKind> {
+    pub fn valid_or_failure(&self) -> Result<&'a Doc, DocFailure> {
         match self {
             Self::Valid(doc) => Ok(doc),
-            Self::Invalid(docs) => {
-                let head = docs.first().problems().first().clone();
-                let rest = docs
-                    .iter()
-                    .enumerate()
-                    .flat_map(|(i, d)| d.problems().iter().skip(usize::from(i == 0)).cloned())
-                    .collect();
-                Err(DocStateKind::Invalid(NonEmptyVec::new(head, rest)))
-            }
-            Self::Gone => Err(DocStateKind::Gone),
-            Self::Unknown { unreadable } => Err(DocStateKind::Unknown(unreadable.clone())),
+            Self::Invalid(docs) => Err(DocFailure::Invalid(all_problems(docs))),
+            Self::Gone => Err(DocFailure::Gone),
+            Self::Unknown { unreadable } => Err(DocFailure::Unknown(unreadable.clone())),
         }
     }
 
-    /// The owned form of a state that is not valid; `None` is a valid document,
-    /// which has nothing to carry.
-    pub fn to_kind(&self) -> Option<DocStateKind> {
-        self.valid_or_kind().err()
+    /// The owned form of the whole state, with the files: the one place an answer
+    /// takes what to show of a document from.
+    pub fn presence(&self) -> DocPresence {
+        match self {
+            Self::Valid(doc) => DocPresence::Valid {
+                key: doc.key().clone(),
+                origin: doc.origin().clone(),
+                hash: *doc.hash(),
+            },
+            Self::Invalid(docs) => DocPresence::Invalid {
+                files: docs.map(|d| d.origin().clone()),
+                problems: all_problems(docs),
+            },
+            Self::Gone => DocPresence::Gone,
+            Self::Unknown { unreadable } => DocPresence::Unknown {
+                unreadable: unreadable.clone(),
+            },
+        }
     }
 }
 
-/// Which graph a cycle was found in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum CycleSource {
-    /// The `Depends` links the shelf holds now.
-    Links,
-    /// The frames of the approvals in the ledger (see
-    /// [`FrameGraph`](super::ledger::FrameGraph)).
-    Frames,
-}
-
-/// The identity of a cycle: where it was found and the smallest identifier in it.
+/// What a file says about its identity.
 ///
-/// The source is part of it, so that two cycles of different graphs that share a
-/// smallest document are two ids.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CycleId {
-    /// The graph.
-    pub source: CycleSource,
-    /// The smallest identifier among the members.
-    pub min: DocId,
+/// A file with no `id:` entry is known to carry none; a file whose `id:` could not
+/// be read (or that could not be read at all) may carry any. Only the second makes
+/// an identity no readable file has [`DocState::Unknown`] instead of
+/// [`DocState::Gone`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdSeen {
+    /// The identity was read.
+    Read(DocId),
+    /// The file has no `id:` entry.
+    Absent,
+    /// The file may have one, and it could not be read.
+    Unreadable,
 }
 
-/// The documents of a cycle.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CycleMembers {
-    /// A document that stands on itself.
-    SelfLoop(DocId),
-    /// Two or more documents that stand on one another, smallest first.
-    Ring(TwoOrMore<DocId>),
-}
-
-/// A cycle among documents.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Cycle {
-    id: CycleId,
-    members: CycleMembers,
-}
-
-impl Cycle {
-    /// The identity of the cycle.
-    pub fn id(&self) -> CycleId {
-        self.id
+impl IdSeen {
+    fn id(self) -> Option<DocId> {
+        match self {
+            Self::Read(id) => Some(id),
+            Self::Absent | Self::Unreadable => None,
+        }
     }
 
-    /// The members.
-    pub fn members(&self) -> &CycleMembers {
-        &self.members
-    }
-
-    /// Whether `id` is in the cycle.
-    pub fn contains(&self, id: DocId) -> bool {
-        self.ids().contains(&id)
-    }
-
-    /// The members, smallest first.
-    pub fn ids(&self) -> Vec<DocId> {
-        match &self.members {
-            CycleMembers::SelfLoop(m) => vec![*m],
-            CycleMembers::Ring(ms) => ms.iter().copied().collect(),
+    /// What the `id:` entry of a parsed front matter says.
+    fn of_entry(entry: Option<&RawValue>) -> Self {
+        match read_id(entry) {
+            Ok(id) => Self::Read(id),
+            Err(fault) => fault.seen(),
         }
     }
 }
 
-/// The strongly connected components of a directed graph, in an order where a
-/// component comes after every component its members point at.
-///
-/// An edge points from a document to what it stands on, so the order is upstream
-/// first. Both graphs of the shelf (the links, the frames of the ledger) are taken
-/// apart here, once: this is the only place a cycle is searched for. The walk keeps
-/// its own stack, so a long chain of documents cannot overflow the call stack.
-pub(super) fn components(edges: &BTreeMap<DocId, BTreeSet<DocId>>) -> Vec<Vec<DocId>> {
-    let mut nodes: BTreeSet<DocId> = edges.keys().copied().collect();
-    for targets in edges.values() {
-        nodes.extend(targets.iter().copied());
-    }
-    let ids: Vec<DocId> = nodes.into_iter().collect();
-    let index_of: BTreeMap<DocId, usize> = ids.iter().enumerate().map(|(i, id)| (*id, i)).collect();
-    let adjacent: Vec<Vec<usize>> = ids
-        .iter()
-        .map(|id| {
-            edges
-                .get(id)
-                .map(|targets| {
-                    targets
-                        .iter()
-                        .filter_map(|t| index_of.get(t).copied())
-                        .collect()
-                })
-                .unwrap_or_default()
-        })
-        .collect();
-
-    let n = ids.len();
-    let unvisited = usize::MAX;
-    let mut order = vec![unvisited; n];
-    let mut low = vec![0usize; n];
-    let mut on_stack = vec![false; n];
-    let mut stack: Vec<usize> = Vec::new();
-    let mut next = 0usize;
-    let mut out: Vec<Vec<DocId>> = Vec::new();
-
-    for root in 0..n {
-        if order[root] != unvisited {
-            continue;
-        }
-        order[root] = next;
-        low[root] = next;
-        next += 1;
-        stack.push(root);
-        on_stack[root] = true;
-        let mut calls: Vec<(usize, usize)> = vec![(root, 0)];
-        while let Some(&(v, i)) = calls.last() {
-            if let Some(&w) = adjacent[v].get(i) {
-                if let Some(top) = calls.last_mut() {
-                    top.1 += 1;
-                }
-                if order[w] == unvisited {
-                    order[w] = next;
-                    low[w] = next;
-                    next += 1;
-                    stack.push(w);
-                    on_stack[w] = true;
-                    calls.push((w, 0));
-                } else if on_stack[w] {
-                    low[v] = low[v].min(order[w]);
-                }
-            } else {
-                calls.pop();
-                if low[v] == order[v] {
-                    let mut component = Vec::new();
-                    while let Some(w) = stack.pop() {
-                        on_stack[w] = false;
-                        component.push(ids[w]);
-                        if w == v {
-                            break;
-                        }
-                    }
-                    component.sort();
-                    out.push(component);
-                }
-                if let Some(&(parent, _)) = calls.last() {
-                    low[parent] = low[parent].min(low[v]);
-                }
-            }
-        }
-    }
-    out
+/// Why an `id:` entry gives no identity.
+enum IdFault {
+    /// There is no `id:` entry.
+    Missing,
+    /// The entry is not a text.
+    NotText,
+    /// The entry is a text that is no identifier.
+    Invalid(ValueError),
 }
 
-/// Every cycle of a graph: each component of two or more, and each document that
-/// points at itself. Ordered by identity.
-pub(super) fn cycles_of(
-    source: CycleSource,
-    edges: &BTreeMap<DocId, BTreeSet<DocId>>,
-) -> Vec<Cycle> {
-    let mut cycles: Vec<Cycle> = components(edges)
-        .into_iter()
-        .filter_map(|component| {
-            let mut ids = component.into_iter();
-            let first = ids.next()?;
-            let members = match ids.next() {
-                Some(second) => CycleMembers::Ring(TwoOrMore::new(first, second, ids.collect())),
-                None if edges.get(&first).is_some_and(|t| t.contains(&first)) => {
-                    CycleMembers::SelfLoop(first)
-                }
-                None => return None,
-            };
-            Some(Cycle {
-                id: CycleId { source, min: first },
-                members,
+impl IdFault {
+    /// What a file with this entry is known to say about its identity.
+    fn seen(&self) -> IdSeen {
+        match self {
+            Self::Missing => IdSeen::Absent,
+            Self::NotText | Self::Invalid(_) => IdSeen::Unreadable,
+        }
+    }
+
+    fn into_problem(self) -> DocProblem {
+        match self {
+            Self::Missing => DocProblem::IdMissing,
+            Self::NotText => DocProblem::IdNotText,
+            Self::Invalid(e) => DocProblem::IdInvalid(e),
+        }
+    }
+}
+
+/// The `id:` entry of a parsed front matter: an identity, or why there is none.
+fn read_id(entry: Option<&RawValue>) -> Result<DocId, IdFault> {
+    match entry {
+        None => Err(IdFault::Missing),
+        Some(RawValue::Text(text)) => text.parse::<DocId>().map_err(IdFault::Invalid),
+        Some(_) => Err(IdFault::NotText),
+    }
+}
+
+/// The `key:` entry of a parsed front matter, in the grammar of its book: a key, or
+/// what is wrong with it.
+fn read_key(book: &BookSchema, entry: Option<&RawValue>) -> Result<DocKey, DocProblem> {
+    match entry {
+        None => Err(DocProblem::KeyMissing),
+        Some(RawValue::Text(text)) => book
+            .key()
+            .parse(text)
+            .map(|form| DocKey {
+                book: book.name().clone(),
+                form,
             })
-        })
-        .collect();
-    cycles.sort_by_key(Cycle::id);
-    cycles
+            .map_err(DocProblem::KeyInvalid),
+        Some(_) => Err(DocProblem::KeyNotText),
+    }
 }
 
-/// The hash of a document: its book, fields and body.
-///
-/// The one place the scope of a [`DocHash`] is decided and computed.
-fn hash_doc(book: &BookName, fields: &BTreeMap<EntryName, FieldValue>, body: &str) -> DocHash {
-    let canon = Canon::map([
-        ("book", Canon::str(book.as_str())),
-        (
-            "fields",
-            Canon::map(
-                fields
-                    .iter()
-                    .map(|(name, value)| (name.as_str(), value.to_canon())),
-            ),
-        ),
-        ("body", Canon::str(body)),
-    ]);
-    DocHash::computed(ContentHash::of(HashKind::ShelfDoc, &canon))
+/// What the `id:` and the `key:` of a file come to, read together: the two things a
+/// valid document must have, so that a file is either whole here or has at least one
+/// problem with them.
+enum Identity {
+    /// Both were read.
+    Whole { id: DocId, key: DocKey },
+    /// One or both were not (or the file could not be read at all): what is known of
+    /// its identity, and what is wrong.
+    Broken {
+        id: IdSeen,
+        faults: NonEmptyVec<DocProblem>,
+    },
+}
+
+impl Identity {
+    fn of(id: Result<DocId, IdFault>, key: Result<DocKey, DocProblem>) -> Self {
+        match (id, key) {
+            (Ok(id), Ok(key)) => Self::Whole { id, key },
+            (Ok(id), Err(key)) => Self::unusable(IdSeen::Read(id), key),
+            (Err(id), Ok(_)) => Self::unusable(id.seen(), id.into_problem()),
+            (Err(id), Err(key)) => Self::Broken {
+                id: id.seen(),
+                faults: NonEmptyVec::new(id.into_problem(), vec![key]),
+            },
+        }
+    }
+
+    /// A file whose identity is what it is, and which is invalid for `problem`.
+    fn unusable(id: IdSeen, problem: DocProblem) -> Self {
+        Self::Broken {
+            id,
+            faults: NonEmptyVec::new(problem, Vec::new()),
+        }
+    }
+
+    /// The identity, when it could be read.
+    fn id(&self) -> Option<DocId> {
+        match self {
+            Self::Whole { id, .. } => Some(*id),
+            Self::Broken { id, .. } => id.id(),
+        }
+    }
+}
+
+/// One link a book declares, as a file wrote it: its kind, and the keys written in
+/// it (none when the file wrote none).
+struct WrittenLink {
+    kind: LinkKind,
+    keys: Vec<String>,
 }
 
 /// A file after its form is read, before the shelf looks at the files together.
 struct Candidate {
     origin: RelPath,
-    id: Option<DocId>,
-    key: Option<DocKey>,
+    identity: Identity,
+    /// What is wrong beyond the identity and the key; the check of the files together
+    /// adds to it.
     problems: Vec<DocProblem>,
     fields: BTreeMap<EntryName, FieldValue>,
-    written: BTreeMap<EntryName, Vec<String>>,
+    /// Every link the book declares, with what the file wrote in it.
+    links: BTreeMap<EntryName, WrittenLink>,
     body: String,
 }
 
+/// A file judged, once: a valid document still to be made whole, or an invalid
+/// file with the identity it showed.
+enum Judged {
+    Valid {
+        draft: DocDraft,
+        links: BTreeMap<EntryName, WrittenLink>,
+    },
+    Invalid {
+        id: IdSeen,
+        file: InvalidDoc,
+    },
+}
+
 impl Candidate {
-    fn unusable(origin: RelPath, id: Option<DocId>, problem: DocProblem) -> Self {
+    fn unusable(origin: RelPath, id: IdSeen, problem: DocProblem) -> Self {
         Self {
             origin,
-            id,
-            key: None,
-            problems: vec![problem],
+            identity: Identity::unusable(id, problem),
+            problems: Vec::new(),
             fields: BTreeMap::new(),
-            written: BTreeMap::new(),
+            links: BTreeMap::new(),
             body: String::new(),
         }
     }
@@ -569,8 +621,8 @@ impl Candidate {
         let (origin, entries, body) = match reading {
             DocReading::Unparsed { origin, id, why } => {
                 let id = match id {
-                    ReadId::Read(id) => Some(id),
-                    ReadId::Unreadable => None,
+                    ReadId::Read(id) => IdSeen::Read(id),
+                    ReadId::Unreadable => IdSeen::Unreadable,
                 };
                 return Self::unusable(origin, id, DocProblem::Unreadable(why));
             }
@@ -580,124 +632,252 @@ impl Candidate {
                 body,
             } => (origin, entries, body),
         };
-        let book = match schema.membership(&origin) {
-            Membership::In(name) => schema.book(&name),
-            Membership::Outside => None,
-        };
-        let Some(book) = book else {
-            let id = match entries.get("id") {
-                Some(RawValue::Text(text)) => text.parse::<DocId>().ok(),
-                _ => None,
-            };
-            return Self::unusable(origin, id, DocProblem::OutsideBooks);
-        };
-        Self::read_in(book, origin, &entries, body)
+        match schema.membership(&origin) {
+            Membership::In(book) => Self::read_in(book, origin, &entries, body),
+            Membership::Outside => {
+                let id = IdSeen::of_entry(entries.get(ID_ENTRY));
+                Self::unusable(origin, id, DocProblem::OutsideBooks)
+            }
+        }
     }
 
+    /// The form of a file under `book`: its identity and key, its fields and the keys
+    /// written in its links, and every problem with them.
     fn read_in(
         book: &BookSchema,
         origin: RelPath,
         entries: &BTreeMap<String, RawValue>,
         body: String,
     ) -> Self {
+        let identity = Identity::of(
+            read_id(entries.get(ID_ENTRY)),
+            read_key(book, entries.get(KEY_ENTRY)),
+        );
         let mut problems = Vec::new();
-
-        let id = match entries.get("id") {
-            None => {
-                problems.push(DocProblem::IdMissing);
-                None
-            }
-            Some(RawValue::Text(text)) => match text.parse::<DocId>() {
-                Ok(id) => Some(id),
-                Err(e) => {
-                    problems.push(DocProblem::IdInvalid(e));
-                    None
-                }
-            },
-            Some(_) => {
-                problems.push(DocProblem::IdNotText);
-                None
-            }
-        };
-        let key = match entries.get("key") {
-            None => {
-                problems.push(DocProblem::KeyMissing);
-                None
-            }
-            Some(RawValue::Text(text)) => match book.key().parse(text) {
-                Ok(form) => Some(DocKey {
-                    book: book.name().clone(),
-                    form,
-                }),
-                Err(e) => {
-                    problems.push(DocProblem::KeyInvalid(e));
-                    None
-                }
-            },
-            Some(_) => {
-                problems.push(DocProblem::KeyNotText);
-                None
-            }
-        };
-
-        let mut fields = BTreeMap::new();
-        let mut written = BTreeMap::new();
-        for (name, raw) in entries {
-            if name == "id" || name == "key" {
-                continue;
-            }
-            if let Some((field, decl)) = book.fields().get_key_value(name.as_str()) {
-                match field_value(field, &decl.ty, raw) {
-                    Ok(value) => {
-                        fields.insert(field.clone(), value);
-                    }
-                    Err(problem) => problems.push(problem),
-                }
-            } else if let Some((link, kind)) = book.links().get_key_value(name.as_str()) {
-                match raw {
-                    RawValue::List(keys) if kind.cardinality.admits(keys.len()) => {
-                        written.insert(link.clone(), keys.clone());
-                    }
-                    RawValue::List(keys) => problems.push(DocProblem::LinkCount {
-                        link: link.clone(),
-                        cardinality: kind.cardinality,
-                        found: keys.len(),
-                    }),
-                    other => problems.push(DocProblem::LinkNotList {
-                        link: link.clone(),
-                        found: other.kind(),
-                    }),
-                }
-            } else {
-                problems.push(DocProblem::UnknownEntry { name: name.clone() });
-            }
-        }
-        for (field, decl) in book.fields() {
-            if decl.presence == FieldPresence::Required && !entries.contains_key(field.as_str()) {
-                problems.push(DocProblem::FieldMissing {
-                    field: field.clone(),
-                });
-            }
-        }
-        for (link, kind) in book.links() {
-            if !entries.contains_key(link.as_str()) && !kind.cardinality.admits(0) {
-                problems.push(DocProblem::LinkCount {
-                    link: link.clone(),
-                    cardinality: kind.cardinality,
-                    found: 0,
-                });
-            }
-        }
-
+        let (fields, written) = read_entries(book, entries, &mut problems);
+        check_required(book, entries, &mut problems);
         Self {
             origin,
-            id,
-            key,
+            identity,
             problems,
             fields,
-            written,
+            links: written_links(book, written),
             body,
         }
+    }
+
+    /// Judges the file, once: valid only when its identity and key were read and
+    /// nothing else is wrong with it.
+    fn judge(self) -> Judged {
+        let Self {
+            origin,
+            identity,
+            problems,
+            fields,
+            links,
+            body,
+        } = self;
+        match identity {
+            Identity::Whole { id, key } => match NonEmptyVec::from_vec(problems) {
+                Err(_) => Judged::Valid {
+                    draft: DocDraft::new(id, key, origin, fields, body),
+                    links,
+                },
+                Ok(problems) => Judged::Invalid {
+                    id: IdSeen::Read(id),
+                    file: InvalidDoc {
+                        origin,
+                        id: Some(id),
+                        problems,
+                    },
+                },
+            },
+            Identity::Broken { id, faults } => Judged::Invalid {
+                id,
+                file: InvalidDoc {
+                    origin,
+                    id: id.id(),
+                    problems: faults.extended(problems),
+                },
+            },
+        }
+    }
+}
+
+/// The fields of a file, and the keys written in each link, from every entry but
+/// `id` and `key`; what is wrong with an entry goes to `problems`.
+fn read_entries(
+    book: &BookSchema,
+    entries: &BTreeMap<String, RawValue>,
+    problems: &mut Vec<DocProblem>,
+) -> (
+    BTreeMap<EntryName, FieldValue>,
+    BTreeMap<EntryName, Vec<String>>,
+) {
+    let mut fields = BTreeMap::new();
+    let mut written = BTreeMap::new();
+    for (name, raw) in entries {
+        if name == ID_ENTRY || name == KEY_ENTRY {
+            continue;
+        }
+        if let Some((field, decl)) = book.fields().get_key_value(name.as_str()) {
+            match field_value(field, &decl.ty, raw) {
+                Ok(value) => {
+                    fields.insert(field.clone(), value);
+                }
+                Err(problem) => problems.push(problem),
+            }
+        } else if let Some((link, kind)) = book.links().get_key_value(name.as_str()) {
+            match raw {
+                RawValue::List(keys) if kind.cardinality.admits(keys.len()) => {
+                    written.insert(link.clone(), keys.clone());
+                }
+                RawValue::List(keys) => problems.push(DocProblem::LinkCount {
+                    link: link.clone(),
+                    cardinality: kind.cardinality,
+                    found: keys.len(),
+                }),
+                other => problems.push(DocProblem::LinkNotList {
+                    link: link.clone(),
+                    found: other.kind(),
+                }),
+            }
+        } else {
+            problems.push(DocProblem::UnknownEntry { name: name.clone() });
+        }
+    }
+    (fields, written)
+}
+
+/// What the book requires and the entries leave out: a required field, and a link
+/// whose cardinality does not admit none.
+fn check_required(
+    book: &BookSchema,
+    entries: &BTreeMap<String, RawValue>,
+    problems: &mut Vec<DocProblem>,
+) {
+    for (field, decl) in book.fields() {
+        if decl.presence == FieldPresence::Required && !entries.contains_key(field.as_str()) {
+            problems.push(DocProblem::FieldMissing {
+                field: field.clone(),
+            });
+        }
+    }
+    for (link, kind) in book.links() {
+        if !entries.contains_key(link.as_str()) && !kind.cardinality.admits(0) {
+            problems.push(DocProblem::LinkCount {
+                link: link.clone(),
+                cardinality: kind.cardinality,
+                found: 0,
+            });
+        }
+    }
+}
+
+/// Every link the book declares, with the keys the file wrote in it.
+fn written_links(
+    book: &BookSchema,
+    mut written: BTreeMap<EntryName, Vec<String>>,
+) -> BTreeMap<EntryName, WrittenLink> {
+    book.links()
+        .iter()
+        .map(|(name, kind)| {
+            let link = WrittenLink {
+                kind: kind.clone(),
+                keys: written.remove(name).unwrap_or_default(),
+            };
+            (name.clone(), link)
+        })
+        .collect()
+}
+
+/// Who holds a key, read once: the judgement both [`KeyHit`] and a link's state are
+/// made from.
+enum Holders {
+    /// No file.
+    None,
+    /// One file, with the hash of its document when the document is valid.
+    One(DocId, Option<DocHash>),
+    /// Several files, valid or not.
+    Many(TwoOrMore<DocId>),
+}
+
+/// The keys of every file whose identity and key could be read, valid or not, and
+/// the hash of each valid document: what a key in a book comes to is read from here,
+/// by the build (for a link) before any document is made, and by
+/// `Shelf::find_key` after.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct KeyIndex {
+    keys: BTreeMap<DocKey, BTreeSet<DocId>>,
+    valid: BTreeMap<DocId, DocHash>,
+}
+
+impl KeyIndex {
+    /// The one reading of a key: more than one file with it is [`Holders::Many`]
+    /// whether their documents are valid or not.
+    fn holders(&self, key: &DocKey) -> Holders {
+        match Count::of(self.keys.get(key).into_iter().flatten().copied()) {
+            Count::None => Holders::None,
+            Count::One(id) => Holders::One(id, self.valid.get(&id).copied()),
+            Count::Many(ids) => Holders::Many(ids),
+        }
+    }
+
+    fn find(&self, key: &DocKey) -> KeyHit {
+        match self.holders(key) {
+            Holders::None => KeyHit::Missing,
+            Holders::One(id, Some(_)) => KeyHit::Valid(id),
+            Holders::One(id, None) => KeyHit::Invalid(id),
+            Holders::Many(ids) => KeyHit::Ambiguous(ids),
+        }
+    }
+}
+
+/// The links of a valid document, resolved: every link the book declares (the
+/// candidate holds each, written or not), with its kind and what each key written in
+/// it comes to.
+fn resolve_links(
+    index: &KeyIndex,
+    written: BTreeMap<EntryName, WrittenLink>,
+) -> BTreeMap<EntryName, Link> {
+    written
+        .into_iter()
+        .map(|(name, WrittenLink { kind, keys })| {
+            let states = keys
+                .iter()
+                .map(|text| link_state(index, &kind, text))
+                .collect();
+            (name, Link::new(kind, states))
+        })
+        .collect()
+}
+
+/// What one key written in a link comes to: read once, in the grammar of the book
+/// the link points into (which the kind of the link carries), and looked up in the
+/// index.
+fn link_state(index: &KeyIndex, kind: &LinkKind, written: &str) -> LinkState {
+    let target = &kind.target;
+    let unresolved = |form, why| {
+        LinkState::Unresolved(UnresolvedLink::new(
+            written.to_owned(),
+            target.clone(),
+            form,
+            why,
+        ))
+    };
+    let form = match kind.target_key.parse(written) {
+        Ok(form) => form,
+        Err(problem) => return unresolved(None, UnresolvedWhy::Malformed(problem)),
+    };
+    let key = DocKey {
+        book: target.clone(),
+        form,
+    };
+    match index.holders(&key) {
+        Holders::One(id, Some(hash)) => LinkState::Resolved(ResolvedLink::new(id, key, hash)),
+        Holders::One(id, None) => unresolved(Some(key.form), UnresolvedWhy::TargetInvalid(id)),
+        Holders::Many(ids) => unresolved(Some(key.form), UnresolvedWhy::Ambiguous(ids)),
+        Holders::None => unresolved(Some(key.form), UnresolvedWhy::Missing),
     }
 }
 
@@ -730,15 +910,17 @@ fn field_value(
 /// The documents of a project, checked: valid ones, invalid ones with their
 /// reasons, and the cycles among the links.
 ///
-/// A shelf keeps the [`Schema`] it was built with, because what a link means and
-/// what a key may be are asked of it later (by the lookup, by freshness).
+/// A shelf keeps the [`Schema`] it was built with, because what a key may be is
+/// asked of it later (by the lookup, for what a person typed). What a link means is
+/// not: each link of a [`Doc`] carries its kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shelf {
     schema: Schema,
     docs: BTreeMap<DocId, Doc>,
     invalid: BTreeMap<DocId, NonEmptyVec<InvalidDoc>>,
     unreadable: Vec<InvalidDoc>,
-    keys: BTreeMap<DocKey, BTreeSet<DocId>>,
+    anonymous: Vec<InvalidDoc>,
+    index: KeyIndex,
     cycles: Vec<Cycle>,
 }
 
@@ -748,157 +930,59 @@ impl Shelf {
     /// The one place a [`Doc`] is made. It never fails; see the module page for the
     /// order of the steps.
     pub fn build(schema: &Schema, readings: Vec<DocReading>) -> Self {
-        let candidates: Vec<Candidate> = readings
+        let candidates = flag_duplicates(
+            readings
+                .into_iter()
+                .map(|reading| Candidate::read(schema, reading))
+                .collect(),
+        );
+        let keys = keys_of(&candidates);
+        let Sorted {
+            drafts,
+            invalid,
+            unreadable,
+            anonymous,
+        } = Sorted::of(candidates);
+
+        let index = KeyIndex {
+            keys,
+            valid: drafts
+                .iter()
+                .map(|(draft, _)| (draft.id(), *draft.hash()))
+                .collect(),
+        };
+        let docs: BTreeMap<DocId, Doc> = drafts
             .into_iter()
-            .map(|reading| Candidate::read(schema, reading))
-            .collect();
-        let candidates = flag_duplicates(candidates);
-
-        let mut docs = BTreeMap::new();
-        let mut pending: Vec<(DocId, BookName, BTreeMap<EntryName, Vec<String>>)> = Vec::new();
-        let mut invalid: BTreeMap<DocId, Vec<InvalidDoc>> = BTreeMap::new();
-        let mut unreadable = Vec::new();
-        let mut keys: BTreeMap<DocKey, BTreeSet<DocId>> = BTreeMap::new();
-
-        for candidate in candidates {
-            if let (Some(id), Some(key)) = (candidate.id, &candidate.key) {
-                keys.entry(key.clone()).or_default().insert(id);
-            }
-            match (candidate.problems.is_empty(), candidate.id, candidate.key) {
-                (true, Some(id), Some(key)) => {
-                    let hash = hash_doc(&key.book, &candidate.fields, &candidate.body);
-                    pending.push((id, key.book.clone(), candidate.written));
-                    docs.insert(
-                        id,
-                        Doc::new(
-                            id,
-                            key,
-                            candidate.origin,
-                            candidate.fields,
-                            candidate.body,
-                            hash,
-                        ),
-                    );
-                }
-                (_, id, _) => {
-                    let mut problems = candidate.problems.into_iter();
-                    let Some(head) = problems.next() else {
-                        // A candidate without problems has an id and a key: the arm
-                        // above took it. Nothing reaches here.
-                        continue;
-                    };
-                    let entry = InvalidDoc {
-                        origin: candidate.origin,
-                        id,
-                        problems: NonEmptyVec::new(head, problems.collect()),
-                    };
-                    match id {
-                        Some(id) => invalid.entry(id).or_default().push(entry),
-                        None => unreadable.push(entry),
-                    }
-                }
-            }
-        }
-
-        let invalid = invalid
-            .into_iter()
-            .filter_map(|(id, docs)| NonEmptyVec::from_vec(docs).ok().map(|docs| (id, docs)))
+            .map(|(draft, written)| {
+                let links = resolve_links(&index, written);
+                (draft.id(), Doc::new(draft, links))
+            })
             .collect();
 
-        let mut shelf = Self {
+        let cycles = cycles_of(CycleSource::Links, &depends_edges(&docs));
+        Self {
             schema: schema.clone(),
             docs,
             invalid,
             unreadable,
-            keys,
-            cycles: Vec::new(),
-        };
-
-        let resolved: Vec<(DocId, BTreeMap<EntryName, Vec<LinkState>>)> = pending
-            .into_iter()
-            .map(|(id, book, written)| (id, shelf.resolve_links(&book, &written)))
-            .collect();
-        for (id, links) in resolved {
-            if let Some(doc) = shelf.docs.get_mut(&id) {
-                doc.set_links(links);
-            }
-        }
-
-        let mut edges: BTreeMap<DocId, BTreeSet<DocId>> = BTreeMap::new();
-        for doc in shelf.docs.values() {
-            for (_, states) in shelf.links_of(doc, Propagation::Depends) {
-                for state in states {
-                    if let LinkState::Resolved { target } = state {
-                        edges.entry(doc.id()).or_default().insert(*target);
-                    }
-                }
-            }
-        }
-        shelf.cycles = cycles_of(CycleSource::Links, &edges);
-        shelf
-    }
-
-    fn resolve_links(
-        &self,
-        book: &BookName,
-        written: &BTreeMap<EntryName, Vec<String>>,
-    ) -> BTreeMap<EntryName, Vec<LinkState>> {
-        let Some(book) = self.schema.book(book) else {
-            return BTreeMap::new();
-        };
-        book.links()
-            .iter()
-            .map(|(name, kind)| {
-                let states = written
-                    .get(name)
-                    .map(|keys| {
-                        keys.iter()
-                            .map(|text| self.link_state(&kind.target, text))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                (name.clone(), states)
-            })
-            .collect()
-    }
-
-    fn link_state(&self, target_book: &BookName, written: &str) -> LinkState {
-        let unresolved = |why| LinkState::Unresolved(UnresolvedLink::new(written.to_owned(), why));
-        let Some(book) = self.schema.book(target_book) else {
-            return unresolved(UnresolvedWhy::Missing);
-        };
-        let form = match book.key().parse(written) {
-            Ok(form) => form,
-            Err(problem) => return unresolved(UnresolvedWhy::Malformed(problem)),
-        };
-        match self.find_key(target_book, &form) {
-            KeyHit::Valid(target) => LinkState::Resolved { target },
-            KeyHit::Invalid(target) => unresolved(UnresolvedWhy::TargetInvalid(target)),
-            KeyHit::Ambiguous(targets) => unresolved(UnresolvedWhy::Ambiguous(targets)),
-            KeyHit::Missing => unresolved(UnresolvedWhy::Missing),
+            anonymous,
+            index,
+            cycles,
         }
     }
 
     /// What a key in a book comes to.
     ///
-    /// The one place a key is looked up in a book: the build of a link and the
-    /// lookup of what a person typed both call it. More than one document with the
-    /// key is [`Ambiguous`](KeyHit::Ambiguous) whether they are valid or not (a key
-    /// written twice makes every holder invalid).
-    pub fn find_key(&self, book: &BookName, form: &KeyForm) -> KeyHit {
-        let key = DocKey {
+    /// The one place a key is looked up in a book: the lookup of what a person typed
+    /// calls it, and the build of a link reads the same index before the shelf
+    /// exists. More than one document with the key is
+    /// [`Ambiguous`](KeyHit::Ambiguous) whether they are valid or not (a key written
+    /// twice makes every holder invalid).
+    pub(super) fn find_key(&self, book: &BookName, form: &KeyForm) -> KeyHit {
+        self.index.find(&DocKey {
             book: book.clone(),
             form: form.clone(),
-        };
-        let mut ids = self.keys.get(&key).into_iter().flatten().copied();
-        match (ids.next(), ids.next()) {
-            (None, _) => KeyHit::Missing,
-            (Some(id), None) if self.docs.contains_key(&id) => KeyHit::Valid(id),
-            (Some(id), None) => KeyHit::Invalid(id),
-            (Some(first), Some(second)) => {
-                KeyHit::Ambiguous(TwoOrMore::new(first, second, ids.collect()))
-            }
-        }
+        })
     }
 
     /// What an identity comes to now.
@@ -929,35 +1013,12 @@ impl Shelf {
         self.docs
             .values()
             .filter(|doc| {
-                self.links_of(doc, Propagation::Replaces)
+                doc.links_of(Propagation::Replaces)
                     .into_iter()
                     .flat_map(|(_, states)| states)
-                    .any(|state| matches!(state, LinkState::Resolved { target } if *target == id))
+                    .any(|state| matches!(state, LinkState::Resolved(target) if target.id() == id))
             })
             .map(Doc::id)
-            .collect()
-    }
-
-    /// The links of a document that have a meaning for freshness, by name.
-    ///
-    /// The one place the schema's `Propagation` of a link is looked up for a
-    /// document. A name the schema no longer declares has no entry.
-    pub fn links_of<'d>(
-        &self,
-        doc: &'d Doc,
-        propagation: Propagation,
-    ) -> Vec<(&'d EntryName, &'d [LinkState])> {
-        let Some(book) = self.schema.book(&doc.key().book) else {
-            return Vec::new();
-        };
-        doc.links()
-            .iter()
-            .filter(|(name, _)| {
-                book.links()
-                    .get(*name)
-                    .is_some_and(|kind| kind.propagation == propagation)
-            })
-            .map(|(name, states)| (name, states.as_slice()))
             .collect()
     }
 
@@ -986,9 +1047,52 @@ impl Shelf {
         &self.invalid
     }
 
-    /// The invalid files whose identity could not be read.
+    /// The invalid files whose identity could not be read: any of them may carry an
+    /// identity no readable file has, which is why such an identity is
+    /// [`DocState::Unknown`].
     pub fn unreadable(&self) -> &[InvalidDoc] {
         &self.unreadable
+    }
+
+    /// The invalid files that have no `id:` entry: they carry no identity, so they
+    /// leave every other identity's state as it is.
+    pub fn anonymous(&self) -> &[InvalidDoc] {
+        &self.anonymous
+    }
+
+    /// How many valid documents and how many invalid files each book holds.
+    ///
+    /// Every file is counted in the book `Schema::membership` puts it in, valid or
+    /// not, readable identity or not: one rule for both counts. Every declared book is
+    /// listed, an empty one with zeros.
+    pub fn tally_by_book(&self) -> BTreeMap<BookName, BookTally> {
+        let mut tally: BTreeMap<BookName, BookTally> = self
+            .schema
+            .books()
+            .keys()
+            .map(|name| (name.clone(), BookTally::default()))
+            .collect();
+        let mut count = |origin: &RelPath, valid: bool| {
+            if let Membership::In(book) = self.schema.membership(origin)
+                && let Some(entry) = tally.get_mut(book.name())
+            {
+                if valid {
+                    entry.valid += 1;
+                } else {
+                    entry.invalid += 1;
+                }
+            }
+        };
+        for doc in self.docs.values() {
+            count(doc.origin(), true);
+        }
+        for invalid in self.invalid.values().flat_map(NonEmptyVec::iter) {
+            count(invalid.origin(), false);
+        }
+        for no_id in self.unreadable.iter().chain(&self.anonymous) {
+            count(no_id.origin(), false);
+        }
+        tally
     }
 
     /// Every identity some file carries, valid or not.
@@ -1001,17 +1105,88 @@ impl Shelf {
     }
 }
 
+/// The files judged, by where each goes in the shelf.
+#[derive(Default)]
+struct Sorted {
+    /// The valid ones, to be made whole, with the keys written in their links.
+    drafts: Vec<(DocDraft, BTreeMap<EntryName, WrittenLink>)>,
+    /// The invalid ones whose identity was read, grouped by identity.
+    invalid: BTreeMap<DocId, NonEmptyVec<InvalidDoc>>,
+    /// The invalid ones whose identity could not be read.
+    unreadable: Vec<InvalidDoc>,
+    /// The invalid ones that have no `id:` entry.
+    anonymous: Vec<InvalidDoc>,
+}
+
+impl Sorted {
+    /// Judges every file once and puts it where it goes.
+    fn of(candidates: Vec<Candidate>) -> Self {
+        let mut sorted = Self::default();
+        for candidate in candidates {
+            match candidate.judge() {
+                Judged::Valid { draft, links } => sorted.drafts.push((draft, links)),
+                Judged::Invalid {
+                    id: IdSeen::Read(id),
+                    file,
+                } => match sorted.invalid.entry(id) {
+                    Entry::Occupied(mut held) => held.get_mut().push(file),
+                    Entry::Vacant(slot) => {
+                        slot.insert(NonEmptyVec::new(file, Vec::new()));
+                    }
+                },
+                Judged::Invalid {
+                    id: IdSeen::Absent,
+                    file,
+                } => sorted.anonymous.push(file),
+                Judged::Invalid {
+                    id: IdSeen::Unreadable,
+                    file,
+                } => sorted.unreadable.push(file),
+            }
+        }
+        sorted
+    }
+}
+
+/// The identities that hold each key: every file whose identity and key could both
+/// be read, valid or not.
+fn keys_of(candidates: &[Candidate]) -> BTreeMap<DocKey, BTreeSet<DocId>> {
+    let mut keys: BTreeMap<DocKey, BTreeSet<DocId>> = BTreeMap::new();
+    for candidate in candidates {
+        if let Identity::Whole { id, key } = &candidate.identity {
+            keys.entry(key.clone()).or_default().insert(*id);
+        }
+    }
+    keys
+}
+
+/// The `Depends` links of the valid documents that resolved, as a graph of
+/// identities.
+fn depends_edges(docs: &BTreeMap<DocId, Doc>) -> BTreeMap<DocId, BTreeSet<DocId>> {
+    let mut edges: BTreeMap<DocId, BTreeSet<DocId>> = BTreeMap::new();
+    for doc in docs.values() {
+        for (_, states) in doc.links_of(Propagation::Depends) {
+            for state in states {
+                if let LinkState::Resolved(target) = state {
+                    edges.entry(doc.id()).or_default().insert(target.id());
+                }
+            }
+        }
+    }
+    edges
+}
+
 /// Marks as invalid every file that shares its `id:` with another, and every file
 /// of a book that shares its key with another file of the book.
 fn flag_duplicates(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
     let mut by_id: BTreeMap<DocId, Vec<usize>> = BTreeMap::new();
     let mut by_key: BTreeMap<DocKey, Vec<usize>> = BTreeMap::new();
     for (i, c) in candidates.iter().enumerate() {
-        if let Some(id) = c.id {
+        if let Some(id) = c.identity.id() {
             by_id.entry(id).or_default().push(i);
-            if let Some(key) = &c.key {
-                by_key.entry(key.clone()).or_default().push(i);
-            }
+        }
+        if let Identity::Whole { key, .. } = &c.identity {
+            by_key.entry(key.clone()).or_default().push(i);
         }
     }
 

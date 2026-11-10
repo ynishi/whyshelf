@@ -6,29 +6,26 @@
 //!
 //! | use case | asks |
 //! |---|---|
-//! | `books_check` | [`Schema::validate`], then [`Shelf::build`] and [`Ledger::build`] through [`assess`](crate::domain::shelf::freshness::assess) for the faults around the documents |
-//! | `status` | [`assess`](crate::domain::shelf::freshness::assess): every identity's [`Standing`], with [`Ledger::status_of`] beside it |
+//! | `books_check` | [`Schema::validate`], then [`Shelf::tally_by_book`] and [`assess`] for the faults around the documents |
+//! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
-//! | `trace` | [`resolve`], then [`Shelf::links_of`] for every kind of link, up and down |
-//! | `stale` | [`assess`](crate::domain::shelf::freshness::assess): the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`] |
+//! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
+//! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`] |
 //!
 //! [`Schema::validate`]: crate::domain::shelf::schema::Schema::validate
-//! [`Shelf::build`]: crate::domain::shelf::build::Shelf::build
-//! [`Ledger::build`]: crate::domain::shelf::ledger::Ledger::build
+//! [`Shelf::tally_by_book`]: crate::domain::shelf::build::Shelf::tally_by_book
+//! [`assess`]: crate::domain::shelf::freshness::assess
 //! [`Ledger::status_of`]: crate::domain::shelf::ledger::Ledger::status_of
 //! [`Standing`]: crate::domain::shelf::freshness::Standing
 //! [`Assessment::roots_of`]: crate::domain::shelf::freshness::Assessment::roots_of
-//! [`Shelf::links_of`]: crate::domain::shelf::build::Shelf::links_of
 //! [`Freshness::Degraded`]: crate::domain::shelf::freshness::Freshness::Degraded
 //! [`resolve`]: crate::domain::shelf::lookup::resolve
-
-use std::collections::BTreeSet;
+//! [domain_trace]: crate::domain::shelf::trace::trace
 
 use crate::domain::id::DocId;
-use crate::domain::shelf::doc::LinkState;
 use crate::domain::shelf::freshness::{Freshness, Standing};
-use crate::domain::shelf::lookup::{Resolution, resolve};
-use crate::domain::shelf::schema::{Membership, Propagation};
+use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
+use crate::domain::shelf::trace::{LinkEnd, trace};
 
 use super::ShelfApp;
 use super::error::ShelfError;
@@ -39,28 +36,30 @@ use super::report::{
     TraceReport, UpstreamEdge, UpstreamEnd,
 };
 
-/// The kinds of link a document can hold, which [`Shelf::links_of`] answers one at a
-/// time.
-///
-/// [`Shelf::links_of`]: crate::domain::shelf::build::Shelf::links_of
-const PROPAGATIONS: [Propagation; 3] = [
-    Propagation::Depends,
-    Propagation::Informs,
-    Propagation::Replaces,
-];
-
 /// The identity a reference names, or why it names none.
 // The error is read once and ends the use case; it is not a hot path.
 #[allow(clippy::result_large_err)]
-pub(super) fn identity(loaded: &Loaded, reference: &str) -> Result<DocId, ShelfError> {
+pub(super) fn identity(loaded: &Loaded, reference: &Reference) -> Result<DocId, ShelfError> {
     match resolve(&loaded.shelf, &loaded.ledger, reference) {
         Resolution::Found(id) | Resolution::LedgerOnly { id, .. } => Ok(id),
         Resolution::Missing => Err(ShelfError::NotFound {
-            reference: reference.to_owned(),
+            reference: reference.clone(),
         }),
         Resolution::Ambiguous(candidates) => Err(ShelfError::Ambiguous {
-            reference: reference.to_owned(),
+            reference: reference.clone(),
             candidates,
+        }),
+        Resolution::UnknownBook(book) => Err(ShelfError::UnknownBook {
+            reference: reference.clone(),
+            book,
+        }),
+        Resolution::NotAKeyOf { book, problem } => Err(ShelfError::NotAKeyOf {
+            reference: reference.clone(),
+            book,
+            problem,
+        }),
+        Resolution::NotAKeyOfAnyBook => Err(ShelfError::NotAKeyOfAnyBook {
+            reference: reference.clone(),
         }),
     }
 }
@@ -84,29 +83,20 @@ impl<P: ShelfRead> ShelfApp<P> {
             loaded: &loaded,
             assessment: &assessment,
         };
-        let health = view.health();
+        let tally = loaded.shelf.tally_by_book();
         let books = schema
             .books()
             .values()
             .map(|book| BookCount {
                 name: book.name().clone(),
                 dir: book.dir().clone(),
-                valid: loaded
-                    .shelf
-                    .docs()
-                    .values()
-                    .filter(|doc| doc.key().book == *book.name())
-                    .count(),
-                invalid: health
-                    .invalid
-                    .iter()
-                    .filter(|file| {
-                        schema.membership(file.origin()) == Membership::In(book.name().clone())
-                    })
-                    .count(),
+                tally: tally.get(book.name()).copied().unwrap_or_default(),
             })
             .collect();
-        Ok(BooksCheck::Checked { books, health })
+        Ok(BooksCheck::Checked {
+            books,
+            health: view.health(),
+        })
     }
 
     /// Every document with what was decided about it and whether the decision still
@@ -132,7 +122,7 @@ impl<P: ShelfRead> ShelfApp<P> {
 
     /// One document: what the reference names, with its standing, its notices and
     /// where the degradation of its approval starts.
-    pub async fn get(&self, reference: &str) -> Result<GetReport, ShelfError> {
+    pub async fn get(&self, reference: &Reference) -> Result<GetReport, ShelfError> {
         let loaded = load(&self.ports).await?;
         let id = identity(&loaded, reference)?;
         let assessment = loaded.assess();
@@ -150,11 +140,9 @@ impl<P: ShelfRead> ShelfApp<P> {
     }
 
     /// What a document is linked to, and what is linked to it, each node with where
-    /// it stands.
-    ///
-    /// Every kind of link is followed (what a document stands on, what it informs of,
-    /// what it replaces), transitively, each document expanded once so a cycle ends.
-    pub async fn trace(&self, reference: &str) -> Result<TraceReport, ShelfError> {
+    /// it stands. The walk is the domain's ([`trace`]); this shows each document it
+    /// reaches as a row.
+    pub async fn trace(&self, reference: &Reference) -> Result<TraceReport, ShelfError> {
         let loaded = load(&self.ports).await?;
         let id = identity(&loaded, reference)?;
         let assessment = loaded.assess();
@@ -162,10 +150,40 @@ impl<P: ShelfRead> ShelfApp<P> {
             loaded: &loaded,
             assessment: &assessment,
         };
+        let walked = trace(&loaded.shelf, id);
+        let upstream = walked
+            .upstream
+            .into_iter()
+            .map(|edge| UpstreamEdge {
+                from: edge.holder,
+                link: edge.link,
+                propagation: edge.propagation,
+                depth: edge.depth,
+                to: match edge.end {
+                    LinkEnd::Doc(target) => UpstreamEnd::Doc(Box::new(view.row(target))),
+                    LinkEnd::Unresolved(unresolved) => UpstreamEnd::Unresolved(unresolved),
+                },
+            })
+            .collect();
+        let downstream = walked
+            .downstream
+            .into_iter()
+            .filter_map(|edge| match edge.end {
+                LinkEnd::Doc(to) => Some(DownstreamEdge {
+                    to,
+                    link: edge.link,
+                    propagation: edge.propagation,
+                    depth: edge.depth,
+                    holder: Box::new(view.row(edge.holder)),
+                }),
+                // A walk down only follows resolved links.
+                LinkEnd::Unresolved(_) => None,
+            })
+            .collect();
         Ok(TraceReport {
             root: view.row(id),
-            upstream: upstream(&loaded, &view, id),
-            downstream: downstream(&loaded, &view, id),
+            upstream,
+            downstream,
             names: loaded.names(),
             health: view.health(),
         })
@@ -184,9 +202,9 @@ impl<P: ShelfRead> ShelfApp<P> {
             .standings()
             .iter()
             .filter_map(|(id, standing)| match standing {
-                Standing::Approved(Freshness::Degraded { level, .. }) => Some(StaleEntry {
+                Standing::Approved(Freshness::Degraded(degradation)) => Some(StaleEntry {
                     row: view.row(*id),
-                    level: *level,
+                    level: degradation.level(),
                     roots: assessment.roots_of(*id),
                 }),
                 _ => None,
@@ -199,85 +217,4 @@ impl<P: ShelfRead> ShelfApp<P> {
             health: view.health(),
         })
     }
-}
-
-/// The links of `start` and of everything they reach, upstream.
-fn upstream(loaded: &Loaded, view: &View<'_>, start: DocId) -> Vec<UpstreamEdge> {
-    let mut edges = Vec::new();
-    let mut expanded = BTreeSet::from([start]);
-    let mut frontier = vec![start];
-    let mut depth = 0;
-    while !frontier.is_empty() {
-        depth += 1;
-        let mut next = Vec::new();
-        for from in frontier {
-            let Some(doc) = loaded.shelf.doc(from) else {
-                continue;
-            };
-            for propagation in PROPAGATIONS {
-                for (link, states) in loaded.shelf.links_of(doc, propagation) {
-                    for state in states {
-                        let to = match state {
-                            LinkState::Resolved { target } => {
-                                if expanded.insert(*target) {
-                                    next.push(*target);
-                                }
-                                UpstreamEnd::Doc(Box::new(view.row(*target)))
-                            }
-                            LinkState::Unresolved(unresolved) => {
-                                UpstreamEnd::Unresolved(unresolved.clone())
-                            }
-                        };
-                        edges.push(UpstreamEdge {
-                            from,
-                            link: link.clone(),
-                            propagation,
-                            depth,
-                            to,
-                        });
-                    }
-                }
-            }
-        }
-        frontier = next;
-    }
-    edges
-}
-
-/// The documents that link to `start`, and those that link to them.
-fn downstream(loaded: &Loaded, view: &View<'_>, start: DocId) -> Vec<DownstreamEdge> {
-    let mut edges = Vec::new();
-    let mut expanded = BTreeSet::from([start]);
-    let mut frontier = vec![start];
-    let mut depth = 0;
-    while !frontier.is_empty() {
-        depth += 1;
-        let mut next = Vec::new();
-        for to in frontier {
-            for holder in loaded.shelf.docs().values() {
-                for propagation in PROPAGATIONS {
-                    for (link, states) in loaded.shelf.links_of(holder, propagation) {
-                        let names_it = states.iter().any(
-                            |state| matches!(state, LinkState::Resolved { target } if *target == to),
-                        );
-                        if !names_it {
-                            continue;
-                        }
-                        if expanded.insert(holder.id()) {
-                            next.push(holder.id());
-                        }
-                        edges.push(DownstreamEdge {
-                            to,
-                            link: link.clone(),
-                            propagation,
-                            depth,
-                            holder: Box::new(view.row(holder.id())),
-                        });
-                    }
-                }
-            }
-        }
-        frontier = next;
-    }
-    edges
 }

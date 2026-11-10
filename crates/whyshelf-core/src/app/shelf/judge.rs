@@ -38,13 +38,14 @@ use crate::domain::actor::Actor;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
-    ApproveFrame, Decision, DeclaredStatus, JudgedAt, JudgementId, PresentFrame, Record,
+    ApproveFrame, Decision, DeclaredStatus, JudgedAt, JudgementId, Ledger, PresentFrame, Record,
     RetireFrame, Revocation, frame_approve, frame_present, frame_retire,
 };
+use crate::domain::shelf::lookup::Reference;
 
 use super::ShelfApp;
 use super::error::ShelfError;
-use super::load::load;
+use super::load::{Loaded, load};
 use super::ports::{ActorSource, IdSource, LedgerAppend, ShelfPort, ShelfWrite, port};
 use super::read::identity;
 use super::report::Judged;
@@ -66,8 +67,8 @@ pub enum Judgement {
     },
     /// The document is to be replaced.
     Deprecate {
-        /// A document that is said to replace it, as typed: checked, not recorded.
-        successor: Option<String>,
+        /// A document that is said to replace it: checked, not recorded.
+        successor: Option<Reference>,
         /// Why, if the person says.
         reason: Option<NonBlank>,
     },
@@ -88,8 +89,8 @@ pub enum Judgement {
 pub struct JudgeRequest {
     /// What is decided.
     pub judgement: Judgement,
-    /// The document, as typed: a key, an identifier or a short identifier.
-    pub reference: String,
+    /// The document.
+    pub reference: Reference,
     /// Who judges. `None` is the person the actor port names.
     pub actor: Option<Actor>,
 }
@@ -101,8 +102,44 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// cannot be followed, a cycle, an expiry that is not in the future, nothing to
     /// revoke, a successor that is none) writes nothing.
     pub async fn judge(&mut self, request: JudgeRequest) -> Result<Judged, ShelfError> {
-        let loaded = load(&self.ports).await?;
-        let subject = identity(&loaded, &request.reference)?;
+        let mut judged = self.judge_all(vec![request]).await?;
+        judged.pop().ok_or(ShelfError::NothingRequested)
+    }
+
+    /// Make several judgements in order, on one reading of the project, and append
+    /// them all, or none.
+    ///
+    /// Each is decided on the ledger as the ones before it left it, so a run that
+    /// approves a finding and then the spec that stands on it frames the spec on
+    /// that approval. Every judgement is decided before anything is written: when one
+    /// is refused, the error names it and nothing is written. (A port that fails
+    /// half-way through the writes can still leave the first of them written; each is
+    /// a record of its own, so what is there is sound.)
+    pub async fn judge_all(
+        &mut self,
+        requests: Vec<JudgeRequest>,
+    ) -> Result<Vec<Judged>, ShelfError> {
+        let mut loaded = load(&self.ports).await?;
+        let mut judged = Vec::with_capacity(requests.len());
+        for request in requests {
+            let one = self.decide(&loaded, request).await?;
+            loaded.records.push(one.record.clone());
+            loaded.ledger = Ledger::build(loaded.records.clone());
+            judged.push(one);
+        }
+        for one in &judged {
+            self.ports
+                .append()
+                .append(&one.record)
+                .await
+                .map_err(port(ShelfPort::LedgerAppend))?;
+        }
+        Ok(judged)
+    }
+
+    /// One judgement, decided on what is loaded; nothing is written.
+    async fn decide(&self, loaded: &Loaded, request: JudgeRequest) -> Result<Judged, ShelfError> {
+        let subject = identity(loaded, &request.reference)?;
         let key = loaded.shelf.doc(subject).map(|doc| doc.key().clone());
         let now = loaded.now;
 
@@ -130,8 +167,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
             Judgement::Deprecate { successor, reason } => {
                 let frame = frame_present(&loaded.shelf, subject)?;
                 let of = Successors::of(&loaded.shelf, &loaded.ledger, subject);
-                if let Some(text) = successor {
-                    let named = identity(&loaded, &text)?;
+                if let Some(successor) = successor {
+                    let named = identity(loaded, &successor)?;
                     let listed = match &of {
                         Successors::None => false,
                         Successors::Some(ids) => ids.iter().any(|id| *id == named),
@@ -194,11 +231,6 @@ impl<P: ShelfWrite> ShelfApp<P> {
             }
         };
 
-        self.ports
-            .append()
-            .append(&record)
-            .await
-            .map_err(port(ShelfPort::LedgerAppend))?;
         Ok(Judged {
             record,
             subject,

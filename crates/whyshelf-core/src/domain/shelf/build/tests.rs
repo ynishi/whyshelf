@@ -4,6 +4,7 @@ use super::*;
 use crate::domain::shelf::fixtures_tests::{
     decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, text,
 };
+use crate::domain::shelf::graph::CycleId;
 use crate::domain::shelf::schema::Cardinality;
 
 fn problems_of(shelf: &Shelf, n: u128) -> Vec<DocProblem> {
@@ -22,8 +23,9 @@ fn links(shelf: &Shelf, n: u128, name: &str) -> Vec<LinkState> {
         .unwrap()
         .links()
         .get(name)
-        .cloned()
         .unwrap()
+        .states()
+        .to_vec()
 }
 
 fn hash_of(shelf: &Shelf, n: u128) -> DocHash {
@@ -31,12 +33,7 @@ fn hash_of(shelf: &Shelf, n: u128) -> DocHash {
 }
 
 fn form(key: &str) -> KeyForm {
-    schema()
-        .book_named("finding")
-        .unwrap()
-        .key()
-        .parse(key)
-        .unwrap()
+    schema().book("finding").unwrap().key().parse(key).unwrap()
 }
 
 fn finding() -> BookName {
@@ -86,17 +83,53 @@ fn a_file_under_no_book_is_outside_the_books() {
 }
 
 #[test]
-fn a_file_under_no_book_and_with_no_id_is_unreadable() {
+fn a_file_under_no_book_and_with_no_id_is_anonymous() {
     let s = shelf(vec![DocReading::Parsed {
         origin: path("notes/n.md"),
         entries: entries(&[]),
         body: String::new(),
     }]);
-    assert_eq!(s.unreadable().len(), 1);
+    assert!(s.unreadable().is_empty());
+    assert_eq!(s.anonymous().len(), 1);
     assert_eq!(
-        s.unreadable()[0].problems().first(),
+        s.anonymous()[0].problems().first(),
         &DocProblem::OutsideBooks
     );
+}
+
+#[test]
+fn an_identity_is_gone_when_only_files_with_no_id_exist() {
+    let s = shelf(vec![
+        fr(1, &[]),
+        DocReading::Parsed {
+            origin: path("findings/a.md"),
+            entries: entries(&[("key", text("FR-2")), ("title", text("t"))]),
+            body: String::new(),
+        },
+    ]);
+    assert_eq!(s.anonymous().len(), 1);
+    assert!(s.unreadable().is_empty());
+    assert_eq!(s.state_of(docid(9)), DocState::Gone);
+    assert_eq!(s.state_of(docid(9)).presence(), DocPresence::Gone);
+}
+
+#[test]
+fn an_identity_is_unknown_when_an_unparsed_file_has_an_unreadable_id_beside_id_less_files() {
+    let s = shelf(vec![
+        DocReading::Parsed {
+            origin: path("findings/a.md"),
+            entries: entries(&[("key", text("FR-2")), ("title", text("t"))]),
+            body: String::new(),
+        },
+        DocReading::Unparsed {
+            origin: path("findings/x.md"),
+            id: ReadId::Unreadable,
+            why: RawProblem::Syntax { line: None },
+        },
+    ]);
+    assert_eq!(s.anonymous().len(), 1);
+    assert_eq!(s.unreadable().len(), 1);
+    assert!(matches!(s.state_of(docid(9)), DocState::Unknown { .. }));
 }
 
 #[test]
@@ -125,13 +158,15 @@ fn the_id_must_be_there_and_be_an_identifier() {
         body: String::new(),
     };
     let s = shelf(vec![no_id, not_text, bad]);
+    // No id at all is anonymous; an id that cannot be read is unreadable.
+    assert_eq!(s.anonymous().len(), 1);
+    assert_eq!(s.anonymous()[0].problems().first(), &DocProblem::IdMissing);
     let kinds: Vec<_> = s
         .unreadable()
         .iter()
         .map(|d| d.problems().first().clone())
         .collect();
-    assert_eq!(kinds.len(), 3);
-    assert!(kinds.contains(&DocProblem::IdMissing));
+    assert_eq!(kinds.len(), 2);
     assert!(kinds.contains(&DocProblem::IdNotText));
     assert!(kinds.iter().any(|p| matches!(p, DocProblem::IdInvalid(_))));
 }
@@ -407,10 +442,19 @@ fn every_problem_of_a_file_is_listed() {
 #[test]
 fn a_link_resolves_to_the_valid_document_with_the_key() {
     let s = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
-    assert_eq!(
-        links(&s, 2, "base"),
-        vec![LinkState::Resolved { target: docid(1) }]
-    );
+    match links(&s, 2, "base").as_slice() {
+        // It carries what the shelf has for the target: its identity, key and hash.
+        [LinkState::Resolved(target)] => {
+            assert_eq!(target.id(), docid(1));
+            assert_eq!(target.key().to_string(), "finding:FR-1");
+            assert_eq!(*target.hash(), hash_of(&s, 1));
+        }
+        other => panic!("{other:?}"),
+    }
+    // And the link carries its kind.
+    let link = s.doc(docid(2)).unwrap().links().get("base").unwrap();
+    assert_eq!(link.kind().propagation, Propagation::Depends);
+    assert_eq!(link.kind().target, finding());
 }
 
 #[test]
@@ -427,7 +471,12 @@ fn a_link_in_the_wrong_grammar_is_malformed() {
         ));
     }
     match links(&s, 1, "base").as_slice() {
-        [LinkState::Unresolved(u)] => assert_eq!(u.written(), "nonsense"),
+        [LinkState::Unresolved(u)] => {
+            assert_eq!(u.written(), "nonsense");
+            // It points into the book, and reads as no key there.
+            assert_eq!(*u.book(), finding());
+            assert_eq!(u.key(), None);
+        }
         other => panic!("{other:?}"),
     }
 }
@@ -435,10 +484,17 @@ fn a_link_in_the_wrong_grammar_is_malformed() {
 #[test]
 fn a_link_to_no_key_is_missing() {
     let s = shelf(vec![fr(1, &["FR-99"])]);
-    assert!(matches!(
-        links(&s, 1, "base").as_slice(),
-        [LinkState::Unresolved(u)] if *u.why() == UnresolvedWhy::Missing
-    ));
+    match links(&s, 1, "base").as_slice() {
+        [LinkState::Unresolved(u)] => {
+            assert_eq!(*u.why(), UnresolvedWhy::Missing);
+            // The key it was read as is kept, so nothing reads the text again.
+            assert_eq!(
+                u.key().map(ToString::to_string).as_deref(),
+                Some("finding:FR-99")
+            );
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 #[test]
@@ -657,9 +713,9 @@ fn links_that_stand_on_each_other_are_a_cycle_even_when_pending() {
         }
     );
     assert_eq!(ring.ids(), vec![docid(1), docid(2)]);
-    assert!(matches!(ring.members(), CycleMembers::Ring(m) if m.len() == 2));
+    // A document that stands on itself is a cycle of one.
     let own = &s.cycles()[1];
-    assert!(matches!(own.members(), CycleMembers::SelfLoop(id) if *id == docid(3)));
+    assert_eq!(own.ids(), vec![docid(3)]);
     // A document that only stands on a cycle is not in it.
     assert!(!s.cycles().iter().any(|c| c.contains(docid(4))));
 }
@@ -802,13 +858,20 @@ fn the_owned_form_of_a_state_carries_every_problem() {
         reading("findings/a.md", 1, "FR-1", &[("title", text("a"))]),
         reading("findings/b.md", 1, "FR-2", &[("title", text("b"))]),
     ]);
-    match s.state_of(docid(1)).to_kind() {
-        Some(DocStateKind::Invalid(problems)) => assert_eq!(problems.len(), 2),
+    let failure = s.state_of(docid(1)).valid_or_failure().err();
+    assert_eq!(
+        failure.as_ref().map(DocFailure::tag),
+        Some(FailureTag::Invalid)
+    );
+    match failure {
+        Some(DocFailure::Invalid(problems)) => assert_eq!(problems.len(), 2),
         other => panic!("{other:?}"),
     }
-    assert_eq!(s.state_of(docid(2)).to_kind(), Some(DocStateKind::Gone));
+    let gone = s.state_of(docid(2)).valid_or_failure().err();
+    assert_eq!(gone, Some(DocFailure::Gone));
+    assert_eq!(gone.as_ref().map(DocFailure::tag), Some(FailureTag::Gone));
     let s = shelf(vec![fr(1, &[])]);
-    assert_eq!(s.state_of(docid(1)).to_kind(), None);
+    assert!(s.state_of(docid(1)).valid_or_failure().is_ok());
 }
 
 #[test]
@@ -857,7 +920,7 @@ fn links_of_gives_the_links_of_one_meaning() {
     ]);
     let doc = s.doc(docid(2)).unwrap();
     let names = |p| {
-        s.links_of(doc, p)
+        doc.links_of(p)
             .into_iter()
             .map(|(n, _)| n.as_str().to_owned())
             .collect::<Vec<_>>()
@@ -884,65 +947,128 @@ fn ids_are_every_identity_some_file_carries() {
     );
 }
 
-fn edges(pairs: &[(u128, &[u128])]) -> BTreeMap<DocId, BTreeSet<DocId>> {
-    pairs
-        .iter()
-        .map(|(from, to)| (docid(*from), to.iter().map(|t| docid(*t)).collect()))
-        .collect()
-}
-
-#[test]
-fn components_come_upstream_first() {
-    // 3 stands on 2, 2 stands on 1; 4 on 3 and 1.
-    let graph = edges(&[(3, &[2]), (2, &[1]), (4, &[3, 1])]);
-    let order: Vec<DocId> = components(&graph).into_iter().flatten().collect();
-    let position = |n: u128| order.iter().position(|id| *id == docid(n)).unwrap();
-    assert_eq!(order.len(), 4);
-    assert!(position(1) < position(2));
-    assert!(position(2) < position(3));
-    assert!(position(3) < position(4));
-}
-
-#[test]
-fn a_cycle_is_one_component_and_its_upstream_comes_before_it() {
-    let graph = edges(&[(1, &[2]), (2, &[1, 3]), (3, &[])]);
-    let all = components(&graph);
-    assert_eq!(all, vec![vec![docid(3)], vec![docid(1), docid(2)]]);
-}
-
-#[test]
-fn cycles_of_finds_rings_and_self_loops_and_names_them_by_source() {
-    let graph = edges(&[(1, &[2]), (2, &[3]), (3, &[1]), (4, &[4]), (5, &[1])]);
-    let cycles = cycles_of(CycleSource::Frames, &graph);
-    assert_eq!(cycles.len(), 2);
-    assert_eq!(
-        cycles[0].id(),
-        CycleId {
-            source: CycleSource::Frames,
-            min: docid(1)
-        }
-    );
-    assert_eq!(cycles[0].ids(), vec![docid(1), docid(2), docid(3)]);
-    assert_eq!(cycles[1].ids(), vec![docid(4)]);
-    // Two cycles of different graphs on one document are two ids.
-    let links = cycles_of(CycleSource::Links, &graph);
-    assert_ne!(links[0].id(), cycles[0].id());
-}
-
-#[test]
-fn a_very_long_chain_does_not_overflow_the_stack() {
-    let n = 20_000u128;
-    let graph: BTreeMap<DocId, BTreeSet<DocId>> = (2..=n)
-        .map(|i| (docid(i), BTreeSet::from([docid(i - 1)])))
-        .collect();
-    assert!(cycles_of(CycleSource::Links, &graph).is_empty());
-    assert_eq!(components(&graph).len(), usize::try_from(n).unwrap());
-}
-
 #[test]
 fn raw_values_know_their_kind() {
     assert_eq!(text("a").kind(), RawKind::Text);
     assert_eq!(RawValue::Integer(1).kind(), RawKind::Integer);
     assert_eq!(RawValue::Bool(true).kind(), RawKind::Bool);
     assert_eq!(list(&[]).kind(), RawKind::List);
+}
+
+#[test]
+fn tally_by_book_counts_valid_docs_and_invalid_files_per_book() {
+    let s = shelf(vec![
+        fr(1, &[]),
+        fr(2, &[]),
+        // Invalid: no title.
+        reading("findings/bad.md", 3, "FR-3", &[]),
+        reading("specs/sp-4.md", 4, "SP-4", &[("title", text("t"))]),
+    ]);
+    let tally = s.tally_by_book();
+    assert_eq!(tally.len(), 3);
+    assert_eq!(
+        tally[&finding()],
+        BookTally {
+            valid: 2,
+            invalid: 1
+        }
+    );
+    assert_eq!(
+        tally[&BookName::new("spec").unwrap()],
+        BookTally {
+            valid: 1,
+            invalid: 0
+        }
+    );
+}
+
+#[test]
+fn tally_by_book_lists_an_empty_declared_book_with_zeros() {
+    let s = shelf(vec![fr(1, &[])]);
+    assert_eq!(
+        s.tally_by_book()[&BookName::new("design").unwrap()],
+        BookTally::default()
+    );
+}
+
+#[test]
+fn tally_by_book_counts_an_unreadable_file_as_invalid_in_its_book() {
+    let s = shelf(vec![
+        fr(1, &[]),
+        DocReading::Unparsed {
+            origin: path("specs/x.md"),
+            id: ReadId::Unreadable,
+            why: RawProblem::Syntax { line: None },
+        },
+    ]);
+    let tally = s.tally_by_book();
+    assert_eq!(
+        tally[&BookName::new("spec").unwrap()],
+        BookTally {
+            valid: 0,
+            invalid: 1
+        }
+    );
+    assert_eq!(
+        tally[&finding()],
+        BookTally {
+            valid: 1,
+            invalid: 0
+        }
+    );
+}
+
+#[test]
+fn presence_of_a_valid_doc_has_its_key_file_and_hash() {
+    let s = shelf(vec![fr(1, &[])]);
+    match s.state_of(docid(1)).presence() {
+        DocPresence::Valid { key, origin, hash } => {
+            assert_eq!(&key, s.doc(docid(1)).unwrap().key());
+            assert_eq!(origin, path("findings/fr-1.md"));
+            assert_eq!(hash, hash_of(&s, 1));
+        }
+        other => panic!("expected valid, got {other:?}"),
+    }
+}
+
+#[test]
+fn presence_of_two_files_with_one_id_lists_both_files_and_the_problems_of_both() {
+    let s = shelf(vec![
+        reading("findings/a.md", 1, "FR-1", &[("title", text("t"))]),
+        reading("findings/b.md", 1, "FR-1", &[("title", text("t"))]),
+    ]);
+    match s.state_of(docid(1)).presence() {
+        DocPresence::Invalid { files, problems } => {
+            let files: Vec<&str> = files.iter().map(RelPath::as_str).collect();
+            assert_eq!(files, vec!["findings/a.md", "findings/b.md"]);
+            let duplicates = problems
+                .iter()
+                .filter(|p| matches!(p, DocProblem::DuplicateId { .. }))
+                .count();
+            assert_eq!(duplicates, 2);
+        }
+        other => panic!("expected invalid, got {other:?}"),
+    }
+}
+
+#[test]
+fn presence_of_an_identity_no_file_carries_is_gone() {
+    let s = shelf(vec![fr(1, &[])]);
+    assert_eq!(s.state_of(docid(9)).presence(), DocPresence::Gone);
+}
+
+#[test]
+fn presence_is_unknown_while_a_file_cannot_say_its_id() {
+    let s = shelf(vec![DocReading::Unparsed {
+        origin: path("findings/x.md"),
+        id: ReadId::Unreadable,
+        why: RawProblem::Syntax { line: None },
+    }]);
+    match s.state_of(docid(9)).presence() {
+        DocPresence::Unknown { unreadable } => {
+            assert_eq!(unreadable.len(), 1);
+            assert_eq!(unreadable.first().as_str(), "findings/x.md");
+        }
+        other => panic!("expected unknown, got {other:?}"),
+    }
 }

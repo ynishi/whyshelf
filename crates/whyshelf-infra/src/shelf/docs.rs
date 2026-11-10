@@ -29,6 +29,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use std::fmt;
+
+use serde::Deserialize;
+use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_norway::Value;
 use whyshelf_core::app::shelf::DocSource;
 use whyshelf_core::domain::error::ValueError;
@@ -173,10 +177,10 @@ pub fn read(origin: RelPath, text: &str) -> DocReading {
         why,
     };
     let Some(rest) = text.strip_prefix("---\n") else {
-        return unparsed(RawProblem::NotAMapping);
+        return unparsed(RawProblem::NoFrontMatter);
     };
     let Some((yaml, body)) = split_closing(rest) else {
-        return unparsed(RawProblem::Syntax { line: None });
+        return unparsed(RawProblem::Unclosed);
     };
     match entries(yaml) {
         Ok(entries) => DocReading::Parsed {
@@ -205,25 +209,21 @@ fn entries(yaml: &str) -> Result<BTreeMap<String, RawValue>, RawProblem> {
     if yaml.trim().is_empty() {
         return Ok(BTreeMap::new());
     }
-    let value: Value = serde_norway::from_str(yaml).map_err(|error| {
-        let message = error.to_string();
-        match duplicate_key(&message) {
-            Some(key) => RawProblem::DuplicateKey { key },
-            None => RawProblem::Syntax {
-                // The parser counts from the first line of the YAML, which is the
-                // second line of the file.
-                line: error
-                    .location()
-                    .and_then(|at| u32::try_from(at.line()).ok())
-                    .map(|line| line + 1),
-            },
-        }
+    let front: Front = serde_norway::from_str(yaml).map_err(|error| RawProblem::Syntax {
+        // The parser counts from the first line of the YAML, which is the second
+        // line of the file.
+        line: error
+            .location()
+            .and_then(|at| u32::try_from(at.line()).ok())
+            .map(|line| line + 1),
     })?;
-    let Value::Mapping(map) = value else {
-        return Err(RawProblem::NotAMapping);
+    let pairs = match front {
+        Front::Mapping(pairs) => pairs,
+        Front::Duplicate(key) => return Err(RawProblem::DuplicateKey { key }),
+        Front::NotMapping => return Err(RawProblem::NotAMapping),
     };
     let mut out = BTreeMap::new();
-    for (key, value) in map {
+    for (key, value) in pairs {
         let Value::String(key) = key else {
             return Err(RawProblem::NotAMapping);
         };
@@ -234,11 +234,85 @@ fn entries(yaml: &str) -> Result<BTreeMap<String, RawValue>, RawProblem> {
     Ok(out)
 }
 
-/// The key a duplicate-key message of the YAML parser names.
-fn duplicate_key(message: &str) -> Option<String> {
-    let rest = message.strip_prefix("duplicate entry with key \"")?;
-    let end = rest.find('"')?;
-    Some(rest[..end].to_owned())
+/// The top level of a front matter as the parser streams it.
+///
+/// A key written twice is found here, in the parser's own stream of keys, and not in
+/// a mapping built from it (which keeps one value per key) and not in the wording of
+/// an error. Only the top level is looked at: a key written twice inside a nested
+/// mapping is not a [`RawProblem::DuplicateKey`], because a nested value is not a
+/// kind a front matter holds and is reported as that
+/// ([`RawProblem::UnsupportedValue`]), or, when the parser itself refuses the
+/// nested mapping, as a [`RawProblem::Syntax`].
+enum Front {
+    /// A mapping, with every entry in the order written.
+    Mapping(Vec<(Value, Value)>),
+    /// A mapping with a text key written twice: the first such key.
+    Duplicate(String),
+    /// A scalar, or a sequence.
+    NotMapping,
+}
+
+impl<'de> Deserialize<'de> for Front {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct FrontVisitor;
+
+        impl<'de> Visitor<'de> for FrontVisitor {
+            type Value = Front;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("a YAML document")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Front, A::Error> {
+                let mut pairs: Vec<(Value, Value)> = Vec::new();
+                let mut duplicate = None;
+                while let Some((key, value)) = map.next_entry::<Value, Value>()? {
+                    if duplicate.is_none()
+                        && let Value::String(text) = &key
+                        && pairs.iter().any(|(seen, _)| *seen == key)
+                    {
+                        duplicate = Some(text.clone());
+                    }
+                    pairs.push((key, value));
+                }
+                Ok(match duplicate {
+                    Some(key) => Front::Duplicate(key),
+                    None => Front::Mapping(pairs),
+                })
+            }
+
+            fn visit_bool<E: de::Error>(self, _: bool) -> Result<Front, E> {
+                Ok(Front::NotMapping)
+            }
+
+            fn visit_i64<E: de::Error>(self, _: i64) -> Result<Front, E> {
+                Ok(Front::NotMapping)
+            }
+
+            fn visit_u64<E: de::Error>(self, _: u64) -> Result<Front, E> {
+                Ok(Front::NotMapping)
+            }
+
+            fn visit_f64<E: de::Error>(self, _: f64) -> Result<Front, E> {
+                Ok(Front::NotMapping)
+            }
+
+            fn visit_str<E: de::Error>(self, _: &str) -> Result<Front, E> {
+                Ok(Front::NotMapping)
+            }
+
+            fn visit_unit<E: de::Error>(self) -> Result<Front, E> {
+                Ok(Front::NotMapping)
+            }
+
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Front, A::Error> {
+                while seq.next_element::<IgnoredAny>()?.is_some() {}
+                Ok(Front::NotMapping)
+            }
+        }
+
+        deserializer.deserialize_any(FrontVisitor)
+    }
 }
 
 /// A value of a front matter, if it is a kind a front matter holds.
@@ -343,22 +417,64 @@ mod tests {
     }
 
     #[test]
-    fn a_file_without_a_front_matter_or_its_end_is_unparsed() {
+    fn a_file_without_a_front_matter_is_said_to_have_none() {
         assert!(matches!(
             read(origin(), "Just text.\n"),
             DocReading::Unparsed {
-                why: RawProblem::NotAMapping,
+                why: RawProblem::NoFrontMatter,
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn a_front_matter_that_is_not_closed_is_said_so_and_keeps_its_identity() {
         assert!(matches!(
             read(origin(), &format!("---\nid: {ID}\n")),
             DocReading::Unparsed {
-                why: RawProblem::Syntax { .. },
+                why: RawProblem::Unclosed,
                 id: ReadId::Read(_),
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn a_front_matter_that_is_no_mapping_is_said_so() {
+        for yaml in ["- a\n- b", "just: [", "plain"] {
+            let DocReading::Unparsed { why, .. } = read(origin(), &format!("---\n{yaml}\n---\n"))
+            else {
+                panic!("unparsed");
+            };
+            let expected_mapping = yaml != "just: [";
+            assert_eq!(why == RawProblem::NotAMapping, expected_mapping, "{yaml}");
+        }
+    }
+
+    #[test]
+    fn a_key_written_twice_inside_a_nested_mapping_is_no_top_level_duplicate() {
+        let text = format!("---\nid: {ID}\nnested:\n  a: 1\n  a: 2\n---\n");
+        let DocReading::Unparsed { why, .. } = read(origin(), &text) else {
+            panic!("unparsed");
+        };
+        assert!(
+            !matches!(why, RawProblem::DuplicateKey { .. }),
+            "a nested mapping is not a value a front matter holds: {why:?}"
+        );
+    }
+
+    #[test]
+    fn the_first_of_several_duplicate_keys_is_named() {
+        let text = format!("---\nid: {ID}\nb: 1\na: 1\na: 2\nb: 2\n---\n");
+        let DocReading::Unparsed { why, .. } = read(origin(), &text) else {
+            panic!("unparsed");
+        };
+        assert_eq!(
+            why,
+            RawProblem::DuplicateKey {
+                key: "a".to_owned()
+            }
+        );
     }
 
     #[tokio::test]
