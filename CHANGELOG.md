@@ -59,6 +59,16 @@ and this project adheres to
 
 ### Changed
 
+- A link to artifacts names its space (`space = "file"` for files of the
+  project); one with no space, or an unknown one, is refused. Everything
+  outside the documents is an artifact of a space, resolved by that space's
+  adapter, and files are one space among others. A name resolves to present,
+  absent, cannot tell or not a name: an approval on a name that cannot be told
+  is refused, and one that later cannot be told is a notice, listed by `check`
+  under `unknown`. `presence` compares only whether an artifact is there. Every
+  answer about an artifact carries its `space`; pins stored before spaces read
+  as files and stay as stored (#38).
+
 - The commands are flat verbs (`whyshelf check`, not `whyshelf books check`),
   and every JSON answer carries `"version": 1` (#9).
 - The normalization of a document's text is a function of the domain,
