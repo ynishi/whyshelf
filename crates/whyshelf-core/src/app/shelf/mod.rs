@@ -60,6 +60,8 @@ mod artifact_tests;
 #[cfg(test)]
 mod comparison_tests;
 #[cfg(test)]
+mod cover_tests;
+#[cfg(test)]
 mod fake_tests;
 #[cfg(test)]
 mod new_doc_tests;
@@ -81,7 +83,7 @@ pub use ports::{
 pub use report::{
     ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport, DownstreamEdge,
     GetReport, Health, Judged, Names, Row, StaleEntry, StaleReport, StatusReport, TraceReport,
-    UpstreamEdge, UpstreamEnd,
+    Uncovered, UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use withdraw::WithdrawRequest;

@@ -1,0 +1,74 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "6fcf775202b4e62831e4ac4473fe2eedda60dfa6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:61b0e69d3f7143df6eaf7d658ba28643b88a2eadaa88b603bca151b192300580",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "4547d2fbfa866593437f1b6f9fb973736c559530",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:075685f2c082bb85b43ca4546cb4c5f6c01fdfb707b10e3d388a83d57d74540e",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "fa68eef7f38e66c122704bfbb87700d7e08bd750",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:afab5ce7b892766d9a289ab4299efeb29febabbeed1a5f5d0ec93d9dcf2e9b58",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/books.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794304361925,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7bbfeb560c708d2332037c3c673f81031f030e54",
+      "hash": "sha256:da5824c39e86e69afad60e05aa9f930192817a141c268c0f15fc84cc1098feb2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "11"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-11d9-7657-8910-6240e23765d9"
+    }
+  ],
+  "id": "01a1c4df-c675-759a-b3d3-9e044dbe017e",
+  "kind": "decision",
+  "reason": "Issue #13: the test files only gained cover: false in their struct literals, and books.rs and output.rs gained the cover code; read again",
+  "revision": "c4943ff701eff0643d9227a0b527fc26207f4a44",
+  "seen": "sha256:f57eaad50aacfed8c625ef6780227805030ca254ebfcf07af9ff3a997627b6fa",
+  "seen_address": "006702fc871add4f3625d91c1b785d1ee2c23bc6",
+  "subject": "01a1c4ba-15af-74cf-8ea9-0f39eda83aa0",
+  "v": 1,
+  "verb": "approve"
+}

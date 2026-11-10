@@ -220,6 +220,10 @@ struct LinkDto {
     compare: Option<String>,
     /// For `compare = "lines"`: the prefixes of the lines left out.
     ignore: Option<Vec<String>>,
+    /// For a link into a book: every document of the target book is expected to be
+    /// reached by it; checked by the domain.
+    #[serde(default)]
+    cover: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -298,6 +302,7 @@ impl BookDto {
                             ignore: ignore.unwrap_or_default(),
                         }),
                     },
+                    cover: l.cover,
                 })
                 .collect(),
         }
@@ -435,6 +440,41 @@ means = "informs"
     fn a_key_a_link_does_not_know_is_still_refused() {
         assert!(parse(&tests_link("compare='lines'\nskip=['//']\n")).is_err());
         assert!(parse(&tests_link("compare=['lines']\n")).is_err());
+    }
+
+    /// A book `a` with a link `up` into itself, with `extra` lines on the link.
+    fn book_link(extra: &str) -> String {
+        format!(
+            "[[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [[book.link]]\nname='up'\ntarget='a'\nmeans='depends'\n{extra}"
+        )
+    }
+
+    #[test]
+    fn cover_is_read_onto_a_link_and_is_false_when_not_written() {
+        let decls = parse(&book_link("cover = true\n")).unwrap();
+        assert!(decls[0].links[0].cover);
+        let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
+        let book = schema.book("a").unwrap();
+        let (_, kind) = book
+            .links()
+            .iter()
+            .find(|(name, _)| name.as_str() == "up")
+            .unwrap();
+        assert!(kind.cover);
+
+        assert!(!parse(&book_link("cover = false\n")).unwrap()[0].links[0].cover);
+        assert!(!parse(&book_link("")).unwrap()[0].links[0].cover);
+    }
+
+    #[test]
+    fn a_cover_that_is_not_a_truth_value_is_refused() {
+        for value in ["'true'", "1", "['yes']"] {
+            assert!(
+                parse(&book_link(&format!("cover = {value}\n"))).is_err(),
+                "cover = {value}"
+            );
+        }
     }
 
     #[test]
