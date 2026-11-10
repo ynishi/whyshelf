@@ -45,9 +45,10 @@ pub enum BooksCommand {
     New {
         /// The book.
         book: String,
-        /// The title (the entry `title`).
+        /// A shorthand for the entry `title=<text>`, for a book that declares a
+        /// `title` field; a book declares whether a title is required.
         #[arg(long)]
-        title: String,
+        title: Option<String>,
         /// The key (default: the book's next number; a book of slugs needs one).
         #[arg(long)]
         key: Option<String>,

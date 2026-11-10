@@ -1,0 +1,87 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "751177c0f781f302e642bc5da36f090682a88876",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:81e8d6c919ad288532935eb8bd5a4e5360c0919db31bdf4be955d0176f180857",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/new_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "2ebca704ad875350ca9bad2b37ec7dbd20e0ed79",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bb6cc811a43b57bc38601fc45d067840767474f6e33fbbbd643bb5f031187055",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "b6ffa3575ab195c63b824fe1da831ad710d72450",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f0e0d4d4a41b9fc282e3e96a1eb50af66fea7a2bcfb97272574c8f2271f99c28",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "dae01214db56739388d92de8b64a5fb6ff7803c5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4370b333e8686847ebea8bd5058575f80fb7c034de159fec0d86ef5b61b47087",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794304798238,
+  "expires": null,
+  "frame": [
+    {
+      "address": "66263bdc3980b936c694c2d17be9b4677758e75e",
+      "hash": "sha256:84fddda824da59e08802e861073615e8cc6db49ab5c14a3467e6aeb3760e433b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    }
+  ],
+  "id": "01a1c4e6-6ebb-74fa-96ce-99d5b7ca2c8f",
+  "kind": "decision",
+  "reason": "Issue #16: new no longer assumes a title; DEC-8 says so, V-4 links the new tests and the app test of a book with no title; reviewed; just check green",
+  "revision": "d8c57233cab69cdb3f11be5714f1d0301d897781",
+  "seen": "sha256:9663feb4fb2ddf1e9a369edf1cc54e8c72aa3c05f3eabb7b6ccb2e5995341c58",
+  "seen_address": "8b476e2f3b7bf50f3c1e22dd6d5fe2467bc551b9",
+  "subject": "01a1c3eb-4d0e-77f5-b895-ad9aa697cad0",
+  "v": 1,
+  "verb": "approve"
+}
