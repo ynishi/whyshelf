@@ -93,7 +93,7 @@ pub struct BookCount {
     pub tally: BookTally,
 }
 
-/// The result of `books check`.
+/// The result of `check`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BooksCheck {
     /// The declaration of the books is not sound. Nothing was read through it.
@@ -230,7 +230,7 @@ pub struct ApprovedItem {
     pub retrieval: Retrieval,
 }
 
-/// The result of `show --approved`: what the approval that stands saw.
+/// The result of `get --approved`: what the approval that stands saw.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovedReport {
     /// The document as the answers show it now.

@@ -1,15 +1,15 @@
-//! `whyshelf books ...`: the commands on a shelf of books, over
+//! `whyshelf ...`: the commands on a shelf of books, over
 //! [`whyshelf_core::app::shelf`] and the adapters of `whyshelf_infra::shelf`.
 //!
 //! Every command answers in JSON.
 //!
 //! ```text
-//!   books <cmd> --> Project (infra::shelf) --> ShelfApp (app::shelf) --> report
-//!                                                                         |
-//!                                         output::* (serde) -> stdout, exit status
+//!   whyshelf <cmd> --> Project (infra::shelf) --> ShelfApp (app::shelf) --> report
+//!                                                                            |
+//!                                            output::* (serde) -> stdout, exit status
 //! ```
 //!
-//! `show --approved` and `diff` only read: they bring back the content an approval
+//! `get --approved` and `diff` only read: they bring back the content an approval
 //! saw (through Git, by the address the record kept) for a person to read, and
 //! never put anything back in place; that is Git's work and a person's. The text of
 //! a difference is made here, by [`textdiff`], from the two contents the use case
@@ -20,8 +20,8 @@
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `books check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `show --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path) |
+//! | 1 | `check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path) |
 //! | 3 | the run failed (a file could not be read or written) |
 //!
 //! `new` is the one command that writes a document. Its values arrive as text and
@@ -55,7 +55,7 @@ use args::Verb;
 /// The environment variable that names who judges.
 const ACTOR_VAR: &str = "WHYSHELF_ACTOR";
 
-/// The exit status of a `books` command.
+/// The exit status of a command.
 #[derive(Debug, Clone, Copy)]
 enum Exit {
     Ok = 0,
@@ -64,7 +64,7 @@ enum Exit {
     Failed = 3,
 }
 
-/// Run a `books` command on the project at `root`.
+/// Run a command on the project at `root`.
 pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
     let project = Project::new(root, std::env::var(ACTOR_VAR).ok());
     let result = match command {
@@ -81,10 +81,20 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             .status()
             .await
             .map(|r| print(&output::status(&r))),
-        BooksCommand::Get { reference } => ShelfApp::new(project)
+        BooksCommand::Get {
+            reference,
+            approved: false,
+        } => ShelfApp::new(project)
             .get(&reference)
             .await
             .map(|r| print(&output::get(&r))),
+        BooksCommand::Get {
+            reference,
+            approved: true,
+        } => ShelfApp::new(project)
+            .show_approved(&reference)
+            .await
+            .map(|r| print(&output::approved(&r))),
         BooksCommand::Trace { reference } => ShelfApp::new(project)
             .trace(&reference)
             .await
@@ -93,11 +103,6 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             .stale()
             .await
             .map(|r| print(&output::stale(&r))),
-        // `--approved` is required by the arguments, so `show` has this one view.
-        BooksCommand::Show { reference, .. } => ShelfApp::new(project)
-            .show_approved(&reference)
-            .await
-            .map(|r| print(&output::approved(&r))),
         BooksCommand::Diff { reference } => ShelfApp::new(project)
             .diff(&reference)
             .await
@@ -227,7 +232,9 @@ fn new_request(
 /// Print an answer as one JSON document on stdout.
 fn print<T: serde::Serialize>(value: &T) -> Exit {
     let mut out = std::io::stdout().lock();
-    let written = serde_json::to_writer_pretty(&mut out, value)
+    let written = serde_json::to_value(value)
+        .map(output::versioned)
+        .and_then(|answer| serde_json::to_writer_pretty(&mut out, &answer))
         .map_err(std::io::Error::from)
         .and_then(|()| writeln!(out));
     match written {

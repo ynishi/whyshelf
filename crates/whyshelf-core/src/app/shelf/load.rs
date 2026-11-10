@@ -59,7 +59,7 @@ pub(super) struct Loaded {
 /// Read the project through the ports and build the shelf and the ledger.
 ///
 /// A declaration that is not sound is [`ShelfError::Schema`]: nothing can be read
-/// through it. (`books check` wants the problems as an answer, so it builds the
+/// through it. (`check` wants the problems as an answer, so it builds the
 /// schema itself with [`schema_of`].)
 pub(super) async fn load<P: ShelfRead>(ports: &P) -> Result<Loaded, ShelfError> {
     let schema = schema_of(ports).await?.map_err(ShelfError::Schema)?;

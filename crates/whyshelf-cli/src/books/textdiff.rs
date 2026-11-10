@@ -1,4 +1,4 @@
-//! A unified line diff of two texts, for `books diff`: small, and with no dependency.
+//! A unified line diff of two texts, for `diff`: small, and with no dependency.
 //!
 //! The lines both texts start and end with are set aside first; the rest is compared
 //! with a longest common subsequence. When what is left is too large for that table

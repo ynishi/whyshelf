@@ -8,7 +8,7 @@
 //! | module | job |
 //! |---|---|
 //! | [`args`] | the commands as clap types |
-//! | [`books`] | the `books` commands: run one, print its JSON, give its exit status |
+//! | [`books`] | the commands: run one, print its JSON, give its exit status |
 
 mod args;
 mod books;
@@ -18,13 +18,11 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
-use args::{Cli, Sub};
+use args::Cli;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
     let root = cli.root.unwrap_or_else(|| PathBuf::from("."));
-    match cli.command {
-        Sub::Books(command) => books::run(root, command).await,
-    }
+    books::run(root, cli.command).await
 }
