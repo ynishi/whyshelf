@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "714a20ed69b52f2cf2711b2511c7fd417097b2b4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8d42a1a1004c34669994523154ab6ebc11080972d78c70ad16477b47fa273068",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/repository_ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794346883332,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e4894a2b3e0e23aa63e7a3936ccc1ddaf023bd48",
+      "hash": "sha256:cb58335814d4bb6089497d3f145dfc4d77325175f1fd66c238dfa13a74f4c87e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "46"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bf0d-70d9-a6b0-d454e6662c4d"
+    }
+  ],
+  "id": "01a1c768-9b33-7221-95be-fb863cb38df4",
+  "kind": "decision",
+  "reason": "Tests of the binary are given to e2e verifications (#45); checked against the tests by a blind review, every finding fixed",
+  "revision": "cefa153fab8e2e7607b033f364e925f87bfa83a8",
+  "seen": "sha256:0c7448460969b5289f1bf1e6a8b0b35790bbecc2c8d6e7df32c4f67b23e7fe6c",
+  "seen_address": "3f49a8bb5f101ac4f4a29a70eee388d0ee57a923",
+  "subject": "01a1c765-2707-72a5-97a0-25758305061d",
+  "v": 1,
+  "verb": "approve"
+}

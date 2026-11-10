@@ -1,0 +1,80 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "73080a658ef3eb790a48a32f3ba1abdfd8bfad30",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:17d531319fc0483e73e0204db808f37dc6a3b01aec4b1fae170cca5e6225667b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/absent_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8ff21984d68f148ff2450989704e49ffd7267a3f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0c1921e35a09de137cc2d9ec6f5b461b0c91f9a7f3e8e3f2596c7ac429167c86",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794346884287,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11891129d27429b1a8097e576d0f157c6b3cd482",
+      "hash": "sha256:05b0ad4b9e5f6ad4e62ade00efd1d9cbd92a70836b544a02c6abdce673bedc34",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-778a-7288-ae20-3289a8a7a718"
+    },
+    {
+      "address": "d7a292650bcffaef1d0c947abe40235c719878dc",
+      "hash": "sha256:5e81657b4cab843a97e92fe98612a395883064e6a9e5bca0f72011698227d272",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "43"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-7849-7632-b126-5a6b72f508b0"
+    }
+  ],
+  "id": "01a1c768-9ec3-7247-81e3-57c5ebf3216c",
+  "kind": "decision",
+  "reason": "Restated to name only the unit tests they rest on (#45), the tests of the binary moved to e2e verifications; checked by a blind review",
+  "revision": "cefa153fab8e2e7607b033f364e925f87bfa83a8",
+  "seen": "sha256:313904c8338a9ea385badc4a85aeadd2b8aa234c91bf78d33bc16ddd7942b4f2",
+  "seen_address": "594af04e9e0bc168ec244f93e6e183bc2b041094",
+  "subject": "01a1c5c5-790a-74a0-9dad-6cfab3896b88",
+  "v": 1,
+  "verb": "approve"
+}

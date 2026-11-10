@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "112dac04d8d3c59090c754db138c85a8ed56f34e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:22b093a16f1b28a6f1aedb8f902b0643be77f10e1a7d3d5a368ef717e7d6d96f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794346883332,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a0fd6d7c9569173efcc54a424e59fc4fb1320f63",
+      "hash": "sha256:43b7be0c15e5f03f546deba6051a6077e27f2f5adab430f35a7f76d3d6c136d2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d99a-72ad-86a3-e75931d0b50a"
+    },
+    {
+      "address": "8ea9966b54a032c0bd52b4fa8d9ba4f612763c3e",
+      "hash": "sha256:ee5b023c8b0ffac33a7ac16fd28d716315715c27fabd918eb3351172ae4f54ce",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce"
+    }
+  ],
+  "id": "01a1c768-99cb-70fe-8be5-22f6c895e714",
+  "kind": "decision",
+  "reason": "Tests of the binary are given to e2e verifications (#45); checked against the tests by a blind review, every finding fixed",
+  "revision": "cefa153fab8e2e7607b033f364e925f87bfa83a8",
+  "seen": "sha256:182958f76818f87f8989bc0c43c59537c69c15207251c2e34f40aa9b3296b116",
+  "seen_address": "2c25c4309860a48add1e847670ff75ee91dc6512",
+  "subject": "01a1c765-21d2-758d-ab46-8928cc29c746",
+  "v": 1,
+  "verb": "approve"
+}

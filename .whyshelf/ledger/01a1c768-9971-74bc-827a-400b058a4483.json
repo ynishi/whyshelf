@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "112dac04d8d3c59090c754db138c85a8ed56f34e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:22b093a16f1b28a6f1aedb8f902b0643be77f10e1a7d3d5a368ef717e7d6d96f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794346883332,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0a499a121b00325cdd8d64891c34443373d5cbef",
+      "hash": "sha256:7442f2bb294d68443fd80a86e07d43d963bdf47969a698b37f01f10e01fff4ed",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a1c768-9971-74bc-827a-400b058a4483",
+  "kind": "decision",
+  "reason": "Tests of the binary are given to e2e verifications (#45); checked against the tests by a blind review, every finding fixed",
+  "revision": "cefa153fab8e2e7607b033f364e925f87bfa83a8",
+  "seen": "sha256:6da13e5689cd278afbdef461d589d83c52ce9d06c81b2cff6be421c021314e4a",
+  "seen_address": "b5c2489145638ad7ac1da26a77a7a29a3e7ceb4a",
+  "subject": "01a1c765-2032-71f6-a0ec-ae9a7f747e4d",
+  "v": 1,
+  "verb": "approve"
+}
