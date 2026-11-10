@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794307149329,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c50a-4e7c-718e-964c-b82e361572a3",
+  "kind": "decision",
+  "reason": "Issue #17: a blind review that started from whyshelf read the change, and its findings are fixed",
+  "revision": "3b18d886309f2f7e4cd162c9e63b74bd0c87d03c",
+  "seen": "sha256:87e36477fbf429b8654dc59bad4e56dc035aa46594b37a9e57e249ccef94dc5d",
+  "seen_address": "26c8ba327e3df34654bd9691454a76af8a337fc9",
+  "subject": "01a1c502-5742-7127-a17c-48a043f725fe",
+  "v": 1,
+  "verb": "approve"
+}

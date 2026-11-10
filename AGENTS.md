@@ -9,7 +9,9 @@
 - Where documents live:
   - requirements, decisions and verifications: whyshelf under `books/`
     (declared in `.whyshelf/books.toml`, decisions in `.whyshelf/ledger/`);
-    check them with `whyshelf check` and `whyshelf stale`.
+    check them with `whyshelf check` and `whyshelf stale`. How a change goes
+    through them:
+    [CONTRIBUTING.md](CONTRIBUTING.md#working-with-the-books).
   - everything else (concepts, file formats, the command line, the code):
     RustDoc (crate and module docs, diagrams as ASCII in code blocks tagged
     `text`). `cargo doc` must be warning-free (`just rust-doc`). Code
@@ -21,7 +23,7 @@
   what it covers.
 - Review a change locally before it goes up — by a person or an AI agent — and
   say in the PR body who or what reviewed it.
-  [CONTRIBUTING.md](CONTRIBUTING.md#review) lists the questions a review
-  answers.
+  [CONTRIBUTING.md](CONTRIBUTING.md#review) says how (blind, starting from
+  whyshelf) and lists the questions a review answers.
 - Layers: `whyshelf-core` (domain, app) never depends on an I/O crate; adapters
   go in `whyshelf-infra`. See [README.md](README.md#crates).
