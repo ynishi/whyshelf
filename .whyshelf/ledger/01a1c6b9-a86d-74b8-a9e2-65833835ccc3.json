@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "112dac04d8d3c59090c754db138c85a8ed56f34e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:22b093a16f1b28a6f1aedb8f902b0643be77f10e1a7d3d5a368ef717e7d6d96f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794335417798,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1306c7b12267619130e508101e554839a1538cd4",
+      "hash": "sha256:60b4ad1b9c325625ec5be16eb08c8944a0675784f7b93995b8e412ea402b5d4f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "50"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c690-6834-77b2-8c4a-bd554e7eb233"
+    }
+  ],
+  "id": "01a1c6b9-a86d-74b8-a9e2-65833835ccc3",
+  "kind": "decision",
+  "reason": "Shared tests and the manual changed for #41; the tests still check what these verifications say, checked by a blind review",
+  "revision": "7ae791da635ea877c9c8051db05e49fc6b6cdc62",
+  "seen": "sha256:e4decfb45be28dba65ccb75a9d1f14bd3edaf1f14f6e96772d45fb9389562f3e",
+  "seen_address": "a36f65313575a746d3909e65371fc6946e3a4d7f",
+  "subject": "01a1c690-6a53-711f-a112-a6171d377d5f",
+  "v": 1,
+  "verb": "approve"
+}
