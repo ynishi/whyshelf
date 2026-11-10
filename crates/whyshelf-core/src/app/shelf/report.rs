@@ -18,7 +18,7 @@ use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
 use crate::domain::shelf::freshness::{Notice, RootCause, Severity, Standing, Successors};
 use crate::domain::shelf::graph::Cycle;
-use crate::domain::shelf::ledger::{DeclaredStatus, LedgerProblem, Record};
+use crate::domain::shelf::ledger::{Decision, DeclaredStatus, LedgerProblem, Record};
 use crate::domain::shelf::schema::{BookDir, BookName, EntryName, Propagation, SchemaProblem};
 use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
 
@@ -74,6 +74,12 @@ pub struct Row {
     pub presence: DocPresence,
     /// What the ledger says people decided.
     pub declared: DeclaredStatus,
+    /// The decision that stands about it ([`Ledger::standing_decision`]), the one
+    /// `declared` is read from, with who made it, when and why; none while it is
+    /// pending.
+    ///
+    /// [`Ledger::standing_decision`]: crate::domain::shelf::ledger::Ledger::standing_decision
+    pub decision: Option<Decision>,
     /// Where it stands now, with the causes when an approval does not hold.
     pub standing: Standing,
     /// What is worth knowing that changes no freshness.

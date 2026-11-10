@@ -109,6 +109,19 @@ pub struct NoticeOut {
     pub detail: String,
 }
 
+/// Who made a decision, when and why, as its record keeps it.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DecisionOut {
+    /// The record's id (`judge withdraw` takes it).
+    pub judgement: String,
+    /// Who decided.
+    pub actor: String,
+    /// When (unix milliseconds).
+    pub at: i64,
+    /// Why, as it was given; none when no reason was given.
+    pub reason: Option<String>,
+}
+
 /// A document as every answer shows it.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct RowOut {
@@ -118,6 +131,9 @@ pub struct RowOut {
     pub presence: PresenceOut,
     /// What people decided: `pending`, `approved`, `denied`, `deprecated`, `retired`.
     pub declared: &'static str,
+    /// The decision that stands, the one `declared` is read from; none while the
+    /// document is pending.
+    pub decision: Option<DecisionOut>,
     /// When the approval lapses (unix milliseconds), if it does.
     pub expires: Option<i64>,
     /// Where it stands now: `pending`, `denied`, `deprecated`, `retired`, or for an
@@ -611,6 +627,12 @@ impl Namer<'_> {
             doc: self.doc(row.id),
             presence: presence(&row.presence),
             declared,
+            decision: row.decision.as_ref().map(|d| DecisionOut {
+                judgement: d.id().to_string(),
+                actor: d.actor().as_str().to_owned(),
+                at: d.at().millis(),
+                reason: d.reason().map(|r| r.as_str().to_owned()),
+            }),
             expires,
             standing: standing(row.standing.kind()),
             successors,

@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "778944d564888bd7e742257a5972f3c2727c6806",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d3fa4b3318efde0386272dbb081ff945c650d1551b3a6d3542c7a762c8f2628",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "d1a7cc77f05c0b8a3d1cb5042a7297b7318a4674",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7b506cbf6a936deca5e76536f7b01265e2484a210de7620eb52f482f252d3054",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/ledger/frame_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "ce312988bba414a67f677989cd0a6391e54ea9a0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:71fde7d00d14ee927719bc7bed7d4db7bd97e874876d35d6470f2500cde73547",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794314649320,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0cfd693e1404aa11b4060b45ce2d38120b104321",
+      "hash": "sha256:3e2cd9d44c9bf55259fc8e2c8b8e90958298fecbaf0fa69320409b897d69c3a6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c333-d435-7f4d-abb6-036e89451d8b"
+    },
+    {
+      "address": "d7dcb139087f0bd66e49b321b596db9ace6de948",
+      "hash": "sha256:fda5c3e503f91bb9ffa4078eaee50be18ea8825d600abf4631fb18dbb93d6c30",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "14"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-12cd-738a-8346-061089dc647a"
+    }
+  ],
+  "id": "01a1c57c-bfab-71ff-bb18-cac56f9dead3",
+  "kind": "decision",
+  "reason": "Tests added to shared test files for #32 (rows show the decision); the tests these verifications name still check what they say, checked by a blind review",
+  "revision": "386f223ebcf20b4eb2c36831150c6b5c99a85af7",
+  "seen": "sha256:295f408a6ce5216185fc6ace73008613f1a81dec6e0ba3cec17947332b60c659",
+  "seen_address": "177150bbca23e60cce10dd7f7e4073dcd50c96ee",
+  "subject": "01a1c4ba-16ca-7646-97b3-aa146c3ca2bb",
+  "v": 1,
+  "verb": "approve"
+}
