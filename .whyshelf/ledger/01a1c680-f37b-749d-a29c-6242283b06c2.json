@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "eb7890f9bbb4de2506e76f3f4eb0fa7123d18157",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:372375674c7eccaac3614217466e4ff582643da7bb46435167156fdb47c14bcf",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794331702044,
+  "expires": null,
+  "frame": [
+    {
+      "address": "cf903bf283f2281b2fd1dc43a89ab6169688e91a",
+      "hash": "sha256:8a7d8ed40441bf1a2a05f058ea8699574d79d5ea3377c5a6c619cbc3e5b23380",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "18"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1413-758c-a10a-55cdcaa23432"
+    }
+  ],
+  "id": "01a1c680-f37b-749d-a29c-6242283b06c2",
+  "kind": "decision",
+  "reason": "Shared tests changed for #47, and DEC-33 names the exit 1 of map and unlinked; checked by a blind review",
+  "revision": "d8984e12f19b767dfaee50d9e3476f80d95a8d11",
+  "seen": "sha256:2a7d24c71536f0c5aa6ef9c2c54e077ede1e5cac6f9c3c25922071f47fa31cd3",
+  "seen_address": "0576a5db50166d8ada554024b749d03faa3fbc66",
+  "subject": "01a1c4ba-18f0-70ab-a304-3682b6758c3c",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "bfcee6ede720a69302fb1e1ec4e3208e056cc3f3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bd4fc955945024da075fb20293481ee97ff47b7d71320f2c12bd2af83dd51807",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/unlinked_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "eb7890f9bbb4de2506e76f3f4eb0fa7123d18157",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:372375674c7eccaac3614217466e4ff582643da7bb46435167156fdb47c14bcf",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "108928374f6dfadcb9c6da00a7e377f2960f22b4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:74d20d58cfba76afda7e3cf0d111010988219587f8be65e7aa9641bbfa854524",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794331700374,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ca7c8c4269eaa45df8e03f0ea03e3e5f2cf9ea2d",
+      "hash": "sha256:a0325c31d2e214266cfafccbae480ea590107004fc5955b97a37c0c76c50b4ad",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "49"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c671-1d95-725c-bd74-8b605650d16c"
+    }
+  ],
+  "id": "01a1c680-ee6d-77d6-b827-0cbe955d152c",
+  "kind": "decision",
+  "reason": "Isolated documents are found by asking, apart from cover (#47); checked against the code by three rounds of blind review, every finding fixed",
+  "revision": "d8984e12f19b767dfaee50d9e3476f80d95a8d11",
+  "seen": "sha256:55f96286ec885bbac4531ec6946fa0575870b64e56ee02208d0d4bf24eed13cf",
+  "seen_address": "f3800ec71b7325f4bf54c56848cd56ed6014d8e7",
+  "subject": "01a1c671-1e88-731a-a996-a78758d9570d",
+  "v": 1,
+  "verb": "approve"
+}
