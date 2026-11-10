@@ -1,0 +1,156 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "dd52ddb1c15878b73abee3a8af50de93b2f7dc4a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0343353487bbe89cf6fbaf27db52dab051368927cc2e0f80b766d0df01cff545",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4765736ea352235620b42224e45326b23080f783",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0c640480b577f7dc8c1e1d9192f77ef74f7a8cd92d50f15cdd4275aeb2c78552",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "52d824940ce8a214c4d48b66d0afa1f993339b39",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d926fed6fce0c60a64d0d7f1c57406aed5f1933b0abf746db98db7ab74bc33d",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1c8ea29c341d1a8648791dafd7df6192a5d2df63",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:170670e7db4cc3cb51ba477431ba82da1401e6e6ee359006064b16d1145c9e61",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d693238b1a6ea7caf94e69594e825695e3fd6818",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:747ff424bf12495542a87a5f2a6b8249f215f174bc109aa7c1be61bf25931497",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794326111346,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1b87bc28bf8099cb7ccbadd2a10c0f2bb5aec6c4",
+      "hash": "sha256:29a9e797a7b663f15d704ddd576bd48c5e4ca4de5b3b33c81c1d8ae843ed2fdf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "30"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d626-73e6-9e17-45d0aef14328"
+    },
+    {
+      "address": "a0fd6d7c9569173efcc54a424e59fc4fb1320f63",
+      "hash": "sha256:43b7be0c15e5f03f546deba6051a6077e27f2f5adab430f35a7f76d3d6c136d2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d99a-72ad-86a3-e75931d0b50a"
+    },
+    {
+      "address": "ec2f4abc7c0b28d7a26689284802a8b803d178f6",
+      "hash": "sha256:f28a92d28151052d0295cfdce49cbacc12b1e8538962cb1c6e8c81a0f78e8a59",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "32"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dcde-76e2-a624-77aadb435255"
+    },
+    {
+      "address": "6f28577fcdcd7643bcc0f019a252dcb8119a2519",
+      "hash": "sha256:fe4740e46cbad70d6f05091089b73287fc44d5b974f31fd827c38c18d1f02125",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce"
+    }
+  ],
+  "id": "01a1c62b-aa6f-7327-b77c-7e1f429a901a",
+  "kind": "decision",
+  "reason": "Artifacts made one model of spaces for #38: decisions restated for artifacts in general, tests moved with the code; checked by a blind review",
+  "revision": "e54fbb6995c5a4cab6723c7bdfbf72c351c7545a",
+  "seen": "sha256:01cd51c2fbf7e85fc4c0d4adfbe935bf065d8c0e1bee5e3d8838653e89b9d8a8",
+  "seen_address": "66e473f02ebb1bfded663559e07fe70e47fd189f",
+  "subject": "01a1c4ba-1a9f-7201-9b7f-62a0f1be9e14",
+  "v": 1,
+  "verb": "approve"
+}

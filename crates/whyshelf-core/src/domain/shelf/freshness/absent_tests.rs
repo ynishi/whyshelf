@@ -18,7 +18,9 @@ fn absent_notices(assessment: &Assessment, n: u128) -> Vec<(String, String)> {
         .notices_of(docid(n))
         .iter()
         .filter_map(|notice| match notice {
-            Notice::ArtifactAbsent { link, path } => Some((link.to_string(), path.to_string())),
+            Notice::ArtifactAbsent { link, artifact } => {
+                Some((link.to_string(), artifact.name().to_string()))
+            }
             _ => None,
         })
         .collect()
@@ -47,10 +49,9 @@ fn a_document_lists_the_paths_that_name_no_file_as_written() {
         .unwrap()
         .absent_artifacts()
         .into_iter()
-        .map(|(link, path)| (link.to_string(), path.to_string()))
+        .map(|(link, artifact)| (link.to_string(), artifact.name().to_string()))
         .collect();
-    // A path the adapter found no file at, and one it was not even asked about, in
-    // the order they are written.
+    // Two paths the adapter found no file at, in the order they are written.
     assert_eq!(
         absent,
         vec![

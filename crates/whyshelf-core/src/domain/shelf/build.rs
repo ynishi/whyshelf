@@ -20,17 +20,21 @@
 //!      │                                   the hash of each valid one
 //!      │           6  each valid Doc, once: every link the book declares, with its
 //!      │                                   kind, resolved through the index; every
-//!      │                                   path of a link to artifacts made an
+//!      │                                   name of a link to artifacts made an
 //!      │                                   Artifact from the ArtifactReadings (A1)
 //!      └────────►  7  link cycles          (strongly connected components)
 //! ```
 //!
-//! The paths a link to artifacts writes are read before the build, by
-//! [`Shelf::artifact_asks`] (each with the comparisons of the links that write it), so
-//! that an adapter can look at those files first: a path is read once, by one reader,
-//! for both, and each link takes the hash of its own comparison. A path that has no file is an
-//! [`Artifact`] that is absent, not a link that cannot be followed (rule A1); a text
-//! that is no path is a [`DocProblem::ArtifactPathInvalid`].
+//! The names a link to artifacts writes are read before the build, by
+//! [`Shelf::artifact_asks`] (per space, each with the comparisons of the links that
+//! write it), so that the adapter of each space can answer for them first: a name is
+//! resolved once, for every link that writes it, and each link takes the hash of its
+//! own comparison. A name with nothing there is an [`Artifact`] that is absent, and
+//! one the adapter cannot tell about now is one that is unknown, not a link that
+//! cannot be followed (rule A1). A text that is no [`ArtifactName`] is a
+//! [`DocProblem::ArtifactNameInvalid`], and one its adapter answered is not a name of
+//! the space is a [`DocProblem::NotAnArtifactName`]: either makes the document
+//! invalid.
 //!
 //! Two questions about a shelf have one entry each, and everything else asks them:
 //! `Shelf::find_key` answers what a key in a book comes to (the build of a link
@@ -52,9 +56,11 @@ use thiserror::Error;
 use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{Count, NonEmptyVec, TwoOrMore};
+use crate::domain::nonempty::{Count, NonBlank, NonEmptyVec, TwoOrMore};
 
-use super::artifact::{Artifact, ArtifactAsks, ArtifactReadings, ArtifactState};
+use super::artifact::{
+    Artifact, ArtifactAsks, ArtifactKey, ArtifactName, ArtifactNameProblem, ArtifactReadings, Space,
+};
 use super::doc::{
     ArtifactLink, Doc, DocDraft, DocHash, DocKey, FieldValue, Link, LinkState, ResolvedLink,
     UnresolvedLink, UnresolvedWhy,
@@ -346,17 +352,29 @@ pub enum DocProblem {
         /// What was written.
         found: RawKind,
     },
-    /// A text written in a link to artifacts that is no path under the root (an
-    /// absolute path, one that climbs out with `..`, an empty segment).
-    #[error("`{written}` in the link `{link}` is not a path under the root of the project")]
-    ArtifactPathInvalid {
+    /// A text written in a link to artifacts that is no [`ArtifactName`] (empty, with
+    /// a control character, or too long).
+    #[error("`{written}` in the link `{link}` is no name of an artifact: {why}")]
+    ArtifactNameInvalid {
         /// The link.
         link: EntryName,
         /// What was written.
         written: String,
-        /// Why it is no path.
-        #[source]
-        source: ValueError,
+        /// Why it is no name.
+        why: ArtifactNameProblem,
+    },
+    /// A text written in a link to artifacts that the adapter of its space answered
+    /// is not a name there, for the reason it gives.
+    #[error("`{written}` in the link `{link}` is not a name in the space `{space}`: {why}")]
+    NotAnArtifactName {
+        /// The link.
+        link: EntryName,
+        /// The space of the link.
+        space: Space,
+        /// What was written.
+        written: String,
+        /// Why, as the adapter says.
+        why: NonBlank,
     },
     /// A link with a number of keys its cardinality does not admit.
     #[error("the link `{link}` has {found} key(s), which {cardinality:?} does not admit")]
@@ -692,10 +710,10 @@ struct WrittenLink {
 }
 
 /// One link to artifacts a book declares, as a file wrote it: its kind, and the
-/// paths written in it, each already read as a path.
+/// names written in it, each already read as a name.
 struct WrittenArtifacts {
     kind: ArtifactLinkKind,
-    paths: Vec<RelPath>,
+    names: Vec<ArtifactName>,
 }
 
 /// A file after its form is read, before the shelf looks at the files together.
@@ -711,7 +729,7 @@ struct Candidate {
     fields: BTreeMap<EntryName, FieldValue>,
     /// Every link into a book the book declares, with what the file wrote in it.
     links: BTreeMap<EntryName, WrittenLink>,
-    /// Every link to artifacts the book declares, with the paths the file wrote.
+    /// Every link to artifacts the book declares, with the names the file wrote.
     artifact_links: BTreeMap<EntryName, WrittenArtifacts>,
     body: String,
 }
@@ -744,7 +762,9 @@ impl Candidate {
         }
     }
 
-    fn read(schema: &Schema, reading: DocReading) -> Self {
+    /// The form of a file. `artifacts` are what the adapters answered for the names
+    /// of the links to artifacts, read for one answer only: that a text is not a name.
+    fn read(schema: &Schema, reading: DocReading, artifacts: &ArtifactReadings) -> Self {
         let (origin, entries, body) = match reading {
             DocReading::Unparsed { origin, id, why } => {
                 let id = match id {
@@ -760,7 +780,7 @@ impl Candidate {
             } => (origin, entries, body),
         };
         match schema.membership(&origin) {
-            Membership::In(book) => Self::read_in(book, origin, &entries, body),
+            Membership::In(book) => Self::read_in(book, origin, &entries, body, artifacts),
             Membership::Outside => {
                 let id = IdSeen::of_entry(entries.get(ID_ENTRY));
                 Self::unusable(origin, id, DocProblem::OutsideBooks)
@@ -775,6 +795,7 @@ impl Candidate {
         origin: RelPath,
         entries: &BTreeMap<String, RawValue>,
         body: String,
+        found: &ArtifactReadings,
     ) -> Self {
         let key = read_key(book, entries.get(KEY_ENTRY));
         let written_key = key.as_ref().ok().cloned();
@@ -784,7 +805,7 @@ impl Candidate {
             fields,
             links: written,
             artifacts,
-        } = read_entries(book, entries, &mut problems);
+        } = read_entries(book, entries, found, &mut problems);
         check_required(book, entries, &mut problems);
         Self {
             origin,
@@ -844,22 +865,23 @@ struct Entries {
     fields: BTreeMap<EntryName, FieldValue>,
     /// The keys written in each link into a book.
     links: BTreeMap<EntryName, Vec<String>>,
-    /// The paths written in each link to artifacts.
-    artifacts: BTreeMap<EntryName, Vec<RelPath>>,
+    /// The names written in each link to artifacts.
+    artifacts: BTreeMap<EntryName, Vec<ArtifactName>>,
 }
 
-/// A text written in a link to artifacts, read as a path under the root: the one
-/// reader of it, which both [`Shelf::artifact_asks`] and the build use.
-fn artifact_path(text: &str) -> Result<RelPath, ValueError> {
-    text.parse::<RelPath>()
+/// A text written in a link to artifacts, read as a name: the one reader of it,
+/// which both [`Shelf::artifact_asks`] and the build use.
+fn artifact_name(text: &str) -> Result<ArtifactName, ArtifactNameProblem> {
+    ArtifactName::new(text)
 }
 
-/// The fields of a file, the keys written in each link and the paths written in each
+/// The fields of a file, the keys written in each link and the names written in each
 /// link to artifacts, from every entry but `id` and `key`; what is wrong with an entry
-/// goes to `problems`.
+/// goes to `problems`, a name its adapter answered is none included.
 fn read_entries(
     book: &BookSchema,
     entries: &BTreeMap<String, RawValue>,
+    found: &ArtifactReadings,
     problems: &mut Vec<DocProblem>,
 ) -> Entries {
     let mut fields = BTreeMap::new();
@@ -894,18 +916,29 @@ fn read_entries(
         } else if let Some((link, kind)) = book.artifact_links().get_key_value(name.as_str()) {
             match raw {
                 RawValue::List(texts) if kind.cardinality.admits(texts.len()) => {
-                    let mut paths = Vec::new();
+                    let mut names = Vec::new();
                     for text in texts {
-                        match artifact_path(text) {
-                            Ok(path) => paths.push(path),
-                            Err(source) => problems.push(DocProblem::ArtifactPathInvalid {
+                        match artifact_name(text) {
+                            Ok(name) => match found
+                                .get(&kind.space, &name)
+                                .and_then(|r| r.not_a_name_why())
+                            {
+                                Some(why) => problems.push(DocProblem::NotAnArtifactName {
+                                    link: link.clone(),
+                                    space: kind.space.clone(),
+                                    written: text.clone(),
+                                    why: why.clone(),
+                                }),
+                                None => names.push(name),
+                            },
+                            Err(why) => problems.push(DocProblem::ArtifactNameInvalid {
                                 link: link.clone(),
                                 written: text.clone(),
-                                source,
+                                why,
                             }),
                         }
                     }
-                    artifacts.insert(link.clone(), paths);
+                    artifacts.insert(link.clone(), names);
                 }
                 RawValue::List(texts) => problems.push(DocProblem::LinkCount {
                     link: link.clone(),
@@ -962,45 +995,58 @@ fn check_required(
     }
 }
 
-/// Every link to artifacts the book declares, with the paths the file wrote in it.
+/// Every link to artifacts the book declares, with the names the file wrote in it.
 fn written_artifacts(
     book: &BookSchema,
-    mut written: BTreeMap<EntryName, Vec<RelPath>>,
+    mut written: BTreeMap<EntryName, Vec<ArtifactName>>,
 ) -> BTreeMap<EntryName, WrittenArtifacts> {
     book.artifact_links()
         .iter()
         .map(|(name, kind)| {
             let link = WrittenArtifacts {
                 kind: kind.clone(),
-                paths: written.remove(name).unwrap_or_default(),
+                names: written.remove(name).unwrap_or_default(),
             };
             (name.clone(), link)
         })
         .collect()
 }
 
-/// The links to artifacts of a valid document, each path made an [`Artifact`] from
-/// what the adapter found there (rule A1): a path with no reading is a path with no
-/// file, never a link that cannot be followed.
+/// The links to artifacts of a valid document, each name made an [`Artifact`] of
+/// its link's space from what the adapter answered (rule A1): a name with no answer
+/// is a name with nothing there, never a link that cannot be followed.
 fn resolve_artifacts(
     found: &ArtifactReadings,
     written: BTreeMap<EntryName, WrittenArtifacts>,
 ) -> BTreeMap<EntryName, ArtifactLink> {
     written
         .into_iter()
-        .map(|(name, WrittenArtifacts { kind, paths })| {
-            let artifacts = paths
+        .map(|(link, WrittenArtifacts { kind, names })| {
+            let artifacts = names
                 .into_iter()
-                .map(|path| {
-                    let state = found
-                        .get(&path)
-                        .map_or(ArtifactState::Absent, |r| r.state(&kind.comparison));
-                    Artifact::new(path, state)
+                .map(|name| {
+                    let key = ArtifactKey::new(kind.space.clone(), name);
+                    let state = found.state_of(&key, &kind.comparison);
+                    Artifact::new(key, state)
                 })
                 .collect();
-            (name, ArtifactLink::new(kind, artifacts))
+            (link, ArtifactLink::new(kind, artifacts))
         })
         .collect()
+}
+
+/// What the links to artifacts of a book ask of the adapters, from the entries one
+/// file writes: each name, in its link's space, with its link's comparison. A text
+/// that is no name is left out (the build makes it a
+/// [`DocProblem::ArtifactNameInvalid`]).
+fn ask_of(book: &BookSchema, entries: &BTreeMap<String, RawValue>, asks: &mut ArtifactAsks) {
+    for (name, kind) in book.artifact_links() {
+        if let Some(RawValue::List(texts)) = entries.get(name.as_str()) {
+            for artifact in texts.iter().filter_map(|t| artifact_name(t).ok()) {
+                asks.ask(kind.space.clone(), artifact, kind.comparison.clone());
+            }
+        }
+    }
 }
 
 /// Every link the book declares, with the keys the file wrote in it.
@@ -1158,12 +1204,12 @@ pub struct Shelf {
 }
 
 impl Shelf {
-    /// The paths the files write in their links to artifacts, each with the
-    /// comparisons of the links that write it: what an adapter is to read before
-    /// [`Shelf::build`], so that each becomes an [`Artifact`].
+    /// The names the files write in their links to artifacts, per space, each with
+    /// the comparisons of the links that write it: what the adapters are to resolve
+    /// before [`Shelf::build`], so that each becomes an [`Artifact`].
     ///
-    /// A text that is no path is left out here (the build makes it a
-    /// [`DocProblem::ArtifactPathInvalid`]); a file under no book writes none.
+    /// A text that is no name is left out here (the build makes it a
+    /// [`DocProblem::ArtifactNameInvalid`]); a file under no book writes none.
     pub fn artifact_asks(schema: &Schema, readings: &[DocReading]) -> ArtifactAsks {
         let mut asks = ArtifactAsks::new();
         for reading in readings {
@@ -1176,30 +1222,22 @@ impl Shelf {
             let Membership::In(book) = schema.membership(origin) else {
                 continue;
             };
-            for (name, kind) in book.artifact_links() {
-                if let Some(RawValue::List(texts)) = entries.get(name.as_str()) {
-                    for path in texts.iter().filter_map(|t| artifact_path(t).ok()) {
-                        asks.entry(path)
-                            .or_default()
-                            .insert(kind.comparison.clone());
-                    }
-                }
-            }
+            ask_of(book, entries, &mut asks);
         }
         asks
     }
 
-    /// A shelf from the schema, what an adapter read of the documents, and what it
-    /// found at the paths [`Shelf::artifact_asks`] named.
+    /// A shelf from the schema, what an adapter read of the documents, and what the
+    /// adapters answered for the names [`Shelf::artifact_asks`] asked.
     ///
     /// The one place a [`Doc`] is made. It never fails; see the module page for the
-    /// order of the steps. A path written in a link to artifacts with no entry in
-    /// `artifacts` is a path with no file.
+    /// order of the steps. A name written in a link to artifacts with no answer in
+    /// `artifacts` is a name with nothing there.
     pub fn build(schema: &Schema, readings: Vec<DocReading>, artifacts: &ArtifactReadings) -> Self {
         let candidates = flag_duplicates(
             readings
                 .into_iter()
-                .map(|reading| Candidate::read(schema, reading))
+                .map(|reading| Candidate::read(schema, reading, artifacts))
                 .collect(),
         );
         let keys = keys_of(&candidates);
@@ -1223,9 +1261,9 @@ impl Shelf {
         };
         let docs: BTreeMap<DocId, Doc> = drafts
             .into_iter()
-            .map(|(draft, written, paths)| {
+            .map(|(draft, written, names)| {
                 let links = resolve_links(&index, written);
-                let artifact_links = resolve_artifacts(artifacts, paths);
+                let artifact_links = resolve_artifacts(artifacts, names);
                 (draft.id(), Doc::new(draft, links, artifact_links))
             })
             .collect();
@@ -1381,7 +1419,7 @@ impl Shelf {
 #[derive(Default)]
 struct Sorted {
     /// The valid ones, to be made whole, with the keys written in their links and the
-    /// paths written in their links to artifacts.
+    /// names written in their links to artifacts.
     #[allow(clippy::type_complexity)]
     drafts: Vec<(
         DocDraft,

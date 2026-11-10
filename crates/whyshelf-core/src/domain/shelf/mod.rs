@@ -12,16 +12,17 @@
 //! ```text
 //!   module       uses                                  entry ──► what it makes
 //!
-//!   schema                                             Schema::validate ──► Schema
-//!                                                        (BookSchemaDecl in; declared once)
-//!   artifact                                           Comparison::fingerprint, ArtifactReading::
-//!                                                        of_bytes, ContentAddress, Revision
-//!                                                        (opaque), Artifact (a file that is
-//!                                                        no document)
+//!   schema    ──► artifact                             Schema::validate ──► Schema
+//!                                                        (BookSchemaDecl and the spaces
+//!                                                        offered in; declared once)
+//!   artifact                                           Space, ArtifactName, Comparison::
+//!                                                        fingerprint, ArtifactReading (the four
+//!                                                        answers), ContentAddress, Revision
+//!                                                        (opaque), Artifact (a name in a space)
 //!   doc       ──► schema, artifact                     DocDraft, Doc::new ──► Doc, with its Links
 //!                                                        and its ArtifactLinks
 //!   graph                                              cycles_of ──► Cycle; components
-//!   build     ──► schema, artifact, doc, graph         Shelf::artifact_asks ──► the paths to read
+//!   build     ──► schema, artifact, doc, graph         Shelf::artifact_asks ──► the names to resolve
 //!                                                      Shelf::build ──► Shelf
 //!                                                        (DocReading and ArtifactReadings in: valid
 //!                                                         Docs, InvalidDocs, link cycles)
@@ -89,15 +90,18 @@
 //! | a contradiction among records | [`Ledger::build`] | [`LedgerProblem`]s |
 //! | what was decided | [`Ledger::status_of`] | a [`DeclaredStatus`] |
 //! | what a person typed | [`resolve`] | a [`Resolution`] (an identity only the ledger knows has an [`Absence`], which cannot be invalid) |
-//! | which paths a document's links to artifacts name (A1) | [`Shelf::artifact_asks`], before the build, and [`Shelf::build`], which makes each path an [`Artifact`] that is there or absent (never unresolved); a text that is no path is a [`DocProblem::ArtifactPathInvalid`] | the paths, with their comparisons; an [`Artifact`] |
-//! | what of a file counts, and which hashes are compared | [`Comparison`](artifact::Comparison), declared per link and kept in each pin; [`Comparison::fingerprint`](artifact::Comparison::fingerprint) is the one maker of a file's hash; pins of another comparison than the link's are [`Cause::ArtifactComparisonChanged`](freshness::Cause::ArtifactComparisonChanged), never compared | an [`ArtifactHash`](artifact::ArtifactHash) |
+//! | which spaces a declaration may name | [`Schema::validate`], given the spaces the adapters offer as a value; a link to artifacts that names none, or one not offered, is a [`SchemaProblem::NoSpace`] or a [`SchemaProblem::UnknownSpace`] | an [`ArtifactLinkKind`] with its [`Space`] |
+//! | which names a document's links to artifacts write (A1) | [`Shelf::artifact_asks`], before the build, per space, and [`Shelf::build`], which makes each name an [`Artifact`] that is there, absent or unknown (never unresolved); a text that is no [`ArtifactName`] is a [`DocProblem::ArtifactNameInvalid`], one its adapter says is no name of the space a [`DocProblem::NotAnArtifactName`] | the names, with their comparisons; an [`Artifact`] |
+//! | whether a text is a name of its space, and what a name comes to now | the adapter of the space, through the port of the application, as an [`ArtifactReading`]: there, absent, cannot tell (why), or not a name (why) | an [`ArtifactReading`] |
+//! | what of an artifact counts, and which hashes are compared | [`Comparison`](artifact::Comparison), declared per link and kept in each pin; [`Comparison::fingerprint`](artifact::Comparison::fingerprint) is the one maker of an artifact's hash; pins of another comparison than the link's are [`Cause::ArtifactComparisonChanged`](freshness::Cause::ArtifactComparisonChanged), never compared | an [`ArtifactHash`](artifact::ArtifactHash) |
 //! | the form of a content address and of a revision (A7) | the adapter, then `from_validated` ([`ContentAddress::from_validated`], [`Revision::from_validated`]) checks only that it is not empty and has no space | an opaque value |
 //! | a link to artifacts never replaces | [`Schema::validate`] ([`SchemaProblem::ArtifactReplaces`]); the type [`ArtifactPropagation`] has no `Replaces` | an [`ArtifactLinkKind`] |
-//! | a pin of an artifact (A2) | the private constructor of [`ArtifactPin`]: [`frame_approve`] pins every artifact of a `Depends` link as it is, a file or none, and refuses nothing for it | an [`ArtifactPin`] with a [`PinnedArtifact`] |
-//! | which address goes on which item of an approval (A5) | [`ApproveFrame::addressed`], from the files the frame knows ([`ApproveFrame::files`]) | the frame, with the addresses and the revision |
+//! | a pin of an artifact (A2) | the private constructor of [`ArtifactPin`]: [`frame_approve`] pins every artifact of a `Depends` link as it is, there or not, by its space and name, and refuses only one its adapter cannot tell about now ([`FrameRefusal::ArtifactUnknown`]) | an [`ArtifactPin`] with a [`PinnedArtifact`] |
+//! | which address goes on which item of an approval (A5) | [`ApproveFrame::addressed`], from the files of documents the frame knows ([`ApproveFrame::files`]) and what the adapters answered for its artifacts | the frame, with the addresses and the revision |
 //! | which records keep addresses and a revision, and how a record without them reads (A5) | [`Record::to_canon`] / [`Record::from_canon`]: optional keys, left out when empty | a [`Record`] |
+//! | how a record names an artifact, and how one written before spaces reads | [`Record::to_canon`] / [`Record::from_canon`]: `space` and `name`; a `path` with no `space` is a name in the space `file`, and the record is written again as it was stored | a [`Record`] |
 //! | how strong a cause is | [`Cause::severity`] | a [`Severity`] |
-//! | what a pinned artifact makes of an approval (A3), with hashes only (A4) | `artifact_causes` in `freshness.rs`, called by [`assess`] | [`Cause::ArtifactChanged`], [`Cause::ArtifactGone`], [`Cause::ArtifactArrived`], [`Cause::ArtifactLinksChanged`] |
+//! | what a pinned artifact makes of an approval (A3), with hashes only (A4) | `artifact_causes` in `freshness.rs`, called by [`assess`] | [`Cause::ArtifactChanged`], [`Cause::ArtifactGone`], [`Cause::ArtifactArrived`], [`Cause::ArtifactLinksChanged`]; none for one that cannot be told now, which is a [`Notice::ArtifactUnknown`] |
 //! | what an approval that stands saw | [`Snapshot::of`], from [`Ledger::standing_decision`] (which [`Ledger::status_of`] reads too) | a [`Snapshot`] of [`SnapshotItem`]s |
 //! | whether the content of an item came back (A6) | [`SnapshotItem::retrieval`] | a [`Retrieval`]: read, an address that cannot be read, or no address |
 //! | whether an item of a snapshot changed | [`SnapshotItem::changed_from`], by hash | a truth value |
@@ -111,16 +115,19 @@
 //! `doc.rs` or by an adapter, and read back in `ledger.rs`), so the rule is a name:
 //! `restore` only where a record is read back.
 //!
-//! # Files that are no document
+//! # Artifacts
 //!
-//! A book may link to *artifacts* (`target = "artifact"`): code, tests, data, named
-//! by their path. An approval pins what is at each path of a `Depends` link, a hash
-//! or "no file", the way it pins an upstream document, and freshness compares the
-//! same way, by hash only. Beside each hash, a record may keep a
-//! [`ContentAddress`] where the content can be read back later, and a
-//! [`Revision`], both opaque: the domain knows no version control, and a project
-//! outside one has the same freshness. What an approval saw is a [`Snapshot`], and
-//! whether its content came back is a [`Retrieval`].
+//! A book may link to *artifacts* (`target = "artifact"`): things outside the
+//! documents, such as code, tests, data, named in a *space* the link declares. The
+//! model knows a space by its name only; the adapter of the space says whether a
+//! text is one of its names and what each name comes to. An approval pins what each
+//! name of a `Depends` link comes to, a hash or "not there", the way it pins an
+//! upstream document, and freshness compares the same way, by hash only. Beside
+//! each hash, a record may keep a [`ContentAddress`] where the content can be read
+//! back later, and a [`Revision`], both opaque: the domain knows no version
+//! control, and a project outside one has the same freshness. What an approval saw
+//! is a [`Snapshot`], and whether its content came back is a [`Retrieval`]. The
+//! values and their rules are on the page of [`artifact`].
 //!
 //! # What a hash covers
 //!
@@ -178,7 +185,15 @@
 //! [`ContentAddress::from_validated`]: artifact::ContentAddress::from_validated
 //! [`Revision`]: artifact::Revision
 //! [`Revision::from_validated`]: artifact::Revision::from_validated
-//! [`DocProblem::ArtifactPathInvalid`]: build::DocProblem::ArtifactPathInvalid
+//! [`DocProblem::ArtifactNameInvalid`]: build::DocProblem::ArtifactNameInvalid
+//! [`DocProblem::NotAnArtifactName`]: build::DocProblem::NotAnArtifactName
+//! [`SchemaProblem::NoSpace`]: schema::SchemaProblem::NoSpace
+//! [`SchemaProblem::UnknownSpace`]: schema::SchemaProblem::UnknownSpace
+//! [`Space`]: artifact::Space
+//! [`ArtifactName`]: artifact::ArtifactName
+//! [`ArtifactReading`]: artifact::ArtifactReading
+//! [`FrameRefusal::ArtifactUnknown`]: ledger::FrameRefusal::ArtifactUnknown
+//! [`Notice::ArtifactUnknown`]: freshness::Notice::ArtifactUnknown
 //! [`SchemaProblem::ArtifactReplaces`]: schema::SchemaProblem::ArtifactReplaces
 //! [`ArtifactPropagation`]: schema::ArtifactPropagation
 //! [`ArtifactLinkKind`]: schema::ArtifactLinkKind

@@ -1,14 +1,16 @@
 //! Tests of the JSON of `judge same` and `judge withdraw`, and of the notices an
 //! edit declared to keep the meaning gives, from a shelf built by the domain.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use whyshelf_core::app::shelf::{Declared, DeclaredAbout, Names};
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::id::{DocId, EntityId};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet};
-use whyshelf_core::domain::shelf::artifact::{ArtifactReading, ArtifactReadings};
+use whyshelf_core::domain::shelf::artifact::{
+    ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings, Space,
+};
 use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
 use whyshelf_core::domain::shelf::freshness::assess;
 use whyshelf_core::domain::shelf::ledger::{
@@ -54,6 +56,7 @@ fn because() -> NonBlank {
 fn schema() -> Schema {
     let link = |name: &str, target: LinkTargetDecl| LinkEntryDecl {
         name: name.to_owned(),
+        space: matches!(target, LinkTargetDecl::Artifact).then(|| "file".to_owned()),
         target,
         cardinality: Cardinality::Many,
         propagation: Propagation::Depends,
@@ -73,24 +76,35 @@ fn schema() -> Schema {
         }],
         links,
     };
-    Schema::validate(vec![
-        book(
-            "finding",
-            "findings",
-            "FR",
-            vec![link("base", LinkTargetDecl::Book("finding".to_owned()))],
-        ),
-        book(
-            "spec",
-            "specs",
-            "SP",
-            vec![
-                link("grounds", LinkTargetDecl::Book("finding".to_owned())),
-                link("tests", LinkTargetDecl::Artifact),
-            ],
-        ),
-    ])
+    Schema::validate(
+        vec![
+            book(
+                "finding",
+                "findings",
+                "FR",
+                vec![link("base", LinkTargetDecl::Book("finding".to_owned()))],
+            ),
+            book(
+                "spec",
+                "specs",
+                "SP",
+                vec![
+                    link("grounds", LinkTargetDecl::Book("finding".to_owned())),
+                    link("tests", LinkTargetDecl::Artifact),
+                ],
+            ),
+        ],
+        &BTreeSet::from([file()]),
+    )
     .unwrap()
+}
+
+fn file() -> Space {
+    Space::new("file").unwrap()
+}
+
+fn name(text: &str) -> ArtifactName {
+    ArtifactName::new(text).unwrap()
 }
 
 fn reading(file: &str, n: u8, key: &str, title: &str, links: &[(&str, &str)]) -> DocReading {
@@ -114,10 +128,13 @@ fn reading(file: &str, n: u8, key: &str, title: &str, links: &[(&str, &str)]) ->
 
 /// FR-1 titled `finding`, and SP-2 on it, tested by `tests/a.rs` holding `test`.
 fn shelf(finding: &str, test: &str) -> Shelf {
-    let artifacts: ArtifactReadings = BTreeMap::from([(
-        rel("tests/a.rs"),
+    let artifacts: ArtifactReadings = [(
+        file(),
+        name("tests/a.rs"),
         ArtifactReading::of_bytes(test.as_bytes(), &Default::default(), None),
-    )]);
+    )]
+    .into_iter()
+    .collect();
     Shelf::build(
         &schema(),
         vec![
@@ -185,7 +202,7 @@ fn a_declaration_is_written_with_what_it_is_about_and_the_record() {
         &now,
         vec![
             SameMeaningTarget::Doc(docid(1)),
-            SameMeaningTarget::Artifact(rel("tests/a.rs")),
+            SameMeaningTarget::Artifact(name("tests/a.rs")),
         ],
     );
     let declared = [
@@ -199,7 +216,7 @@ fn a_declaration_is_written_with_what_it_is_about_and_the_record() {
         Declared {
             record: all[3].clone(),
             about: DeclaredAbout::Artifact {
-                path: rel("tests/a.rs"),
+                artifact: ArtifactKey::new(file(), name("tests/a.rs")),
             },
         },
     ];
@@ -218,7 +235,9 @@ fn a_declaration_is_written_with_what_it_is_about_and_the_record() {
     );
     assert_eq!(items[1]["doc"], Value::Null);
     assert_eq!(items[1]["artifact"], "tests/a.rs");
-    assert_eq!(items[1]["record"]["subject"]["path"], "tests/a.rs");
+    assert_eq!(items[1]["space"], "file");
+    assert_eq!(items[1]["record"]["subject"]["space"], "file");
+    assert_eq!(items[1]["record"]["subject"]["name"], "tests/a.rs");
     assert_eq!(items[1]["record"]["from"].as_array().unwrap().len(), 1);
 }
 
@@ -248,7 +267,7 @@ fn the_notices_of_a_declared_edit_name_the_declarations_and_the_file() {
         &now,
         vec![
             SameMeaningTarget::Doc(docid(1)),
-            SameMeaningTarget::Artifact(rel("tests/a.rs")),
+            SameMeaningTarget::Artifact(name("tests/a.rs")),
         ],
     );
     let assessment = assess(&now, &Ledger::build(all), JudgedAt::new(100));

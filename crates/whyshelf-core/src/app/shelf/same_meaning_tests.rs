@@ -10,7 +10,9 @@ use crate::domain::shelf::ledger::{
 };
 use crate::domain::shelf::lookup::Reference;
 
-use super::fake_tests::{FakeShelf, block_on, docid, eid, fr, path, sp, sp_tested};
+use super::fake_tests::{
+    FakeShelf, aname, artifact, block_on, docid, eid, file_space, fr, sp, sp_tested,
+};
 use super::{
     DeclaredAbout, ErrorClass, JudgeRequest, Judgement, SameMeaningAbout, SameMeaningRequest,
     ShelfApp, ShelfError, WithdrawRequest,
@@ -212,7 +214,7 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     assert!(is_stale(&standing(&app, "SP-2")));
 
     let declared = block_on(app.same_meaning(vec![SameMeaningRequest {
-        about: SameMeaningAbout::Artifact(path("tests/a.rs")),
+        about: SameMeaningAbout::Artifact(aname("tests/a.rs")),
         reason: NonBlank::new("formatting").unwrap(),
         actor: Some(Actor::new("bob").unwrap()),
         from: None,
@@ -221,7 +223,7 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     assert_eq!(
         declared[0].about,
         DeclaredAbout::Artifact {
-            path: path("tests/a.rs")
+            artifact: artifact(&file_space(), "tests/a.rs")
         }
     );
     let Record::SameMeaning(record) = &declared[0].record else {
@@ -231,14 +233,14 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
     assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
     assert!(
-        matches!(row.notices.as_slice(), [Notice::ArtifactSameMeaning { pin, .. }] if pin.path() == &path("tests/a.rs")),
+        matches!(row.notices.as_slice(), [Notice::ArtifactSameMeaning { pin, .. }] if pin.name() == &aname("tests/a.rs")),
         "{:?}",
         row.notices
     );
 
     // A path no document links is refused.
     let err = block_on(app.same_meaning(vec![SameMeaningRequest {
-        about: SameMeaningAbout::Artifact(path("tests/z.rs")),
+        about: SameMeaningAbout::Artifact(aname("tests/z.rs")),
         reason: NonBlank::new("formatting").unwrap(),
         actor: None,
         from: None,
@@ -253,7 +255,7 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     // A path with no file now is a refusal of the model.
     app.ports().remove_file("tests/a.rs");
     let err = block_on(app.same_meaning(vec![SameMeaningRequest {
-        about: SameMeaningAbout::Artifact(path("tests/a.rs")),
+        about: SameMeaningAbout::Artifact(aname("tests/a.rs")),
         reason: NonBlank::new("formatting").unwrap(),
         actor: None,
         from: None,

@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794326111346,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e9417e937c515717990db4ed17437f59a1deb458",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "address": "bebb54c5957d0e581aa8a39545992aa46197ce4f",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    }
+  ],
+  "id": "01a1c62b-a5f7-77f6-b3d5-872110955ab4",
+  "kind": "decision",
+  "reason": "Artifacts made one model of spaces for #38: decisions restated for artifacts in general, tests moved with the code; checked by a blind review",
+  "revision": "e54fbb6995c5a4cab6723c7bdfbf72c351c7545a",
+  "seen": "sha256:5e81657b4cab843a97e92fe98612a395883064e6a9e5bca0f72011698227d272",
+  "seen_address": "d7a292650bcffaef1d0c947abe40235c719878dc",
+  "subject": "01a1c5c5-7849-7632-b126-5a6b72f508b0",
+  "v": 1,
+  "verb": "approve"
+}

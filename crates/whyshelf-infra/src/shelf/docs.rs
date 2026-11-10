@@ -27,6 +27,12 @@
 //! its directories. What [`render`] writes, [`read`] reads back into the same
 //! entries; a test holds the two together.
 //!
+//! # Where the content of a document is kept
+//!
+//! [`MarkdownDocs`] names the blob a document's file is (or would be) in, for an
+//! approval to keep, and reads that content back, through the project's Git
+//! ([`git`](super::git)); outside a repository there is none.
+//!
 //! # Normalization
 //!
 //! Before anything is read, the whole text is normalized by the domain's one rule,
@@ -46,11 +52,14 @@ use whyshelf_core::app::shelf::{Creation, DocSource, DocWrite};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::location::RelPath;
+use whyshelf_core::domain::shelf::artifact::ContentAddress;
 use whyshelf_core::domain::shelf::build::{
     DocReading, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind,
 };
 use whyshelf_core::domain::shelf::doc::normalize;
 use whyshelf_core::domain::shelf::schema::BookDir;
+
+use super::git::{Git, GitError};
 
 /// Why the documents could not be read at all. A file that is not a document is not
 /// an error: it is a reading that says why.
@@ -75,18 +84,32 @@ pub enum DocsError {
         #[source]
         source: Option<ValueError>,
     },
+    /// Git gave no usable name for a document's file that is there.
+    #[error(transparent)]
+    Git(#[from] GitError),
 }
 
-/// The Markdown files of a project.
+/// The Markdown files of a project, and where their content is kept: the blob each
+/// is (or would be) in, in the project's Git repository when it is in one.
 #[derive(Debug, Clone)]
 pub struct MarkdownDocs {
     root: PathBuf,
+    git: Git,
 }
 
 impl MarkdownDocs {
     /// The documents of the project at `root`.
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            git: Git::new(root.clone()),
+            root,
+        }
+    }
+
+    /// The content a document's file had at `address`, or none when it cannot be
+    /// read back.
+    pub async fn read_back(&self, address: &ContentAddress) -> Option<Vec<u8>> {
+        self.git.read_blob(address).await
     }
 }
 
@@ -115,6 +138,40 @@ impl DocSource for MarkdownDocs {
             }
         }
         Ok(readings)
+    }
+
+    async fn current(&self, file: &RelPath) -> Result<Option<Vec<u8>>, DocsError> {
+        let full = self.root.join(file.as_str());
+        match tokio::fs::read(&full).await {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound
+                        | io::ErrorKind::NotADirectory
+                        | io::ErrorKind::IsADirectory
+                ) =>
+            {
+                Ok(None)
+            }
+            Err(source) => Err(DocsError::Io { path: full, source }),
+        }
+    }
+
+    async fn addresses(
+        &self,
+        files: &BTreeSet<RelPath>,
+    ) -> Result<BTreeMap<RelPath, ContentAddress>, DocsError> {
+        let mut there = Vec::new();
+        for file in files {
+            if self.current(file).await?.is_some() {
+                there.push(file);
+            }
+        }
+        let Some(names) = self.git.blob_names(&there).await? else {
+            return Ok(BTreeMap::new());
+        };
+        Ok(there.into_iter().cloned().zip(names).collect())
     }
 }
 

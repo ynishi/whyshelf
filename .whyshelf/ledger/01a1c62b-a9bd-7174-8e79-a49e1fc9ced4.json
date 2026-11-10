@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "ad6836592eeb2c9ebb66f8de70bf1120cd553944",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8b2a6c6705c954ad8ce83ce02f72e7b9153bb25f7d2060d187f8f0ab65f207d0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794326111346,
+  "expires": null,
+  "frame": [
+    {
+      "address": "cf903bf283f2281b2fd1dc43a89ab6169688e91a",
+      "hash": "sha256:8a7d8ed40441bf1a2a05f058ea8699574d79d5ea3377c5a6c619cbc3e5b23380",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "18"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1413-758c-a10a-55cdcaa23432"
+    }
+  ],
+  "id": "01a1c62b-a9bd-7174-8e79-a49e1fc9ced4",
+  "kind": "decision",
+  "reason": "Artifacts made one model of spaces for #38: decisions restated for artifacts in general, tests moved with the code; checked by a blind review",
+  "revision": "e54fbb6995c5a4cab6723c7bdfbf72c351c7545a",
+  "seen": "sha256:2a7d24c71536f0c5aa6ef9c2c54e077ede1e5cac6f9c3c25922071f47fa31cd3",
+  "seen_address": "0576a5db50166d8ada554024b749d03faa3fbc66",
+  "subject": "01a1c4ba-18f0-70ab-a304-3682b6758c3c",
+  "v": 1,
+  "verb": "approve"
+}

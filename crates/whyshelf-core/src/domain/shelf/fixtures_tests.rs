@@ -12,7 +12,7 @@
 //!   design   designs/    <slug>      specs      -> spec     Many  Depends
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use uuid::Uuid;
 
@@ -20,7 +20,10 @@ use crate::domain::actor::Actor;
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
 
-use super::artifact::{ArtifactHash, ArtifactReading, ArtifactReadings, Comparison, LinePrefix};
+use super::artifact::{
+    ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings, Comparison,
+    LinePrefix, Space,
+};
 use super::build::{DocReading, RawValue, Shelf};
 use super::ledger::{
     Decision, JudgedAt, JudgementId, Ledger, Record, frame_approve, frame_present, frame_retire,
@@ -46,6 +49,26 @@ pub(super) fn jid(n: u128) -> JudgementId {
 
 pub(super) fn path(text: &str) -> RelPath {
     text.parse().unwrap()
+}
+
+/// The space the links to artifacts of [`decls`] are in.
+pub(super) fn file_space() -> Space {
+    Space::new("file").unwrap()
+}
+
+/// The spaces the adapters of these tests offer: `file` and `other`.
+pub(super) fn spaces() -> BTreeSet<Space> {
+    BTreeSet::from([file_space(), Space::new("other").unwrap()])
+}
+
+/// A name of an artifact.
+pub(super) fn name(text: &str) -> ArtifactName {
+    ArtifactName::new(text).unwrap()
+}
+
+/// The artifact `text` in the space `file`.
+pub(super) fn file_artifact(text: &str) -> ArtifactKey {
+    ArtifactKey::new(file_space(), name(text))
 }
 
 pub(super) fn actor() -> Actor {
@@ -74,17 +97,20 @@ fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
         target: LinkTargetDecl::Book(target.to_owned()),
         cardinality: Cardinality::Many,
         propagation,
+        space: None,
         compare: None,
         cover: false,
     }
 }
 
-fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
+/// A link to artifacts in the space `file`.
+pub(super) fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
     LinkEntryDecl {
         name: name.to_owned(),
         target: LinkTargetDecl::Artifact,
         cardinality: Cardinality::Many,
         propagation,
+        space: Some("file".to_owned()),
         compare: None,
         cover: false,
     }
@@ -141,7 +167,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
 }
 
 pub(super) fn schema() -> Schema {
-    Schema::validate(decls()).unwrap()
+    Schema::validate(decls(), &spaces()).unwrap()
 }
 
 pub(super) fn entries(items: &[(&str, RawValue)]) -> BTreeMap<String, RawValue> {
@@ -181,17 +207,19 @@ pub(super) fn fr_titled(n: u128, title: &str, base: &[&str]) -> DocReading {
     )
 }
 
+/// A shelf with nothing at any name its links to artifacts write: the adapter
+/// answers "absent" for each.
 pub(super) fn shelf(readings: Vec<DocReading>) -> Shelf {
-    Shelf::build(&schema(), readings, &ArtifactReadings::new())
+    shelf_answered(readings, &[])
 }
 
-/// A shelf whose artifacts are these paths: a file with this hash (as its bytes
-/// compare), or none.
+/// A shelf whose artifacts are these names in the space `file`: a thing with this
+/// hash (as its bytes compare), or none. Every other name asked is absent.
 pub(super) fn shelf_with(
     readings: Vec<DocReading>,
     artifacts: &[(&str, Option<ArtifactHash>)],
 ) -> Shelf {
-    let found: ArtifactReadings = artifacts
+    let answers: Vec<(&str, ArtifactReading)> = artifacts
         .iter()
         .map(|(p, hash)| {
             let reading = match hash {
@@ -200,10 +228,27 @@ pub(super) fn shelf_with(
                 }
                 None => ArtifactReading::absent(),
             };
-            (path(p), reading)
+            (*p, reading)
         })
         .collect();
-    Shelf::build(&schema(), readings, &found)
+    shelf_answered(readings, &answers)
+}
+
+/// A shelf whose artifacts in the space `file` are these answers, as an adapter
+/// answers: every other name asked, in any space, is absent.
+pub(super) fn shelf_answered(
+    readings: Vec<DocReading>,
+    artifacts: &[(&str, ArtifactReading)],
+) -> Shelf {
+    let schema = schema();
+    let mut found: ArtifactReadings = Shelf::artifact_asks(&schema, &readings)
+        .iter()
+        .map(|(space, at, _)| (space.clone(), at.clone(), ArtifactReading::absent()))
+        .collect();
+    for (p, reading) in artifacts {
+        found.insert(file_space(), name(p), reading.clone());
+    }
+    Shelf::build(&schema, readings, &found)
 }
 
 /// A spec `SP-<n>` with identity `n`, grounded in these findings and tested by these
@@ -232,7 +277,7 @@ pub(super) fn schema_of_lines(ignore: &[&str]) -> Schema {
         kind: "lines".to_owned(),
         ignore: ignore.iter().map(|i| (*i).to_owned()).collect(),
     });
-    Schema::validate(decls).unwrap()
+    Schema::validate(decls, &spaces()).unwrap()
 }
 
 /// The comparison `lines` with these prefixes left out.
@@ -242,23 +287,23 @@ pub(super) fn lines(ignore: &[&str]) -> Comparison {
     }
 }
 
-/// A shelf of `schema` whose artifacts hold these bytes (a path with none has no
-/// file), read as an adapter does: each path under the comparisons
-/// [`Shelf::artifact_asks`] asks.
+/// A shelf of `schema` whose artifacts hold these bytes (a name with none has
+/// nothing there), read as an adapter does: each name under the comparisons
+/// [`Shelf::artifact_asks`] asks, whatever its space.
 pub(super) fn shelf_reading(
     schema: &Schema,
     readings: Vec<DocReading>,
     files: &[(&str, &[u8])],
 ) -> Shelf {
-    let files: BTreeMap<RelPath, &[u8]> = files.iter().map(|(p, b)| (path(p), *b)).collect();
+    let files: BTreeMap<ArtifactName, &[u8]> = files.iter().map(|(p, b)| (name(p), *b)).collect();
     let found: ArtifactReadings = Shelf::artifact_asks(schema, &readings)
-        .into_iter()
-        .map(|(at, comparisons)| {
-            let reading = match files.get(&at) {
-                Some(bytes) => ArtifactReading::of_bytes(bytes, &comparisons, None),
+        .iter()
+        .map(|(space, at, comparisons)| {
+            let reading = match files.get(at) {
+                Some(bytes) => ArtifactReading::of_bytes(bytes, comparisons, None),
                 None => ArtifactReading::absent(),
             };
-            (at, reading)
+            (space.clone(), at.clone(), reading)
         })
         .collect();
     Shelf::build(schema, readings, &found)

@@ -110,6 +110,7 @@ fn a_valid_new_document_is_made_as_the_build_makes_it_with_its_unresolved_links(
                 ("base", list(&["FR-1", "FR-8"])),
             ]),
             "body\n".to_owned(),
+            &ArtifactReadings::new(),
         )
         .unwrap();
     assert_eq!(new.doc().origin().as_str(), "findings/FR-2.md");
@@ -149,6 +150,7 @@ fn an_invalid_new_document_has_every_problem_the_build_finds() {
             ("colour", text("red")),
         ]),
         String::new(),
+        &ArtifactReadings::new(),
     ) else {
         panic!("invalid");
     };
@@ -188,6 +190,7 @@ fn the_identity_and_the_key_cannot_be_given_as_entries() {
             &key,
             entries(&[("title", text("t")), ("key", text("FR-3"))]),
             String::new(),
+            &ArtifactReadings::new(),
         ),
         Err(NewDocProblem::ReservedEntry { name: "key" })
     );

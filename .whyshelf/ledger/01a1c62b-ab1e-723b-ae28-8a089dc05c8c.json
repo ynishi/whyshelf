@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d693238b1a6ea7caf94e69594e825695e3fd6818",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:747ff424bf12495542a87a5f2a6b8249f215f174bc109aa7c1be61bf25931497",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "778944d564888bd7e742257a5972f3c2727c6806",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d3fa4b3318efde0386272dbb081ff945c650d1551b3a6d3542c7a762c8f2628",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794326111346,
+  "expires": null,
+  "frame": [
+    {
+      "address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+      "hash": "sha256:303a8c9d8c90c20bd63ddd4cf51bfef801a85102e852aefee5bc607e74389897",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "40"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c577-33e1-735e-b992-19f40a27438a"
+    }
+  ],
+  "id": "01a1c62b-ab1e-723b-ae28-8a089dc05c8c",
+  "kind": "decision",
+  "reason": "Artifacts made one model of spaces for #38: decisions restated for artifacts in general, tests moved with the code; checked by a blind review",
+  "revision": "e54fbb6995c5a4cab6723c7bdfbf72c351c7545a",
+  "seen": "sha256:38efce53e6942d94dd60060479423d0c353ede1b318af908509ed7d2c981975b",
+  "seen_address": "ab391718215e349e0a4b34303810714cde7b77ff",
+  "subject": "01a1c577-367b-725d-b911-25170a16cfd6",
+  "v": 1,
+  "verb": "approve"
+}

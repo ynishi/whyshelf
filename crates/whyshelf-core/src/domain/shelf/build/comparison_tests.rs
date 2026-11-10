@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use crate::domain::shelf::artifact::{ArtifactState, Comparison};
 use crate::domain::shelf::fixtures_tests::{
-    docid, lines, list, path, reading, schema_of_lines, shelf_reading, text,
+    docid, file_space, lines, list, name, reading, schema_of_lines, shelf_reading, text,
 };
 use crate::domain::shelf::schema::ArtifactPropagation;
 
@@ -34,16 +34,25 @@ fn each_path_is_asked_with_the_comparisons_of_the_links_that_write_it() {
     ];
     let asks = Shelf::artifact_asks(&schema, &readings);
     let slashes = lines(&["//"]);
+    let asked: Vec<_> = asks
+        .iter()
+        .map(|(space, n, c)| (space.clone(), n.clone(), c.clone()))
+        .collect();
     assert_eq!(
-        asks,
-        ArtifactAsks::from([
+        asked,
+        [
             (
-                path("src/a.rs"),
+                file_space(),
+                name("src/a.rs"),
                 BTreeSet::from([Comparison::Bytes, slashes.clone()])
             ),
-            (path("src/b.rs"), BTreeSet::from([Comparison::Bytes])),
-            (path("src/c.rs"), BTreeSet::from([slashes])),
-        ])
+            (
+                file_space(),
+                name("src/b.rs"),
+                BTreeSet::from([Comparison::Bytes])
+            ),
+            (file_space(), name("src/c.rs"), BTreeSet::from([slashes])),
+        ]
     );
 }
 
@@ -62,7 +71,7 @@ fn each_link_takes_the_hash_of_its_own_comparison_of_one_file() {
         let [(_, artifacts)] = links.as_slice() else {
             panic!("one link: {links:?}");
         };
-        *artifacts[0].state()
+        artifacts[0].state().clone()
     };
     assert_eq!(
         state_under(ArtifactPropagation::Depends),

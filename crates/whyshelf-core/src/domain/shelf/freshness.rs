@@ -50,14 +50,15 @@
 //! - for each `Depends` link name, the set of what it names now against what the
 //!   frame pinned ([`Cause::LinksChanged`]), leaving out what an edge rule already
 //!   said about the same upstream (matched by key, not by count);
-//! - for each pinned artifact still written under its link: when a file is there then
-//!   and now and the link declares another [`Comparison`] than the one the pin was
-//!   made with, [`Cause::ArtifactComparisonChanged`] and no comparison of hashes;
-//!   otherwise rule
-//!   A3: a file whose hash differs is [`Cause::ArtifactChanged`], a file that went is
-//!   [`Cause::ArtifactGone`], a file that came where there was none is
-//!   [`Cause::ArtifactArrived`], and no file then and none now is nothing; for each
-//!   `Depends` link to artifacts, the paths it writes now against those pinned
+//! - for each pinned artifact still written under its link: when its adapter cannot
+//!   tell about it now, nothing (it is a [`Notice::ArtifactUnknown`], and the
+//!   freshness is unchanged); when it is there then and now and the link declares
+//!   another [`Comparison`] than the one the pin was made with,
+//!   [`Cause::ArtifactComparisonChanged`] and no comparison of hashes; otherwise rule
+//!   A3: an artifact whose hash differs is [`Cause::ArtifactChanged`], one that went
+//!   is [`Cause::ArtifactGone`], one that came where there was none is
+//!   [`Cause::ArtifactArrived`], and nothing then and nothing now is nothing; for
+//!   each `Depends` link to artifacts, the names it writes now against those pinned
 //!   ([`Cause::ArtifactLinksChanged`]);
 //! - a cycle the document is in, among links or among frames;
 //! - an expiry: `now >= expires`.
@@ -85,10 +86,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
-use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 
-use super::artifact::{ArtifactHash, ArtifactState, Comparison};
+use super::artifact::{ArtifactHash, ArtifactKey, ArtifactState, Comparison, Untold};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
 use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
 use super::graph::{Cycle, CycleId};
@@ -214,20 +214,20 @@ pub enum Cause {
         /// upstream another cause already says is gone, invalid or unknown).
         unresolved: Vec<UnresolvedLink>,
     },
-    /// A pinned artifact's file is there and is not what was pinned (rule A3).
+    /// A pinned artifact is there and is not what was pinned (rule A3).
     ArtifactChanged {
-        /// The pin.
+        /// The pin, with its space and its name.
         pin: ArtifactPin,
         /// The hash it has now.
         now: ArtifactHash,
     },
-    /// A pinned artifact had a file when it was pinned and has none now (rule A3).
+    /// A pinned artifact was there when it was pinned and is not now (rule A3).
     ArtifactGone {
         /// The pin.
         pin: ArtifactPin,
     },
-    /// A pinned artifact had no file when it was pinned and has one now: the
-    /// evidence came, so look again (rule A3).
+    /// A pinned artifact was not there when it was pinned and is now: the evidence
+    /// came, so look again (rule A3).
     ArtifactArrived {
         /// The pin.
         pin: ArtifactPin,
@@ -244,14 +244,14 @@ pub enum Cause {
         now: Comparison,
     },
     /// What a `Depends` link to artifacts names now is not what the approval pinned
-    /// for it: paths written since, and paths pinned that it no longer writes.
+    /// for it: names written since, and names pinned that it no longer writes.
     ArtifactLinksChanged {
         /// The link.
         link: EntryName,
-        /// Paths it writes now that were not pinned.
-        added: Vec<RelPath>,
-        /// Paths that were pinned and that it no longer writes.
-        removed: Vec<RelPath>,
+        /// Artifacts it names now that were not pinned.
+        added: Vec<ArtifactKey>,
+        /// Artifacts that were pinned and that it no longer names.
+        removed: Vec<ArtifactKey>,
     },
     /// The document is in a cycle.
     InCycle {
@@ -267,7 +267,7 @@ pub enum Cause {
 
 impl Cause {
     /// Where this cause starts, held by the document `holder`: the upstream a pin
-    /// names, the file an artifact pin names, the declaration for a comparison
+    /// names, the artifact an artifact pin names, the declaration for a comparison
     /// changed, the cycle for a cycle, else the holder itself (its own text, links
     /// or expiry). A `Via` starts nowhere of its own (it leads to its upstream's
     /// causes). The one place an origin is assigned.
@@ -284,7 +284,7 @@ impl Cause {
             | Self::UpstreamDeclared { pin, .. } => Some(Origin::Doc(pin.target())),
             Self::ArtifactChanged { pin, .. }
             | Self::ArtifactGone { pin }
-            | Self::ArtifactArrived { pin, .. } => Some(Origin::Artifact(pin.path().clone())),
+            | Self::ArtifactArrived { pin, .. } => Some(Origin::Artifact(pin.artifact().clone())),
             Self::ArtifactComparisonChanged { .. } => Some(Origin::Declaration),
             Self::InCycle { cycle } => Some(Origin::Cycle(*cycle)),
         }
@@ -307,8 +307,9 @@ impl Cause {
     /// | `InCycle` | `Broken` |
     /// | `Expired` | `Expired` |
     ///
-    /// A pinned artifact that had no file and still has none is no cause at all (rule
-    /// A3), so it has no row.
+    /// A pinned artifact that was not there and still is not is no cause at all
+    /// (rule A3), nor is one its adapter cannot tell about now (a notice), so they
+    /// have no row.
     pub fn severity(&self) -> Severity {
         match self {
             Self::SelfChanged { .. }
@@ -510,14 +511,25 @@ pub enum Notice {
         /// The link.
         link: EntryName,
     },
-    /// A path a link to artifacts writes names no file now
-    /// ([`Doc::absent_artifacts`]): the evidence is not written yet, or the path is
+    /// A name a link to artifacts writes has nothing there now
+    /// ([`Doc::absent_artifacts`]): the evidence is not written yet, or the name is
     /// wrong.
     ArtifactAbsent {
         /// The link.
         link: EntryName,
-        /// The path as written.
-        path: RelPath,
+        /// The space and the name as written.
+        artifact: ArtifactKey,
+    },
+    /// The adapter of the space cannot tell about a name a link to artifacts writes
+    /// now ([`Doc::unknown_artifacts`]). Pinned or not, it changes no freshness; an
+    /// approval cannot be made on it while it lasts.
+    ArtifactUnknown {
+        /// The link.
+        link: EntryName,
+        /// The space and the name as written.
+        artifact: ArtifactKey,
+        /// Why it cannot be told.
+        why: Untold,
     },
     /// The document is not what was approved, and people declared that the edit
     /// keeps the meaning: no [`Cause::SelfChanged`].
@@ -539,8 +551,8 @@ pub enum Notice {
         /// The declarations that join the two, in order.
         declared: NonEmptyVec<JudgementId>,
     },
-    /// A pinned artifact's file is not what was pinned, and people declared that the
-    /// edit keeps the meaning: no [`Cause::ArtifactChanged`].
+    /// A pinned artifact is not what was pinned, and people declared that the edit
+    /// keeps the meaning: no [`Cause::ArtifactChanged`].
     ArtifactSameMeaning {
         /// The pin.
         pin: ArtifactPin,
@@ -568,9 +580,10 @@ pub enum Origin {
     /// A document: edited, invalid or gone, declared about, or holding a link or an
     /// expiry of its own.
     Doc(DocId),
-    /// A file a document pins: edited, gone or arrived.
-    Artifact(RelPath),
-    /// The declaration of the books: a link to files that now declares another
+    /// An artifact a document pins, by its space and its name: edited, gone or
+    /// arrived.
+    Artifact(ArtifactKey),
+    /// The declaration of the books: a link to artifacts that now declares another
     /// comparison than a pin was made with.
     Declaration,
     /// A cycle, one origin for all its members.
@@ -1010,36 +1023,42 @@ fn valid_causes(
 /// of what its `Depends` links to artifacts name.
 ///
 /// Only the [`ArtifactState`] is compared: an address in a pin is never read (A4).
-/// A path still written under the link it was pinned for is compared with what is
-/// there now; a pinned path no longer written, and a path written that was not
-/// pinned, are an [`Cause::ArtifactLinksChanged`] of that link.
+/// An artifact still named under the link it was pinned for is compared with what
+/// is there now, unless its adapter cannot tell now (no cause: the notice
+/// [`Notice::ArtifactUnknown`] says so); a pinned artifact no longer named, and one
+/// named that was not pinned, are an [`Cause::ArtifactLinksChanged`] of that link.
 fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, found: Found<'_>) {
     let Found { causes: out, kept } = found;
-    let current: BTreeMap<(&EntryName, &RelPath), &ArtifactState> = doc
+    let current: BTreeMap<(&EntryName, &ArtifactKey), &ArtifactState> = doc
         .artifact_links_of(ArtifactPropagation::Depends)
         .into_iter()
         .flat_map(|(link, artifacts)| {
             artifacts
                 .iter()
-                .map(move |artifact| ((link, artifact.path()), artifact.state()))
+                .map(move |artifact| ((link, artifact.key()), artifact.state()))
         })
         .collect();
 
     let mut causes = Vec::new();
     for pin in pinned {
-        let Some(now) = current.get(&(pin.link(), pin.path())) else {
+        let Some(now) = current.get(&(pin.link(), pin.artifact())) else {
             continue;
         };
-        // Two hashes are compared only when they were made the same way: when a file
-        // is there then and now and the link's declared comparison changed since,
-        // that is the cause, and the hashes are not compared. A file gone, or come,
-        // is told as such whatever the comparison: there is no pair of hashes.
+        let now = match now {
+            ArtifactState::Unknown(_) => continue,
+            ArtifactState::Present(hash) => ArtifactState::Present(*hash),
+            ArtifactState::Absent => ArtifactState::Absent,
+        };
+        // Two hashes are compared only when they were made the same way: when an
+        // artifact is there then and now and the link's declared comparison changed
+        // since, that is the cause, and the hashes are not compared. An artifact gone,
+        // or come, is told as such whatever the comparison: there is no pair of hashes.
         let declared = doc
             .artifact_links()
             .get(pin.link())
             .map(|link| &link.kind().comparison);
         let changed_comparison = declared.filter(|d| *d != pin.comparison());
-        match (pin.seen().state(), **now) {
+        match (pin.seen().state(), now) {
             (ArtifactState::Present(_), ArtifactState::Present(_))
                 if changed_comparison.is_some() =>
             {
@@ -1051,7 +1070,7 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, f
                 }
             }
             (ArtifactState::Present(then), ArtifactState::Present(now)) if then != now => {
-                match ledger.artifact_same_meaning(pin.path(), &then, &now) {
+                match ledger.artifact_same_meaning(pin.artifact(), &then, &now) {
                     Some(declared) => kept.push(Notice::ArtifactSameMeaning {
                         pin: pin.clone(),
                         now,
@@ -1072,26 +1091,30 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, f
                     now,
                 });
             }
+            // A pin is never of an unknown artifact (an approval on one is refused),
+            // and one unknown now was passed over above.
             (ArtifactState::Present(_), ArtifactState::Present(_))
-            | (ArtifactState::Absent, ArtifactState::Absent) => {}
+            | (ArtifactState::Absent, ArtifactState::Absent)
+            | (ArtifactState::Unknown(_), _)
+            | (_, ArtifactState::Unknown(_)) => {}
         }
     }
 
     let mut names: BTreeSet<&EntryName> = pinned.iter().map(ArtifactPin::link).collect();
     names.extend(current.keys().map(|(link, _)| *link));
     for name in names {
-        let was: BTreeSet<&RelPath> = pinned
+        let was: BTreeSet<&ArtifactKey> = pinned
             .iter()
             .filter(|p| p.link() == name)
-            .map(ArtifactPin::path)
+            .map(ArtifactPin::artifact)
             .collect();
-        let is: BTreeSet<&RelPath> = current
+        let is: BTreeSet<&ArtifactKey> = current
             .keys()
             .filter(|(link, _)| *link == name)
-            .map(|(_, path)| *path)
+            .map(|(_, artifact)| *artifact)
             .collect();
-        let added: Vec<RelPath> = is.difference(&was).map(|p| (*p).clone()).collect();
-        let removed: Vec<RelPath> = was.difference(&is).map(|p| (*p).clone()).collect();
+        let added: Vec<ArtifactKey> = is.difference(&was).map(|a| (*a).clone()).collect();
+        let removed: Vec<ArtifactKey> = was.difference(&is).map(|a| (*a).clone()).collect();
         if !added.is_empty() || !removed.is_empty() {
             causes.push(Cause::ArtifactLinksChanged {
                 link: name.clone(),
@@ -1345,11 +1368,12 @@ fn expected_reach<'s>(
 /// | a pinned upstream's causes include `Expired` | `UpstreamExpired` |
 /// | a `Replaces` link | none |
 /// | a pending or approved document of a book a covering link points into, that no pending or approved document reaches through it | `NotCovered` |
-/// | a pending or approved document whose link to artifacts writes a path that names no file | `ArtifactAbsent` |
+/// | a pending or approved document whose link to artifacts writes a name with nothing there | `ArtifactAbsent` |
+/// | a pending or approved document whose link to artifacts writes a name its adapter cannot tell about now, pinned or not | `ArtifactUnknown` |
 ///
-/// They are given whatever the document's own standing is, except `NotCovered` and
-/// `ArtifactAbsent`: a document denied, deprecated or retired is not expected to be
-/// reached, nor its evidence to be kept. To them are added, first,
+/// They are given whatever the document's own standing is, except `NotCovered`,
+/// `ArtifactAbsent` and `ArtifactUnknown`: a document denied, deprecated or retired
+/// is not expected to be reached, nor its evidence to be kept. To them are added, first,
 /// the notices of an approval's edits that a declaration kept from being causes
 /// (`SelfSameMeaning`, `UpstreamSameMeaning`, `ArtifactSameMeaning`): those are made
 /// where the hashes are compared, so only an approved document has them.
@@ -1380,10 +1404,17 @@ fn collect_notices(
                     });
                 }
             }
-            for (link, path) in doc.absent_artifacts() {
+            for (link, artifact) in doc.absent_artifacts() {
                 notices.push(Notice::ArtifactAbsent {
                     link: link.clone(),
-                    path: path.clone(),
+                    artifact: artifact.clone(),
+                });
+            }
+            for (link, artifact, why) in doc.unknown_artifacts() {
+                notices.push(Notice::ArtifactUnknown {
+                    link: link.clone(),
+                    artifact: artifact.clone(),
+                    why: why.clone(),
                 });
             }
         }

@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::DocReading;
 use crate::domain::shelf::fixtures_tests::{
-    approved, decls, deny, deprecate, docid, fr, ledger, list, reading, retire, text,
+    approved, decls, deny, deprecate, docid, fr, ledger, list, reading, retire, spaces, text,
 };
 use crate::domain::shelf::ledger::{JudgedAt, Ledger, Record};
 use crate::domain::shelf::schema::{BookSchemaDecl, Schema};
@@ -24,7 +24,7 @@ fn schema_covering(links: &[(&str, &str)]) -> Schema {
             .expect("the fixtures declare it")
             .cover = true;
     }
-    Schema::validate(decls).unwrap()
+    Schema::validate(decls, &spaces()).unwrap()
 }
 
 /// A shelf where a spec's `grounds` covers the findings.
@@ -160,7 +160,7 @@ fn two_covering_links_into_one_book_are_each_expected() {
 
 #[test]
 fn a_link_without_cover_expects_nothing() {
-    let schema = Schema::validate(decls()).unwrap();
+    let schema = Schema::validate(decls(), &spaces()).unwrap();
     let shelf = shelf_of(&schema, vec![fr(1, &[]), fr(2, &[])]);
     let assessment = assess(&shelf, &ledger(vec![]), JudgedAt::new(100));
     for n in [1, 2] {
