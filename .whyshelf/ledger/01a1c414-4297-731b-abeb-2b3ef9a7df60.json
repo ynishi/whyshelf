@@ -1,0 +1,73 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e70ae0a031f3ff48de8a4ee3845fd1f1e0c90ee2",
+      "hash": "sha256:4df59e31254091f5f8586bc0d926dc284a681cf204e473edf08c7547cef56e97",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "9da4ad27670a651a4e10494b55a7c41e8d4d6920",
+      "hash": "sha256:a094f54c86fac149f7e67207aaf4286041960b369adf17ce6164f8d1ba239515",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "4d6f58d6951cc682954d6a27f6f588f66357c1da",
+      "hash": "sha256:10c3eac61eb2927247f2419e98d86844bd098a88a098a91b7e373e62297dfb84",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/git.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794291024352,
+  "expires": null,
+  "frame": [
+    {
+      "address": "77663e51c838e55f5feb16635d6ffdc244721230",
+      "hash": "sha256:962bca42a4aed00f4aa03d4eb971854a0da11d55cb5a2a2bb9248c4fa40b7dad",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "6"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fa37-74bf-bbd8-1dbc0e039102"
+    },
+    {
+      "address": "326c8e0dd83dc88b70602064de0c71308ec00abf",
+      "hash": "sha256:f8b80a6e8223bcd54319242f643920ba9845b5b3276192631a2a59cd976aeece",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    }
+  ],
+  "id": "01a1c414-4297-731b-abeb-2b3ef9a7df60",
+  "kind": "decision",
+  "reason": "Command names flattened (whyshelf books <cmd> -> whyshelf <cmd>); DEC-8's text and a doc comment in git.rs changed only that name.",
+  "revision": "ac3f49fa37677517c7ed3e89e69a9cfe5d84a620",
+  "seen": "sha256:9ff6ee087d1a1e46368da2481e1f64ab89a4f5fe34887387597add6757816eaa",
+  "seen_address": "3fe855a1cbdc5598bc77f6a26f19cd40ed0a9494",
+  "subject": "01a1c3d2-fcc8-780b-9a64-87c28c477246",
+  "v": 1,
+  "verb": "approve"
+}

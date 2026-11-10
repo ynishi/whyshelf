@@ -13,10 +13,8 @@ preset = "recommended"
 
 [rules.no-sync-io]
 # whyshelf-infra runs on an async runtime (tokio), so blocking I/O there stalls the executor. The rule
-# is a built-in one that looks at every file under the workspace root, not at a scope; the one place
-# where blocking I/O is allowed is named in `exclude_files`: it runs inside `spawn_blocking`.
+# is a built-in one that looks at every file under the workspace root, not at a scope.
 enabled = true
-exclude_files = ["crates/whyshelf-infra/src/blocking.rs"]
 
 [[scopes]]
 name = "domain"

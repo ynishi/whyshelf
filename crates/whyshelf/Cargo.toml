@@ -1,6 +1,6 @@
 [package]
 name = "whyshelf"
-description = "Ground specs in findings: hash-pinned Finding -> Spec -> Design -> Impl with event-sourced approvals"
+description = "Books of documents whose kinds a project declares, linked to the files they stand on, and whether each decision about them still holds"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,5 +16,5 @@ whyshelf-infra = { workspace = true, optional = true }
 
 [features]
 default = ["infra"]
-# The adapters (Git, file system, SQLite, clock). Off for a caller that brings its own.
+# The adapters (file system, Git, clock). Off for a caller that brings its own.
 infra = ["dep:whyshelf-infra"]

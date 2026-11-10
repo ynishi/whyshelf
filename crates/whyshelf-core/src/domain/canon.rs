@@ -270,27 +270,6 @@ fn take_value(rest: &mut &[u8], depth: usize) -> Result<Canon, CanonError> {
     }
 }
 
-/// A value that has one canonical form.
-///
-/// Crate-private: the canonical forms are an implementation of the hash scope
-/// documented on each entity, not an extension point.
-pub(crate) trait ToCanon {
-    /// The canonical form of this value.
-    fn to_canon(&self) -> Canon;
-}
-
-impl<T: ToCanon> ToCanon for Option<T> {
-    fn to_canon(&self) -> Canon {
-        self.as_ref().map_or(Canon::Null, ToCanon::to_canon)
-    }
-}
-
-impl<T: ToCanon> ToCanon for [T] {
-    fn to_canon(&self) -> Canon {
-        Canon::list(self.iter().map(ToCanon::to_canon))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,17 +422,5 @@ mod tests {
             Canon::from_bytes(&deep.to_bytes()),
             Err(CanonError::TooDeep)
         );
-    }
-
-    #[test]
-    fn option_none_is_null() {
-        struct One;
-        impl ToCanon for One {
-            fn to_canon(&self) -> Canon {
-                Canon::Int(1)
-            }
-        }
-        assert_eq!(None::<One>.to_canon(), Canon::Null);
-        assert_eq!(Some(One).to_canon(), Canon::Int(1));
     }
 }
