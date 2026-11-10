@@ -8,8 +8,8 @@ use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::shelf::artifact::ArtifactHash;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, deny, docid, fr, fr_titled, jid, ledger, path, reading, shelf, shelf_with,
-    sp_testing,
+    actor, approve, deny, docid, file_artifact, fr, fr_titled, jid, ledger, name, reading, shelf,
+    shelf_with, sp_testing,
 };
 
 use super::*;
@@ -51,7 +51,7 @@ fn artifact_declaration(judgement: u128, at: &str, from: &[&str], to: &str) -> R
     declaration(
         judgement,
         SameMeaningOf::Artifact {
-            path: path(at),
+            artifact: file_artifact(at),
             from: NonEmptySet::from_set(from.iter().map(|t| ah(t)).collect()).unwrap(),
             to: ah(to),
         },
@@ -125,9 +125,33 @@ fn a_declaration_about_a_file_survives_its_canonical_form() {
         map_mut(&mut owned).get("subject"),
         Some(&Canon::map([
             ("kind", Canon::str("artifact")),
-            ("path", Canon::str("tests/a.rs")),
+            ("space", Canon::str("file")),
+            ("name", Canon::str("tests/a.rs")),
         ]))
     );
+    // Stored before spaces existed, with `path` alone: read as the space `file`, and
+    // written again as it was stored, with the hash of that form.
+    let mut stored = canon.clone();
+    map_mut(&mut stored).insert(
+        "subject".to_owned(),
+        Canon::map([
+            ("kind", Canon::str("artifact")),
+            ("path", Canon::str("tests/a.rs")),
+        ]),
+    );
+    let old = Record::from_canon(&stored).unwrap();
+    assert_eq!(old.to_canon(), stored);
+    assert_eq!(
+        old.hash(),
+        RecordHash(ContentHash::of(HashKind::ShelfJudgement, &stored))
+    );
+    let Record::SameMeaning(old) = &old else {
+        panic!("a declaration");
+    };
+    assert!(matches!(
+        old.of(),
+        SameMeaningOf::Artifact { artifact, .. } if *artifact == file_artifact("tests/a.rs")
+    ));
     let back = Record::from_canon(&canon).unwrap();
     assert_eq!(back, record);
     assert_eq!(back.hash(), record.hash());
@@ -317,11 +341,11 @@ fn a_declaration_about_another_document_or_path_does_not_count() {
     assert_eq!(l.doc_same_meaning(docid(1), &dh(1), &dh(2)), None);
     assert!(l.doc_same_meaning(docid(2), &dh(1), &dh(2)).is_some());
     assert_eq!(
-        l.artifact_same_meaning(&path("tests/a.rs"), &ah("a"), &ah("b")),
+        l.artifact_same_meaning(&file_artifact("tests/a.rs"), &ah("a"), &ah("b")),
         None
     );
     assert_eq!(
-        ids(l.artifact_same_meaning(&path("tests/b.rs"), &ah("b"), &ah("a"))),
+        ids(l.artifact_same_meaning(&file_artifact("tests/b.rs"), &ah("b"), &ah("a"))),
         Some(vec![jid(2002)])
     );
 }
@@ -333,11 +357,11 @@ fn files_are_joined_through_a_chain_as_documents_are() {
         artifact_declaration(2002, "tests/a.rs", &["b"], "c"),
     ]);
     assert_eq!(
-        ids(l.artifact_same_meaning(&path("tests/a.rs"), &ah("a"), &ah("c"))),
+        ids(l.artifact_same_meaning(&file_artifact("tests/a.rs"), &ah("a"), &ah("c"))),
         Some(vec![jid(2001), jid(2002)])
     );
     assert_eq!(
-        ids(l.artifact_same_meaning(&path("tests/a.rs"), &ah("c"), &ah("a"))),
+        ids(l.artifact_same_meaning(&file_artifact("tests/a.rs"), &ah("c"), &ah("a"))),
         Some(vec![jid(2002), jid(2001)])
     );
 }
@@ -600,11 +624,11 @@ fn a_declaration_about_a_file_gathers_every_pin_of_its_path() {
     let then = tested(Some(ah("a")));
     let l = ledger(approving(&then, &[1, 2], 1001));
     let now = tested(Some(ah("b")));
-    let target = || SameMeaningTarget::Artifact(path("tests/a.rs"));
+    let target = || SameMeaningTarget::Artifact(name("tests/a.rs"));
     assert_eq!(
         frame(&now, &l, target()),
         Ok(SameMeaningOf::Artifact {
-            path: path("tests/a.rs"),
+            artifact: file_artifact("tests/a.rs"),
             from: NonEmptySet::from_set(BTreeSet::from([ah("a")])).unwrap(),
             to: ah("b"),
         })
@@ -642,7 +666,7 @@ fn a_file_pinned_at_two_different_hashes_needs_one_named() {
     ));
     let l = ledger(records);
     let now = tested_twice("c");
-    let at = || path("tests/a.rs");
+    let at = || name("tests/a.rs");
     let named = |hash: ArtifactHash| {
         frame_same_meaning(
             &now,
@@ -664,7 +688,7 @@ fn a_file_pinned_at_two_different_hashes_needs_one_named() {
         assert_eq!(
             named(hash),
             Ok(SameMeaningOf::Artifact {
-                path: at(),
+                artifact: file_artifact("tests/a.rs"),
                 from: NonEmptySet::from_set(BTreeSet::from([hash])).unwrap(),
                 to: ah("c"),
             })
@@ -685,19 +709,19 @@ fn a_declaration_about_a_file_no_document_links_or_that_is_not_there_is_refused(
     let then = tested(Some(ah("a")));
     let l = ledger(approving(&then, &[1, 2], 1001));
     assert_eq!(
-        frame(&then, &l, SameMeaningTarget::Artifact(path("tests/z.rs"))),
+        frame(&then, &l, SameMeaningTarget::Artifact(name("tests/z.rs"))),
         Err(SameMeaningRefusal::ArtifactNotLinked {
-            path: path("tests/z.rs")
+            name: name("tests/z.rs")
         })
     );
     assert_eq!(
         frame(
             &tested(None),
             &l,
-            SameMeaningTarget::Artifact(path("tests/a.rs"))
+            SameMeaningTarget::Artifact(name("tests/a.rs"))
         ),
         Err(SameMeaningRefusal::ArtifactAbsent {
-            path: path("tests/a.rs")
+            artifact: file_artifact("tests/a.rs")
         })
     );
 }

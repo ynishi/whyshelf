@@ -23,7 +23,7 @@ use crate::domain::id::ShortId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonEmptySet, NonEmptyVec, TwoOrMore};
 
-use super::artifact::{Comparison, ComparisonProblem};
+use super::artifact::{Comparison, ComparisonProblem, Space, SpaceProblem};
 
 /// The most characters of the name of a book, a field, a link or an enum word.
 const NAME_MAX: usize = 64;
@@ -568,18 +568,18 @@ pub enum Propagation {
     Replaces,
 }
 
-/// What a link to an artifact (a file that is no document) means for freshness: one
-/// of the two meanings of [`Propagation`] a file can have.
+/// What a link to an artifact (a thing outside the documents) means for freshness:
+/// one of the two meanings of [`Propagation`] an artifact can have.
 ///
-/// There is no `Replaces`: a file takes no document's place, so a declaration that
-/// says so is refused ([`SchemaProblem::ArtifactReplaces`]) and the type cannot hold
-/// it.
+/// There is no `Replaces`: an artifact takes no document's place, so a declaration
+/// that says so is refused ([`SchemaProblem::ArtifactReplaces`]) and the type cannot
+/// hold it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArtifactPropagation {
-    /// The document stands on the file: an approval pins what is there (rule A2),
-    /// and a change makes the approval stale (A3).
+    /// The document stands on the artifact: an approval pins what is there (rule
+    /// A2), and a change makes the approval stale (A3).
     Depends,
-    /// The document points at the file for information; it changes no freshness.
+    /// The document points at the artifact for information; it changes no freshness.
     Informs,
 }
 
@@ -593,22 +593,25 @@ impl ArtifactPropagation {
     }
 }
 
-/// A kind of link a book declares to artifacts: files of the project that are no
-/// document, named by their path under the root.
+/// A kind of link a book declares to artifacts: things outside the documents, named
+/// in one [`Space`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactLinkKind {
-    /// How many paths a document writes.
+    /// The space its names are in (`space` in the declaration, which every link to
+    /// artifacts writes: there is no space a link has when it names none). One of
+    /// the spaces [`Schema::validate`] was given.
+    pub space: Space,
+    /// How many names a document writes.
     pub cardinality: Cardinality,
     /// What the link means for freshness.
     pub propagation: ArtifactPropagation,
-    /// What of each file is compared (`compare` in the declaration; `bytes` when it
-    /// says none).
+    /// What of each artifact is compared (`compare` in the declaration; `bytes` when
+    /// it says none).
     pub comparison: Comparison,
 }
 
 /// The name no book can have: the word a declaration uses for the target of a link to
-/// a file that is no document (`target = "artifact"`), so that the word never names a
-/// book as well.
+/// artifacts (`target = "artifact"`), so that the word never names a book as well.
 pub const ARTIFACT_TARGET: &str = "artifact";
 
 /// A kind of link a book declares to another book.
@@ -738,8 +741,8 @@ pub struct FieldEntryDecl {
 pub enum LinkTargetDecl {
     /// Documents of the book of this name, as written.
     Book(String),
-    /// Files of the project that are no document, by path (an adapter reads it from
-    /// the word [`ARTIFACT_TARGET`]).
+    /// Artifacts, things outside the documents, by name in the space the link
+    /// declares (an adapter reads it from the word [`ARTIFACT_TARGET`]).
     Artifact,
 }
 
@@ -754,19 +757,22 @@ pub struct LinkEntryDecl {
     pub cardinality: Cardinality,
     /// What the link means for freshness.
     pub propagation: Propagation,
-    /// For a link to artifacts, what of each file is compared, as written: the kind
-    /// (`bytes` or `lines`) and the prefixes of the lines `lines` leaves out. `None`
-    /// is `bytes`.
+    /// For a link to artifacts, the space its names are in, as written. Every link
+    /// to artifacts names one, and only such a link takes it.
+    pub space: Option<String>,
+    /// For a link to artifacts, what of each artifact is compared, as written: the
+    /// kind (`bytes`, `lines` or `presence`) and the prefixes of the lines `lines`
+    /// leaves out. `None` is `bytes`.
     pub compare: Option<CompareDecl>,
     /// For a link into a book: whether every document of the target book is
     /// expected to be reached by it (`cover = true`). Refused on a link to artifacts.
     pub cover: bool,
 }
 
-/// What of a file a link to artifacts compares, as declared.
+/// What of an artifact a link to artifacts compares, as declared.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CompareDecl {
-    /// `bytes` or `lines`.
+    /// `bytes`, `lines` or `presence`.
     pub kind: String,
     /// The prefixes of the lines `lines` leaves out.
     pub ignore: Vec<String>,
@@ -925,8 +931,53 @@ pub enum SchemaProblem {
         /// The book it points into.
         target: BookName,
     },
-    /// A link to artifacts that says it replaces them: a file takes no document's
-    /// place, so such a link `depends` or `informs`.
+    /// A link to artifacts that names no space: there is no space a link has when
+    /// it names none.
+    #[error(
+        "book `{book}`: the link `{link}` points at artifacts and names no `space` they are in"
+    )]
+    NoSpace {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+    },
+    /// A link to artifacts whose `space` is no space.
+    #[error("book `{book}`: the link `{link}`: {why}")]
+    BadSpace {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+        /// Why.
+        why: SpaceProblem,
+    },
+    /// A link to artifacts whose space no adapter offers.
+    #[error(
+        "book `{book}`: the link `{link}` names the space `{space}`, which no adapter offers (it offers: {offered})"
+    )]
+    UnknownSpace {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+        /// The space it names.
+        space: Space,
+        /// The spaces offered, as one text.
+        offered: String,
+    },
+    /// `space` on a link into a book: only artifacts are in a space.
+    #[error(
+        "book `{book}`: the link `{link}` points into a book, and only a link to artifacts takes `space`"
+    )]
+    SpaceOnBookLink {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+    },
+    /// A link to artifacts that says it replaces them: an artifact takes no
+    /// document's place, so such a link `depends` or `informs`.
     #[error(
         "book `{book}`: the link `{link}` points at artifacts, so it depends or informs and does not replace"
     )]
@@ -1011,14 +1062,18 @@ struct DraftLink {
 }
 
 impl Draft {
-    fn read(decl: BookSchemaDecl, problems: &mut Vec<SchemaProblem>) -> Self {
+    fn read(
+        decl: BookSchemaDecl,
+        spaces: &BTreeSet<Space>,
+        problems: &mut Vec<SchemaProblem>,
+    ) -> Self {
         let label = decl.name.clone();
         let first_problem = problems.len();
         let name = read_book_name(&decl.name, problems);
         let dir = read_dir(&label, &decl.dir, problems);
         let key = read_key_pattern(&label, &decl.key, problems);
         let fields = read_fields(&label, decl.fields, problems);
-        let (links, artifact_links) = read_links(&label, decl.links, &fields, problems);
+        let (links, artifact_links) = read_links(&label, decl.links, &fields, spaces, problems);
         Self {
             label,
             name,
@@ -1205,11 +1260,13 @@ fn read_field_type(
 /// The links of a book, into books and to artifacts; one that breaks a rule is
 /// reported and left out. `fields` are the fields already read, for a name that is
 /// both. A name is one link, whichever its target: a name written twice is reported
-/// whether the two point at books or at artifacts.
+/// whether the two point at books or at artifacts. `spaces` are the spaces the
+/// adapters offer.
 fn read_links(
     book: &str,
     entries: Vec<LinkEntryDecl>,
     fields: &BTreeMap<EntryName, FieldDecl>,
+    spaces: &BTreeSet<Space>,
     problems: &mut Vec<SchemaProblem>,
 ) -> (
     BTreeMap<EntryName, DraftLink>,
@@ -1270,6 +1327,13 @@ fn read_links(
                     });
                     continue;
                 }
+                if entry.space.is_some() {
+                    problems.push(SchemaProblem::SpaceOnBookLink {
+                        book: book.to_owned(),
+                        link: name,
+                    });
+                    continue;
+                }
                 let link = DraftLink {
                     target,
                     cardinality: entry.cardinality,
@@ -1286,6 +1350,10 @@ fn read_links(
                     });
                     continue;
                 }
+                let Some(space) = read_space(book, &name, entry.space.as_deref(), spaces, problems)
+                else {
+                    continue;
+                };
                 let comparison = match &entry.compare {
                     None => Comparison::Bytes,
                     Some(decl) => match Comparison::parse(&decl.kind, &decl.ignore) {
@@ -1312,6 +1380,7 @@ fn read_links(
                     }
                 };
                 let link = ArtifactLinkKind {
+                    space,
                     cardinality: entry.cardinality,
                     propagation,
                     comparison,
@@ -1321,6 +1390,51 @@ fn read_links(
         }
     }
     (links, artifact_links)
+}
+
+/// The space of a link to artifacts: written, a space, and one the adapters offer
+/// (the spaces come from the port, as a value). Each of the three that is not so is
+/// reported.
+fn read_space(
+    book: &str,
+    link: &EntryName,
+    written: Option<&str>,
+    spaces: &BTreeSet<Space>,
+    problems: &mut Vec<SchemaProblem>,
+) -> Option<Space> {
+    let Some(written) = written else {
+        problems.push(SchemaProblem::NoSpace {
+            book: book.to_owned(),
+            link: link.clone(),
+        });
+        return None;
+    };
+    let space = match Space::new(written) {
+        Ok(space) => space,
+        Err(why) => {
+            problems.push(SchemaProblem::BadSpace {
+                book: book.to_owned(),
+                link: link.clone(),
+                why,
+            });
+            return None;
+        }
+    };
+    if !spaces.contains(&space) {
+        let offered: Vec<String> = spaces.iter().map(|s| format!("`{s}`")).collect();
+        problems.push(SchemaProblem::UnknownSpace {
+            book: book.to_owned(),
+            link: link.clone(),
+            space,
+            offered: if offered.is_empty() {
+                "none".to_owned()
+            } else {
+                offered.join(", ")
+            },
+        });
+        return None;
+    }
+    Some(space)
 }
 
 /// The names of the books declared, each once; a name written twice is reported
@@ -1411,15 +1525,20 @@ impl Schema {
     /// a field and a link, a link into a book that is not declared, an enum with no
     /// word, two books that use one key prefix, two directories that are the same or
     /// nest, a `Replaces` link that leaves its own book, a link to artifacts that
-    /// replaces, and a book named [`ARTIFACT_TARGET`]. A [`Schema`] exists
-    /// only when there is none, so nothing after this re-checks a declaration.
+    /// replaces, one that names no space, a text that is no space, or a space not in
+    /// `spaces` (the spaces the adapters offer, given as a value), and a book named
+    /// [`ARTIFACT_TARGET`]. A [`Schema`] exists only when there is none, so nothing
+    /// after this re-checks a declaration.
     // The problems are the answer, read once per run; it is not a hot path.
     #[allow(clippy::result_large_err)]
-    pub fn validate(decls: Vec<BookSchemaDecl>) -> Result<Self, NonEmptyVec<SchemaProblem>> {
+    pub fn validate(
+        decls: Vec<BookSchemaDecl>,
+        spaces: &BTreeSet<Space>,
+    ) -> Result<Self, NonEmptyVec<SchemaProblem>> {
         let mut problems = Vec::new();
         let drafts: Vec<Draft> = decls
             .into_iter()
-            .map(|decl| Draft::read(decl, &mut problems))
+            .map(|decl| Draft::read(decl, spaces, &mut problems))
             .collect();
 
         let declared = declared_names(&drafts, &mut problems);

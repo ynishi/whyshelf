@@ -65,6 +65,7 @@ fn an_uncovered_document_is_listed_and_the_check_is_not_clean() {
             link: link("grounds"),
         }],
         absent: Vec::new(),
+        unknown: Vec::new(),
     };
     let out = serde_json::to_value(books_check(&check)).unwrap();
     assert_eq!(out["clean"], false);

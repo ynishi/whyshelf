@@ -12,7 +12,7 @@
 //!
 //! A link that cannot be followed is an edge too, upstream, so an answer shows where
 //! the trail breaks. A link to an artifact is an edge upstream that ends there: the
-//! file links to nothing, and nothing is walked down from it.
+//! artifact links to nothing, and nothing is walked down from it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -30,8 +30,8 @@ pub enum LinkEnd {
     Doc(DocId),
     /// A key that cannot be followed.
     Unresolved(UnresolvedLink),
-    /// A file that is no document, there or not. The walk ends at it: an artifact
-    /// links to nothing.
+    /// An artifact, there, not there, or not told now. The walk ends at it: an
+    /// artifact links to nothing.
     Artifact(Artifact),
 }
 
@@ -222,7 +222,7 @@ mod tests {
         let artifacts: Vec<(&str, ArtifactState, Propagation)> = up
             .iter()
             .filter_map(|e| match &e.end {
-                LinkEnd::Artifact(a) => Some((a.path().as_str(), *a.state(), e.propagation)),
+                LinkEnd::Artifact(a) => Some((a.name().as_str(), a.state().clone(), e.propagation)),
                 _ => None,
             })
             .collect();

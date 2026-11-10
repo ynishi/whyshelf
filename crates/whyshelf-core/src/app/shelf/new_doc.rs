@@ -5,6 +5,7 @@
 //!   request ---- load -------------------------------> the shelf as it is
 //!   book, key? -- Shelf::claim_key / next_key -------> a NewKey (free, in the grammar)
 //!   texts  ---- the book's declared types ----------> RawValues (a translation only)
+//!   entries -- Shelf::new_artifact_asks ------------> ArtifactSource::resolve
 //!   new id ---- Shelf::check_new -------------------> a NewDoc, or every DocProblem
 //!   NewDoc ---- DocWrite::create (create-only) -----> <book dir>/<key>.md
 //! ```
@@ -24,6 +25,7 @@ use std::collections::BTreeMap;
 
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
+use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::{RawValue, Shelf};
 use crate::domain::shelf::doc::{DocKey, UnresolvedLink};
 use crate::domain::shelf::schema::{BookName, BookSchema, EntryName, FieldType};
@@ -31,7 +33,7 @@ use crate::domain::shelf::schema::{BookName, BookSchema, EntryName, FieldType};
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::load;
-use super::ports::{Creation, DocWrite, IdSource, ShelfPort, ShelfWrite, port};
+use super::ports::{ArtifactSource, Creation, DocWrite, IdSource, ShelfPort, ShelfWrite, port};
 
 /// A request for a new document.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,7 +89,20 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .new_doc_id()
             .await
             .map_err(port(ShelfPort::Ids))?;
-        let new = shelf.check_new(id, &key, entries, request.body)?;
+        // The names its links to artifacts write are asked of their adapters as the
+        // load asks those of every document, so a text that is no name of its space
+        // is refused here as the build would refuse it.
+        let asks = shelf.new_artifact_asks(&key, &entries);
+        let artifacts = if asks.is_empty() {
+            ArtifactReadings::new()
+        } else {
+            self.ports
+                .artifacts()
+                .resolve(&asks)
+                .await
+                .map_err(port(ShelfPort::Artifacts))?
+        };
+        let new = shelf.check_new(id, &key, entries, request.body, &artifacts)?;
         let doc = new.doc();
         let written = self
             .ports

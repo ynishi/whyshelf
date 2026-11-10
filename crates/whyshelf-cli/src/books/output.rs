@@ -20,8 +20,7 @@ use whyshelf_core::domain::shelf::snapshot::{
 
 use super::textdiff;
 use whyshelf_core::domain::id::DocId;
-use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::shelf::artifact::{Artifact, Comparison};
+use whyshelf_core::domain::shelf::artifact::{Artifact, ArtifactKey, ArtifactState, Comparison};
 use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence};
 use whyshelf_core::domain::shelf::doc::{
     Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy, normalize,
@@ -83,10 +82,12 @@ pub struct CauseOut {
     pub upstream: Option<DocRef>,
     /// The link it was reached through, if any.
     pub link: Option<String>,
-    /// The path of the artifact the cause names, if it names one
+    /// The name of the artifact the cause names, if it names one
     /// (`artifact_changed`, `artifact_gone`, `artifact_arrived`,
-    /// `artifact_comparison_changed`).
+    /// `artifact_comparison_changed`): for the space `file`, its path.
     pub artifact: Option<String>,
+    /// The space of that artifact, beside `artifact`.
+    pub space: Option<String>,
     /// A sentence for a person.
     pub detail: String,
 }
@@ -96,14 +97,17 @@ pub struct CauseOut {
 pub struct NoticeOut {
     /// What kind (`informs_not_fresh`, `informs_unresolved`, `upstream_expired`,
     /// `self_same_meaning`, `upstream_same_meaning`, `artifact_same_meaning`,
-    /// `not_covered`, `artifact_absent`).
+    /// `not_covered`, `artifact_absent`, `artifact_unknown`).
     pub kind: &'static str,
     /// The link; empty for a notice about the document itself.
     pub link: String,
     /// The document it names, if it names one.
     pub target: Option<DocRef>,
-    /// The file it names, a path under the root, if it names one.
+    /// The name of the artifact it names, if it names one: for the space `file`, a
+    /// path under the root.
     pub artifact: Option<String>,
+    /// The space of that artifact, beside `artifact`.
+    pub space: Option<String>,
     /// For an edit declared to keep the meaning, the declarations (record ids) that
     /// join the hash pinned to the hash now, in order; empty otherwise.
     pub declared: Vec<String>,
@@ -211,22 +215,46 @@ pub struct BooksCheckOut {
     /// The documents a covering link (`cover = true`) is expected to reach and does
     /// not; any makes `clean` false.
     pub uncovered: Vec<UncoveredOut>,
-    /// The paths of pending and approved documents that name no file; they leave
-    /// `clean` as it is, since a path may name evidence not written yet.
+    /// The names of pending and approved documents with nothing there (for the
+    /// space `file`, paths that name no file); they leave `clean` as it is, since a
+    /// name may be of evidence not written yet.
     pub absent: Vec<AbsentOut>,
+    /// The names of pending and approved documents their adapter cannot tell about
+    /// now; they leave `clean` as it is, and no approval can be made on one.
+    pub unknown: Vec<UnknownOut>,
 }
 
-/// A path a link to artifacts writes that names no file.
+/// A name a link to artifacts writes with nothing there.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct AbsentOut {
     /// The document.
     pub doc: DocRef,
     /// The link.
     pub link: String,
-    /// The path as written.
+    /// The name as written (kept from when every name was a path; the same as
+    /// `name`).
     pub path: String,
+    /// The name as written.
+    pub name: String,
+    /// The space of the name.
+    pub space: String,
     /// A sentence for a person.
     pub detail: String,
+}
+
+/// A name a link to artifacts writes that its adapter cannot tell about now.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct UnknownOut {
+    /// The document.
+    pub doc: DocRef,
+    /// The link.
+    pub link: String,
+    /// The name as written.
+    pub name: String,
+    /// The space of the name.
+    pub space: String,
+    /// Why, as the adapter says.
+    pub why: String,
 }
 
 /// A document a covering link is expected to reach and does not.
@@ -283,11 +311,18 @@ pub enum LinkTargetOut {
         /// Why.
         why: String,
     },
-    /// A file that is no document (a link with `target = "artifact"`).
+    /// An artifact (a link with `target = "artifact"`).
     Artifact {
-        /// Its path under the root.
+        /// Its name (kept from when every name was a path; the same as `name`).
         path: String,
-        /// The hash of its content now; none when no file is there.
+        /// Its name as written.
+        name: String,
+        /// Its space.
+        space: String,
+        /// What it is now: `present`, `absent`, or `unknown` (its adapter cannot tell
+        /// now).
+        now: &'static str,
+        /// The hash of its content now, when `now` is `present`; none otherwise.
         hash: Option<String>,
     },
 }
@@ -360,7 +395,7 @@ pub struct StaleEntryOut {
 pub struct StaleOut {
     /// The approvals that do not hold, strongest first.
     pub stale: Vec<StaleEntryOut>,
-    /// Where they start: each document, file, cycle or the declaration an event
+    /// Where they start: each document, artifact, cycle or the declaration an event
     /// starts at, with the approvals of `stale` it degrades; the one that degrades
     /// the most first.
     pub origins: Vec<OriginOut>,
@@ -386,12 +421,16 @@ pub enum StartOut {
         /// The document.
         doc: DocRef,
     },
-    /// A file that is no document.
+    /// An artifact.
     Artifact {
-        /// Its path from the project root.
+        /// Its name (kept from when every name was a path; the same as `name`).
         path: String,
+        /// Its name.
+        name: String,
+        /// Its space.
+        space: String,
     },
-    /// The declaration of the books: a link to files declares another comparison.
+    /// The declaration of the books: a link to artifacts declares another comparison.
     Declaration,
     /// A cycle (see `health.cycles`).
     Cycle {
@@ -406,16 +445,21 @@ pub enum StartOut {
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct ItemOut {
     /// `subject` (the approved document), `upstream` (a document it stood on) or
-    /// `artifact` (a file it stood on).
+    /// `artifact` (an artifact it stood on).
     pub role: &'static str,
     /// The document, for a subject or an upstream (an upstream's key is the one it
     /// had when it was pinned).
     pub doc: Option<DocRef>,
     /// The link it was pinned through, for an upstream or an artifact.
     pub link: Option<String>,
-    /// The path, for an artifact.
+    /// The name, for an artifact (kept from when every name was a path; the same as
+    /// `name`).
     pub path: Option<String>,
-    /// The hash the approval pinned; none for an artifact that had no file.
+    /// The name, for an artifact.
+    pub name: Option<String>,
+    /// The space, for an artifact.
+    pub space: Option<String>,
+    /// The hash the approval pinned; none for an artifact that was not there.
     pub approved_hash: Option<String>,
     /// Where its content, as it was approved, can be read back; none when the record
     /// keeps no address.
@@ -468,11 +512,18 @@ pub struct ApprovedOut {
 pub struct DiffItemOut {
     /// What it is, with the hash that was approved.
     pub item: ItemOut,
-    /// The hash it has now; none when it is no valid document, or no file is there.
+    /// The hash it has now; none when it is no valid document, or, for an artifact,
+    /// when `now` is not `present`.
     pub current_hash: Option<String>,
-    /// Whether the hash is not the one approved.
+    /// Whether it is not known to be what was approved: its hash differs, it is no
+    /// valid document now, or it is an artifact that cannot be told now (`now` is
+    /// `unknown`).
     pub changed: bool,
-    /// The file that holds it now, if one does.
+    /// For an artifact, what it is now: `present`, `absent`, or `unknown` (its
+    /// adapter cannot tell now); none for a document.
+    pub now: Option<&'static str>,
+    /// What holds it now, if anything does: a document's file, or the name of an
+    /// artifact that is there now (for the space `file`, its path).
     pub file: Option<String>,
     /// Whether the approved content came back: `read`, `address_not_readable`,
     /// `no_address` (the content itself is in `diff`).
@@ -521,8 +572,11 @@ pub struct DeclaredAllOut {
 pub struct DeclaredOut {
     /// The document it is about, if it is about one.
     pub doc: Option<DocRef>,
-    /// The file it is about, a path under the root, if it is about one.
+    /// The name of the artifact it is about, if it is about one: for the space
+    /// `file`, a path under the root.
     pub artifact: Option<String>,
+    /// The space of that artifact, beside `artifact`.
+    pub space: Option<String>,
     /// The record written, as it is in the ledger (its `from` lists the earlier
     /// hashes, its `to` the hash now).
     pub record: Value,
@@ -545,18 +599,23 @@ pub struct JudgedOut {
     pub record: Value,
     /// For a deprecation, what replaces the document.
     pub successors: Vec<DocRef>,
-    /// For an approval, the paths of the document's links to artifacts that name
-    /// no file; a `depends` link pinned each as absent.
-    pub absent: Vec<AbsentPathOut>,
+    /// For an approval, the names of the document's links to artifacts with nothing
+    /// there; a `depends` link pinned each as absent.
+    pub absent: Vec<AbsentNameOut>,
 }
 
-/// A path of a link to artifacts that names no file.
+/// A name of a link to artifacts with nothing there.
 #[derive(Debug, Serialize, JsonSchema)]
-pub struct AbsentPathOut {
+pub struct AbsentNameOut {
     /// The link.
     pub link: String,
-    /// The path as written.
+    /// The name as written (kept from when every name was a path; the same as
+    /// `name`).
     pub path: String,
+    /// The name as written.
+    pub name: String,
+    /// The space of the name.
+    pub space: String,
     /// A sentence for a person.
     pub detail: String,
 }
@@ -726,6 +785,7 @@ impl Namer<'_> {
             upstream: upstream.map(|p| self.pin(p)),
             link: upstream.map(|p| p.link().to_string()),
             artifact: None,
+            space: None,
             detail,
         };
         let artifact = |kind, pin: &ArtifactPin, detail: String| CauseOut {
@@ -733,7 +793,8 @@ impl Namer<'_> {
             severity,
             upstream: None,
             link: Some(pin.link().to_string()),
-            artifact: Some(pin.path().to_string()),
+            artifact: Some(pin.name().to_string()),
+            space: Some(pin.space().to_string()),
             detail,
         };
         match cause {
@@ -816,6 +877,7 @@ impl Namer<'_> {
                 upstream: None,
                 link: Some(link.to_string()),
                 artifact: None,
+                space: None,
                 detail: format!(
                     "the link `{link}` changed since the approval: {} added, {} removed, {} unresolved",
                     added.len(),
@@ -827,8 +889,8 @@ impl Namer<'_> {
                 "artifact_changed",
                 pin,
                 format!(
-                    "`{}` changed since the approval pinned it ({} -> {now})",
-                    pin.path(),
+                    "{} changed since the approval pinned it ({} -> {now})",
+                    pin.artifact(),
                     pinned_hash(pin)
                 ),
             ),
@@ -836,9 +898,9 @@ impl Namer<'_> {
                 "artifact_comparison_changed",
                 pin,
                 format!(
-                    "the link `{}` compares `{}` as {} now, and it was pinned as {}: the hashes are not compared",
+                    "the link `{}` compares {} as {} now, and it was pinned as {}: the hashes are not compared",
                     pin.link(),
-                    pin.path(),
+                    pin.artifact(),
                     comparison(now),
                     comparison(pin.comparison())
                 ),
@@ -847,16 +909,16 @@ impl Namer<'_> {
                 "artifact_gone",
                 pin,
                 format!(
-                    "`{}` was there when it was pinned and is gone (a path is compared as written, ASCII case included)",
-                    pin.path()
+                    "{} was there when it was pinned and has nothing behind it now",
+                    pin.artifact()
                 ),
             ),
             Cause::ArtifactArrived { pin, now } => artifact(
                 "artifact_arrived",
                 pin,
                 format!(
-                    "`{}` was not there when it was pinned and is now ({now}): look again",
-                    pin.path()
+                    "{} was not there when it was pinned and is now ({now}): look again",
+                    pin.artifact()
                 ),
             ),
             Cause::ArtifactLinksChanged {
@@ -869,6 +931,16 @@ impl Namer<'_> {
                 upstream: None,
                 link: Some(link.to_string()),
                 artifact: None,
+                // The space of the names, when they all agree; none when the link
+                // moved to another space since (the detail names each name's space).
+                space: {
+                    let mut spaces = added.iter().chain(removed).map(|a| a.space());
+                    let first = spaces.next();
+                    match first {
+                        Some(first) if spaces.all(|s| s == first) => Some(first.to_string()),
+                        Some(_) | None => None,
+                    }
+                },
                 detail: format!(
                     "the link `{link}` to artifacts changed since the approval: {} added ({}), {} removed ({})",
                     added.len(),
@@ -901,6 +973,7 @@ impl Namer<'_> {
                 link: link.to_string(),
                 target: Some(self.doc(*target)),
                 artifact: None,
+                space: None,
                 declared: Vec::new(),
                 detail: format!("a document it informs of is {}", standing(*kind)),
             },
@@ -909,6 +982,7 @@ impl Namer<'_> {
                 link: link.to_string(),
                 target: None,
                 artifact: None,
+                space: None,
                 declared: Vec::new(),
                 detail: self.unresolved(unresolved),
             },
@@ -917,6 +991,7 @@ impl Namer<'_> {
                 link: pin.link().to_string(),
                 target: Some(self.pin(pin)),
                 artifact: None,
+                space: None,
                 declared: Vec::new(),
                 detail: format!(
                     "the approval of {} lapsed at {} (unix ms)",
@@ -933,6 +1008,7 @@ impl Namer<'_> {
                 link: String::new(),
                 target: None,
                 artifact: None,
+                space: None,
                 declared: declared.iter().map(ToString::to_string).collect(),
                 detail: format!(
                     "the document was edited since its approval ({approved} -> {now}), and the edit was declared to keep the meaning"
@@ -943,6 +1019,7 @@ impl Namer<'_> {
                 link: pin.link().to_string(),
                 target: Some(self.pin(pin)),
                 artifact: None,
+                space: None,
                 declared: declared.iter().map(ToString::to_string).collect(),
                 detail: format!(
                     "{} was edited since it was pinned ({} -> {now}), and the edit was declared to keep the meaning",
@@ -954,26 +1031,42 @@ impl Namer<'_> {
                 kind: "artifact_same_meaning",
                 link: pin.link().to_string(),
                 target: None,
-                artifact: Some(pin.path().to_string()),
+                artifact: Some(pin.name().to_string()),
+                space: Some(pin.space().to_string()),
                 declared: declared.iter().map(ToString::to_string).collect(),
                 detail: format!(
-                    "`{}` changed since it was pinned (now {now}), and the change was declared to keep the meaning",
-                    pin.path()
+                    "{} changed since it was pinned (now {now}), and the change was declared to keep the meaning",
+                    pin.artifact()
                 ),
             },
-            Notice::ArtifactAbsent { link, path } => NoticeOut {
+            Notice::ArtifactAbsent { link, artifact } => NoticeOut {
                 kind: "artifact_absent",
                 link: link.to_string(),
                 target: None,
-                artifact: Some(path.to_string()),
+                artifact: Some(artifact.name().to_string()),
+                space: Some(artifact.space().to_string()),
                 declared: Vec::new(),
-                detail: absent_detail(path),
+                detail: absent_detail(artifact),
+            },
+            Notice::ArtifactUnknown {
+                link,
+                artifact,
+                why,
+            } => NoticeOut {
+                kind: "artifact_unknown",
+                link: link.to_string(),
+                target: None,
+                artifact: Some(artifact.name().to_string()),
+                space: Some(artifact.space().to_string()),
+                declared: Vec::new(),
+                detail: unknown_detail(artifact, why.as_str()),
             },
             Notice::NotCovered { book, link } => NoticeOut {
                 kind: "not_covered",
                 link: link.to_string(),
                 target: None,
                 artifact: None,
+                space: None,
                 declared: Vec::new(),
                 detail: format!(
                     "no document of `{book}` reaches this one through `{link}`, which is declared to cover its book"
@@ -1124,12 +1217,14 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             health: None,
             uncovered: Vec::new(),
             absent: Vec::new(),
+            unknown: Vec::new(),
         },
         BooksCheck::Checked {
             books,
             health,
             uncovered,
             absent,
+            unknown,
         } => {
             let names = Names::default();
             BooksCheckOut {
@@ -1164,8 +1259,23 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                             key: a.key.as_ref().map(ToString::to_string),
                         },
                         link: a.link.to_string(),
-                        path: a.path.to_string(),
-                        detail: absent_detail(&a.path),
+                        path: a.artifact.name().to_string(),
+                        name: a.artifact.name().to_string(),
+                        space: a.artifact.space().to_string(),
+                        detail: absent_detail(&a.artifact),
+                    })
+                    .collect(),
+                unknown: unknown
+                    .iter()
+                    .map(|u| UnknownOut {
+                        doc: DocRef {
+                            id: u.doc.to_string(),
+                            key: u.key.as_ref().map(ToString::to_string),
+                        },
+                        link: u.link.to_string(),
+                        name: u.artifact.name().to_string(),
+                        space: u.artifact.space().to_string(),
+                        why: u.why.to_string(),
                     })
                     .collect(),
             }
@@ -1228,8 +1338,10 @@ pub fn stale(report: &StaleReport) -> StaleOut {
                     Origin::Doc(id) => StartOut::Doc {
                         doc: namer.doc(*id),
                     },
-                    Origin::Artifact(path) => StartOut::Artifact {
-                        path: path.to_string(),
+                    Origin::Artifact(artifact) => StartOut::Artifact {
+                        path: artifact.name().to_string(),
+                        name: artifact.name().to_string(),
+                        space: artifact.space().to_string(),
                     },
                     Origin::Declaration => StartOut::Declaration,
                     Origin::Cycle(cycle) => StartOut::Cycle {
@@ -1249,7 +1361,7 @@ pub fn stale(report: &StaleReport) -> StaleOut {
 
 impl Namer<'_> {
     fn item(&self, item: &SnapshotItem) -> ItemOut {
-        let (role, doc, link, path) = match item.role() {
+        let (role, doc, link, artifact) = match item.role() {
             ItemRole::Subject { id } => ("subject", Some(self.doc(*id)), None, None),
             ItemRole::Upstream { link, target, key } => (
                 "upstream",
@@ -1260,12 +1372,9 @@ impl Namer<'_> {
                 Some(link.to_string()),
                 None,
             ),
-            ItemRole::Artifact { link, path, .. } => (
-                "artifact",
-                None,
-                Some(link.to_string()),
-                Some(path.to_string()),
-            ),
+            ItemRole::Artifact { link, artifact, .. } => {
+                ("artifact", None, Some(link.to_string()), Some(artifact))
+            }
         };
         let approved_hash = match item.seen() {
             SeenHash::Doc(hash) => Some(hash.to_string()),
@@ -1275,7 +1384,9 @@ impl Namer<'_> {
             role,
             doc,
             link,
-            path,
+            path: artifact.map(|a| a.name().to_string()),
+            name: artifact.map(|a| a.name().to_string()),
+            space: artifact.map(|a| a.space().to_string()),
             approved_hash,
             address: item.address().map(ToString::to_string),
         }
@@ -1378,10 +1489,22 @@ fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
         )),
         _ => None,
     };
+    // An artifact that is there now is held by its name, as `file` has always said.
+    let file = match (&item.now, item.item.role()) {
+        (ItemNow::Artifact(ArtifactState::Present(_)), ItemRole::Artifact { artifact, .. }) => {
+            Some(artifact.name().to_string())
+        }
+        _ => item.file.as_ref().map(ToString::to_string),
+    };
+    let now = match &item.now {
+        ItemNow::Doc(_) => None,
+        ItemNow::Artifact(state) => Some(state_word(state)),
+    };
     DiffItemOut {
         current_hash,
         changed: item.changed,
-        file: item.file.as_ref().map(ToString::to_string),
+        now,
+        file,
         retrieval: retrieval_word(&item.approved),
         diff,
         item: out,
@@ -1409,10 +1532,12 @@ pub fn judged(all: &[Judged]) -> JudgedAllOut {
                 absent: judged
                     .absent
                     .iter()
-                    .map(|(link, path)| AbsentPathOut {
+                    .map(|(link, artifact)| AbsentNameOut {
                         link: link.to_string(),
-                        path: path.to_string(),
-                        detail: absent_detail(path),
+                        path: artifact.name().to_string(),
+                        name: artifact.name().to_string(),
+                        space: artifact.space().to_string(),
+                        detail: absent_detail(artifact),
                     })
                     .collect(),
             })
@@ -1434,11 +1559,12 @@ pub fn same_meaning(all: &[Declared]) -> DeclaredAllOut {
                         }),
                         None,
                     ),
-                    DeclaredAbout::Artifact { path } => (None, Some(path.to_string())),
+                    DeclaredAbout::Artifact { artifact } => (None, Some(artifact)),
                 };
                 DeclaredOut {
                     doc,
-                    artifact,
+                    artifact: artifact.map(|a| a.name().to_string()),
+                    space: artifact.map(|a| a.space().to_string()),
                     record: to_json(&one.record.to_canon()),
                 }
             })
@@ -1527,10 +1653,26 @@ fn presence(presence: &DocPresence) -> PresenceOut {
     }
 }
 
-/// The sentence for a path that names no file.
-fn absent_detail(path: &RelPath) -> String {
+/// The sentence for a name with nothing there.
+fn absent_detail(artifact: &ArtifactKey) -> String {
     format!(
-        "`{path}` names no file: the evidence is not written yet, or the path is wrong (it is compared as written, ASCII case included)"
+        "{artifact} has nothing behind it now: the evidence is not written yet, or the name is wrong"
+    )
+}
+
+/// The word for what an artifact is now: `present`, `absent` or `unknown`.
+fn state_word(state: &ArtifactState) -> &'static str {
+    match state {
+        ArtifactState::Present(_) => "present",
+        ArtifactState::Absent => "absent",
+        ArtifactState::Unknown(_) => "unknown",
+    }
+}
+
+/// The sentence for a name its adapter cannot tell about now.
+fn unknown_detail(artifact: &ArtifactKey, why: &str) -> String {
+    format!(
+        "{artifact} cannot be told about now ({why}): it changes no freshness, and no approval can be made on it"
     )
 }
 
@@ -1601,7 +1743,10 @@ fn field(value: &FieldValue) -> Value {
 
 fn artifact_target(artifact: &Artifact) -> LinkTargetOut {
     LinkTargetOut::Artifact {
-        path: artifact.path().to_string(),
+        path: artifact.name().to_string(),
+        name: artifact.name().to_string(),
+        space: artifact.space().to_string(),
+        now: state_word(artifact.state()),
         hash: artifact.state().hash().map(ToString::to_string),
     }
 }

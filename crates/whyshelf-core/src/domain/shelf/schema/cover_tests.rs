@@ -2,7 +2,7 @@
 //! refused on a link to artifacts.
 
 use super::*;
-use crate::domain::shelf::fixtures_tests::decls;
+use crate::domain::shelf::fixtures_tests::{decls, spaces};
 
 fn link_decl<'d>(decls: &'d mut [BookSchemaDecl], book: &str, link: &str) -> &'d mut LinkEntryDecl {
     decls
@@ -25,7 +25,7 @@ fn cover_of(schema: &Schema, book: &str, link: &str) -> bool {
 
 #[test]
 fn cover_is_false_unless_declared() {
-    let schema = Schema::validate(decls()).unwrap();
+    let schema = Schema::validate(decls(), &spaces()).unwrap();
     for (book, link) in [
         ("finding", "base"),
         ("finding", "related"),
@@ -41,7 +41,7 @@ fn cover_is_false_unless_declared() {
 fn cover_is_read_when_declared() {
     let mut decls = decls();
     link_decl(&mut decls, "spec", "grounds").cover = true;
-    let schema = Schema::validate(decls).unwrap();
+    let schema = Schema::validate(decls, &spaces()).unwrap();
     assert!(cover_of(&schema, "spec", "grounds"));
     assert!(!cover_of(&schema, "finding", "base"));
 }
@@ -50,7 +50,7 @@ fn cover_is_read_when_declared() {
 fn cover_on_a_link_to_artifacts_is_refused() {
     let mut decls = decls();
     link_decl(&mut decls, "spec", "tests").cover = true;
-    let problems = Schema::validate(decls).unwrap_err().into_vec();
+    let problems = Schema::validate(decls, &spaces()).unwrap_err().into_vec();
     assert_eq!(problems.len(), 1, "{problems:?}");
     assert!(
         matches!(

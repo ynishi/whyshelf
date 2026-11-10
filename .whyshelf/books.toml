@@ -84,6 +84,7 @@ required = true
 [[book.link]]
 name = "tests"              # depends: the test files that show it holds; editing their code makes it stale
 target = "artifact"
+space = "file"              # files of the repository, by path
 means = "depends"
 compare = "lines"           # indentation, how many spaces, blank lines and // comments do not count
 ignore = ["//"]

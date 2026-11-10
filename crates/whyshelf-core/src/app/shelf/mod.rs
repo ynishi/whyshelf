@@ -68,6 +68,8 @@ mod new_doc_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]
+mod space_tests;
+#[cfg(test)]
 mod successor_tests;
 #[cfg(test)]
 mod tests;
@@ -76,14 +78,14 @@ pub use error::{ErrorClass, ShelfError};
 pub use judge::{JudgeRequest, Judgement};
 pub use new_doc::{Created, NewDocRequest};
 pub use ports::{
-    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentStore, Creation, DocSource,
-    DocWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, RevisionSource, ShelfPort,
-    ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
+    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
+    DocSource, DocWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, RevisionSource,
+    ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
     DownstreamEdge, GetReport, Health, Judged, Names, Row, StaleEntry, StaleReport, StatusReport,
-    TraceReport, Uncovered, UpstreamEdge, UpstreamEnd,
+    TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use withdraw::WithdrawRequest;

@@ -12,7 +12,8 @@
 //! What goes into each hash is decided where the value is defined, in
 //! [`shelf`](super::shelf): a document's hash covers its book, its fields and its
 //! body; a record's hash covers its canonical form; an artifact's hash covers what
-//! its link's comparison counts of the file (every byte, or its lines).
+//! its link's comparison counts of the bytes its adapter read (every byte, its lines,
+//! or only that it is there).
 
 use std::fmt;
 use std::str::FromStr;
@@ -33,14 +34,17 @@ pub enum HashKind {
     /// The canonical form of a record in a shelf's ledger of judgements (see
     /// [`shelf`](super::shelf)).
     ShelfJudgement,
-    /// The bytes of a file of a project that is no document of a shelf (code, a
-    /// test, data), as an approval pins it (see
+    /// The bytes of an artifact, a thing outside the documents of a shelf (code, a
+    /// test, data), as its adapter read them and an approval pins them (see
     /// [`shelf::artifact`](super::shelf::artifact)).
     ShelfArtifact,
-    /// The lines of a file of a project that is no document, as a `lines`
-    /// comparison keeps them (see
+    /// The lines of the bytes of an artifact, as a `lines` comparison keeps them (see
     /// [`shelf::artifact::Comparison`](super::shelf::artifact::Comparison)).
     ShelfArtifactLines,
+    /// That an artifact is there, as a `presence` comparison keeps it: one hash for
+    /// every artifact that is there, whatever its content (see
+    /// [`shelf::artifact::Comparison`](super::shelf::artifact::Comparison)).
+    ShelfArtifactPresence,
 }
 
 impl HashKind {
@@ -51,6 +55,7 @@ impl HashKind {
             Self::ShelfJudgement => "shelf-judgement",
             Self::ShelfArtifact => "shelf-artifact",
             Self::ShelfArtifactLines => "shelf-artifact-lines",
+            Self::ShelfArtifactPresence => "shelf-artifact-presence",
         }
     }
 

@@ -12,7 +12,7 @@ use crate::domain::shelf::snapshot::ItemRole;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::ledger::SameMeaningRefusal;
 
-use super::fake_tests::{FakeShelf, block_on, fr, path, sp_tested};
+use super::fake_tests::{FakeShelf, aname, block_on, file_space, fr, sp_tested};
 use super::{
     ErrorClass, JudgeRequest, Judgement, SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError,
 };
@@ -75,7 +75,7 @@ fn file_changed(app: &ShelfApp<FakeShelf>) -> bool {
     let diff = block_on(app.diff(&r("SP-2"))).unwrap();
     diff.items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Artifact { path, .. } if path.as_str() == "tests/a.rs"))
+        .find(|i| matches!(i.item.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() == "tests/a.rs"))
         .unwrap()
         .changed
 }
@@ -87,7 +87,7 @@ fn a_hash_pinned_under_another_comparison_is_a_request_error_and_writes_nothing(
     app.ports().put_file("tests/a.rs", b"assert!(slow);\n");
     let pinned = slashes().fingerprint(b"assert!(fast);\n");
     let err = block_on(app.same_meaning(vec![SameMeaningRequest {
-        about: SameMeaningAbout::Artifact(path("tests/a.rs")),
+        about: SameMeaningAbout::Artifact(aname("tests/a.rs")),
         reason: NonBlank::new("renamed").unwrap(),
         actor: None,
         from: Some(*pinned.hash()),
@@ -112,7 +112,10 @@ fn the_load_asks_each_path_under_the_comparison_of_its_link() {
     let asked = app.ports().asked();
     assert_eq!(asked.len(), before + 1);
     assert_eq!(
-        asked.last().unwrap().get(&path("tests/a.rs")),
+        asked
+            .last()
+            .unwrap()
+            .get(&file_space(), &aname("tests/a.rs")),
         Some(&BTreeSet::from([slashes()]))
     );
 }
@@ -154,7 +157,7 @@ fn diff_compares_by_the_pin_s_comparison_after_the_declaration_changed() {
     let asked = app.ports().asked();
     assert!(
         asked[ask_count..].iter().any(|a| a
-            .get(&path("tests/a.rs"))
+            .get(&file_space(), &aname("tests/a.rs"))
             .is_some_and(|c| c.contains(&slashes()))),
         "{asked:?}"
     );

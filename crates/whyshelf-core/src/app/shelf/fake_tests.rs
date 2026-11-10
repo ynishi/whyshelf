@@ -24,14 +24,16 @@ use crate::domain::shelf::schema::{
 };
 
 use super::ports::{
-    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentStore, Creation, DocSource,
-    DocWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, RevisionSource, ShelfRead,
-    ShelfWrite, UnreadableRecord,
+    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
+    DocSource, DocWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, RevisionSource,
+    ShelfRead, ShelfWrite, UnreadableRecord,
 };
+use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{
-    ArtifactAsks, ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
+    ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings,
+    Comparison, ContentAddress, Revision, Space,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Drive a future to completion on the current thread. The fakes never wait.
 pub(super) fn block_on<F: Future>(future: F) -> F::Output {
@@ -83,6 +85,7 @@ fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
         target: LinkTargetDecl::Book(target.to_owned()),
         cardinality: Cardinality::Many,
         propagation,
+        space: None,
         compare: None,
         cover: false,
     }
@@ -118,6 +121,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
                     target: LinkTargetDecl::Artifact,
                     cardinality: Cardinality::Many,
                     propagation: Propagation::Depends,
+                    space: Some("file".to_owned()),
                     compare: None,
                     cover: false,
                 },
@@ -213,6 +217,46 @@ pub(super) struct FakeShelf {
     pub(super) asked: Mutex<Vec<ArtifactAsks>>,
     /// How many document files were created.
     pub(super) created: Mutex<usize>,
+    /// The spaces the artifact source offers: `file` and `other`.
+    pub(super) spaces: Mutex<BTreeSet<Space>>,
+    /// The bytes of artifacts of spaces other than `file`.
+    pub(super) elsewhere: Mutex<BTreeMap<ArtifactKey, Vec<u8>>>,
+    /// The artifacts the source cannot tell about now, with why.
+    pub(super) untellable: Mutex<BTreeMap<ArtifactKey, NonBlank>>,
+    /// The texts the source says are no name of their space, with why (beside the
+    /// texts of `file` that are no path).
+    pub(super) not_names: Mutex<BTreeMap<ArtifactKey, NonBlank>>,
+    /// Contents one adapter keeps at an address, whatever another keeps there: read
+    /// back before `committed`.
+    pub(super) kept_by: Mutex<BTreeMap<(ContentOf, ContentAddress), Vec<u8>>>,
+}
+
+/// The space of the files.
+pub(super) fn file_space() -> Space {
+    Space::new("file").expect("a space")
+}
+
+/// The other space the fake offers.
+pub(super) fn other_space() -> Space {
+    Space::new("other").expect("a space")
+}
+
+/// An artifact of a space.
+pub(super) fn artifact(space: &Space, name: &str) -> ArtifactKey {
+    ArtifactKey::new(
+        space.clone(),
+        ArtifactName::new(name).expect("a name of an artifact"),
+    )
+}
+
+/// A name of an artifact.
+pub(super) fn aname(text: &str) -> ArtifactName {
+    ArtifactName::new(text).expect("a name of an artifact")
+}
+
+/// A reason an adapter gives.
+pub(super) fn reason(text: &str) -> NonBlank {
+    NonBlank::new(text).expect("a reason")
 }
 
 /// The address the fake gives a content: its hash, cut short, so equal contents
@@ -246,7 +290,32 @@ impl FakeShelf {
             artifact_reads: Mutex::new(0),
             asked: Mutex::new(Vec::new()),
             created: Mutex::new(0),
+            spaces: Mutex::new(BTreeSet::from([file_space(), other_space()])),
+            elsewhere: Mutex::new(BTreeMap::new()),
+            untellable: Mutex::new(BTreeMap::new()),
+            not_names: Mutex::new(BTreeMap::new()),
+            kept_by: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// Put an artifact in a space other than `file`.
+    pub(super) fn put_in(&self, space: &Space, name: &str, bytes: &[u8]) {
+        lock(&self.elsewhere).insert(artifact(space, name), bytes.to_vec());
+    }
+
+    /// From now on the source cannot tell about this artifact, for this reason.
+    pub(super) fn cannot_tell(&self, space: &Space, name: &str, why: &str) {
+        lock(&self.untellable).insert(artifact(space, name), reason(why));
+    }
+
+    /// From now on the source can tell about this artifact again.
+    pub(super) fn can_tell(&self, space: &Space, name: &str) {
+        lock(&self.untellable).remove(&artifact(space, name));
+    }
+
+    /// The source says this text is no name of its space, for this reason.
+    pub(super) fn not_a_name(&self, space: &Space, name: &str, why: &str) {
+        lock(&self.not_names).insert(artifact(space, name), reason(why));
     }
 
     pub(super) fn created_count(&self) -> usize {
@@ -343,6 +412,26 @@ impl DocSource for FakeShelf {
         self.check()?;
         Ok(lock(&self.readings).clone())
     }
+
+    async fn current(&self, file: &RelPath) -> Result<Option<Vec<u8>>, FakeError> {
+        self.check()?;
+        Ok(lock(&self.files).get(file).cloned())
+    }
+
+    async fn addresses(
+        &self,
+        files: &BTreeSet<RelPath>,
+    ) -> Result<BTreeMap<RelPath, ContentAddress>, FakeError> {
+        self.check()?;
+        if !self.versioned {
+            return Ok(BTreeMap::new());
+        }
+        let there = lock(&self.files);
+        Ok(files
+            .iter()
+            .filter_map(|f| there.get(f).map(|bytes| (f.clone(), fake_address(bytes))))
+            .collect())
+    }
 }
 
 impl LedgerRead for FakeShelf {
@@ -428,41 +517,91 @@ impl ActorSource for FakeShelf {
     }
 }
 
+impl FakeShelf {
+    /// The bytes of an artifact now: in `file`, the file at the path the name is; in
+    /// another space, what [`FakeShelf::put_in`] put there.
+    fn bytes_of(&self, artifact: &ArtifactKey) -> Option<Vec<u8>> {
+        if artifact.space() == &file_space() {
+            let at = artifact.name().as_str().parse::<RelPath>().ok()?;
+            lock(&self.files).get(&at).cloned()
+        } else {
+            lock(&self.elsewhere).get(artifact).cloned()
+        }
+    }
+
+    /// The answer for one name, as an adapter of its space gives it.
+    fn answer(
+        &self,
+        artifact: &ArtifactKey,
+        comparisons: &BTreeSet<Comparison>,
+    ) -> ArtifactReading {
+        if let Some(why) = lock(&self.untellable).get(artifact) {
+            return ArtifactReading::cannot_tell(why.clone());
+        }
+        if artifact.space() == &file_space() && artifact.name().as_str().parse::<RelPath>().is_err()
+        {
+            return ArtifactReading::not_a_name(reason("no path under the root"));
+        }
+        if let Some(why) = lock(&self.not_names).get(artifact) {
+            return ArtifactReading::not_a_name(why.clone());
+        }
+        match self.bytes_of(artifact) {
+            Some(bytes) => ArtifactReading::of_bytes(
+                &bytes,
+                comparisons,
+                self.versioned.then(|| fake_address(&bytes)),
+            ),
+            None => ArtifactReading::absent(),
+        }
+    }
+}
+
 impl ArtifactSource for FakeShelf {
     type Error = FakeError;
 
-    async fn read_artifacts(&self, asks: &ArtifactAsks) -> Result<ArtifactReadings, FakeError> {
+    fn spaces(&self) -> BTreeSet<Space> {
+        lock(&self.spaces).clone()
+    }
+
+    async fn resolve(&self, asks: &ArtifactAsks) -> Result<ArtifactReadings, FakeError> {
         self.check()?;
         *lock(&self.artifact_reads) += 1;
         lock(&self.asked).push(asks.clone());
-        let files = lock(&self.files);
         Ok(asks
             .iter()
-            .map(|(p, comparisons)| {
-                let reading = match files.get(p) {
-                    Some(bytes) => ArtifactReading::of_bytes(
-                        bytes,
-                        comparisons,
-                        self.versioned.then(|| fake_address(bytes)),
-                    ),
-                    None => ArtifactReading::absent(),
-                };
-                (p.clone(), reading)
+            .map(|(space, name, comparisons)| {
+                let artifact = ArtifactKey::new(space.clone(), name.clone());
+                let reading = self.answer(&artifact, comparisons);
+                (space.clone(), name.clone(), reading)
             })
             .collect())
     }
 
-    async fn current(&self, at: &RelPath) -> Result<Option<Vec<u8>>, FakeError> {
+    async fn current(&self, artifact: &ArtifactKey) -> Result<Option<Vec<u8>>, FakeError> {
         self.check()?;
-        Ok(lock(&self.files).get(at).cloned())
+        Ok(self.bytes_of(artifact))
     }
 }
 
 impl ContentStore for FakeShelf {
     type Error = FakeError;
 
-    async fn read_back(&self, address: &ContentAddress) -> Result<Option<Vec<u8>>, FakeError> {
+    /// What was committed, for a document or a space the fake offers; nothing for
+    /// any other space.
+    async fn read_back(
+        &self,
+        of: &ContentOf,
+        address: &ContentAddress,
+    ) -> Result<Option<Vec<u8>>, FakeError> {
         self.check()?;
+        if let Some(content) = lock(&self.kept_by).get(&(of.clone(), address.clone())) {
+            return Ok(Some(content.clone()));
+        }
+        if let ContentOf::Artifact(space) = of
+            && !lock(&self.spaces).contains(space)
+        {
+            return Ok(None);
+        }
         Ok(lock(&self.committed).get(address).cloned())
     }
 }

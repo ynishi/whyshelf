@@ -190,6 +190,33 @@ fn a_comparison_that_is_none_is_refused() {
 }
 
 #[test]
+fn presence_ignores_the_content_and_tells_present_from_absent() {
+    let c = Comparison::Presence;
+    for other in ["", "x", "fn other() {}\n"] {
+        assert!(same(&c, CODE, other), "{other:?}");
+    }
+    assert_eq!(c.fingerprint(&[0xff]), c.fingerprint(b""));
+    // Its hash is of a kind of its own: never the hash of some bytes or lines.
+    assert_ne!(c.fingerprint(b""), Comparison::Bytes.fingerprint(b""));
+    assert_ne!(c.fingerprint(b""), lines(&[]).fingerprint(b""));
+    // A thing there has the hash; a thing not there has none.
+    let asked = BTreeSet::from([Comparison::Presence]);
+    let there = ArtifactReading::of_bytes(CODE.as_bytes(), &asked, None);
+    let edited = ArtifactReading::of_bytes(b"else", &asked, None);
+    assert_eq!(there.state(&c), edited.state(&c));
+    assert_eq!(there.state(&c), ArtifactState::Present(c.fingerprint(b"")));
+    assert_ne!(ArtifactReading::absent().state(&c), there.state(&c));
+    // Its words.
+    assert_eq!(Comparison::parse("presence", &[]), Ok(Comparison::Presence));
+    assert_eq!(c.kind_word(), "presence");
+    assert_eq!(c.ignored().count(), 0);
+    assert_eq!(
+        Comparison::parse("presence", &["//".to_owned()]),
+        Err(ComparisonProblem::IgnoreWithPresence)
+    );
+}
+
+#[test]
 fn a_reading_has_the_hash_of_each_comparison_asked_and_of_its_bytes() {
     let asked = BTreeSet::from([lines(&["//"])]);
     let reading = ArtifactReading::of_bytes(CODE.as_bytes(), &asked, None);
@@ -201,6 +228,9 @@ fn a_reading_has_the_hash_of_each_comparison_asked_and_of_its_bytes() {
         reading.state(&Comparison::Bytes),
         ArtifactState::Present(ArtifactHash::of_content(CODE.as_bytes()))
     );
-    // A comparison not asked reads as no file.
-    assert_eq!(reading.state(&lines(&[])), ArtifactState::Absent);
+    // A comparison not asked cannot be told: it is never read as nothing there.
+    assert_eq!(
+        reading.state(&lines(&[])),
+        ArtifactState::Unknown(Untold::NotAsked)
+    );
 }

@@ -85,8 +85,12 @@ fn a_pin_of_bytes_has_the_form_and_the_record_hash_it_had_before_comparisons() {
     let _ = with_pin(&record, |pin| {
         keys = pin.keys().cloned().collect();
     });
-    // The keys of a pin of the first version: no `compare`.
-    assert_eq!(keys, ["hash", "link", "path", "state"].map(String::from));
+    // No `compare`, as in a pin of the first version (which named its file by
+    // `path`; a pin now names its space and its name).
+    assert_eq!(
+        keys,
+        ["hash", "link", "name", "space", "state"].map(String::from)
+    );
     // A record written by hand the old way, with the same pin and no `compare`, is
     // this record, with its hash.
     let old = Record::from_canon(&with_pin(&record, |pin| {

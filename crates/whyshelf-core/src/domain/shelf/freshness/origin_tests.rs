@@ -3,7 +3,8 @@
 
 use crate::domain::shelf::artifact::ArtifactHash;
 use crate::domain::shelf::fixtures_tests::{
-    approve, approved, deny, docid, fr, fr_titled, ledger, path, shelf, shelf_with, sp_testing,
+    approve, approved, deny, docid, file_artifact, fr, fr_titled, ledger, shelf, shelf_with,
+    sp_testing,
 };
 use crate::domain::shelf::graph::CycleSource;
 use crate::domain::shelf::ledger::{JudgedAt, Record};
@@ -113,7 +114,10 @@ fn one_file_pinned_by_several_approvals_is_one_origin_and_the_largest_comes_firs
     let now = shelf_with(docs("title"), &files("a, edited", Some("b")));
     assert_eq!(
         origins(&assess(&now, &l, JudgedAt::new(100))),
-        vec![group(Origin::Artifact(path("tests/a.rs")), &[2, 3, 4, 5])]
+        vec![group(
+            Origin::Artifact(file_artifact("tests/a.rs")),
+            &[2, 3, 4, 5]
+        )]
     );
 
     // The finding is edited and another file is gone too. SP-2 and SP-3 are under
@@ -123,9 +127,9 @@ fn one_file_pinned_by_several_approvals_is_one_origin_and_the_largest_comes_firs
     assert_eq!(
         origins(&assess(&now, &l, JudgedAt::new(100))),
         vec![
-            group(Origin::Artifact(path("tests/a.rs")), &[2, 3, 4, 5]),
+            group(Origin::Artifact(file_artifact("tests/a.rs")), &[2, 3, 4, 5]),
             group(Origin::Doc(docid(1)), &[1, 2, 3]),
-            group(Origin::Artifact(path("tests/b.rs")), &[3]),
+            group(Origin::Artifact(file_artifact("tests/b.rs")), &[3]),
         ]
     );
 }

@@ -4,9 +4,12 @@
 use std::collections::BTreeMap;
 
 use crate::domain::canon::Canon;
-use crate::domain::shelf::artifact::{ArtifactHash, ContentAddress, Revision};
+use crate::domain::shelf::artifact::{
+    ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
+};
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, docid, fr, jid, ledger, path, shelf, shelf_with, sp_testing,
+    actor, approve, docid, file_artifact, file_space, fr, jid, ledger, name, shelf, shelf_with,
+    sp_testing,
 };
 
 use super::*;
@@ -42,8 +45,19 @@ fn addressed_approval() -> Record {
             (f, a)
         })
         .collect();
+    // What the adapter answered for the artifacts, with an address for each that is
+    // there (one for b.rs too, which was pinned as absent and keeps none).
+    let artifacts: ArtifactReadings = ["tests/a.rs", "tests/b.rs"]
+        .into_iter()
+        .map(|at| {
+            let mut reading = ArtifactReading::of_bytes(b"a", &Default::default(), None);
+            reading.set_address(address(&format!("blob-of-{}", at.replace('/', "-"))));
+            (file_space(), name(at), reading)
+        })
+        .collect();
     let frame = frame.addressed(
         &addresses,
+        &artifacts,
         Some(Revision::from_validated("c1".into()).unwrap()),
     );
     Record::Decision(
@@ -160,7 +174,7 @@ fn an_approval_pins_every_artifact_of_a_depends_link_present_or_not() {
         .iter()
         .map(|p| {
             (
-                p.path().as_str(),
+                p.name().as_str(),
                 matches!(p.seen(), PinnedArtifact::Present { .. }),
                 p.seen().address().is_some(),
             )
@@ -239,8 +253,126 @@ fn a_frame_that_pins_one_path_of_one_link_twice_is_refused() {
     }
     assert!(matches!(
         Record::from_canon(&canon),
-        Err(RecordProblem::Invariant(DecisionProblem::ArtifactPinsTwice { path: p, .. }))
-            if p == path("tests/a.rs")
+        Err(RecordProblem::Invariant(DecisionProblem::ArtifactPinsTwice { artifact, .. }))
+            if artifact == file_artifact("tests/a.rs")
+    ));
+}
+
+/// The pin of `tests/a.rs` in an approval, as a record of this version writes it.
+fn pin_of_a(canon: &Canon) -> BTreeMap<String, Canon> {
+    let Some(Canon::List(items)) = map_of(canon).get("artifacts") else {
+        panic!("artifacts");
+    };
+    items
+        .iter()
+        .map(|i| map_of(i).clone())
+        .find(|m| m.get("name") == Some(&Canon::str("tests/a.rs")))
+        .expect("the pin of tests/a.rs")
+}
+
+#[test]
+fn a_new_pin_writes_its_space_and_its_name() {
+    let canon = addressed_approval().to_canon();
+    let pin = pin_of_a(&canon);
+    assert_eq!(pin.get("space"), Some(&Canon::str("file")));
+    assert_eq!(pin.get("name"), Some(&Canon::str("tests/a.rs")));
+    assert!(!pin.contains_key("path"));
+}
+
+#[test]
+fn a_stored_pin_without_a_space_reads_as_a_file_and_its_record_is_unchanged() {
+    // The record as one written before spaces existed: `path` in place of `space`
+    // and `name`.
+    let mut stored = addressed_approval().to_canon();
+    if let Canon::Map(map) = &mut stored
+        && let Some(Canon::List(items)) = map.get_mut("artifacts")
+    {
+        for item in items {
+            if let Canon::Map(pin) = item {
+                pin.remove("space");
+                let name = pin.remove("name").expect("a name");
+                pin.insert("path".to_owned(), name);
+            }
+        }
+    }
+    let record = Record::from_canon(&stored).unwrap();
+    let Record::Decision(decision) = &record else {
+        panic!("a decision");
+    };
+    let DecisionVerb::Approve { artifacts, .. } = decision.verb() else {
+        panic!("an approval");
+    };
+    let read: Vec<ArtifactKey> = artifacts.iter().map(|p| p.artifact().clone()).collect();
+    assert_eq!(
+        read,
+        [file_artifact("tests/a.rs"), file_artifact("tests/b.rs")]
+    );
+    // Written again, it is the form it was stored in, and so its hash.
+    assert_eq!(record.to_canon(), stored);
+    assert_eq!(
+        record.hash(),
+        RecordHash(ContentHash::of(HashKind::ShelfJudgement, &stored))
+    );
+    // And it means what the record of this version means.
+    let now = addressed_approval();
+    let Record::Decision(made) = &now else {
+        panic!("a decision");
+    };
+    let DecisionVerb::Approve {
+        artifacts: made, ..
+    } = made.verb()
+    else {
+        panic!("an approval");
+    };
+    assert!(
+        artifacts
+            .iter()
+            .zip(made)
+            .all(|(a, b)| a.artifact() == b.artifact()
+                && a.seen() == b.seen()
+                && a.comparison() == b.comparison())
+    );
+}
+
+#[test]
+fn a_pin_with_both_forms_or_neither_is_refused() {
+    let mut both = addressed_approval().to_canon();
+    let mut neither = both.clone();
+    for (canon, edit) in [(&mut both, true), (&mut neither, false)] {
+        if let Canon::Map(map) = canon
+            && let Some(Canon::List(items)) = map.get_mut("artifacts")
+            && let Some(Canon::Map(pin)) = items.first_mut()
+        {
+            if edit {
+                pin.insert("path".to_owned(), Canon::str("tests/a.rs"));
+            } else {
+                pin.remove("space");
+                pin.remove("name");
+            }
+        }
+    }
+    assert!(matches!(
+        Record::from_canon(&both),
+        Err(RecordProblem::ExtraKey { key }) if key == "path"
+    ));
+    assert!(matches!(
+        Record::from_canon(&neither),
+        Err(RecordProblem::MissingKey { .. })
+    ));
+}
+
+#[test]
+fn a_pin_of_a_space_that_is_no_space_is_refused() {
+    let mut canon = addressed_approval().to_canon();
+    if let Canon::Map(map) = &mut canon
+        && let Some(Canon::List(items)) = map.get_mut("artifacts")
+        && let Some(Canon::Map(pin)) = items.first_mut()
+    {
+        pin.insert("space".to_owned(), Canon::str("File"));
+    }
+    assert!(matches!(
+        Record::from_canon(&canon),
+        Err(RecordProblem::BadSpace(_))
     ));
 }
 

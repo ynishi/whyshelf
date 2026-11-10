@@ -11,8 +11,12 @@
 //!   <root>/.whyshelf/books.toml        --books-->  Vec<BookSchemaDecl>
 //!   <root>/<book dir>/**/*.md          <-docs--->  Vec<DocReading>; a new <key>.md
 //!   <root>/.whyshelf/ledger/<id>.json  <-ledger->  Record (through Canon)
-//!   <root>/<path an artifact link names> --git-->  ArtifactReadings (hash, blob name?)
-//!   Git: HEAD, blobs                   --git--->  Revision, content read back
+//!   a name a link to artifacts writes --artifact-->  ArtifactReadings, by the adapter
+//!                                                    of its space (for `file`: the
+//!                                                    file at the path, blob name?)
+//!   an address of an approval          --docs / artifact-->  content read back, by the
+//!                                                    adapter that named it
+//!   Git: HEAD                          --git---->  Revision
 //!   system clock, UUID v7, actor       --system->  JudgedAt, JudgementId, Actor
 //! ```
 //!
@@ -21,12 +25,14 @@
 //! | `.whyshelf/books.toml` | [`BookSchemaSource`] | [`books`] |
 //! | the Markdown files of the books | [`DocSource`], [`DocWrite`] | [`docs`] |
 //! | `.whyshelf/ledger/<id>.json` | [`LedgerRead`], [`LedgerAppend`] | [`ledger`] |
-//! | the files links to artifacts name, and Git | [`ArtifactSource`], [`ContentStore`], [`RevisionSource`] | [`git`] |
+//! | what links to artifacts name, by space | [`ArtifactSource`] | [`artifact`] |
+//! | content kept by address, read back by the adapter of the documents or of the space | [`ContentStore`] | [`Project`], to [`docs`] or [`artifact`] |
+//! | the project's version control | [`RevisionSource`] | [`git`] |
 //! | none | [`Clock`], [`IdSource`], [`ActorSource`] | [`system`] |
 //!
 //! Git's words (blob, commit, `HEAD`) are this crate's alone: the domain holds an
-//! opaque [`ContentAddress`] and [`Revision`], and nothing but [`git`] knows they are
-//! Git's.
+//! opaque [`ContentAddress`] and [`Revision`], and nothing but [`git`] and the
+//! adapters that use it know they are Git's.
 //!
 //! [`ArtifactSource`]: whyshelf_core::app::shelf::ArtifactSource
 //! [`ContentStore`]: whyshelf_core::app::shelf::ContentStore
@@ -50,19 +56,24 @@
 //! [`IdSource`]: whyshelf_core::app::shelf::IdSource
 //! [`ActorSource`]: whyshelf_core::app::shelf::ActorSource
 
+pub mod artifact;
 pub mod books;
 pub mod docs;
 pub mod git;
 pub mod ledger;
 pub mod system;
 
+use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 
-use whyshelf_core::app::shelf::{ShelfRead, ShelfWrite};
+use whyshelf_core::app::shelf::{ContentOf, ContentStore, ShelfRead, ShelfWrite};
+use whyshelf_core::domain::shelf::artifact::ContentAddress;
 
+use artifact::ArtifactSpaces;
+use artifact::file::FileSpace;
 use books::BooksToml;
 use docs::MarkdownDocs;
-use git::GitArtifacts;
+use git::Git;
 use ledger::JsonLedger;
 use system::{ProjectActor, SystemClock, UuidV7Ids};
 
@@ -78,7 +89,8 @@ pub struct Project {
     clock: SystemClock,
     ids: UuidV7Ids,
     actor: ProjectActor,
-    git: GitArtifacts,
+    artifacts: ArtifactSpaces,
+    git: Git,
 }
 
 impl Project {
@@ -93,7 +105,8 @@ impl Project {
             ledger: JsonLedger::new(root.join(WHYSHELF_DIR).join("ledger"), WHYSHELF_DIR),
             clock: SystemClock,
             ids: UuidV7Ids,
-            git: GitArtifacts::new(root.clone()),
+            artifacts: ArtifactSpaces::of_project(FileSpace::new(root.clone())),
+            git: Git::new(root.clone()),
             actor: ProjectActor::new(root, actor),
         }
     }
@@ -104,20 +117,37 @@ impl Project {
     }
 }
 
+/// Content read back by the adapter that named its address: the documents' for a
+/// document's file, the space's for an artifact.
+impl ContentStore for Project {
+    type Error = Infallible;
+
+    async fn read_back(
+        &self,
+        of: &ContentOf,
+        address: &ContentAddress,
+    ) -> Result<Option<Vec<u8>>, Infallible> {
+        Ok(match of {
+            ContentOf::Doc => self.docs.read_back(address).await,
+            ContentOf::Artifact(space) => self.artifacts.read_back(space, address).await,
+        })
+    }
+}
+
 impl ShelfRead for Project {
     type Schemas = BooksToml;
     type Docs = MarkdownDocs;
     type Ledger = JsonLedger;
     type Clock = SystemClock;
-    type Artifacts = GitArtifacts;
-    type Store = GitArtifacts;
+    type Artifacts = ArtifactSpaces;
+    type Store = Self;
 
-    fn artifacts(&self) -> &GitArtifacts {
-        &self.git
+    fn artifacts(&self) -> &ArtifactSpaces {
+        &self.artifacts
     }
 
-    fn store(&self) -> &GitArtifacts {
-        &self.git
+    fn store(&self) -> &Self {
+        self
     }
 
     fn schemas(&self) -> &BooksToml {
@@ -141,10 +171,10 @@ impl ShelfWrite for Project {
     type Append = JsonLedger;
     type Ids = UuidV7Ids;
     type Actor = ProjectActor;
-    type Revisions = GitArtifacts;
+    type Revisions = Git;
     type DocWriter = MarkdownDocs;
 
-    fn revisions(&self) -> &GitArtifacts {
+    fn revisions(&self) -> &Git {
         &self.git
     }
 

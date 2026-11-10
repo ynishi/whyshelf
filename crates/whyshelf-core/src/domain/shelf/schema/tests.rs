@@ -1,10 +1,16 @@
 //! Tests of the schema.
 
 use super::*;
-use crate::domain::shelf::fixtures_tests::{decls, eid, path};
+use crate::domain::shelf::fixtures_tests::{decls, eid, path, spaces};
+
+/// The declaration checked against the spaces of the fixtures (`file`, `other`).
+#[allow(clippy::result_large_err)]
+fn validate(decls: Vec<BookSchemaDecl>) -> Result<Schema, NonEmptyVec<SchemaProblem>> {
+    Schema::validate(decls, &spaces())
+}
 
 fn problems_of(decls: Vec<BookSchemaDecl>) -> Vec<SchemaProblem> {
-    Schema::validate(decls).unwrap_err().into_vec()
+    validate(decls).unwrap_err().into_vec()
 }
 
 fn book(name: &str, dir: &str, prefix: &str) -> BookSchemaDecl {
@@ -33,6 +39,7 @@ fn link_to(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl 
         target: LinkTargetDecl::Book(target.to_owned()),
         cardinality: Cardinality::Many,
         propagation,
+        space: None,
         compare: None,
         cover: false,
     }
@@ -40,7 +47,7 @@ fn link_to(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl 
 
 #[test]
 fn a_sound_declaration_makes_a_schema() {
-    let schema = Schema::validate(decls()).unwrap();
+    let schema = validate(decls()).unwrap();
     assert_eq!(schema.books().len(), 3);
     let finding = schema.book("finding").unwrap();
     assert_eq!(finding.name().as_str(), "finding");
@@ -51,7 +58,7 @@ fn a_sound_declaration_makes_a_schema() {
 
 #[test]
 fn an_empty_declaration_is_a_schema_with_no_book() {
-    assert!(Schema::validate(Vec::new()).unwrap().books().is_empty());
+    assert!(validate(Vec::new()).unwrap().books().is_empty());
 }
 
 #[test]
@@ -164,7 +171,7 @@ fn a_key_prefix_must_follow_its_grammar() {
             "{prefix}: {problems:?}"
         );
     }
-    assert!(Schema::validate(vec![book("one", "a", &"A".repeat(16))]).is_ok());
+    assert!(validate(vec![book("one", "a", &"A".repeat(16))]).is_ok());
 }
 
 #[test]
@@ -263,7 +270,7 @@ fn slug_books_do_not_clash_on_a_prefix() {
     a.key = KeyPatternDecl::Slug;
     let mut b = book("two", "b", "BB");
     b.key = KeyPatternDecl::Slug;
-    assert!(Schema::validate(vec![a, b]).is_ok());
+    assert!(validate(vec![a, b]).is_ok());
 }
 
 #[test]
@@ -276,7 +283,7 @@ fn directories_cannot_be_the_same_or_nested() {
         );
     }
     // A shared name prefix is not nesting.
-    assert!(Schema::validate(vec![book("one", "docs", "AA"), book("two", "docs-2", "BB")]).is_ok());
+    assert!(validate(vec![book("one", "docs", "AA"), book("two", "docs-2", "BB")]).is_ok());
 }
 
 #[test]
@@ -291,7 +298,7 @@ fn a_replaces_link_must_stay_in_its_book() {
 
     let mut own = book("one", "a", "AA");
     own.links = vec![link_to("next", "one", Propagation::Replaces)];
-    assert!(Schema::validate(vec![own]).is_ok());
+    assert!(validate(vec![own]).is_ok());
 }
 
 fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
@@ -300,9 +307,70 @@ fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
         target: LinkTargetDecl::Artifact,
         cardinality: Cardinality::Many,
         propagation,
+        space: Some("file".to_owned()),
         compare: None,
         cover: false,
     }
+}
+
+#[test]
+fn a_link_to_artifacts_names_a_space_the_adapters_offer() {
+    let with_space = |space: Option<&str>| {
+        let mut a = book("one", "a", "AA");
+        let mut link = artifact_link("tests", Propagation::Depends);
+        link.space = space.map(str::to_owned);
+        a.links = vec![link];
+        vec![a]
+    };
+    let schema = validate(with_space(Some("other"))).unwrap();
+    assert_eq!(
+        schema.book("one").unwrap().artifact_links()["tests"]
+            .space
+            .as_str(),
+        "other"
+    );
+
+    // No space: there is no space a link has when it names none.
+    assert_eq!(
+        problems_of(with_space(None)),
+        [SchemaProblem::NoSpace {
+            book: "one".to_owned(),
+            link: EntryName::new("tests").unwrap(),
+        }]
+    );
+    // A space no adapter offers.
+    let problems = problems_of(with_space(Some("rust-item")));
+    assert!(
+        matches!(problems.as_slice(), [SchemaProblem::UnknownSpace { space, offered, .. }]
+            if space.as_str() == "rust-item" && offered == "`file`, `other`"),
+        "{problems:?}"
+    );
+    assert!(problems[0].to_string().contains("no adapter offers"));
+    // Offered by none at all.
+    let problems = Schema::validate(with_space(Some("file")), &BTreeSet::new())
+        .unwrap_err()
+        .into_vec();
+    assert!(matches!(
+        problems.as_slice(),
+        [SchemaProblem::UnknownSpace { offered, .. }] if offered == "none"
+    ));
+    // A text that is no space.
+    assert!(matches!(
+        problems_of(with_space(Some("File"))).as_slice(),
+        [SchemaProblem::BadSpace { why, .. }] if why.found == "File"
+    ));
+    // A link into a book takes none.
+    let mut b = book("one", "a", "AA");
+    let mut up = link_to("up", "one", Propagation::Depends);
+    up.space = Some("file".to_owned());
+    b.links = vec![up];
+    assert_eq!(
+        problems_of(vec![b]),
+        [SchemaProblem::SpaceOnBookLink {
+            book: "one".to_owned(),
+            link: EntryName::new("up").unwrap(),
+        }]
+    );
 }
 
 #[test]
@@ -313,7 +381,7 @@ fn a_link_to_artifacts_depends_or_informs_and_is_kept_apart_from_links_into_book
         artifact_link("code", Propagation::Informs),
         link_to("up", "one", Propagation::Depends),
     ];
-    let schema = Schema::validate(vec![a]).unwrap();
+    let schema = validate(vec![a]).unwrap();
     let one = schema.book("one").unwrap();
     assert_eq!(one.links().len(), 1);
     assert_eq!(one.artifact_links().len(), 2);
@@ -384,7 +452,7 @@ fn every_problem_is_returned_at_once() {
 
 #[test]
 fn membership_is_the_book_whose_directory_a_file_is_under() {
-    let schema = Schema::validate(decls()).unwrap();
+    let schema = validate(decls()).unwrap();
     let of = |p: &str| schema.membership(&path(p));
     let book = |name: &str| Membership::In(schema.book(name).unwrap());
     assert_eq!(of("findings/fr-1.md"), book("finding"));
