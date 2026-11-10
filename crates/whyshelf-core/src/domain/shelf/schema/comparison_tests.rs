@@ -23,6 +23,7 @@ fn decl(target: LinkTargetDecl, compare: Option<(&str, &[&str])>) -> Vec<BookSch
                 kind: kind.to_owned(),
                 ignore: ignore.iter().map(|i| (*i).to_owned()).collect(),
             }),
+            cover: false,
         }],
     }]
 }

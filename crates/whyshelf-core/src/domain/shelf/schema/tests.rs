@@ -34,6 +34,7 @@ fn link_to(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl 
         cardinality: Cardinality::Many,
         propagation,
         compare: None,
+        cover: false,
     }
 }
 
@@ -300,6 +301,7 @@ fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
         cardinality: Cardinality::Many,
         propagation,
         compare: None,
+        cover: false,
     }
 }
 

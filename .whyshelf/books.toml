@@ -20,6 +20,9 @@ key = { prefix = "REQ" }
 name = "title"
 type = "text"
 required = true
+[[book.field]]
+name = "issues"             # the issues of the repository it answers, as `#<number>`
+type = "list"
 [[book.link]]
 name = "grounds"            # informs: a finding fixed and retired must not break what it grounded
 target = "finding"
@@ -47,11 +50,15 @@ type = "text"
 [[book.field]]
 name = "rustdoc"            # where the contract is written (rustdoc item paths)
 type = "list"
+[[book.field]]
+name = "issues"             # the issues of the repository it answers, as `#<number>`
+type = "list"
 [[book.link]]
 name = "serves"             # depends: a changed requirement makes the decision stale
 target = "requirement"
 count = "at-least-one"
 means = "depends"
+cover = true                # every requirement is expected to have a decision that serves it
 [[book.link]]
 name = "related"
 target = "decision"
@@ -85,6 +92,7 @@ name = "checks"             # depends: a changed decision makes its check stale
 target = "decision"
 count = "at-least-one"
 means = "depends"
+cover = true                # every decision is expected to have a verification that checks it
 [[book.link]]
 name = "for"
 target = "requirement"

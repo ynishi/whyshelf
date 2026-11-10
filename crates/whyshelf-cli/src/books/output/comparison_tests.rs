@@ -50,6 +50,7 @@ fn schema(compare: Option<CompareDecl>) -> Schema {
             cardinality: Cardinality::Many,
             propagation: Propagation::Depends,
             compare,
+            cover: false,
         }],
     }])
     .unwrap()

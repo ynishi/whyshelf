@@ -23,7 +23,7 @@
 //! [domain_trace]: crate::domain::shelf::trace::trace
 
 use crate::domain::id::DocId;
-use crate::domain::shelf::freshness::{Freshness, Standing};
+use crate::domain::shelf::freshness::{Freshness, Notice, Standing};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::trace::{LinkEnd, trace};
 
@@ -33,7 +33,7 @@ use super::load::{Loaded, View, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
     BookCount, BooksCheck, DownstreamEdge, GetReport, StaleEntry, StaleReport, StatusReport,
-    TraceReport, UpstreamEdge, UpstreamEnd,
+    TraceReport, Uncovered, UpstreamEdge, UpstreamEnd,
 };
 
 /// The identity a reference names, or why it names none.
@@ -93,9 +93,29 @@ impl<P: ShelfRead> ShelfApp<P> {
                 tally: tally.get(book.name()).copied().unwrap_or_default(),
             })
             .collect();
+        let uncovered = assessment
+            .standings()
+            .keys()
+            .flat_map(|id| {
+                let key = loaded.shelf.doc(*id).map(|doc| doc.key().clone());
+                assessment
+                    .notices_of(*id)
+                    .iter()
+                    .filter_map(move |notice| match notice {
+                        Notice::NotCovered { book, link } => Some(Uncovered {
+                            doc: *id,
+                            key: key.clone(),
+                            book: book.clone(),
+                            link: link.clone(),
+                        }),
+                        _ => None,
+                    })
+            })
+            .collect();
         Ok(BooksCheck::Checked {
             books,
             health: view.health(),
+            uncovered,
         })
     }
 
