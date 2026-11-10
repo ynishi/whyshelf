@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794303051580,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d5620a9ca28b1360faf9863f7dc2c103dcd84918",
+      "hash": "sha256:e5215bb3745ef02a80711bbdbaaa3998a3bfdacd680180831d4add57c39fff78",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-36e2-72bb-8529-f374820e1565"
+    },
+    {
+      "address": "27ee4c93525f88102f5c0530f2c02559b7a642cc",
+      "hash": "sha256:e49f328339a8d34ff09ed3d6d17b93e33bb1295adf54330c34af8ecd37755c4f",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "6"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3a30-7619-bd64-354d96dbcf90"
+    }
+  ],
+  "id": "01a1c4cb-c7a4-7371-80c8-e5bb423f2cc3",
+  "kind": "decision",
+  "reason": "Corrected to what the code does after an independent review of the books; the tests the verifications link were added or extended; just check green",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:da5824c39e86e69afad60e05aa9f930192817a141c268c0f15fc84cc1098feb2",
+  "seen_address": "7bbfeb560c708d2332037c3c673f81031f030e54",
+  "subject": "01a1c4ba-11d9-7657-8910-6240e23765d9",
+  "v": 1,
+  "verb": "approve"
+}

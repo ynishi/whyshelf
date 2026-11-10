@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7a0fa8445db99cc2b3aa9bccdd872eebc1637040",
+      "hash": "sha256:9d1ae80161aeaff8ad8f262133a0496e0ee423bf34e93f076cca8209bfcf9330",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    }
+  ],
+  "id": "01a1c4c0-a962-73a8-a08b-07a98870b622",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:f05a7415bb76d47959f744695542827afe42f19d26e3366372d914e8a83f6520",
+  "seen_address": "f128592aef7222dcc4ad1ba3c777d605081781f1",
+  "subject": "01a1c4ba-1465-7320-b3cb-05827d35ef01",
+  "v": 1,
+  "verb": "approve"
+}

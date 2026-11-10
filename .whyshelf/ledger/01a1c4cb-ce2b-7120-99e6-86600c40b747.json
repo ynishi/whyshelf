@@ -1,0 +1,48 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "fb5d348ec63da10c858dfc33c6613ab174bf2972",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8933bae4f557ee88e3bebc58cf33cd0256916b048e0f40a67056055e3cb59b96",
+      "link": "tests",
+      "path": "crates/whyshelf-core/tests/architecture.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794303051580,
+  "expires": null,
+  "frame": [
+    {
+      "address": "5edc41db98e0c4cc578c9cedb438a41761e27bf3",
+      "hash": "sha256:d45c66e275347ed5324362e6c7c3dc4fb996d7eff1f733e376cba2412b0d3968",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "22"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-155d-70fa-a267-9044c79b42b7"
+    }
+  ],
+  "id": "01a1c4cb-ce2b-7120-99e6-86600c40b747",
+  "kind": "decision",
+  "reason": "Corrected to what the code does after an independent review of the books; the tests the verifications link were added or extended; just check green",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:5500a43d22b6d47a5b328e9a6738b1cbae00244d74520ea548c452b666dc21a0",
+  "seen_address": "3a8e55a1f5de7df17e480ead442500bcdfde6e52",
+  "subject": "01a1c4ba-1c7a-7445-809d-046cf7ef0267",
+  "v": 1,
+  "verb": "approve"
+}

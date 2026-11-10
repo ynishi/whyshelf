@@ -1,0 +1,152 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "c8a948d6781d6c0e57b914a8da6d69d6d4edd365",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f2cbc3069d683cc64091bb5f9cde2c34ff7b022f9aa1347b7297b5533dae8d8f",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "840fcb84c23cd02220645168a92170ef5602d2de",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:55967eab1d64c1b82e2c5453219f32fdedba13d3525fcf2ff5e696dec36c4fa5",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "0cf365704b98369d536b45cc4c9479f649c28777",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d5640857a96162e23093cc77a0b226813cd59d1f93db91d22dffa8f2c7aa217",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "f9c97e598709037f8ac5dc0b869c1872fad76129",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fab52960ca376b9cdef61417cee9b6275819e1338b8b6f2755aa918445bc26bf",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "25f51ed2bd6cbb4166cb94c02e7add3b8c545010",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e4178ba395781762d2aad50723b55353f86af2a3b7c30393c64c2e61c871a70e",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/freshness/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "ed603ab42dd59e922c80cdfc2a70207ad6f4a674",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bf92fdbc0b73fc552058b9f937f61ce551a3244380f36738fa319d2323a35ab6",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/ledger/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "c7c3e56a76de21b677c075c90b22eb315220bd2b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fdfc3ecd364012d97580a0545dec244cb6738f1fbe907b09e3e70fd5dac0a223",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "c0d13b96daa199e6e12d4c93fb4e499a99657857",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:96f6295d5ea4bb8df5cec44fa73d14d63613bd6604fa217f6e7f29bece854a67",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/books.rs",
+      "state": "present"
+    },
+    {
+      "address": "8ada971076b3f71b825d521559f38a242d15a44d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:81b0e68006958690dcc27fc49ccff7c59e36806349d1e613bbe90dc55231f2d1",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/git.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "57e902d4dee484b96a87a410e6fc57ca27fcf3df",
+      "hash": "sha256:6297ced00691efd8ceb05f1007f3d1cae418407fad8af7189e04aaa28554d83b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c45a-279c-7672-ac87-9afd9c344dc8"
+    }
+  ],
+  "id": "01a1c4c0-acdb-7022-8dd6-a2e59396d662",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:5358457cf5e04c82621ca7917cfd5ec42dbd801b976c084c79688590ca105ef6",
+  "seen_address": "626bdf60f263e9123192c8151eb7258dfa3a0da1",
+  "subject": "01a1c45a-27fd-75bc-a433-f3e0233f0f72",
+  "v": 1,
+  "verb": "approve"
+}

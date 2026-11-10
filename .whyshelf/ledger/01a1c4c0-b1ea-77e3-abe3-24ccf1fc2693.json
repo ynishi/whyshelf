@@ -1,0 +1,87 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "93722b26fc7aadd0d84732405e9271afc6ee65bc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:50e30cc1340a29f7dd91ba39a52dc6bbeafa361dd20d7c1ed4c5a5ed07870d18",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "45dcb1d5914916344cb65ab1e3d3c17f2ec0c156",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7f5be8f4a8348574b722677ed1da48987749f16aeac95e0c43467233d205d32f",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output.rs",
+      "state": "present"
+    },
+    {
+      "address": "c8a948d6781d6c0e57b914a8da6d69d6d4edd365",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f2cbc3069d683cc64091bb5f9cde2c34ff7b022f9aa1347b7297b5533dae8d8f",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "c93a41605f338715825ad095de9888d2da4aa33e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d9681a9df57087abf5287688d68f2d29d63924e28b6cb22ef16623dc40d1320c",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "cbc1deb32d99eeb57e62c4b3394e1e5b021fea40",
+      "hash": "sha256:34616907fa0572be373122998b4018f4acb3ceddf79ff556545098d1bc28f81e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "20"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-14b4-77f7-9af0-acbe8896080b"
+    }
+  ],
+  "id": "01a1c4c0-b1ea-77e3-abe3-24ccf1fc2693",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:c3c6a1fe7298e512e2c3c9f06d0c7a785e7fc0bb7d1d19f98aa95a3812adb33c",
+  "seen_address": "28a83bfb31bb4d8d26014b3ba7fc70729864e607",
+  "subject": "01a1c4ba-1a9f-7201-9b7f-62a0f1be9e14",
+  "v": 1,
+  "verb": "approve"
+}

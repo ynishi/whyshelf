@@ -37,6 +37,8 @@ pub mod output;
 pub mod textdiff;
 
 #[cfg(test)]
+mod exit_tests;
+#[cfg(test)]
 mod same_meaning_tests;
 
 use std::io::Write;
@@ -337,7 +339,12 @@ fn report(error: &ShelfError) -> Exit {
     }
     eprintln!("error: {}", chain.join(": "));
     print(&output::error(error, chain));
-    match error.class() {
+    exit_of(error.class())
+}
+
+/// The exit status of each class of error: the one place it is given.
+fn exit_of(class: ErrorClass) -> Exit {
+    match class {
         ErrorClass::Request => Exit::Request,
         ErrorClass::Refused => Exit::Stopped,
         ErrorClass::Failed => Exit::Failed,

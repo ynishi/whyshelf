@@ -24,9 +24,11 @@
 //! [`ArtifactSource`], the revision from the [`RevisionSource`]. None of them changes
 //! what is refused.
 //!
-//! The time, the identity of the record and the actor are fetched only after every
-//! check has passed, so a refused judgement uses none of them. The write is the last
-//! step, so a refusal writes nothing.
+//! The time is the one the project was read at. The actor and the identity of the
+//! record are fetched after the frame (or what stands to be revoked, or the
+//! successor) is checked, and before the decision's own invariants are, which may
+//! still refuse it. The write is the last step, for every judgement of a run after
+//! all of them are decided, so a refusal writes nothing.
 //!
 //! **`--successor`.** A deprecation records only that the document is to be replaced;
 //! who replaces it is a fact of the links ([`Shelf::replacers_of`]) and a verdict of

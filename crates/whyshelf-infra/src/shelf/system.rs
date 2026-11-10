@@ -143,6 +143,58 @@ mod tests {
         assert_eq!(actor.actor().await.unwrap().as_str(), "ana");
     }
 
+    /// A Git repository in a temporary directory whose own `user.name` is `name`.
+    async fn repo_named(name: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        for args in [&["init", "-q"][..], &["config", "user.name", name][..]] {
+            let status = tokio::process::Command::new("git")
+                .arg("-C")
+                .arg(dir.path())
+                .args(args)
+                .status()
+                .await
+                .unwrap();
+            assert!(status.success(), "git {args:?}");
+        }
+        dir
+    }
+
+    #[tokio::test]
+    async fn the_declared_name_wins_over_gits_user_name() {
+        let repo = repo_named("gina").await;
+        let actor = ProjectActor::new(repo.path().to_path_buf(), Some("ana".to_owned()));
+        assert_eq!(actor.actor().await.unwrap().as_str(), "ana");
+    }
+
+    #[tokio::test]
+    async fn with_no_declared_name_gits_user_name_is_used() {
+        let repo = repo_named("gina").await;
+        for declared in [None, Some(String::new()), Some("  ".to_owned())] {
+            let actor = ProjectActor::new(repo.path().to_path_buf(), declared.clone());
+            assert_eq!(
+                actor.actor().await.unwrap().as_str(),
+                "gina",
+                "declared {declared:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn no_name_is_read_from_the_projects_files() {
+        // Files a committed project could hold, each naming someone else.
+        let repo = repo_named("gina").await;
+        let whyshelf = repo.path().join(".whyshelf");
+        tokio::fs::create_dir_all(&whyshelf).await.unwrap();
+        tokio::fs::write(whyshelf.join("actor"), "mallory\n")
+            .await
+            .unwrap();
+        tokio::fs::write(repo.path().join(".env"), "WHYSHELF_ACTOR=mallory\n")
+            .await
+            .unwrap();
+        let actor = ProjectActor::new(repo.path().to_path_buf(), None);
+        assert_eq!(actor.actor().await.unwrap().as_str(), "gina");
+    }
+
     #[tokio::test]
     async fn identities_are_v7_and_distinct() {
         let a = UuidV7Ids.new_judgement_id().await.unwrap();

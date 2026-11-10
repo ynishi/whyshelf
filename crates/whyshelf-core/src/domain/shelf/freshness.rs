@@ -1217,6 +1217,12 @@ mod artifact_tests;
 #[cfg(test)]
 mod comparison_tests;
 #[cfg(test)]
+mod notice_tests;
+#[cfg(test)]
 mod same_meaning_tests;
+#[cfg(test)]
+mod severity_tests;
+#[cfg(test)]
+mod successor_tests;
 #[cfg(test)]
 mod tests;

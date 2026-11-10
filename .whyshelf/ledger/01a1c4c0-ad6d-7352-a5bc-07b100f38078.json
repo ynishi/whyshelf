@@ -1,0 +1,74 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "c7c3e56a76de21b677c075c90b22eb315220bd2b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fdfc3ecd364012d97580a0545dec244cb6738f1fbe907b09e3e70fd5dac0a223",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "b32f1fafa1108c1e0cdbe3ce7ab2ad382d8b543f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1122a47f5b66c30c94314d7fdea9f1cde2d9d2f97e4f2f12dad1ef3056f9bdb7",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "c0d13b96daa199e6e12d4c93fb4e499a99657857",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:96f6295d5ea4bb8df5cec44fa73d14d63613bd6604fa217f6e7f29bece854a67",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/books.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4f7a074cb8437a1ee00bd89b260c7aa930cb1189",
+      "hash": "sha256:d705e9265f545576a783e00679ba77b42f63d6724a602a9f346277b3690a0266",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "11"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-11d9-7657-8910-6240e23765d9"
+    }
+  ],
+  "id": "01a1c4c0-ad6d-7352-a5bc-07b100f38078",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:f57eaad50aacfed8c625ef6780227805030ca254ebfcf07af9ff3a997627b6fa",
+  "seen_address": "006702fc871add4f3625d91c1b785d1ee2c23bc6",
+  "subject": "01a1c4ba-15af-74cf-8ea9-0f39eda83aa0",
+  "v": 1,
+  "verb": "approve"
+}
