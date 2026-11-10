@@ -87,6 +87,26 @@
 //! directory outside Git works the same, with nothing recorded to read back. The
 //! records of the ledger written before these were kept read back unchanged.
 //!
+//! ## An edit that keeps the meaning
+//!
+//! Any change of a hash makes the approvals that pinned it stale, a typo fixed as
+//! much as a rule rewritten: whyshelf does not guess what an edit means. When a person
+//! has read an edit and it keeps the meaning, `judge same <ref>` (or `--artifact
+//! <path>` for a file) records that, with a reason. The declaration is of the edit
+//! from one earlier hash to the hash now: the one the document's own approval saw, or
+//! the only one approvals pinned, or the one `--from <hash>` names when they pinned
+//! several that do not mean the same (then, unnamed, it is refused with the list). It
+//! covers every approval that pinned that hash (its own approval, and every downstream
+//! at once); an older pin, from before a change no one declared, stays a change. The
+//! approvals it covers hold again: each tells the edit as a notice
+//! (`self_same_meaning`, `upstream_same_meaning`, `artifact_same_meaning`) naming the
+//! declaration, instead of a cause. Declarations chain (A to B, then B to C), and a
+//! later edit is a change again until it is declared too. A declaration is a record of
+//! the ledger like a decision: it is read on every run, never stored as a result, and
+//! is refused when the document is not valid, the file is not there, or nothing
+//! pinned another hash of it. One made by mistake is taken back with `judge withdraw
+//! <record id>` (the id each notice names), and the edit is a change again.
+//!
 //! ## What an approval saw
 //!
 //! `get <ref> --approved` lists what the approval that stands saw (the
@@ -114,6 +134,11 @@
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
 //!   judge deny|deprecate|retire <ref>... [--reason <text>]   (deprecate: [--successor <ref>])
 //!   judge revoke <ref>... --reason <text>
+//!   judge same <ref>... [--artifact <path>]... [--from <hash>] --reason <text>
+//!                             the edits named keep the meaning: the approvals that pinned the
+//!                             hashes before them hold again, each with a notice
+//!   judge withdraw <record id>... --reason <text>
+//!                             take back decisions or declarations by the id of their record
 //!   new <book> --title <text> [--key <key>] [<entry>=<value>]... [--body <text>]
 //!                             one new document, valid for its book, at <book dir>/<key>.md
 //!   schema                    the JSON Schema of the answer of every command
@@ -141,7 +166,7 @@
 //!   required fields, enum words, link names and counts, types), with every problem
 //!   listed; a link to a key no document has yet is allowed, and listed in
 //!   `unresolved_links`. The identity is a new UUID v7.
-//! - Only `judge` and `new` write: `judge` one new file per decision, `new` one new
+//! - Only `judge` and `new` write: `judge` one new file per decision or declaration, `new` one new
 //!   document's file, never in place of a file that is there; every other command
 //!   only reads and creates nothing. Who judges is `--actor`, else `WHYSHELF_ACTOR`,
 //!   else Git's `user.name`; never a committed file.
@@ -165,7 +190,7 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, or for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!
 //! `new` answers `{"doc": {"id", "key"}, "file": ..., "unresolved_links": [{"link",

@@ -1,7 +1,9 @@
 //! The judgements people made, as records, and what the records say.
 //!
 //! A [`Record`] is a [`Decision`] about one document (approve, deny, deprecate,
-//! retire) or a [`Revocation`] of decisions. The domain holds a record as a value
+//! retire), a [`SameMeaning`] (a declaration that an edit of a document or a file
+//! keeps the meaning; see its page), or a [`Revocation`] of decisions and
+//! declarations. The domain holds a record as a value
 //! with no wire format: [`Record::to_canon`] and [`Record::from_canon`] are the two
 //! ends of its canonical form, and an adapter turns that form into JSON and back.
 //! [`Record::from_canon`] is strict (a version it does not know, a key too many or
@@ -47,7 +49,7 @@ use crate::domain::error::ValueError;
 use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{Count, NonBlank, NonEmptySet, TwoOrMore};
+use crate::domain::nonempty::{Count, NonBlank, NonEmptySet, NonEmptyVec, TwoOrMore};
 
 use super::artifact::{ArtifactHash, ArtifactState, ContentAddress, OpaqueProblem, Revision};
 use super::build::{DocFailure, DocState, FailureTag, Shelf};
@@ -601,8 +603,8 @@ impl Decision {
     }
 }
 
-/// The withdrawal of earlier decisions, whoever made them and whichever documents
-/// they are about. It has no subject and no frame.
+/// The withdrawal of earlier decisions and declarations of the same meaning,
+/// whoever made them and whatever they are about. It has no subject and no frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Revocation {
     id: JudgementId,
@@ -613,7 +615,7 @@ pub struct Revocation {
 }
 
 impl Revocation {
-    /// A revocation of one or more decisions.
+    /// A revocation of one or more decisions or declarations.
     pub fn new(
         id: JudgementId,
         targets: NonEmptySet<JudgementId>,
@@ -636,8 +638,10 @@ impl Revocation {
 pub enum Record {
     /// A decision about a document.
     Decision(Decision),
-    /// A withdrawal of decisions.
+    /// A withdrawal of decisions or declarations.
     Revocation(Revocation),
+    /// A declaration that an edit keeps the meaning.
+    SameMeaning(SameMeaning),
 }
 
 /// The hash of a record's canonical form, which tells two records of one id apart.
@@ -740,6 +744,18 @@ pub enum RecordProblem {
     /// The record is well formed but breaks an invariant of a decision.
     #[error("the record breaks an invariant of a decision")]
     Invariant(#[source] DecisionProblem),
+    /// A declaration that an edit keeps the meaning names no earlier hash.
+    #[error("a declaration of the same meaning names no earlier hash")]
+    EmptyFrom,
+    /// The record is well formed but breaks an invariant of a declaration.
+    #[error("the record breaks an invariant of a declaration of the same meaning")]
+    SameMeaning(#[source] SameMeaningProblem),
+    /// The `kind` of what a declaration is about is neither `doc` nor `artifact`.
+    #[error("`{found}` is not something a declaration of the same meaning is about")]
+    UnknownSubjectKind {
+        /// What was found.
+        found: String,
+    },
 }
 
 type CanonMap = BTreeMap<String, Canon>;
@@ -895,6 +911,15 @@ tags!(
     RecordKind {
         Decision => "decision",
         Revocation => "revocation",
+        SameMeaning => "same_meaning",
+    }
+);
+
+tags!(
+    /// The `kind` of what a declaration of the same meaning is about.
+    SubjectKind {
+        Doc => "doc",
+        Artifact => "artifact",
     }
 );
 
@@ -1169,12 +1194,18 @@ const DECISION_KEYS: [&str; 8] = [
 /// The keys a revocation has, and no more.
 const REVOCATION_KEYS: [&str; 7] = ["v", "kind", "id", "targets", "actor", "at", "reason"];
 
+/// The keys a declaration of the same meaning has, and no more.
+const SAME_MEANING_KEYS: [&str; 9] = [
+    "v", "kind", "id", "subject", "from", "to", "actor", "at", "reason",
+];
+
 impl Record {
     /// The identity of the record.
     pub fn id(&self) -> JudgementId {
         match self {
             Self::Decision(d) => d.id,
             Self::Revocation(r) => r.id,
+            Self::SameMeaning(s) => s.id,
         }
     }
 
@@ -1195,6 +1226,7 @@ impl Record {
                 ("at", Canon::Int(r.at.0)),
                 ("reason", Canon::str(r.reason.as_str())),
             ]),
+            Self::SameMeaning(s) => same_meaning_canon(s),
         }
     }
 
@@ -1217,6 +1249,7 @@ impl Record {
         match RecordKind::parse(kind) {
             Some(RecordKind::Decision) => decision_from(map).map(Self::Decision),
             Some(RecordKind::Revocation) => revocation_from(map).map(Self::Revocation),
+            Some(RecordKind::SameMeaning) => same_meaning_from(map).map(Self::SameMeaning),
             None => Err(RecordProblem::UnknownKind {
                 found: kind.to_owned(),
             }),
@@ -1403,6 +1436,101 @@ fn revocation_from(map: &CanonMap) -> Result<Revocation, RecordProblem> {
     Ok(Revocation::new(id, targets, actor, at, reason))
 }
 
+fn same_meaning_canon(s: &SameMeaning) -> Canon {
+    let (subject, from, to) = match &s.of {
+        SameMeaningOf::Doc { id, from, to } => (
+            Canon::map([
+                ("kind", Canon::str(SubjectKind::Doc.as_str())),
+                ("id", Canon::str(id.to_string())),
+            ]),
+            Canon::list(from.iter().map(|h| Canon::str(h.to_string()))),
+            Canon::str(to.to_string()),
+        ),
+        SameMeaningOf::Artifact { path, from, to } => (
+            Canon::map([
+                ("kind", Canon::str(SubjectKind::Artifact.as_str())),
+                ("path", Canon::str(path.as_str())),
+            ]),
+            Canon::list(from.iter().map(|h| Canon::str(h.to_string()))),
+            Canon::str(to.to_string()),
+        ),
+    };
+    Canon::map([
+        ("v", Canon::Int(VERSION)),
+        ("kind", Canon::str(RecordKind::SameMeaning.as_str())),
+        ("id", Canon::str(s.id.to_string())),
+        ("subject", subject),
+        ("from", from),
+        ("to", to),
+        ("actor", Canon::str(s.actor.as_str())),
+        ("at", Canon::Int(s.at.0)),
+        ("reason", Canon::str(s.reason.as_str())),
+    ])
+}
+
+/// The hashes of `from`: a list of one or more texts, each read by `read`.
+fn hashes_of<H: Ord>(
+    map: &CanonMap,
+    read: impl Fn(&str) -> Result<H, RecordProblem>,
+) -> Result<NonEmptySet<H>, RecordProblem> {
+    let hashes = items(map, "from")?
+        .iter()
+        .map(|c| match c {
+            Canon::Str(s) => read(s),
+            _ => Err(wrong("from", "a list of texts")),
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    NonEmptySet::from_set(hashes).map_err(|_| RecordProblem::EmptyFrom)
+}
+
+fn artifact_hash_of(raw: &str, key: &str) -> Result<ArtifactHash, RecordProblem> {
+    raw.parse::<ContentHash>()
+        .map(ArtifactHash::restore)
+        .map_err(|e| bad(key, e))
+}
+
+fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
+    exact(map, &SAME_MEANING_KEYS)?;
+    let Common {
+        id,
+        actor,
+        at,
+        reason,
+    } = read_common(map, required_reason)?;
+    let subject = submap(map, "subject")?;
+    let kind = text(subject, "kind")?;
+    let of = match SubjectKind::parse(kind) {
+        Some(SubjectKind::Doc) => {
+            exact(subject, &["kind", "id"])?;
+            SameMeaningOf::Doc {
+                id: doc_id(subject, "id")?,
+                from: hashes_of(map, |s| {
+                    s.parse::<ContentHash>()
+                        .map(DocHash::restore)
+                        .map_err(|e| bad("from", e))
+                })?,
+                to: doc_hash(map, "to")?,
+            }
+        }
+        Some(SubjectKind::Artifact) => {
+            exact(subject, &["kind", "path"])?;
+            SameMeaningOf::Artifact {
+                path: text(subject, "path")?
+                    .parse::<RelPath>()
+                    .map_err(|e| bad("path", e))?,
+                from: hashes_of(map, |s| artifact_hash_of(s, "from"))?,
+                to: artifact_hash_of(text(map, "to")?, "to")?,
+            }
+        }
+        None => {
+            return Err(RecordProblem::UnknownSubjectKind {
+                found: kind.to_owned(),
+            });
+        }
+    };
+    SameMeaning::new(id, of, actor, at, reason).map_err(RecordProblem::SameMeaning)
+}
+
 /// What the records of a ledger say about one document: the declared status.
 ///
 /// It says what people decided, not whether it still holds: that is what
@@ -1488,6 +1616,7 @@ pub enum LedgerProblem {
 struct Grouped {
     decisions: BTreeMap<JudgementId, Decision>,
     revocations: BTreeMap<JudgementId, Revocation>,
+    same_meanings: BTreeMap<JudgementId, SameMeaning>,
     conflicted: BTreeSet<JudgementId>,
     /// The conflicts.
     problems: Vec<LedgerProblem>,
@@ -1508,6 +1637,7 @@ impl Grouped {
         let mut grouped = Self {
             decisions: BTreeMap::new(),
             revocations: BTreeMap::new(),
+            same_meanings: BTreeMap::new(),
             conflicted: BTreeSet::new(),
             problems: Vec::new(),
         };
@@ -1519,6 +1649,9 @@ impl Grouped {
                 }
                 Count::One(Record::Revocation(r)) => {
                     grouped.revocations.insert(id, r);
+                }
+                Count::One(Record::SameMeaning(s)) => {
+                    grouped.same_meanings.insert(id, s);
                 }
                 Count::Many(records) => {
                     grouped.conflicted.insert(id);
@@ -1532,15 +1665,17 @@ impl Grouped {
     }
 }
 
-/// The decisions the revocations withdraw. A revocation of a conflict, of a
-/// revocation or of what is not there withdraws nothing for that target and is
-/// reported in `problems`.
-fn revoked_by(
-    revocations: &BTreeMap<JudgementId, Revocation>,
-    decisions: &BTreeMap<JudgementId, Decision>,
-    conflicted: &BTreeSet<JudgementId>,
-    problems: &mut Vec<LedgerProblem>,
-) -> BTreeSet<JudgementId> {
+/// The decisions and declarations the revocations withdraw. A revocation of a
+/// conflict, of a revocation or of what is not there withdraws nothing for that
+/// target and is reported in `problems`.
+fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<JudgementId> {
+    let Grouped {
+        decisions,
+        revocations,
+        same_meanings,
+        conflicted,
+        ..
+    } = grouped;
     let mut revoked = BTreeSet::new();
     for (id, revocation) in revocations {
         for target in revocation.targets.iter().copied() {
@@ -1554,7 +1689,7 @@ fn revoked_by(
                     revocation: *id,
                     target,
                 });
-            } else if decisions.contains_key(&target) {
+            } else if decisions.contains_key(&target) || same_meanings.contains_key(&target) {
                 revoked.insert(target);
             } else {
                 problems.push(LedgerProblem::RevokesUnknown {
@@ -1571,6 +1706,8 @@ fn revoked_by(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ledger {
     decisions: BTreeMap<JudgementId, Decision>,
+    /// The declarations of the same meaning that are not revoked.
+    same_meanings: BTreeMap<JudgementId, SameMeaning>,
     revoked: BTreeSet<JudgementId>,
     subjects: BTreeSet<DocId>,
     problems: Vec<LedgerProblem>,
@@ -1586,19 +1723,74 @@ impl Ledger {
     /// a conflict is set aside for that one target only. A revocation of decisions of
     /// several subjects, or of someone else's, is allowed.
     pub fn build(records: Vec<Record>) -> Self {
+        let mut grouped = Grouped::of(records);
+        let mut problems = std::mem::take(&mut grouped.problems);
+        let revoked = revoked_by(&grouped, &mut problems);
         let Grouped {
             decisions,
-            revocations,
-            conflicted,
-            mut problems,
-        } = Grouped::of(records);
-        let revoked = revoked_by(&revocations, &decisions, &conflicted, &mut problems);
+            mut same_meanings,
+            ..
+        } = grouped;
+        same_meanings.retain(|id, _| !revoked.contains(id));
         let subjects = decisions.values().map(|d| d.subject).collect();
         Self {
             decisions,
+            same_meanings,
             revoked,
             subjects,
             problems,
+        }
+    }
+
+    /// The declarations, not revoked, that make the hashes `a` and `b` of the
+    /// document `id` mean the same, in the order of the way from `a` to `b`; `None`
+    /// when none do. The one place two hashes of a document are said to mean the same.
+    pub fn doc_same_meaning(
+        &self,
+        id: DocId,
+        a: &DocHash,
+        b: &DocHash,
+    ) -> Option<NonEmptyVec<JudgementId>> {
+        let edges = self.same_meanings.values().flat_map(|s| match &s.of {
+            SameMeaningOf::Doc { id: of, from, to } if *of == id => {
+                from.iter().map(|f| (s.id, *f, *to)).collect::<Vec<_>>()
+            }
+            _ => Vec::new(),
+        });
+        declared_way(edges, *a, *b)
+    }
+
+    /// As [`Ledger::doc_same_meaning`], for the file at `path`.
+    pub fn artifact_same_meaning(
+        &self,
+        path: &RelPath,
+        a: &ArtifactHash,
+        b: &ArtifactHash,
+    ) -> Option<NonEmptyVec<JudgementId>> {
+        let edges = self.same_meanings.values().flat_map(|s| match &s.of {
+            SameMeaningOf::Artifact { path: of, from, to } if of == path => {
+                from.iter().map(|f| (s.id, *f, *to)).collect::<Vec<_>>()
+            }
+            _ => Vec::new(),
+        });
+        declared_way(edges, *a, *b)
+    }
+
+    /// A declaration that is not revoked, by its identity.
+    pub fn same_meaning(&self, id: JudgementId) -> Option<&SameMeaning> {
+        self.same_meanings.get(&id)
+    }
+
+    /// Whether the record `id` can be withdrawn: it is a decision or a declaration of
+    /// this ledger, and no revocation withdraws it yet. The one place a withdrawal
+    /// by identity is checked.
+    pub fn check_withdraw(&self, id: JudgementId) -> Result<(), WithdrawRefusal> {
+        if self.revoked.contains(&id) {
+            Err(WithdrawRefusal::AlreadyWithdrawn { id })
+        } else if self.decisions.contains_key(&id) || self.same_meanings.contains_key(&id) {
+            Ok(())
+        } else {
+            Err(WithdrawRefusal::Unknown { id })
         }
     }
 
@@ -1828,6 +2020,24 @@ pub fn frame_present(shelf: &Shelf, id: DocId) -> Result<PresentFrame, FrameRefu
     })
 }
 
+/// Why a record cannot be withdrawn by its identity.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum WithdrawRefusal {
+    /// No decision or declaration of the ledger has the identity (a revocation, a
+    /// record in conflict, or none at all).
+    #[error("{id} is no decision or declaration of the ledger")]
+    Unknown {
+        /// The identity.
+        id: JudgementId,
+    },
+    /// A revocation already withdraws it.
+    #[error("{id} is already withdrawn")]
+    AlreadyWithdrawn {
+        /// The identity.
+        id: JudgementId,
+    },
+}
+
 /// The frame of a retirement of `id`: what is seen of the document now, whatever it
 /// is. It does not fail: a document can be retired after its file is gone.
 pub fn frame_retire(shelf: &Shelf, id: DocId) -> RetireFrame {
@@ -1840,7 +2050,17 @@ pub fn frame_retire(shelf: &Shelf, id: DocId) -> RetireFrame {
     RetireFrame { subject: id, seen }
 }
 
+mod same_meaning;
+
+use same_meaning::declared_way;
+pub use same_meaning::{
+    SameMeaning, SameMeaningOf, SameMeaningProblem, SameMeaningRefusal, SameMeaningTarget,
+    frame_same_meaning,
+};
+
 #[cfg(test)]
 mod artifact_tests;
+#[cfg(test)]
+mod same_meaning_tests;
 #[cfg(test)]
 mod tests;

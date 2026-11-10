@@ -3,7 +3,8 @@
 //! One file per record, named by the record's own identity, so that two branches
 //! that each judge add two files and merge without a conflict. A record is never
 //! changed: a write creates a new file and fails when the name is taken, and a
-//! decision is withdrawn by a revocation, which is a record of its own.
+//! decision or a declaration is withdrawn by a revocation, which is a record of its
+//! own.
 //!
 //! JSON is the wire form and nothing more. A record is written from its canonical
 //! form ([`Record::to_canon`]) and read back into one ([`Record::from_canon`]); the

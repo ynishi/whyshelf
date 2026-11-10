@@ -1,6 +1,7 @@
 //! The commands, as clap types.
 
 use clap::{Args, Subcommand};
+use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::lookup::Reference;
 
 /// The commands on the documents whose kinds the project declares in
@@ -115,5 +116,38 @@ pub enum Verb {
         /// The document and why.
         #[command(flatten)]
         common: Common,
+    },
+    /// Declare that an edit keeps the meaning: the approvals that pinned the hash
+    /// before it stay fresh, with a notice (needs --reason).
+    Same {
+        /// The documents edited, in order.
+        #[arg(num_args = 0.., required_unless_present = "artifacts")]
+        references: Vec<Reference>,
+        /// A file that is no document, by its path under the root; may be repeated.
+        #[arg(long = "artifact", value_name = "PATH")]
+        artifacts: Vec<RelPath>,
+        /// The earlier hash the edit was read from (`sha256:...`), for one document or
+        /// file, when approvals pinned several that do not mean the same.
+        #[arg(long, value_name = "HASH")]
+        from: Option<String>,
+        /// Why the meaning is kept.
+        #[arg(long, required = true)]
+        reason: String,
+        /// Who declares it (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
+        #[arg(long)]
+        actor: Option<String>,
+    },
+    /// Withdraw decisions or declarations by the `id` of their record (needs
+    /// --reason), with one revocation.
+    Withdraw {
+        /// The ids of the records, as answers and notices show them.
+        #[arg(required = true, num_args = 1.., value_name = "RECORD_ID")]
+        records: Vec<String>,
+        /// Why.
+        #[arg(long, required = true)]
+        reason: String,
+        /// Who withdraws them (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
+        #[arg(long)]
+        actor: Option<String>,
     },
 }

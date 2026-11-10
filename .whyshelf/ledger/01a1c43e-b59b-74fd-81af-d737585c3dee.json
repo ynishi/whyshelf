@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "36896bc9050db4cb2070450dd57f7f826ced87de",
+      "hash": "sha256:34d7f0e15ae5ad83aee5822e8f847c6087feaaecadbba8db890f2387db74b0eb",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "2dc6ef98fde00ad04900993c5f9a9db4de01807b",
+      "hash": "sha256:ec7d6ded29abb62f6078604b5fd108b7bee94ef715802432a3f8edafe3aa3c6f",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/freshness/same_meaning_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "f4d256024dc2fad052cffd07e1869d49c4b2899b",
+      "hash": "sha256:e5aebd9384a9446b3f1386fd2985cfd62f3272124a83fb25682b844a24b42f91",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/ledger/same_meaning_tests.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794293806406,
+  "expires": null,
+  "frame": [
+    {
+      "address": "40df97284f46b7fc9cfd0ceb0d410c2f5221e77d",
+      "hash": "sha256:9c2ad2aa5f67627c67e859792d7d4dda57f44b5f501747f07d418ecee796a041",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "9"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c434-c205-7538-9b17-4fe0f9900392"
+    }
+  ],
+  "id": "01a1c43e-b59b-74fd-81af-d737585c3dee",
+  "kind": "decision",
+  "reason": "Reviewed with the change that adds same-meaning declarations; just check green",
+  "revision": "364ea4803e8690cd4026e3c6263cd82b440b065e",
+  "seen": "sha256:38358f43b4b51b85481343dca7fc35c56b00810d4eaf83b22793084f5d12fd24",
+  "seen_address": "5bee573c9592766bb5ae22c7ff50926dd9a71857",
+  "subject": "01a1c434-c247-7331-9063-4647de8cf529",
+  "v": 1,
+  "verb": "approve"
+}
