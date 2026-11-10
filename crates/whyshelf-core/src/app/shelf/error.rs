@@ -85,7 +85,8 @@ pub enum ShelfError {
     #[error("the decision is not sound")]
     Decision(#[from] DecisionProblem),
     /// The edit cannot be declared to keep the meaning: the document is not valid,
-    /// the file is not linked or not there, or no approval pinned another hash of it.
+    /// the artifact is not linked, not there or cannot be told now, or no approval
+    /// pinned another hash of it.
     #[error("the declaration of the same meaning is refused")]
     SameMeaningRefused(#[from] SameMeaningRefusal),
     /// The declaration breaks an invariant of a declaration.
@@ -196,11 +197,13 @@ impl ShelfError {
             | Self::ItemOfNoList { .. }
             | Self::EmptyItem { .. }
             | Self::FileTaken { .. } => ErrorClass::Request,
-            // As a reference that names nothing and a revocation of nothing: a path or
-            // a hash that names nothing pinned, an earlier hash that cannot be told
+            // As a reference that names nothing and a revocation of nothing: a name of
+            // an artifact no document links or that is linked in two spaces, a hash
+            // that names nothing pinned, an earlier hash that cannot be told
             // without being named, nothing left to declare or to withdraw.
             Self::SameMeaningRefused(
                 SameMeaningRefusal::ArtifactNotLinked { .. }
+                | SameMeaningRefusal::ArtifactInSpaces { .. }
                 | SameMeaningRefusal::NotPinned { .. }
                 | SameMeaningRefusal::SeveralEarlier { .. }
                 | SameMeaningRefusal::PinnedUnderOtherComparison { .. }
@@ -209,11 +212,14 @@ impl ShelfError {
             | Self::Withdraw(
                 WithdrawRefusal::Unknown { .. } | WithdrawRefusal::AlreadyWithdrawn { .. },
             ) => ErrorClass::Request,
-            // As a judgement the model refuses: no valid document, no file.
+            // As a judgement the model refuses: no valid document, an artifact with
+            // nothing behind it now or that cannot be told now.
             Self::Refused(_)
             | Self::Decision(_)
             | Self::SameMeaningRefused(
-                SameMeaningRefusal::DocNotValid { .. } | SameMeaningRefusal::ArtifactAbsent { .. },
+                SameMeaningRefusal::DocNotValid { .. }
+                | SameMeaningRefusal::ArtifactAbsent { .. }
+                | SameMeaningRefusal::ArtifactUnknown { .. },
             )
             | Self::SameMeaning(_) => ErrorClass::Refused,
             Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,

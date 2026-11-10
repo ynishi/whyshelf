@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7a8256313ffa93ed6c835f167e5001b6b1ebfced",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4cd29ec2ac479069f40f41f5e3d3c943d0ececa4e2393084a1b883c91cf877e0",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e86e0855ae7fb7d2d4b932d0803c81f77c76fde",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b7f2943f6d0c68df2c6032f298a1a9978d719efe5f61acac64960a571372fa55",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "259305ccafc5d70916d2af93643112d7b83891c0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c738397f87023f959b592af982b1666022de1d63819da25fc3ef4a82068c828a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d8441ab5dea05b3bb959ecc2e33b4ce73cff8c9f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b13bcca61cb71bb1b39706f2f3aae0199800a6ea93f6c0a8a731d8802d20fa6f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f876a873f634f830673c04606d15b278c6562e89",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:36239987dc84e98d65e6010b0a87d0e5fb8926cdcf9ffa8faf1d1ffbc35b36c6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794326111346,
+  "expires": null,
+  "frame": [
+    {
+      "address": "76f0ecc2a002f9bda71dd1bc771a2fa21b5f2a26",
+      "hash": "sha256:bd04969d0ef3157ab360d31c46760e62bc2a96bd8e943c92c5080ebad20029be",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "23"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4d3-a3a0-7506-8312-b5aef92e4742"
+    }
+  ],
+  "id": "01a1c62b-aac5-7121-b454-1d9ad3577436",
+  "kind": "decision",
+  "reason": "Artifacts made one model of spaces for #38: decisions restated for artifacts in general, tests moved with the code; checked by a blind review",
+  "revision": "e54fbb6995c5a4cab6723c7bdfbf72c351c7545a",
+  "seen": "sha256:7da0503c8630f5dbf79d7306cfa63fa324620adf58078eb981c9cf679a4870e2",
+  "seen_address": "895d2f32b948dbd622e3b83faa45cd0d2b2ada4e",
+  "subject": "01a1c4d3-a447-7273-a614-51ab620651af",
+  "v": 1,
+  "verb": "approve"
+}

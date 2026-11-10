@@ -34,13 +34,14 @@ use thiserror::Error;
 use crate::domain::actor::Actor;
 use crate::domain::hash::ContentHash;
 use crate::domain::id::DocId;
-use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec};
 
-use super::super::artifact::{ArtifactHash, ArtifactState, Comparison};
+use super::super::artifact::{
+    Artifact, ArtifactHash, ArtifactKey, ArtifactName, ArtifactState, Comparison, Space, Untold,
+};
 use super::super::build::{FailureTag, Shelf};
 use super::super::doc::DocHash;
-use super::{DeclaredStatus, JudgedAt, JudgementId, Ledger, PinnedArtifact};
+use super::{DeclaredStatus, JudgedAt, JudgementId, Ledger, NameForm, PinnedArtifact};
 
 /// What a declaration is about, and the hashes it says mean the same.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,10 +55,10 @@ pub enum SameMeaningOf {
         /// The hash it had when the declaration was made.
         to: DocHash,
     },
-    /// A file that is no document, named by its path.
+    /// An artifact, by its space and its name.
     Artifact {
-        /// The path.
-        path: RelPath,
+        /// The artifact.
+        artifact: ArtifactKey,
         /// The earlier hashes.
         from: NonEmptySet<ArtifactHash>,
         /// The hash it had when the declaration was made.
@@ -84,6 +85,9 @@ pub struct SameMeaning {
     pub(super) actor: Actor,
     pub(super) at: JudgedAt,
     pub(super) reason: NonBlank,
+    /// How the record names its artifact: kept from a record read back, so it is
+    /// written as it was stored.
+    pub(super) form: NameForm,
 }
 
 impl SameMeaning {
@@ -109,6 +113,7 @@ impl SameMeaning {
             actor,
             at,
             reason,
+            form: NameForm::Spaced,
         })
     }
 
@@ -143,8 +148,9 @@ impl SameMeaning {
 pub enum SameMeaningTarget {
     /// A document.
     Doc(DocId),
-    /// A file that is no document, as a link writes its path.
-    Artifact(RelPath),
+    /// An artifact, by its name as a link writes it, in the one space the documents
+    /// link it in.
+    Artifact(ArtifactName),
 }
 
 /// Why a declaration is refused.
@@ -158,17 +164,34 @@ pub enum SameMeaningRefusal {
         /// How it is not.
         tag: FailureTag,
     },
-    /// No document links the path, so what is there was never read.
-    #[error("no document links `{path}`")]
+    /// No document links the name, so what is there was never read.
+    #[error("no document links `{name}`")]
     ArtifactNotLinked {
-        /// The path.
-        path: RelPath,
+        /// The name.
+        name: ArtifactName,
     },
-    /// The path has no file now.
-    #[error("`{path}` has no file now")]
+    /// Documents link the name in more than one space, so which artifact is meant
+    /// cannot be told.
+    #[error("documents link `{name}` in more than one space: {spaces:?}")]
+    ArtifactInSpaces {
+        /// The name.
+        name: ArtifactName,
+        /// The spaces.
+        spaces: Vec<Space>,
+    },
+    /// Nothing is there now.
+    #[error("{artifact} has nothing there now")]
     ArtifactAbsent {
-        /// The path.
-        path: RelPath,
+        /// The artifact.
+        artifact: ArtifactKey,
+    },
+    /// Its adapter cannot tell about it now.
+    #[error("{artifact} cannot be told about now: {why}")]
+    ArtifactUnknown {
+        /// The artifact.
+        artifact: ArtifactKey,
+        /// Why it cannot be told.
+        why: Untold,
     },
     /// Every approval that stands pinned the hash now, or one that already means the
     /// same as it.
@@ -181,8 +204,8 @@ pub enum SameMeaningRefusal {
         /// The hash named, as text.
         hash: String,
     },
-    /// The hash named was pinned under a comparison no link declares for the file
-    /// now: the approval is to be looked at again (the comparison changed), and an
+    /// The hash named was pinned under a comparison no link declares for the
+    /// artifact now: the approval is to be looked at again (the comparison changed), and an
     /// edit across two comparisons cannot be declared.
     #[error("{hash} was pinned under a comparison no link declares now: approve again instead")]
     PinnedUnderOtherComparison {
@@ -211,7 +234,7 @@ pub enum SameMeaningRefusal {
 /// rewrite the document was approved again after, stays a change. A second
 /// declaration of the same edit is refused as [`SameMeaningRefusal::NothingToDeclare`].
 ///
-/// For a file, hashes are taken under one [`Comparison`] at a time, since two links
+/// For an artifact, hashes are taken under one [`Comparison`] at a time, since two links
 /// may compare it differently: the one whose pins hold the hash named, else the only
 /// one with an earlier hash to declare (two such, and none named, is
 /// [`SameMeaningRefusal::SeveralEarlier`]), with the hash now under that comparison.
@@ -254,30 +277,53 @@ pub fn frame_same_meaning(
             let from = earlier(pinned, now, from.map(DocHash::restore), own, same)?;
             Ok(SameMeaningOf::Doc { id, from, to: now })
         }
-        SameMeaningTarget::Artifact(path) => {
-            // A file's hash is made by a comparison, so the hash now and the earlier
-            // hashes are taken under one comparison at a time: the hash now of each
-            // comparison a link declares for the path now.
+        SameMeaningTarget::Artifact(name) => {
+            // The artifact is the name in the one space the documents link it in.
+            let spaces: BTreeSet<&Space> = shelf
+                .docs()
+                .values()
+                .flat_map(|doc| doc.artifact_links().values())
+                .flat_map(|link| link.artifacts())
+                .filter(|a| *a.name() == name)
+                .map(Artifact::space)
+                .collect();
+            let artifact = match spaces.into_iter().collect::<Vec<_>>().as_slice() {
+                [] => return Err(SameMeaningRefusal::ArtifactNotLinked { name }),
+                [space] => ArtifactKey::new((*space).clone(), name),
+                many => {
+                    return Err(SameMeaningRefusal::ArtifactInSpaces {
+                        name,
+                        spaces: many.iter().map(|s| (*s).clone()).collect(),
+                    });
+                }
+            };
+            // An artifact's hash is made by a comparison, so the hash now and the
+            // earlier hashes are taken under one comparison at a time: the hash now of
+            // each comparison a link declares for it now.
             let mut now_of: BTreeMap<Comparison, ArtifactState> = BTreeMap::new();
             for doc in shelf.docs().values() {
                 for link in doc.artifact_links().values() {
-                    for artifact in link.artifacts().iter().filter(|a| *a.path() == path) {
-                        now_of.insert(link.kind().comparison.clone(), *artifact.state());
+                    for found in link.artifacts().iter().filter(|a| *a.key() == artifact) {
+                        now_of.insert(link.kind().comparison.clone(), found.state().clone());
                     }
                 }
             }
-            if now_of.is_empty() {
-                return Err(SameMeaningRefusal::ArtifactNotLinked { path });
-            }
+            let unknown = now_of.values().find_map(|state| match state {
+                ArtifactState::Unknown(why) => Some(why.clone()),
+                ArtifactState::Present(_) | ArtifactState::Absent => None,
+            });
             let now_of: BTreeMap<Comparison, ArtifactHash> = now_of
                 .into_iter()
                 .filter_map(|(c, state)| match state {
                     ArtifactState::Present(hash) => Some((c, hash)),
-                    ArtifactState::Absent => None,
+                    ArtifactState::Absent | ArtifactState::Unknown(_) => None,
                 })
                 .collect();
             if now_of.is_empty() {
-                return Err(SameMeaningRefusal::ArtifactAbsent { path });
+                return Err(match unknown {
+                    Some(why) => SameMeaningRefusal::ArtifactUnknown { artifact, why },
+                    None => SameMeaningRefusal::ArtifactAbsent { artifact },
+                });
             }
             // The earlier hashes, by the comparison they were made with; a pin of a
             // comparison no link declares now is told by freshness as such, and has
@@ -288,7 +334,7 @@ pub fn frame_same_meaning(
                 let DeclaredStatus::Approved { artifacts, .. } = ledger.status_of(*subject) else {
                     continue;
                 };
-                for pin in artifacts.iter().filter(|p| *p.path() == path) {
+                for pin in artifacts.iter().filter(|p| *p.artifact() == artifact) {
                     let PinnedArtifact::Present { hash, .. } = pin.seen() else {
                         continue;
                     };
@@ -303,7 +349,7 @@ pub fn frame_same_meaning(
                 }
             }
             let same = |a: &ArtifactHash, b: &ArtifactHash| {
-                ledger.artifact_same_meaning(&path, a, b).is_some()
+                ledger.artifact_same_meaning(&artifact, a, b).is_some()
             };
             let named = from.map(ArtifactHash::restore);
             // The comparison to declare under: the one whose pins hold the hash named,
@@ -355,7 +401,7 @@ pub fn frame_same_meaning(
             let hashes = pinned.remove(&comparison).unwrap_or_default();
             let from = earlier(hashes, now, named, None, same)?;
             Ok(SameMeaningOf::Artifact {
-                path,
+                artifact,
                 from,
                 to: now,
             })

@@ -24,13 +24,17 @@
 //!
 //! [[book.link]]
 //! name = "tests"
-//! target = "artifact"              # files that are no document, by path under the root
+//! target = "artifact"              # things outside the documents, by name in a space
+//! space = "file"                   # the space: one an adapter offers; always written
 //! means = "depends"                # "depends" or "informs" (an artifact replaces nothing)
+//! compare = "lines"                # "bytes" (default), "lines" or "presence"
+//! ignore = ["//"]                  # for "lines": the lines it leaves out
 //! ```
 //!
 //! The word `artifact` as a target is read here into
 //! [`LinkTargetDecl::Artifact`]; the domain refuses a book of that name, so the word
-//! never names both.
+//! never names both. `space` is read as written onto the link, and the domain says
+//! whether it is one the adapters offer.
 //!
 //! This module reads the text and its shape; whether the books make sense (names,
 //! directories that overlap, links to a book that is not declared) is
@@ -216,7 +220,9 @@ struct LinkDto {
     #[serde(default)]
     count: CountWord,
     means: MeansWord,
-    /// For a link to artifacts: `bytes` or `lines`; checked by the domain.
+    /// For a link to artifacts: the space its names are in; checked by the domain.
+    space: Option<String>,
+    /// For a link to artifacts: `bytes`, `lines` or `presence`; checked by the domain.
     compare: Option<String>,
     /// For `compare = "lines"`: the prefixes of the lines left out.
     ignore: Option<Vec<String>>,
@@ -293,6 +299,7 @@ impl BookDto {
                         MeansWord::Informs => Propagation::Informs,
                         MeansWord::Replaces => Propagation::Replaces,
                     },
+                    space: l.space,
                     // `ignore` without `compare` is a `compare` of no kind, which the
                     // domain refuses, so it is not lost.
                     compare: match (l.compare, l.ignore) {
@@ -311,6 +318,11 @@ impl BookDto {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
+    use whyshelf_core::domain::shelf::artifact::Space;
+    use whyshelf_core::domain::shelf::schema::{Schema, SchemaProblem};
+
     use super::*;
 
     const SAMPLE: &str = r#"
@@ -364,16 +376,46 @@ means = "informs"
         assert_eq!(decls[1].links[1].propagation, Propagation::Informs);
     }
 
+    /// The spaces the tests hold declarations against.
+    fn spaces() -> BTreeSet<Space> {
+        BTreeSet::from([Space::new("file").unwrap()])
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn validate(
+        decls: Vec<BookSchemaDecl>,
+    ) -> Result<Schema, whyshelf_core::domain::nonempty::NonEmptyVec<SchemaProblem>> {
+        Schema::validate(decls, &spaces())
+    }
+
     #[test]
-    fn the_target_artifact_is_a_link_to_files_and_not_to_a_book() {
+    fn the_target_artifact_is_a_link_to_artifacts_and_not_to_a_book() {
+        let decls = parse(
+            "[[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [[book.link]]\nname='tests'\ntarget='artifact'\nspace='file'\nmeans='depends'\n",
+        )
+        .unwrap();
+        assert_eq!(decls[0].links[0].target, LinkTargetDecl::Artifact);
+        assert_eq!(decls[0].links[0].space.as_deref(), Some("file"));
+        let schema = validate(decls).unwrap();
+        let links = schema.book("a").unwrap().artifact_links();
+        assert_eq!(links.len(), 1);
+        assert_eq!(links["tests"].space.as_str(), "file");
+    }
+
+    #[test]
+    fn a_link_to_artifacts_without_a_space_is_read_as_none_and_refused() {
         let decls = parse(
             "[[book]]\nname='a'\ndir='a'\nkey='slug'\n\
              [[book.link]]\nname='tests'\ntarget='artifact'\nmeans='depends'\n",
         )
         .unwrap();
-        assert_eq!(decls[0].links[0].target, LinkTargetDecl::Artifact);
-        let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
-        assert_eq!(schema.book("a").unwrap().artifact_links().len(), 1);
+        assert_eq!(decls[0].links[0].space, None);
+        let problems = validate(decls).unwrap_err();
+        assert!(matches!(
+            problems.first(),
+            SchemaProblem::NoSpace { link, .. } if link.as_str() == "tests"
+        ));
     }
 
     #[test]
@@ -386,7 +428,7 @@ means = "informs"
     fn tests_link(extra: &str) -> String {
         format!(
             "[[book]]\nname='a'\ndir='a'\nkey='slug'\n\
-             [[book.link]]\nname='tests'\ntarget='artifact'\nmeans='depends'\n{extra}"
+             [[book.link]]\nname='tests'\ntarget='artifact'\nspace='file'\nmeans='depends'\n{extra}"
         )
     }
 
@@ -400,7 +442,7 @@ means = "informs"
                 ignore: vec!["//".to_owned(), "#".to_owned()],
             })
         );
-        let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
+        let schema = validate(decls).unwrap();
         let kind = &schema.book("a").unwrap().artifact_links()["tests"];
         assert_eq!(kind.comparison.kind_word(), "lines");
         assert_eq!(
@@ -433,7 +475,7 @@ means = "informs"
                 ignore: vec!["//".to_owned()],
             })
         );
-        assert!(whyshelf_core::domain::shelf::schema::Schema::validate(decls).is_err());
+        assert!(validate(decls).is_err());
     }
 
     #[test]
@@ -454,7 +496,7 @@ means = "informs"
     fn cover_is_read_onto_a_link_and_is_false_when_not_written() {
         let decls = parse(&book_link("cover = true\n")).unwrap();
         assert!(decls[0].links[0].cover);
-        let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
+        let schema = validate(decls).unwrap();
         let book = schema.book("a").unwrap();
         let (_, kind) = book
             .links()
@@ -488,7 +530,7 @@ means = "informs"
         let decls = parse(super::SAMPLE).unwrap();
         let names: Vec<&str> = decls.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, ["finding", "spec", "design"]);
-        let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
+        let schema = validate(decls).unwrap();
         assert_eq!(schema.books().len(), 3);
         let design = schema.book("design").unwrap();
         assert!(design.artifact_links().contains_key("tests"));

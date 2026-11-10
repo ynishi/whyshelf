@@ -12,15 +12,15 @@
 //! | port | gives the use cases |
 //! |---|---|
 //! | [`BookSchemaSource`] | the declarations of the books, as an adapter read them |
-//! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books |
+//! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books, and the bytes and the [`ContentAddress`] of a document's file now |
 //! | [`LedgerRead`] | the records of the ledger, and the files of it that could not be read as one |
 //! | [`LedgerAppend`] | one record added, never in place of another |
 //! | [`Clock`] | now, as a [`JudgedAt`] |
 //! | [`IdSource`] | the identity of a new record, and of a new document |
 //! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there |
 //! | [`ActorSource`] | who is acting |
-//! | [`ArtifactSource`] | for each path a document links to: the hash of the file and where its content can be read back, or no file; and the bytes of a file now |
-//! | [`ContentStore`] | content read back by its [`ContentAddress`], or "not readable" |
+//! | [`ArtifactSource`] | the spaces it offers; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
+//! | [`ContentStore`] | content read back by its [`ContentAddress`], by the adapter of the document or the space it is of, or "not readable" |
 //! | [`RevisionSource`] | the point of the project's history now, if there is one |
 //!
 //! The ports are bundled in two traits, so that a use case that only reads is generic
@@ -35,7 +35,7 @@
 //!               what `judge` and `new_doc` are generic over
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
@@ -45,7 +45,9 @@ use thiserror::Error;
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactReadings, ContentAddress, Revision};
+use crate::domain::shelf::artifact::{
+    ArtifactAsks, ArtifactKey, ArtifactReadings, ContentAddress, Revision, Space,
+};
 use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record, RecordProblem};
 use crate::domain::shelf::schema::{BookDir, BookSchemaDecl};
@@ -125,6 +127,22 @@ pub trait DocSource: Send + Sync {
         &self,
         dirs: &[BookDir],
     ) -> impl Future<Output = Result<Vec<DocReading>, Self::Error>> + Send;
+
+    /// The bytes of the file of a document (relative to the project root) as they
+    /// are now, or none when no file is there: what `diff` sets beside the content
+    /// that was approved.
+    fn current(
+        &self,
+        file: &RelPath,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
+
+    /// Where the content of each of these files of documents, as it is now, can be
+    /// read back later ([`ContentStore::read_back`] of [`ContentOf::Doc`]), for those
+    /// it can say (outside version control it cannot, and that is no error).
+    fn addresses(
+        &self,
+        files: &BTreeSet<RelPath>,
+    ) -> impl Future<Output = Result<BTreeMap<RelPath, ContentAddress>, Self::Error>> + Send;
 }
 
 /// Why a file of the ledger is not a record.
@@ -250,51 +268,72 @@ pub trait ActorSource: Send + Sync {
     fn actor(&self) -> impl Future<Output = Result<Actor, Self::Error>> + Send;
 }
 
-/// The files of a project that are no document, read by path: what is there now.
+/// The artifacts of a project, things outside the documents, by their names in the
+/// spaces the adapters offer: what is there now.
 ///
-/// The adapter reads the bytes and what a [`ContentAddress`] is; what of the bytes a
-/// hash covers is the domain's [`Comparison`], which the adapter applies to them and
-/// does not choose.
+/// The domain knows a space only by its name; what the names of a space are, and
+/// what each comes to, is this port's answer. Every space goes through the same
+/// methods, values and rules. The adapter reads the bytes and what a
+/// [`ContentAddress`] is; what of the bytes a hash covers is the domain's
+/// [`Comparison`], which the adapter applies to them and does not choose.
 ///
 /// [`Comparison`]: crate::domain::shelf::artifact::Comparison
 pub trait ArtifactSource: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// For each path: the hash of the file under each comparison asked, made with
+    /// The spaces it can resolve names in: what
+    /// [`Schema::validate`](crate::domain::shelf::schema::Schema::validate) holds the
+    /// declaration's spaces against.
+    fn spaces(&self) -> BTreeSet<Space>;
+
+    /// For each name asked, in its space, one answer of the four of an
+    /// [`ArtifactReading`](crate::domain::shelf::artifact::ArtifactReading): there
+    /// (its hash under each comparison asked, made with
     /// [`ArtifactReading::of_bytes`](crate::domain::shelf::artifact::ArtifactReading::of_bytes)
-    /// from the bytes read, and where its content can be read back (when the adapter
-    /// can say: outside version control it cannot, and that is no error), or no file.
-    /// Every path asked about has an answer. A path names a file only as written: one that
-    /// differs from the name of an entry of its directory in ASCII case only names
-    /// no file, on every system, as for Git (a file system that does not tell case
-    /// apart would open it). A name that differs in a non-ASCII letter's case, or
-    /// that the system stores in another form (macOS keeps some non-ASCII names
-    /// decomposed), is left to the system. An error is for what
-    /// stops the reading itself (a file that is there and cannot be read).
-    fn read_artifacts(
+    /// from the bytes read, and where its content can be read back, when the adapter
+    /// can say), absent, cannot tell now (with why), or not a name of the space (with
+    /// why). Every name asked about has an answer; a name of a space it does not
+    /// offer cannot be told. An error is for what stops the reading itself (a thing
+    /// that is there and cannot be read); what a space's names are is each adapter's
+    /// own rule, on its page.
+    fn resolve(
         &self,
         asks: &ArtifactAsks,
     ) -> impl Future<Output = Result<ArtifactReadings, Self::Error>> + Send;
 
-    /// The bytes of the file at `path` as they are now, or none when no file is
-    /// there: what `diff` sets beside the content that was approved.
+    /// The bytes of the artifact as they are now, or none when nothing is there or
+    /// they cannot be read now: what `diff` sets beside the content that was
+    /// approved.
     fn current(
         &self,
-        path: &RelPath,
+        artifact: &ArtifactKey,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
 }
 
-/// Content read back by its address, as it was when the address was taken.
+/// Whose content an address is of: a document's file, or an artifact of a space. The
+/// address is read back by the adapter that named it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ContentOf {
+    /// A document's file: the adapter of the documents reads it back.
+    Doc,
+    /// An artifact of this space: the adapter of the space reads it back.
+    Artifact(Space),
+}
+
+/// Content read back by its address, as it was when the address was taken, by the
+/// adapter that took it.
 pub trait ContentStore: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// The content at `address`, or none when nothing can be read through it (it was
-    /// never kept, or is kept no longer). An error is for a store that cannot be
-    /// asked at all.
+    /// The content at `address`, an address of `of`, or none when nothing can be
+    /// read through it: it was never kept, is kept no longer, or the adapter of `of`
+    /// cannot read back (a space with no such adapter is one). An error is for a
+    /// store that cannot be asked at all.
     fn read_back(
         &self,
+        of: &ContentOf,
         address: &ContentAddress,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
 }
@@ -321,7 +360,7 @@ pub trait ShelfRead: Send + Sync {
     type Ledger: LedgerRead;
     /// The clock.
     type Clock: Clock;
-    /// The files that are no document.
+    /// The artifacts, by space.
     type Artifacts: ArtifactSource;
     /// The content that was approved, read back.
     type Store: ContentStore;

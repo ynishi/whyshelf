@@ -1,13 +1,15 @@
 //! Tests of the JSON of a change of comparison, and of the diff of a file whose
 //! `lines` hash is the same, from a shelf built by the domain.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use whyshelf_core::app::shelf::{DiffItem, Names};
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::id::{DocId, EntityId};
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::shelf::artifact::{ArtifactAsks, ArtifactReading, ArtifactReadings};
+use whyshelf_core::domain::shelf::artifact::{
+    ArtifactAsks, ArtifactReading, ArtifactReadings, Space,
+};
 use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
 use whyshelf_core::domain::shelf::freshness::assess;
 use whyshelf_core::domain::shelf::ledger::{
@@ -33,26 +35,30 @@ fn rel(text: &str) -> RelPath {
 
 /// One book of specs (`SP`), whose `tests` link to artifacts compares as `compare`.
 fn schema(compare: Option<CompareDecl>) -> Schema {
-    Schema::validate(vec![BookSchemaDecl {
-        name: "spec".to_owned(),
-        dir: "specs".to_owned(),
-        key: KeyPatternDecl::Prefixed {
-            prefix: "SP".to_owned(),
-        },
-        fields: vec![FieldEntryDecl {
-            name: "title".to_owned(),
-            ty: FieldTypeDecl::Text,
-            presence: FieldPresence::Required,
+    Schema::validate(
+        vec![BookSchemaDecl {
+            name: "spec".to_owned(),
+            dir: "specs".to_owned(),
+            key: KeyPatternDecl::Prefixed {
+                prefix: "SP".to_owned(),
+            },
+            fields: vec![FieldEntryDecl {
+                name: "title".to_owned(),
+                ty: FieldTypeDecl::Text,
+                presence: FieldPresence::Required,
+            }],
+            links: vec![LinkEntryDecl {
+                name: "tests".to_owned(),
+                target: LinkTargetDecl::Artifact,
+                cardinality: Cardinality::Many,
+                propagation: Propagation::Depends,
+                space: Some("file".to_owned()),
+                compare,
+                cover: false,
+            }],
         }],
-        links: vec![LinkEntryDecl {
-            name: "tests".to_owned(),
-            target: LinkTargetDecl::Artifact,
-            cardinality: Cardinality::Many,
-            propagation: Propagation::Depends,
-            compare,
-            cover: false,
-        }],
-    }])
+        &BTreeSet::from([Space::new("file").unwrap()]),
+    )
     .unwrap()
 }
 
@@ -83,8 +89,14 @@ fn shelf(schema: &Schema, bytes: &[u8]) -> Shelf {
     }];
     let asks: ArtifactAsks = Shelf::artifact_asks(schema, &readings);
     let found: ArtifactReadings = asks
-        .into_iter()
-        .map(|(p, c)| (p, ArtifactReading::of_bytes(bytes, &c, None)))
+        .iter()
+        .map(|(s, n, c)| {
+            (
+                s.clone(),
+                n.clone(),
+                ArtifactReading::of_bytes(bytes, c, None),
+            )
+        })
         .collect();
     Shelf::build(schema, readings, &found)
 }
@@ -128,6 +140,7 @@ fn a_change_of_comparison_is_written_with_the_file_the_link_and_both_comparisons
     let json = serde_json::to_value(&out).unwrap();
     assert_eq!(json["kind"], "artifact_comparison_changed");
     assert_eq!(json["artifact"], "tests/a.rs");
+    assert_eq!(json["space"], "file");
 }
 
 /// The diff item of `tests/a.rs` for an approval of `then` and the file `now`, both
@@ -142,12 +155,13 @@ fn diff_of(then: &[u8], now: &[u8]) -> DiffItemOut {
         .find(|i| matches!(i.role(), ItemRole::Artifact { .. }))
         .unwrap()
         .clone();
-    let state = *shelf(&lines, now)
+    let state = shelf(&lines, now)
         .doc(DocId::new(eid(1)))
         .unwrap()
         .artifact_links()["tests"]
         .artifacts()[0]
-        .state();
+        .state()
+        .clone();
     let now_item = ItemNow::Artifact(state);
     let changed = item.changed_from(&now_item);
     let diff = DiffItem {
@@ -170,7 +184,97 @@ fn the_diff_of_a_file_whose_lines_are_the_same_is_empty() {
 
     let other = diff_of(THEN, b"assert!(slow);\n");
     assert!(other.changed);
+    assert_eq!(other.now, Some("present"));
     let text = other.diff.unwrap();
     assert!(text.contains("-assert!(fast);"), "{text}");
     assert!(text.contains("+assert!(slow);"), "{text}");
+}
+
+#[test]
+fn an_artifact_that_cannot_be_told_is_unknown_and_not_absent_in_diff_and_trace() {
+    use whyshelf_core::domain::shelf::artifact::{ArtifactState, Untold};
+    let ledger = approved(&shelf(&schema(None), THEN));
+    let snapshot = Snapshot::of(&ledger, DocId::new(eid(1))).unwrap();
+    let item = snapshot
+        .items()
+        .iter()
+        .find(|i| matches!(i.role(), ItemRole::Artifact { .. }))
+        .unwrap()
+        .clone();
+    let now = ItemNow::Artifact(ArtifactState::Unknown(Untold::NoAnswer));
+    let diff = DiffItem {
+        changed: item.changed_from(&now),
+        item,
+        approved: Retrieval::Read(THEN.to_vec()),
+        now,
+        file: None,
+        current: None,
+    };
+    let names = Names::default();
+    let out = diff_item(&Namer(&names), &diff);
+    assert!(out.changed);
+    assert_eq!(out.now, Some("unknown"));
+    assert_eq!(out.current_hash, None);
+    let json = serde_json::to_value(&out).unwrap();
+    assert_eq!(json["now"], "unknown");
+    assert_eq!(json["item"]["name"], "tests/a.rs");
+    assert_eq!(json["item"]["path"], "tests/a.rs");
+
+    // The target of a trace says the same.
+    let s = Shelf::build(
+        &schema(None),
+        vec![DocReading::Parsed {
+            origin: rel("specs/sp-1.md"),
+            entries: BTreeMap::from([
+                (
+                    "id".to_owned(),
+                    RawValue::Text(DocId::new(eid(1)).to_string()),
+                ),
+                ("key".to_owned(), RawValue::Text("SP-1".to_owned())),
+                ("title".to_owned(), RawValue::Text("spec".to_owned())),
+                (
+                    "tests".to_owned(),
+                    RawValue::List(vec!["tests/a.rs".to_owned()]),
+                ),
+            ]),
+            body: "body\n".to_owned(),
+        }],
+        &ArtifactReadings::new(),
+    );
+    let artifact = &s.doc(DocId::new(eid(1))).unwrap().artifact_links()["tests"].artifacts()[0];
+    let target = serde_json::to_value(artifact_target(artifact)).unwrap();
+    assert_eq!(target["now"], "unknown");
+    assert_eq!(target["hash"], Value::Null);
+    assert_eq!(target["name"], "tests/a.rs");
+}
+
+#[test]
+fn a_change_of_the_links_to_artifacts_gives_the_space_only_when_every_name_agrees() {
+    use whyshelf_core::domain::shelf::artifact::{ArtifactKey, ArtifactName};
+    use whyshelf_core::domain::shelf::schema::EntryName;
+    let key = |space: &str, name: &str| {
+        ArtifactKey::new(Space::new(space).unwrap(), ArtifactName::new(name).unwrap())
+    };
+    let names = Names::default();
+    let namer = Namer(&names);
+    let cause = |added: Vec<ArtifactKey>, removed: Vec<ArtifactKey>| {
+        namer.cause(&Cause::ArtifactLinksChanged {
+            link: EntryName::new("tests").unwrap(),
+            added,
+            removed,
+        })
+    };
+
+    let same = cause(vec![key("file", "b.rs")], vec![key("file", "a.rs")]);
+    assert_eq!(same.space.as_deref(), Some("file"));
+
+    // The link moved from `file` to `other`: each name in its own space, no one space.
+    let moved = cause(vec![key("other", "a.rs")], vec![key("file", "a.rs")]);
+    assert_eq!(moved.kind, "links_changed");
+    assert_eq!(moved.space, None);
+    assert!(
+        moved.detail.contains("`a.rs` in `other`") && moved.detail.contains("`a.rs` in `file`"),
+        "{}",
+        moved.detail
+    );
 }

@@ -35,14 +35,15 @@ use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
-use crate::domain::shelf::artifact::ArtifactReadings;
+use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactReadings};
 use crate::domain::shelf::doc::{Doc, DocKey, LinkState, UnresolvedLink};
 use crate::domain::shelf::schema::{
     BookName, EntryName, ID_ENTRY, KEY_ENTRY, KeyForm, KeyPattern, KeyProblem, KeyTail,
 };
 
 use super::{
-    Candidate, DocProblem, DocReading, Judged, RawValue, Shelf, resolve_artifacts, resolve_links,
+    Candidate, DocProblem, DocReading, Judged, RawValue, Shelf, ask_of, resolve_artifacts,
+    resolve_links,
 };
 
 /// A key a new document may take: read in its book's grammar and written by no file
@@ -264,13 +265,30 @@ impl Shelf {
         Ok(NewKey { key })
     }
 
+    /// What the links to artifacts of a new document of `key`'s book with these
+    /// entries ask of the adapters: what [`Shelf::check_new`] is to be given the
+    /// answers for, as [`Shelf::artifact_asks`] is for the build. A book the shelf
+    /// does not declare asks nothing (`check_new` refuses it).
+    pub fn new_artifact_asks(
+        &self,
+        key: &NewKey,
+        entries: &BTreeMap<String, RawValue>,
+    ) -> ArtifactAsks {
+        let mut asks = ArtifactAsks::new();
+        if let Some(book) = self.schema.book(&key.key.book) {
+            ask_of(book, entries, &mut asks);
+        }
+        asks
+    }
+
     /// Whether a document with this identity, key, entries and body would be valid,
-    /// as the file `<book dir>/<key>.md`.
+    /// as the file `<book dir>/<key>.md`, with the answers `artifacts` of the adapters
+    /// for what [`Shelf::new_artifact_asks`] asked.
     ///
     /// The one place a new document is judged, and no second set of rules: the file
     /// it would be is read by the build's own reader and judged as the build judges
     /// it (fields and their types, required fields, enum words, links and their
-    /// counts, paths of links to artifacts), and its links are resolved in this
+    /// counts, names of links to artifacts), and its links are resolved in this
     /// shelf's index. `entries` are every entry but `id` and `key`, which come from
     /// `id` and `key`.
     // The problems are the answer, read once per request; it is not a hot path.
@@ -281,6 +299,7 @@ impl Shelf {
         key: &NewKey,
         mut entries: BTreeMap<String, RawValue>,
         body: String,
+        artifacts: &ArtifactReadings,
     ) -> Result<NewDoc, NewDocProblem> {
         for name in [ID_ENTRY, KEY_ENTRY] {
             if entries.contains_key(name) {
@@ -309,16 +328,14 @@ impl Shelf {
             entries: entries.clone(),
             body,
         };
-        match Candidate::read(&self.schema, reading).judge() {
+        match Candidate::read(&self.schema, reading, artifacts).judge() {
             Judged::Valid {
                 draft,
                 links,
                 artifact_links,
             } => {
                 let links = resolve_links(&self.index, links);
-                // What is at the paths changes nothing of validity (rule A1), so the
-                // new document is made without reading them.
-                let artifact_links = resolve_artifacts(&ArtifactReadings::new(), artifact_links);
+                let artifact_links = resolve_artifacts(artifacts, artifact_links);
                 Ok(NewDoc {
                     doc: Doc::new(draft, links, artifact_links),
                     entries,

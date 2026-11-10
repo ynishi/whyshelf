@@ -1,7 +1,7 @@
 //! The use case that declares an edit keeps the meaning: `judge same`.
 //!
 //! ```text
-//!   reference or path ---- resolve -----------------> a SameMeaningTarget
+//!   reference or name ---- resolve -----------------> a SameMeaningTarget
 //!   target            ---- frame_same_meaning ------> what to declare (every earlier
 //!                                                     hash an approval pinned), or a
 //!                                                     SameMeaningRefusal
@@ -17,8 +17,8 @@
 use crate::domain::actor::Actor;
 use crate::domain::hash::ContentHash;
 use crate::domain::id::DocId;
-use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonBlank;
+use crate::domain::shelf::artifact::{ArtifactKey, ArtifactName};
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::ledger::{
     Ledger, Record, SameMeaning, SameMeaningOf, SameMeaningTarget, frame_same_meaning,
@@ -36,8 +36,8 @@ use super::read::identity;
 pub enum SameMeaningAbout {
     /// A document, by a reference.
     Doc(Reference),
-    /// A file that is no document, by its path under the root.
-    Artifact(RelPath),
+    /// An artifact, by its name, in the one space the documents link it in.
+    Artifact(ArtifactName),
 }
 
 /// A request to declare that an edit keeps the meaning.
@@ -64,10 +64,10 @@ pub enum DeclaredAbout {
         /// Its key.
         key: Option<DocKey>,
     },
-    /// A file.
+    /// An artifact.
     Artifact {
-        /// Its path.
-        path: RelPath,
+        /// Its space and its name.
+        artifact: ArtifactKey,
     },
 }
 
@@ -84,9 +84,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// Declare, in order and on one reading, that each edit named keeps the meaning,
     /// and append every declaration, or none.
     ///
-    /// Refused (nothing written): a document that is not valid, a path no document
-    /// links or with no file, and an edit no approval that stands pinned another hash
-    /// of (or one already declared).
+    /// Refused (nothing written): a document that is not valid, a name of an
+    /// artifact no document links, linked in two spaces, with nothing behind it now
+    /// or that cannot be told now, and an edit no approval that stands pinned another
+    /// hash of (or one already declared).
     pub async fn same_meaning(
         &mut self,
         requests: Vec<SameMeaningRequest>,
@@ -122,7 +123,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
             SameMeaningAbout::Doc(reference) => {
                 SameMeaningTarget::Doc(identity(loaded, reference)?)
             }
-            SameMeaningAbout::Artifact(path) => SameMeaningTarget::Artifact(path.clone()),
+            SameMeaningAbout::Artifact(name) => SameMeaningTarget::Artifact(name.clone()),
         };
         let of = frame_same_meaning(&loaded.shelf, &loaded.ledger, target, request.from)?;
         let about = match &of {
@@ -130,7 +131,9 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 id: *id,
                 key: loaded.shelf.doc(*id).map(|doc| doc.key().clone()),
             },
-            SameMeaningOf::Artifact { path, .. } => DeclaredAbout::Artifact { path: path.clone() },
+            SameMeaningOf::Artifact { artifact, .. } => DeclaredAbout::Artifact {
+                artifact: artifact.clone(),
+            },
         };
 
         let actor = match request.actor {

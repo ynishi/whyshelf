@@ -7,11 +7,12 @@
 //! [`Row`], with what the model said about it, and shows no more than the model said.
 //!
 //! ```text
-//!   BookSchemaSource -> Schema::validate -+
-//!                                         |  dirs of the books
-//!   DocSource <---------------------------+
+//!   BookSchemaSource -> Schema::validate <- ArtifactSource::spaces
+//!                          |  dirs of the books
+//!   DocSource <------------+
 //!        |
-//!        v  readings --Shelf::artifact_asks--> ArtifactSource (hashes, address?, or absent)
+//!        v  readings --Shelf::artifact_asks--> ArtifactSource::resolve (per space: present,
+//!        |                                     absent, cannot tell, or not a name)
 //!        |                                            |
 //!        v                                            v  ArtifactReadings
 //!   Shelf::build <------------------------------------+
@@ -21,7 +22,7 @@
 //!   LedgerRead -> Ledger::build
 //!   Clock ---------------------------------------^ (now)
 //!
-//!   (no path written in a link to artifacts: the ArtifactSource is not asked)
+//!   (no name written in a link to artifacts: the ArtifactSource is not asked to resolve)
 //! ```
 
 use crate::domain::id::DocId;
@@ -48,9 +49,9 @@ pub(super) struct Loaded {
     /// again with the ones it adds.
     pub(super) records: Vec<Record>,
     pub(super) unreadable: Vec<UnreadableRecord>,
-    /// What the artifact source found at the paths the documents link to, with the
-    /// addresses: a judgement keeps the address of what it pinned from here, so the
-    /// address and the hash are of one reading.
+    /// What the artifact source answered for the names the documents link to, with
+    /// the addresses: a judgement keeps the address of what it pinned from here, so
+    /// the address and the hash are of one reading.
     pub(super) artifacts: ArtifactReadings,
     pub(super) now: JudgedAt,
 }
@@ -74,7 +75,7 @@ pub(super) async fn schema_of<P: ShelfRead>(
         .declarations()
         .await
         .map_err(port(ShelfPort::Schema))?;
-    Ok(Schema::validate(decls))
+    Ok(Schema::validate(decls, &ports.artifacts().spaces()))
 }
 
 /// Read the documents and the ledger and build the shelf and the ledger.
@@ -94,7 +95,7 @@ pub(super) async fn load_with<P: ShelfRead>(
     } else {
         ports
             .artifacts()
-            .read_artifacts(&asks)
+            .resolve(&asks)
             .await
             .map_err(port(ShelfPort::Artifacts))?
     };

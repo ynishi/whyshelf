@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794326110029,
+  "expires": null,
+  "frame": [
+    {
+      "address": "236356d44da069035f8ddf19d7a69445bf8acd4a",
+      "hash": "sha256:e5215bb3745ef02a80711bbdbaaa3998a3bfdacd680180831d4add57c39fff78",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-36e2-72bb-8529-f374820e1565"
+    },
+    {
+      "address": "257107f9c4cfa8d4e68128f4526c814bad5edcf8",
+      "hash": "sha256:3dee90053e30522f4e521b929944c3e772a08261b80be3834f10916f64cae9b9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1137-7513-ab9a-0c7fb1ba82da"
+    }
+  ],
+  "id": "01a1c62b-9fbe-7380-acc7-ea0d347e23d9",
+  "kind": "decision",
+  "reason": "Everything outside the documents is an artifact of a space, files one of them (#38); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "e54fbb6995c5a4cab6723c7bdfbf72c351c7545a",
+  "seen": "sha256:5a6a5c02c00de310d05b1d2c6ec559598820aa811cb27420df4ae705c4463f6a",
+  "seen_address": "8ba81dcf51cdcd2f0551645a788829904b9c7530",
+  "subject": "01a1c60b-bb53-7733-93f1-bf8478b9df23",
+  "v": 1,
+  "verb": "approve"
+}

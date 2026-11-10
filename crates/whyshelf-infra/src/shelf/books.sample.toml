@@ -76,4 +76,5 @@ means = "informs"
 [[book.link]]
 name = "tests"              # the tests that show it holds: files, by path; editing one makes it stale
 target = "artifact"
+space = "file"              # the space its names are in: here the files, by path under the root
 means = "depends"

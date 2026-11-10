@@ -7,7 +7,8 @@ use std::collections::BTreeSet;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::artifact::ArtifactHash;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, docid, fr, fr_titled, jid, ledger, path, shelf, shelf_with, sp_testing,
+    actor, approve, docid, file_artifact, fr, fr_titled, jid, ledger, name, shelf, shelf_with,
+    sp_testing,
 };
 use crate::domain::shelf::ledger::{
     JudgedAt, Record, Revocation, SameMeaning, SameMeaningOf, SameMeaningTarget, frame_same_meaning,
@@ -311,7 +312,7 @@ fn a_declared_change_of_a_file_is_a_notice_and_not_a_cause() {
     let records = declared(
         &now,
         approvals(&then, &[1, 2]),
-        SameMeaningTarget::Artifact(path("tests/a.rs")),
+        SameMeaningTarget::Artifact(name("tests/a.rs")),
         2001,
     );
     let assessment = assess(&now, &ledger(records.clone()), JudgedAt::new(100));
@@ -319,7 +320,7 @@ fn a_declared_change_of_a_file_is_a_notice_and_not_a_cause() {
     assert!(assessment.roots_of(docid(2)).is_empty());
     assert!(
         matches!(assessment.notices_of(docid(2)), [Notice::ArtifactSameMeaning { pin, now, declared }]
-            if pin.path() == &path("tests/a.rs")
+            if pin.artifact() == &file_artifact("tests/a.rs")
                 && *now == h("b")
                 && declared.clone().into_vec() == [jid(2001)]),
         "{:?}",
@@ -345,7 +346,7 @@ fn a_declaration_about_another_path_keeps_no_change_of_a_file() {
     records.push(declaration(
         2001,
         SameMeaningOf::Artifact {
-            path: path("tests/other.rs"),
+            artifact: file_artifact("tests/other.rs"),
             from: NonEmptySet::from_set(BTreeSet::from([h("a")])).unwrap(),
             to: h("b"),
         },
