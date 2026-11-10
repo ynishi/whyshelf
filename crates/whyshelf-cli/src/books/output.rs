@@ -26,9 +26,10 @@ use whyshelf_core::domain::shelf::doc::{
     Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy, normalize,
 };
 use whyshelf_core::domain::shelf::freshness::{
-    Cause, Freshness, FreshnessLevel, Notice, RootCause, Severity, Standing, StandingKind,
+    Cause, Freshness, FreshnessLevel, Notice, Origin, RootCause, Severity, Standing, StandingKind,
     Successors, UpstreamStatus,
 };
+use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin, Record};
 use whyshelf_core::domain::shelf::schema::Propagation;
 use whyshelf_infra::shelf::ledger::to_json;
@@ -342,8 +343,46 @@ pub struct StaleEntryOut {
 pub struct StaleOut {
     /// The approvals that do not hold, strongest first.
     pub stale: Vec<StaleEntryOut>,
+    /// Where they start: each document, file, cycle or the declaration an event
+    /// starts at, with the approvals of `stale` it degrades; the one that degrades
+    /// the most first.
+    pub origins: Vec<OriginOut>,
     /// What is wrong around the documents.
     pub health: HealthOut,
+}
+
+/// Where the degradations of approvals start, with what they degrade.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct OriginOut {
+    /// Where it starts.
+    pub start: StartOut,
+    /// The approvals it degrades, each also an entry of `stale`, by identity.
+    pub degraded: Vec<DocRef>,
+}
+
+/// The thing an origin is.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum StartOut {
+    /// A document (its key is null when no valid document has it now).
+    Doc {
+        /// The document.
+        doc: DocRef,
+    },
+    /// A file that is no document.
+    Artifact {
+        /// Its path from the project root.
+        path: String,
+    },
+    /// The declaration of the books: a link to files declares another comparison.
+    Declaration,
+    /// A cycle (see `health.cycles`).
+    Cycle {
+        /// `links` or `frames`.
+        among: &'static str,
+        /// Its smallest member, by identity.
+        smallest: DocRef,
+    },
 }
 
 /// What an item of an approval is, and which document or file it names.
@@ -1123,6 +1162,29 @@ pub fn stale(report: &StaleReport) -> StaleOut {
             .map(|e| StaleEntryOut {
                 row: namer.row(&e.row),
                 roots: e.roots.iter().map(|r| namer.root(r)).collect(),
+            })
+            .collect(),
+        origins: report
+            .origins
+            .iter()
+            .map(|group| OriginOut {
+                start: match &group.origin {
+                    Origin::Doc(id) => StartOut::Doc {
+                        doc: namer.doc(*id),
+                    },
+                    Origin::Artifact(path) => StartOut::Artifact {
+                        path: path.to_string(),
+                    },
+                    Origin::Declaration => StartOut::Declaration,
+                    Origin::Cycle(cycle) => StartOut::Cycle {
+                        among: match cycle.source {
+                            CycleSource::Links => "links",
+                            CycleSource::Frames => "frames",
+                        },
+                        smallest: namer.doc(cycle.min),
+                    },
+                },
+                degraded: group.degraded.iter().map(|id| namer.doc(*id)).collect(),
             })
             .collect(),
         health: namer.health(&report.health),

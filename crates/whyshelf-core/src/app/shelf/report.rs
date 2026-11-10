@@ -16,7 +16,9 @@ use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::Artifact;
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
-use crate::domain::shelf::freshness::{Notice, RootCause, Severity, Standing, Successors};
+use crate::domain::shelf::freshness::{
+    Notice, OriginGroup, RootCause, Severity, Standing, Successors,
+};
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{Decision, DeclaredStatus, LedgerProblem, Record};
 use crate::domain::shelf::schema::{BookDir, BookName, EntryName, Propagation, SchemaProblem};
@@ -241,6 +243,10 @@ pub struct StaleEntry {
 pub struct StaleReport {
     /// The documents, the strongest degradation first.
     pub entries: Vec<StaleEntry>,
+    /// Where their degradations start ([`Assessment::origins`]).
+    ///
+    /// [`Assessment::origins`]: crate::domain::shelf::freshness::Assessment::origins
+    pub origins: Vec<OriginGroup>,
     /// The keys of the valid documents.
     pub names: Names,
     /// What is wrong around them.

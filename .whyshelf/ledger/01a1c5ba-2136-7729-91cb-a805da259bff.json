@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794318672164,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c5ba-2136-7729-91cb-a805da259bff",
+  "kind": "decision",
+  "reason": "Stale approvals grouped by origin, and the roots of a cycle fixed (#34); checked against the code by three rounds of blind review, every finding fixed",
+  "revision": "1eca61bff39d16be1c6ae951d3ce759c6b047eb3",
+  "seen": "sha256:154cd23b238ef2bcd7a3fb2b4b9023dd00fa2af74a745ed4bf3b19241fad3b98",
+  "seen_address": "e7415364985d80818783ddf6b0233f10086eb8d4",
+  "subject": "01a1c5ae-35b6-756c-b038-516ab13dba0b",
+  "v": 1,
+  "verb": "approve"
+}
