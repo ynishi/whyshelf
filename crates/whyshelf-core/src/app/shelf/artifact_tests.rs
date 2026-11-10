@@ -40,7 +40,7 @@ fn project() -> ShelfApp<FakeShelf> {
 fn approval_of(record: &Record) -> &DecisionVerb {
     match record {
         Record::Decision(d) => d.verb(),
-        Record::Revocation(_) => panic!("a decision"),
+        Record::Revocation(_) | Record::SameMeaning(_) => panic!("a decision"),
     }
 }
 
