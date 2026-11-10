@@ -1,0 +1,61 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "815e2dcbb23129a478a14e6ce0da9e25b9f48a27",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:60faf5bf1f5b4005b732d30dfa882b15104dc27293ac0282fd1e87f854c18d1d",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/ledger/merge_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "4bdd4e3987e9d2cdecf88a0f9c601dc398db7ac6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:97548159de5f67e3c13c9c87e9787af96c4d37585b5ce852f0d862a42c8340f4",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c9e0c1cbf9eba08917b62a3645be0d738db08354",
+      "hash": "sha256:b60dc0295376775317aeadb9163db6701fe53a561caf10aeda377a21d288aefc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3ad8-7753-b9e1-a7cd0b06ed77"
+    }
+  ],
+  "id": "01a1c4c0-ab64-77fd-9fec-24c9817b317d",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:9b53677b0838c08e1f6c37c9796cdb2fa12d95f1a85654fc07749310bcdb06e5",
+  "seen_address": "e65f8a68cb185a38638acef1a1e8cbbd7066c886",
+  "subject": "01a1c332-3e2b-7840-9c1e-c6aebdf917a0",
+  "v": 1,
+  "verb": "approve"
+}

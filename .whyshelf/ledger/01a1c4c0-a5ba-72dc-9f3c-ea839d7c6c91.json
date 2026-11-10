@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c4c0-a5ba-72dc-9f3c-ea839d7c6c91",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:6413fb022d918e9b67affc8898f52ddaa70a8d333dcfc36e5271f16e99ba6448",
+  "seen_address": "3d50f9bfdfdcf5d8fee877704a937e7d7c556707",
+  "subject": "01a1c4ba-118b-7565-a3b3-dc05a9e6d947",
+  "v": 1,
+  "verb": "approve"
+}

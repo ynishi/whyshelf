@@ -1,0 +1,48 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "fb5d348ec63da10c858dfc33c6613ab174bf2972",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8933bae4f557ee88e3bebc58cf33cd0256916b048e0f40a67056055e3cb59b96",
+      "link": "tests",
+      "path": "crates/whyshelf-core/tests/architecture.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dae3757e45ed11e17555e947ab3ee7c4a608d7ed",
+      "hash": "sha256:e66e1400f2d96c737ce0eaab3cfbe6b27a8c4e2512bd95a6daa2d90d1927a836",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "22"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-155d-70fa-a267-9044c79b42b7"
+    }
+  ],
+  "id": "01a1c4c0-b282-76a5-911d-5ab693f67468",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:9265402b73f0f68db22bea24c06108afd006c3f4311ca54040bd9566be73d087",
+  "seen_address": "6d9b5fb713b58de794768c51cf7dadc6ae1263cb",
+  "subject": "01a1c4ba-1c7a-7445-809d-046cf7ef0267",
+  "v": 1,
+  "verb": "approve"
+}

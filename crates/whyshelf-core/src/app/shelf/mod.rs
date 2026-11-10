@@ -54,6 +54,8 @@ mod same_meaning;
 mod withdraw;
 
 #[cfg(test)]
+mod actor_tests;
+#[cfg(test)]
 mod artifact_tests;
 #[cfg(test)]
 mod comparison_tests;
@@ -63,6 +65,8 @@ mod fake_tests;
 mod new_doc_tests;
 #[cfg(test)]
 mod same_meaning_tests;
+#[cfg(test)]
+mod successor_tests;
 #[cfg(test)]
 mod tests;
 

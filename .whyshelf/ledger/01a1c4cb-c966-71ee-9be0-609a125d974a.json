@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794303051580,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7a0fa8445db99cc2b3aa9bccdd872eebc1637040",
+      "hash": "sha256:9d1ae80161aeaff8ad8f262133a0496e0ee423bf34e93f076cca8209bfcf9330",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    }
+  ],
+  "id": "01a1c4cb-c966-71ee-9be0-609a125d974a",
+  "kind": "decision",
+  "reason": "Corrected to what the code does after an independent review of the books; the tests the verifications link were added or extended; just check green",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:c51cec385698091a6ec82b8355a7f68a46af4794e6f439d061e632c7f91d43c9",
+  "seen_address": "a7ccf62e0bb738ae532cf9db8d22227311bd524c",
+  "subject": "01a1c4ba-1465-7320-b3cb-05827d35ef01",
+  "v": 1,
+  "verb": "approve"
+}
