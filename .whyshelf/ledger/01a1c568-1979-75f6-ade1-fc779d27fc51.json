@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794313295816,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e9417e937c515717990db4ed17437f59a1deb458",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "address": "f6cb259a5a8d83789537b427c16fa5dffba688e9",
+      "hash": "sha256:47590abbdbc9d25aad5eb6e15b5dab769a95fc6d35ecea687cd208b08df8395f",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-382f-717a-938e-9014e2c69bed"
+    }
+  ],
+  "id": "01a1c568-1979-75f6-ade1-fc779d27fc51",
+  "kind": "decision",
+  "reason": "Rules moved to the split decisions or stated once, links and tests updated (#30); checked by a blind review",
+  "revision": "ac7c70ca304e62858ea0ec500664b74cc207164f",
+  "seen": "sha256:dbf9ac4be66b8a74faf566c6b866c10c21c86466a959ccab7ee03d44a20eb38a",
+  "seen_address": "f38d9b5bf5a057913698a1a68cb5d46dab27dd45",
+  "subject": "01a1c4ba-131c-70e3-ae5e-e8e75931bc90",
+  "v": 1,
+  "verb": "approve"
+}

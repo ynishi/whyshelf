@@ -23,7 +23,7 @@ use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::shelf::artifact::{Artifact, Comparison};
 use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence};
 use whyshelf_core::domain::shelf::doc::{
-    Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy,
+    Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy, normalize,
 };
 use whyshelf_core::domain::shelf::freshness::{
     Cause, Freshness, FreshnessLevel, Notice, RootCause, Severity, Standing, StandingKind,
@@ -31,7 +31,6 @@ use whyshelf_core::domain::shelf::freshness::{
 };
 use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin, Record};
 use whyshelf_core::domain::shelf::schema::Propagation;
-use whyshelf_infra::shelf::docs::normalize;
 use whyshelf_infra::shelf::ledger::to_json;
 
 /// A document named in an answer: its identity, and its key when it is valid.

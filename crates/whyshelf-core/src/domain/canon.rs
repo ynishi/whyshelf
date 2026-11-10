@@ -44,11 +44,8 @@
 //!
 //! # Text rule
 //!
-//! Text is normalized once, by the adapter that reads a file, before it is
-//! parsed: line breaks become LF, the trailing spaces and tabs of each line are
-//! removed, and the end of the file becomes exactly one LF. Nothing else is
-//! changed (no Unicode normalization). The domain receives text already in this
-//! form and does not repeat the step.
+//! A canon holds a text as it is given. The one rule that normalizes a
+//! document's text is [`normalize`](crate::domain::shelf::doc::normalize).
 
 use std::collections::BTreeMap;
 
