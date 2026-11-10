@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794303051580,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c4cb-c750-732b-adf7-8b421c70c555",
+  "kind": "decision",
+  "reason": "Corrected to what the code does after an independent review of the books; the tests the verifications link were added or extended; just check green",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+  "seen_address": "7aa6703f46c5b700606ac9f1d9706033cc1ee9d2",
+  "subject": "01a1c4ba-1073-7374-81ec-909d2fd379d1",
+  "v": 1,
+  "verb": "approve"
+}

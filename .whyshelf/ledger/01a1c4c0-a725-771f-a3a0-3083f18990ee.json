@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794302321489,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e9417e937c515717990db4ed17437f59a1deb458",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "address": "4c7249616f3cdf6543c6c7580b1a1089d16d4c4c",
+      "hash": "sha256:12d0ef125cbcd802b9c30ee05d731c00b709f99d322533c22cb90ba2b3842a5e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    }
+  ],
+  "id": "01a1c4c0-a725-771f-a3a0-3083f18990ee",
+  "kind": "decision",
+  "reason": "The specification the code and its RustDoc hold, written into the books and read against the code; each verification links tests that pass (just check green)",
+  "revision": "18e7dd8a358adf08304029589fea61bafcf667d4",
+  "seen": "sha256:422c36ecf368f8e4842ab494c2be46a1bf38da4fe4ec3e202185e070da311f86",
+  "seen_address": "68c0bd65b98123c8099c573b0159da39384bd3d4",
+  "subject": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157",
+  "v": 1,
+  "verb": "approve"
+}

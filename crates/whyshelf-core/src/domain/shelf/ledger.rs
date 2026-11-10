@@ -2133,6 +2133,12 @@ mod artifact_tests;
 #[cfg(test)]
 mod comparison_tests;
 #[cfg(test)]
+mod frame_tests;
+#[cfg(test)]
+mod merge_tests;
+#[cfg(test)]
+mod revocation_tests;
+#[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]
 mod tests;
