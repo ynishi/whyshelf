@@ -20,6 +20,7 @@ use whyshelf_core::domain::shelf::snapshot::{
 
 use super::textdiff;
 use whyshelf_core::domain::id::DocId;
+use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::artifact::{Artifact, Comparison};
 use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence};
 use whyshelf_core::domain::shelf::doc::{
@@ -95,7 +96,7 @@ pub struct CauseOut {
 pub struct NoticeOut {
     /// What kind (`informs_not_fresh`, `informs_unresolved`, `upstream_expired`,
     /// `self_same_meaning`, `upstream_same_meaning`, `artifact_same_meaning`,
-    /// `not_covered`).
+    /// `not_covered`, `artifact_absent`).
     pub kind: &'static str,
     /// The link; empty for a notice about the document itself.
     pub link: String,
@@ -210,6 +211,22 @@ pub struct BooksCheckOut {
     /// The documents a covering link (`cover = true`) is expected to reach and does
     /// not; any makes `clean` false.
     pub uncovered: Vec<UncoveredOut>,
+    /// The paths of pending and approved documents that name no file; they leave
+    /// `clean` as it is, since a path may name evidence not written yet.
+    pub absent: Vec<AbsentOut>,
+}
+
+/// A path a link to artifacts writes that names no file.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct AbsentOut {
+    /// The document.
+    pub doc: DocRef,
+    /// The link.
+    pub link: String,
+    /// The path as written.
+    pub path: String,
+    /// A sentence for a person.
+    pub detail: String,
 }
 
 /// A document a covering link is expected to reach and does not.
@@ -528,6 +545,20 @@ pub struct JudgedOut {
     pub record: Value,
     /// For a deprecation, what replaces the document.
     pub successors: Vec<DocRef>,
+    /// For an approval, the paths of the document's links to artifacts that name
+    /// no file; a `depends` link pinned each as absent.
+    pub absent: Vec<AbsentPathOut>,
+}
+
+/// A path of a link to artifacts that names no file.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct AbsentPathOut {
+    /// The link.
+    pub link: String,
+    /// The path as written.
+    pub path: String,
+    /// A sentence for a person.
+    pub detail: String,
 }
 
 /// A key written in a link of a new document that no valid document answers to now.
@@ -815,7 +846,10 @@ impl Namer<'_> {
             Cause::ArtifactGone { pin } => artifact(
                 "artifact_gone",
                 pin,
-                format!("`{}` was there when it was pinned and is gone", pin.path()),
+                format!(
+                    "`{}` was there when it was pinned and is gone (a path is compared as written, ASCII case included)",
+                    pin.path()
+                ),
             ),
             Cause::ArtifactArrived { pin, now } => artifact(
                 "artifact_arrived",
@@ -926,6 +960,14 @@ impl Namer<'_> {
                     "`{}` changed since it was pinned (now {now}), and the change was declared to keep the meaning",
                     pin.path()
                 ),
+            },
+            Notice::ArtifactAbsent { link, path } => NoticeOut {
+                kind: "artifact_absent",
+                link: link.to_string(),
+                target: None,
+                artifact: Some(path.to_string()),
+                declared: Vec::new(),
+                detail: absent_detail(path),
             },
             Notice::NotCovered { book, link } => NoticeOut {
                 kind: "not_covered",
@@ -1081,11 +1123,13 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             books: Vec::new(),
             health: None,
             uncovered: Vec::new(),
+            absent: Vec::new(),
         },
         BooksCheck::Checked {
             books,
             health,
             uncovered,
+            absent,
         } => {
             let names = Names::default();
             BooksCheckOut {
@@ -1110,6 +1154,18 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                         },
                         book: u.book.to_string(),
                         link: u.link.to_string(),
+                    })
+                    .collect(),
+                absent: absent
+                    .iter()
+                    .map(|a| AbsentOut {
+                        doc: DocRef {
+                            id: a.doc.to_string(),
+                            key: a.key.as_ref().map(ToString::to_string),
+                        },
+                        link: a.link.to_string(),
+                        path: a.path.to_string(),
+                        detail: absent_detail(&a.path),
                     })
                     .collect(),
             }
@@ -1350,6 +1406,15 @@ pub fn judged(all: &[Judged]) -> JudgedAllOut {
                     .as_ref()
                     .map(|s| namer.successors(s))
                     .unwrap_or_default(),
+                absent: judged
+                    .absent
+                    .iter()
+                    .map(|(link, path)| AbsentPathOut {
+                        link: link.to_string(),
+                        path: path.to_string(),
+                        detail: absent_detail(path),
+                    })
+                    .collect(),
             })
             .collect(),
     }
@@ -1460,6 +1525,13 @@ fn presence(presence: &DocPresence) -> PresenceOut {
             unreadable: unreadable.iter().map(ToString::to_string).collect(),
         },
     }
+}
+
+/// The sentence for a path that names no file.
+fn absent_detail(path: &RelPath) -> String {
+    format!(
+        "`{path}` names no file: the evidence is not written yet, or the path is wrong (it is compared as written, ASCII case included)"
+    )
 }
 
 fn declared(status: &DeclaredStatus) -> (&'static str, Option<i64>) {

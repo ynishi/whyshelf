@@ -116,7 +116,25 @@ pub enum BooksCheck {
         /// [`Notice::NotCovered`](crate::domain::shelf::freshness::Notice::NotCovered)
         /// notices of every document).
         uncovered: Vec<Uncovered>,
+        /// The paths of pending and approved documents that name no file (the
+        /// [`Notice::ArtifactAbsent`](crate::domain::shelf::freshness::Notice::ArtifactAbsent)
+        /// notices of every document). They leave the check clean: a path may name
+        /// evidence not written yet.
+        absent: Vec<Absent>,
     },
+}
+
+/// A path a link to artifacts writes that names no file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Absent {
+    /// The document.
+    pub doc: DocId,
+    /// Its key.
+    pub key: Option<DocKey>,
+    /// The link.
+    pub link: EntryName,
+    /// The path as written.
+    pub path: RelPath,
 }
 
 /// A document a covering link is expected to reach and does not.
@@ -322,4 +340,8 @@ pub struct Judged {
     pub key: Option<DocKey>,
     /// For a deprecation, the documents that take the place of the one deprecated.
     pub successors: Option<Successors>,
+    /// For an approval, the paths of the document's links to artifacts that name
+    /// no file ([`Doc::absent_artifacts`]); a `depends` link pins each as absent.
+    /// Empty otherwise.
+    pub absent: Vec<(EntryName, RelPath)>,
 }

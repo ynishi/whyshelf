@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794319956029,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c5cd-b852-72f0-a698-7f3534684aa4",
+  "kind": "decision",
+  "reason": "Paths with no file are told, and ASCII case counts on every system (#36); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "dee0eb16050d3127b3a65cd27adff7039ed14388",
+  "seen": "sha256:10e810a639aaf8862467223fb3d6fab4a6e49048a15735227cbc8f3ccf96084d",
+  "seen_address": "ebfe7903e87f1d60355d0c3b785551c5461f2c26",
+  "subject": "01a1c5c5-76bb-7406-baf2-34057dc6d552",
+  "v": 1,
+  "verb": "approve"
+}
