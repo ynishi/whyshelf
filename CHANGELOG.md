@@ -28,6 +28,9 @@ and this project adheres to
   (#22).
 - `whyshelf stale --exit-code`, and `just check` (so CI) fails when the
   repository's own books are not clean or an approval does not hold (#24).
+- Every row of an answer carries `decision`: the decision that stands about
+  the document, with its record's `judgement` id, `actor`, `at` and `reason`
+  (#32).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
