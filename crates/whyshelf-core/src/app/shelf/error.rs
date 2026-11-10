@@ -139,6 +139,19 @@ pub enum ShelfError {
         /// The entry.
         name: String,
     },
+    /// An item (`name+=text`) was given for an entry the book does not read as a
+    /// list.
+    #[error("`{name}` is no list field or link of the book, so it takes no item")]
+    ItemOfNoList {
+        /// The entry.
+        name: String,
+    },
+    /// An item (`name+=text`) with nothing in it but white space.
+    #[error("the item given for `{name}` is empty")]
+    EmptyItem {
+        /// The entry.
+        name: String,
+    },
     /// A file is already where the new document would be written (a file whose key
     /// is not its name); nothing was written.
     #[error("{path} is already there; nothing was written")]
@@ -180,6 +193,8 @@ impl ShelfError {
             | Self::ClaimKey(_)
             | Self::NewDoc(_)
             | Self::EntryTwice { .. }
+            | Self::ItemOfNoList { .. }
+            | Self::EmptyItem { .. }
             | Self::FileTaken { .. } => ErrorClass::Request,
             // As a reference that names nothing and a revocation of nothing: a path or
             // a hash that names nothing pinned, an earlier hash that cannot be told

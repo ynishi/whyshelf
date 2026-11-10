@@ -52,8 +52,9 @@ pub enum BooksCommand {
         /// The key (default: the book's next number; a book of slugs needs one).
         #[arg(long)]
         key: Option<String>,
-        /// More entries, `<entry>=<value>`. A list field or a link takes `a,b`; a
-        /// truth value `true` or `false`; a whole number its digits. Links are keys.
+        /// More entries, `<entry>=<value>`. A list field or a link takes `a,b`, or one
+        /// item at a time with `<entry>+=<item>`, commas kept; a truth value `true` or
+        /// `false`; a whole number its digits. Links are keys.
         entries: Vec<String>,
         /// The body.
         #[arg(long)]

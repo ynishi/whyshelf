@@ -41,8 +41,14 @@ pub struct NewDocRequest {
     /// The key, as typed; `None` is the book's next key.
     pub key: Option<String>,
     /// The entries of the front matter as typed, `name` and text, in order (`id` and
-    /// `key` are whyshelf's).
+    /// `key` are whyshelf's). A list field or a link reads its text as items split
+    /// at commas.
     pub entries: Vec<(String, String)>,
+    /// Items of a list field or a link, `name` and one item each, as typed (commas
+    /// included, white space around it left out), in order: each is appended after
+    /// the items of the entry of that name, if any. An item for a field that is no
+    /// list, and an item of nothing, are refused.
+    pub items: Vec<(String, String)>,
     /// The body.
     pub body: String,
 }
@@ -74,7 +80,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
             Some(text) => shelf.claim_key(&request.book, text)?,
             None => shelf.next_key(&request.book)?,
         };
-        let entries = typed_entries(shelf, &request.book, request.entries)?;
+        let entries = typed_entries(shelf, &request.book, request.entries, request.items)?;
         let id = self
             .ports
             .ids()
@@ -116,6 +122,7 @@ fn typed_entries(
     shelf: &Shelf,
     book: &BookName,
     texts: Vec<(String, String)>,
+    items: Vec<(String, String)>,
 ) -> Result<BTreeMap<String, RawValue>, ShelfError> {
     let schema = shelf.schema().book(book);
     let mut entries = BTreeMap::new();
@@ -128,7 +135,36 @@ fn typed_entries(
             return Err(ShelfError::EntryTwice { name });
         }
     }
+    for (name, item) in items {
+        if !schema.is_some_and(|schema| is_list(schema, &name)) {
+            return Err(ShelfError::ItemOfNoList { name });
+        }
+        // As an item split from `a, b` is: white space around it does not count,
+        // and an item of nothing is no item.
+        let item = item.trim().to_owned();
+        if item.is_empty() {
+            return Err(ShelfError::EmptyItem { name });
+        }
+        match entries
+            .entry(name)
+            .or_insert_with(|| RawValue::List(Vec::new()))
+        {
+            RawValue::List(list) => list.push(item),
+            // `typed` reads every entry of a list field or a link as a list.
+            other => *other = RawValue::List(vec![item]),
+        }
+    }
     Ok(entries)
+}
+
+/// Whether the book reads the entry `name` as a list: a list field or a link.
+fn is_list(book: &BookSchema, name: &str) -> bool {
+    book.links().contains_key(name)
+        || book.artifact_links().contains_key(name)
+        || matches!(
+            book.fields().get(name).map(|decl| &decl.ty),
+            Some(FieldType::TextList)
+        )
 }
 
 /// One text as the value its declaration asks for, or as the text it is when it does
