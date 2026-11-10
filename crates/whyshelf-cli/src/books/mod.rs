@@ -305,16 +305,23 @@ fn new_request(
         .into_iter()
         .map(|title| ("title".to_owned(), title))
         .collect();
+    // `name+=text` is one item of a list, exactly as written; `name=text` an entry.
+    let mut items = Vec::new();
     for entry in entries {
         let (name, value) = entry
             .split_once('=')
-            .ok_or_else(|| format!("`{entry}` is not `<entry>=<value>`"))?;
-        pairs.push((name.to_owned(), value.to_owned()));
+            .ok_or_else(|| format!("`{entry}` is not `<entry>=<value>` or `<entry>+=<item>`"))?;
+        match name.strip_suffix('+') {
+            Some("") => return Err(format!("`{entry}` names no entry before `+=`")),
+            Some(name) => items.push((name.to_owned(), value.to_owned())),
+            None => pairs.push((name.to_owned(), value.to_owned())),
+        }
     }
     Ok(NewDocRequest {
         book,
         key,
         entries: pairs,
+        items,
         body: body.unwrap_or_default(),
     })
 }
