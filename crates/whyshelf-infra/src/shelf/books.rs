@@ -39,6 +39,16 @@ use whyshelf_core::domain::shelf::schema::{
     LinkEntryDecl, Propagation,
 };
 
+/// A declaration of a Finding -> Spec -> Design chain, as a project could write it.
+///
+/// whyshelf has no kind of document of its own; this sample is data, not a mode of
+/// the program. Its test checks that it reads and that
+/// [`Schema::validate`](whyshelf_core::domain::shelf::schema::Schema::validate)
+/// accepts it, so the manual that shows it cannot drift from what the program reads.
+///
+#[doc = concat!("```toml\n", include_str!("books.sample.toml"), "```")]
+pub const SAMPLE: &str = include_str!("books.sample.toml");
+
 /// Why the declaration of the books could not be read.
 #[derive(Debug, thiserror::Error)]
 pub enum BooksError {
@@ -332,6 +342,16 @@ means = "informs"
     #[test]
     fn an_empty_file_declares_no_book() {
         assert!(parse("").unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_sample_reads_and_is_a_sound_declaration() {
+        // `super::SAMPLE` is the public sample; this module has a small one of its own.
+        let decls = parse(super::SAMPLE).unwrap();
+        let names: Vec<&str> = decls.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(names, ["finding", "spec", "design"]);
+        let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
+        assert_eq!(schema.books().len(), 3);
     }
 
     #[tokio::test]

@@ -1,0 +1,74 @@
+# A Finding -> Spec -> Design chain, declared as books.
+#
+# whyshelf knows no kind of document; this is one way a project can declare the
+# chain it wants. Copy it to `.whyshelf/books.toml` and change what you need.
+
+[[book]]
+name = "finding"            # what was seen or measured, and how it is known
+dir = "docs/findings"
+key = { prefix = "F" }      # F-1, F-2, F-LATENCY
+
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+
+[[book.field]]
+name = "evidence"
+type = { enum = ["measured", "observed", "reported", "theoretical"] }
+required = true
+
+[[book.field]]
+name = "source"
+type = "text"
+
+[[book]]
+name = "spec"               # what must hold
+dir = "docs/specs"
+key = { prefix = "S" }
+
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+
+[[book.field]]
+name = "pins"               # the names the tests carry to bind the spec
+type = "list"
+
+[[book.link]]
+name = "grounds"            # a spec stands on its findings: a changed finding makes it stale
+target = "finding"
+count = "at-least-one"
+means = "depends"
+
+[[book.link]]
+name = "replaces"           # a spec that takes the place of an older one
+target = "spec"
+count = "optional"
+means = "replaces"
+
+[[book]]
+name = "design"             # how it is built, and why not another way
+dir = "docs/designs"
+key = { prefix = "D" }
+
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+
+[[book.field]]
+name = "rejected"           # the options not taken
+type = "list"
+
+[[book.link]]
+name = "spec"               # a design stands on one spec
+target = "spec"
+count = "one"
+means = "depends"
+
+[[book.link]]
+name = "see"                # findings worth reading, which do not make it stale
+target = "finding"
+means = "informs"
