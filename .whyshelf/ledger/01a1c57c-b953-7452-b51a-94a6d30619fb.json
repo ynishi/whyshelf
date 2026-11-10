@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794314647491,
+  "expires": null,
+  "frame": [
+    {
+      "address": "2a877cd7a2329b9fe134bc8ec20469b2f1076942",
+      "hash": "sha256:7ae631d245dd8884ce9fe81c4766a2e27fcba0fc30df6238175aa1ee420ccf23",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "14"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c577-324c-70fc-b7a6-0736323b5881"
+    }
+  ],
+  "id": "01a1c57c-b953-7452-b51a-94a6d30619fb",
+  "kind": "decision",
+  "reason": "Rows show the decision that stands (#32); every statement checked against the code by a blind review, its findings fixed",
+  "revision": "386f223ebcf20b4eb2c36831150c6b5c99a85af7",
+  "seen": "sha256:303a8c9d8c90c20bd63ddd4cf51bfef801a85102e852aefee5bc607e74389897",
+  "seen_address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+  "subject": "01a1c577-33e1-735e-b992-19f40a27438a",
+  "v": 1,
+  "verb": "approve"
+}

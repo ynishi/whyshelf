@@ -612,6 +612,11 @@ impl Decision {
     pub fn at(&self) -> JudgedAt {
         self.at
     }
+
+    /// Why, as it was given, if it was.
+    pub fn reason(&self) -> Option<&NonBlank> {
+        self.reason.as_ref()
+    }
 }
 
 /// The withdrawal of earlier decisions and declarations of the same meaning,
@@ -1891,7 +1896,8 @@ impl Ledger {
 
     /// The decision that stands about a document: the latest of those about it that
     /// are not revoked, by time and then by the larger id. The one place it is
-    /// chosen; [`Ledger::status_of`] and the snapshot of an approval read it.
+    /// chosen: what [`Ledger::status_of`] says is read from it, and so is every
+    /// other answer that names the decision about a document.
     pub fn standing_decision(&self, id: DocId) -> Option<&Decision> {
         self.decisions
             .values()

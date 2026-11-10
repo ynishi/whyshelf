@@ -1,0 +1,74 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "778944d564888bd7e742257a5972f3c2727c6806",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d3fa4b3318efde0386272dbb081ff945c650d1551b3a6d3542c7a762c8f2628",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "6cc4cf6553c47cdab36ace746db357892a5bc7e2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2430026213e3811bcee3094d549fb966374c036a3f4c193c940f92afba218ea7",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/id.rs",
+      "state": "present"
+    },
+    {
+      "address": "4d3c3061622c730f9d73ea9b13ce3a27ff405dec",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a1d81c812cd5b53a3465b254a0ae4b6705fd57af01ca8839c6b0fbc9c5e2afee",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/lookup/tests.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794314649320,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1cd79c3c236ee5e2f0fc31826019a3f88abbedc8",
+      "hash": "sha256:6712f11392ed7d3c81c7d8ca8a36ced7848abec5021348cb69c9153459055dae",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "17"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-13c1-71ff-8447-3222d6d270df"
+    }
+  ],
+  "id": "01a1c57c-c04b-74ea-a0d4-527a349631a6",
+  "kind": "decision",
+  "reason": "Tests added to shared test files for #32 (rows show the decision); the tests these verifications name still check what they say, checked by a blind review",
+  "revision": "386f223ebcf20b4eb2c36831150c6b5c99a85af7",
+  "seen": "sha256:5fef89319cf556b0a98b45eb1472235f78da67dee6880a69cd16908ca841b3a4",
+  "seen_address": "0cd33547b0b36dee54c63cbfea4b0ffb379fd884",
+  "subject": "01a1c4ba-1878-7520-ab7b-54358c7ed69e",
+  "v": 1,
+  "verb": "approve"
+}

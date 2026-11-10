@@ -153,13 +153,14 @@ impl<'a> View<'a> {
 
     /// An identity as the answers show it: each part is one entry of the domain
     /// ([`DocState::presence`](crate::domain::shelf::build::DocState::presence),
-    /// [`Ledger::status_of`], [`Assessment::standing_of`],
+    /// [`Ledger::status_of`], [`Ledger::standing_decision`], [`Assessment::standing_of`],
     /// [`Assessment::notices_of`]), and nothing is decided here.
     pub(super) fn row(&self, id: DocId) -> Row {
         Row {
             id,
             presence: self.loaded.shelf.state_of(id).presence(),
             declared: self.loaded.ledger.status_of(id),
+            decision: self.loaded.ledger.standing_decision(id).cloned(),
             standing: self.assessment.standing_of(id),
             notices: self.assessment.notices_of(id).to_vec(),
         }
