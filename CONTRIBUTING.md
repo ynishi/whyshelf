@@ -84,8 +84,8 @@ Refs #<issue>
 
 ## Review
 
-Review the change locally before it goes up, by a person or by an AI agent —
-whichever you have. Ask four questions of every diff:
+Review every change locally before it goes up, by a person or by an AI agent
+other than the one that wrote it (REQ-13). Ask four questions of every diff:
 
 1. Does it do what its issue asked?
 2. May everything in it be published?
@@ -102,8 +102,7 @@ the approved ones — follows their `rustdoc` items and `tests` into the code, a
 reads the diff for what the documents did not lead to. This is the one place the
 procedure is written.
 
-Say in the PR body who or what reviewed it, that it was blind, and what it found,
-or that nobody did.
+Say in the PR body who or what reviewed it, that it was blind, and what it found.
 
 ## Pull requests
 

@@ -1,0 +1,61 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "815e2dcbb23129a478a14e6ce0da9e25b9f48a27",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:60faf5bf1f5b4005b732d30dfa882b15104dc27293ac0282fd1e87f854c18d1d",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/ledger/merge_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "4674412ccf6436874611a26b9694d11c5a2f05e9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:54202fa74f3c72730d555a7614f369532071cc530067aeb7180703e778e328c2",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794311073887,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c9e0c1cbf9eba08917b62a3645be0d738db08354",
+      "hash": "sha256:b60dc0295376775317aeadb9163db6701fe53a561caf10aeda377a21d288aefc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3ad8-7753-b9e1-a7cd0b06ed77"
+    }
+  ],
+  "id": "01a1c546-358c-76bf-b13d-6a64dea6705a",
+  "kind": "decision",
+  "reason": "Issue #26: corrected to what the code does after a blind evaluation and a blind review; the ledger tests now reorder keys and compare two spellings; just check green",
+  "revision": "c9c1f701c2aa4fb9dccd98fe790e4c590120994d",
+  "seen": "sha256:9b53677b0838c08e1f6c37c9796cdb2fa12d95f1a85654fc07749310bcdb06e5",
+  "seen_address": "e65f8a68cb185a38638acef1a1e8cbbd7066c886",
+  "subject": "01a1c332-3e2b-7840-9c1e-c6aebdf917a0",
+  "v": 1,
+  "verb": "approve"
+}
