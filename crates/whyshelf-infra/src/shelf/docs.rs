@@ -27,11 +27,10 @@
 //! its directories. What [`render`] writes, [`read`] reads back into the same
 //! entries; a test holds the two together.
 //!
-//! # The one normalization rule
+//! # Normalization
 //!
-//! Before anything is read, line breaks become LF, the spaces and tabs at the end of
-//! each line are removed, and the text ends in exactly one LF. There is no Unicode
-//! normalization. The body is hashed by the domain as it is after this rule.
+//! Before anything is read, the whole text is normalized by the domain's one rule,
+//! [`normalize`]; the body is hashed by the domain as it is after it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
@@ -50,6 +49,7 @@ use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::build::{
     DocReading, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind,
 };
+use whyshelf_core::domain::shelf::doc::normalize;
 use whyshelf_core::domain::shelf::schema::BookDir;
 
 /// Why the documents could not be read at all. A file that is not a document is not
@@ -161,22 +161,6 @@ fn relative(root: &Path, file: &Path) -> Result<RelPath, DocsError> {
         segments.push(part.as_os_str().to_str().ok_or_else(|| name(None))?);
     }
     segments.join("/").parse().map_err(|e| name(Some(e)))
-}
-
-/// Normalize a text by the rule in the module documentation.
-pub fn normalize(text: &str) -> String {
-    let unified = text.replace("\r\n", "\n").replace('\r', "\n");
-    let mut out = String::with_capacity(unified.len() + 1);
-    for line in unified.split('\n') {
-        out.push_str(line.trim_end_matches([' ', '\t']));
-        out.push('\n');
-    }
-    let kept = out.trim_end_matches('\n').len();
-    out.truncate(kept);
-    if !out.is_empty() {
-        out.push('\n');
-    }
-    out
 }
 
 /// A file's text as a reading.

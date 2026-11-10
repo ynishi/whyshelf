@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794313292883,
+  "expires": null,
+  "frame": [
+    {
+      "address": "55caec0db41d7ace38636bc3417988db1d4944ab",
+      "hash": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    }
+  ],
+  "id": "01a1c568-0fec-7309-bf5e-ff8b18a3d643",
+  "kind": "decision",
+  "reason": "Split from a bundled decision so each states one rule (#30); checked against the code by a blind review",
+  "revision": "ac7c70ca304e62858ea0ec500664b74cc207164f",
+  "seen": "sha256:47114a4be98886db6d360ff246ff82048c89eba19b48fe17ce59d059cf0e9c9d",
+  "seen_address": "c06e8164aa78931dd54e3e884d8016a3735fdbde",
+  "subject": "01a1c55d-ea98-7060-acb2-b3c19c484a89",
+  "v": 1,
+  "verb": "approve"
+}

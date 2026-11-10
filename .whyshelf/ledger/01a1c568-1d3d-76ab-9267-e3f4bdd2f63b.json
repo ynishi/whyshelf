@@ -1,0 +1,104 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2197bce8bee7e7aaf592ad8930a4624a61cc6278",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8bfe83e5c71fd327834bbb45f4577b703ec62ec4b6268a82a50372f0c2a01760",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/actor_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "25e8a7b517705295b075b8de3b4f1d6208b06ef8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a41dc5e31e728408af205e23b8d1a86798ed5aa1043800a37b17f3366f8fbfd6",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/actor.rs",
+      "state": "present"
+    },
+    {
+      "address": "6cc4cf6553c47cdab36ace746db357892a5bc7e2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2430026213e3811bcee3094d549fb966374c036a3f4c193c940f92afba218ea7",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/id.rs",
+      "state": "present"
+    },
+    {
+      "address": "4e5f5d66f524c82f5a0852fae120a0e8bdfd6900",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ef9d95eb838616667bcaeb33ca6989ab7d9df6d941c3420e65e3185b9bdba2c",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/system.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794313295816,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1c52d02046a22d505f4175e7ce7137d8b60beda9",
+      "hash": "sha256:aa77238a3ab077545286499789e5762eaa6ae6682612884389d2acdf13de4e4f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "34"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e310-703a-82cc-fecc69ebdc07"
+    },
+    {
+      "address": "12b9000513a1af84240cb975aa08345c7d3187c4",
+      "hash": "sha256:43e004a4a06b13c27d282343d295b7108702e0451f76a5408b3a950b91af7cc9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "35"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e6b5-775e-9fa6-11ec41ab044a"
+    }
+  ],
+  "id": "01a1c568-1d3d-76ab-9267-e3f4bdd2f63b",
+  "kind": "decision",
+  "reason": "Rules moved to the split decisions or stated once, links and tests updated (#30); checked by a blind review",
+  "revision": "ac7c70ca304e62858ea0ec500664b74cc207164f",
+  "seen": "sha256:004675956edd3fddb92deac8dc692eb4249d7d5af36d3836e1a27325dd5c243a",
+  "seen_address": "be79f226b0e7f20a1a755faac846cc8af2c574a0",
+  "subject": "01a1c4ba-1b8f-732a-b8df-96833f6bcad2",
+  "v": 1,
+  "verb": "approve"
+}

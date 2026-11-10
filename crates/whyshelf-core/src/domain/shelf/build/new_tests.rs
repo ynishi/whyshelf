@@ -29,6 +29,13 @@ fn the_next_key_counts_invalid_files_and_ignores_name_tails() {
             body: String::new(),
         },
         reading("findings/z.md", 3, "FR-LATENCY", &[("title", text("t"))]),
+        // A front matter that cannot be read writes no key that is seen, whatever
+        // its file is named.
+        DocReading::Unparsed {
+            origin: path("findings/FR-20.md"),
+            id: ReadId::Unreadable,
+            why: RawProblem::NoFrontMatter,
+        },
         // A key of another book does not count.
         reading("specs/s.md", 4, "SP-40", &[("title", text("t"))]),
     ]);
