@@ -20,7 +20,7 @@
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
+//! | 1 | `check` found something wrong, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
 //! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
 //! | 3 | the run failed (a file could not be read or written) |
 //!
@@ -42,6 +42,8 @@ mod exit_tests;
 mod new_tests;
 #[cfg(test)]
 mod same_meaning_tests;
+#[cfg(test)]
+mod stale_tests;
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -49,7 +51,7 @@ use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
     ErrorClass, JudgeRequest, Judgement, NewDocRequest, SameMeaningAbout, SameMeaningRequest,
-    ShelfApp, ShelfError, WithdrawRequest,
+    ShelfApp, ShelfError, StaleReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -110,10 +112,15 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             .trace(&reference)
             .await
             .map(|r| print(&output::trace(&r))),
-        BooksCommand::Stale => ShelfApp::new(project)
-            .stale()
-            .await
-            .map(|r| print(&output::stale(&r))),
+        BooksCommand::Stale { exit_code } => {
+            ShelfApp::new(project)
+                .stale()
+                .await
+                .map(|r| match print(&output::stale(&r)) {
+                    Exit::Ok => stale_exit(&r, exit_code),
+                    failed => failed,
+                })
+        }
         BooksCommand::Diff { reference } => ShelfApp::new(project)
             .diff(&reference)
             .await
@@ -324,6 +331,16 @@ fn new_request(
         items,
         body: body.unwrap_or_default(),
     })
+}
+
+/// The exit of `stale` once its answer is printed: with `--exit-code`, 1 when any
+/// approval does not hold; otherwise 0.
+fn stale_exit(report: &StaleReport, exit_code: bool) -> Exit {
+    if exit_code && !report.entries.is_empty() {
+        Exit::Stopped
+    } else {
+        Exit::Ok
+    }
 }
 
 /// Print an answer as one JSON document on stdout.
