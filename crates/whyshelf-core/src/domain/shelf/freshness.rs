@@ -59,6 +59,15 @@
 //! - a cycle the document is in, among links or among frames;
 //! - an expiry: `now >= expires`.
 //!
+//! A hash that differs is a change unless people declared the edit keeps the
+//! meaning ([`SameMeaning`]): when the ledger joins the pinned hash to the hash now
+//! ([`Ledger::doc_same_meaning`], [`Ledger::artifact_same_meaning`]), the
+//! `SelfChanged`, `UpstreamChanged` or `ArtifactChanged` is not a cause, and a
+//! [`Notice`] names the declarations instead. The same three comparisons decide
+//! both, so an edit is either a cause or a notice, never both.
+//!
+//! [`SameMeaning`]: super::ledger::SameMeaning
+//!
 //! Freshness is decided by hashes alone (rule A4): the [`ContentAddress`] a pin may
 //! carry and the [`Revision`] of a record are never read here, so a project outside
 //! any version control has the same freshness as one inside.
@@ -67,7 +76,8 @@
 //! [`Revision`]: super::artifact::Revision
 //!
 //! Every fact is said once. Notices ([`Notice`]) are what is worth knowing and does
-//! not change a freshness: they come from `collect_notices`'s table.
+//! not change a freshness: they come from `collect_notices`'s table, and the edits a
+//! declaration kept from being causes from the comparisons above.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -79,7 +89,9 @@ use super::artifact::{ArtifactHash, ArtifactState};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
 use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
 use super::graph::{Cycle, CycleId};
-use super::ledger::{ArtifactPin, DeclaredStatus, FramePin, JudgedAt, Ledger, LedgerProblem};
+use super::ledger::{
+    ArtifactPin, DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem,
+};
 use super::schema::{ArtifactPropagation, EntryName, Propagation};
 
 /// The documents that take the place of a deprecated one.
@@ -450,6 +462,36 @@ pub enum Notice {
         /// When it was to lapse.
         since: JudgedAt,
     },
+    /// The document is not what was approved, and people declared that the edit
+    /// keeps the meaning: no [`Cause::SelfChanged`].
+    SelfSameMeaning {
+        /// The hash that was approved.
+        approved: DocHash,
+        /// The hash it has now.
+        now: DocHash,
+        /// The declarations that join the two, in order.
+        declared: NonEmptyVec<JudgementId>,
+    },
+    /// A pinned upstream is not what was pinned, and people declared that the edit
+    /// keeps the meaning: no [`Cause::UpstreamChanged`].
+    UpstreamSameMeaning {
+        /// The pin.
+        pin: FramePin,
+        /// The hash it has now.
+        now: DocHash,
+        /// The declarations that join the two, in order.
+        declared: NonEmptyVec<JudgementId>,
+    },
+    /// A pinned artifact's file is not what was pinned, and people declared that the
+    /// edit keeps the meaning: no [`Cause::ArtifactChanged`].
+    ArtifactSameMeaning {
+        /// The pin.
+        pin: ArtifactPin,
+        /// The hash it has now.
+        now: ArtifactHash,
+        /// The declarations that join the two, in order.
+        declared: NonEmptyVec<JudgementId>,
+    },
 }
 
 /// The root of a degradation: where it starts, and the way from the document asked
@@ -585,6 +627,7 @@ impl Assessment {
 /// What `assess` reads while it works.
 struct Cx<'a> {
     shelf: &'a Shelf,
+    ledger: &'a Ledger,
     now: JudgedAt,
     in_cycle: BTreeMap<DocId, Vec<CycleId>>,
     component: BTreeMap<DocId, usize>,
@@ -595,6 +638,9 @@ struct Standings {
     standings: BTreeMap<DocId, Standing>,
     /// What each was read as, once: a notice asks it again of nobody.
     statuses: BTreeMap<DocId, DeclaredStatus>,
+    /// The edits a declaration kept from being a cause, found while the causes were:
+    /// told as notices, so each comparison is made once.
+    same_meaning: BTreeMap<DocId, Vec<Notice>>,
 }
 
 /// The standing of every document, from the shelf and the ledger, at `now`.
@@ -608,6 +654,7 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt) -> Assessment {
     let components = graph.components();
     let cx = Cx {
         shelf,
+        ledger,
         now,
         in_cycle: cycle_ids_by_member(&cycles),
         component: component_of_each(&components),
@@ -617,8 +664,9 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt) -> Assessment {
     let Standings {
         standings,
         statuses,
-    } = stand_in_order(&cx, ledger, order);
-    let notices = collect_notices(&cx, &standings, &statuses);
+        same_meaning,
+    } = stand_in_order(&cx, order);
+    let notices = collect_notices(&cx, &standings, &statuses, same_meaning);
     Assessment {
         standings,
         notices,
@@ -668,11 +716,14 @@ fn travel_order(shelf: &Shelf, ledger: &Ledger, components: Vec<Vec<DocId>>) -> 
 }
 
 /// The standing of each document in `order`, an approval after what it stands on.
-fn stand_in_order(cx: &Cx<'_>, ledger: &Ledger, order: Vec<DocId>) -> Standings {
+fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
+    let ledger = cx.ledger;
     let mut standings: BTreeMap<DocId, Standing> = BTreeMap::new();
     let mut statuses = BTreeMap::new();
+    let mut same_meaning = BTreeMap::new();
     for id in order {
         let status = ledger.status_of(id);
+        let mut kept = Vec::new();
         let standing = match &status {
             DeclaredStatus::Pending => Standing::Pending,
             DeclaredStatus::Denied { .. } => Standing::Denied,
@@ -696,14 +747,19 @@ fn stand_in_order(cx: &Cx<'_>, ledger: &Ledger, order: Vec<DocId>) -> Standings 
                 },
                 *expires,
                 &standings,
+                &mut kept,
             )),
         };
         standings.insert(id, standing);
         statuses.insert(id, status);
+        if !kept.is_empty() {
+            same_meaning.insert(id, kept);
+        }
     }
     Standings {
         standings,
         statuses,
+        same_meaning,
     }
 }
 
@@ -731,12 +787,21 @@ fn freshness_of(
     pinned: Pinned<'_>,
     expires: Option<JudgedAt>,
     standings: &BTreeMap<DocId, Standing>,
+    kept: &mut Vec<Notice>,
 ) -> Freshness {
     let mut causes = Vec::new();
     match cx.shelf.state_of(id).valid_or_failure() {
         Ok(doc) => {
-            valid_causes(cx, doc, pinned.seen, pinned.frame, standings, &mut causes);
-            causes.extend(artifact_causes(doc, pinned.artifacts));
+            let found = Found {
+                causes: &mut causes,
+                kept,
+            };
+            valid_causes(cx, doc, pinned.seen, pinned.frame, standings, found);
+            let found = Found {
+                causes: &mut causes,
+                kept,
+            };
+            artifact_causes(cx.ledger, doc, pinned.artifacts, found);
             if let Some(ids) = cx.in_cycle.get(&doc.id()) {
                 causes.extend(ids.iter().map(|cycle| Cause::InCycle { cycle: *cycle }));
             }
@@ -751,24 +816,43 @@ fn freshness_of(
     Freshness::from_causes(causes)
 }
 
+/// Where the facts about one approval go as they are found: a cause, or an edit a
+/// declaration kept from being one.
+struct Found<'f> {
+    causes: &'f mut Vec<Cause>,
+    kept: &'f mut Vec<Notice>,
+}
+
 fn valid_causes(
     cx: &Cx<'_>,
     doc: &Doc,
     seen: &DocHash,
     frame: &BTreeSet<FramePin>,
     standings: &BTreeMap<DocId, Standing>,
-    causes: &mut Vec<Cause>,
+    found: Found<'_>,
 ) {
+    let Found { causes, kept } = found;
     if doc.hash() != seen {
-        causes.push(Cause::SelfChanged {
-            approved: *seen,
-            now: *doc.hash(),
-        });
+        match cx.ledger.doc_same_meaning(doc.id(), seen, doc.hash()) {
+            Some(declared) => kept.push(Notice::SelfSameMeaning {
+                approved: *seen,
+                now: *doc.hash(),
+                declared,
+            }),
+            None => causes.push(Cause::SelfChanged {
+                approved: *seen,
+                now: *doc.hash(),
+            }),
+        }
     }
 
     let mut lost: Vec<(&FramePin, FailureTag)> = Vec::new();
     for pin in frame {
-        pin_causes(cx, doc, pin, standings, causes, &mut lost);
+        let found = Found {
+            causes: &mut *causes,
+            kept: &mut *kept,
+        };
+        pin_causes(cx, doc, pin, standings, found, &mut lost);
     }
 
     causes.extend(link_changes(doc, frame, &lost));
@@ -781,7 +865,8 @@ fn valid_causes(
 /// A path still written under the link it was pinned for is compared with what is
 /// there now; a pinned path no longer written, and a path written that was not
 /// pinned, are an [`Cause::ArtifactLinksChanged`] of that link.
-fn artifact_causes(doc: &Doc, pinned: &BTreeSet<ArtifactPin>) -> Vec<Cause> {
+fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, found: Found<'_>) {
+    let Found { causes: out, kept } = found;
     let current: BTreeMap<(&EntryName, &RelPath), &ArtifactState> = doc
         .artifact_links_of(ArtifactPropagation::Depends)
         .into_iter()
@@ -799,10 +884,17 @@ fn artifact_causes(doc: &Doc, pinned: &BTreeSet<ArtifactPin>) -> Vec<Cause> {
         };
         match (pin.seen().state(), **now) {
             (ArtifactState::Present(then), ArtifactState::Present(now)) if then != now => {
-                causes.push(Cause::ArtifactChanged {
-                    pin: pin.clone(),
-                    now,
-                });
+                match ledger.artifact_same_meaning(pin.path(), &then, &now) {
+                    Some(declared) => kept.push(Notice::ArtifactSameMeaning {
+                        pin: pin.clone(),
+                        now,
+                        declared,
+                    }),
+                    None => causes.push(Cause::ArtifactChanged {
+                        pin: pin.clone(),
+                        now,
+                    }),
+                }
             }
             (ArtifactState::Present(_), ArtifactState::Absent) => {
                 causes.push(Cause::ArtifactGone { pin: pin.clone() });
@@ -841,7 +933,7 @@ fn artifact_causes(doc: &Doc, pinned: &BTreeSet<ArtifactPin>) -> Vec<Cause> {
             });
         }
     }
-    causes
+    out.extend(causes);
 }
 
 /// The causes one pin of the frame of a valid document adds: its upstream is no
@@ -852,9 +944,10 @@ fn pin_causes<'p>(
     doc: &Doc,
     pin: &'p FramePin,
     standings: &BTreeMap<DocId, Standing>,
-    causes: &mut Vec<Cause>,
+    found: Found<'_>,
     lost: &mut Vec<(&'p FramePin, FailureTag)>,
 ) {
+    let Found { causes, kept } = found;
     let target = pin.target();
     match cx.shelf.state_of(target).valid_or_failure() {
         Err(failure) => {
@@ -866,10 +959,20 @@ fn pin_causes<'p>(
         }
         Ok(upstream) => {
             if upstream.hash() != pin.hash() {
-                causes.push(Cause::UpstreamChanged {
-                    pin: pin.clone(),
-                    now: *upstream.hash(),
-                });
+                match cx
+                    .ledger
+                    .doc_same_meaning(target, pin.hash(), upstream.hash())
+                {
+                    Some(declared) => kept.push(Notice::UpstreamSameMeaning {
+                        pin: pin.clone(),
+                        now: *upstream.hash(),
+                        declared,
+                    }),
+                    None => causes.push(Cause::UpstreamChanged {
+                        pin: pin.clone(),
+                        now: *upstream.hash(),
+                    }),
+                }
             }
             let same_cycle = cx
                 .component
@@ -1020,15 +1123,19 @@ fn already_said(unresolved: &UnresolvedLink, lost_here: &[(&FramePin, FailureTag
 /// | a pinned upstream's causes include `Expired` | `UpstreamExpired` |
 /// | a `Replaces` link | none |
 ///
-/// They are given whatever the document's own standing is.
+/// They are given whatever the document's own standing is. To them are added, first,
+/// the notices of an approval's edits that a declaration kept from being causes
+/// (`SelfSameMeaning`, `UpstreamSameMeaning`, `ArtifactSameMeaning`): those are made
+/// where the hashes are compared, so only an approved document has them.
 fn collect_notices(
     cx: &Cx<'_>,
     standings: &BTreeMap<DocId, Standing>,
     statuses: &BTreeMap<DocId, DeclaredStatus>,
+    mut same_meaning: BTreeMap<DocId, Vec<Notice>>,
 ) -> BTreeMap<DocId, Vec<Notice>> {
     let mut all = BTreeMap::new();
     for doc in cx.shelf.docs().values() {
-        let mut notices = Vec::new();
+        let mut notices = same_meaning.remove(&doc.id()).unwrap_or_default();
         for (link, states) in doc.links_of(Propagation::Informs) {
             for state in states {
                 match state {
@@ -1075,5 +1182,7 @@ fn collect_notices(
 
 #[cfg(test)]
 mod artifact_tests;
+#[cfg(test)]
+mod same_meaning_tests;
 #[cfg(test)]
 mod tests;

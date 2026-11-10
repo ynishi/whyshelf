@@ -9,9 +9,9 @@ use schemars::{JsonSchema, Schema, schema_for};
 use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
-    ApprovedReport, BooksCheck, Created, DiffItem, DiffReport, DownstreamEdge, ErrorClass,
-    GetReport, Health, Judged, Names, Row, ShelfError, StaleReport, StatusReport, TraceReport,
-    UpstreamEdge, UpstreamEnd,
+    ApprovedReport, BooksCheck, Created, Declared, DeclaredAbout, DiffItem, DiffReport,
+    DownstreamEdge, ErrorClass, GetReport, Health, Judged, Names, Row, ShelfError, StaleReport,
+    StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::shelf::build::NewDocProblem;
 use whyshelf_core::domain::shelf::snapshot::{
@@ -29,7 +29,7 @@ use whyshelf_core::domain::shelf::freshness::{
     Cause, Freshness, FreshnessLevel, Notice, RootCause, Severity, Standing, StandingKind,
     Successors, UpstreamStatus,
 };
-use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin};
+use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin, Record};
 use whyshelf_core::domain::shelf::schema::Propagation;
 use whyshelf_infra::shelf::docs::normalize;
 use whyshelf_infra::shelf::ledger::to_json;
@@ -92,12 +92,18 @@ pub struct CauseOut {
 /// Something worth knowing that changes no freshness.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct NoticeOut {
-    /// What kind (`informs_not_fresh`, `informs_unresolved`, `upstream_expired`).
+    /// What kind (`informs_not_fresh`, `informs_unresolved`, `upstream_expired`,
+    /// `self_same_meaning`, `upstream_same_meaning`, `artifact_same_meaning`).
     pub kind: &'static str,
-    /// The link.
+    /// The link; empty for a notice about the document itself.
     pub link: String,
     /// The document it names, if it names one.
     pub target: Option<DocRef>,
+    /// The file it names, a path under the root, if it names one.
+    pub artifact: Option<String>,
+    /// For an edit declared to keep the meaning, the declarations (record ids) that
+    /// join the hash pinned to the hash now, in order; empty otherwise.
+    pub declared: Vec<String>,
     /// A sentence for a person.
     pub detail: String,
 }
@@ -415,6 +421,34 @@ pub struct JudgedAllOut {
     pub judged: Vec<JudgedOut>,
 }
 
+/// The answer of `judge same`: every declaration written, in the order the
+/// documents and files were named.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DeclaredAllOut {
+    /// The declarations.
+    pub declared: Vec<DeclaredOut>,
+}
+
+/// One declaration that an edit keeps the meaning.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DeclaredOut {
+    /// The document it is about, if it is about one.
+    pub doc: Option<DocRef>,
+    /// The file it is about, a path under the root, if it is about one.
+    pub artifact: Option<String>,
+    /// The record written, as it is in the ledger (its `from` lists the earlier
+    /// hashes, its `to` the hash now).
+    pub record: Value,
+}
+
+/// The answer of `judge withdraw`: the revocation written.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct WithdrawnOut {
+    /// The record written, as it is in the ledger (its `targets` are the records
+    /// withdrawn).
+    pub record: Value,
+}
+
 /// One judgement written.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct JudgedOut {
@@ -487,6 +521,8 @@ pub fn schemas() -> SchemasOut {
     put("stale", schema_for!(StaleOut));
     put("diff", schema_for!(DiffOut));
     put("judge", schema_for!(JudgedAllOut));
+    put("judge same", schema_for!(DeclaredAllOut));
+    put("judge withdraw", schema_for!(WithdrawnOut));
     put("new", schema_for!(CreatedOut));
     put("error", schema_for!(ErrorOut));
     SchemasOut {
@@ -743,22 +779,65 @@ impl Namer<'_> {
                 kind: "informs_not_fresh",
                 link: link.to_string(),
                 target: Some(self.doc(*target)),
+                artifact: None,
+                declared: Vec::new(),
                 detail: format!("a document it informs of is {}", standing(*kind)),
             },
             Notice::InformsUnresolved { link, unresolved } => NoticeOut {
                 kind: "informs_unresolved",
                 link: link.to_string(),
                 target: None,
+                artifact: None,
+                declared: Vec::new(),
                 detail: self.unresolved(unresolved),
             },
             Notice::UpstreamExpired { pin, since } => NoticeOut {
                 kind: "upstream_expired",
                 link: pin.link().to_string(),
                 target: Some(self.pin(pin)),
+                artifact: None,
+                declared: Vec::new(),
                 detail: format!(
                     "the approval of {} lapsed at {} (unix ms)",
                     pin.key(),
                     since.millis()
+                ),
+            },
+            Notice::SelfSameMeaning {
+                approved,
+                now,
+                declared,
+            } => NoticeOut {
+                kind: "self_same_meaning",
+                link: String::new(),
+                target: None,
+                artifact: None,
+                declared: declared.iter().map(ToString::to_string).collect(),
+                detail: format!(
+                    "the document was edited since its approval ({approved} -> {now}), and the edit was declared to keep the meaning"
+                ),
+            },
+            Notice::UpstreamSameMeaning { pin, now, declared } => NoticeOut {
+                kind: "upstream_same_meaning",
+                link: pin.link().to_string(),
+                target: Some(self.pin(pin)),
+                artifact: None,
+                declared: declared.iter().map(ToString::to_string).collect(),
+                detail: format!(
+                    "{} was edited since it was pinned ({} -> {now}), and the edit was declared to keep the meaning",
+                    pin.key(),
+                    pin.hash()
+                ),
+            },
+            Notice::ArtifactSameMeaning { pin, now, declared } => NoticeOut {
+                kind: "artifact_same_meaning",
+                link: pin.link().to_string(),
+                target: None,
+                artifact: Some(pin.path().to_string()),
+                declared: declared.iter().map(ToString::to_string).collect(),
+                detail: format!(
+                    "`{}` changed since it was pinned (now {now}), and the change was declared to keep the meaning",
+                    pin.path()
                 ),
             },
         }
@@ -1138,6 +1217,39 @@ pub fn judged(all: &[Judged]) -> JudgedAllOut {
     }
 }
 
+/// The answer of `judge same`.
+pub fn same_meaning(all: &[Declared]) -> DeclaredAllOut {
+    DeclaredAllOut {
+        declared: all
+            .iter()
+            .map(|one| {
+                let (doc, artifact) = match &one.about {
+                    DeclaredAbout::Doc { id, key } => (
+                        Some(DocRef {
+                            id: id.to_string(),
+                            key: key.as_ref().map(ToString::to_string),
+                        }),
+                        None,
+                    ),
+                    DeclaredAbout::Artifact { path } => (None, Some(path.to_string())),
+                };
+                DeclaredOut {
+                    doc,
+                    artifact,
+                    record: to_json(&one.record.to_canon()),
+                }
+            })
+            .collect(),
+    }
+}
+
+/// The answer of `judge withdraw`.
+pub fn withdrawn(record: &Record) -> WithdrawnOut {
+    WithdrawnOut {
+        record: to_json(&record.to_canon()),
+    }
+}
+
 /// The answer of a command that gave none.
 pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
     ErrorOut {
@@ -1297,6 +1409,9 @@ fn join<T: std::fmt::Display>(items: impl Iterator<Item = T>) -> String {
 }
 
 #[cfg(test)]
+mod same_meaning_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1314,6 +1429,8 @@ mod tests {
             "stale",
             "diff",
             "judge",
+            "judge same",
+            "judge withdraw",
             "new",
             "error",
         ] {

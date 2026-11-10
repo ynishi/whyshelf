@@ -133,7 +133,9 @@ impl SnapshotItem {
 
     /// Whether the item is not now what was approved: the hashes compared, as
     /// freshness compares them (rule A4). A document that is no valid document now
-    /// has changed; an artifact with no file then and none now has not.
+    /// has changed; an artifact with no file then and none now has not. An edit
+    /// declared to keep the meaning has changed here (the content differs, which is
+    /// what a diff shows) while freshness tells it as a notice.
     pub fn changed_from(&self, now: &ItemNow) -> bool {
         match (&self.seen, now) {
             (SeenHash::Doc(then), ItemNow::Doc(now)) => now.as_ref() != Some(then),

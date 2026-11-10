@@ -21,7 +21,7 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
 //! | 3 | the run failed (a file could not be read or written) |
 //!
 //! `new` is the one command that writes a document. Its values arrive as text and
@@ -36,15 +36,22 @@ pub mod args;
 pub mod output;
 pub mod textdiff;
 
+#[cfg(test)]
+mod same_meaning_tests;
+
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
-    ErrorClass, JudgeRequest, Judgement, NewDocRequest, ShelfApp, ShelfError,
+    ErrorClass, JudgeRequest, Judgement, NewDocRequest, SameMeaningAbout, SameMeaningRequest,
+    ShelfApp, ShelfError, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
+use whyshelf_core::domain::hash::ContentHash;
+use whyshelf_core::domain::id::EntityId;
 use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::shelf::ledger::JudgementId;
 use whyshelf_core::domain::shelf::schema::BookName;
 use whyshelf_infra::shelf::Project;
 use whyshelf_infra::shelf::system::parse_time;
@@ -124,11 +131,19 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
                 return ExitCode::from(Exit::Request as u8);
             }
         },
-        BooksCommand::Judge(verb) => match judge_requests(verb) {
-            Ok(requests) => ShelfApp::new(project)
+        BooksCommand::Judge(verb) => match judge_run(verb) {
+            Ok(JudgeRun::Decide(requests)) => ShelfApp::new(project)
                 .judge_all(requests)
                 .await
                 .map(|r| print(&output::judged(&r))),
+            Ok(JudgeRun::Same(requests)) => ShelfApp::new(project)
+                .same_meaning(requests)
+                .await
+                .map(|r| print(&output::same_meaning(&r))),
+            Ok(JudgeRun::Withdraw(request)) => ShelfApp::new(project)
+                .withdraw(request)
+                .await
+                .map(|r| print(&output::withdrawn(&r))),
             Err(message) => {
                 eprintln!("error: {message}");
                 print(&output::usage(message));
@@ -143,15 +158,82 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
     ExitCode::from(exit as u8)
 }
 
-/// The requests of a `judge` command, one per document named, or why the arguments
-/// are not one.
-fn judge_requests(verb: Verb) -> Result<Vec<JudgeRequest>, String> {
+/// What a `judge` command asks for: decisions, or declarations that an edit keeps
+/// the meaning. They are two use cases, with requests of their own.
+enum JudgeRun {
+    Decide(Vec<JudgeRequest>),
+    Same(Vec<SameMeaningRequest>),
+    Withdraw(WithdrawRequest),
+}
+
+/// The requests of a `judge` command, one per document or file named, or why the
+/// arguments are not one.
+fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
     let reason = |text: &Option<String>| {
         text.as_deref()
             .map(|t| NonBlank::new(t).map_err(|e| format!("--reason: {e}")))
             .transpose()
     };
+    let actor_of = |actor: Option<String>| {
+        actor
+            .map(|a| Actor::new(&a).map_err(|e| format!("--actor `{a}`: {e}")))
+            .transpose()
+    };
     let (judgement, common) = match verb {
+        Verb::Same {
+            references,
+            artifacts,
+            from,
+            reason,
+            actor,
+        } => {
+            let reason = NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?;
+            let actor = actor_of(actor)?;
+            let about: Vec<SameMeaningAbout> = references
+                .into_iter()
+                .map(SameMeaningAbout::Doc)
+                .chain(artifacts.into_iter().map(SameMeaningAbout::Artifact))
+                .collect();
+            let from = from
+                .map(|h| {
+                    h.parse::<ContentHash>()
+                        .map_err(|e| format!("--from `{h}`: {e}"))
+                })
+                .transpose()?;
+            if from.is_some() && about.len() != 1 {
+                return Err("--from names the earlier hash of one document or file".to_owned());
+            }
+            return Ok(JudgeRun::Same(
+                about
+                    .into_iter()
+                    .map(|about| SameMeaningRequest {
+                        about,
+                        from,
+                        reason: reason.clone(),
+                        actor: actor.clone(),
+                    })
+                    .collect(),
+            ));
+        }
+        Verb::Withdraw {
+            records,
+            reason,
+            actor,
+        } => {
+            let records = records
+                .iter()
+                .map(|r| {
+                    r.parse::<EntityId>()
+                        .map(JudgementId::new)
+                        .map_err(|e| format!("`{r}` is not the id of a record: {e}"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            return Ok(JudgeRun::Withdraw(WithdrawRequest {
+                records,
+                reason: NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?,
+                actor: actor_of(actor)?,
+            }));
+        }
         Verb::Approve { common, until } => (
             Judgement::Approve {
                 until: until
@@ -188,19 +270,18 @@ fn judge_requests(verb: Verb) -> Result<Vec<JudgeRequest>, String> {
             common,
         ),
     };
-    let actor = common
-        .actor
-        .map(|a| Actor::new(&a).map_err(|e| format!("--actor `{a}`: {e}")))
-        .transpose()?;
-    Ok(common
-        .references
-        .into_iter()
-        .map(|reference| JudgeRequest {
-            judgement: judgement.clone(),
-            reference,
-            actor: actor.clone(),
-        })
-        .collect())
+    let actor = actor_of(common.actor)?;
+    Ok(JudgeRun::Decide(
+        common
+            .references
+            .into_iter()
+            .map(|reference| JudgeRequest {
+                judgement: judgement.clone(),
+                reference,
+                actor: actor.clone(),
+            })
+            .collect(),
+    ))
 }
 
 /// The request of a `new` command, or why the arguments are not one. Every value

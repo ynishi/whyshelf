@@ -16,12 +16,15 @@
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
 //! | [`judge`](ShelfApp::judge) | **yes** | [`Judged`]: the record that was appended, with the addresses of what an approval stood on and the revision |
+//! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
+//! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
 //!
 //! # Reading and writing
 //!
 //! A use case that reads takes `&self` and is generic over [`ShelfRead`], which has no
-//! way to write. [`judge`](ShelfApp::judge) and [`new_doc`](ShelfApp::new_doc) take
+//! way to write. [`judge`](ShelfApp::judge), [`same_meaning`](ShelfApp::same_meaning),
+//! [`withdraw`](ShelfApp::withdraw) and [`new_doc`](ShelfApp::new_doc) take
 //! `&mut self` and [`ShelfWrite`]: the writes of one program run one at a time, by the
 //! type. Two processes can still write at once; that is safe because a record is a
 //! file of its own named by its own identity, and neither write replaces a file that
@@ -33,7 +36,8 @@
 //!
 //! A [`Row`] has its [`Notice`](crate::domain::shelf::freshness::Notice)s (a
 //! document it informs of that does not hold, a link that cannot be followed, a
-//! pinned upstream whose approval lapsed), and every report has a [`Health`]: the
+//! pinned upstream whose approval lapsed, an edit declared to keep the meaning), and
+//! every report has a [`Health`]: the
 //! files that are no document, the cycles, the records that contradict one another
 //! and the files of the ledger that are no record. None is a failure of the use case,
 //! and none is left out.
@@ -46,6 +50,8 @@ mod new_doc;
 pub mod ports;
 mod read;
 mod report;
+mod same_meaning;
+mod withdraw;
 
 #[cfg(test)]
 mod artifact_tests;
@@ -53,6 +59,8 @@ mod artifact_tests;
 mod fake_tests;
 #[cfg(test)]
 mod new_doc_tests;
+#[cfg(test)]
+mod same_meaning_tests;
 #[cfg(test)]
 mod tests;
 
@@ -69,6 +77,8 @@ pub use report::{
     GetReport, Health, Judged, Names, Row, StaleEntry, StaleReport, StatusReport, TraceReport,
     UpstreamEdge, UpstreamEnd,
 };
+pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
+pub use withdraw::WithdrawRequest;
 
 /// The use cases of a shelf over a bundle of ports.
 ///
