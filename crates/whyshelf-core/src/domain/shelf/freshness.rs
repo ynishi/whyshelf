@@ -504,7 +504,8 @@ pub enum Notice {
     /// (`cover = true`), and no pending or approved document of that book reaches
     /// this one through it: a hole in the chain of reasons. The document's freshness
     /// is unchanged. (A link of a book into itself is met only by another document
-    /// of that book.)
+    /// of that book.) The notices of one document come in the order the
+    /// declaration writes the books, and their links.
     NotCovered {
         /// The book whose link is expected to reach this document.
         book: BookName,

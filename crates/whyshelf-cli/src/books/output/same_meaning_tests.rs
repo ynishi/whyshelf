@@ -69,6 +69,7 @@ fn schema() -> Schema {
         key: KeyPatternDecl::Prefixed {
             prefix: prefix.to_owned(),
         },
+        description: None,
         fields: vec![FieldEntryDecl {
             name: "title".to_owned(),
             ty: FieldTypeDecl::Text,

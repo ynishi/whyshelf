@@ -20,7 +20,7 @@
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
+//! | 1 | `check` found something wrong (or `map` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
 //! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
 //! | 3 | the run failed (a file could not be read or written) |
 //!
@@ -50,8 +50,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
-    ErrorClass, JudgeRequest, Judgement, NewDocRequest, SameMeaningAbout, SameMeaningRequest,
-    ShelfApp, ShelfError, StaleReport, WithdrawRequest,
+    ErrorClass, JudgeRequest, Judgement, MapReport, NewDocRequest, SameMeaningAbout,
+    SameMeaningRequest, ShelfApp, ShelfError, StaleReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -130,6 +130,15 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
                 Exit::Stopped
             }
         }),
+        BooksCommand::Map => {
+            ShelfApp::new(project)
+                .map()
+                .await
+                .map(|r| match print(&output::map(&r)) {
+                    Exit::Ok => map_exit(&r),
+                    failed => failed,
+                })
+        }
         BooksCommand::Status => ShelfApp::new(project)
             .status()
             .await
@@ -380,6 +389,15 @@ fn stale_exit(report: &StaleReport, exit_code: bool) -> Exit {
         Exit::Stopped
     } else {
         Exit::Ok
+    }
+}
+
+/// The exit of `map` once its answer is printed: 1 for a declaration that cannot be
+/// used, as `check` gives for one; otherwise 0.
+fn map_exit(report: &MapReport) -> Exit {
+    match report {
+        MapReport::SchemaInvalid(_) => Exit::Stopped,
+        MapReport::Mapped(_) => Exit::Ok,
     }
 }
 

@@ -1,0 +1,94 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "0496c454ceb0a2c498e02ff1f697e0149f22792e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0063de42e77aca079bc7f4da10b686a9a44544f02afc57da2a9406920df1bb28",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c16a4ffe53bf7abd156be742abb3c766855e8782",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a7394e0256b28ffd8092d6595c0bad258df42d60505e3f7d0f5d0e4a9c22c612",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "52da244ffc42de62ec97f4f7c0ec7c0cabb0b77c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:33d091e31022850d16429dcfd27704740cc8fe09cf02673f5680ac8bb9d6ed90",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794329371393,
+  "expires": null,
+  "frame": [
+    {
+      "address": "87c23c7acf9413519f7c8e5e653d3360d58ea369",
+      "hash": "sha256:4d450a2ae4b580d56af2043a893c46713c4b8828b2e012667de22bad979c473e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3c29-7041-9ec8-42f8da38f9c3"
+    },
+    {
+      "address": "5a3900ddfbb6787e4d56e217679369826035c765",
+      "hash": "sha256:92844cb36a9b234bc3b55af03e85504035cb0ebd30c2a85d7f06864249dddde2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "4"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3cd5-7944-ac64-25bd8640a4ca"
+    }
+  ],
+  "id": "01a1c65d-6314-73ef-8deb-c7088bc0d2fb",
+  "kind": "decision",
+  "reason": "Tests in shared files changed for #39 (map, declaration order, description); they still check what these verifications say, checked by a blind review",
+  "revision": "07756c31f025d11b6906f87b5aa586031581d0ed",
+  "seen": "sha256:46164fbe61489817f1113012a80b73f8b4b00b84dc40129e9fcbc5b177ef3f1d",
+  "seen_address": "16737fb1781731851df7dbdf57a8659f4f4342e2",
+  "subject": "01a1c332-3d7d-70c1-b5f4-22ab3a43d66f",
+  "v": 1,
+  "verb": "approve"
+}

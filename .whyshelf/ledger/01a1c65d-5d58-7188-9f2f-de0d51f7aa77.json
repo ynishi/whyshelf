@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794329369924,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c65d-5d58-7188-9f2f-de0d51f7aa77",
+  "kind": "decision",
+  "reason": "How the books relate is answered from the declaration by whyshelf map (#39); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "07756c31f025d11b6906f87b5aa586031581d0ed",
+  "seen": "sha256:e290d7e90c80753e017b9a72b17e0ef6839a76b87a1c9bda3a09df05ac1de97d",
+  "seen_address": "0bd2ee8503da3d7f29c9f1b56151aebbcc53af11",
+  "subject": "01a1c64b-b1fe-71c9-b685-4420d98a115c",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "adf591f387e3c47d62c505f3f85452237161c9e5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0398119ff22db8e499c29fc4dfa7bc400a0808a0b84090410839d5567ad43e54",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0496c454ceb0a2c498e02ff1f697e0149f22792e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0063de42e77aca079bc7f4da10b686a9a44544f02afc57da2a9406920df1bb28",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7070d76efe91990d4973eb166f1062b86253b575",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e3ba268d72ebf4f9ada629a22bb147095d60b94b5778dae7c85d44f33e74cd56",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6ed618300394aa8cef676ab4f5ade2fb12c21819",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:91f25fe4f3f2e3edae699c91009364954f909c49a7125fdf79635fc8851832e7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "414f68604863ec21b8c197741a8c91d56fee748e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b06de71b8b68ce1e7f4df142feece7e5fab021f71271ff740c01e35d731744fb",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794329369924,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bac0999d408e1c279c43992dc2812b698e24ee5e",
+      "hash": "sha256:44384a821945e1074a5299e54915512c9d2efa8056b2084c043799d3730012e8",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "47"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c64b-b4b9-723c-b0d7-3a6afd9617d3"
+    },
+    {
+      "address": "39252af38832187b59e9e968207026852ab259e5",
+      "hash": "sha256:015a61f3a3f8e0241d6ce42b08c4cac471e86f193c67f30672c1624993eccc7b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "48"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c64b-b644-758a-85e6-34c76e900513"
+    }
+  ],
+  "id": "01a1c65d-5ee8-7351-a919-29799a54f8c9",
+  "kind": "decision",
+  "reason": "How the books relate is answered from the declaration by whyshelf map (#39); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "07756c31f025d11b6906f87b5aa586031581d0ed",
+  "seen": "sha256:6ef84a4d498e500efca487c4d6f0e020fba79d5ff19dcf05396c974dfb5dc924",
+  "seen_address": "4a2006417a18ef16a03d9d1ee03ff26f56a66f36",
+  "subject": "01a1c64b-b81b-7364-8bf1-27b28c0b3680",
+  "v": 1,
+  "verb": "approve"
+}

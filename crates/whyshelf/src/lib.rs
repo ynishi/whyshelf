@@ -16,13 +16,15 @@
 //!
 //! # Books: kinds of document you declare
 //!
-//! `whyshelf ...` knows no kind of document of its own. A project declares
-//! its *books* in `.whyshelf/books.toml`: for each, a directory, how its keys are
-//! written, its fields, and the kinds of link it may hold to other books. People
-//! decide about documents (approve, deny, deprecate, retire, or revoke an earlier
-//! decision), each decision is a record of its own, and whether an approval still
-//! holds is computed on every read. The model is [`domain::shelf`], the use cases
-//! [`app::shelf`], the files and their formats `whyshelf_infra::shelf`.
+//! `whyshelf ...` knows no kind of document of its own. A project declares its
+//! *books* in `.whyshelf/books.toml`: for each, a directory, how its keys are
+//! written, what it is for (`description`, one line, optional), its fields, and
+//! the kinds of link it may hold to other books; `map` answers what it declares,
+//! with a drawing. People decide about documents (approve, deny, deprecate,
+//! retire, or revoke an earlier decision), each decision is a record of its own,
+//! and whether an approval still holds is computed on every read. The model is
+//! [`domain::shelf`], the use cases [`app::shelf`], the files and their formats
+//! `whyshelf_infra::shelf`.
 //!
 //! | kind of link | what it means for an approval |
 //! |---|---|
@@ -195,6 +197,9 @@
 //!   check                     the declaration, the documents and the ledger, what no covering
 //!                             link reaches, the names with nothing there and those that cannot
 //!                             be told now; exit 1 if anything is wrong (neither of those is)
+//!   map                       what the declaration says: every book and every link, in its order,
+//!                             and a drawing of them; it reads no document and no ledger
+//!                             (exit 1, as check, when the declaration cannot be used)
 //!   status                    every document: what was decided, and where it stands now
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   get <ref> --approved      what the approval that stands saw, with its content read back
@@ -270,14 +275,29 @@
 //! its `space`) and a `detail` sentence; every answer that reads the documents (`check` when the
 //! declaration can be used, `status`, `get`, `trace`, `stale`, `diff`) carries
 //! `health` (files that are no document, cycles, records that contradict one another
-//! or cannot be read). The answers of the writes and of `schema` carry none.
+//! or cannot be read). The answers of the writes, of `map` and of `schema` carry
+//! none.
 //!
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
+//! | 1 | `check` found something wrong, `map` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
 //! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
+//!
+//! `map` answers `{"schema_problems": [...], "books": [...], "links": [...],
+//! "diagram": ...}`: each book with its `name`, `dir`, `key` (`{"kind": "prefix",
+//! "prefix"}` or `{"kind": "slug"}`), `description` and `fields` (`name`, `type`,
+//! `words` of an enum, `required`); each link with the book it is `from`, its
+//! `name`, its `target` (`{"kind": "book", "book"}` or `{"kind": "artifact",
+//! "space", "compare", "ignore"}`), `means`, `count` and `cover`, as the
+//! declaration writes them and in its order, with one exception: the `words` of
+//! an enum and the prefixes of `ignore` are sets, so they are answered sorted.
+//! `diagram` is the same as text, one block per book: a line of its name, key and
+//! description, then a line per link with its meaning, `cover`, count (`1`,
+//! `0..1`, `0..`, `1..`) and target, every column aligned across the drawing. It
+//! is null, and `books` and `links` are empty, when `schema_problems` lists why
+//! the declaration cannot be used, as `check` lists it.
 //!
 //! `new` answers `{"doc": {"id", "key"}, "file": ..., "unresolved_links": [{"link",
 //! "written", "why"}]}`. On 1 (a refusal), 2 and 3 the JSON is `{"error": "refused" |

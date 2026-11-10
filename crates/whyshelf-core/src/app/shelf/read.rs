@@ -1,4 +1,4 @@
-//! The use cases that only read: `check`, `status`, `get`, `trace`, `stale`.
+//! The use cases that only read: `check`, `map`, `status`, `get`, `trace`, `stale`.
 //!
 //! Each builds the schema, the shelf and the ledger ([`load`](super::load)) and asks
 //! the entries of the domain; none writes, and the type they are generic over
@@ -7,12 +7,14 @@
 //! | use case | asks |
 //! |---|---|
 //! | `books_check` | [`Schema::validate`], then [`Shelf::tally_by_book`] and [`assess`] for the faults around the documents |
+//! | `map` | [`Schema::validate`], then [`ShelfMap::of`]; nothing else is read |
 //! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
 //! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`] |
 //!
 //! [`Schema::validate`]: crate::domain::shelf::schema::Schema::validate
+//! [`ShelfMap::of`]: crate::domain::shelf::map::ShelfMap::of
 //! [`Shelf::tally_by_book`]: crate::domain::shelf::build::Shelf::tally_by_book
 //! [`assess`]: crate::domain::shelf::freshness::assess
 //! [`Ledger::status_of`]: crate::domain::shelf::ledger::Ledger::status_of
@@ -25,6 +27,7 @@
 use crate::domain::id::DocId;
 use crate::domain::shelf::freshness::{Freshness, Notice, Standing};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
+use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::trace::{LinkEnd, trace};
 
 use super::ShelfApp;
@@ -32,7 +35,7 @@ use super::error::ShelfError;
 use super::load::{Loaded, View, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
-    Absent, BookCount, BooksCheck, DownstreamEdge, GetReport, StaleEntry, StaleReport,
+    Absent, BookCount, BooksCheck, DownstreamEdge, GetReport, MapReport, StaleEntry, StaleReport,
     StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
 };
 
@@ -161,6 +164,19 @@ impl<P: ShelfRead> ShelfApp<P> {
             uncovered,
             absent,
             unknown,
+        })
+    }
+
+    /// What the declaration of the books says: every book and every link, in its
+    /// order ([`ShelfMap::of`]).
+    ///
+    /// It reads the declaration and nothing else, no document and no ledger. A
+    /// declaration that is not sound is an answer, as for
+    /// [`books_check`](Self::books_check).
+    pub async fn map(&self) -> Result<MapReport, ShelfError> {
+        Ok(match schema_of(&self.ports).await? {
+            Ok(schema) => MapReport::Mapped(ShelfMap::of(&schema)),
+            Err(problems) => MapReport::SchemaInvalid(problems),
         })
     }
 

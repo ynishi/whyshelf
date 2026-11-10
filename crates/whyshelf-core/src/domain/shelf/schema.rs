@@ -193,6 +193,90 @@ impl fmt::Display for BookDir {
     }
 }
 
+/// What a book is for, in one line of text (`description` in the declaration).
+///
+/// Why a type: it is shown in a drawing of the books, one line per book, so a
+/// description that is blank, breaks the line or moves the cursor must not exist.
+///
+/// A text is refused when:
+///
+/// - it is blank: every character is white space or one of the characters that
+///   show nothing (U+200B, U+200C, U+200D, U+2060, U+FEFF), the empty text
+///   included;
+/// - it breaks the line: `\n`, `\r`, U+0085, U+2028 or U+2029;
+/// - it holds any other control character (`char::is_control`: a tab, ESC, U+000B,
+///   U+000C, ...) or a character that sets the direction of the text (U+202A to
+///   U+202E, U+2066 to U+2069, U+200E, U+200F, U+061C).
+///
+/// Anything else is kept as written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BookDescription(String);
+
+/// The characters that show nothing and are no white space: a description of
+/// these alone is blank.
+const INVISIBLE: [char; 5] = ['\u{200B}', '\u{200C}', '\u{200D}', '\u{2060}', '\u{FEFF}'];
+
+/// Whether a character sets the direction of the text around it (U+202A to
+/// U+202E, U+2066 to U+2069, U+200E, U+200F, U+061C): it can reorder a line of a
+/// terminal, so a description is refused with it as with a control character.
+fn is_bidi_format(c: char) -> bool {
+    matches!(
+        c,
+        '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{200E}' | '\u{200F}' | '\u{061C}'
+    )
+}
+
+impl BookDescription {
+    /// A description from a text, kept as written, or why it is refused (above).
+    pub fn new(text: &str) -> Result<Self, DescriptionProblem> {
+        if text
+            .chars()
+            .all(|c| c.is_whitespace() || INVISIBLE.contains(&c))
+        {
+            return Err(DescriptionProblem::Blank);
+        }
+        if text
+            .chars()
+            .any(|c| matches!(c, '\n' | '\r' | '\u{85}' | '\u{2028}' | '\u{2029}'))
+        {
+            return Err(DescriptionProblem::MoreThanOneLine);
+        }
+        if let Some(ch) = text.chars().find(|c| c.is_control() || is_bidi_format(*c)) {
+            return Err(DescriptionProblem::ControlCharacter { ch });
+        }
+        Ok(Self(text.to_owned()))
+    }
+
+    /// The description as text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for BookDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Why a text is not a [`BookDescription`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum DescriptionProblem {
+    /// The text is empty, or only white space and characters that show nothing.
+    #[error("is blank")]
+    Blank,
+    /// The text holds a line break.
+    #[error("is more than one line")]
+    MoreThanOneLine,
+    /// The text holds a control character that breaks no line, or a character
+    /// that sets the direction of the text.
+    #[error("holds the control character {ch:?}")]
+    ControlCharacter {
+        /// The character.
+        ch: char,
+    },
+}
+
 /// Why a text is not a key of a book.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum KeyProblem {
@@ -642,15 +726,52 @@ pub struct BookSchema {
     name: BookName,
     dir: BookDir,
     key: KeyPattern,
-    fields: BTreeMap<EntryName, FieldDecl>,
-    links: BTreeMap<EntryName, LinkKind>,
-    artifact_links: BTreeMap<EntryName, ArtifactLinkKind>,
+    description: Option<BookDescription>,
+    fields: Declared<EntryName, FieldDecl>,
+    /// Every link, into books and to artifacts, in one list: a name is one link.
+    links: Declared<EntryName, DeclaredLink>,
+}
+
+/// A link of a book as declared, into a book or to artifacts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeclaredLink {
+    /// A link into a book.
+    Book(LinkKind),
+    /// A link to artifacts.
+    Artifact(ArtifactLinkKind),
+}
+
+impl DeclaredLink {
+    fn book(&self) -> Option<&LinkKind> {
+        match self {
+            Self::Book(kind) => Some(kind),
+            Self::Artifact(_) => None,
+        }
+    }
+
+    fn artifact(&self) -> Option<&ArtifactLinkKind> {
+        match self {
+            Self::Artifact(kind) => Some(kind),
+            Self::Book(_) => None,
+        }
+    }
 }
 
 impl BookSchema {
     /// The name of the book.
     pub fn name(&self) -> &BookName {
         &self.name
+    }
+
+    /// What the book is for, when the declaration says.
+    pub fn description(&self) -> Option<&BookDescription> {
+        self.description.as_ref()
+    }
+
+    /// Every link of the book, into books and to artifacts, in the order of the
+    /// declaration.
+    pub fn all_links(&self) -> &Declared<EntryName, DeclaredLink> {
+        &self.links
     }
 
     /// The directory of the book.
@@ -663,20 +784,20 @@ impl BookSchema {
         &self.key
     }
 
-    /// The fields of the book, by name.
-    pub fn fields(&self) -> &BTreeMap<EntryName, FieldDecl> {
+    /// The fields of the book, by name, in the order of the declaration.
+    pub fn fields(&self) -> &Declared<EntryName, FieldDecl> {
         &self.fields
     }
 
-    /// The links of the book into books, by name.
-    pub fn links(&self) -> &BTreeMap<EntryName, LinkKind> {
-        &self.links
+    /// The links of the book into books, by name, in the order of the declaration.
+    pub fn links(&self) -> Picked<'_, EntryName, DeclaredLink, LinkKind> {
+        Picked::new(&self.links, DeclaredLink::book)
     }
 
-    /// The links of the book to artifacts, by name. A name is a link into a book or
-    /// a link to artifacts, never both.
-    pub fn artifact_links(&self) -> &BTreeMap<EntryName, ArtifactLinkKind> {
-        &self.artifact_links
+    /// The links of the book to artifacts, by name, in the order of the
+    /// declaration. A name is a link into a book or a link to artifacts, never both.
+    pub fn artifact_links(&self) -> Picked<'_, EntryName, DeclaredLink, ArtifactLinkKind> {
+        Picked::new(&self.links, DeclaredLink::artifact)
     }
 }
 
@@ -692,6 +813,8 @@ pub struct BookSchemaDecl {
     pub dir: String,
     /// The grammar of the keys.
     pub key: KeyPatternDecl,
+    /// What the book is for, as written (one line), when the declaration says.
+    pub description: Option<String>,
     /// The fields.
     pub fields: Vec<FieldEntryDecl>,
     /// The links.
@@ -846,6 +969,14 @@ pub enum SchemaProblem {
         /// Why the path is refused.
         #[source]
         source: ValueError,
+    },
+    /// A description that is blank or more than one line.
+    #[error("book `{book}`: the description {why}")]
+    BadDescription {
+        /// The book, as written.
+        book: String,
+        /// What is wrong with it.
+        why: DescriptionProblem,
     },
     /// A key prefix that breaks its grammar.
     #[error("book `{book}`: {why}")]
@@ -1035,7 +1166,7 @@ pub(super) enum Membership<'a> {
 /// The books of a project, checked as a whole.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schema {
-    books: BTreeMap<BookName, BookSchema>,
+    books: Declared<BookName, BookSchema>,
 }
 
 /// What [`Schema::validate`] learns of one declaration before it can be judged
@@ -1046,14 +1177,21 @@ struct Draft {
     name: Option<BookName>,
     dir: Option<BookDir>,
     key: Option<KeyPattern>,
-    fields: BTreeMap<EntryName, FieldDecl>,
-    links: BTreeMap<EntryName, DraftLink>,
-    artifact_links: BTreeMap<EntryName, ArtifactLinkKind>,
+    description: Option<BookDescription>,
+    fields: Declared<EntryName, FieldDecl>,
+    links: Declared<EntryName, DraftEntry>,
     clean: bool,
 }
 
-/// A link of a draft: what is read of the declaration, before the books are known
-/// together (the grammar of the target's keys is added when they are).
+/// A link of a draft, into a book or to artifacts.
+enum DraftEntry {
+    Book(DraftLink),
+    Artifact(ArtifactLinkKind),
+}
+
+/// A link of a draft into a book: what is read of the declaration, before the
+/// books are known together (the grammar of the target's keys is added when they
+/// are).
 struct DraftLink {
     target: BookName,
     cardinality: Cardinality,
@@ -1072,18 +1210,27 @@ impl Draft {
         let name = read_book_name(&decl.name, problems);
         let dir = read_dir(&label, &decl.dir, problems);
         let key = read_key_pattern(&label, &decl.key, problems);
+        let description = read_description(&label, decl.description.as_deref(), problems);
         let fields = read_fields(&label, decl.fields, problems);
-        let (links, artifact_links) = read_links(&label, decl.links, &fields, spaces, problems);
+        let links = read_links(&label, decl.links, &fields, spaces, problems);
         Self {
             label,
             name,
             dir,
             key,
+            description,
             fields,
             links,
-            artifact_links,
             clean: problems.len() == first_problem,
         }
+    }
+
+    /// The links of the draft into books.
+    fn book_links(&self) -> impl Iterator<Item = (&EntryName, &DraftLink)> {
+        self.links.iter().filter_map(|(name, entry)| match entry {
+            DraftEntry::Book(link) => Some((name, link)),
+            DraftEntry::Artifact(_) => None,
+        })
     }
 
     /// The book, when the declaration had no problem of its own. `key_of` gives the
@@ -1094,29 +1241,45 @@ impl Draft {
         if !self.clean {
             return None;
         }
-        let links = self
-            .links
-            .into_iter()
-            .map(|(name, link)| {
-                let target_key = key_of.get(&link.target)?.clone();
-                let kind = LinkKind {
+        let mut links = Declared::default();
+        for (name, entry) in self.links.into_entries() {
+            let link = match entry {
+                DraftEntry::Artifact(kind) => DeclaredLink::Artifact(kind),
+                DraftEntry::Book(link) => DeclaredLink::Book(LinkKind {
+                    target_key: key_of.get(&link.target)?.clone(),
                     target: link.target,
-                    target_key,
                     cardinality: link.cardinality,
                     propagation: link.propagation,
                     cover: link.cover,
-                };
-                Some((name, kind))
-            })
-            .collect::<Option<_>>()?;
+                }),
+            };
+            links.insert(name, link);
+        }
         Some(BookSchema {
             name: self.name?,
             dir: self.dir?,
             key: self.key?,
+            description: self.description,
             fields: self.fields,
             links,
-            artifact_links: self.artifact_links,
         })
+    }
+}
+
+fn read_description(
+    book: &str,
+    text: Option<&str>,
+    problems: &mut Vec<SchemaProblem>,
+) -> Option<BookDescription> {
+    match BookDescription::new(text?) {
+        Ok(description) => Some(description),
+        Err(why) => {
+            problems.push(SchemaProblem::BadDescription {
+                book: book.to_owned(),
+                why,
+            });
+            None
+        }
     }
 }
 
@@ -1171,13 +1334,14 @@ fn read_key_pattern(
     }
 }
 
-/// The fields of a book; one that breaks a rule is reported and left out.
+/// The fields of a book, in the order written; one that breaks a rule is reported
+/// and left out.
 fn read_fields(
     book: &str,
     entries: Vec<FieldEntryDecl>,
     problems: &mut Vec<SchemaProblem>,
-) -> BTreeMap<EntryName, FieldDecl> {
-    let mut fields = BTreeMap::new();
+) -> Declared<EntryName, FieldDecl> {
+    let mut fields = Declared::default();
     for entry in entries {
         let name = match EntryName::new(&entry.name) {
             Ok(name) => name,
@@ -1199,7 +1363,7 @@ fn read_fields(
             ty,
             presence: entry.presence,
         };
-        if fields.insert(name.clone(), decl).is_some() {
+        if !fields.insert(name.clone(), decl) {
             problems.push(SchemaProblem::DuplicateField {
                 book: book.to_owned(),
                 name,
@@ -1261,19 +1425,15 @@ fn read_field_type(
 /// reported and left out. `fields` are the fields already read, for a name that is
 /// both. A name is one link, whichever its target: a name written twice is reported
 /// whether the two point at books or at artifacts. `spaces` are the spaces the
-/// adapters offer.
+/// adapters offer. The links kept are in the order written.
 fn read_links(
     book: &str,
     entries: Vec<LinkEntryDecl>,
-    fields: &BTreeMap<EntryName, FieldDecl>,
+    fields: &Declared<EntryName, FieldDecl>,
     spaces: &BTreeSet<Space>,
     problems: &mut Vec<SchemaProblem>,
-) -> (
-    BTreeMap<EntryName, DraftLink>,
-    BTreeMap<EntryName, ArtifactLinkKind>,
-) {
-    let mut links = BTreeMap::new();
-    let mut artifact_links = BTreeMap::new();
+) -> Declared<EntryName, DraftEntry> {
+    let mut links = Declared::default();
     for entry in entries {
         let name = match EntryName::new(&entry.name) {
             Ok(name) => name,
@@ -1311,8 +1471,7 @@ fn read_links(
                 name: name.clone(),
             });
         }
-        let taken = links.contains_key(&name) || artifact_links.contains_key(&name);
-        if taken {
+        if links.contains_key(&name) {
             problems.push(SchemaProblem::DuplicateLink {
                 book: book.to_owned(),
                 name: name.clone(),
@@ -1340,7 +1499,7 @@ fn read_links(
                     propagation: entry.propagation,
                     cover: entry.cover,
                 };
-                links.entry(name).or_insert(link);
+                links.insert(name, DraftEntry::Book(link));
             }
             None => {
                 if entry.cover {
@@ -1385,11 +1544,11 @@ fn read_links(
                     propagation,
                     comparison,
                 };
-                artifact_links.entry(name).or_insert(link);
+                links.insert(name, DraftEntry::Artifact(link));
             }
         }
     }
-    (links, artifact_links)
+    links
 }
 
 /// The space of a link to artifacts: written, a space, and one the adapters offer
@@ -1461,7 +1620,7 @@ fn check_links(
     problems: &mut Vec<SchemaProblem>,
 ) {
     for draft in drafts {
-        for (link, kind) in &draft.links {
+        for (link, kind) in draft.book_links() {
             if !declared.contains(&kind.target) {
                 problems.push(SchemaProblem::UnknownLinkTarget {
                     book: draft.label.clone(),
@@ -1526,9 +1685,11 @@ impl Schema {
     /// word, two books that use one key prefix, two directories that are the same or
     /// nest, a `Replaces` link that leaves its own book, a link to artifacts that
     /// replaces, one that names no space, a text that is no space, or a space not in
-    /// `spaces` (the spaces the adapters offer, given as a value), and a book named
-    /// [`ARTIFACT_TARGET`]. A [`Schema`] exists only when there is none, so nothing
-    /// after this re-checks a declaration.
+    /// `spaces` (the spaces the adapters offer, given as a value), a book named
+    /// [`ARTIFACT_TARGET`], and a description that is no [`BookDescription`]. A
+    /// [`Schema`] exists only when there is none, so nothing after this re-checks a
+    /// declaration. The books, and the fields and links of each, are kept in the
+    /// order the declaration writes them, once ([`Declared`]).
     // The problems are the answer, read once per run; it is not a hot path.
     #[allow(clippy::result_large_err)]
     pub fn validate(
@@ -1553,11 +1714,13 @@ impl Schema {
             .iter()
             .filter_map(|d| Some((d.name.clone()?, d.key.clone()?)))
             .collect();
-        let books = drafts
+        let mut books = Declared::default();
+        for book in drafts
             .into_iter()
             .filter_map(|draft| draft.into_schema(&key_of))
-            .map(|book| (book.name.clone(), book))
-            .collect();
+        {
+            books.insert(book.name.clone(), book);
+        }
         Ok(Self { books })
     }
 
@@ -1580,11 +1743,15 @@ impl Schema {
         self.books.get(name)
     }
 
-    /// The books, by name.
-    pub fn books(&self) -> &BTreeMap<BookName, BookSchema> {
+    /// The books, by name, in the order of the declaration.
+    pub fn books(&self) -> &Declared<BookName, BookSchema> {
         &self.books
     }
 }
+
+mod declared;
+
+pub use declared::{Declared, Picked};
 
 #[cfg(test)]
 mod comparison_tests;

@@ -11,6 +11,10 @@ pub enum BooksCommand {
     /// Check the declaration, the documents and the ledger; exit 1 if anything is
     /// wrong.
     Check,
+    /// What the declaration says: every book and every link, with a drawing of
+    /// them; it reads nothing else, and exits 1 as `check` does when the
+    /// declaration cannot be used.
+    Map,
     /// Every document, what was decided about it and whether it still holds.
     Status,
     /// One document in full, with where its approval stops holding.
