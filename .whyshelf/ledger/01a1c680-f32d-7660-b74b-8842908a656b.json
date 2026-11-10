@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794331702044,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11bc9c136097621264f69d36c6bdb21c4dfbfd4a",
+      "hash": "sha256:0f0dc2ad41413994dc6572780a21a6417af6a2f38038b3c173d65af913147e1c",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "4"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-38d9-72fc-8ee9-4bc78bdcca4c"
+    }
+  ],
+  "id": "01a1c680-f32d-7660-b74b-8842908a656b",
+  "kind": "decision",
+  "reason": "Shared tests changed for #47, and DEC-33 names the exit 1 of map and unlinked; checked by a blind review",
+  "revision": "d8984e12f19b767dfaee50d9e3476f80d95a8d11",
+  "seen": "sha256:ee5b023c8b0ffac33a7ac16fd28d716315715c27fabd918eb3351172ae4f54ce",
+  "seen_address": "8ea9966b54a032c0bd52b4fa8d9ba4f612763c3e",
+  "subject": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794331700374,
+  "expires": null,
+  "frame": [
+    {
+      "address": "506bffb88deb3f7867e1389c1dd8e17e131565d9",
+      "hash": "sha256:74a75042c5f67aad20a2140eabf2b07750e2afcf7caa003baf93dc8b6de49487",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4d3-a2e6-7651-a588-ca95e98cfe67"
+    },
+    {
+      "address": "0bf188350bcff41c0ee5170de9d6b8e1200533a1",
+      "hash": "sha256:74a50a66c32539411307d5b327e95c96344908df8ea05126f93483f75e68af7a",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "17"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c671-1c9c-749b-bd8e-66518935992c"
+    }
+  ],
+  "id": "01a1c680-edd6-71d7-821e-6f901aabe5c1",
+  "kind": "decision",
+  "reason": "Isolated documents are found by asking, apart from cover (#47); checked against the code by three rounds of blind review, every finding fixed",
+  "revision": "d8984e12f19b767dfaee50d9e3476f80d95a8d11",
+  "seen": "sha256:a0325c31d2e214266cfafccbae480ea590107004fc5955b97a37c0c76c50b4ad",
+  "seen_address": "ca7c8c4269eaa45df8e03f0ea03e3e5f2cf9ea2d",
+  "subject": "01a1c671-1d95-725c-bd74-8b605650d16c",
+  "v": 1,
+  "verb": "approve"
+}

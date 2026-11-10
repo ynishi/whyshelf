@@ -447,6 +447,12 @@ pub enum Standing {
 }
 
 impl Standing {
+    /// Whether no decision went against it: pending, or approved at any freshness.
+    /// Denied, deprecated and retired are decided against.
+    pub fn stands(&self) -> bool {
+        matches!(self, Self::Pending | Self::Approved(_))
+    }
+
     /// The standing without the causes and the successors.
     pub fn kind(&self) -> StandingKind {
         match self {
@@ -1314,11 +1320,11 @@ struct ExpectedReach<'s> {
     reached: BTreeSet<(DocId, BookName, EntryName)>,
 }
 
-/// Whether a document counts for coverage: pending or approved, at any freshness.
-/// What was denied, deprecated or retired neither reaches nor is expected to be
-/// reached.
+/// Whether a document counts for coverage: it has a standing that
+/// [stands](Standing::stands). What was denied, deprecated or retired neither
+/// reaches nor is expected to be reached.
 fn stands(standing: Option<&Standing>) -> bool {
-    matches!(standing, Some(Standing::Pending | Standing::Approved(_)))
+    standing.is_some_and(Standing::stands)
 }
 
 /// The expectations of the covering links (`cover = true`) and the documents they

@@ -8,4 +8,4 @@ rustdoc: ["whyshelf", "whyshelf_core::app::shelf::ErrorClass", "whyshelf_core::a
 serves: ["REQ-4"]
 title: "Four exit statuses over three classes of error"
 ---
-The exit status is 0 answered, 1 when check found something wrong, when the model refused a judgement, or when stale --exit-code found an approval that does not hold (DEC-26), 2 a wrong request and 3 a failed run. Every error belongs to one of three classes (request, refused, failed), with no catch-all, so an error added without a class does not build.
+The exit status is 0 answered, 1 when check found something wrong, when the model refused a judgement, when stale --exit-code found an approval that does not hold (DEC-26), or when map or unlinked was given a declaration that cannot be used, 2 a wrong request and 3 a failed run. Every error belongs to one of three classes (request, refused, failed), with no catch-all, so an error added without a class does not build.

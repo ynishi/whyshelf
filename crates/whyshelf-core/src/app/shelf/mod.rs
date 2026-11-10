@@ -13,6 +13,7 @@
 //! | [`status`](ShelfApp::status) | no | [`StatusReport`]: every document's declared status and standing |
 //! | [`get`](ShelfApp::get) | no | [`GetReport`]: one document, its standing, notices and root causes |
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
+//! | [`unlinked`](ShelfApp::unlinked) | no | [`UnlinkedReport`]: the problems of the declaration, or the documents linked neither way, those no link reaches and those that hold none, those decided against apart |
 //! | [`stale`](ShelfApp::stale) | no | [`StaleReport`]: the approvals that no longer hold, with where they start to fail |
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
@@ -52,6 +53,7 @@ pub mod ports;
 mod read;
 mod report;
 mod same_meaning;
+mod unlinked;
 mod withdraw;
 
 #[cfg(test)]
@@ -74,6 +76,8 @@ mod space_tests;
 mod successor_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod unlinked_tests;
 
 pub use error::{ErrorClass, ShelfError};
 pub use judge::{JudgeRequest, Judgement};
@@ -86,9 +90,11 @@ pub use ports::{
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
     DownstreamEdge, GetReport, Health, Judged, MapReport, Names, Row, StaleEntry, StaleReport,
-    StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
+    StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport,
+    UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
+pub use unlinked::{UnlinkedAsk, UnlinkedFilter};
 pub use withdraw::WithdrawRequest;
 
 /// The use cases of a shelf over a bundle of ports.

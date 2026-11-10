@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a944e297ea3627fcd26c903c097498e28a62b064",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3f30531ad9d03e17127a70a1a7a000e2c8bec593d2e30d80ee41464596a7b981",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794331700374,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ca7c8c4269eaa45df8e03f0ea03e3e5f2cf9ea2d",
+      "hash": "sha256:a0325c31d2e214266cfafccbae480ea590107004fc5955b97a37c0c76c50b4ad",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "49"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c671-1d95-725c-bd74-8b605650d16c"
+    }
+  ],
+  "id": "01a1c680-ef3e-71e9-ab6a-21fe378ead88",
+  "kind": "decision",
+  "reason": "Isolated documents are found by asking, apart from cover (#47); checked against the code by three rounds of blind review, every finding fixed",
+  "revision": "d8984e12f19b767dfaee50d9e3476f80d95a8d11",
+  "seen": "sha256:8b17609c060d264db4b673ef93353d77b1e9e7005c5a7816ec9579044f0c32dd",
+  "seen_address": "9dcfbe4e991deba02eefca7aba4b12ed138e25e9",
+  "subject": "01a1c671-1f9d-76d6-aacd-ed84f9eac803",
+  "v": 1,
+  "verb": "approve"
+}

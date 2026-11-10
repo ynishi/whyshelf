@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794331700374,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c680-ed70-703b-aba5-2e347de3bf6d",
+  "kind": "decision",
+  "reason": "Isolated documents are found by asking, apart from cover (#47); checked against the code by three rounds of blind review, every finding fixed",
+  "revision": "d8984e12f19b767dfaee50d9e3476f80d95a8d11",
+  "seen": "sha256:74a50a66c32539411307d5b327e95c96344908df8ea05126f93483f75e68af7a",
+  "seen_address": "0bf188350bcff41c0ee5170de9d6b8e1200533a1",
+  "subject": "01a1c671-1c9c-749b-bd8e-66518935992c",
+  "v": 1,
+  "verb": "approve"
+}

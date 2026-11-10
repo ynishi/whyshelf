@@ -196,6 +196,62 @@ pub enum MapReport {
     Mapped(ShelfMap),
 }
 
+/// A document `unlinked` lists: the book it is in, and the document as the answers
+/// show it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnlinkedEntry {
+    /// The book.
+    pub book: BookName,
+    /// The document.
+    pub row: Row,
+}
+
+/// The three disjoint lists of `unlinked`, each in the order the declaration writes
+/// the books, then by identity. Which document goes in which is the rule of
+/// [`Linkage`](crate::domain::shelf::trace::Linkage).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct UnlinkedLists {
+    /// Linked neither way ([`Linkage::isolated`]); always answered.
+    ///
+    /// [`Linkage::isolated`]: crate::domain::shelf::trace::Linkage::isolated
+    pub isolated: Vec<UnlinkedEntry>,
+    /// Reached by no link ([`Linkage::unreached`]); none when not asked.
+    ///
+    /// [`Linkage::unreached`]: crate::domain::shelf::trace::Linkage::unreached
+    pub no_incoming: Option<Vec<UnlinkedEntry>>,
+    /// Holding no link ([`Linkage::holds_none`]); none when not asked.
+    ///
+    /// [`Linkage::holds_none`]: crate::domain::shelf::trace::Linkage::holds_none
+    pub no_outgoing: Option<Vec<UnlinkedEntry>>,
+}
+
+/// The result of `unlinked`: the documents that are not linked, each way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnlinkedReport {
+    /// The declaration of the books is not sound, as `check` answers it. Nothing was
+    /// read through it.
+    SchemaInvalid {
+        /// Its problems.
+        problems: NonEmptyVec<SchemaProblem>,
+        /// The lists asked for, empty, for the documents that stand and those
+        /// decided against alike.
+        lists: UnlinkedLists,
+    },
+    /// The declaration is sound; the documents and the ledger were read.
+    Answered {
+        /// The documents that [stand](crate::domain::shelf::freshness::Standing::stands):
+        /// pending or approved.
+        standing: UnlinkedLists,
+        /// The documents decided against (denied, deprecated, retired), apart, so
+        /// that they do not crowd out the ones that stand.
+        decided_against: UnlinkedLists,
+        /// The keys of the valid documents.
+        names: Names,
+        /// What is wrong around them.
+        health: Health,
+    },
+}
+
 /// The result of `status`: every document with what was decided and where it stands.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusReport {
