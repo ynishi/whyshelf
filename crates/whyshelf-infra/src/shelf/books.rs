@@ -22,6 +22,7 @@
 //! target = "finding"
 //! count = "at-least-one"           # "one", "optional", "many" (default), "at-least-one"
 //! means = "depends"                # "depends", "informs", "replaces"
+//! cover = "warn"                   # "error" (or true), "warn", false (default)
 //!
 //! [[book.link]]
 //! name = "tests"
@@ -49,8 +50,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use whyshelf_core::app::shelf::BookSchemaSource;
 use whyshelf_core::domain::shelf::schema::{
-    ARTIFACT_TARGET, BookSchemaDecl, Cardinality, CompareDecl, FieldEntryDecl, FieldPresence,
-    FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation,
+    ARTIFACT_TARGET, BookSchemaDecl, Cardinality, CompareDecl, CoverDecl, FieldEntryDecl,
+    FieldPresence, FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation,
 };
 
 /// A declaration of a Finding -> Spec -> Design chain, as a project could write it.
@@ -229,10 +230,19 @@ struct LinkDto {
     compare: Option<String>,
     /// For `compare = "lines"`: the prefixes of the lines left out.
     ignore: Option<Vec<String>>,
-    /// For a link into a book: every document of the target book is expected to be
-    /// reached by it; checked by the domain.
-    #[serde(default)]
-    cover: bool,
+    /// For a link into a book: how strongly every document of the target book is
+    /// expected to be reached by it, a truth value or a word; checked by the domain.
+    cover: Option<CoverDto>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(
+    untagged,
+    expecting = "`cover` takes true, false, \"error\" or \"warn\""
+)]
+enum CoverDto {
+    Truth(bool),
+    Word(String),
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -313,7 +323,10 @@ impl BookDto {
                             ignore: ignore.unwrap_or_default(),
                         }),
                     },
-                    cover: l.cover,
+                    cover: l.cover.map(|cover| match cover {
+                        CoverDto::Truth(truth) => CoverDecl::Truth(truth),
+                        CoverDto::Word(word) => CoverDecl::Word(word),
+                    }),
                 })
                 .collect(),
         }
@@ -502,30 +515,57 @@ means = "informs"
     }
 
     #[test]
-    fn cover_is_read_onto_a_link_and_is_false_when_not_written() {
-        let decls = parse(&book_link("cover = true\n")).unwrap();
-        assert!(decls[0].links[0].cover);
-        let schema = validate(decls).unwrap();
-        let book = schema.book("a").unwrap();
-        let (_, kind) = book
-            .links()
-            .iter()
-            .find(|(name, _)| name.as_str() == "up")
-            .unwrap();
-        assert!(kind.cover);
-
-        assert!(!parse(&book_link("cover = false\n")).unwrap()[0].links[0].cover);
-        assert!(!parse(&book_link("")).unwrap()[0].links[0].cover);
+    fn cover_is_read_onto_a_link_as_a_truth_value_or_a_word() {
+        for (text, read, strength) in [
+            (
+                "cover = true\n",
+                Some(CoverDecl::Truth(true)),
+                Some("error"),
+            ),
+            ("cover = false\n", Some(CoverDecl::Truth(false)), None),
+            (
+                "cover = 'error'\n",
+                Some(CoverDecl::Word("error".to_owned())),
+                Some("error"),
+            ),
+            (
+                "cover = 'warn'\n",
+                Some(CoverDecl::Word("warn".to_owned())),
+                Some("warn"),
+            ),
+            ("", None, None),
+        ] {
+            let decls = parse(&book_link(text)).unwrap();
+            assert_eq!(decls[0].links[0].cover, read, "{text}");
+            let schema = validate(decls).unwrap();
+            let book = schema.book("a").unwrap();
+            let (_, kind) = book
+                .links()
+                .iter()
+                .find(|(name, _)| name.as_str() == "up")
+                .unwrap();
+            assert_eq!(kind.cover.map(|c| c.word()), strength, "{text}");
+        }
     }
 
     #[test]
-    fn a_cover_that_is_not_a_truth_value_is_refused() {
-        for value in ["'true'", "1", "['yes']"] {
+    fn a_cover_that_is_neither_a_truth_value_nor_a_word_is_refused() {
+        for value in ["1", "['yes']"] {
+            let error = parse(&book_link(&format!("cover = {value}\n")))
+                .expect_err(value)
+                .to_string();
             assert!(
-                parse(&book_link(&format!("cover = {value}\n"))).is_err(),
-                "cover = {value}"
+                error.contains(r#"true, false, "error" or "warn""#),
+                "cover = {value}: {error}"
             );
         }
+        // A word is read as written; the domain refuses one it does not know.
+        let decls = parse(&book_link("cover = 'true'\n")).unwrap();
+        let problems = validate(decls).unwrap_err().into_vec();
+        assert!(
+            matches!(&problems[..], [SchemaProblem::BadCover { value, .. }] if value == "true"),
+            "{problems:?}"
+        );
     }
 
     #[test]

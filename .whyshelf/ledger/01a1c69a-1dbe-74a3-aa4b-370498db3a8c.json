@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794333351339,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c69a-1dbe-74a3-aa4b-370498db3a8c",
+  "kind": "decision",
+  "reason": "A covering link declares a strength, and findings are covered as a warning (#49, #43); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "18b77b51c1ecaccbefc3eddb6e377e0f88b6862d",
+  "seen": "sha256:f3c1eab12716a9de186084b276ead9b722bd3676e46a2ec019c987e236ca34b5",
+  "seen_address": "57b745ee3189b83bff859421612ef48b95a021fd",
+  "subject": "01a1c690-671b-77fb-a349-3a19b9c1bcc4",
+  "v": 1,
+  "verb": "approve"
+}

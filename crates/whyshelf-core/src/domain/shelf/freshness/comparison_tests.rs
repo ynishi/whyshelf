@@ -195,7 +195,7 @@ fn schema_of_both() -> Schema {
                 propagation: Propagation::Depends,
                 space: Some("file".to_owned()),
                 compare: None,
-                cover: false,
+                cover: None,
             });
         }
     }
