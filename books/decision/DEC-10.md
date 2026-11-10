@@ -8,4 +8,4 @@ rustdoc: ["whyshelf_core::domain::shelf::artifact::Comparison", "whyshelf_core::
 serves: ["REQ-2"]
 title: "What of a file counts is declared per link and kept in each pin"
 ---
-A link to artifacts declares what of a file counts: every byte, or its lines without white space, blank lines and the lines that start with a declared prefix. The domain makes every hash of a file from that comparison, and each pin keeps the comparison its hash was made with; two hashes are compared only when made the same way, and a link whose comparison changed since says so as its own cause.
+A link to artifacts declares what of a file counts: every byte, or its lines with the white space in each collapsed to one space and without blank lines and the lines that start with a declared prefix. The domain makes every hash of a file from that comparison, and each pin keeps the comparison its hash was made with; two hashes are compared only when made the same way, and a link whose comparison changed since says so as its own cause.

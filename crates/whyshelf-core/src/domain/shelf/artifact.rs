@@ -10,7 +10,7 @@
 //! |---|---|---|
 //! | [`Artifact`] | a path under the root, and whether a file is there now with which [`ArtifactHash`] | the build of a shelf, from an [`ArtifactReading`] (rule A1) |
 //! | [`ArtifactHash`] | the hash of the file as its link's [`Comparison`] counts it: the only thing freshness compares (A3, A4) | [`Comparison::fingerprint`], over the bytes the adapter read |
-//! | [`Comparison`] | what of a file counts: every byte, or the lines without white space and without the lines a prefix marks | a book's declaration of the link; kept in each pin |
+//! | [`Comparison`] | what of a file counts: every byte, or the lines with their white space collapsed, without blank lines and without the lines a prefix marks | a book's declaration of the link; kept in each pin |
 //! | [`ContentAddress`] | where the content can be read back later; opaque, only compared | an adapter, after its own check ([`ContentAddress::from_validated`], A7) |
 //! | [`Revision`] | one point of the project's history, kept as a hint; opaque | the same ([`Revision::from_validated`]) |
 //!

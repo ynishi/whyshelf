@@ -85,7 +85,7 @@ required = true
 name = "tests"              # depends: the test files that show it holds; editing their code makes it stale
 target = "artifact"
 means = "depends"
-compare = "lines"           # whitespace, blank lines and comments do not count
+compare = "lines"           # indentation, how many spaces, blank lines and // comments do not count
 ignore = ["//"]
 [[book.link]]
 name = "checks"             # depends: a changed decision makes its check stale

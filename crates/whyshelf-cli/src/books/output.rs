@@ -1220,7 +1220,7 @@ fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
     // hash is taken over its text after the reader's normalization (line breaks,
     // trailing white space), so its diff is taken over the normalized texts too. An
     // artifact's hash is its link's comparison of the file (every byte, or the lines
-    // without white space and ignored lines), so when it is the same the diff is
+    // with their white space collapsed, without blank and ignored lines), so when it is the same the diff is
     // empty, and when it is not, the diff is of the texts as they are.
     let is_doc = matches!(item.now, ItemNow::Doc(_));
     let diff = match (approved_text, current_text) {

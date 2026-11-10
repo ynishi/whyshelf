@@ -1899,7 +1899,9 @@ impl Ledger {
             .max_by_key(|d| (d.at, d.id))
     }
 
-    /// The documents some record is about, revoked or not.
+    /// The documents some decision is about, revoked or not. A declaration of the
+    /// same meaning about a document is not counted here, and a revocation names no
+    /// document.
     pub fn subjects(&self) -> &BTreeSet<DocId> {
         &self.subjects
     }

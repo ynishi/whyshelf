@@ -190,7 +190,8 @@ impl NewDoc {
 
 impl Shelf {
     /// The next key of a prefixed book: one more than the highest number any file of
-    /// the book writes, valid or not, so that a key is never handed out twice;
+    /// the book writes, valid or not, so that a key a file writes is not handed out
+    /// again (a file whose front matter cannot be read writes no key that is seen);
     /// `<PREFIX>-1` when there is none. A key with a name tail (`FR-LATENCY`) is no
     /// number and is not counted. A book of slugs has no next key.
     ///

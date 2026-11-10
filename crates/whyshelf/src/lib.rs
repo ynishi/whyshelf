@@ -192,8 +192,9 @@
 //!   decided does not stand (denied, deprecated or retired: pin the successor). An
 //!   upstream that is only pending is accepted, and the approval is stale from the
 //!   start.
-//! - `new` takes the book's next key (`V-4` after `V-3`, counting every file of the
-//!   book, valid or not, so a key is never reused) unless `--key` gives one; a book
+//! - `new` takes the book's next key (`V-4` after `V-3`, counting every key a file
+//!   of the book writes, valid or not; a file whose front matter cannot be read is
+//!   not counted) unless `--key` gives one; a book
 //!   of slugs needs `--key`, and a key that is taken is refused. Each `<entry>` is
 //!   read by the book's declaration: a list field or a link takes `a,b` (links are
 //!   keys), or one item at a time with `<entry>+=<item>`, commas kept and white space
@@ -209,7 +210,9 @@
 //!   only reads and creates nothing. Who judges is `--actor`, else `WHYSHELF_ACTOR`,
 //!   else Git's `user.name`; never a committed file.
 //! - None of these commands needs a Git repository. Git is used, when it is there,
-//!   only to name and read back the content an approval saw.
+//!   to name and read back the content an approval saw and to keep `HEAD` as a hint
+//!   of the revision; its `user.name`, read even outside a repository, says who
+//!   judges when nothing else does. No freshness depends on any of it.
 //!
 //! ## Output and exit status
 //!
