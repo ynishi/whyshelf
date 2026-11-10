@@ -31,11 +31,17 @@ and this project adheres to
 - Every row of an answer carries `decision`: the decision that stands about
   the document, with its record's `judgement` id, `actor`, `at` and `reason`
   (#32).
+- `stale` answers `origins` too: each document, file, cycle or the
+  declaration where the stale approvals start, with the approvals it
+  degrades, so an edit of a file several approvals pin is read once (#34).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
 ### Fixed
 
+- An upstream edited inside a cycle of frames, where no `Via` passes, is a
+  root of the approval that pinned it; it was left out of the roots. An edit
+  or a cycle reached two ways up is one root (#34).
 - A wrong argument, or none, is answered with the error JSON of a request and
   exit 2, as every wrong request is; only `--help` and `--version` answer in
   text, and there is no `help` command (#28).

@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794318672164,
+  "expires": null,
+  "frame": [
+    {
+      "address": "afcf5cf49e9d8ca7de7a1bd3d443ce084b20693c",
+      "hash": "sha256:c8aca837254675dc3fbc3f163b55a58c6d777e4ddfb0e1b49f1f9339958e4ed4",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "15"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c5ae-3667-7464-9605-084d59233cef"
+    }
+  ],
+  "id": "01a1c5ba-2218-7066-b347-f649cf01aa38",
+  "kind": "decision",
+  "reason": "Stale approvals grouped by origin, and the roots of a cycle fixed (#34); checked against the code by three rounds of blind review, every finding fixed",
+  "revision": "1eca61bff39d16be1c6ae951d3ce759c6b047eb3",
+  "seen": "sha256:1c2efae13bcf74c29df5dacea069f3260206db27a9f5594997d4c5f54713b415",
+  "seen_address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+  "subject": "01a1c5ae-3719-7199-87eb-67281a108cef",
+  "v": 1,
+  "verb": "approve"
+}
