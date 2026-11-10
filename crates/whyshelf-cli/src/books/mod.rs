@@ -125,6 +125,9 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
         BooksCommand::Schema => Ok(print(&output::schemas())),
         BooksCommand::Check => ShelfApp::new(project).books_check().await.map(|check| {
             print(&output::books_check(&check));
+            for warning in output::check_warnings(&check) {
+                eprintln!("{warning}");
+            }
             if check.is_clean() {
                 Exit::Ok
             } else {

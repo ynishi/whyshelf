@@ -9,20 +9,29 @@ use crate::domain::shelf::fixtures_tests::{
     approved, decls, deny, deprecate, docid, fr, ledger, list, reading, retire, spaces, text,
 };
 use crate::domain::shelf::ledger::{JudgedAt, Ledger, Record};
-use crate::domain::shelf::schema::{BookSchemaDecl, Schema};
+use crate::domain::shelf::schema::{BookSchemaDecl, CoverDecl, CoverSeverity, Schema};
 
 use super::*;
 
 /// The fixtures' schema with `cover = true` on these links, as (book, link).
 fn schema_covering(links: &[(&str, &str)]) -> Schema {
+    let links: Vec<_> = links
+        .iter()
+        .map(|(book, link)| (*book, *link, CoverDecl::Truth(true)))
+        .collect();
+    schema_covering_as(&links)
+}
+
+/// The fixtures' schema with these `cover`s, as (book, link, cover).
+fn schema_covering_as(links: &[(&str, &str, CoverDecl)]) -> Schema {
     let mut decls: Vec<BookSchemaDecl> = decls();
-    for (book, link) in links {
+    for (book, link, cover) in links {
         decls
             .iter_mut()
             .find(|b| b.name == *book)
             .and_then(|b| b.links.iter_mut().find(|l| l.name == *link))
             .expect("the fixtures declare it")
-            .cover = true;
+            .cover = Some(cover.clone());
     }
     Schema::validate(decls, &spaces()).unwrap()
 }
@@ -52,7 +61,7 @@ fn not_covered(shelf: &Shelf, ledger: &Ledger, n: u128) -> BTreeSet<(String, Str
         .notices_of(docid(n))
         .iter()
         .filter_map(|notice| match notice {
-            Notice::NotCovered { book, link } => Some((book.to_string(), link.to_string())),
+            Notice::NotCovered { book, link, .. } => Some((book.to_string(), link.to_string())),
             _ => None,
         })
         .collect()
@@ -156,6 +165,36 @@ fn two_covering_links_into_one_book_are_each_expected() {
     );
     assert!(not_covered(&full, &ledger(vec![]), 1).is_empty());
     assert_eq!(not_covered(&full, &ledger(vec![]), 2), both);
+}
+
+#[test]
+fn each_notice_carries_the_strength_its_link_declares() {
+    let schema = schema_covering_as(&[
+        ("spec", "grounds", CoverDecl::Word("warn".to_owned())),
+        ("finding", "base", CoverDecl::Truth(true)),
+    ]);
+    let shelf = shelf_of(&schema, vec![fr(1, &[])]);
+    let strengths: BTreeSet<(String, CoverSeverity)> =
+        assess(&shelf, &ledger(vec![]), JudgedAt::new(100))
+            .notices_of(docid(1))
+            .iter()
+            .filter_map(|notice| match notice {
+                Notice::NotCovered { link, severity, .. } => Some((link.to_string(), *severity)),
+                _ => None,
+            })
+            .collect();
+    assert_eq!(
+        strengths,
+        BTreeSet::from([
+            ("base".to_owned(), CoverSeverity::Error),
+            ("grounds".to_owned(), CoverSeverity::Warn),
+        ])
+    );
+    // Whatever the strength, the freshness is unchanged.
+    assert_eq!(
+        assess(&shelf, &ledger(vec![]), JudgedAt::new(100)).standing_of(docid(1)),
+        Standing::Pending
+    );
 }
 
 #[test]

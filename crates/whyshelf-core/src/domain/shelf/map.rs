@@ -9,8 +9,8 @@
 
 use super::artifact::{Comparison, Space};
 use super::schema::{
-    BookDescription, BookDir, BookName, Cardinality, DeclaredLink, EntryName, FieldDecl,
-    KeyPattern, Propagation, Schema,
+    BookDescription, BookDir, BookName, Cardinality, CoverSeverity, DeclaredLink, EntryName,
+    FieldDecl, KeyPattern, Propagation, Schema,
 };
 
 /// Every book and every link of a declaration, in the order it writes them.
@@ -60,9 +60,9 @@ pub enum MapTarget {
     Book {
         /// The book.
         book: BookName,
-        /// Whether every pending or approved document of it is expected to be
-        /// reached ([`LinkKind::cover`](super::schema::LinkKind::cover)).
-        cover: bool,
+        /// How strongly every pending or approved document of it is expected to be
+        /// reached, or `None` ([`LinkKind::cover`](super::schema::LinkKind::cover)).
+        cover: Option<CoverSeverity>,
     },
     /// Artifacts, by name in a space.
     Artifact {

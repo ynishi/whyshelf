@@ -87,7 +87,7 @@ fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
         propagation,
         space: None,
         compare: None,
-        cover: false,
+        cover: None,
     }
 }
 
@@ -125,7 +125,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
                     propagation: Propagation::Depends,
                     space: Some("file".to_owned()),
                     compare: None,
-                    cover: false,
+                    cover: None,
                 },
             ],
         },

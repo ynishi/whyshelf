@@ -11,8 +11,9 @@ use whyshelf_infra::shelf::books::parse;
 use super::*;
 
 /// Three books, declared in an order that is not the one of their names: links of
-/// every count, a cover, a link into its own book, one to artifacts compared by
-/// lines, and a book of slugs with no link and no description.
+/// every count, a cover of each strength, a link into its own book, one to
+/// artifacts compared by lines, and a book of slugs with no link and no
+/// description.
 const BOOKS: &str = r##"
 [[book]]
 name = "verification"
@@ -54,6 +55,7 @@ name = "replaces"
 target = "decision"
 count = "optional"
 means = "replaces"
+cover = "warn"
 [[book.link]]
 name = "main"
 target = "note"
@@ -81,16 +83,16 @@ fn mapped() -> MapOut {
 
 #[test]
 fn the_drawing_is_one_block_per_book_in_the_order_of_the_declaration() {
-    // Every column is aligned across the blocks, and the one of `cover` is in the
-    // block of `decision` too, where no link covers.
+    // Every column is aligned across the blocks, the one of `cover` as wide as
+    // `cover(warn)`, and it is in every block that has a link.
     let expected = "\
 verification  V-    how a decision is checked
-├─ tests     depends          0..   ──► artifact space=file  compare=lines ignore=\"#\",\"//\"
-├─ checks    depends   cover  1..   ──► decision
-└─ for       informs          0..   ──► note
+├─ tests     depends                0..   ──► artifact space=file  compare=lines ignore=\"#\",\"//\"
+├─ checks    depends   cover        1..   ──► decision
+└─ for       informs                0..   ──► note
 decision      DEC-  how it is met
-├─ replaces  replaces         0..1  ──► decision (own book)
-└─ main      informs          1     ──► note
+├─ replaces  replaces  cover(warn)  0..1  ──► decision (own book)
+└─ main      informs                1     ──► note
 note          slug
 ";
     assert_eq!(mapped().diagram.as_deref(), Some(expected));
@@ -164,6 +166,7 @@ fn the_json_holds_the_books_and_links_as_data() {
             "means": "depends",
             "count": "many",
             "cover": false,
+            "cover_severity": null,
         })
     );
     assert_eq!(
@@ -175,10 +178,16 @@ fn the_json_holds_the_books_and_links_as_data() {
             "means": "depends",
             "count": "at-least-one",
             "cover": true,
+            "cover_severity": "error",
         })
     );
+    // `cover` is true for either strength, and the strength stands beside it.
+    assert_eq!(links[2]["cover"], false);
+    assert_eq!(links[2]["cover_severity"], serde_json::Value::Null);
     assert_eq!(links[3]["target"]["book"], "decision");
     assert_eq!(links[3]["count"], "optional");
+    assert_eq!(links[3]["cover"], true);
+    assert_eq!(links[3]["cover_severity"], "warn");
     assert_eq!(links[4]["count"], "one");
 }
 
