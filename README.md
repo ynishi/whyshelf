@@ -9,7 +9,7 @@ cargo install whyshelf-cli   # installs the `whyshelf` command
 ## Documentation
 
 The requirements, decisions and verifications of whyshelf itself are whyshelf
-books under `books/` (`whyshelf books status`). Everything else is the RustDoc:
+books under `books/` (`whyshelf status`). Everything else is the RustDoc:
 the model, the file formats, the command line, its output and exit status.
 Build and read it with:
 

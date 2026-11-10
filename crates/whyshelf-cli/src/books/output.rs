@@ -1,5 +1,5 @@
-//! The JSON form of every answer of `books`: one serde type per command, the same
-//! type `books schema` describes, so the schema and the output cannot drift apart.
+//! The JSON form of every answer: one serde type per command, the same
+//! type `schema` describes, so the schema and the output cannot drift apart.
 //!
 //! A report of the use cases holds domain values; this module writes them as data
 //! an agent can read without knowing Rust: a document is `{id, key}`, a state is a
@@ -172,7 +172,7 @@ pub struct BookOut {
     pub invalid: usize,
 }
 
-/// The answer of `books check`.
+/// The answer of `check`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct BooksCheckOut {
     /// Whether nothing is wrong.
@@ -185,7 +185,7 @@ pub struct BooksCheckOut {
     pub health: Option<HealthOut>,
 }
 
-/// The answer of `books status`.
+/// The answer of `status`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct StatusOut {
     /// Every document.
@@ -248,7 +248,7 @@ pub struct DocOut {
     pub body: String,
 }
 
-/// The answer of `books get`.
+/// The answer of `get`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct GetOut {
     /// The document.
@@ -261,7 +261,7 @@ pub struct GetOut {
     pub health: HealthOut,
 }
 
-/// One link followed in `books trace`.
+/// One link followed in `trace`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct EdgeOut {
     /// The document that holds the link.
@@ -278,7 +278,7 @@ pub struct EdgeOut {
     pub standing: Option<&'static str>,
 }
 
-/// The answer of `books trace`.
+/// The answer of `trace`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct TraceOut {
     /// The document asked about.
@@ -300,7 +300,7 @@ pub struct StaleEntryOut {
     pub roots: Vec<RootOut>,
 }
 
-/// The answer of `books stale`.
+/// The answer of `stale`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct StaleOut {
     /// The approvals that do not hold, strongest first.
@@ -342,7 +342,7 @@ pub struct RetrievalOut {
     pub bytes: Option<usize>,
 }
 
-/// One item of `books show --approved`.
+/// One item of `get --approved`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct ApprovedItemOut {
     /// What it is.
@@ -351,7 +351,7 @@ pub struct ApprovedItemOut {
     pub retrieval: RetrievalOut,
 }
 
-/// The answer of `books show <ref> --approved`: what the approval that stands saw.
+/// The answer of `get <ref> --approved`: what the approval that stands saw.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct ApprovedOut {
     /// The document, as every answer shows it now.
@@ -370,7 +370,7 @@ pub struct ApprovedOut {
     pub health: HealthOut,
 }
 
-/// One item of `books diff`.
+/// One item of `diff`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct DiffItemOut {
     /// What it is, with the hash that was approved.
@@ -391,7 +391,7 @@ pub struct DiffItemOut {
     pub diff: Option<String>,
 }
 
-/// The answer of `books diff <ref>`: each item of the approval that stands, then and
+/// The answer of `diff <ref>`: each item of the approval that stands, then and
 /// now.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct DiffOut {
@@ -407,7 +407,7 @@ pub struct DiffOut {
     pub health: HealthOut,
 }
 
-/// The answer of `books judge`: every record written, in the order the documents
+/// The answer of `judge`: every record written, in the order the documents
 /// were named.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct JudgedAllOut {
@@ -437,7 +437,7 @@ pub struct UnresolvedOut {
     pub why: String,
 }
 
-/// The answer of `books new`: the document written.
+/// The answer of `new`: the document written.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct CreatedOut {
     /// The document.
@@ -467,6 +467,8 @@ pub struct ErrorOut {
 /// The JSON Schema of every answer.
 #[derive(Debug, Serialize)]
 pub struct SchemasOut {
+    /// The version of the answers these schemas describe.
+    pub version: u32,
     /// By command.
     pub outputs: serde_json::Map<String, Value>,
 }
@@ -475,19 +477,55 @@ pub struct SchemasOut {
 pub fn schemas() -> SchemasOut {
     let mut outputs = serde_json::Map::new();
     let mut put = |name: &str, schema: Schema| {
-        outputs.insert(name.to_owned(), schema.to_value());
+        outputs.insert(name.to_owned(), versioned_schema(schema.to_value()));
     };
-    put("books check", schema_for!(BooksCheckOut));
-    put("books status", schema_for!(StatusOut));
-    put("books get", schema_for!(GetOut));
-    put("books trace", schema_for!(TraceOut));
-    put("books stale", schema_for!(StaleOut));
-    put("books show --approved", schema_for!(ApprovedOut));
-    put("books diff", schema_for!(DiffOut));
-    put("books judge", schema_for!(JudgedAllOut));
-    put("books new", schema_for!(CreatedOut));
+    put("check", schema_for!(BooksCheckOut));
+    put("status", schema_for!(StatusOut));
+    put("get", schema_for!(GetOut));
+    put("get --approved", schema_for!(ApprovedOut));
+    put("trace", schema_for!(TraceOut));
+    put("stale", schema_for!(StaleOut));
+    put("diff", schema_for!(DiffOut));
+    put("judge", schema_for!(JudgedAllOut));
+    put("new", schema_for!(CreatedOut));
     put("error", schema_for!(ErrorOut));
-    SchemasOut { outputs }
+    SchemasOut {
+        version: FORMAT_VERSION,
+        outputs,
+    }
+}
+
+/// The version of the JSON every command prints, as the `version` field of each
+/// answer.
+///
+/// Why: a reader (often an agent) can tell which shape it has. Changes within a
+/// version only add: a new field, a new word in a field that holds words. Anything
+/// else is a new version.
+pub const FORMAT_VERSION: u32 = 1;
+
+/// An answer with its `version` field, the one place every printed answer passes.
+pub fn versioned(answer: Value) -> Value {
+    match answer {
+        Value::Object(mut fields) => {
+            fields.insert("version".to_owned(), Value::from(FORMAT_VERSION));
+            Value::Object(fields)
+        }
+        other => other,
+    }
+}
+
+/// A schema of an answer, with the `version` field `versioned` adds.
+fn versioned_schema(mut schema: Value) -> Value {
+    if let Some(Value::Object(properties)) = schema.get_mut("properties") {
+        properties.insert(
+            "version".to_owned(),
+            serde_json::json!({ "type": "integer", "const": FORMAT_VERSION }),
+        );
+    }
+    if let Some(Value::Array(required)) = schema.get_mut("required") {
+        required.push(Value::from("version"));
+    }
+    schema
 }
 
 /// Writes identities as `{id, key}` with the keys of one report.
@@ -858,7 +896,7 @@ impl Namer<'_> {
     }
 }
 
-/// The answer of `books check`.
+/// The answer of `check`.
 pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
     match check {
         BooksCheck::SchemaInvalid(problems) => BooksCheckOut {
@@ -887,7 +925,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
     }
 }
 
-/// The answer of `books status`.
+/// The answer of `status`.
 pub fn status(report: &StatusReport) -> StatusOut {
     let namer = Namer(&report.names);
     StatusOut {
@@ -896,7 +934,7 @@ pub fn status(report: &StatusReport) -> StatusOut {
     }
 }
 
-/// The answer of `books get`.
+/// The answer of `get`.
 pub fn get(report: &GetReport) -> GetOut {
     let namer = Namer(&report.names);
     GetOut {
@@ -907,7 +945,7 @@ pub fn get(report: &GetReport) -> GetOut {
     }
 }
 
-/// The answer of `books trace`.
+/// The answer of `trace`.
 pub fn trace(report: &TraceReport) -> TraceOut {
     let namer = Namer(&report.names);
     TraceOut {
@@ -922,7 +960,7 @@ pub fn trace(report: &TraceReport) -> TraceOut {
     }
 }
 
-/// The answer of `books stale`.
+/// The answer of `stale`.
 pub fn stale(report: &StaleReport) -> StaleOut {
     let namer = Namer(&report.names);
     StaleOut {
@@ -993,7 +1031,7 @@ fn retrieval(retrieval: &Retrieval) -> RetrievalOut {
     }
 }
 
-/// The answer of `books show <ref> --approved`.
+/// The answer of `get <ref> --approved`.
 pub fn approved(report: &ApprovedReport) -> ApprovedOut {
     let namer = Namer(&report.names);
     ApprovedOut {
@@ -1014,7 +1052,7 @@ pub fn approved(report: &ApprovedReport) -> ApprovedOut {
     }
 }
 
-/// The answer of `books diff <ref>`.
+/// The answer of `diff <ref>`.
 pub fn diff(report: &DiffReport) -> DiffOut {
     let namer = Namer(&report.names);
     DiffOut {
@@ -1077,7 +1115,7 @@ fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
     }
 }
 
-/// The answer of `books judge`.
+/// The answer of `judge`.
 pub fn judged(all: &[Judged]) -> JudgedAllOut {
     let names = Names::default();
     let namer = Namer(&names);
@@ -1135,7 +1173,7 @@ pub fn usage(message: String) -> ErrorOut {
     }
 }
 
-/// The answer of `books new`.
+/// The answer of `new`.
 pub fn created(created: &Created) -> CreatedOut {
     let names = Names::default();
     let namer = Namer(&names);
@@ -1263,34 +1301,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_schema_covers_every_answer_including_show_and_diff() {
-        let outputs = schemas().outputs;
+    fn the_schema_covers_every_answer_with_its_version() {
+        let schemas = schemas();
+        assert_eq!(schemas.version, FORMAT_VERSION);
+        let outputs = schemas.outputs;
         for command in [
-            "books check",
-            "books status",
-            "books get",
-            "books trace",
-            "books stale",
-            "books show --approved",
-            "books diff",
-            "books judge",
-            "books new",
+            "check",
+            "status",
+            "get",
+            "get --approved",
+            "trace",
+            "stale",
+            "diff",
+            "judge",
+            "new",
             "error",
         ] {
             assert!(outputs.contains_key(command), "{command}");
+            let schema = serde_json::to_string(&outputs[command]).unwrap();
+            assert!(schema.contains("\"version\""), "{command} has no version");
         }
-        let new = serde_json::to_string(&outputs["books new"]).unwrap();
+        let new = serde_json::to_string(&outputs["new"]).unwrap();
         for field in ["doc", "file", "unresolved_links", "written", "why"] {
             assert!(new.contains(&format!("\"{field}\"")), "{field}");
         }
         let error = serde_json::to_string(&outputs["error"]).unwrap();
         assert!(error.contains("\"problems\""));
-        let diff = serde_json::to_string(&outputs["books diff"]).unwrap();
+        let diff = serde_json::to_string(&outputs["diff"]).unwrap();
         for field in ["approved_hash", "current_hash", "retrieval", "diff"] {
             assert!(diff.contains(field), "{field}");
         }
         // A cause names the artifact it is about, beside the fields it had.
-        let stale = serde_json::to_string(&outputs["books stale"]).unwrap();
+        let stale = serde_json::to_string(&outputs["stale"]).unwrap();
         for field in ["kind", "severity", "upstream", "link", "detail", "artifact"] {
             assert!(stale.contains(&format!("\"{field}\"")), "{field}");
         }

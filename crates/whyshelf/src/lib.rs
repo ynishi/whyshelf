@@ -16,7 +16,7 @@
 //!
 //! # Books: kinds of document you declare
 //!
-//! `whyshelf books ...` knows no kind of document of its own. A project declares
+//! `whyshelf ...` knows no kind of document of its own. A project declares
 //! its *books* in `.whyshelf/books.toml`: for each, a directory, how its keys are
 //! written, its fields, and the kinds of link it may hold to other books. People
 //! decide about documents (approve, deny, deprecate, retire, or revoke an earlier
@@ -89,34 +89,34 @@
 //!
 //! ## What an approval saw
 //!
-//! `books show <ref> --approved` lists what the approval that stands saw (the
+//! `get <ref> --approved` lists what the approval that stands saw (the
 //! document, its upstreams and its files), each with its content as it was approved,
 //! read back from Git, or why it cannot be: `no_address` (made outside Git, by an
 //! older version, or no file was there) or `address_not_readable` (the content was
-//! never committed, or is not in this clone). `books diff <ref>` sets each beside
+//! never committed, or is not in this clone). `diff <ref>` sets each beside
 //! the file now: the approved and current hash, whether it changed, and a unified
 //! line diff when both are text. Both only read; putting a file back as it was is
 //! Git's work (`git checkout`) and yours. A release is a Git tag: check it out and
-//! `books status` says what held then, because freshness is derived, never stored.
+//! `status` says what held then, because freshness is derived, never stored.
 //!
 //! ## Commands
 //!
 //! ```text
-//!   whyshelf [--root <dir>] books <command>
+//!   whyshelf [--root <dir>] <command>
 //!
 //!   check                     the declaration, the documents and the ledger; exit 1 if anything is wrong
 //!   status                    every document: what was decided, and where it stands now
 //!   get <ref>                 one document, with where its approval starts to fail
+//!   get <ref> --approved      what the approval that stands saw, with its content read back
 //!   trace <ref>               what it links to and what links to it, transitively
 //!   stale                     the approvals that no longer hold, strongest first, with their roots
-//!   show <ref> --approved     what the approval that stands saw, with its content read back
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
 //!   judge deny|deprecate|retire <ref>... [--reason <text>]   (deprecate: [--successor <ref>])
 //!   judge revoke <ref>... --reason <text>
 //!   new <book> --title <text> [--key <key>] [<entry>=<value>]... [--body <text>]
 //!                             one new document, valid for its book, at <book dir>/<key>.md
-//!   schema                    the JSON Schema of the answer of every books command
+//!   schema                    the JSON Schema of the answer of every command
 //! ```
 //!
 //! - A `<ref>` is a key (`S-1`), a key in a book (`spec:S-1`), an identity, or the
@@ -150,8 +150,10 @@
 //!
 //! ## Output and exit status
 //!
-//! Every `books` command prints one JSON document on stdout; `books schema` prints
-//! the JSON Schema of each, made from the same types. A document is
+//! Every command prints one JSON document on stdout, with a `version` field (now
+//! `1`; within a version the shape only grows: new fields, new words in a field of
+//! words); `schema` prints the JSON Schema of each, made from the same types. A
+//! document is
 //! `{"id": ..., "key": ...}`; its `standing` is `pending`, `denied`, `deprecated`,
 //! `retired`, or for an approval `fresh`, `expired`, `stale` or `broken`; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a path) and a
@@ -162,8 +164,8 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `books check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `show --approved` / `diff` of a document no approval stands about, or for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path |
+//! | 1 | `check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, or for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path |
 //! | 3 | the run failed: a file could not be read or written |
 //!
 //! `new` answers `{"doc": {"id", "key"}, "file": ..., "unresolved_links": [{"link",

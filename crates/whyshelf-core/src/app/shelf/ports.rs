@@ -29,7 +29,7 @@
 //! ```text
 //!   ShelfRead   BookSchemaSource  DocSource  LedgerRead  Clock  ArtifactSource  ContentStore
 //!        ^
-//!        |      what `books check`, `status`, `get`, `trace`, `stale`, `show --approved`
+//!        |      what `check`, `status`, `get`, `trace`, `stale`, `get --approved`
 //!        |      and `diff` are generic over
 //!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite
 //!               what `judge` and `new_doc` are generic over

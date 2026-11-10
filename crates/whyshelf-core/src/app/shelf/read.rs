@@ -1,4 +1,4 @@
-//! The use cases that only read: `books check`, `status`, `get`, `trace`, `stale`.
+//! The use cases that only read: `check`, `status`, `get`, `trace`, `stale`.
 //!
 //! Each builds the schema, the shelf and the ledger ([`load`](super::load)) and asks
 //! the entries of the domain; none writes, and the type they are generic over

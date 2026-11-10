@@ -1,9 +1,13 @@
 //! The command line: the one description of the commands (help, the list of
 //! commands and the checks of the arguments come from here).
+//!
+//! The commands are verbs at the top level, as one kind of thing (the documents of
+//! the declared books) is all the tool works on; a group of commands is added only
+//! when a second kind of thing needs one.
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 
 /// whyshelf: documents whose kinds a project declares, linked to one another and to
 /// the files they stand on, judged, and checked for whether each judgement still
@@ -16,14 +20,5 @@ pub struct Cli {
     pub root: Option<PathBuf>,
     /// What to do.
     #[command(subcommand)]
-    pub command: Sub,
-}
-
-/// Every command.
-#[derive(Debug, Subcommand)]
-pub enum Sub {
-    /// Documents whose kinds the project declares in `.whyshelf/books.toml`: check,
-    /// status, get, trace, stale, show, diff, new, judge, schema. Answers in JSON.
-    #[command(subcommand)]
-    Books(crate::books::BooksCommand),
+    pub command: crate::books::BooksCommand,
 }

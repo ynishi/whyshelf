@@ -129,7 +129,7 @@ a human hand.
 Requirements, decisions and verifications are whyshelf books: the documents
 under `books/`, declared in `.whyshelf/books.toml`, with one decision per file in
 `.whyshelf/ledger/`. Write them in public-safe English (see
-PUBLIC_DEVELOPMENT.md) and check them with `whyshelf books check`.
+PUBLIC_DEVELOPMENT.md) and check them with `whyshelf check`.
 
 Everything else is RustDoc: crate and module docs (`//!`) and item docs (`///`),
 with diagrams as ASCII in code blocks tagged `text`; concepts, file formats,
