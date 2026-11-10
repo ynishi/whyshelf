@@ -20,8 +20,8 @@ and this project adheres to
   `get --approved` and `diff`, which read back what an approval saw (#7).
 - `judge same`, a declaration that an edit keeps the meaning, and
   `judge withdraw`, which takes back a record by its id (#10).
-- `compare = "lines"` and `ignore` on a link to files: white space, blank lines
-  and declared comment lines do not count (#11).
+- `compare = "lines"` and `ignore` on a link to files: indentation and runs of
+  white space, blank lines and declared comment lines do not count (#11).
 - `cover = true` on a link into a book: `check` reports a document no such link
   reaches (#18).
 - A value a front matter does not hold is told with the kind it was read as
@@ -30,6 +30,12 @@ and this project adheres to
   repository's own books are not clean or an approval does not hold (#24).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
+
+### Fixed
+
+- Statements of the books and of the documentation that the code does not
+  hold, found by a blind evaluation, and a test of the ledger that checked
+  nothing (#26).
 
 ### Changed
 
