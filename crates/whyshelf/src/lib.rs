@@ -173,7 +173,7 @@
 //!                             hashes before them hold again, each with a notice
 //!   judge withdraw <record id>... --reason <text>
 //!                             take back decisions or declarations by the id of their record
-//!   new <book> --title <text> [--key <key>] [<entry>=<value>]... [--body <text>]
+//!   new <book> [--title <text>] [--key <key>] [<entry>=<value>]... [--body <text>]
 //!                             one new document, valid for its book, at <book dir>/<key>.md
 //!   schema                    the JSON Schema of the answer of every command
 //! ```

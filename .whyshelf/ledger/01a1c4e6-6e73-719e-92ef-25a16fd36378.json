@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794304798238,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dfe55ac6c94df3813d83a813723664111f6fff56",
+      "hash": "sha256:e5215bb3745ef02a80711bbdbaaa3998a3bfdacd680180831d4add57c39fff78",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-36e2-72bb-8529-f374820e1565"
+    },
+    {
+      "address": "7a0fa8445db99cc2b3aa9bccdd872eebc1637040",
+      "hash": "sha256:9d1ae80161aeaff8ad8f262133a0496e0ee423bf34e93f076cca8209bfcf9330",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    }
+  ],
+  "id": "01a1c4e6-6e73-719e-92ef-25a16fd36378",
+  "kind": "decision",
+  "reason": "Issue #16: new no longer assumes a title; DEC-8 says so, V-4 links the new tests and the app test of a book with no title; reviewed; just check green",
+  "revision": "d8c57233cab69cdb3f11be5714f1d0301d897781",
+  "seen": "sha256:84fddda824da59e08802e861073615e8cc6db49ab5c14a3467e6aeb3760e433b",
+  "seen_address": "66263bdc3980b936c694c2d17be9b4677758e75e",
+  "subject": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900",
+  "v": 1,
+  "verb": "approve"
+}
