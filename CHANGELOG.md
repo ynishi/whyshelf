@@ -62,6 +62,8 @@ and this project adheres to
 
 ### Fixed
 
+- whyshelf's own verifications say `e2e` for the tests that run the binary: a
+  verification that rested on both kinds of test is split in two (#45).
 - A path names a file only as written, ASCII case included: on a file system that
   does not tell case apart, `justfile` read the file `Justfile`, which Git and
   CI on Linux do not find. An approval made there that pinned such a path is
