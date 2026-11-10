@@ -46,6 +46,16 @@ and this project adheres to
   (`isolated`), then those with no link in or out where the declaration lets
   one be; documents decided against are listed apart. It is a question, not a
   rule, and never fails the check (#47).
+- `whyshelf fmt` writes every document's file in the one form `new` writes
+  (`id` and `key` first, every text in double quotes, the whole text with
+  `\n` line endings and no trailing white space, as it is read), only
+  where the text read back is the same reading, so no hash or approval
+  changes; a file it cannot write so (unparsed, a comment in its front matter,
+  a form that would read otherwise, read-only, more than one link, changed
+  since it was read) is left as it is and listed. A rewrite replaces the file,
+  so its owner and extended attributes are not kept. `fmt --check` writes
+  nothing and exits 1 while a file is not in the form or would be left alone
+  (#44).
 - `cover` takes a strength: `true` or `"error"` fails `check` as before, and
   `"warn"` lists the documents the link does not reach and leaves `check`
   clean, with a warning line on stderr for each. `check`'s `uncovered` and the
