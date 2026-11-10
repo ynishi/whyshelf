@@ -3,7 +3,7 @@ id: "01a1c532-68dc-71dd-a7c8-35e9618f81f6"
 key: "DEC-26"
 issues: ["#24"]
 rejected: ["Run check and stale by hand before a pull request: nothing stops a merge when it is forgotten", "Make check fail on a stale approval: check answers whether the books are sound, and whether approvals hold is the question stale answers"]
-related: ["DEC-20", "DEC-23"]
+related: ["DEC-33", "DEC-23"]
 revisit: "When approving again what a change made stale costs more than the gate is worth"
 rustdoc: ["whyshelf"]
 serves: ["REQ-12", "REQ-2"]

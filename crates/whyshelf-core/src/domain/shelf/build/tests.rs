@@ -592,6 +592,26 @@ fn renaming_an_upstream_key_does_not_change_the_downstream_hash() {
 }
 
 #[test]
+fn the_hash_covers_the_body_after_the_normalization_whatever_the_adapter_did() {
+    let with_body = |body: &str| {
+        let DocReading::Parsed {
+            origin, entries, ..
+        } = fr(1, &[])
+        else {
+            unreachable!("fr is parsed")
+        };
+        shelf(vec![DocReading::Parsed {
+            origin,
+            entries,
+            body: body.to_owned(),
+        }])
+    };
+    let normalized = hash_of(&with_body("one\ntwo\n"), 1);
+    assert_eq!(hash_of(&with_body("one  \r\ntwo\t\r\n\r\n"), 1), normalized);
+    assert_ne!(hash_of(&with_body("one\nthree\n"), 1), normalized);
+}
+
+#[test]
 fn pointing_a_link_elsewhere_does_not_change_the_hash() {
     let a = shelf(vec![fr(1, &[]), fr(3, &[]), fr(2, &["FR-1"])]);
     let b = shelf(vec![fr(1, &[]), fr(3, &[]), fr(2, &["FR-3"])]);

@@ -8,4 +8,4 @@ rustdoc: ["whyshelf_core::domain::shelf::freshness::assess", "whyshelf_core::dom
 serves: ["REQ-2", "REQ-3"]
 title: "Staleness travels the frames of approvals; one table gives every strength; one event is one root"
 ---
-Freshness follows what each approval pinned, upstream first. Every cause has one strength (expired, stale or broken) from one table, and a degradation is as strong as its strongest cause. A stale or broken upstream passes on as Via; an expiry does not; inside a cycle nothing passes and the cycle is broken. The roots of a degradation name each event once. An informs link gives notices and never a staleness.
+Freshness follows what each approval pinned, upstream first. Every cause has one strength (expired, stale or broken) from one table, and a degradation is as strong as its strongest cause. A stale or broken upstream passes on as Via; an expiry does not; inside a cycle nothing passes and the cycle is broken. The roots of a degradation name each event once. What an informs link gives is DEC-3's rule.
