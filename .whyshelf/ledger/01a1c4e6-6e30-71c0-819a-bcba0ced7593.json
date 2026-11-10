@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794304798238,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c4e6-6e30-71c0-819a-bcba0ced7593",
+  "kind": "decision",
+  "reason": "Issue #16: new no longer assumes a title; DEC-8 says so, V-4 links the new tests and the app test of a book with no title; reviewed; just check green",
+  "revision": "d8c57233cab69cdb3f11be5714f1d0301d897781",
+  "seen": "sha256:f515be5f2dfa18c666e6b21c6b127767d1dc723a4623f11ccddc59bc441c0b6a",
+  "seen_address": "6cc55be832f84d376d38778d02583ea6e2118f96",
+  "subject": "01a1c4e3-60fc-7797-ab1c-cba34f13ecdd",
+  "v": 1,
+  "verb": "approve"
+}
