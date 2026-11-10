@@ -109,6 +109,27 @@ fn entries_the_book_refuses_are_listed_and_nothing_is_written() {
 }
 
 #[test]
+fn a_title_for_a_book_with_no_title_field_is_an_unknown_entry() {
+    let fake = FakeShelf::new();
+    fake.decls.lock().unwrap().push(measures());
+    let mut app = ShelfApp::new(fake);
+    let error =
+        block_on(app.new_doc(request("measure", None, &[("title", "a title")]))).unwrap_err();
+    let ShelfError::NewDoc(NewDocProblem::Invalid(problems)) = &error else {
+        panic!("invalid: {error:?}");
+    };
+    assert!(
+        problems.iter().any(
+            |p| matches!(p, DocProblem::UnknownEntry { name, .. } if name.as_str() == "title")
+        )
+    );
+    assert_eq!(app.ports().created_count(), 0);
+    // And with no title, the same book takes a document.
+    block_on(app.new_doc(request("measure", None, &[("count", "1")]))).unwrap();
+    assert_eq!(app.ports().created_count(), 1);
+}
+
+#[test]
 fn texts_become_values_by_the_declared_types() {
     let fake = FakeShelf::new();
     fake.decls.lock().unwrap().push(measures());

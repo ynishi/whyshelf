@@ -39,6 +39,8 @@ pub mod textdiff;
 #[cfg(test)]
 mod exit_tests;
 #[cfg(test)]
+mod new_tests;
+#[cfg(test)]
 mod same_meaning_tests;
 
 use std::io::Write;
@@ -291,13 +293,18 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
 /// the book's declaration, in the use case.
 fn new_request(
     book: &str,
-    title: String,
+    title: Option<String>,
     key: Option<String>,
     entries: Vec<String>,
     body: Option<String>,
 ) -> Result<NewDocRequest, String> {
     let book = BookName::new(book).map_err(|e| format!("book `{book}`: {e}"))?;
-    let mut pairs = vec![("title".to_owned(), title)];
+    // The title is an entry like any other: the book's declaration says whether it
+    // is there and whether it must be.
+    let mut pairs: Vec<(String, String)> = title
+        .into_iter()
+        .map(|title| ("title".to_owned(), title))
+        .collect();
     for entry in entries {
         let (name, value) = entry
             .split_once('=')
