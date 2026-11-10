@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794335417061,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7a0fa8445db99cc2b3aa9bccdd872eebc1637040",
+      "hash": "sha256:9d1ae80161aeaff8ad8f262133a0496e0ee423bf34e93f076cca8209bfcf9330",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    },
+    {
+      "address": "dd0569f50df65c8e603d65945b732663f342f60a",
+      "hash": "sha256:665cc53a4d4f74d28db81b7538b987de5e1845ab18bcd77117dc4cb4fe848add",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "18"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c6a9-7783-7239-aa91-3d22bdc409e0"
+    }
+  ],
+  "id": "01a1c6b9-a3aa-765b-bd1c-e65005ef0d78",
+  "kind": "decision",
+  "reason": "What a change made stale is approved again in one step (#41); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "7ae791da635ea877c9c8051db05e49fc6b6cdc62",
+  "seen": "sha256:3a4d77025cd4d8a07a4e673662a5cf8f16bdc7a45f1daeb5d096a94107d8462c",
+  "seen_address": "1ecf0c96ce76e871a9153f06568d2550308184dc",
+  "subject": "01a1c6a9-7880-7658-9fdc-915180d46b03",
+  "v": 1,
+  "verb": "approve"
+}

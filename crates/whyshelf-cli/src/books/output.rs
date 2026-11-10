@@ -10,9 +10,9 @@ use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, Created, Declared, DeclaredAbout, DiffItem, DiffReport,
-    DownstreamEdge, ErrorClass, GetReport, Health, Judged, MapReport, Names, Row, ShelfError,
-    StaleReport, StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport, UpstreamEdge,
-    UpstreamEnd,
+    DownstreamEdge, ErrorClass, GetReport, Health, Judged, LeftOut, LeftOutWhy, MapReport, Names,
+    Row, ShelfError, StaleApproved, StaleReport, StatusReport, TraceReport, UnlinkedEntry,
+    UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::shelf::build::NewDocProblem;
 use whyshelf_core::domain::shelf::snapshot::{
@@ -31,8 +31,11 @@ use whyshelf_core::domain::shelf::freshness::{
     Successors, UpstreamStatus,
 };
 use whyshelf_core::domain::shelf::graph::CycleSource;
-use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin, Record};
+use whyshelf_core::domain::shelf::ledger::{
+    ArtifactPin, DeclaredStatus, FramePin, FrameRefusal, Record,
+};
 use whyshelf_core::domain::shelf::map::MapTarget;
+use whyshelf_core::domain::shelf::order::Hold;
 use whyshelf_core::domain::shelf::schema::{
     Cardinality, CoverSeverity, FieldPresence, FieldType, KeyPattern, Propagation,
 };
@@ -720,6 +723,42 @@ pub struct JudgedAllOut {
     pub judged: Vec<JudgedOut>,
 }
 
+/// The answer of `judge approve --stale`: every approval made again, upstream first,
+/// and those left out.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct StaleApprovedOut {
+    /// The judgements, as `judge` answers them, upstream first; empty when nothing
+    /// could be approved.
+    pub judged: Vec<JudgedOut>,
+    /// The approvals that do not hold and were not approved again, by identity.
+    pub left_out: Vec<LeftOutOut>,
+}
+
+/// An approval that `judge approve --stale` did not approve again.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct LeftOutOut {
+    /// The document.
+    pub doc: DocRef,
+    /// Why: `broken` (its approval is broken now), `refused` (the model refuses its
+    /// approval now) or `stands_on` (a `depends` link names a document that is
+    /// broken, pending or left out).
+    pub reason: &'static str,
+    /// A sentence for a person.
+    pub detail: String,
+    /// For `stands_on`, the document that holds it back.
+    pub upstream: Option<DocRef>,
+    /// For `stands_on`, the link that names it.
+    pub link: Option<String>,
+    /// For `stands_on`, why that document holds it back: `broken`, `pending` or
+    /// `left_out`.
+    pub upstream_is: Option<&'static str>,
+    /// For `broken`, the kinds of its causes, each once, in the order of `causes`;
+    /// empty otherwise.
+    pub kinds: Vec<&'static str>,
+    /// For `broken`, why its approval does not hold; empty otherwise.
+    pub causes: Vec<CauseOut>,
+}
+
 /// The answer of `judge same`: every declaration written, in the order the
 /// documents and files were named.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -844,6 +883,7 @@ pub fn schemas() -> SchemasOut {
     put("stale", schema_for!(StaleOut));
     put("diff", schema_for!(DiffOut));
     put("judge", schema_for!(JudgedAllOut));
+    put("judge approve --stale", schema_for!(StaleApprovedOut));
     put("judge same", schema_for!(DeclaredAllOut));
     put("judge withdraw", schema_for!(WithdrawnOut));
     put("new", schema_for!(CreatedOut));
@@ -1839,32 +1879,184 @@ pub fn judged(all: &[Judged]) -> JudgedAllOut {
     let names = Names::default();
     let namer = Namer(&names);
     JudgedAllOut {
-        judged: all
+        judged: all.iter().map(|judged| namer.judged(judged)).collect(),
+    }
+}
+
+/// The answer of `judge approve --stale`.
+pub fn stale_approved(done: &StaleApproved) -> StaleApprovedOut {
+    let namer = Namer(&done.names);
+    StaleApprovedOut {
+        judged: done
+            .judged
             .iter()
-            .map(|judged| JudgedOut {
-                doc: DocRef {
-                    id: judged.subject.to_string(),
-                    key: judged.key.as_ref().map(ToString::to_string),
-                },
-                record: to_json(&judged.record.to_canon()),
-                successors: judged
-                    .successors
-                    .as_ref()
-                    .map(|s| namer.successors(s))
-                    .unwrap_or_default(),
-                absent: judged
-                    .absent
-                    .iter()
-                    .map(|(link, artifact)| AbsentNameOut {
-                        link: link.to_string(),
-                        path: artifact.name().to_string(),
-                        name: artifact.name().to_string(),
-                        space: artifact.space().to_string(),
-                        detail: absent_detail(artifact),
-                    })
-                    .collect(),
+            .map(|judged| namer.judged(judged))
+            .collect(),
+        left_out: done
+            .left_out
+            .iter()
+            .map(|left| {
+                let (upstream, link, upstream_is) = match &left.why {
+                    LeftOutWhy::StandsOn { held, .. } => (
+                        Some(namer.doc(held.upstream)),
+                        Some(held.link.to_string()),
+                        Some(hold_word(held.hold)),
+                    ),
+                    LeftOutWhy::Broken(_) | LeftOutWhy::Refused(_) => (None, None, None),
+                };
+                LeftOutOut {
+                    doc: DocRef {
+                        id: left.doc.to_string(),
+                        key: left.key.as_ref().map(ToString::to_string),
+                    },
+                    reason: match left.why {
+                        LeftOutWhy::Broken(_) => "broken",
+                        LeftOutWhy::Refused(_) => "refused",
+                        LeftOutWhy::StandsOn { .. } => "stands_on",
+                    },
+                    detail: left_out_detail(&namer, left),
+                    upstream,
+                    link,
+                    upstream_is,
+                    kinds: left_out_kinds(&namer, left),
+                    causes: match &left.why {
+                        LeftOutWhy::Broken(degradation) => degradation
+                            .causes()
+                            .iter()
+                            .map(|c| namer.cause(c))
+                            .collect(),
+                        LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } => Vec::new(),
+                    },
+                }
             })
             .collect(),
+    }
+}
+
+/// The lines `judge approve --stale` writes on stderr: one per approval it left out,
+/// in the order of `left_out`, then one per name with nothing there that an approval
+/// made pinned as absent, in the order of `judged`.
+pub fn stale_approved_warnings(done: &StaleApproved) -> Vec<String> {
+    let namer = Namer(&done.names);
+    let left = done.left_out.iter().map(|left| {
+        let doc = left
+            .key
+            .as_ref()
+            .map_or_else(|| left.doc.to_string(), ToString::to_string);
+        match &left.why {
+            LeftOutWhy::Broken(_) => format!(
+                "warning: {doc} is broken and was not approved again ({})",
+                left_out_kinds(&namer, left).join(", ")
+            ),
+            LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } => format!(
+                "warning: {doc} was not approved again: {}",
+                left_out_detail(&namer, left)
+            ),
+        }
+    });
+    let absent = done.judged.iter().flat_map(|judged| {
+        let doc = judged
+            .key
+            .as_ref()
+            .map_or_else(|| judged.subject.to_string(), ToString::to_string);
+        judged.absent.iter().map(move |(_, artifact)| {
+            format!(
+                "warning: {doc} pins {} in {}, which has nothing behind it",
+                artifact.name(),
+                artifact.space()
+            )
+        })
+    });
+    left.chain(absent).collect()
+}
+
+/// The kinds of the causes of a broken approval left out, each once, in the order
+/// found; none for one left out for another reason.
+fn left_out_kinds(namer: &Namer<'_>, left: &LeftOut) -> Vec<&'static str> {
+    let LeftOutWhy::Broken(degradation) = &left.why else {
+        return Vec::new();
+    };
+    let mut kinds: Vec<&'static str> = Vec::new();
+    for cause in degradation.causes().iter() {
+        let kind = namer.cause(cause).kind;
+        if !kinds.contains(&kind) {
+            kinds.push(kind);
+        }
+    }
+    kinds
+}
+
+/// The sentence for an approval left out.
+fn left_out_detail(namer: &Namer<'_>, left: &LeftOut) -> String {
+    match &left.why {
+        LeftOutWhy::Broken(_) => format!(
+            "its approval is broken ({})",
+            left_out_kinds(namer, left).join(", ")
+        ),
+        LeftOutWhy::Refused(FrameRefusal::UpstreamNotStanding {
+            link,
+            target,
+            status,
+        }) => format!(
+            "the link `{link}` names {}, which is {status}: an approval cannot stand on it",
+            namer
+                .0
+                .key_of(*target)
+                .map_or_else(|| target.to_string(), ToString::to_string)
+        ),
+        LeftOutWhy::Refused(refusal) => refusal.to_string(),
+        LeftOutWhy::StandsOn { held, key } => {
+            let upstream = key
+                .as_ref()
+                .map_or_else(|| held.upstream.to_string(), ToString::to_string);
+            let link = &held.link;
+            match held.hold {
+                Hold::Broken => format!("the link `{link}` names {upstream}, which is broken"),
+                Hold::Pending => format!(
+                    "the link `{link}` names {upstream}, which is pending: approve it first with `judge approve`"
+                ),
+                Hold::LeftOut => {
+                    format!("the link `{link}` names {upstream}, which was left out of this run")
+                }
+            }
+        }
+    }
+}
+
+/// The word for why an upstream holds an approval back.
+fn hold_word(hold: Hold) -> &'static str {
+    match hold {
+        Hold::Broken => "broken",
+        Hold::Pending => "pending",
+        Hold::LeftOut => "left_out",
+    }
+}
+
+impl Namer<'_> {
+    fn judged(&self, judged: &Judged) -> JudgedOut {
+        JudgedOut {
+            doc: DocRef {
+                id: judged.subject.to_string(),
+                key: judged.key.as_ref().map(ToString::to_string),
+            },
+            record: to_json(&judged.record.to_canon()),
+            successors: judged
+                .successors
+                .as_ref()
+                .map(|s| self.successors(s))
+                .unwrap_or_default(),
+            absent: judged
+                .absent
+                .iter()
+                .map(|(link, artifact)| AbsentNameOut {
+                    link: link.to_string(),
+                    path: artifact.name().to_string(),
+                    name: artifact.name().to_string(),
+                    space: artifact.space().to_string(),
+                    detail: absent_detail(artifact),
+                })
+                .collect(),
+        }
     }
 }
 
@@ -2152,6 +2344,7 @@ mod tests {
             "stale",
             "diff",
             "judge",
+            "judge approve --stale",
             "judge same",
             "judge withdraw",
             "new",

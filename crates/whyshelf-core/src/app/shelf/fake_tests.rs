@@ -79,7 +79,7 @@ fn field(name: &str, ty: FieldTypeDecl, presence: FieldPresence) -> FieldEntryDe
     }
 }
 
-fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
+pub(super) fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
     LinkEntryDecl {
         name: name.to_owned(),
         target: LinkTargetDecl::Book(target.to_owned()),
