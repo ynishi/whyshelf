@@ -1,0 +1,152 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9b3393adbe31f161e1380d5ffd50ac0b136d052e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d9c73a6abbb9d0581104ab84f5a3a96b38f1a987ed21f7139b4815263d29d20",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "840fcb84c23cd02220645168a92170ef5602d2de",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:55967eab1d64c1b82e2c5453219f32fdedba13d3525fcf2ff5e696dec36c4fa5",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "0cf365704b98369d536b45cc4c9479f649c28777",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d5640857a96162e23093cc77a0b226813cd59d1f93db91d22dffa8f2c7aa217",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "f9c97e598709037f8ac5dc0b869c1872fad76129",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fab52960ca376b9cdef61417cee9b6275819e1338b8b6f2755aa918445bc26bf",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "de09081182c2384573a83f49cbf0f5169bfc4054",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0c89f749ed95bff046e559cf7cb75ecf20048e5f82929682f278024649731cd1",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/freshness/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "ed603ab42dd59e922c80cdfc2a70207ad6f4a674",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bf92fdbc0b73fc552058b9f937f61ce551a3244380f36738fa319d2323a35ab6",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/ledger/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "6fcf775202b4e62831e4ac4473fe2eedda60dfa6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:61b0e69d3f7143df6eaf7d658ba28643b88a2eadaa88b603bca151b192300580",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "fa68eef7f38e66c122704bfbb87700d7e08bd750",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:afab5ce7b892766d9a289ab4299efeb29febabbeed1a5f5d0ec93d9dcf2e9b58",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/books.rs",
+      "state": "present"
+    },
+    {
+      "address": "8ada971076b3f71b825d521559f38a242d15a44d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:81b0e68006958690dcc27fc49ccff7c59e36806349d1e613bbe90dc55231f2d1",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/git.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794311073887,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0601621d74aa78869d445e6be3a91fb736c510f3",
+      "hash": "sha256:d78b80130706319731bf37a01042eb4b6fa4fa9cb98c7f363304479678ec5833",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c45a-279c-7672-ac87-9afd9c344dc8"
+    }
+  ],
+  "id": "01a1c546-36c7-71f4-8437-186abc85f815",
+  "kind": "decision",
+  "reason": "Issue #26: corrected to what the code does after a blind evaluation and a blind review; the ledger tests now reorder keys and compare two spellings; just check green",
+  "revision": "c9c1f701c2aa4fb9dccd98fe790e4c590120994d",
+  "seen": "sha256:38d1ebdb1799195f4e7a078afb3ecb4dcfd6e89dcff18444255fafcf5405c286",
+  "seen_address": "c878d057b50764829727ee37b3fbec12e511dcfd",
+  "subject": "01a1c45a-27fd-75bc-a433-f3e0233f0f72",
+  "v": 1,
+  "verb": "approve"
+}

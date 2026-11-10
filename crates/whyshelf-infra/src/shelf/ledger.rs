@@ -288,9 +288,60 @@ mod tests {
         let Value::Object(map) = to_json(&record.to_canon()) else {
             panic!("an object");
         };
-        let reversed: serde_json::Map<String, Value> = map.into_iter().rev().collect();
-        let text = serde_json::to_string(&Value::Object(reversed)).unwrap();
+        // The text is written by hand with the keys in the reverse order: a JSON map
+        // would sort them back when it is written.
+        let pairs: Vec<String> = map
+            .iter()
+            .rev()
+            .map(|(key, value)| {
+                format!(
+                    "{}:{}",
+                    serde_json::to_string(key).unwrap(),
+                    serde_json::to_string(value).unwrap()
+                )
+            })
+            .collect();
+        let reversed = format!("{{{}}}", pairs.join(","));
+        let sorted = serde_json::to_string(&Value::Object(map)).unwrap();
+        assert_ne!(reversed, sorted, "the keys are in another order");
+        let back = decode(reversed.as_bytes()).unwrap();
+        assert_eq!(back, record);
+        assert_eq!(back.hash(), record.hash());
+    }
+
+    #[test]
+    fn two_spellings_of_one_text_give_one_record_and_one_hash() {
+        // `é` and `é`, `\/` and `/`, are one text in JSON: a record written with
+        // either reads back as the same record, with the same hash.
+        let record = Record::Revocation(Revocation::new(
+            jid(4),
+            NonEmptySet::from_set(BTreeSet::from([jid(1)])).unwrap(),
+            Actor::new("ana").unwrap(),
+            JudgedAt::new(1_700_000_000_000),
+            NonBlank::new("caf\u{e9} a/b").unwrap(),
+        ));
+        let plain = serde_json::to_string(&to_json(&record.to_canon())).unwrap();
+        assert!(plain.contains("café a/b"), "{plain}");
+        let escaped = plain.replace("café a/b", "caf\\u00e9 a\\/b");
+        assert_ne!(plain, escaped);
+        let back = decode(escaped.as_bytes()).unwrap();
+        assert_eq!(back, record);
+        assert_eq!(back.hash(), record.hash());
+    }
+
+    #[test]
+    fn a_reason_with_quotes_backslashes_lines_and_accents_reads_back_the_same() {
+        let record = Record::Revocation(Revocation::new(
+            jid(3),
+            NonEmptySet::from_set(BTreeSet::from([jid(1)])).unwrap(),
+            Actor::new("ana").unwrap(),
+            JudgedAt::new(1_700_000_000_000),
+            NonBlank::new("a \"quoted\" word, a \\ and a / ,\nsecond line\twith é and 日本")
+                .unwrap(),
+        ));
+        let text = serde_json::to_string(&to_json(&record.to_canon())).unwrap();
         let back = decode(text.as_bytes()).unwrap();
+        assert_eq!(back, record);
         assert_eq!(back.hash(), record.hash());
     }
 

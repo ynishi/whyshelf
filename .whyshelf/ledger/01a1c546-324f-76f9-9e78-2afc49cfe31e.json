@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794311073887,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b9f20c64ada313151f606189dff57fd674aee70c",
+      "hash": "sha256:38cf703829644940a576121efe151b02ea5d0ed46f333c2150a735d6cbba9860",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c3d2-f82b-7c4e-92a5-6c0b968a5474"
+    },
+    {
+      "address": "d635421dd58a433d01d5221209d2f38216e79618",
+      "hash": "sha256:dfaf6f21b584019b9b03b520cd04a78613f1c1ac073cbee4f1489dd079efe8df",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "11"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-118b-7565-a3b3-dc05a9e6d947"
+    }
+  ],
+  "id": "01a1c546-324f-76f9-9e78-2afc49cfe31e",
+  "kind": "decision",
+  "reason": "Issue #26: corrected to what the code does after a blind evaluation and a blind review; the ledger tests now reorder keys and compare two spellings; just check green",
+  "revision": "c9c1f701c2aa4fb9dccd98fe790e4c590120994d",
+  "seen": "sha256:378afb7f199c534e0afac1de327527009b6bd9ebcc400a56dd31aa4d83ac596a",
+  "seen_address": "5c61813a4fa38ea4c27d27e4d52dd8dc5e7f1281",
+  "subject": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794311073887,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c546-30af-739d-ab8a-10a1973c124b",
+  "kind": "decision",
+  "reason": "Issue #26: corrected to what the code does after a blind evaluation and a blind review; the ledger tests now reorder keys and compare two spellings; just check green",
+  "revision": "c9c1f701c2aa4fb9dccd98fe790e4c590120994d",
+  "seen": "sha256:dfaf6f21b584019b9b03b520cd04a78613f1c1ac073cbee4f1489dd079efe8df",
+  "seen_address": "d635421dd58a433d01d5221209d2f38216e79618",
+  "subject": "01a1c4ba-118b-7565-a3b3-dc05a9e6d947",
+  "v": 1,
+  "verb": "approve"
+}
