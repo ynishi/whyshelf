@@ -5,6 +5,7 @@
 //! name = "finding"
 //! dir = "docs/findings"
 //! key = { prefix = "F" }          # keys F-1, F-2, F-name; or key = "slug"
+//! description = "what was seen"    # optional: one line, not blank; `whyshelf map` shows it
 //!
 //! [[book.field]]
 //! name = "severity"
@@ -154,6 +155,8 @@ struct BookDto {
     name: String,
     dir: String,
     key: KeyDto,
+    /// What the book is for, one line; checked by the domain.
+    description: Option<String>,
     #[serde(default)]
     field: Vec<FieldDto>,
     #[serde(default)]
@@ -259,6 +262,7 @@ impl BookDto {
                 KeyDto::Prefixed(PrefixDto { prefix }) => KeyPatternDecl::Prefixed { prefix },
                 KeyDto::Word(KeyWord::Slug) => KeyPatternDecl::Slug,
             },
+            description: self.description,
             fields: self
                 .field
                 .into_iter()
@@ -400,7 +404,7 @@ means = "informs"
         let schema = validate(decls).unwrap();
         let links = schema.book("a").unwrap().artifact_links();
         assert_eq!(links.len(), 1);
-        assert_eq!(links["tests"].space.as_str(), "file");
+        assert_eq!(links.get("tests").unwrap().space.as_str(), "file");
     }
 
     #[test]
@@ -443,7 +447,12 @@ means = "informs"
             })
         );
         let schema = validate(decls).unwrap();
-        let kind = &schema.book("a").unwrap().artifact_links()["tests"];
+        let kind = schema
+            .book("a")
+            .unwrap()
+            .artifact_links()
+            .get("tests")
+            .unwrap();
         assert_eq!(kind.comparison.kind_word(), "lines");
         assert_eq!(
             kind.comparison
@@ -517,6 +526,30 @@ means = "informs"
                 "cover = {value}"
             );
         }
+    }
+
+    #[test]
+    fn a_description_is_read_as_written_and_none_when_not_written() {
+        let decls = parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\ndescription='what was seen'\n")
+            .unwrap();
+        assert_eq!(decls[0].description.as_deref(), Some("what was seen"));
+        let schema = validate(decls).unwrap();
+        assert_eq!(
+            schema.book("a").unwrap().description().map(|d| d.as_str()),
+            Some("what was seen")
+        );
+        assert_eq!(
+            parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\n").unwrap()[0].description,
+            None
+        );
+        let two_lines =
+            parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\ndescription=\"\"\"\none\ntwo\"\"\"\n")
+                .unwrap();
+        assert!(matches!(
+            validate(two_lines).unwrap_err().first(),
+            SchemaProblem::BadDescription { .. }
+        ));
+        assert!(parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\ndescription=1\n").is_err());
     }
 
     #[test]

@@ -10,8 +10,8 @@ use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, Created, Declared, DeclaredAbout, DiffItem, DiffReport,
-    DownstreamEdge, ErrorClass, GetReport, Health, Judged, Names, Row, ShelfError, StaleReport,
-    StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
+    DownstreamEdge, ErrorClass, GetReport, Health, Judged, MapReport, Names, Row, ShelfError,
+    StaleReport, StatusReport, TraceReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::shelf::build::NewDocProblem;
 use whyshelf_core::domain::shelf::snapshot::{
@@ -31,7 +31,10 @@ use whyshelf_core::domain::shelf::freshness::{
 };
 use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin, Record};
-use whyshelf_core::domain::shelf::schema::Propagation;
+use whyshelf_core::domain::shelf::map::MapTarget;
+use whyshelf_core::domain::shelf::schema::{
+    Cardinality, FieldPresence, FieldType, KeyPattern, Propagation,
+};
 use whyshelf_infra::shelf::ledger::to_json;
 
 /// A document named in an answer: its identity, and its key when it is valid.
@@ -178,7 +181,8 @@ pub struct UnreadableOut {
 pub struct HealthOut {
     /// Whether nothing is.
     pub clean: bool,
-    /// Files that are no valid document.
+    /// Files that are no valid document; those whose front matter or identity
+    /// could not be read follow the order the declaration writes the books in.
     pub invalid: Vec<InvalidOut>,
     /// Cycles among links or among the frames of approvals.
     pub cycles: Vec<Vec<DocRef>>,
@@ -208,7 +212,7 @@ pub struct BooksCheckOut {
     pub clean: bool,
     /// The problems of the declaration; when there are any, nothing else was read.
     pub schema_problems: Vec<String>,
-    /// The books.
+    /// The books, in the order the declaration writes them.
     pub books: Vec<BookOut>,
     /// What is wrong around the documents.
     pub health: Option<HealthOut>,
@@ -222,6 +226,105 @@ pub struct BooksCheckOut {
     /// The names of pending and approved documents their adapter cannot tell about
     /// now; they leave `clean` as it is, and no approval can be made on one.
     pub unknown: Vec<UnknownOut>,
+}
+
+/// The answer of `map`: what the declaration says.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MapOut {
+    /// The problems of the declaration, as `check` gives them; when there are any,
+    /// there is no book, no link and no drawing.
+    pub schema_problems: Vec<String>,
+    /// The books, in the order of the declaration.
+    pub books: Vec<MapBookOut>,
+    /// The links, book by book and within a book in the order of the declaration.
+    pub links: Vec<MapLinkOut>,
+    /// The books and links drawn as text, one block per book; null when the
+    /// declaration cannot be used.
+    pub diagram: Option<String>,
+}
+
+/// A book of `map`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MapBookOut {
+    /// The name.
+    pub name: String,
+    /// The directory.
+    pub dir: String,
+    /// The grammar of its keys.
+    pub key: KeyGrammarOut,
+    /// What it is for, when the declaration says.
+    pub description: Option<String>,
+    /// Its fields, in the order of the declaration.
+    pub fields: Vec<MapFieldOut>,
+}
+
+/// The grammar of the keys of a book.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum KeyGrammarOut {
+    /// `<prefix>-<number or name>`.
+    Prefix {
+        /// The prefix, without the `-`.
+        prefix: String,
+    },
+    /// A path of lowercase words.
+    Slug,
+}
+
+/// A field of a book of `map`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MapFieldOut {
+    /// The name.
+    pub name: String,
+    /// The type as the declaration writes it: `text`, `integer`, `bool`, `list` or
+    /// `enum`.
+    #[serde(rename = "type")]
+    pub ty: &'static str,
+    /// The words of an `enum`, sorted, not in the order written: the model keeps
+    /// them as a set, as a pin's canon does. Empty for any other type.
+    pub words: Vec<String>,
+    /// Whether a document must carry it.
+    pub required: bool,
+}
+
+/// A link of `map`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MapLinkOut {
+    /// The book that holds it.
+    pub from: String,
+    /// The name.
+    pub name: String,
+    /// What it points at.
+    pub target: MapTargetOut,
+    /// `depends`, `informs` or `replaces`.
+    pub means: &'static str,
+    /// How many a document writes, as the declaration writes it: `one`,
+    /// `optional`, `many` or `at-least-one`.
+    pub count: &'static str,
+    /// Whether every pending or approved document of the target book is expected
+    /// to be reached by it; false for a link to artifacts.
+    pub cover: bool,
+}
+
+/// What a link of `map` points at.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MapTargetOut {
+    /// The documents of a book (which may be the book that holds the link).
+    Book {
+        /// The book.
+        book: String,
+    },
+    /// Artifacts, by name in a space.
+    Artifact {
+        /// The space.
+        space: String,
+        /// What of each is compared: `bytes`, `lines` or `presence`.
+        compare: &'static str,
+        /// The prefixes of the lines `lines` leaves out, sorted, not in the order
+        /// written: the model keeps them as a set, as a pin's canon does.
+        ignore: Vec<String>,
+    },
 }
 
 /// A name a link to artifacts writes with nothing there.
@@ -674,6 +777,7 @@ pub fn schemas() -> SchemasOut {
         outputs.insert(name.to_owned(), versioned_schema(schema.to_value()));
     };
     put("check", schema_for!(BooksCheckOut));
+    put("map", schema_for!(MapOut));
     put("status", schema_for!(StatusOut));
     put("get", schema_for!(GetOut));
     put("get --approved", schema_for!(ApprovedOut));
@@ -1283,6 +1387,79 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
     }
 }
 
+/// The answer of `map`.
+pub fn map(report: &MapReport) -> MapOut {
+    let map = match report {
+        MapReport::SchemaInvalid(problems) => {
+            return MapOut {
+                schema_problems: problems.iter().map(ToString::to_string).collect(),
+                books: Vec::new(),
+                links: Vec::new(),
+                diagram: None,
+            };
+        }
+        MapReport::Mapped(map) => map,
+    };
+    MapOut {
+        schema_problems: Vec::new(),
+        books: map
+            .books
+            .iter()
+            .map(|book| MapBookOut {
+                name: book.name.to_string(),
+                dir: book.dir.as_rel().to_string(),
+                key: match &book.key {
+                    KeyPattern::Prefixed(prefix) => KeyGrammarOut::Prefix {
+                        prefix: prefix.to_string(),
+                    },
+                    KeyPattern::Slug => KeyGrammarOut::Slug,
+                },
+                description: book.description.as_ref().map(ToString::to_string),
+                fields: book
+                    .fields
+                    .iter()
+                    .map(|(name, decl)| MapFieldOut {
+                        name: name.to_string(),
+                        ty: field_type(&decl.ty),
+                        words: match &decl.ty {
+                            FieldType::Enum(words) => {
+                                words.iter().map(ToString::to_string).collect()
+                            }
+                            _ => Vec::new(),
+                        },
+                        required: decl.presence == FieldPresence::Required,
+                    })
+                    .collect(),
+            })
+            .collect(),
+        links: map
+            .links
+            .iter()
+            .map(|link| MapLinkOut {
+                from: link.from.to_string(),
+                name: link.name.to_string(),
+                target: match &link.target {
+                    MapTarget::Book { book, .. } => MapTargetOut::Book {
+                        book: book.to_string(),
+                    },
+                    MapTarget::Artifact { space, comparison } => MapTargetOut::Artifact {
+                        space: space.to_string(),
+                        compare: comparison.kind_word(),
+                        ignore: comparison
+                            .ignored()
+                            .map(|p| p.as_str().to_owned())
+                            .collect(),
+                    },
+                },
+                means: means(link.propagation),
+                count: count_word(link.cardinality),
+                cover: matches!(link.target, MapTarget::Book { cover: true, .. }),
+            })
+            .collect(),
+        diagram: Some(diagram::draw(map)),
+    }
+}
+
 /// The answer of `status`.
 pub fn status(report: &StatusReport) -> StatusOut {
     let namer = Namer(&report.names);
@@ -1729,6 +1906,27 @@ fn means(propagation: Propagation) -> &'static str {
     }
 }
 
+/// A count as the declaration writes it.
+fn count_word(cardinality: Cardinality) -> &'static str {
+    match cardinality {
+        Cardinality::One => "one",
+        Cardinality::Optional => "optional",
+        Cardinality::Many => "many",
+        Cardinality::AtLeastOne => "at-least-one",
+    }
+}
+
+/// The type of a field as the declaration writes it.
+fn field_type(ty: &FieldType) -> &'static str {
+    match ty {
+        FieldType::Text => "text",
+        FieldType::Integer => "integer",
+        FieldType::Bool => "bool",
+        FieldType::TextList => "list",
+        FieldType::Enum(_) => "enum",
+    }
+}
+
 fn field(value: &FieldValue) -> Value {
     match value {
         FieldValue::Text(s) => Value::String(s.clone()),
@@ -1778,10 +1976,14 @@ fn join<T: std::fmt::Display>(items: impl Iterator<Item = T>) -> String {
     items.map(|i| i.to_string()).collect::<Vec<_>>().join("; ")
 }
 
+mod diagram;
+
 #[cfg(test)]
 mod comparison_tests;
 #[cfg(test)]
 mod cover_tests;
+#[cfg(test)]
+mod map_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 
@@ -1796,6 +1998,7 @@ mod tests {
         let outputs = schemas.outputs;
         for command in [
             "check",
+            "map",
             "status",
             "get",
             "get --approved",

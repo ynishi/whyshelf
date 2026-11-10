@@ -42,6 +42,7 @@ fn schema(compare: Option<CompareDecl>) -> Schema {
             key: KeyPatternDecl::Prefixed {
                 prefix: "SP".to_owned(),
             },
+            description: None,
             fields: vec![FieldEntryDecl {
                 name: "title".to_owned(),
                 ty: FieldTypeDecl::Text,
