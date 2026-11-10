@@ -510,6 +510,15 @@ pub enum Notice {
         /// The link.
         link: EntryName,
     },
+    /// A path a link to artifacts writes names no file now
+    /// ([`Doc::absent_artifacts`]): the evidence is not written yet, or the path is
+    /// wrong.
+    ArtifactAbsent {
+        /// The link.
+        link: EntryName,
+        /// The path as written.
+        path: RelPath,
+    },
     /// The document is not what was approved, and people declared that the edit
     /// keeps the meaning: no [`Cause::SelfChanged`].
     SelfSameMeaning {
@@ -1336,9 +1345,11 @@ fn expected_reach<'s>(
 /// | a pinned upstream's causes include `Expired` | `UpstreamExpired` |
 /// | a `Replaces` link | none |
 /// | a pending or approved document of a book a covering link points into, that no pending or approved document reaches through it | `NotCovered` |
+/// | a pending or approved document whose link to artifacts writes a path that names no file | `ArtifactAbsent` |
 ///
-/// They are given whatever the document's own standing is, except `NotCovered`: a
-/// document denied, deprecated or retired is not expected to be reached. To them are added, first,
+/// They are given whatever the document's own standing is, except `NotCovered` and
+/// `ArtifactAbsent`: a document denied, deprecated or retired is not expected to be
+/// reached, nor its evidence to be kept. To them are added, first,
 /// the notices of an approval's edits that a declaration kept from being causes
 /// (`SelfSameMeaning`, `UpstreamSameMeaning`, `ArtifactSameMeaning`): those are made
 /// where the hashes are compared, so only an approved document has them.
@@ -1368,6 +1379,12 @@ fn collect_notices(
                         link: (*link).clone(),
                     });
                 }
+            }
+            for (link, path) in doc.absent_artifacts() {
+                notices.push(Notice::ArtifactAbsent {
+                    link: link.clone(),
+                    path: path.clone(),
+                });
             }
         }
         for (link, states) in doc.links_of(Propagation::Informs) {
@@ -1414,6 +1431,8 @@ fn collect_notices(
     all
 }
 
+#[cfg(test)]
+mod absent_tests;
 #[cfg(test)]
 mod artifact_tests;
 #[cfg(test)]

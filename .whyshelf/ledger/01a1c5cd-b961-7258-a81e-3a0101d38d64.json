@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "0b3ff7fd3e36b9a63d069054494e455932a3dba0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f06599ea1e7eec12c3f5e8122140b3d7e06da3ad920ad84d9c8f0b4a61cdb8d3",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/tests/command_line.rs",
+      "state": "present"
+    },
+    {
+      "address": "f32c34c57b2e507a3fd01082e616b48d8f7ff62c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1fa84a62d234bbd87fb8a935b99cc69c3d5d268bc8d43c8bf69af012c819b13a",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/freshness/absent_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "4a9f717a04e5a98fee8c70f0c0aac30794decbe5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e2823cac78145d40fd014fb4dc54af6eb7e0210d0e7516eddc12523c2b305109",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/git.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794319956029,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9490184445973ae353021cddf5c243f7b4f82cdb",
+      "hash": "sha256:421a0f258ea3f2f294879e8097deb6f16b99ff27aa3ce8267b19006d4646fd2f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-778a-7288-ae20-3289a8a7a718"
+    },
+    {
+      "address": "e983783708085f5d7eb8f268fd01d923ba519bf8",
+      "hash": "sha256:30d37b4f19bb29b6596dcc82b1f27ce0530b64dbb754a30e515802e45f57be18",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "43"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-7849-7632-b126-5a6b72f508b0"
+    }
+  ],
+  "id": "01a1c5cd-b961-7258-a81e-3a0101d38d64",
+  "kind": "decision",
+  "reason": "Paths with no file are told, and ASCII case counts on every system (#36); checked against the code by two rounds of blind review, every finding fixed",
+  "revision": "dee0eb16050d3127b3a65cd27adff7039ed14388",
+  "seen": "sha256:25027f04bec92c04a509e742f6b4aa81a4993f719375a3fb37b7429c0fb6b225",
+  "seen_address": "4cc7e8118145774af3e008539bfc40ea85dadef2",
+  "subject": "01a1c5c5-790a-74a0-9dad-6cfab3896b88",
+  "v": 1,
+  "verb": "approve"
+}

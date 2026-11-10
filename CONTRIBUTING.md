@@ -176,8 +176,8 @@ issue -> finding -> requirement / decision / verification (pending)
   `just check`, and so CI, fails otherwise (`just books`). An approval made with
   `--until` fails it once it expires. Pending documents pass it; approve them.
 - A path in a link is compared as written, case included: write it as Git
-  tracks it (`Justfile`, not `justfile`), or it is absent on a system that tells
-  case apart.
+  tracks it (`Justfile`, not `justfile`), or it names no file, on every system.
+  `check` lists the paths that name no file.
 
 Everything else is RustDoc: crate and module docs (`//!`) and item docs (`///`),
 with diagrams as ASCII in code blocks tagged `text`; concepts, file formats,
