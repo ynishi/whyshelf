@@ -45,7 +45,7 @@ use thiserror::Error;
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::shelf::artifact::{ArtifactReadings, ContentAddress, Revision};
+use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactReadings, ContentAddress, Revision};
 use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record, RecordProblem};
 use crate::domain::shelf::schema::{BookDir, BookSchemaDecl};
@@ -252,23 +252,24 @@ pub trait ActorSource: Send + Sync {
 
 /// The files of a project that are no document, read by path: what is there now.
 ///
-/// The adapter decides what of a file the [`ArtifactHash`] covers (it hands the bytes
-/// it chose to [`ArtifactHash::of_content`]) and what a [`ContentAddress`] is; the
-/// domain only compares them.
+/// The adapter reads the bytes and what a [`ContentAddress`] is; what of the bytes a
+/// hash covers is the domain's [`Comparison`], which the adapter applies to them and
+/// does not choose.
 ///
-/// [`ArtifactHash`]: crate::domain::shelf::artifact::ArtifactHash
-/// [`ArtifactHash::of_content`]: crate::domain::shelf::artifact::ArtifactHash::of_content
+/// [`Comparison`]: crate::domain::shelf::artifact::Comparison
 pub trait ArtifactSource: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// For each path: the hash of the file and where its content can be read back
-    /// (when the adapter can say: outside version control it cannot, and that is no
-    /// error), or no file. Every path asked about has an answer. An error is for what
-    /// stops the reading itself (a file that is there and cannot be read).
+    /// For each path: the hash of the file under each comparison asked, made with
+    /// [`ArtifactReading::of_bytes`](crate::domain::shelf::artifact::ArtifactReading::of_bytes)
+    /// from the bytes read, and where its content can be read back (when the adapter
+    /// can say: outside version control it cannot, and that is no error), or no file.
+    /// Every path asked about has an answer. An error is for what stops the reading
+    /// itself (a file that is there and cannot be read).
     fn read_artifacts(
         &self,
-        paths: &[RelPath],
+        asks: &ArtifactAsks,
     ) -> impl Future<Output = Result<ArtifactReadings, Self::Error>> + Send;
 
     /// The bytes of the file at `path` as they are now, or none when no file is

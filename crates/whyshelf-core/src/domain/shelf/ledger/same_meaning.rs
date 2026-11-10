@@ -37,10 +37,9 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec};
 
-use super::super::artifact::{ArtifactHash, ArtifactState};
+use super::super::artifact::{ArtifactHash, ArtifactState, Comparison};
 use super::super::build::{FailureTag, Shelf};
 use super::super::doc::DocHash;
-use super::super::schema::ArtifactPropagation;
 use super::{DeclaredStatus, JudgedAt, JudgementId, Ledger, PinnedArtifact};
 
 /// What a declaration is about, and the hashes it says mean the same.
@@ -182,6 +181,14 @@ pub enum SameMeaningRefusal {
         /// The hash named, as text.
         hash: String,
     },
+    /// The hash named was pinned under a comparison no link declares for the file
+    /// now: the approval is to be looked at again (the comparison changed), and an
+    /// edit across two comparisons cannot be declared.
+    #[error("{hash} was pinned under a comparison no link declares now: approve again instead")]
+    PinnedUnderOtherComparison {
+        /// The hash named, as text.
+        hash: String,
+    },
     /// Approvals pinned earlier hashes that do not mean the same as one another, and
     /// none was named: which edit was read cannot be told.
     #[error("approvals pinned {} earlier hashes that do not mean the same: name the one the edit was read from", hashes.len())]
@@ -203,6 +210,11 @@ pub enum SameMeaningRefusal {
 /// [`SameMeaningRefusal::SeveralEarlier`]. So an older downstream pin, from before a
 /// rewrite the document was approved again after, stays a change. A second
 /// declaration of the same edit is refused as [`SameMeaningRefusal::NothingToDeclare`].
+///
+/// For a file, hashes are taken under one [`Comparison`] at a time, since two links
+/// may compare it differently: the one whose pins hold the hash named, else the only
+/// one with an earlier hash to declare (two such, and none named, is
+/// [`SameMeaningRefusal::SeveralEarlier`]), with the hash now under that comparison.
 ///
 /// The one place the earlier hashes are chosen.
 pub fn frame_same_meaning(
@@ -243,37 +255,105 @@ pub fn frame_same_meaning(
             Ok(SameMeaningOf::Doc { id, from, to: now })
         }
         SameMeaningTarget::Artifact(path) => {
-            let state = shelf
-                .docs()
-                .values()
-                .flat_map(|doc| {
-                    [ArtifactPropagation::Depends, ArtifactPropagation::Informs]
-                        .into_iter()
-                        .flat_map(|p| doc.artifact_links_of(p))
-                        .flat_map(|(_, artifacts)| artifacts.iter())
-                        .filter(|a| *a.path() == path)
-                        .map(|a| *a.state())
-                        .collect::<Vec<_>>()
+            // A file's hash is made by a comparison, so the hash now and the earlier
+            // hashes are taken under one comparison at a time: the hash now of each
+            // comparison a link declares for the path now.
+            let mut now_of: BTreeMap<Comparison, ArtifactState> = BTreeMap::new();
+            for doc in shelf.docs().values() {
+                for link in doc.artifact_links().values() {
+                    for artifact in link.artifacts().iter().filter(|a| *a.path() == path) {
+                        now_of.insert(link.kind().comparison.clone(), *artifact.state());
+                    }
+                }
+            }
+            if now_of.is_empty() {
+                return Err(SameMeaningRefusal::ArtifactNotLinked { path });
+            }
+            let now_of: BTreeMap<Comparison, ArtifactHash> = now_of
+                .into_iter()
+                .filter_map(|(c, state)| match state {
+                    ArtifactState::Present(hash) => Some((c, hash)),
+                    ArtifactState::Absent => None,
                 })
-                .next()
-                .ok_or_else(|| SameMeaningRefusal::ArtifactNotLinked { path: path.clone() })?;
-            let ArtifactState::Present(now) = state else {
+                .collect();
+            if now_of.is_empty() {
                 return Err(SameMeaningRefusal::ArtifactAbsent { path });
-            };
-            let mut pinned = BTreeSet::new();
+            }
+            // The earlier hashes, by the comparison they were made with; a pin of a
+            // comparison no link declares now is told by freshness as such, and has
+            // nothing to declare.
+            let mut pinned: BTreeMap<Comparison, BTreeSet<ArtifactHash>> = BTreeMap::new();
+            let mut under_other: BTreeSet<ArtifactHash> = BTreeSet::new();
             for subject in ledger.subjects() {
                 let DeclaredStatus::Approved { artifacts, .. } = ledger.status_of(*subject) else {
                     continue;
                 };
-                pinned.extend(artifacts.iter().filter_map(|pin| match pin.seen() {
-                    PinnedArtifact::Present { hash, .. } if *pin.path() == path => Some(*hash),
-                    _ => None,
-                }));
+                for pin in artifacts.iter().filter(|p| *p.path() == path) {
+                    let PinnedArtifact::Present { hash, .. } = pin.seen() else {
+                        continue;
+                    };
+                    if now_of.contains_key(pin.comparison()) {
+                        pinned
+                            .entry(pin.comparison().clone())
+                            .or_default()
+                            .insert(*hash);
+                    } else {
+                        under_other.insert(*hash);
+                    }
+                }
             }
             let same = |a: &ArtifactHash, b: &ArtifactHash| {
                 ledger.artifact_same_meaning(&path, a, b).is_some()
             };
-            let from = earlier(pinned, now, from.map(ArtifactHash::restore), None, same)?;
+            let named = from.map(ArtifactHash::restore);
+            // The comparison to declare under: the one whose pins hold the hash named,
+            // else the only one with an earlier hash; two with earlier hashes and none
+            // named cannot be told apart.
+            let open: Vec<&Comparison> = pinned
+                .iter()
+                .filter(|(c, hashes)| {
+                    let now = now_of[*c];
+                    hashes.iter().any(|h| *h != now && !same(h, &now))
+                })
+                .map(|(c, _)| c)
+                .collect();
+            let comparison = match named {
+                Some(hash) => match pinned.iter().find(|(_, hashes)| hashes.contains(&hash)) {
+                    Some((c, _)) => c.clone(),
+                    None if under_other.contains(&hash) => {
+                        return Err(SameMeaningRefusal::PinnedUnderOtherComparison {
+                            hash: hash.to_string(),
+                        });
+                    }
+                    None => {
+                        return Err(SameMeaningRefusal::NotPinned {
+                            hash: hash.to_string(),
+                        });
+                    }
+                },
+                None => match open.as_slice() {
+                    [] => return Err(SameMeaningRefusal::NothingToDeclare),
+                    [one] => (*one).clone(),
+                    _ => {
+                        return Err(SameMeaningRefusal::SeveralEarlier {
+                            hashes: open
+                                .iter()
+                                .flat_map(|c| {
+                                    let now = now_of[*c];
+                                    let same = &same;
+                                    pinned[*c]
+                                        .iter()
+                                        .filter(move |h| **h != now && !same(h, &now))
+                                })
+                                .map(ToString::to_string)
+                                .collect(),
+                        });
+                    }
+                },
+            };
+            let now = now_of[&comparison];
+            let hashes = pinned.remove(&comparison).unwrap_or_default();
+            let from = earlier(hashes, now, named, None, same)?;
             Ok(SameMeaningOf::Artifact {
                 path,
                 from,

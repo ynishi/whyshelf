@@ -51,7 +51,10 @@ use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonBlank, NonEmptySet, NonEmptyVec, TwoOrMore};
 
-use super::artifact::{ArtifactHash, ArtifactState, ContentAddress, OpaqueProblem, Revision};
+use super::artifact::{
+    ArtifactHash, ArtifactState, Comparison, ComparisonProblem, ContentAddress, OpaqueProblem,
+    Revision,
+};
 use super::build::{DocFailure, DocState, FailureTag, Shelf};
 use super::doc::{DocHash, DocKey, LinkState, UnresolvedLink};
 use super::graph::{Cycle, CycleSource, components, cycles_of};
@@ -211,9 +214,17 @@ pub struct ArtifactPin {
     link: EntryName,
     path: RelPath,
     seen: PinnedArtifact,
+    /// How the hash in `seen` was made. A record written before comparisons existed
+    /// has none, and is [`Comparison::Bytes`], as it was made.
+    comparison: Comparison,
 }
 
 impl ArtifactPin {
+    /// How the hash of what was there was made.
+    pub fn comparison(&self) -> &Comparison {
+        &self.comparison
+    }
+
     /// The link of the approved document the pin was taken for.
     pub fn link(&self) -> &EntryName {
         &self.link
@@ -750,6 +761,9 @@ pub enum RecordProblem {
     /// The record is well formed but breaks an invariant of a declaration.
     #[error("the record breaks an invariant of a declaration of the same meaning")]
     SameMeaning(#[source] SameMeaningProblem),
+    /// The comparison of an artifact pin is not one.
+    #[error("the comparison of a pinned artifact is not one")]
+    BadComparison(#[source] ComparisonProblem),
     /// The `kind` of what a declaration is about is neither `doc` nor `artifact`.
     #[error("`{found}` is not something a declaration of the same meaning is about")]
     UnknownSubjectKind {
@@ -1121,14 +1135,61 @@ fn artifact_pin_canon(pin: &ArtifactPin) -> Canon {
         ADDRESS,
         pin.seen.address().map(ContentAddress::as_str),
     );
+    // `bytes` is written as no key, so a pin made the way every pin was made before
+    // comparisons existed has the same form, and the same record hash, as before.
+    if pin.comparison != Comparison::Bytes {
+        entries.push((
+            COMPARE,
+            Canon::map([
+                ("kind", Canon::str(pin.comparison.kind_word())),
+                (
+                    "ignore",
+                    Canon::list(pin.comparison.ignored().map(|p| Canon::str(p.as_str()))),
+                ),
+            ]),
+        ));
+    }
     Canon::map(entries)
+}
+
+/// The optional key of an artifact pin that holds the comparison its hash was made
+/// with, when it is not `bytes`.
+const COMPARE: &str = "compare";
+
+fn comparison_from(map: &CanonMap) -> Result<Comparison, RecordProblem> {
+    let Some(entry) = map.get(COMPARE) else {
+        return Ok(Comparison::Bytes);
+    };
+    let Canon::Map(compare) = entry else {
+        return Err(wrong(COMPARE, "a map"));
+    };
+    exact(compare, &["kind", "ignore"])?;
+    let ignore = items(compare, "ignore")?
+        .iter()
+        .map(|c| match c {
+            Canon::Str(s) => Ok(s.clone()),
+            _ => Err(wrong("ignore", "a list of texts")),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    // As this code writes it: sorted, each once. Another order is no form made here.
+    if ignore.windows(2).any(|w| w[0] >= w[1]) {
+        return Err(wrong("ignore", "a sorted list of texts, each once"));
+    }
+    match Comparison::parse(text(compare, "kind")?, &ignore) {
+        // `bytes` is never written as a key, so a record that writes it was not made
+        // here.
+        Ok(Comparison::Bytes) => Err(wrong(COMPARE, "a comparison other than bytes")),
+        Ok(comparison) => Ok(comparison),
+        Err(why) => Err(RecordProblem::BadComparison(why)),
+    }
 }
 
 fn artifact_pin_from(canon: &Canon) -> Result<ArtifactPin, RecordProblem> {
     let Canon::Map(map) = canon else {
         return Err(wrong(ARTIFACTS, "a list of maps"));
     };
-    exact_with(map, &["link", "path", "state", "hash"], &[ADDRESS])?;
+    exact_with(map, &["link", "path", "state", "hash"], &[ADDRESS, COMPARE])?;
+    let comparison = comparison_from(map)?;
     let link = EntryName::new(text(map, "link")?).map_err(RecordProblem::BadName)?;
     let path = text(map, "path")?
         .parse::<RelPath>()
@@ -1158,7 +1219,12 @@ fn artifact_pin_from(canon: &Canon) -> Result<ArtifactPin, RecordProblem> {
             });
         }
     };
-    Ok(ArtifactPin { link, path, seen })
+    Ok(ArtifactPin {
+        link,
+        path,
+        seen,
+        comparison,
+    })
 }
 
 fn seen_canon(seen: &Seen) -> Canon {
@@ -1967,12 +2033,15 @@ pub fn frame_approve(
 
     // Rule A2: every artifact a `Depends` link names is pinned as it is, a file or
     // none. An artifact has no declared status, so nothing here refuses it.
+    // Each pin keeps the comparison its hash was made with, the link's.
     let artifacts: BTreeSet<ArtifactPin> = doc
-        .artifact_links_of(ArtifactPropagation::Depends)
-        .into_iter()
-        .flat_map(|(link, artifacts)| {
-            artifacts.iter().map(move |artifact| ArtifactPin {
-                link: link.clone(),
+        .artifact_links()
+        .iter()
+        .filter(|(_, link)| link.kind().propagation == ArtifactPropagation::Depends)
+        .flat_map(|(name, link)| {
+            let comparison = &link.kind().comparison;
+            link.artifacts().iter().map(move |artifact| ArtifactPin {
+                link: name.clone(),
                 path: artifact.path().clone(),
                 seen: match artifact.state() {
                     ArtifactState::Present(hash) => PinnedArtifact::Present {
@@ -1981,6 +2050,7 @@ pub fn frame_approve(
                     },
                     ArtifactState::Absent => PinnedArtifact::Absent,
                 },
+                comparison: comparison.clone(),
             })
         })
         .collect();
@@ -2060,6 +2130,8 @@ pub use same_meaning::{
 
 #[cfg(test)]
 mod artifact_tests;
+#[cfg(test)]
+mod comparison_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]

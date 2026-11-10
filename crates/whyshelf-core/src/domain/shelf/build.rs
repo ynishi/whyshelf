@@ -26,8 +26,9 @@
 //! ```
 //!
 //! The paths a link to artifacts writes are read before the build, by
-//! [`Shelf::artifact_paths`], so that an adapter can look at those files first: a
-//! path is read once, by one reader, for both. A path that has no file is an
+//! [`Shelf::artifact_asks`] (each with the comparisons of the links that write it), so
+//! that an adapter can look at those files first: a path is read once, by one reader,
+//! for both, and each link takes the hash of its own comparison. A path that has no file is an
 //! [`Artifact`] that is absent, not a link that cannot be followed (rule A1); a text
 //! that is no path is a [`DocProblem::ArtifactPathInvalid`].
 //!
@@ -53,7 +54,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonEmptyVec, TwoOrMore};
 
-use super::artifact::{Artifact, ArtifactReading, ArtifactReadings, ArtifactState};
+use super::artifact::{Artifact, ArtifactAsks, ArtifactReadings, ArtifactState};
 use super::doc::{
     ArtifactLink, Doc, DocDraft, DocHash, DocKey, FieldValue, Link, LinkState, ResolvedLink,
     UnresolvedLink, UnresolvedWhy,
@@ -767,7 +768,7 @@ struct Entries {
 }
 
 /// A text written in a link to artifacts, read as a path under the root: the one
-/// reader of it, which both [`Shelf::artifact_paths`] and the build use.
+/// reader of it, which both [`Shelf::artifact_asks`] and the build use.
 fn artifact_path(text: &str) -> Result<RelPath, ValueError> {
     text.parse::<RelPath>()
 }
@@ -912,7 +913,7 @@ fn resolve_artifacts(
                 .map(|path| {
                     let state = found
                         .get(&path)
-                        .map_or(ArtifactState::Absent, ArtifactReading::state);
+                        .map_or(ArtifactState::Absent, |r| r.state(&kind.comparison));
                     Artifact::new(path, state)
                 })
                 .collect();
@@ -1076,13 +1077,14 @@ pub struct Shelf {
 }
 
 impl Shelf {
-    /// The paths the files write in their links to artifacts: what an adapter is to
-    /// read before [`Shelf::build`], so that each becomes an [`Artifact`].
+    /// The paths the files write in their links to artifacts, each with the
+    /// comparisons of the links that write it: what an adapter is to read before
+    /// [`Shelf::build`], so that each becomes an [`Artifact`].
     ///
     /// A text that is no path is left out here (the build makes it a
     /// [`DocProblem::ArtifactPathInvalid`]); a file under no book writes none.
-    pub fn artifact_paths(schema: &Schema, readings: &[DocReading]) -> BTreeSet<RelPath> {
-        let mut paths = BTreeSet::new();
+    pub fn artifact_asks(schema: &Schema, readings: &[DocReading]) -> ArtifactAsks {
+        let mut asks = ArtifactAsks::new();
         for reading in readings {
             let DocReading::Parsed {
                 origin, entries, ..
@@ -1093,17 +1095,21 @@ impl Shelf {
             let Membership::In(book) = schema.membership(origin) else {
                 continue;
             };
-            for name in book.artifact_links().keys() {
+            for (name, kind) in book.artifact_links() {
                 if let Some(RawValue::List(texts)) = entries.get(name.as_str()) {
-                    paths.extend(texts.iter().filter_map(|t| artifact_path(t).ok()));
+                    for path in texts.iter().filter_map(|t| artifact_path(t).ok()) {
+                        asks.entry(path)
+                            .or_default()
+                            .insert(kind.comparison.clone());
+                    }
                 }
             }
         }
-        paths
+        asks
     }
 
     /// A shelf from the schema, what an adapter read of the documents, and what it
-    /// found at the paths [`Shelf::artifact_paths`] named.
+    /// found at the paths [`Shelf::artifact_asks`] named.
     ///
     /// The one place a [`Doc`] is made. It never fails; see the module page for the
     /// order of the steps. A path written in a link to artifacts with no entry in
@@ -1427,6 +1433,8 @@ fn origins_but(
 
 #[cfg(test)]
 mod artifact_tests;
+#[cfg(test)]
+mod comparison_tests;
 #[cfg(test)]
 mod new_tests;
 #[cfg(test)]

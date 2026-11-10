@@ -11,8 +11,8 @@
 //!
 //! What goes into each hash is decided where the value is defined, in
 //! [`shelf`](super::shelf): a document's hash covers its book, its fields and its
-//! body; a record's hash covers its canonical form; an artifact's hash covers the
-//! bytes of the file.
+//! body; a record's hash covers its canonical form; an artifact's hash covers what
+//! its link's comparison counts of the file (every byte, or its lines).
 
 use std::fmt;
 use std::str::FromStr;
@@ -37,6 +37,10 @@ pub enum HashKind {
     /// test, data), as an approval pins it (see
     /// [`shelf::artifact`](super::shelf::artifact)).
     ShelfArtifact,
+    /// The lines of a file of a project that is no document, as a `lines`
+    /// comparison keeps them (see
+    /// [`shelf::artifact::Comparison`](super::shelf::artifact::Comparison)).
+    ShelfArtifactLines,
 }
 
 impl HashKind {
@@ -46,6 +50,7 @@ impl HashKind {
             Self::ShelfDoc => "shelf-doc",
             Self::ShelfJudgement => "shelf-judgement",
             Self::ShelfArtifact => "shelf-artifact",
+            Self::ShelfArtifactLines => "shelf-artifact-lines",
         }
     }
 

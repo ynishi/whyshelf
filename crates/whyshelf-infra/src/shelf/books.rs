@@ -44,8 +44,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use whyshelf_core::app::shelf::BookSchemaSource;
 use whyshelf_core::domain::shelf::schema::{
-    ARTIFACT_TARGET, BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl,
-    KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation,
+    ARTIFACT_TARGET, BookSchemaDecl, Cardinality, CompareDecl, FieldEntryDecl, FieldPresence,
+    FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation,
 };
 
 /// A declaration of a Finding -> Spec -> Design chain, as a project could write it.
@@ -216,6 +216,10 @@ struct LinkDto {
     #[serde(default)]
     count: CountWord,
     means: MeansWord,
+    /// For a link to artifacts: `bytes` or `lines`; checked by the domain.
+    compare: Option<String>,
+    /// For `compare = "lines"`: the prefixes of the lines left out.
+    ignore: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -284,6 +288,15 @@ impl BookDto {
                         MeansWord::Depends => Propagation::Depends,
                         MeansWord::Informs => Propagation::Informs,
                         MeansWord::Replaces => Propagation::Replaces,
+                    },
+                    // `ignore` without `compare` is a `compare` of no kind, which the
+                    // domain refuses, so it is not lost.
+                    compare: match (l.compare, l.ignore) {
+                        (None, None) => None,
+                        (kind, ignore) => Some(CompareDecl {
+                            kind: kind.unwrap_or_default(),
+                            ignore: ignore.unwrap_or_default(),
+                        }),
                     },
                 })
                 .collect(),
@@ -362,6 +375,66 @@ means = "informs"
     fn a_key_the_shape_does_not_know_is_refused() {
         assert!(parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\ncolour='red'\n").is_err());
         assert!(parse("[[book]]\nname='a'\ndir='a'\nkey='uuid'\n").is_err());
+    }
+
+    /// A book `a` whose link `tests` to artifacts has these extra lines.
+    fn tests_link(extra: &str) -> String {
+        format!(
+            "[[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [[book.link]]\nname='tests'\ntarget='artifact'\nmeans='depends'\n{extra}"
+        )
+    }
+
+    #[test]
+    fn compare_and_ignore_are_read_onto_a_link_and_none_is_no_compare() {
+        let decls = parse(&tests_link("compare='lines'\nignore=['//', '#']\n")).unwrap();
+        assert_eq!(
+            decls[0].links[0].compare,
+            Some(CompareDecl {
+                kind: "lines".to_owned(),
+                ignore: vec!["//".to_owned(), "#".to_owned()],
+            })
+        );
+        let schema = whyshelf_core::domain::shelf::schema::Schema::validate(decls).unwrap();
+        let kind = &schema.book("a").unwrap().artifact_links()["tests"];
+        assert_eq!(kind.comparison.kind_word(), "lines");
+        assert_eq!(
+            kind.comparison
+                .ignored()
+                .map(|p| p.as_str())
+                .collect::<Vec<_>>(),
+            ["#", "//"]
+        );
+
+        let plain = parse(&tests_link("")).unwrap();
+        assert_eq!(plain[0].links[0].compare, None);
+        let bytes = parse(&tests_link("compare='bytes'\n")).unwrap();
+        assert_eq!(
+            bytes[0].links[0].compare,
+            Some(CompareDecl {
+                kind: "bytes".to_owned(),
+                ignore: Vec::new(),
+            })
+        );
+    }
+
+    #[test]
+    fn ignore_without_compare_is_kept_for_the_domain_to_refuse() {
+        let decls = parse(&tests_link("ignore=['//']\n")).unwrap();
+        assert_eq!(
+            decls[0].links[0].compare,
+            Some(CompareDecl {
+                kind: String::new(),
+                ignore: vec!["//".to_owned()],
+            })
+        );
+        assert!(whyshelf_core::domain::shelf::schema::Schema::validate(decls).is_err());
+    }
+
+    #[test]
+    fn a_key_a_link_does_not_know_is_still_refused() {
+        assert!(parse(&tests_link("compare='lines'\nskip=['//']\n")).is_err());
+        assert!(parse(&tests_link("compare=['lines']\n")).is_err());
     }
 
     #[test]
