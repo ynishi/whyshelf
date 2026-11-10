@@ -31,6 +31,7 @@ use whyshelf_core::domain::shelf::freshness::{
 };
 use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin};
 use whyshelf_core::domain::shelf::schema::Propagation;
+use whyshelf_infra::shelf::docs::normalize;
 use whyshelf_infra::shelf::ledger::to_json;
 
 /// A document named in an answer: its identity, and its key when it is valid.
@@ -384,7 +385,9 @@ pub struct DiffItemOut {
     /// `no_address` (the content itself is in `diff`).
     pub retrieval: &'static str,
     /// The unified diff from the approved content to the file now, when both are
-    /// UTF-8 text (empty when they are the same); none otherwise.
+    /// UTF-8 text; none otherwise. It agrees with `changed`: a document's diff is of
+    /// its normalized text (what its hash is taken over) and is empty when `changed`
+    /// is false; an artifact's diff is of its bytes as text.
     pub diff: Option<String>,
 }
 
@@ -1043,7 +1046,19 @@ fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
         .or_else(|| item.file.as_ref().map(ToString::to_string))
         .or_else(|| out.doc.as_ref().and_then(|d| d.key.clone()))
         .unwrap_or_default();
+    // The diff says what `changed` says. A document's hash is taken over its text after
+    // the reader's normalization (line breaks, trailing white space), so its diff is
+    // taken over the normalized texts too, and is empty when the hash is the same. An
+    // artifact's hash covers its bytes, so its diff is of the texts as they are.
+    let is_doc = matches!(item.now, ItemNow::Doc(_));
     let diff = match (approved_text, current_text) {
+        (Some(_), Some(_)) if is_doc && !item.changed => Some(String::new()),
+        (Some(then), Some(now)) if is_doc => Some(textdiff::unified(
+            &normalize(then),
+            &normalize(now),
+            &format!("approved/{label}"),
+            &format!("now/{label}"),
+        )),
         (Some(then), Some(now)) => Some(textdiff::unified(
             then,
             now,
