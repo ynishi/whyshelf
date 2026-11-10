@@ -350,6 +350,32 @@ impl DocDraft {
     }
 }
 
+/// A document's text by the one rule of normalization: line breaks (CRLF and a lone
+/// CR) become LF, the spaces and tabs at the end of each line are removed, and the
+/// text ends in exactly one LF, or is empty when nothing but line breaks, spaces
+/// and tabs was in it. There is no Unicode normalization. Applying it twice changes
+/// nothing.
+///
+/// The adapter that reads a document applies it to the whole file before reading
+/// the front matter, and the hash of a document applies it to the body again, so
+/// the body a [`DocHash`] covers is the body after this rule whatever an adapter
+/// did: an edit this rule removes changes no hash.
+#[must_use]
+pub fn normalize(text: &str) -> String {
+    let unified = text.replace("\r\n", "\n").replace('\r', "\n");
+    let mut out = String::with_capacity(unified.len() + 1);
+    for line in unified.split('\n') {
+        out.push_str(line.trim_end_matches([' ', '\t']));
+        out.push('\n');
+    }
+    let kept = out.trim_end_matches('\n').len();
+    out.truncate(kept);
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out
+}
+
 /// The hash of a document: its book, fields and body.
 ///
 /// The one place the scope of a [`DocHash`] is decided and computed.
@@ -364,7 +390,7 @@ fn hash_doc(book: &BookName, fields: &BTreeMap<EntryName, FieldValue>, body: &st
                     .map(|(name, value)| (name.as_str(), value.to_canon())),
             ),
         ),
-        ("body", Canon::str(body)),
+        ("body", Canon::str(normalize(body))),
     ]);
     DocHash::computed(ContentHash::of(HashKind::ShelfDoc, &canon))
 }
@@ -463,5 +489,34 @@ impl Doc {
     /// The hash of the document.
     pub fn hash(&self) -> &DocHash {
         &self.hash
+    }
+}
+
+#[cfg(test)]
+mod normalize_tests {
+    use super::normalize;
+
+    #[test]
+    fn line_breaks_trailing_blanks_and_the_last_lf() {
+        for (text, want) in [
+            ("", ""),
+            ("\n\n", ""),
+            ("a", "a\n"),
+            ("a\r\nb\rc\n", "a\nb\nc\n"),
+            ("a  \t\nb\t\n\n\n", "a\nb\n"),
+            ("  lead\n", "  lead\n"),
+            ("a\n\n\nb\n", "a\n\n\nb\n"),
+            ("caf\u{e9} / cafe\u{301}\n", "caf\u{e9} / cafe\u{301}\n"),
+        ] {
+            assert_eq!(normalize(text), want, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn normalizing_twice_changes_nothing() {
+        for text in ["a \r\n\r\n b\t\r", "x\n", "", " \n \n"] {
+            let once = normalize(text);
+            assert_eq!(normalize(&once), once, "{text:?}");
+        }
     }
 }

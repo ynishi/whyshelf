@@ -1,0 +1,11 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794313294491,
+  "id": "01a1c568-12af-76a2-8981-d3bd328e2472",
+  "kind": "decision",
+  "reason": "Split into DEC-27, DEC-28 and DEC-29, one rule each (#30)",
+  "seen": "sha256:c51cec385698091a6ec82b8355a7f68a46af4794e6f439d061e632c7f91d43c9",
+  "subject": "01a1c4ba-1465-7320-b3cb-05827d35ef01",
+  "v": 1,
+  "verb": "deprecate"
+}
