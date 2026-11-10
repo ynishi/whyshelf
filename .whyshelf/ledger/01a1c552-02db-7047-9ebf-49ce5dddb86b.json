@@ -1,0 +1,100 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "dd52ddb1c15878b73abee3a8af50de93b2f7dc4a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0343353487bbe89cf6fbaf27db52dab051368927cc2e0f80b766d0df01cff545",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "8630603c683014ce59372e56f6e4d7a3f710218f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4ac69e6a86e2087348b3cea5bc0c5144e49db475243f872ffa1d687dcd7428c8",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output.rs",
+      "state": "present"
+    },
+    {
+      "address": "9b3393adbe31f161e1380d5ffd50ac0b136d052e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d9c73a6abbb9d0581104ab84f5a3a96b38f1a987ed21f7139b4815263d29d20",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "cf0b7a983b21ad7068ea149d2ec4bd006106baac",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f1bd370980a9718f812a1e7cc80191515eb0cc3f7a8d2862f4486a802a15bb73",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "00e73ef35f7678e8c7d80fa42638a9e576fc62bc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:95cea67e28f81c121c2d550fd7f16fa0275514b3cfae9c132ee8d453ae00df28",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/tests/command_line.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794311848327,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d45436391d5c3a3caa2fc103570035019b8ceb65",
+      "hash": "sha256:8f5ec6d68c361b3c647d8923ed10bec9d706be3ecbfc32072ad70f42c99a8620",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "20"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-14b4-77f7-9af0-acbe8896080b"
+    }
+  ],
+  "id": "01a1c552-02db-7047-9ebf-49ce5dddb86b",
+  "kind": "decision",
+  "reason": "Issue #28: a wrong argument is answered in JSON, and the command line's promises are tested on the binary; a blind review tried many wrong arguments, and its findings are fixed",
+  "revision": "de40291c3b36af6981a477d5ae4301018ce947b6",
+  "seen": "sha256:01cd51c2fbf7e85fc4c0d4adfbe935bf065d8c0e1bee5e3d8838653e89b9d8a8",
+  "seen_address": "6b3d1d7847d5729a102afad71e2340b57f4d087b",
+  "subject": "01a1c4ba-1a9f-7201-9b7f-62a0f1be9e14",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,130 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "00e73ef35f7678e8c7d80fa42638a9e576fc62bc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:95cea67e28f81c121c2d550fd7f16fa0275514b3cfae9c132ee8d453ae00df28",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/tests/command_line.rs",
+      "state": "present"
+    },
+    {
+      "address": "653ad14e57f8de182cf191b81d64e2f9db4221e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5283bd99399abb8a2db4526a63fcd83271fc7b9c5af198d0d5b43ceb3d69d3de",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "36896bc9050db4cb2070450dd57f7f826ced87de",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:56a07cebb4731ee50c7b30deafec5e835d26b2c9ca2bb17d8b040a2ae35d4497",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "c65e85c22d555b5e310c3df8c9530e447074c434",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:95676a500779279a8ec83ce45a435897c3b22fcedaa6109ab9169fb00e976bb9",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "850624b5ae13dbd3c2271dd069df31983b4db3d8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:506d6c604a075f1ab3846ec6adba35d340980a81822981662245c15ae6c12480",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "state": "present"
+    },
+    {
+      "address": "4674412ccf6436874611a26b9694d11c5a2f05e9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:54202fa74f3c72730d555a7614f369532071cc530067aeb7180703e778e328c2",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794311848327,
+  "expires": null,
+  "frame": [
+    {
+      "address": "66263bdc3980b936c694c2d17be9b4677758e75e",
+      "hash": "sha256:84fddda824da59e08802e861073615e8cc6db49ab5c14a3467e6aeb3760e433b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "a7ccf62e0bb738ae532cf9db8d22227311bd524c",
+      "hash": "sha256:c51cec385698091a6ec82b8355a7f68a46af4794e6f439d061e632c7f91d43c9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "19"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1465-7320-b3cb-05827d35ef01"
+    }
+  ],
+  "id": "01a1c552-01a5-7545-9f2a-ece74c6654f7",
+  "kind": "decision",
+  "reason": "Issue #28: a wrong argument is answered in JSON, and the command line's promises are tested on the binary; a blind review tried many wrong arguments, and its findings are fixed",
+  "revision": "de40291c3b36af6981a477d5ae4301018ce947b6",
+  "seen": "sha256:e120a904e908ff4dde126eb83c32e72e9c1089fd026c123a49f5eb5a1c70168f",
+  "seen_address": "a2be56f16bc18f31eaa64664f677bbc0bf5cb644",
+  "subject": "01a1c4ba-19a6-76f9-a7c1-40f9f8460ecf",
+  "v": 1,
+  "verb": "approve"
+}

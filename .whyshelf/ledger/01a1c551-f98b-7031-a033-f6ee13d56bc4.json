@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794311846226,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c551-f98b-7031-a033-f6ee13d56bc4",
+  "kind": "decision",
+  "reason": "Issue #28: a wrong argument is answered in JSON, and the command line's promises are tested on the binary; a blind review tried many wrong arguments, and its findings are fixed",
+  "revision": "de40291c3b36af6981a477d5ae4301018ce947b6",
+  "seen": "sha256:dbfbc74e9bad4563b102685a9c8444edadf1f5d7649316a70108f469596031b0",
+  "seen_address": "8a8a3d6c2e4cf810ae9aa3623b2401fa6dedaded",
+  "subject": "01a1c54a-3508-71c8-a980-a9c187bf330c",
+  "v": 1,
+  "verb": "approve"
+}
