@@ -1,0 +1,147 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "09adf874c80238d8cf87b9f9332e38d2d8acbf9f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0d6d440c17b58ae87d5dad011458468489e7600e79f3e905329a3a14a31a0e90",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/tests/command_line.rs",
+      "state": "present"
+    },
+    {
+      "address": "653ad14e57f8de182cf191b81d64e2f9db4221e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5283bd99399abb8a2db4526a63fcd83271fc7b9c5af198d0d5b43ceb3d69d3de",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "36896bc9050db4cb2070450dd57f7f826ced87de",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:56a07cebb4731ee50c7b30deafec5e835d26b2c9ca2bb17d8b040a2ae35d4497",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "778944d564888bd7e742257a5972f3c2727c6806",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d3fa4b3318efde0386272dbb081ff945c650d1551b3a6d3542c7a762c8f2628",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "3f8fb6f4fc1f23245e07c144bc3508681e064077",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6e835bc58f6addf8d91c492317bf305ec2493034375ea4419709bf88ad5c4601",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "state": "present"
+    },
+    {
+      "address": "4674412ccf6436874611a26b9694d11c5a2f05e9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:54202fa74f3c72730d555a7614f369532071cc530067aeb7180703e778e328c2",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794314649320,
+  "expires": null,
+  "frame": [
+    {
+      "address": "630ff13403e4a7a900fbbaf133d625de8f0c4562",
+      "hash": "sha256:3323f371c23c4d6ae0485243f0aa8661bef9d31b5ce9e8756a84eaed86b7e874",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "6a4ec3d1e683547d9a7d9662a853747b18f2450a",
+      "hash": "sha256:2cc62a3771370bb6d487f768be190fcff3bc5e846820fdc1459c75f065d07adc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ce54-705b-a4fb-17382395564a"
+    },
+    {
+      "address": "0a499a121b00325cdd8d64891c34443373d5cbef",
+      "hash": "sha256:7442f2bb294d68443fd80a86e07d43d963bdf47969a698b37f01f10e01fff4ed",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a1c57c-c115-716e-9906-33b5db29554e",
+  "kind": "decision",
+  "reason": "Tests added to shared test files for #32 (rows show the decision); the tests these verifications name still check what they say, checked by a blind review",
+  "revision": "386f223ebcf20b4eb2c36831150c6b5c99a85af7",
+  "seen": "sha256:e120a904e908ff4dde126eb83c32e72e9c1089fd026c123a49f5eb5a1c70168f",
+  "seen_address": "ea2383a20af4631fcd139fda9cb0bbc74591d7a2",
+  "subject": "01a1c4ba-19a6-76f9-a7c1-40f9f8460ecf",
+  "v": 1,
+  "verb": "approve"
+}
