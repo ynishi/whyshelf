@@ -26,6 +26,8 @@ and this project adheres to
   reaches (#18).
 - A value a front matter does not hold is told with the kind it was read as
   (#22).
+- `whyshelf stale --exit-code`, and `just check` (so CI) fails when the
+  repository's own books are not clean or an approval does not hold (#24).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
