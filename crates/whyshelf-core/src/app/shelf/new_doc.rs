@@ -1,5 +1,7 @@
-//! The use case that writes a document: `new_doc`, one new file (the other write,
-//! [`judge`](super::ShelfApp::judge), adds to the ledger).
+//! The use case that writes a new document: `new_doc`, one new file (the other
+//! writes: [`judge`](super::ShelfApp::judge) adds to the ledger, and
+//! [`fmt`](super::ShelfApp::fmt) writes documents' files that are there over in the
+//! form, through a port of its own, [`DocReplace`](super::ports::DocReplace)).
 //!
 //! ```text
 //!   request ---- load -------------------------------> the shelf as it is

@@ -8,4 +8,4 @@ rustdoc: ["whyshelf", "whyshelf_core::app::shelf::ports::LedgerRead::read"]
 serves: ["REQ-5"]
 title: "Reading commands create no file and no directory"
 ---
-A command other than judge and new reads the project and leaves every file and directory as it found them, before the first approval as after it.
+A command other than judge, new and fmt reads the project and leaves every file and directory as it found them, before the first approval as after it.

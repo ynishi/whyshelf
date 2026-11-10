@@ -12,12 +12,13 @@
 //! | port | gives the use cases |
 //! |---|---|
 //! | [`BookSchemaSource`] | the declarations of the books, as an adapter read them |
-//! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books, and the bytes and the [`ContentAddress`] of a document's file now |
+//! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books, the bytes and the [`ContentAddress`] of a document's file now, and how each file stands to the one form documents are written in ([`FileForm`]) |
 //! | [`LedgerRead`] | the records of the ledger, and the files of it that could not be read as one |
 //! | [`LedgerAppend`] | one record added, never in place of another |
 //! | [`Clock`] | now, as a [`JudgedAt`] |
 //! | [`IdSource`] | the identity of a new record, and of a new document |
 //! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there |
+//! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten) |
 //! | [`ActorSource`] | who is acting |
 //! | [`ArtifactSource`] | the spaces it offers; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
 //! | [`ContentStore`] | content read back by its [`ContentAddress`], by the adapter of the document or the space it is of, or "not readable" |
@@ -29,10 +30,10 @@
 //! ```text
 //!   ShelfRead   BookSchemaSource  DocSource  LedgerRead  Clock  ArtifactSource  ContentStore
 //!        ^
-//!        |      what `check`, `status`, `get`, `trace`, `stale`, `get --approved`
-//!        |      and `diff` are generic over
-//!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite
-//!               what `judge` and `new_doc` are generic over
+//!        |      what `check`, `status`, `get`, `trace`, `stale`, `get --approved`,
+//!        |      `diff` and `fmt --check` are generic over
+//!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite  DocReplace
+//!               what `judge`, `new_doc` and `fmt` are generic over
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -79,6 +80,8 @@ pub enum ShelfPort {
     Revision,
     /// [`DocWrite`].
     DocWrite,
+    /// [`DocReplace`].
+    DocReplace,
 }
 
 impl fmt::Display for ShelfPort {
@@ -95,6 +98,7 @@ impl fmt::Display for ShelfPort {
             Self::Store => "content store",
             Self::Revision => "revision",
             Self::DocWrite => "document write",
+            Self::DocReplace => "document replace",
         })
     }
 }
@@ -143,6 +147,58 @@ pub trait DocSource: Send + Sync {
         &self,
         files: &BTreeSet<RelPath>,
     ) -> impl Future<Output = Result<BTreeMap<RelPath, ContentAddress>, Self::Error>> + Send;
+
+    /// For every Markdown file under one of these directories, as
+    /// [`read_docs`](Self::read_docs) finds them: its reading, its bytes, and how it
+    /// stands to the one form the adapter writes a document in (the form
+    /// [`DocWrite::create`] writes). Reading creates nothing.
+    fn forms(
+        &self,
+        dirs: &[BookDir],
+    ) -> impl Future<Output = Result<Vec<FileForm>, Self::Error>> + Send;
+}
+
+/// A document's file beside the one form its adapter writes ([`DocSource::forms`]).
+///
+/// The bytes are the adapter's text, carried by the use case and never read by it:
+/// [`DocReplace::replace_read`] is given them back, so that it replaces only the file
+/// as it was read, and with the text that was checked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileForm {
+    /// The file's reading now, as [`DocSource::read_docs`] gives it.
+    pub reading: DocReading,
+    /// The file's bytes now.
+    pub read: Vec<u8>,
+    /// How the file stands to the form.
+    pub form: Form,
+}
+
+/// How a file stands to the one form its adapter writes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Form {
+    /// Its bytes are already the form's.
+    InForm,
+    /// No text in the form can be made from it: its front matter cannot be read.
+    Unwritable,
+    /// Its front matter holds a comment, which the form has no place for; `line` is
+    /// the line of the file the first one is on.
+    Comment {
+        /// The line, counted from 1.
+        line: u32,
+    },
+    /// It is not in the form, and the user cannot write it.
+    ReadOnly,
+    /// It is not in the form, and it has more than one link (a hard link), which a
+    /// file written in its place would not keep.
+    Linked,
+    /// It is not in the form: the text the form gives it, and what that text reads
+    /// as. The use case writes the text only when that reading is the file's own.
+    Other {
+        /// The text in the form.
+        text: Vec<u8>,
+        /// The reading of that text.
+        reads_as: DocReading,
+    },
 }
 
 /// Why a file of the ledger is not a record.
@@ -250,13 +306,49 @@ pub trait DocWrite: Send + Sync {
     /// read back through [`DocSource`] into the same entries.
     ///
     /// Create-only: a file already at the path is never replaced, and is
-    /// [`Creation::AlreadyThere`], not an error. Missing directories are made.
+    /// [`Creation::AlreadyThere`], not an error. Missing directories are made. Writing
+    /// over a file is another port, [`DocReplace`], which only `fmt` calls.
     fn create(
         &self,
         path: &RelPath,
         entries: &BTreeMap<String, RawValue>,
         body: &str,
     ) -> impl Future<Output = Result<Creation, Self::Error>> + Send;
+}
+
+/// What [`DocReplace::replace_read`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Replacement {
+    /// The file was replaced.
+    Replaced,
+    /// The file is no longer what was read (changed, or gone); nothing was written.
+    Changed,
+}
+
+/// Writing over a document's file that is there: the one write that replaces a
+/// file, kept apart from [`DocWrite::create`], which never does (so `new` cannot
+/// overwrite).
+pub trait DocReplace: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// Replace the file at `path` (relative to the project root), which a reading
+    /// just read as `read`, by `text`, the text [`DocSource::forms`] gave for it in
+    /// the form.
+    ///
+    /// The file is compared with `read` just before it is replaced: one that changed
+    /// or is gone by then is [`Replacement::Changed`], not an error, and is left as
+    /// it is. The comparison and the replacement are two steps, so an edit saved in
+    /// the short time between them is overwritten, and a file removed in it is
+    /// written again. The file is replaced whole: it holds `read` or `text`, never a
+    /// part of either, so a run that fails part way leaves each file it wrote a
+    /// sound file of its own.
+    fn replace_read(
+        &self,
+        path: &RelPath,
+        read: &[u8],
+        text: &[u8],
+    ) -> impl Future<Output = Result<Replacement, Self::Error>> + Send;
 }
 
 /// Who is acting.
@@ -379,7 +471,7 @@ pub trait ShelfRead: Send + Sync {
     fn store(&self) -> &Self::Store;
 }
 
-/// The ports that `judge` and `new_doc` are generic over: everything a read has, and
+/// The ports that `judge`, `new_doc` and `fmt` are generic over: everything a read has, and
 /// the things only a write needs.
 pub trait ShelfWrite: ShelfRead {
     /// The ledger, to append to.
@@ -392,11 +484,15 @@ pub trait ShelfWrite: ShelfRead {
     type Revisions: RevisionSource;
     /// The files of new documents.
     type DocWriter: DocWrite;
+    /// The files of documents that are there, written over in the form.
+    type DocReplacer: DocReplace;
 
     /// The ledger, to write.
     fn append(&self) -> &Self::Append;
     /// The writer of new documents' files.
     fn doc_writer(&self) -> &Self::DocWriter;
+    /// The writer over documents' files that are there.
+    fn doc_replacer(&self) -> &Self::DocReplacer;
     /// The source of identities.
     fn ids(&self) -> &Self::Ids;
     /// The acting person.

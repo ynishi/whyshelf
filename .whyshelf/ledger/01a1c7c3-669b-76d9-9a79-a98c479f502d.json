@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794352833728,
+  "expires": null,
+  "frame": [
+    {
+      "address": "80b7ca88aa572685d4aa25aa6a50260a271f8243",
+      "hash": "sha256:36a8f23657089860a548249154b9d58c9d02474608ce556359475db853a351c9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    }
+  ],
+  "id": "01a1c7c3-669b-76d9-9a79-a98c479f502d",
+  "kind": "decision",
+  "reason": "REQ-5 and DEC-29 now count fmt among the writes, V-15 and V-22 are restated, and shared tests changed for #44; checked by a blind review",
+  "revision": "6777de26b11433b74ac2aa5cae504ff6d91efd77",
+  "seen": "sha256:ec6ee4d2f34a744f47d8d8539ad7dbdd1db76d0dacb6ccee803f0ac1d8744584",
+  "seen_address": "57c1c9f6af7b2971ec63c79962325cfa5b2dd023",
+  "subject": "01a1c55d-d0dc-701e-8908-afb6fafe946e",
+  "v": 1,
+  "verb": "approve"
+}
