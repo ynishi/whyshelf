@@ -42,6 +42,10 @@ and this project adheres to
   `description`, one line (#39). Answers that list books, fields or links
   (`check`'s `books`, the missing entries of an invalid document, `not_covered`
   notices) now follow the declaration's order, not the order of the names.
+- `whyshelf unlinked` answers the documents no link reaches and none leaves
+  (`isolated`), then those with no link in or out where the declaration lets
+  one be; documents decided against are listed apart. It is a question, not a
+  rule, and never fails the check (#47).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
