@@ -16,7 +16,8 @@
 //! | [`LedgerRead`] | the records of the ledger, and the files of it that could not be read as one |
 //! | [`LedgerAppend`] | one record added, never in place of another |
 //! | [`Clock`] | now, as a [`JudgedAt`] |
-//! | [`IdSource`] | the identity of a new record |
+//! | [`IdSource`] | the identity of a new record, and of a new document |
+//! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there |
 //! | [`ActorSource`] | who is acting |
 //! | [`ArtifactSource`] | for each path a document links to: the hash of the file and where its content can be read back, or no file; and the bytes of a file now |
 //! | [`ContentStore`] | content read back by its [`ContentAddress`], or "not readable" |
@@ -30,10 +31,11 @@
 //!        ^
 //!        |      what `books check`, `status`, `get`, `trace`, `stale`, `show --approved`
 //!        |      and `diff` are generic over
-//!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource
-//!               what `judge` is generic over
+//!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite
+//!               what `judge` and `new_doc` are generic over
 //! ```
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
@@ -41,9 +43,10 @@ use std::future::Future;
 use thiserror::Error;
 
 use crate::domain::actor::Actor;
+use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::shelf::artifact::{ArtifactReadings, ContentAddress, Revision};
-use crate::domain::shelf::build::DocReading;
+use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record, RecordProblem};
 use crate::domain::shelf::schema::{BookDir, BookSchemaDecl};
 
@@ -72,6 +75,8 @@ pub enum ShelfPort {
     Store,
     /// [`RevisionSource`].
     Revision,
+    /// [`DocWrite`].
+    DocWrite,
 }
 
 impl fmt::Display for ShelfPort {
@@ -87,6 +92,7 @@ impl fmt::Display for ShelfPort {
             Self::Artifacts => "artifact",
             Self::Store => "content store",
             Self::Revision => "revision",
+            Self::DocWrite => "document write",
         })
     }
 }
@@ -195,13 +201,44 @@ pub trait Clock: Send + Sync {
     fn now(&self) -> impl Future<Output = Result<JudgedAt, Self::Error>> + Send;
 }
 
-/// New identities of records. The domain never makes one.
+/// New identities of records and of documents. The domain never makes one.
 pub trait IdSource: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
     /// The identity of a new record: a UUID v7.
     fn new_judgement_id(&self) -> impl Future<Output = Result<JudgementId, Self::Error>> + Send;
+
+    /// The identity of a new document: a UUID v7, which the document keeps for good.
+    fn new_doc_id(&self) -> impl Future<Output = Result<DocId, Self::Error>> + Send;
+}
+
+/// What [`DocWrite::create`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Creation {
+    /// The file was written.
+    Created,
+    /// A file is already at the path; nothing was written.
+    AlreadyThere,
+}
+
+/// Writing a new document's file.
+pub trait DocWrite: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// Write the file at `path` (relative to the project root) with this front matter
+    /// and body. The entries are values; their text (YAML) is the adapter's, and must
+    /// read back through [`DocSource`] into the same entries.
+    ///
+    /// Create-only: a file already at the path is never replaced, and is
+    /// [`Creation::AlreadyThere`], not an error. Missing directories are made.
+    fn create(
+        &self,
+        path: &RelPath,
+        entries: &BTreeMap<String, RawValue>,
+        body: &str,
+    ) -> impl Future<Output = Result<Creation, Self::Error>> + Send;
 }
 
 /// Who is acting.
@@ -297,20 +334,24 @@ pub trait ShelfRead: Send + Sync {
     fn store(&self) -> &Self::Store;
 }
 
-/// The ports that `judge` is generic over: everything a read has, and the four
-/// things only a judgement needs.
+/// The ports that `judge` and `new_doc` are generic over: everything a read has, and
+/// the things only a write needs.
 pub trait ShelfWrite: ShelfRead {
     /// The ledger, to append to.
     type Append: LedgerAppend;
-    /// The identities of new records.
+    /// The identities of new records and documents.
     type Ids: IdSource;
     /// The acting person.
     type Actor: ActorSource;
     /// The revision an approval is made at.
     type Revisions: RevisionSource;
+    /// The files of new documents.
+    type DocWriter: DocWrite;
 
     /// The ledger, to write.
     fn append(&self) -> &Self::Append;
+    /// The writer of new documents' files.
+    fn doc_writer(&self) -> &Self::DocWriter;
     /// The source of identities.
     fn ids(&self) -> &Self::Ids;
     /// The acting person.

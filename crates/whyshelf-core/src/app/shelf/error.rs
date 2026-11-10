@@ -11,7 +11,9 @@ use thiserror::Error;
 
 use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
+use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
+use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem};
 use crate::domain::shelf::ledger::{DecisionProblem, FrameRefusal};
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
@@ -109,6 +111,28 @@ pub enum ShelfError {
         /// The document.
         subject: DocId,
     },
+    /// The book has no next key (a book of slugs, an unknown book, no number left).
+    #[error("no key for the new document")]
+    NextKey(#[from] NextKeyProblem),
+    /// The key given for a new document is malformed or taken, or its book unknown.
+    #[error("the key cannot be the new document's")]
+    ClaimKey(#[from] ClaimKeyProblem),
+    /// The new document would be invalid, or cannot be made of what was given.
+    #[error("the new document is refused")]
+    NewDoc(#[from] NewDocProblem),
+    /// One entry was given twice for a new document.
+    #[error("the entry `{name}` is given twice")]
+    EntryTwice {
+        /// The entry.
+        name: String,
+    },
+    /// A file is already where the new document would be written (a file whose key
+    /// is not its name); nothing was written.
+    #[error("{path} is already there; nothing was written")]
+    FileTaken {
+        /// The file.
+        path: RelPath,
+    },
 }
 
 /// What kind of trouble an error is, for a surface to decide how to end.
@@ -138,7 +162,12 @@ impl ShelfError {
             | Self::NothingToRevoke { .. }
             | Self::NotASuccessor { .. }
             | Self::NothingRequested
-            | Self::NotApproved { .. } => ErrorClass::Request,
+            | Self::NotApproved { .. }
+            | Self::NextKey(_)
+            | Self::ClaimKey(_)
+            | Self::NewDoc(_)
+            | Self::EntryTwice { .. }
+            | Self::FileTaken { .. } => ErrorClass::Request,
             Self::Refused(_) | Self::Decision(_) => ErrorClass::Refused,
             Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,
         }

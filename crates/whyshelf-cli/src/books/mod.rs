@@ -23,8 +23,12 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `books check` found something wrong, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `show --approved` or `diff` of a document no approval stands about) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `show --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path) |
 //! | 3 | the run failed (a file could not be read or written) |
+//!
+//! `new` is the one command that writes a document. Its values arrive as text and
+//! are given to the use case as text; the use case reads them by the book's
+//! declaration, and the domain judges the document before anything is written.
 
 // `ShelfError` and the refusals of the domain hold lists of problems; they are
 // returned once, at the end of a command, so their size costs nothing.
@@ -38,9 +42,12 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use whyshelf_core::app::shelf::{ErrorClass, JudgeRequest, Judgement, ShelfApp, ShelfError};
+use whyshelf_core::app::shelf::{
+    ErrorClass, JudgeRequest, Judgement, NewDocRequest, ShelfApp, ShelfError,
+};
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::shelf::schema::BookName;
 use whyshelf_infra::shelf::Project;
 use whyshelf_infra::shelf::system::parse_time;
 
@@ -97,6 +104,23 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             .diff(&reference)
             .await
             .map(|r| print(&output::diff(&r))),
+        BooksCommand::New {
+            book,
+            title,
+            key,
+            entries,
+            body,
+        } => match new_request(&book, title, key, entries, body) {
+            Ok(request) => ShelfApp::new(project)
+                .new_doc(request)
+                .await
+                .map(|created| print(&output::created(&created))),
+            Err(message) => {
+                eprintln!("error: {message}");
+                print(&output::usage(message));
+                return ExitCode::from(Exit::Request as u8);
+            }
+        },
         BooksCommand::Judge(verb) => match judge_requests(verb) {
             Ok(requests) => ShelfApp::new(project)
                 .judge_all(requests)
@@ -174,6 +198,32 @@ fn judge_requests(verb: Verb) -> Result<Vec<JudgeRequest>, String> {
             actor: actor.clone(),
         })
         .collect())
+}
+
+/// The request of a `new` command, or why the arguments are not one. Every value
+/// stays a text here: which becomes a list, a number or a truth value is decided by
+/// the book's declaration, in the use case.
+fn new_request(
+    book: &str,
+    title: String,
+    key: Option<String>,
+    entries: Vec<String>,
+    body: Option<String>,
+) -> Result<NewDocRequest, String> {
+    let book = BookName::new(book).map_err(|e| format!("book `{book}`: {e}"))?;
+    let mut pairs = vec![("title".to_owned(), title)];
+    for entry in entries {
+        let (name, value) = entry
+            .split_once('=')
+            .ok_or_else(|| format!("`{entry}` is not `<entry>=<value>`"))?;
+        pairs.push((name.to_owned(), value.to_owned()));
+    }
+    Ok(NewDocRequest {
+        book,
+        key,
+        entries: pairs,
+        body: body.unwrap_or_default(),
+    })
 }
 
 /// Print an answer as one JSON document on stdout.

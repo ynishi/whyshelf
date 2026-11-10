@@ -24,9 +24,9 @@ use crate::domain::shelf::schema::{
 };
 
 use super::ports::{
-    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentStore, DocSource, IdSource,
-    LedgerAppend, LedgerContents, LedgerRead, RevisionSource, ShelfRead, ShelfWrite,
-    UnreadableRecord,
+    ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentStore, Creation, DocSource,
+    DocWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, RevisionSource, ShelfRead,
+    ShelfWrite, UnreadableRecord,
 };
 use crate::domain::shelf::artifact::{
     ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
@@ -205,6 +205,8 @@ pub(super) struct FakeShelf {
     pub(super) versioned: bool,
     /// How many times the artifacts were read.
     pub(super) artifact_reads: Mutex<usize>,
+    /// How many document files were created.
+    pub(super) created: Mutex<usize>,
 }
 
 /// The address the fake gives a content: its hash, cut short, so equal contents
@@ -236,7 +238,12 @@ impl FakeShelf {
             revision: Mutex::new(None),
             versioned: true,
             artifact_reads: Mutex::new(0),
+            created: Mutex::new(0),
         }
+    }
+
+    pub(super) fn created_count(&self) -> usize {
+        *lock(&self.created)
     }
 
     /// Write a file that is no document (or the bytes of a document's file).
@@ -365,6 +372,40 @@ impl IdSource for FakeShelf {
         *next += 1;
         Ok(JudgementId::new(eid(*next)))
     }
+
+    async fn new_doc_id(&self) -> Result<DocId, FakeError> {
+        let mut next = lock(&self.next_id);
+        *next += 1;
+        Ok(DocId::new(eid(*next)))
+    }
+}
+
+impl DocWrite for FakeShelf {
+    type Error = FakeError;
+
+    /// Keeps the file as the reading the fake's [`DocSource`] gives from then on.
+    async fn create(
+        &self,
+        at: &RelPath,
+        entries: &BTreeMap<String, RawValue>,
+        body: &str,
+    ) -> Result<Creation, FakeError> {
+        self.check()?;
+        let mut readings = lock(&self.readings);
+        let there = readings.iter().any(|r| match r {
+            DocReading::Parsed { origin, .. } | DocReading::Unparsed { origin, .. } => origin == at,
+        });
+        if there {
+            return Ok(Creation::AlreadyThere);
+        }
+        readings.push(DocReading::Parsed {
+            origin: at.clone(),
+            entries: entries.clone(),
+            body: body.to_owned(),
+        });
+        *lock(&self.created) += 1;
+        Ok(Creation::Created)
+    }
 }
 
 impl ActorSource for FakeShelf {
@@ -458,8 +499,13 @@ impl ShelfWrite for FakeShelf {
     type Ids = Self;
     type Actor = Self;
     type Revisions = Self;
+    type DocWriter = Self;
 
     fn revisions(&self) -> &Self {
+        self
+    }
+
+    fn doc_writer(&self) -> &Self {
         self
     }
 

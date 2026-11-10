@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794288347177,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c3eb-683b-75fe-97ac-ab34fe2ad48c",
+  "kind": "decision",
+  "reason": "REQ-5 now names new as the second writer; DEC-8 and V-4 record and check books new (made with books new itself).",
+  "revision": "5628f0edf773136b88c79a21259cfb7c02229437",
+  "seen": "sha256:9d1ae80161aeaff8ad8f262133a0496e0ee423bf34e93f076cca8209bfcf9330",
+  "seen_address": "7a0fa8445db99cc2b3aa9bccdd872eebc1637040",
+  "subject": "01a1c332-3988-7cda-b185-14a038a1dfdf",
+  "v": 1,
+  "verb": "approve"
+}
