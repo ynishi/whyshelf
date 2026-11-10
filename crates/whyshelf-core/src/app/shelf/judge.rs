@@ -65,6 +65,13 @@ use super::ports::{
 use super::read::identity;
 use super::report::Judged;
 
+/// Take a judgement decided into the reading, so the next of the run is decided on
+/// the ledger as it left it.
+pub(super) fn taken(loaded: &mut Loaded, one: &Judged) {
+    loaded.records.push(one.record.clone());
+    loaded.ledger = Ledger::build(loaded.records.clone());
+}
+
 /// What a person decides about a document, with what only that decision has.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Judgement {
@@ -139,22 +146,31 @@ impl<P: ShelfWrite> ShelfApp<P> {
         let mut judged = Vec::with_capacity(requests.len());
         for request in requests {
             let one = self.decide(&loaded, request).await?;
-            loaded.records.push(one.record.clone());
-            loaded.ledger = Ledger::build(loaded.records.clone());
+            taken(&mut loaded, &one);
             judged.push(one);
         }
-        for one in &judged {
+        self.write(&judged).await?;
+        Ok(judged)
+    }
+
+    /// Append the records of a run, every one decided, in order.
+    pub(super) async fn write(&mut self, judged: &[Judged]) -> Result<(), ShelfError> {
+        for one in judged {
             self.ports
                 .append()
                 .append(&one.record)
                 .await
                 .map_err(port(ShelfPort::LedgerAppend))?;
         }
-        Ok(judged)
+        Ok(())
     }
 
     /// One judgement, decided on what is loaded; nothing is written.
-    async fn decide(&self, loaded: &Loaded, request: JudgeRequest) -> Result<Judged, ShelfError> {
+    pub(super) async fn decide(
+        &self,
+        loaded: &Loaded,
+        request: JudgeRequest,
+    ) -> Result<Judged, ShelfError> {
         let subject = identity(loaded, &request.reference)?;
         let key = loaded.shelf.doc(subject).map(|doc| doc.key().clone());
         let now = loaded.now;

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "112dac04d8d3c59090c754db138c85a8ed56f34e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:22b093a16f1b28a6f1aedb8f902b0643be77f10e1a7d3d5a368ef717e7d6d96f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b1879f1a2da758fea9e5f6dcda5bf48bfca84690",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0f31ff6cf2388e6da50d554c5b432b80f2c77c9b259fb2cccb7cc41832667021",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794335417798,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:1c2efae13bcf74c29df5dacea069f3260206db27a9f5594997d4c5f54713b415",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a1c6b9-a6fc-7484-9b2c-2cd6a67b9bc2",
+  "kind": "decision",
+  "reason": "Shared tests and the manual changed for #41; the tests still check what these verifications say, checked by a blind review",
+  "revision": "7ae791da635ea877c9c8051db05e49fc6b6cdc62",
+  "seen": "sha256:b3d5e9f21e7af36056adede47334e411931b41499c1dba6cd8044d94856c7007",
+  "seen_address": "55f1d7cb80eb65239639289259ddf4d6d66096f6",
+  "subject": "01a1c5ae-37cb-7230-9fce-a99ff188132c",
+  "v": 1,
+  "verb": "approve"
+}

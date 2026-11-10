@@ -50,9 +50,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
-    ErrorClass, JudgeRequest, Judgement, MapReport, NewDocRequest, SameMeaningAbout,
-    SameMeaningRequest, ShelfApp, ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter,
-    UnlinkedReport, WithdrawRequest,
+    ApproveStaleRequest, ErrorClass, JudgeRequest, Judgement, MapReport, NewDocRequest,
+    SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError, StaleReport, UnlinkedAsk,
+    UnlinkedFilter, UnlinkedReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -64,7 +64,7 @@ use whyshelf_infra::shelf::Project;
 use whyshelf_infra::shelf::system::parse_time;
 
 pub use args::BooksCommand;
-use args::Verb;
+use args::{Common, Verb};
 
 /// The environment variable that names who judges.
 const ACTOR_VAR: &str = "WHYSHELF_ACTOR";
@@ -217,6 +217,16 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
                 .judge_all(requests)
                 .await
                 .map(|r| print(&output::judged(&r))),
+            Ok(JudgeRun::Stale(request)) => ShelfApp::new(project)
+                .approve_stale(request)
+                .await
+                .map(|r| {
+                    let exit = print(&output::stale_approved(&r));
+                    for warning in output::stale_approved_warnings(&r) {
+                        eprintln!("{warning}");
+                    }
+                    exit
+                }),
             Ok(JudgeRun::Same(requests)) => ShelfApp::new(project)
                 .same_meaning(requests)
                 .await
@@ -243,6 +253,7 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
 /// the meaning. They are two use cases, with requests of their own.
 enum JudgeRun {
     Decide(Vec<JudgeRequest>),
+    Stale(ApproveStaleRequest),
     Same(Vec<SameMeaningRequest>),
     Withdraw(WithdrawRequest),
 }
@@ -315,15 +326,39 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
                 actor: actor_of(actor)?,
             }));
         }
-        Verb::Approve { common, until } => (
-            Judgement::Approve {
-                until: until
-                    .map(|t| parse_time(&t).map_err(|e| format!("--until `{t}`: {e}")))
-                    .transpose()?,
-                reason: reason(&common.reason)?,
-            },
-            common,
-        ),
+        Verb::Approve {
+            references,
+            stale,
+            reason: text,
+            actor,
+            until,
+        } => {
+            let until = until
+                .map(|t| parse_time(&t).map_err(|e| format!("--until `{t}`: {e}")))
+                .transpose()?;
+            if stale {
+                // clap keeps references away from --stale, and --reason beside it, so
+                // the `None` arm below is not reached; it is kept so that the request,
+                // whose reason is required, is still made from the type alone should
+                // the arguments change.
+                return Ok(JudgeRun::Stale(ApproveStaleRequest {
+                    reason: reason(&text)?.ok_or_else(|| "--stale needs --reason".to_owned())?,
+                    actor: actor_of(actor)?,
+                    until,
+                }));
+            }
+            (
+                Judgement::Approve {
+                    until,
+                    reason: reason(&text)?,
+                },
+                Common {
+                    references,
+                    reason: text,
+                    actor,
+                },
+            )
+        }
         Verb::Deny { common } => (
             Judgement::Deny {
                 reason: reason(&common.reason)?,

@@ -222,6 +222,9 @@
 //!                             (exit 1 with --exit-code when there is any)
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
+//!   judge approve --stale --reason <text> [--until <time>] [--actor <name>]
+//!                             approve again, in one run and upstream first, every approval
+//!                             that is expired or stale and would hold; the rest are left out
 //!   judge deny|deprecate|retire <ref>... [--reason <text>]   (deprecate: [--successor <ref>])
 //!   judge revoke <ref>... --reason <text>
 //!   judge same <ref>... [--artifact <name>]... [--from <hash>] --reason <text>
@@ -242,6 +245,32 @@
 //!   the project, each on what the ones before it left (so `judge approve F-1 S-1`
 //!   frames S-1 on F-1's new approval); it writes all of them, or none when one is
 //!   refused.
+//! - `judge approve --stale` takes no reference (one given beside it is a request
+//!   error, exit 2) and needs `--reason`. It approves again, in one such run, every
+//!   approval whose standing is `expired` or `stale` and that would hold once
+//!   approved, each after every one of them it stands on (the rule is on
+//!   [`upstream_first`](domain::shelf::order::upstream_first)); no order of books is
+//!   read. A pending document is not touched: it was never approved. Every other
+//!   approval that does not hold is left out, never in silence, with a `reason`:
+//!   `broken` (it is broken now: an artifact pinned there that is gone, an upstream
+//!   that is not valid, a cycle), `refused` (the approval would be refused now, as
+//!   below: an upstream decided against, an artifact that cannot be told), or
+//!   `stands_on` (a `depends` link names a document that is broken, pending, or
+//!   itself left out; a pending one is approved first, with `judge approve`). Each is
+//!   listed under `left_out` as `{"doc", "reason", "detail", "upstream", "link",
+//!   "upstream_is", "kinds", "causes"}` (`kinds` and `causes` for `broken`,
+//!   `upstream`, `link` and `upstream_is` for `stands_on`), and written as a line on
+//!   stderr: `warning: <key> is broken and was not approved again (<kinds>)`, or
+//!   `warning: <key> was not approved again: <detail>`. A name with nothing there is
+//!   pinned as absent, as by any approval, listed in the judgement's `absent`, and
+//!   written on stderr as `warning: <key> pins <name> in <space>, which has nothing
+//!   behind it`; what is never approved again is an artifact pinned there and gone.
+//!   Leaving out is no failure. One `--until` applies to every approval of the run
+//!   (an expiry an approval had before is not carried over), and one not after now
+//!   is refused, exit 1, even when nothing is stale. The answer is `{"judged":
+//!   [...], "left_out": [...]}`, `judged` as `judge approve` answers it, and empty,
+//!   with exit 0, when nothing can be approved. Otherwise the exits are those of
+//!   `judge`.
 //! - An approval is refused when the document is not valid, a `depends` link cannot
 //!   be followed, it would close a cycle, a `depends` link names an artifact its
 //!   adapter cannot tell about now, or a `depends` link names a document people
