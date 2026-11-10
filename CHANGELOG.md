@@ -44,6 +44,9 @@ and this project adheres to
 
 - The commands are flat verbs (`whyshelf check`, not `whyshelf books check`),
   and every JSON answer carries `"version": 1` (#9).
+- The normalization of a document's text is a function of the domain,
+  `whyshelf_core::domain::shelf::doc::normalize`; `whyshelf_infra` no longer
+  has one of its own. whyshelf's own decisions state one rule each (#30).
 
 ### Removed
 
