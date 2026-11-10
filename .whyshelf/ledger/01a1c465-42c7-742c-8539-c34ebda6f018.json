@@ -1,0 +1,74 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "0cf365704b98369d536b45cc4c9479f649c28777",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d5640857a96162e23093cc77a0b226813cd59d1f93db91d22dffa8f2c7aa217",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "25f51ed2bd6cbb4166cb94c02e7add3b8c545010",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e4178ba395781762d2aad50723b55353f86af2a3b7c30393c64c2e61c871a70e",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/freshness/comparison_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "ed603ab42dd59e922c80cdfc2a70207ad6f4a674",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bf92fdbc0b73fc552058b9f937f61ce551a3244380f36738fa319d2323a35ab6",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/ledger/comparison_tests.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794296332895,
+  "expires": null,
+  "frame": [
+    {
+      "address": "57e902d4dee484b96a87a410e6fc57ca27fcf3df",
+      "hash": "sha256:6297ced00691efd8ceb05f1007f3d1cae418407fad8af7189e04aaa28554d83b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c45a-279c-7672-ac87-9afd9c344dc8"
+    }
+  ],
+  "id": "01a1c465-42c7-742c-8539-c34ebda6f018",
+  "kind": "decision",
+  "reason": "Reviewed with the change that adds per-link comparisons of files; just check green",
+  "revision": "98df1cc09397ad1ff9b816e3a92b95f68d0efb24",
+  "seen": "sha256:5358457cf5e04c82621ca7917cfd5ec42dbd801b976c084c79688590ca105ef6",
+  "seen_address": "ae9d2068d9a635fde90a94592d40ee386043f948",
+  "subject": "01a1c45a-27fd-75bc-a433-f3e0233f0f72",
+  "v": 1,
+  "verb": "approve"
+}

@@ -11,7 +11,7 @@
 //!                                         |  dirs of the books
 //!   DocSource <---------------------------+
 //!        |
-//!        v  readings --Shelf::artifact_paths--> ArtifactSource (hash, address?, or absent)
+//!        v  readings --Shelf::artifact_asks--> ArtifactSource (hashes, address?, or absent)
 //!        |                                            |
 //!        v                                            v  ArtifactReadings
 //!   Shelf::build <------------------------------------+
@@ -25,7 +25,6 @@
 //! ```
 
 use crate::domain::id::DocId;
-use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::Shelf;
@@ -89,15 +88,13 @@ pub(super) async fn load_with<P: ShelfRead>(
         .read_docs(&dirs)
         .await
         .map_err(port(ShelfPort::Docs))?;
-    let paths: Vec<RelPath> = Shelf::artifact_paths(schema, &readings)
-        .into_iter()
-        .collect();
-    let artifacts = if paths.is_empty() {
+    let asks = Shelf::artifact_asks(schema, &readings);
+    let artifacts = if asks.is_empty() {
         ArtifactReadings::new()
     } else {
         ports
             .artifacts()
-            .read_artifacts(&paths)
+            .read_artifacts(&asks)
             .await
             .map_err(port(ShelfPort::Artifacts))?
     };

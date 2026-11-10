@@ -56,6 +56,8 @@ mod withdraw;
 #[cfg(test)]
 mod artifact_tests;
 #[cfg(test)]
+mod comparison_tests;
+#[cfg(test)]
 mod fake_tests;
 #[cfg(test)]
 mod new_doc_tests;

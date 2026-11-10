@@ -8,7 +8,7 @@ use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::id::{DocId, EntityId};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet};
-use whyshelf_core::domain::shelf::artifact::{ArtifactHash, ArtifactReading, ArtifactReadings};
+use whyshelf_core::domain::shelf::artifact::{ArtifactReading, ArtifactReadings};
 use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
 use whyshelf_core::domain::shelf::freshness::assess;
 use whyshelf_core::domain::shelf::ledger::{
@@ -57,6 +57,7 @@ fn schema() -> Schema {
         target,
         cardinality: Cardinality::Many,
         propagation: Propagation::Depends,
+        compare: None,
     };
     let book = |name: &str, dir: &str, prefix: &str, links| BookSchemaDecl {
         name: name.to_owned(),
@@ -114,10 +115,7 @@ fn reading(file: &str, n: u8, key: &str, title: &str, links: &[(&str, &str)]) ->
 fn shelf(finding: &str, test: &str) -> Shelf {
     let artifacts: ArtifactReadings = BTreeMap::from([(
         rel("tests/a.rs"),
-        ArtifactReading::Present {
-            hash: ArtifactHash::of_content(test.as_bytes()),
-            address: None,
-        },
+        ArtifactReading::of_bytes(test.as_bytes(), &Default::default(), None),
     )]);
     Shelf::build(
         &schema(),

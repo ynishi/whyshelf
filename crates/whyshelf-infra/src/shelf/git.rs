@@ -8,7 +8,7 @@
 //! | [`ContentStore`] | the content of a blob, by its name | `git cat-file blob <name>` |
 //!
 //! ```text
-//!   path ──tokio::fs::read──► bytes ──ArtifactHash::of_content──► ArtifactHash   (always)
+//!   path ──tokio::fs::read──► bytes ──ArtifactReading::of_bytes──► a hash per comparison asked (always)
 //!                               └──git hash-object──► blob name ──► ContentAddress (in a repository)
 //!   HEAD ──git rev-parse──► commit ──► Revision                                   (in a repository)
 //!   ContentAddress ──git cat-file blob──► bytes, or not readable
@@ -43,7 +43,7 @@ use tokio::process::Command;
 use whyshelf_core::app::shelf::{ArtifactSource, ContentStore, RevisionSource};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, OpaqueProblem, Revision,
+    ArtifactAsks, ArtifactReading, ArtifactReadings, ContentAddress, OpaqueProblem, Revision,
 };
 
 /// Why the files or Git could not be read.
@@ -200,30 +200,27 @@ fn object_name(line: &str) -> Result<String, ArtifactError> {
 impl ArtifactSource for GitArtifacts {
     type Error = ArtifactError;
 
-    async fn read_artifacts(&self, paths: &[RelPath]) -> Result<ArtifactReadings, ArtifactError> {
+    async fn read_artifacts(&self, asks: &ArtifactAsks) -> Result<ArtifactReadings, ArtifactError> {
         let mut readings = ArtifactReadings::new();
         let mut present = Vec::new();
-        for path in paths {
+        for (path, comparisons) in asks {
             match self.bytes(path).await? {
                 Some(bytes) => {
                     present.push(path);
                     readings.insert(
                         path.clone(),
-                        ArtifactReading::Present {
-                            hash: ArtifactHash::of_content(&bytes),
-                            address: None,
-                        },
+                        ArtifactReading::of_bytes(&bytes, comparisons, None),
                     );
                 }
                 None => {
-                    readings.insert(path.clone(), ArtifactReading::Absent);
+                    readings.insert(path.clone(), ArtifactReading::absent());
                 }
             }
         }
         if let Some(names) = self.blob_names(&present).await? {
             for (path, name) in present.into_iter().zip(names) {
-                if let Some(ArtifactReading::Present { address, .. }) = readings.get_mut(path) {
-                    *address = Some(name);
+                if let Some(reading) = readings.get_mut(path) {
+                    reading.set_address(name);
                 }
             }
         }
@@ -273,6 +270,10 @@ impl RevisionSource for GitArtifacts {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
+    use whyshelf_core::domain::shelf::artifact::{ArtifactState, Comparison, LinePrefix};
+
     use super::*;
 
     /// Whether `git` can be run here; the tests that need it pass without it.
@@ -303,6 +304,20 @@ mod tests {
         text.parse().unwrap()
     }
 
+    /// Each path, asked for its bytes only.
+    fn bytes_of(paths: &[&str]) -> ArtifactAsks {
+        paths
+            .iter()
+            .map(|t| (p(t), BTreeSet::from([Comparison::Bytes])))
+            .collect()
+    }
+
+    fn lines(ignore: &[&str]) -> Comparison {
+        Comparison::Lines {
+            ignore: ignore.iter().map(|i| LinePrefix::new(i).unwrap()).collect(),
+        }
+    }
+
     async fn write(dir: &std::path::Path, at: &str, text: &str) {
         let full = dir.join(at);
         if let Some(parent) = full.parent() {
@@ -317,19 +332,17 @@ mod tests {
         write(dir.path(), "tests/a.rs", "one\n").await;
         let source = GitArtifacts::new(dir.path().to_path_buf());
         let found = source
-            .read_artifacts(&[p("tests/a.rs"), p("tests/none.rs")])
+            .read_artifacts(&bytes_of(&["tests/a.rs", "tests/none.rs"]))
             .await
             .unwrap();
         assert_eq!(
             found.get(&p("tests/a.rs")),
-            Some(&ArtifactReading::Present {
-                hash: ArtifactHash::of_content(b"one\n"),
-                address: None
-            })
+            Some(&ArtifactReading::of_bytes(b"one\n", &BTreeSet::new(), None))
         );
+        assert_eq!(found[&p("tests/a.rs")].address(), None);
         assert_eq!(
             found.get(&p("tests/none.rs")),
-            Some(&ArtifactReading::Absent)
+            Some(&ArtifactReading::absent())
         );
         assert_eq!(source.revision().await.unwrap(), None);
         assert_eq!(
@@ -344,8 +357,46 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         write(dir.path(), "tests/a.rs", "one\n").await;
         let source = GitArtifacts::new(dir.path().to_path_buf());
-        let found = source.read_artifacts(&[p("tests")]).await.unwrap();
-        assert_eq!(found.get(&p("tests")), Some(&ArtifactReading::Absent));
+        let found = source.read_artifacts(&bytes_of(&["tests"])).await.unwrap();
+        assert_eq!(found.get(&p("tests")), Some(&ArtifactReading::absent()));
+    }
+
+    #[tokio::test]
+    async fn a_file_is_hashed_under_each_comparison_asked_and_its_bytes_always() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = "// a comment\nfn  main() {}\n";
+        write(dir.path(), "src/a.rs", text).await;
+        write(dir.path(), "src/b.rs", text).await;
+        let source = GitArtifacts::new(dir.path().to_path_buf());
+        let slashes = lines(&["//"]);
+        let asks = ArtifactAsks::from([
+            (p("src/a.rs"), BTreeSet::from([slashes.clone(), lines(&[])])),
+            (p("src/b.rs"), BTreeSet::new()),
+        ]);
+        let found = source.read_artifacts(&asks).await.unwrap();
+
+        let a = &found[&p("src/a.rs")];
+        assert!(a.is_present());
+        for comparison in [Comparison::Bytes, slashes.clone(), lines(&[])] {
+            assert_eq!(
+                a.state(&comparison),
+                ArtifactState::Present(comparison.fingerprint(text.as_bytes())),
+                "{comparison:?}"
+            );
+        }
+        // The whole reading is the one the domain makes of those bytes.
+        assert_eq!(
+            a,
+            &ArtifactReading::of_bytes(text.as_bytes(), &asks[&p("src/a.rs")], None)
+        );
+        assert_eq!(a.state(&lines(&["#"])), ArtifactState::Absent);
+        // Asked for nothing, a file still has the hash of its bytes, and no other.
+        let b = &found[&p("src/b.rs")];
+        assert_eq!(
+            b.state(&Comparison::Bytes),
+            ArtifactState::Present(Comparison::Bytes.fingerprint(text.as_bytes()))
+        );
+        assert_eq!(b.state(&slashes), ArtifactState::Absent);
     }
 
     #[tokio::test]
@@ -359,11 +410,13 @@ mod tests {
         let source = GitArtifacts::new(dir.path().to_path_buf());
 
         // Before the first commit: an address, no revision, and nothing to read back.
-        let found = source.read_artifacts(&[p("tests/a.rs")]).await.unwrap();
-        let Some(ArtifactReading::Present {
-            address: Some(address),
-            ..
-        }) = found.get(&p("tests/a.rs"))
+        let found = source
+            .read_artifacts(&bytes_of(&["tests/a.rs"]))
+            .await
+            .unwrap();
+        let Some(address) = found
+            .get(&p("tests/a.rs"))
+            .and_then(ArtifactReading::address)
         else {
             panic!("a file in a repository has an address: {found:?}");
         };

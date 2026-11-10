@@ -50,8 +50,11 @@
 //! - for each `Depends` link name, the set of what it names now against what the
 //!   frame pinned ([`Cause::LinksChanged`]), leaving out what an edge rule already
 //!   said about the same upstream (matched by key, not by count);
-//! - for each pinned artifact still written under its link, rule A3: a file whose
-//!   hash differs is [`Cause::ArtifactChanged`], a file that went is
+//! - for each pinned artifact still written under its link: when a file is there then
+//!   and now and the link declares another [`Comparison`] than the one the pin was
+//!   made with, [`Cause::ArtifactComparisonChanged`] and no comparison of hashes;
+//!   otherwise rule
+//!   A3: a file whose hash differs is [`Cause::ArtifactChanged`], a file that went is
 //!   [`Cause::ArtifactGone`], a file that came where there was none is
 //!   [`Cause::ArtifactArrived`], and no file then and none now is nothing; for each
 //!   `Depends` link to artifacts, the paths it writes now against those pinned
@@ -85,7 +88,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 
-use super::artifact::{ArtifactHash, ArtifactState};
+use super::artifact::{ArtifactHash, ArtifactState, Comparison};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
 use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
 use super::graph::{Cycle, CycleId};
@@ -231,6 +234,15 @@ pub enum Cause {
         /// The hash it has now.
         now: ArtifactHash,
     },
+    /// The link a pinned artifact was pinned for now declares another comparison: the
+    /// hash pinned and the hash now were made differently and are not compared. Look
+    /// again, as for a change.
+    ArtifactComparisonChanged {
+        /// The pin, with the comparison it was made with.
+        pin: ArtifactPin,
+        /// The comparison the link declares now.
+        now: Comparison,
+    },
     /// What a `Depends` link to artifacts names now is not what the approval pinned
     /// for it: paths written since, and paths pinned that it no longer writes.
     ArtifactLinksChanged {
@@ -266,7 +278,7 @@ impl Cause {
     /// | `UpstreamDeclared` of `Denied`, `Retired`, or of `Deprecated` with none | `Broken` |
     /// | `Via` | the strength it carries (`Stale` or `Broken`; an upstream that is only `Expired` makes no `Via`) |
     /// | `LinksChanged` | `Broken` when some key cannot be followed, otherwise `Stale` |
-    /// | `ArtifactChanged`, `ArtifactArrived`, `ArtifactLinksChanged` | `Stale` |
+    /// | `ArtifactChanged`, `ArtifactArrived`, `ArtifactComparisonChanged`, `ArtifactLinksChanged` | `Stale` |
     /// | `ArtifactGone` | `Broken` |
     /// | `InCycle` | `Broken` |
     /// | `Expired` | `Expired` |
@@ -279,6 +291,7 @@ impl Cause {
             | Self::UpstreamChanged { .. }
             | Self::ArtifactChanged { .. }
             | Self::ArtifactArrived { .. }
+            | Self::ArtifactComparisonChanged { .. }
             | Self::ArtifactLinksChanged { .. } => Severity::Stale,
             Self::SelfNotValid(_) | Self::UpstreamNotValid { .. } | Self::ArtifactGone { .. } => {
                 Severity::Broken
@@ -882,7 +895,26 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, f
         let Some(now) = current.get(&(pin.link(), pin.path())) else {
             continue;
         };
+        // Two hashes are compared only when they were made the same way: when a file
+        // is there then and now and the link's declared comparison changed since,
+        // that is the cause, and the hashes are not compared. A file gone, or come,
+        // is told as such whatever the comparison: there is no pair of hashes.
+        let declared = doc
+            .artifact_links()
+            .get(pin.link())
+            .map(|link| &link.kind().comparison);
+        let changed_comparison = declared.filter(|d| *d != pin.comparison());
         match (pin.seen().state(), **now) {
+            (ArtifactState::Present(_), ArtifactState::Present(_))
+                if changed_comparison.is_some() =>
+            {
+                if let Some(declared) = changed_comparison {
+                    causes.push(Cause::ArtifactComparisonChanged {
+                        pin: pin.clone(),
+                        now: declared.clone(),
+                    });
+                }
+            }
             (ArtifactState::Present(then), ArtifactState::Present(now)) if then != now => {
                 match ledger.artifact_same_meaning(pin.path(), &then, &now) {
                     Some(declared) => kept.push(Notice::ArtifactSameMeaning {
@@ -1182,6 +1214,8 @@ fn collect_notices(
 
 #[cfg(test)]
 mod artifact_tests;
+#[cfg(test)]
+mod comparison_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]

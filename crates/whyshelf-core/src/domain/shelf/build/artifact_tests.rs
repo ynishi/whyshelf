@@ -87,11 +87,16 @@ fn the_paths_to_read_are_those_the_files_under_a_book_write() {
             &[("tests", list(&["tests/c.rs"]))],
         ),
     ];
-    let paths = Shelf::artifact_paths(&schema(), &readings);
+    let asks = Shelf::artifact_asks(&schema(), &readings);
     assert_eq!(
-        paths.into_iter().collect::<Vec<_>>(),
+        asks.keys().cloned().collect::<Vec<_>>(),
         [path("tests/a.rs"), path("tests/b.rs")]
     );
+    // Each path with the comparison of the link that writes it.
+    assert!(asks.values().all(|c| {
+        c.iter()
+            .eq([&crate::domain::shelf::artifact::Comparison::Bytes])
+    }));
 }
 
 #[test]

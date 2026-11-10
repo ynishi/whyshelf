@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794296332895,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e9417e937c515717990db4ed17437f59a1deb458",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    }
+  ],
+  "id": "01a1c465-4270-7654-bdc7-285858abea59",
+  "kind": "decision",
+  "reason": "Reviewed with the change that adds per-link comparisons of files; just check green",
+  "revision": "98df1cc09397ad1ff9b816e3a92b95f68d0efb24",
+  "seen": "sha256:6297ced00691efd8ceb05f1007f3d1cae418407fad8af7189e04aaa28554d83b",
+  "seen_address": "57e902d4dee484b96a87a410e6fc57ca27fcf3df",
+  "subject": "01a1c45a-279c-7672-ac87-9afd9c344dc8",
+  "v": 1,
+  "verb": "approve"
+}
