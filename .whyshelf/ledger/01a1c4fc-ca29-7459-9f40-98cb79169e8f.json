@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794306263574,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c4fc-ca29-7459-9f40-98cb79169e8f",
+  "kind": "decision",
+  "reason": "Issue #15: a value is told with its kind; two reviews, one blind; the tests of docs.rs and of each kind's words pass; just check green",
+  "revision": "4b6a05238793f846617130207f0084b29b01c969",
+  "seen": "sha256:6b722d5e785727846d7f41e1df41baad7e0c22e75c20cce6a5eddfe09ab71176",
+  "seen_address": "846460f92f1421d62dae45da63ccf5149a771553",
+  "subject": "01a1c4f1-a28e-7629-86fd-d81751352e5a",
+  "v": 1,
+  "verb": "approve"
+}
