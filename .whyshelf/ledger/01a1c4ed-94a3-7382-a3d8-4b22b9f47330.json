@@ -1,0 +1,61 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "14df336bff39f27f8802c3b91e0f3d0a1cdff335",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e1da5d25f76f00d0b2d613826076756172b61433df5264dc37e18d8a0cab4230",
+      "link": "tests",
+      "path": "crates/whyshelf-cli/src/books/new_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "653ad14e57f8de182cf191b81d64e2f9db4221e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5283bd99399abb8a2db4526a63fcd83271fc7b9c5af198d0d5b43ceb3d69d3de",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794305266677,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0d523c0e6b5d7eb05e55bfea2ce892ebc4a70ea1",
+      "hash": "sha256:0616e9ae0a9e63deb9313d5efa507184799211bba804c337958b80afa11c3193",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "24"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4e9-62d4-72e8-bf6a-0b974af9ea91"
+    }
+  ],
+  "id": "01a1c4ed-94a3-7382-a3d8-4b22b9f47330",
+  "kind": "decision",
+  "reason": "Issue #14: += gives one item as written with its commas; reviewed; V-4 and V-15 link the new tests of new; just check green",
+  "revision": "6adec8fa56d527552d3223cb5e9abd395f834c92",
+  "seen": "sha256:f8593e8c1813914e08c3dafc6c23e280a95b37dd0fec3f2d7c4f548a27c059c3",
+  "seen_address": "2fcfb14e08be5652a8cf9878f6a8aaebab27b0a0",
+  "subject": "01a1c4e9-6379-7470-911e-6db69d926799",
+  "v": 1,
+  "verb": "approve"
+}
