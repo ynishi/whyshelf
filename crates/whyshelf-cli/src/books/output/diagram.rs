@@ -16,15 +16,16 @@
 //! ```
 //!
 //! A count is `1` (one), `0..1` (optional), `0..` (many) or `1..` (at least one).
-//! The column of `cover` is in every block when any link of the declaration
-//! covers, and in none when none does. A link into the book that holds it ends in
-//! `(own book)`. Each prefix `ignore` names is a quoted string, escaped as JSON
-//! escapes it, so a prefix that holds a comma or a quote reads as one; they are
-//! joined by `,`, sorted, as the model keeps them. A book with no link is its
-//! header alone.
+//! A covering link shows `cover` when its strength is `error` and `cover(warn)`
+//! when it is `warn`. The column of `cover` is in every block when any link of the
+//! declaration covers, and in none when none does. A link into the book that
+//! holds it ends in `(own book)`. Each prefix `ignore` names is a quoted string,
+//! escaped as JSON escapes it, so a prefix that holds a comma or a quote reads as
+//! one; they are joined by `,`, sorted, as the model keeps them. A book with no
+//! link is its header alone.
 
 use whyshelf_core::domain::shelf::map::{LinkMap, MapTarget, ShelfMap};
-use whyshelf_core::domain::shelf::schema::{Cardinality, KeyPattern};
+use whyshelf_core::domain::shelf::schema::{Cardinality, CoverSeverity, KeyPattern};
 
 use super::means;
 
@@ -56,11 +57,21 @@ pub(super) fn draw(map: &ShelfMap) -> String {
         .links
         .iter()
         .map(|link| {
-            let cover = matches!(link.target, MapTarget::Book { cover: true, .. });
+            let cover = match link.target {
+                MapTarget::Book {
+                    cover: Some(CoverSeverity::Error),
+                    ..
+                } => "cover",
+                MapTarget::Book {
+                    cover: Some(CoverSeverity::Warn),
+                    ..
+                } => "cover(warn)",
+                MapTarget::Book { cover: None, .. } | MapTarget::Artifact { .. } => "",
+            };
             [
                 link.name.to_string(),
                 means(link.propagation).to_owned(),
-                if cover { "cover" } else { "" }.to_owned(),
+                cover.to_owned(),
                 count(link.cardinality).to_owned(),
             ]
         })

@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7c6852bdc83da8ae463d8f1c1ae1c9872182beb0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7592ec6ce2c729c0508a4355a5a396159c848b21baed990911634a7fa34937b2",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794333352480,
+  "expires": null,
+  "frame": [
+    {
+      "address": "573dc5ef3fcd0ec4d1b9d4ef061d37ecf56d23b0",
+      "hash": "sha256:58fdc5ac75b863c3e76c7bf5246e495af91eaa99c3567e083c8157df17a2ad13",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "49"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c671-1d95-725c-bd74-8b605650d16c"
+    }
+  ],
+  "id": "01a1c69a-272a-7532-ba77-7bdb22b4bb73",
+  "kind": "decision",
+  "reason": "Restated for the strength of cover and shared tests changed for #49; checked by a blind review",
+  "revision": "18b77b51c1ecaccbefc3eddb6e377e0f88b6862d",
+  "seen": "sha256:8b17609c060d264db4b673ef93353d77b1e9e7005c5a7816ec9579044f0c32dd",
+  "seen_address": "9dcfbe4e991deba02eefca7aba4b12ed138e25e9",
+  "subject": "01a1c671-1f9d-76d6-aacd-ed84f9eac803",
+  "v": 1,
+  "verb": "approve"
+}

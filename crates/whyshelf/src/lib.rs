@@ -32,14 +32,20 @@
 //! | `informs` | the target is worth reading: one that does not hold is a notice, never a staleness |
 //! | `replaces` | the document takes the place of the target, and is its successor when the target is deprecated |
 //!
-//! A link into a book may also say `cover = true`: every pending or approved
-//! document of the target book is expected to be reached by it, from a pending or
-//! approved document. A project uses it to see a hole in its chain of reasons (a
-//! requirement no decision serves, a decision no verification checks). A document no
-//! covering link reaches has a `not_covered` notice and is listed in `check`'s
-//! `uncovered`, which makes `check` not clean; its freshness is unchanged. A link to
-//! artifacts cannot say it, and a link into its own book is met only by another
-//! document of that book.
+//! A link into a book may also say `cover`: every pending or approved document of
+//! the target book is expected to be reached by it, from a pending or approved
+//! document. A project uses it to see a hole in its chain of reasons (a requirement
+//! no decision serves, a decision no verification checks). `cover` has a strength:
+//! `"error"` (or `true`) or `"warn"`; `false`, or no `cover`, expects nothing, and
+//! any other value is a problem of the declaration. A document no covering link
+//! reaches has a `not_covered` notice and is listed in `check`'s `uncovered`, each
+//! with the strength; one of `error` makes `check` not clean, and one of `warn`
+//! leaves it clean, for a hole that may stand a while, and is written by `check` as
+//! a line on stderr, `warning: <key> is reached by no <book>.<link> (cover =
+//! "warn")` (its identity when it has no key), so that a run which shows the answer only when it fails still shows
+//! it. Its freshness is unchanged either way. A link to artifacts takes no
+//! expectation, and a link into its own book is met only by another document of
+//! that book.
 //!
 //! The files:
 //!
@@ -196,7 +202,8 @@
 //!
 //!   check                     the declaration, the documents and the ledger, what no covering
 //!                             link reaches, the names with nothing there and those that cannot
-//!                             be told now; exit 1 if anything is wrong (neither of those is)
+//!                             be told now; exit 1 if anything is wrong (neither of those is;
+//!                             for what a covering link does not reach, see `cover` above)
 //!   map                       what the declaration says: every book and every link, in its order,
 //!                             and a drawing of them; it reads no document and no ledger
 //!                             (exit 1, as check, when the declaration cannot be used)
@@ -290,16 +297,24 @@
 //! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!
+//! `check` answers `clean` (whether it exits 0) beside what it found; its
+//! `uncovered` lists each document a covering link does not reach as `{"doc",
+//! "book", "link", "severity"}`, the book and link expected to reach it and their
+//! strength (`warn` or `error`), and the `not_covered` notice carries the same
+//! `severity`.
+//!
 //! `map` answers `{"schema_problems": [...], "books": [...], "links": [...],
 //! "diagram": ...}`: each book with its `name`, `dir`, `key` (`{"kind": "prefix",
 //! "prefix"}` or `{"kind": "slug"}`), `description` and `fields` (`name`, `type`,
 //! `words` of an enum, `required`); each link with the book it is `from`, its
 //! `name`, its `target` (`{"kind": "book", "book"}` or `{"kind": "artifact",
-//! "space", "compare", "ignore"}`), `means`, `count` and `cover`, as the
-//! declaration writes them and in its order, with one exception: the `words` of
-//! an enum and the prefixes of `ignore` are sets, so they are answered sorted.
+//! "space", "compare", "ignore"}`), `means`, `count`, `cover` (true for either
+//! strength) and `cover_severity` (`warn`, `error`, or null when `cover` is false),
+//! as the declaration writes them and in its order, with one exception: the `words`
+//! of an enum and the prefixes of `ignore` are sets, so they are answered sorted.
 //! `diagram` is the same as text, one block per book: a line of its name, key and
-//! description, then a line per link with its meaning, `cover`, count (`1`,
+//! description, then a line per link with its meaning, `cover` (`cover`, or
+//! `cover(warn)` for `warn`), count (`1`,
 //! `0..1`, `0..`, `1..`) and target, every column aligned across the drawing. It
 //! is null, and `books` and `links` are empty, when `schema_problems` lists why
 //! the declaration cannot be used, as `check` lists it.

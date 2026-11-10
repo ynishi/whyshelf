@@ -165,10 +165,15 @@ issue -> finding -> requirement / decision / verification (pending)
 - Write a document with `whyshelf new <book> --title <text> <entry>=<value>`;
   give a list item that holds a comma with `<entry>+=<item>`.
 - A bug against a promise the books already make needs no new requirement or
-  decision: add the finding, correct the decision it breaks, and extend the
-  verification's tests.
+  decision: add the finding, ground it on the requirement whose promise it
+  found broken, correct the decision it breaks, and extend the verification's
+  tests.
 - `serves` and `checks` cover their books, so `whyshelf check` fails while a
-  requirement has no decision or a decision has no verification.
+  requirement has no decision or a decision has no verification. `grounds`
+  covers findings as a warning: a finding no requirement grounds is listed by
+  `check`, with a warning line on stderr that `just check` shows, and leaves it
+  clean. `whyshelf unlinked` lists the documents nothing links, whatever is
+  covered.
 - After the review, the author approves the new documents and what the change
   made stale in one `judge approve`, upstream first, with a reason that names
   the review and says why it holds. An edit that keeps the meaning (a typo, a

@@ -34,7 +34,7 @@ use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::ledger::{ArtifactPin, DeclaredStatus, FramePin, Record};
 use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::schema::{
-    Cardinality, FieldPresence, FieldType, KeyPattern, Propagation,
+    Cardinality, CoverSeverity, FieldPresence, FieldType, KeyPattern, Propagation,
 };
 use whyshelf_infra::shelf::ledger::to_json;
 
@@ -103,6 +103,9 @@ pub struct NoticeOut {
     /// `self_same_meaning`, `upstream_same_meaning`, `artifact_same_meaning`,
     /// `not_covered`, `artifact_absent`, `artifact_unknown`).
     pub kind: &'static str,
+    /// For `not_covered`, how strongly the link expects to reach the document:
+    /// `warn` or `error`; null for any other kind.
+    pub severity: Option<&'static str>,
     /// The link; empty for a notice about the document itself.
     pub link: String,
     /// The document it names, if it names one.
@@ -207,6 +210,10 @@ pub struct BookOut {
 }
 
 /// The answer of `check`.
+///
+/// Beside it, on stderr, `check` writes one line per entry of `uncovered` of
+/// strength `warn` ([`check_warnings`]), since such a gap leaves the check clean
+/// and a run that shows the answer only when it fails would show it nowhere.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct BooksCheckOut {
     /// Whether nothing is wrong.
@@ -217,8 +224,9 @@ pub struct BooksCheckOut {
     pub books: Vec<BookOut>,
     /// What is wrong around the documents.
     pub health: Option<HealthOut>,
-    /// The documents a covering link (`cover = true`) is expected to reach and does
-    /// not; any makes `clean` false.
+    /// The documents a covering link is expected to reach and does not, each with
+    /// the strength of the link; which strength makes `clean` false is
+    /// [`BooksCheck::is_clean`]'s rule.
     pub uncovered: Vec<UncoveredOut>,
     /// The names of pending and approved documents with nothing there (for the
     /// space `file`, paths that name no file); they leave `clean` as it is, since a
@@ -303,8 +311,11 @@ pub struct MapLinkOut {
     /// `optional`, `many` or `at-least-one`.
     pub count: &'static str,
     /// Whether every pending or approved document of the target book is expected
-    /// to be reached by it; false for a link to artifacts.
+    /// to be reached by it, of either strength; false for a link to artifacts.
     pub cover: bool,
+    /// How strongly it is expected, beside `cover`: `warn` or `error`; null when
+    /// `cover` is false.
+    pub cover_severity: Option<&'static str>,
 }
 
 /// What a link of `map` points at.
@@ -370,6 +381,8 @@ pub struct UncoveredOut {
     pub book: String,
     /// The link.
     pub link: String,
+    /// How strongly the link expects to reach it: `warn` or `error`.
+    pub severity: &'static str,
 }
 
 /// The answer of `status`.
@@ -1120,6 +1133,7 @@ impl Namer<'_> {
                 standing: kind,
             } => NoticeOut {
                 kind: "informs_not_fresh",
+                severity: None,
                 link: link.to_string(),
                 target: Some(self.doc(*target)),
                 artifact: None,
@@ -1129,6 +1143,7 @@ impl Namer<'_> {
             },
             Notice::InformsUnresolved { link, unresolved } => NoticeOut {
                 kind: "informs_unresolved",
+                severity: None,
                 link: link.to_string(),
                 target: None,
                 artifact: None,
@@ -1138,6 +1153,7 @@ impl Namer<'_> {
             },
             Notice::UpstreamExpired { pin, since } => NoticeOut {
                 kind: "upstream_expired",
+                severity: None,
                 link: pin.link().to_string(),
                 target: Some(self.pin(pin)),
                 artifact: None,
@@ -1155,6 +1171,7 @@ impl Namer<'_> {
                 declared,
             } => NoticeOut {
                 kind: "self_same_meaning",
+                severity: None,
                 link: String::new(),
                 target: None,
                 artifact: None,
@@ -1166,6 +1183,7 @@ impl Namer<'_> {
             },
             Notice::UpstreamSameMeaning { pin, now, declared } => NoticeOut {
                 kind: "upstream_same_meaning",
+                severity: None,
                 link: pin.link().to_string(),
                 target: Some(self.pin(pin)),
                 artifact: None,
@@ -1179,6 +1197,7 @@ impl Namer<'_> {
             },
             Notice::ArtifactSameMeaning { pin, now, declared } => NoticeOut {
                 kind: "artifact_same_meaning",
+                severity: None,
                 link: pin.link().to_string(),
                 target: None,
                 artifact: Some(pin.name().to_string()),
@@ -1191,6 +1210,7 @@ impl Namer<'_> {
             },
             Notice::ArtifactAbsent { link, artifact } => NoticeOut {
                 kind: "artifact_absent",
+                severity: None,
                 link: link.to_string(),
                 target: None,
                 artifact: Some(artifact.name().to_string()),
@@ -1204,6 +1224,7 @@ impl Namer<'_> {
                 why,
             } => NoticeOut {
                 kind: "artifact_unknown",
+                severity: None,
                 link: link.to_string(),
                 target: None,
                 artifact: Some(artifact.name().to_string()),
@@ -1211,8 +1232,13 @@ impl Namer<'_> {
                 declared: Vec::new(),
                 detail: unknown_detail(artifact, why.as_str()),
             },
-            Notice::NotCovered { book, link } => NoticeOut {
+            Notice::NotCovered {
+                book,
+                link,
+                severity,
+            } => NoticeOut {
                 kind: "not_covered",
+                severity: Some(severity.word()),
                 link: link.to_string(),
                 target: None,
                 artifact: None,
@@ -1357,6 +1383,29 @@ impl Namer<'_> {
     }
 }
 
+/// The lines `check` writes on stderr: one per document a covering link of
+/// strength `warn` does not reach, in the order of `uncovered`. A gap of strength
+/// `error` has none: it fails the check, and the answer is shown.
+pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
+    let BooksCheck::Checked { uncovered, .. } = check else {
+        return Vec::new();
+    };
+    uncovered
+        .iter()
+        .filter(|u| u.severity == CoverSeverity::Warn)
+        .map(|u| {
+            let doc = u
+                .key
+                .as_ref()
+                .map_or_else(|| u.doc.to_string(), ToString::to_string);
+            format!(
+                "warning: {doc} is reached by no {}.{} (cover = \"warn\")",
+                u.book, u.link
+            )
+        })
+        .collect()
+}
+
 /// The answer of `check`.
 pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
     match check {
@@ -1399,6 +1448,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                         },
                         book: u.book.to_string(),
                         link: u.link.to_string(),
+                        severity: u.severity.word(),
                     })
                     .collect(),
                 absent: absent
@@ -1481,25 +1531,32 @@ pub fn map(report: &MapReport) -> MapOut {
         links: map
             .links
             .iter()
-            .map(|link| MapLinkOut {
-                from: link.from.to_string(),
-                name: link.name.to_string(),
-                target: match &link.target {
-                    MapTarget::Book { book, .. } => MapTargetOut::Book {
-                        book: book.to_string(),
+            .map(|link| {
+                let cover = match link.target {
+                    MapTarget::Book { cover, .. } => cover,
+                    MapTarget::Artifact { .. } => None,
+                };
+                MapLinkOut {
+                    from: link.from.to_string(),
+                    name: link.name.to_string(),
+                    target: match &link.target {
+                        MapTarget::Book { book, .. } => MapTargetOut::Book {
+                            book: book.to_string(),
+                        },
+                        MapTarget::Artifact { space, comparison } => MapTargetOut::Artifact {
+                            space: space.to_string(),
+                            compare: comparison.kind_word(),
+                            ignore: comparison
+                                .ignored()
+                                .map(|p| p.as_str().to_owned())
+                                .collect(),
+                        },
                     },
-                    MapTarget::Artifact { space, comparison } => MapTargetOut::Artifact {
-                        space: space.to_string(),
-                        compare: comparison.kind_word(),
-                        ignore: comparison
-                            .ignored()
-                            .map(|p| p.as_str().to_owned())
-                            .collect(),
-                    },
-                },
-                means: means(link.propagation),
-                count: count_word(link.cardinality),
-                cover: matches!(link.target, MapTarget::Book { cover: true, .. }),
+                    means: means(link.propagation),
+                    count: count_word(link.cardinality),
+                    cover: cover.is_some(),
+                    cover_severity: cover.map(CoverSeverity::word),
+                }
             })
             .collect(),
         diagram: Some(diagram::draw(map)),

@@ -711,13 +711,67 @@ pub struct LinkKind {
     pub cardinality: Cardinality,
     /// What the link means for freshness.
     pub propagation: Propagation,
-    /// Whether every pending or approved document of the target book is expected to
-    /// be reached by this link from a pending or approved document (`cover = true`).
-    /// One that is not is a [`Notice::NotCovered`](super::freshness::Notice::NotCovered)
-    /// on it, and is listed by a check of the books; its freshness is unchanged. A
+    /// How strongly every pending or approved document of the target book is
+    /// expected to be reached by this link from a pending or approved document;
+    /// `None` when it is not expected ([`CoverSeverity::read`] says how `cover` is
+    /// read). One that is not reached is a
+    /// [`Notice::NotCovered`](super::freshness::Notice::NotCovered) on it, with the
+    /// strength, and is listed by a check of the books; its freshness is unchanged. A
     /// link into its own book is met only by another document of that book, so the
     /// first of a chain of `depends` links within one book can never be reached.
-    pub cover: bool,
+    pub cover: Option<CoverSeverity>,
+}
+
+/// How strongly a covering link expects to reach every document of its target
+/// book. What each strength does to a check of the books is stated on
+/// [`BooksCheck::is_clean`](crate::app::shelf::BooksCheck::is_clean).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CoverSeverity {
+    /// The weaker strength.
+    Warn,
+    /// The stronger strength.
+    Error,
+}
+
+impl CoverSeverity {
+    /// The strength `cover` declares, or none.
+    ///
+    /// | `cover` | strength |
+    /// |---|---|
+    /// | not written, or `false` | none |
+    /// | `true` or `"error"` | [`Error`](Self::Error) |
+    /// | `"warn"` | [`Warn`](Self::Warn) |
+    /// | any other word | refused: the word, as written |
+    pub fn read(decl: &CoverDecl) -> Result<Option<Self>, String> {
+        match decl {
+            CoverDecl::Truth(false) => Ok(None),
+            CoverDecl::Truth(true) => Ok(Some(Self::Error)),
+            CoverDecl::Word(word) => [Self::Warn, Self::Error]
+                .into_iter()
+                .find(|s| s.word() == word)
+                .map(Some)
+                .ok_or_else(|| word.clone()),
+        }
+    }
+
+    /// The word of the strength in a declaration and in the answers: `warn` or
+    /// `error`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+}
+
+/// `cover` on a link, as declared: a truth value or a word, read by
+/// [`CoverSeverity::read`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CoverDecl {
+    /// `true` or `false`.
+    Truth(bool),
+    /// A word, as written.
+    Word(String),
 }
 
 /// The declaration of one book, checked.
@@ -887,9 +941,10 @@ pub struct LinkEntryDecl {
     /// kind (`bytes`, `lines` or `presence`) and the prefixes of the lines `lines`
     /// leaves out. `None` is `bytes`.
     pub compare: Option<CompareDecl>,
-    /// For a link into a book: whether every document of the target book is
-    /// expected to be reached by it (`cover = true`). Refused on a link to artifacts.
-    pub cover: bool,
+    /// For a link into a book: how strongly every document of the target book is
+    /// expected to be reached by it, as written; `None` when not written. Refused on
+    /// a link to artifacts, unless it declares no expectation.
+    pub cover: Option<CoverDecl>,
 }
 
 /// What of an artifact a link to artifacts compares, as declared.
@@ -1131,15 +1186,28 @@ pub enum SchemaProblem {
         /// The link.
         link: EntryName,
     },
-    /// `cover` on a link to artifacts: only a document can be expected to be reached.
+    /// `cover` with a strength on a link to artifacts: only a document can be
+    /// expected to be reached.
     #[error(
-        "book `{book}`: the link `{link}` points at artifacts, and only a link into a book takes `cover`"
+        "book `{book}`: the link `{link}` points at artifacts, and a link to artifacts takes no cover expectation (only `cover = false`)"
     )]
     CoverOnArtifactLink {
         /// The book, as written.
         book: String,
         /// The link.
         link: EntryName,
+    },
+    /// A `cover` that is no strength ([`CoverSeverity::read`]).
+    #[error(
+        "book `{book}`: the `cover` of the link `{link}` is \"{value}\", and it takes true, false, \"error\" or \"warn\""
+    )]
+    BadCover {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+        /// The word, as written.
+        value: String,
     },
     /// A `compare` that is no comparison.
     #[error("book `{book}`: the `compare` of the link `{link}` is not one")]
@@ -1196,7 +1264,7 @@ struct DraftLink {
     target: BookName,
     cardinality: Cardinality,
     propagation: Propagation,
-    cover: bool,
+    cover: Option<CoverSeverity>,
 }
 
 impl Draft {
@@ -1477,6 +1545,18 @@ fn read_links(
                 name: name.clone(),
             });
         }
+        let cover = match entry.cover.as_ref().map(CoverSeverity::read) {
+            None => None,
+            Some(Ok(cover)) => cover,
+            Some(Err(value)) => {
+                problems.push(SchemaProblem::BadCover {
+                    book: book.to_owned(),
+                    link: name,
+                    value,
+                });
+                continue;
+            }
+        };
         match target {
             Some(target) => {
                 if entry.compare.is_some() {
@@ -1497,12 +1577,12 @@ fn read_links(
                     target,
                     cardinality: entry.cardinality,
                     propagation: entry.propagation,
-                    cover: entry.cover,
+                    cover,
                 };
                 links.insert(name, DraftEntry::Book(link));
             }
             None => {
-                if entry.cover {
+                if cover.is_some() {
                     problems.push(SchemaProblem::CoverOnArtifactLink {
                         book: book.to_owned(),
                         link: name,

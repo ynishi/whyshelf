@@ -4,8 +4,8 @@ use super::*;
 use crate::domain::shelf::artifact::LinePrefix;
 use crate::domain::shelf::fixtures_tests::spaces;
 use crate::domain::shelf::schema::{
-    BookSchemaDecl, CompareDecl, FieldEntryDecl, FieldPresence, FieldType, FieldTypeDecl,
-    KeyPatternDecl, LinkEntryDecl, LinkTargetDecl,
+    BookSchemaDecl, CompareDecl, CoverDecl, FieldEntryDecl, FieldPresence, FieldType,
+    FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl,
 };
 
 fn link(name: &str, target: &str, count: Cardinality, means: Propagation) -> LinkEntryDecl {
@@ -16,7 +16,7 @@ fn link(name: &str, target: &str, count: Cardinality, means: Propagation) -> Lin
         propagation: means,
         space: None,
         compare: None,
-        cover: false,
+        cover: None,
     }
 }
 
@@ -45,7 +45,7 @@ fn schema() -> Schema {
             ],
             links: vec![
                 LinkEntryDecl {
-                    cover: true,
+                    cover: Some(CoverDecl::Word("warn".to_owned())),
                     ..link(
                         "serves",
                         "requirement",
@@ -164,7 +164,7 @@ fn the_links_are_mapped_as_declared_with_every_count() {
         map.links[0].target,
         MapTarget::Book {
             book: book("requirement"),
-            cover: true
+            cover: Some(CoverSeverity::Warn)
         }
     );
     // A link into its own book names that book; the map adds nothing to say so.
@@ -172,7 +172,7 @@ fn the_links_are_mapped_as_declared_with_every_count() {
         map.links[1].target,
         MapTarget::Book {
             book: book("decision"),
-            cover: false
+            cover: None
         }
     );
     assert_eq!(map.links[1].from, book("decision"));
@@ -189,7 +189,7 @@ fn the_links_are_mapped_as_declared_with_every_count() {
         map.links[3].target,
         MapTarget::Book {
             book: book("requirement"),
-            cover: false
+            cover: None
         }
     );
 }

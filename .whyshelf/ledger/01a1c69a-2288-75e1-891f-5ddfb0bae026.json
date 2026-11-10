@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794333352480,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6ae8c27d20b0142bb9e6228dc8c10d883a8f2279",
+      "hash": "sha256:74a75042c5f67aad20a2140eabf2b07750e2afcf7caa003baf93dc8b6de49487",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4d3-a2e6-7651-a588-ca95e98cfe67"
+    },
+    {
+      "address": "0bf188350bcff41c0ee5170de9d6b8e1200533a1",
+      "hash": "sha256:74a50a66c32539411307d5b327e95c96344908df8ea05126f93483f75e68af7a",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "17"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c671-1c9c-749b-bd8e-66518935992c"
+    }
+  ],
+  "id": "01a1c69a-2288-75e1-891f-5ddfb0bae026",
+  "kind": "decision",
+  "reason": "Restated for the strength of cover and shared tests changed for #49; checked by a blind review",
+  "revision": "18b77b51c1ecaccbefc3eddb6e377e0f88b6862d",
+  "seen": "sha256:58fdc5ac75b863c3e76c7bf5246e495af91eaa99c3567e083c8157df17a2ad13",
+  "seen_address": "573dc5ef3fcd0ec4d1b9d4ef061d37ecf56d23b0",
+  "subject": "01a1c671-1d95-725c-bd74-8b605650d16c",
+  "v": 1,
+  "verb": "approve"
+}

@@ -29,6 +29,7 @@ type = "list"
 name = "grounds"            # informs: a finding fixed and retired must not break what it grounded
 target = "finding"
 means = "informs"
+cover = "warn"              # every finding is expected to ground a requirement; one that does not yet is listed, not a failure
 [[book.link]]
 name = "replaces"
 target = "requirement"
