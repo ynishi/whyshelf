@@ -1,0 +1,87 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b05de743c6ef4bb0bc80e0e2c2026a40a475e7d8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1cdac47178d7bf913a0e48320a5ce76bc5650a3368c16433dbea0b2015235c29",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "1b4f49f8462d5c1cb9f6595103f3c73a9e461dcc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d05a0dcfd64c7ffdce9cccf1a643dbc2e7533301b6888f8eabe0d0a5f5f4e144",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "69df4d6dc7b23ca94a4713567877995d09836e28",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ff546c47a9697d3c4224f6591f1e2a537da1d740b973811b0a5f662feab43c5b",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/build/unheld_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "850624b5ae13dbd3c2271dd069df31983b4db3d8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:506d6c604a075f1ab3846ec6adba35d340980a81822981662245c15ae6c12480",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794306263574,
+  "expires": null,
+  "frame": [
+    {
+      "address": "66a7ea8ddcdce6f21f4c5c856c441b4cb73beb17",
+      "hash": "sha256:a34c53b9c15a728b3b3bb9836673cd9106f270ef827e5d7d65c6378fc409abb6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    }
+  ],
+  "id": "01a1c4fc-cbd2-71ec-b948-48d96e68647f",
+  "kind": "decision",
+  "reason": "Issue #15: a value is told with its kind; two reviews, one blind; the tests of docs.rs and of each kind's words pass; just check green",
+  "revision": "4b6a05238793f846617130207f0084b29b01c969",
+  "seen": "sha256:7b0c37e86042e1db02f284434425558a48c59aa36f73661e458f948879624f6c",
+  "seen_address": "b8a8a5d3271f2614f886c30c4f7a9d808f515832",
+  "subject": "01a1c4ba-1606-7681-90fb-0d70558c8701",
+  "v": 1,
+  "verb": "approve"
+}
