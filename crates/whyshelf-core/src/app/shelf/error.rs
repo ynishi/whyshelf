@@ -52,12 +52,15 @@ pub enum ShelfError {
         /// The documents it could be.
         candidates: TwoOrMore<DocId>,
     },
-    /// The reference names a book that is not declared.
-    #[error("`{reference}`: there is no book `{book}`")]
+    /// A book that is not declared is named: by a reference, or by its name alone.
+    #[error(
+        "{}there is no book `{book}`",
+        .reference.as_ref().map(|r| format!("`{r}`: ")).unwrap_or_default()
+    )]
     UnknownBook {
-        /// The reference.
-        reference: Reference,
-        /// The book it names.
+        /// The reference that names it, when it was named by one.
+        reference: Option<Reference>,
+        /// The book named.
         book: BookName,
     },
     /// The reference writes a key that the book's grammar refuses.

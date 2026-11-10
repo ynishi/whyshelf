@@ -53,7 +53,7 @@ pub(super) fn identity(loaded: &Loaded, reference: &Reference) -> Result<DocId, 
             candidates,
         }),
         Resolution::UnknownBook(book) => Err(ShelfError::UnknownBook {
-            reference: reference.clone(),
+            reference: Some(reference.clone()),
             book,
         }),
         Resolution::NotAKeyOf { book, problem } => Err(ShelfError::NotAKeyOf {

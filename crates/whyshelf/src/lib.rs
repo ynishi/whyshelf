@@ -204,6 +204,11 @@
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   get <ref> --approved      what the approval that stands saw, with its content read back
 //!   trace <ref>               what it links to and what links to it, transitively
+//!   unlinked [--book <name>] [--no-incoming | --no-outgoing]
+//!                             the documents linked neither way (look there first), those no
+//!                             link reaches and those that hold none, those decided against
+//!                             apart (exit 1, as map does, when the declaration cannot be used;
+//!                             otherwise 0, whatever it lists)
 //!   stale [--exit-code]       the approvals that no longer hold, strongest first, with their roots,
 //!                             and their origins: each document, artifact, cycle or the declaration where
 //!                             they start, with the approvals it degrades
@@ -272,8 +277,8 @@
 //! `decision` is the decision that stands (the record's `judgement` id, `actor`, `at`
 //! and `reason`, null when none was given), or null while it is pending; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
-//! its `space`) and a `detail` sentence; every answer that reads the documents (`check` when the
-//! declaration can be used, `status`, `get`, `trace`, `stale`, `diff`) carries
+//! its `space`) and a `detail` sentence; every answer that reads the documents (`check` and
+//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `stale`, `diff`) carries
 //! `health` (files that are no document, cycles, records that contradict one another
 //! or cannot be read). The answers of the writes, of `map` and of `schema` carry
 //! none.
@@ -281,8 +286,8 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `map` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!
 //! `map` answers `{"schema_problems": [...], "books": [...], "links": [...],
@@ -298,6 +303,23 @@
 //! `0..1`, `0..`, `1..`) and target, every column aligned across the drawing. It
 //! is null, and `books` and `links` are empty, when `schema_problems` lists why
 //! the declaration cannot be used, as `check` lists it.
+//!
+//! `unlinked` answers `{"isolated": [...], "schema_problems": [...], "no_incoming":
+//! [...], "no_outgoing": [...], "decided_against": {"isolated": [...],
+//! "no_incoming": [...], "no_outgoing": [...]}, "health": ...}`, each entry
+//! `{"book", "row"}` with the document as `status` shows it. The three lists are
+//! disjoint. `isolated` is the place to look first: the documents that hold no link
+//! and that no link from a document that stands reaches. `no_incoming`
+//! holds those no link reaches, and `no_outgoing` those that hold none. What the
+//! declaration makes inevitable is left out, and a document decided against reaches
+//! nothing; the rule is on [`Linkage`](domain::shelf::trace::Linkage). The documents
+//! decided against (denied, deprecated, retired) are listed in `decided_against`,
+//! the pending and approved ones at the top. Lists are in the order the declaration
+//! writes the books, then by identity. `--no-incoming` or `--no-outgoing` asks for
+//! one of the two one-way lists, and the other is null; `isolated` is always
+//! answered. Files that are no document are in `health`, not in a list. When
+//! `schema_problems` lists why the declaration cannot be used, as `check` lists it,
+//! the lists asked for are empty and `health` is null.
 //!
 //! `new` answers `{"doc": {"id", "key"}, "file": ..., "unresolved_links": [{"link",
 //! "written", "why"}]}`. On 1 (a refusal), 2 and 3 the JSON is `{"error": "refused" |

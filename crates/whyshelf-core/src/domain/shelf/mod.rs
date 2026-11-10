@@ -37,9 +37,11 @@
 //!                                                        └─► ApproveFrame::addressed
 //!                                                        └─► Decision::approve / deny / deprecate / retire
 //!   lookup    ──► schema, build, ledger                resolve ──► Resolution  (what a person typed)
-//!   trace     ──► schema, artifact, doc, build         trace ──► Trace         (the links, up and down)
 //!   freshness ──► schema, artifact, doc, graph,        assess ──► Assessment   (whether it still holds)
 //!                 build, ledger
+//!   trace     ──► schema, artifact, doc, build,        trace ──► Trace         (the links, up and down)
+//!                 freshness                            linkage ──► Linkage     (linked at all, each way,
+//!                                                        and what the declaration lets be)
 //!   snapshot  ──► artifact, doc, build, ledger         Snapshot::of ──► Snapshot (what an approval saw),
 //!                                                        SnapshotItem::retrieval ──► Retrieval
 //! ```
@@ -79,6 +81,7 @@
 //! | a key given for a new document | [`Shelf::claim_key`]: read by [`KeyPattern::parse`], and not taken | a [`NewKey`], or a [`ClaimKeyProblem`] |
 //! | whether a new document would be valid | [`Shelf::check_new`], which hands the would-be file `<book dir>/<key>.md` to the same reader and judgement [`Shelf::build`] uses and resolves its links in the same index (no second validator) | a [`NewDoc`] with its unresolved links, or a [`NewDocProblem`] with every [`DocProblem`] |
 //! | the links around a document, up and down | [`trace`](trace::trace) | a [`Trace`] of [`LinkEdge`]s |
+//! | whether a document is linked at all, each way (a link reaches it, it holds one) | [`linkage`](trace::linkage); the rule is on [`Linkage`] | a [`Linkage`] per valid document |
 //! | which links have which meaning | [`Doc::links_of`], from the [`Link`]s of the document (each carries its [`LinkKind`]) | the links of one [`Propagation`] |
 //! | what a hash covers | `hash_doc` in `doc.rs`, private, called by `DocDraft::new` only | a [`DocHash`] (made by `DocHash::computed`, private to `doc.rs`) |
 //! | a hash read from a record | `DocHash::restore` | called by [`Record::from_canon`] only |
@@ -251,6 +254,7 @@
 //! [`BookTally`]: build::BookTally
 //! [`Trace`]: trace::Trace
 //! [`LinkEdge`]: trace::LinkEdge
+//! [`Linkage`]: trace::Linkage
 //! [`DocState::Unknown`]: build::DocState::Unknown
 //! [`DocState::Gone`]: build::DocState::Gone
 //! [`Cycle`]: graph::Cycle
