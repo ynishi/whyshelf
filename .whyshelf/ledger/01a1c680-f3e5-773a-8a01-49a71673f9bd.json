@@ -1,0 +1,153 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a944e297ea3627fcd26c903c097498e28a62b064",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3f30531ad9d03e17127a70a1a7a000e2c8bec593d2e30d80ee41464596a7b981",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3003b2616105a3c810ad570d980f7561cf8e4e69",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:eb825a54b8908605c4cb958a39757ad5c265546fed235f6b9f7d6de4555d2f9b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1915bca11aa5d5fee2b624700734ee0158c2a058",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ab582b7a1b502743e943358d6e0334d50b4894dd4458b58c69c1db4a53d312c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0496c454ceb0a2c498e02ff1f697e0149f22792e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0063de42e77aca079bc7f4da10b686a9a44544f02afc57da2a9406920df1bb28",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c2b6918d5cfc13ed50047958b33d754bc05608d9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3108f109d94a5515afcd4cf3f3b22b586e445c0e15c70344423be7c10721940f",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ec8bce6309637829ccd3e9670a027307992f5cfd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ae31721e3d9ef4be030f675045896dfbaed05ff6836aab0b74c327c09e0c26d0",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794331702044,
+  "expires": null,
+  "frame": [
+    {
+      "address": "630ff13403e4a7a900fbbaf133d625de8f0c4562",
+      "hash": "sha256:3323f371c23c4d6ae0485243f0aa8661bef9d31b5ce9e8756a84eaed86b7e874",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "6a4ec3d1e683547d9a7d9662a853747b18f2450a",
+      "hash": "sha256:2cc62a3771370bb6d487f768be190fcff3bc5e846820fdc1459c75f065d07adc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ce54-705b-a4fb-17382395564a"
+    },
+    {
+      "address": "0a499a121b00325cdd8d64891c34443373d5cbef",
+      "hash": "sha256:7442f2bb294d68443fd80a86e07d43d963bdf47969a698b37f01f10e01fff4ed",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a1c680-f3e5-773a-8a01-49a71673f9bd",
+  "kind": "decision",
+  "reason": "Shared tests changed for #47, and DEC-33 names the exit 1 of map and unlinked; checked by a blind review",
+  "revision": "d8984e12f19b767dfaee50d9e3476f80d95a8d11",
+  "seen": "sha256:e120a904e908ff4dde126eb83c32e72e9c1089fd026c123a49f5eb5a1c70168f",
+  "seen_address": "ea2383a20af4631fcd139fda9cb0bbc74591d7a2",
+  "subject": "01a1c4ba-19a6-76f9-a7c1-40f9f8460ecf",
+  "v": 1,
+  "verb": "approve"
+}

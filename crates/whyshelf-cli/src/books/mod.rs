@@ -20,8 +20,8 @@
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong (or `map` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
+//! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, or a rule of the model refused the judgement (nothing was written) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
 //! | 3 | the run failed (a file could not be read or written) |
 //!
 //! `new` is the one command that writes a document. Its values arrive as text and
@@ -51,7 +51,8 @@ use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
     ErrorClass, JudgeRequest, Judgement, MapReport, NewDocRequest, SameMeaningAbout,
-    SameMeaningRequest, ShelfApp, ShelfError, StaleReport, WithdrawRequest,
+    SameMeaningRequest, ShelfApp, ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter,
+    UnlinkedReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -161,6 +162,23 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             .trace(&reference)
             .await
             .map(|r| print(&output::trace(&r))),
+        BooksCommand::Unlinked {
+            book,
+            no_incoming,
+            no_outgoing,
+        } => match unlinked_filter(book.as_deref(), no_incoming, no_outgoing) {
+            Ok(filter) => ShelfApp::new(project).unlinked(&filter).await.map(|r| {
+                match print(&output::unlinked(&r)) {
+                    Exit::Ok => unlinked_exit(&r),
+                    failed => failed,
+                }
+            }),
+            Err(message) => {
+                eprintln!("error: {message}");
+                print(&output::usage(message));
+                return ExitCode::from(Exit::Request as u8);
+            }
+        },
         BooksCommand::Stale { exit_code } => {
             ShelfApp::new(project)
                 .stale()
@@ -380,6 +398,33 @@ fn new_request(
         items,
         body: body.unwrap_or_default(),
     })
+}
+
+/// The filter of an `unlinked` command, or why the arguments are not one (clap keeps
+/// the two flags from being given together).
+fn unlinked_filter(
+    book: Option<&str>,
+    no_incoming: bool,
+    no_outgoing: bool,
+) -> Result<UnlinkedFilter, String> {
+    let book = book
+        .map(|b| BookName::new(b).map_err(|e| format!("--book `{b}`: {e}")))
+        .transpose()?;
+    let ask = match (no_incoming, no_outgoing) {
+        (true, _) => UnlinkedAsk::NoIncoming,
+        (false, true) => UnlinkedAsk::NoOutgoing,
+        (false, false) => UnlinkedAsk::Both,
+    };
+    Ok(UnlinkedFilter { book, ask })
+}
+
+/// The exit of `unlinked` once its answer is printed: 1 for a declaration that
+/// cannot be used, as `check` gives for one; otherwise 0, whatever it lists.
+fn unlinked_exit(report: &UnlinkedReport) -> Exit {
+    match report {
+        UnlinkedReport::SchemaInvalid { .. } => Exit::Stopped,
+        UnlinkedReport::Answered { .. } => Exit::Ok,
+    }
 }
 
 /// The exit of `stale` once its answer is printed: with `--exit-code`, 1 when any

@@ -13,6 +13,12 @@
 //! A link that cannot be followed is an edge too, upstream, so an answer shows where
 //! the trail breaks. A link to an artifact is an edge upstream that ends there: the
 //! artifact links to nothing, and nothing is walked down from it.
+//!
+//! [`linkage`] asks of the same edges, one step and for every document at once,
+//! whether a document is linked at all, each way: whether a link reaches it, and
+//! whether it holds one. It reads where each document stands from an
+//! [`Assessment`], and the declaration from the shelf's schema. Its rules are on
+//! [`Linkage`].
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,7 +27,8 @@ use crate::domain::id::DocId;
 use super::artifact::Artifact;
 use super::build::Shelf;
 use super::doc::{LinkState, UnresolvedLink};
-use super::schema::{EntryName, Propagation};
+use super::freshness::Assessment;
+use super::schema::{BookName, EntryName, LinkKind, Propagation};
 
 /// What the far end of a link comes to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,6 +82,134 @@ pub fn trace(shelf: &Shelf, start: DocId) -> Trace {
             )
         },
     }
+}
+
+/// Whether a valid document is linked at all, each way, and whether its book's
+/// declaration lets it be: the one statement of what `unlinked` answers.
+///
+/// The two facts of the document are read from the links the documents hold now,
+/// of every meaning (`depends`, `informs`, `replaces`), into any book, whatever the
+/// declaration says about `cover`:
+///
+/// | a link that `holder` holds | `incoming` of what it names | `outgoing` of `holder` |
+/// |---|---|---|
+/// | resolves to another valid document, and `holder` [stands](super::freshness::Standing::stands) | yes | yes |
+/// | resolves to another valid document, and `holder` is decided against (denied, deprecated, retired) | no | yes |
+/// | resolves to `holder` itself | no | yes |
+/// | cannot be followed (a key that names no valid document) | none is reached | yes |
+/// | to artifacts, with a name written | none is reached | yes |
+///
+/// A link with nothing written in it is no link. As for coverage, a document
+/// decided against reaches nothing, so it cannot hide a document that stands. A file
+/// that is no valid document holds no link and is not asked about: the shelf keeps
+/// it apart ([`Shelf::invalid`], [`Shelf::unreadable`]).
+///
+/// The two facts of the book are read from the checked schema alone, and count
+/// every declared link but `replaces`: a successor's link is absent from every
+/// original by nature.
+///
+/// - `reachable`: a link some book declares, its own included, not `replaces`,
+///   points into it.
+/// - `may_hold`: it declares a link that is not `replaces`, to artifacts or into a
+///   book, its own included.
+///
+/// A book that is neither is cut off by its declaration, and what it holds is
+/// inevitable. The answers are disjoint:
+///
+/// | answer | when |
+/// |---|---|
+/// | [`isolated`](Self::isolated) | neither `incoming` nor `outgoing`, and the book is `reachable` or `may_hold` |
+/// | [`unreached`](Self::unreached) | not `incoming` but `outgoing`, and the book is `reachable` |
+/// | [`holds_none`](Self::holds_none) | not `outgoing` but `incoming`, and the book `may_hold` |
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Linkage {
+    /// A link held by another valid document that stands resolves to it.
+    pub incoming: bool,
+    /// It holds a link to anything.
+    pub outgoing: bool,
+    /// A declared link that is not `replaces`, of any book, points into its book.
+    pub reachable: bool,
+    /// Its book declares a link that is not `replaces`.
+    pub may_hold: bool,
+}
+
+impl Linkage {
+    /// It is linked neither way, though its declaration lets it be one way at least.
+    pub fn isolated(&self) -> bool {
+        (self.reachable || self.may_hold) && !self.incoming && !self.outgoing
+    }
+
+    /// It holds a link but no link reaches it, though the declaration lets one.
+    pub fn unreached(&self) -> bool {
+        self.reachable && !self.incoming && self.outgoing
+    }
+
+    /// A link reaches it but it holds none, though its book declares some.
+    pub fn holds_none(&self) -> bool {
+        self.may_hold && !self.outgoing && self.incoming
+    }
+}
+
+/// The [`Linkage`] of every valid document of the shelf, with where each stands
+/// from `assessment`.
+pub fn linkage(shelf: &Shelf, assessment: &Assessment) -> BTreeMap<DocId, Linkage> {
+    let schema = shelf.schema();
+    let expected = |kind: &&LinkKind| kind.propagation != Propagation::Replaces;
+    let reachable: BTreeSet<&BookName> = schema
+        .books()
+        .values()
+        .flat_map(|book| {
+            book.links()
+                .into_iter()
+                .map(|(_, kind)| kind)
+                .filter(expected)
+                .map(|kind| &kind.target)
+        })
+        .collect();
+    let may_hold: BTreeSet<&BookName> = schema
+        .books()
+        .iter()
+        .filter(|(_, book)| {
+            book.artifact_links().into_iter().next().is_some()
+                || book
+                    .links()
+                    .into_iter()
+                    .map(|(_, kind)| kind)
+                    .any(|k| expected(&k))
+        })
+        .map(|(name, _)| name)
+        .collect();
+    let mut all: BTreeMap<DocId, Linkage> = shelf
+        .docs()
+        .iter()
+        .map(|(id, doc)| {
+            let book = &doc.key().book;
+            let linkage = Linkage {
+                reachable: reachable.contains(book),
+                may_hold: may_hold.contains(book),
+                ..Linkage::default()
+            };
+            (*id, linkage)
+        })
+        .collect();
+    for id in shelf.docs().keys() {
+        let edges = out_edges(shelf, *id);
+        if let Some(own) = all.get_mut(id) {
+            own.outgoing = !edges.is_empty();
+        }
+        if !assessment.standing_of(*id).stands() {
+            continue;
+        }
+        for edge in edges {
+            if let LinkEnd::Doc(target) = edge.end
+                && target != edge.holder
+                && let Some(reached) = all.get_mut(&target)
+            {
+                reached.incoming = true;
+            }
+        }
+    }
+    all
 }
 
 /// The links a valid document holds, as edges of depth 0, in the order of their
@@ -169,6 +304,9 @@ fn walk(
     }
     edges
 }
+
+#[cfg(test)]
+mod linkage_tests;
 
 #[cfg(test)]
 mod tests {

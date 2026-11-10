@@ -32,6 +32,20 @@ pub enum BooksCommand {
         /// A key, an identifier or a short identifier.
         reference: Reference,
     },
+    /// The documents linked neither way, those no link reaches and those that hold
+    /// none, those decided against apart; exit 0 whenever the declaration can be
+    /// used, whatever it lists.
+    Unlinked {
+        /// Only the documents of this book.
+        #[arg(long)]
+        book: Option<String>,
+        /// Of the two one-way lists, only `no_incoming`.
+        #[arg(long, conflicts_with = "no_outgoing")]
+        no_incoming: bool,
+        /// Of the two one-way lists, only `no_outgoing`.
+        #[arg(long)]
+        no_outgoing: bool,
+    },
     /// The approvals that no longer hold, with where each starts to fail.
     Stale {
         /// Exit 1 when any approval does not hold (as `git diff --exit-code`), so a
