@@ -33,6 +33,7 @@ fn link_to(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl 
         target: LinkTargetDecl::Book(target.to_owned()),
         cardinality: Cardinality::Many,
         propagation,
+        compare: None,
     }
 }
 
@@ -298,6 +299,7 @@ fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
         target: LinkTargetDecl::Artifact,
         cardinality: Cardinality::Many,
         propagation,
+        compare: None,
     }
 }
 

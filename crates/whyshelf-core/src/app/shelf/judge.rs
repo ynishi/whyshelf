@@ -47,7 +47,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::domain::actor::Actor;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
-use crate::domain::shelf::artifact::ContentAddress;
+use crate::domain::shelf::artifact::{ArtifactAsks, ContentAddress};
 use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
     ApproveFrame, Decision, DeclaredStatus, JudgedAt, JudgementId, Ledger, PresentFrame, Record,
@@ -270,7 +270,9 @@ impl<P: ShelfWrite> ShelfApp<P> {
         frame: ApproveFrame,
     ) -> Result<ApproveFrame, ShelfError> {
         let mut addresses: BTreeMap<RelPath, ContentAddress> = BTreeMap::new();
-        let mut ask = Vec::new();
+        // Only the address is wanted of these files (the documents'), and every
+        // reading has the hash of the bytes: no other comparison is asked.
+        let mut ask = ArtifactAsks::new();
         for file in frame.files() {
             match loaded.artifacts.get(&file) {
                 Some(reading) => {
@@ -278,7 +280,9 @@ impl<P: ShelfWrite> ShelfApp<P> {
                         addresses.insert(file, address.clone());
                     }
                 }
-                None => ask.push(file),
+                None => {
+                    ask.insert(file, BTreeSet::new());
+                }
             }
         }
         if !ask.is_empty() {

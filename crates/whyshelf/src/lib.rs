@@ -66,9 +66,10 @@
 //!   tests: [crates/cache/tests/expiry.rs]      paths under the root, with `/`
 //! ```
 //!
-//! An approval pins, for each path of a `depends` link, the hash of the file's bytes,
-//! or that no file was there: a path that has no file yet is the evidence not
-//! written yet, not a broken link. Afterwards:
+//! An approval pins, for each path of a `depends` link, the hash of the file (of its
+//! bytes, unless the link compares otherwise, below), or that no file was there: a
+//! path that has no file yet is the evidence not written yet, not a broken link.
+//! Afterwards:
 //!
 //! | the pinned file | now | the approval is |
 //! |---|---|---|
@@ -77,9 +78,32 @@
 //! | there | gone | `broken` (`artifact_gone`) |
 //! | not there | not there | unchanged by it |
 //! | not there | there | `stale` (`artifact_arrived`): the evidence came, look again |
+//! | there, under one comparison | there, and the link now declares another | `stale` (`artifact_comparison_changed`): the hashes are not compared |
 //!
 //! A path added to or taken from the link since is `links_changed` (`stale`). An
 //! `informs` link to a file changes no freshness.
+//!
+//! What of a file counts is declared per link, with `compare`:
+//!
+//! ```text
+//!   [[book.link]]
+//!   name = "tests"
+//!   target = "artifact"
+//!   means = "depends"
+//!   compare = "lines"        # default "bytes": every byte counts
+//!   ignore = ["//"]          # lines that start with these (after white space) do not count
+//! ```
+//!
+//! `lines` compares the lines of the file with their white space collapsed and the
+//! blank lines left out, so indentation, spacing and blank lines change nothing, and
+//! neither do the lines `ignore` names (`//` takes `//`, `///` and `//!` comments; `#`
+//! takes those of TOML, shell or Python). It knows no language: a comment at the end
+//! of a line of code still counts, and so does every byte that is not UTF-8 (a file
+//! that is no text is better compared as `bytes`). Each pin keeps the comparison its
+//! hash was made with. A link whose `compare` is changed afterwards makes the
+//! approvals that pinned a file through it `stale` (`artifact_comparison_changed`),
+//! and the hashes are not compared, since they were made differently: look again and
+//! approve. A file gone or come is told as such, whatever the comparison.
 //!
 //! In a Git repository an approval also records, for the approved document, each
 //! upstream it pinned and each file, the Git blob its content is in, and the commit

@@ -20,14 +20,14 @@ use crate::domain::actor::Actor;
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
 
-use super::artifact::{ArtifactHash, ArtifactReading, ArtifactReadings};
+use super::artifact::{ArtifactHash, ArtifactReading, ArtifactReadings, Comparison, LinePrefix};
 use super::build::{DocReading, RawValue, Shelf};
 use super::ledger::{
     Decision, JudgedAt, JudgementId, Ledger, Record, frame_approve, frame_present, frame_retire,
 };
 use super::schema::{
-    BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl, KeyPatternDecl,
-    LinkEntryDecl, LinkTargetDecl, Propagation, Schema,
+    BookSchemaDecl, Cardinality, CompareDecl, FieldEntryDecl, FieldPresence, FieldTypeDecl,
+    KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation, Schema,
 };
 
 /// A UUID v7 identifier from a small number.
@@ -74,6 +74,7 @@ fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
         target: LinkTargetDecl::Book(target.to_owned()),
         cardinality: Cardinality::Many,
         propagation,
+        compare: None,
     }
 }
 
@@ -83,6 +84,7 @@ fn artifact_link(name: &str, propagation: Propagation) -> LinkEntryDecl {
         target: LinkTargetDecl::Artifact,
         cardinality: Cardinality::Many,
         propagation,
+        compare: None,
     }
 }
 
@@ -181,7 +183,8 @@ pub(super) fn shelf(readings: Vec<DocReading>) -> Shelf {
     Shelf::build(&schema(), readings, &ArtifactReadings::new())
 }
 
-/// A shelf whose artifacts are these paths: a file with this hash, or none.
+/// A shelf whose artifacts are these paths: a file with this hash (as its bytes
+/// compare), or none.
 pub(super) fn shelf_with(
     readings: Vec<DocReading>,
     artifacts: &[(&str, Option<ArtifactHash>)],
@@ -190,11 +193,10 @@ pub(super) fn shelf_with(
         .iter()
         .map(|(p, hash)| {
             let reading = match hash {
-                Some(hash) => ArtifactReading::Present {
-                    hash: *hash,
-                    address: None,
-                },
-                None => ArtifactReading::Absent,
+                Some(hash) => {
+                    ArtifactReading::of_hashes(BTreeMap::from([(Comparison::Bytes, *hash)]), None)
+                }
+                None => ArtifactReading::absent(),
             };
             (path(p), reading)
         })
@@ -213,6 +215,51 @@ pub(super) fn sp_testing(n: u128, grounds: &[&str], tests: &[&str]) -> DocReadin
         extra.push(("tests", list(tests)));
     }
     reading(&format!("specs/sp-{n}.md"), n, &format!("SP-{n}"), &extra)
+}
+
+/// The schema of [`decls`] with the spec's `tests` link comparing `lines`, leaving out
+/// the lines that start with one of `ignore`.
+pub(super) fn schema_of_lines(ignore: &[&str]) -> Schema {
+    let mut decls = decls();
+    let tests = decls[1]
+        .links
+        .iter_mut()
+        .find(|l| l.name == "tests")
+        .expect("the spec has a tests link");
+    tests.compare = Some(CompareDecl {
+        kind: "lines".to_owned(),
+        ignore: ignore.iter().map(|i| (*i).to_owned()).collect(),
+    });
+    Schema::validate(decls).unwrap()
+}
+
+/// The comparison `lines` with these prefixes left out.
+pub(super) fn lines(ignore: &[&str]) -> Comparison {
+    Comparison::Lines {
+        ignore: ignore.iter().map(|i| LinePrefix::new(i).unwrap()).collect(),
+    }
+}
+
+/// A shelf of `schema` whose artifacts hold these bytes (a path with none has no
+/// file), read as an adapter does: each path under the comparisons
+/// [`Shelf::artifact_asks`] asks.
+pub(super) fn shelf_reading(
+    schema: &Schema,
+    readings: Vec<DocReading>,
+    files: &[(&str, &[u8])],
+) -> Shelf {
+    let files: BTreeMap<RelPath, &[u8]> = files.iter().map(|(p, b)| (path(p), *b)).collect();
+    let found: ArtifactReadings = Shelf::artifact_asks(schema, &readings)
+        .into_iter()
+        .map(|(at, comparisons)| {
+            let reading = match files.get(&at) {
+                Some(bytes) => ArtifactReading::of_bytes(bytes, &comparisons, None),
+                None => ArtifactReading::absent(),
+            };
+            (at, reading)
+        })
+        .collect();
+    Shelf::build(schema, readings, &found)
 }
 
 pub(super) fn ledger(records: Vec<Record>) -> Ledger {

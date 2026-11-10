@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "775f0ce412eff619653639d2ea26e76555cb6cf2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3fd91fc284ad431af6667d3c6e7c680ed278c6a2d3990b73c75fc0b0726042d6",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "9da4ad27670a651a4e10494b55a7c41e8d4d6920",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bb9a3d0e1fe9bd74ad96e61b053bef028c8d3a9160ccf2964e811bcef1d8f00d",
+      "link": "tests",
+      "path": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "state": "present"
+    },
+    {
+      "address": "8ada971076b3f71b825d521559f38a242d15a44d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:81b0e68006958690dcc27fc49ccff7c59e36806349d1e613bbe90dc55231f2d1",
+      "link": "tests",
+      "path": "crates/whyshelf-infra/src/shelf/git.rs",
+      "state": "present"
+    }
+  ],
+  "at": 1794296333166,
+  "expires": null,
+  "frame": [
+    {
+      "address": "77663e51c838e55f5feb16635d6ffdc244721230",
+      "hash": "sha256:962bca42a4aed00f4aa03d4eb971854a0da11d55cb5a2a2bb9248c4fa40b7dad",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "6"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fa37-74bf-bbd8-1dbc0e039102"
+    },
+    {
+      "address": "326c8e0dd83dc88b70602064de0c71308ec00abf",
+      "hash": "sha256:f8b80a6e8223bcd54319242f643920ba9845b5b3276192631a2a59cd976aeece",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    }
+  ],
+  "id": "01a1c465-43cc-733a-801e-ff4aa784ad5a",
+  "kind": "decision",
+  "reason": "The tests link now compares lines without comments; the tests were read again, and V-3's git.rs reads hashes per comparison",
+  "revision": "98df1cc09397ad1ff9b816e3a92b95f68d0efb24",
+  "seen": "sha256:9ff6ee087d1a1e46368da2481e1f64ab89a4f5fe34887387597add6757816eaa",
+  "seen_address": "3fe855a1cbdc5598bc77f6a26f19cd40ed0a9494",
+  "subject": "01a1c3d2-fcc8-780b-9a64-87c28c477246",
+  "v": 1,
+  "verb": "approve"
+}

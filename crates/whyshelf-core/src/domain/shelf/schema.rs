@@ -23,6 +23,8 @@ use crate::domain::id::ShortId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonEmptySet, NonEmptyVec, TwoOrMore};
 
+use super::artifact::{Comparison, ComparisonProblem};
+
 /// The most characters of the name of a book, a field, a link or an enum word.
 const NAME_MAX: usize = 64;
 /// The most characters of a name in the tail of a key (`FR-LATENCY-BUDGET`): its own
@@ -599,6 +601,9 @@ pub struct ArtifactLinkKind {
     pub cardinality: Cardinality,
     /// What the link means for freshness.
     pub propagation: ArtifactPropagation,
+    /// What of each file is compared (`compare` in the declaration; `bytes` when it
+    /// says none).
+    pub comparison: Comparison,
 }
 
 /// The name no book can have: the word a declaration uses for the target of a link to
@@ -742,6 +747,19 @@ pub struct LinkEntryDecl {
     pub cardinality: Cardinality,
     /// What the link means for freshness.
     pub propagation: Propagation,
+    /// For a link to artifacts, what of each file is compared, as written: the kind
+    /// (`bytes` or `lines`) and the prefixes of the lines `lines` leaves out. `None`
+    /// is `bytes`.
+    pub compare: Option<CompareDecl>,
+}
+
+/// What of a file a link to artifacts compares, as declared.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CompareDecl {
+    /// `bytes` or `lines`.
+    pub kind: String,
+    /// The prefixes of the lines `lines` leaves out.
+    pub ignore: Vec<String>,
 }
 
 /// Where a name was written, for a problem to say so.
@@ -911,6 +929,27 @@ pub enum SchemaProblem {
     /// A book named with the word a link uses for artifacts.
     #[error("`{ARTIFACT_TARGET}` is the target of a link to artifacts and cannot name a book")]
     ReservedBookName,
+    /// `compare` on a link into a book: a document is compared by its hash, always.
+    #[error(
+        "book `{book}`: the link `{link}` points into a book, and only a link to artifacts takes `compare`"
+    )]
+    CompareOnBookLink {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+    },
+    /// A `compare` that is no comparison.
+    #[error("book `{book}`: the `compare` of the link `{link}` is not one")]
+    BadComparison {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+        /// Why.
+        #[source]
+        why: ComparisonProblem,
+    },
 }
 
 /// Whether a file belongs to a book: what `Schema::membership` answers.
@@ -1202,6 +1241,13 @@ fn read_links(
         }
         match target {
             Some(target) => {
+                if entry.compare.is_some() {
+                    problems.push(SchemaProblem::CompareOnBookLink {
+                        book: book.to_owned(),
+                        link: name,
+                    });
+                    continue;
+                }
                 let link = DraftLink {
                     target,
                     cardinality: entry.cardinality,
@@ -1210,6 +1256,20 @@ fn read_links(
                 links.entry(name).or_insert(link);
             }
             None => {
+                let comparison = match &entry.compare {
+                    None => Comparison::Bytes,
+                    Some(decl) => match Comparison::parse(&decl.kind, &decl.ignore) {
+                        Ok(comparison) => comparison,
+                        Err(why) => {
+                            problems.push(SchemaProblem::BadComparison {
+                                book: book.to_owned(),
+                                link: name,
+                                why,
+                            });
+                            continue;
+                        }
+                    },
+                };
                 let propagation = match entry.propagation {
                     Propagation::Depends => ArtifactPropagation::Depends,
                     Propagation::Informs => ArtifactPropagation::Informs,
@@ -1224,6 +1284,7 @@ fn read_links(
                 let link = ArtifactLinkKind {
                     cardinality: entry.cardinality,
                     propagation,
+                    comparison,
                 };
                 artifact_links.entry(name).or_insert(link);
             }
@@ -1376,5 +1437,7 @@ impl Schema {
     }
 }
 
+#[cfg(test)]
+mod comparison_tests;
 #[cfg(test)]
 mod tests;
