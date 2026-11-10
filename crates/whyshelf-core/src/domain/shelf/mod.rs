@@ -14,13 +14,14 @@
 //!
 //!   schema                                             Schema::validate ──► Schema
 //!                                                        (BookSchemaDecl in; declared once)
-//!   artifact                                           ArtifactHash::of_content, ContentAddress,
-//!                                                        Revision (opaque), Artifact
-//!                                                        (a file that is no document)
+//!   artifact                                           Comparison::fingerprint, ArtifactReading::
+//!                                                        of_bytes, ContentAddress, Revision
+//!                                                        (opaque), Artifact (a file that is
+//!                                                        no document)
 //!   doc       ──► schema, artifact                     DocDraft, Doc::new ──► Doc, with its Links
 //!                                                        and its ArtifactLinks
 //!   graph                                              cycles_of ──► Cycle; components
-//!   build     ──► schema, artifact, doc, graph         Shelf::artifact_paths ──► the paths to read
+//!   build     ──► schema, artifact, doc, graph         Shelf::artifact_asks ──► the paths to read
 //!                                                      Shelf::build ──► Shelf
 //!                                                        (DocReading and ArtifactReadings in: valid
 //!                                                         Docs, InvalidDocs, link cycles)
@@ -88,8 +89,8 @@
 //! | a contradiction among records | [`Ledger::build`] | [`LedgerProblem`]s |
 //! | what was decided | [`Ledger::status_of`] | a [`DeclaredStatus`] |
 //! | what a person typed | [`resolve`] | a [`Resolution`] (an identity only the ledger knows has an [`Absence`], which cannot be invalid) |
-//! | which paths a document's links to artifacts name (A1) | [`Shelf::artifact_paths`], before the build, and [`Shelf::build`], which makes each path an [`Artifact`] that is there or absent (never unresolved); a text that is no path is a [`DocProblem::ArtifactPathInvalid`] | the paths; an [`Artifact`] |
-//! | what an artifact's hash covers | the adapter, which hands the bytes it chose to [`ArtifactHash::of_content`] | an [`ArtifactHash`] |
+//! | which paths a document's links to artifacts name (A1) | [`Shelf::artifact_asks`], before the build, and [`Shelf::build`], which makes each path an [`Artifact`] that is there or absent (never unresolved); a text that is no path is a [`DocProblem::ArtifactPathInvalid`] | the paths, with their comparisons; an [`Artifact`] |
+//! | what of a file counts, and which hashes are compared | [`Comparison`](artifact::Comparison), declared per link and kept in each pin; [`Comparison::fingerprint`](artifact::Comparison::fingerprint) is the one maker of a file's hash; pins of another comparison than the link's are [`Cause::ArtifactComparisonChanged`](freshness::Cause::ArtifactComparisonChanged), never compared | an [`ArtifactHash`](artifact::ArtifactHash) |
 //! | the form of a content address and of a revision (A7) | the adapter, then `from_validated` ([`ContentAddress::from_validated`], [`Revision::from_validated`]) checks only that it is not empty and has no space | an opaque value |
 //! | a link to artifacts never replaces | [`Schema::validate`] ([`SchemaProblem::ArtifactReplaces`]); the type [`ArtifactPropagation`] has no `Replaces` | an [`ArtifactLinkKind`] |
 //! | a pin of an artifact (A2) | the private constructor of [`ArtifactPin`]: [`frame_approve`] pins every artifact of a `Depends` link as it is, a file or none, and refuses nothing for it | an [`ArtifactPin`] with a [`PinnedArtifact`] |
@@ -170,10 +171,9 @@
 //! [`RelPath`]: crate::domain::location::RelPath
 //! [`Actor`]: crate::domain::actor::Actor
 //! [`ValueError`]: crate::domain::error::ValueError
-//! [`Shelf::artifact_paths`]: build::Shelf::artifact_paths
+//! [`Shelf::artifact_asks`]: build::Shelf::artifact_asks
 //! [`Artifact`]: artifact::Artifact
 //! [`ArtifactHash`]: artifact::ArtifactHash
-//! [`ArtifactHash::of_content`]: artifact::ArtifactHash::of_content
 //! [`ContentAddress`]: artifact::ContentAddress
 //! [`ContentAddress::from_validated`]: artifact::ContentAddress::from_validated
 //! [`Revision`]: artifact::Revision

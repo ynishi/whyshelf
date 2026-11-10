@@ -188,6 +188,7 @@ impl ShelfError {
                 SameMeaningRefusal::ArtifactNotLinked { .. }
                 | SameMeaningRefusal::NotPinned { .. }
                 | SameMeaningRefusal::SeveralEarlier { .. }
+                | SameMeaningRefusal::PinnedUnderOtherComparison { .. }
                 | SameMeaningRefusal::NothingToDeclare,
             )
             | Self::Withdraw(

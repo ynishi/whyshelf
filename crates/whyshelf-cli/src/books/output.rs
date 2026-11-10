@@ -20,7 +20,7 @@ use whyshelf_core::domain::shelf::snapshot::{
 
 use super::textdiff;
 use whyshelf_core::domain::id::DocId;
-use whyshelf_core::domain::shelf::artifact::Artifact;
+use whyshelf_core::domain::shelf::artifact::{Artifact, Comparison};
 use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence};
 use whyshelf_core::domain::shelf::doc::{
     Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy,
@@ -83,7 +83,8 @@ pub struct CauseOut {
     /// The link it was reached through, if any.
     pub link: Option<String>,
     /// The path of the artifact the cause names, if it names one
-    /// (`artifact_changed`, `artifact_gone`, `artifact_arrived`).
+    /// (`artifact_changed`, `artifact_gone`, `artifact_arrived`,
+    /// `artifact_comparison_changed`).
     pub artifact: Option<String>,
     /// A sentence for a person.
     pub detail: String,
@@ -725,6 +726,17 @@ impl Namer<'_> {
                     pinned_hash(pin)
                 ),
             ),
+            Cause::ArtifactComparisonChanged { pin, now } => artifact(
+                "artifact_comparison_changed",
+                pin,
+                format!(
+                    "the link `{}` compares `{}` as {} now, and it was pinned as {}: the hashes are not compared",
+                    pin.link(),
+                    pin.path(),
+                    comparison(now),
+                    comparison(pin.comparison())
+                ),
+            ),
             Cause::ArtifactGone { pin } => artifact(
                 "artifact_gone",
                 pin,
@@ -1068,7 +1080,7 @@ impl Namer<'_> {
                 Some(link.to_string()),
                 None,
             ),
-            ItemRole::Artifact { link, path } => (
+            ItemRole::Artifact { link, path, .. } => (
                 "artifact",
                 None,
                 Some(link.to_string()),
@@ -1163,13 +1175,15 @@ fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
         .or_else(|| item.file.as_ref().map(ToString::to_string))
         .or_else(|| out.doc.as_ref().and_then(|d| d.key.clone()))
         .unwrap_or_default();
-    // The diff says what `changed` says. A document's hash is taken over its text after
-    // the reader's normalization (line breaks, trailing white space), so its diff is
-    // taken over the normalized texts too, and is empty when the hash is the same. An
-    // artifact's hash covers its bytes, so its diff is of the texts as they are.
+    // The diff says what `changed` says: empty when the hash is the same. A document's
+    // hash is taken over its text after the reader's normalization (line breaks,
+    // trailing white space), so its diff is taken over the normalized texts too. An
+    // artifact's hash is its link's comparison of the file (every byte, or the lines
+    // without white space and ignored lines), so when it is the same the diff is
+    // empty, and when it is not, the diff is of the texts as they are.
     let is_doc = matches!(item.now, ItemNow::Doc(_));
     let diff = match (approved_text, current_text) {
-        (Some(_), Some(_)) if is_doc && !item.changed => Some(String::new()),
+        (Some(_), Some(_)) if !item.changed => Some(String::new()),
         (Some(then), Some(now)) if is_doc => Some(textdiff::unified(
             &normalize(then),
             &normalize(now),
@@ -1404,10 +1418,27 @@ fn pinned_hash(pin: &ArtifactPin) -> String {
         .map_or_else(|| "absent".to_owned(), ToString::to_string)
 }
 
+/// A comparison as a person reads it: `bytes`, or `lines` with the prefixes it
+/// leaves out.
+fn comparison(comparison: &Comparison) -> String {
+    let ignored: Vec<&str> = comparison.ignored().map(|p| p.as_str()).collect();
+    if ignored.is_empty() {
+        comparison.kind_word().to_owned()
+    } else {
+        format!(
+            "{} (ignoring {})",
+            comparison.kind_word(),
+            ignored.join(" ")
+        )
+    }
+}
+
 fn join<T: std::fmt::Display>(items: impl Iterator<Item = T>) -> String {
     items.map(|i| i.to_string()).collect::<Vec<_>>().join("; ")
 }
 
+#[cfg(test)]
+mod comparison_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 

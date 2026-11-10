@@ -25,7 +25,7 @@
 use std::collections::BTreeMap;
 
 use crate::domain::location::RelPath;
-use crate::domain::shelf::artifact::{ArtifactState, ContentAddress};
+use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactState, ContentAddress};
 use crate::domain::shelf::snapshot::{ItemNow, ItemRole, Snapshot, SnapshotItem, doc_now};
 
 use super::ShelfApp;
@@ -73,20 +73,23 @@ impl<P: ShelfRead> ShelfApp<P> {
         let (loaded, snapshot) = self.approved(reference).await?;
         let readable = self.read_back(&snapshot).await?;
 
-        let artifact_paths: Vec<RelPath> = snapshot
-            .items()
-            .iter()
-            .filter_map(|item| match item.role() {
-                ItemRole::Artifact { path, .. } => Some(path.clone()),
-                ItemRole::Subject { .. } | ItemRole::Upstream { .. } => None,
-            })
-            .collect();
-        let artifacts_now = if artifact_paths.is_empty() {
+        let mut asks = ArtifactAsks::new();
+        for item in snapshot.items() {
+            if let ItemRole::Artifact {
+                path, comparison, ..
+            } = item.role()
+            {
+                asks.entry(path.clone())
+                    .or_default()
+                    .insert(comparison.clone());
+            }
+        }
+        let artifacts_now = if asks.is_empty() {
             BTreeMap::new()
         } else {
             self.ports
                 .artifacts()
-                .read_artifacts(&artifact_paths)
+                .read_artifacts(&asks)
                 .await
                 .map_err(port(ShelfPort::Artifacts))?
         };
@@ -98,10 +101,12 @@ impl<P: ShelfRead> ShelfApp<P> {
                     let now = doc_now(&loaded.shelf, *id);
                     (now.now, now.file)
                 }
-                ItemRole::Artifact { path, .. } => {
+                ItemRole::Artifact {
+                    path, comparison, ..
+                } => {
                     let state = artifacts_now
                         .get(path)
-                        .map_or(ArtifactState::Absent, |reading| reading.state());
+                        .map_or(ArtifactState::Absent, |reading| reading.state(comparison));
                     let file = matches!(state, ArtifactState::Present(_)).then(|| path.clone());
                     (ItemNow::Artifact(state), file)
                 }

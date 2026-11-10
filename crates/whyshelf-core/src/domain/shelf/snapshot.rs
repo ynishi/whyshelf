@@ -30,7 +30,7 @@ use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 
-use super::artifact::{ArtifactState, ContentAddress, Revision};
+use super::artifact::{ArtifactState, Comparison, ContentAddress, Revision};
 use super::build::{DocState, Shelf};
 use super::doc::{DocHash, DocKey};
 use super::ledger::{DecisionVerb, JudgedAt, JudgementId, Ledger};
@@ -59,6 +59,8 @@ pub enum ItemRole {
         link: EntryName,
         /// Its path.
         path: RelPath,
+        /// How its hash was made, so that the hash now is made the same way.
+        comparison: Comparison,
     },
 }
 
@@ -194,6 +196,7 @@ impl Snapshot {
             role: ItemRole::Artifact {
                 link: pin.link().clone(),
                 path: pin.path().clone(),
+                comparison: pin.comparison().clone(),
             },
             seen: SeenHash::Artifact(pin.seen().state()),
             address: pin.seen().address().cloned(),
@@ -393,6 +396,7 @@ mod tests {
             role: ItemRole::Artifact {
                 link: EntryName::new("tests").unwrap(),
                 path: "t.rs".parse().unwrap(),
+                comparison: Comparison::Bytes,
             },
             seen: SeenHash::Artifact(ArtifactState::Absent),
             address: None,

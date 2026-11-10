@@ -29,7 +29,7 @@ use super::ports::{
     ShelfWrite, UnreadableRecord,
 };
 use crate::domain::shelf::artifact::{
-    ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
+    ArtifactAsks, ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
 };
 use std::collections::BTreeMap;
 
@@ -83,6 +83,7 @@ fn link(name: &str, target: &str, propagation: Propagation) -> LinkEntryDecl {
         target: LinkTargetDecl::Book(target.to_owned()),
         cardinality: Cardinality::Many,
         propagation,
+        compare: None,
     }
 }
 
@@ -116,6 +117,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
                     target: LinkTargetDecl::Artifact,
                     cardinality: Cardinality::Many,
                     propagation: Propagation::Depends,
+                    compare: None,
                 },
             ],
         },
@@ -205,6 +207,8 @@ pub(super) struct FakeShelf {
     pub(super) versioned: bool,
     /// How many times the artifacts were read.
     pub(super) artifact_reads: Mutex<usize>,
+    /// What each read of the artifacts asked for, in order.
+    pub(super) asked: Mutex<Vec<ArtifactAsks>>,
     /// How many document files were created.
     pub(super) created: Mutex<usize>,
 }
@@ -238,6 +242,7 @@ impl FakeShelf {
             revision: Mutex::new(None),
             versioned: true,
             artifact_reads: Mutex::new(0),
+            asked: Mutex::new(Vec::new()),
             created: Mutex::new(0),
         }
     }
@@ -270,6 +275,11 @@ impl FakeShelf {
 
     pub(super) fn artifact_read_count(&self) -> usize {
         *lock(&self.artifact_reads)
+    }
+
+    /// What the reads of the artifacts asked for, in order.
+    pub(super) fn asked(&self) -> Vec<ArtifactAsks> {
+        lock(&self.asked).clone()
     }
 
     /// The files of the project, replacing what was there.
@@ -419,19 +429,21 @@ impl ActorSource for FakeShelf {
 impl ArtifactSource for FakeShelf {
     type Error = FakeError;
 
-    async fn read_artifacts(&self, paths: &[RelPath]) -> Result<ArtifactReadings, FakeError> {
+    async fn read_artifacts(&self, asks: &ArtifactAsks) -> Result<ArtifactReadings, FakeError> {
         self.check()?;
         *lock(&self.artifact_reads) += 1;
+        lock(&self.asked).push(asks.clone());
         let files = lock(&self.files);
-        Ok(paths
+        Ok(asks
             .iter()
-            .map(|p| {
+            .map(|(p, comparisons)| {
                 let reading = match files.get(p) {
-                    Some(bytes) => ArtifactReading::Present {
-                        hash: ArtifactHash::of_content(bytes),
-                        address: self.versioned.then(|| fake_address(bytes)),
-                    },
-                    None => ArtifactReading::Absent,
+                    Some(bytes) => ArtifactReading::of_bytes(
+                        bytes,
+                        comparisons,
+                        self.versioned.then(|| fake_address(bytes)),
+                    ),
+                    None => ArtifactReading::absent(),
                 };
                 (p.clone(), reading)
             })
