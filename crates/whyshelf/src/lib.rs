@@ -428,6 +428,69 @@
 //!           "crates/cache/src/lib.rs::tests::a_fresh_entry_is_kept"]
 //! ```
 //!
+//! The space `js-test` holds the tests of the project's JavaScript and TypeScript
+//! source, each by its file and its titles: `<file>::<title>(::<title>)*`, the
+//! file a path of the space `file` ending in `.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
+//! `.jsx`, `.mjs` or `.cjs` (everything before the first `::`), then the titles of
+//! the `describe`s it is in, outermost first, then the title of the `it` or `test`.
+//! A title is any non-empty text, compared with the value of the literal in the
+//! source, case included; in it `\:` stands for `:` and `\\` for `\` (so a title
+//! holding `::` can be written), and any other `\` is no name. A test call is a
+//! call of a `describe` (`describe`, `suite`, `context`, `xcontext`, `xdescribe`,
+//! `fdescribe`, or Playwright's `test.describe` with `only`, `skip`, `fixme`,
+//! `serial` or `parallel`) or of a test (`it`, `test`, `specify`, `xspecify`, `xit`,
+//! `fit`, `xtest`), with
+//! any of the members `only`, `skip`, `todo`, `concurrent` and `sequential` (for a
+//! test also `fails`, `failing`, `fixme`, `fail` and `slow`), `skipIf(…)` or
+//! `runIf(…)` applied, and type arguments (`it<Ctx>(…)`); its title is its first
+//! argument when that is a string literal or a template literal with no `${}`.
+//! Playwright's annotations (`test.skip()`, `test.slow()`, `test.skip(cond, "why")`,
+//! `test.skip(({ browserName }) => …)`, of `test` alone) and settings (`test.use`,
+//! `test.describe.configure`) make no test; `test.skip(name)` or `it.skip(name)`
+//! is a test whose title is not literal. Type arguments longer than 256 tokens
+//! are not stepped over: such a call is not read, and a test not found beside it
+//! cannot be told. The tests of
+//! a `describe` are those in the brace body of its callback (a function or an
+//! arrow), with the blocks of its statements (`if`, `for`, `switch` and its cases,
+//! a label, a `namespace`), never the body of a function. Twin `describe`s or tests
+//! of a title are all searched, and twin tests are one. Finding them runs no
+//! program: the file is read (at most 16 MiB) and lexed by whyshelf's own lexer
+//! (comments, strings, templates with `${}`, regular expressions told from division
+//! by the token before, JSX in the files that may hold it, brackets nested at most
+//! 128 deep), and indexed once however many of its tests are named; no expression
+//! is parsed. What is compared is the test call alone: its tokens from the callee
+//! to the `)` that closes it, comments left out, one space between tokens (a line
+//! end where JavaScript ends a statement there whatever follows: after `return`,
+//! `throw`, `break`, `continue`, `yield`, `async`, and before `++` and `--`),
+//! strings and templates kept exactly, and the text of a JSX element with its
+//! white space at both ends left out and its inner white space kept. So an edit
+//! of white space or comments, or of another test, changes nothing, but for the
+//! white space inside a JSX text, which is compared (re-indenting a text of several
+//! lines makes the call stale); an edit of the call's body, title or modifiers makes the
+//! approvals that name it stale, and a test renamed or removed breaks them. Nothing
+//! outside the call counts: an edit of a hook (`beforeEach`), a helper, an
+//! `import` or a fixture leaves it fresh. A file that cannot be read, is too large
+//! or does not lex cannot be told. Titles that are not literal (a variable, a
+//! template with `${}`, `describe.each`, `it.each`, `test.each`) and tests made by
+//! helpers cannot be read: a test not found where a level on the way (the top of
+//! the file or the body of a `describe` named) has such a title, or a call of
+//! another function that starts a statement there (`cases.forEach(…)`,
+//! `sharedBehaviour()`; not a hook, `vi.…`, `jest.…`, `expect.…`, and not a call
+//! inside a test's body), cannot be told, and an approval of it stays fresh with a
+//! notice. The text is made,
+//! not stored, so `diff` has nothing to set beside it. The rules and the limits are
+//! on the page of `whyshelf_infra::shelf::artifact::js_test`. A link to such
+//! tests, and a name in it:
+//!
+//! ```text
+//!   [[book.link]]
+//!   name = "tests"
+//!   target = "artifact"
+//!   preset = "js-test"       # space = "js-test", compare = "bytes", means = "depends"
+//!
+//!   tests: ["tests/cart.test.ts::Cart::adds an item"]
+//! ```
+//!
 //! A text that is no name of the link's space makes the document invalid, with a
 //! problem that names the link, the text and why. For each name, its adapter answers
 //! one of four: the thing is there (with its hash), not there, it cannot tell now
@@ -529,7 +592,9 @@
 //! `space = "file"`, `compare = "presence"`, `means = "depends"`; the adapter of Rust
 //! items offers `rustdoc`: `space = "rust-item"`, `compare = "presence"`,
 //! `means = "depends"`; the adapter of Rust tests offers `test`:
-//! `space = "rust-test"`, `compare = "bytes"`, `means = "depends"`; the page of
+//! `space = "rust-test"`, `compare = "bytes"`, `means = "depends"`; the adapter of
+//! JavaScript and TypeScript tests offers `js-test`: `space = "js-test"`,
+//! `compare = "bytes"`, `means = "depends"`; the page of
 //! `whyshelf_infra::shelf::artifact` lists them).
 //!
 //! `code` suits a decision's link to the code that carries it out. Under `file`
@@ -649,7 +714,7 @@
 //! 16 MiB, and stops at 20,000 files or 512 MiB; a name pins are read as in two
 //! spaces is listed with no candidate, as `judge moved` refuses it. What could not be
 //! looked at is a `note` of the name. A space that has no way to suggest
-//! (`rust-item` and `rust-test`, for now) is listed in `cannot_suggest`, and its names with no
+//! (`rust-item`, `rust-test` and `js-test`, for now) is listed in `cannot_suggest`, and its names with no
 //! candidate.
 //!
 //! ## What an approval saw

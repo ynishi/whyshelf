@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "ab19662b1149bbf539dd39e1d58dd4274e5df949",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8287abfecbf9d7ebbf9831b2fb17baf1fd212d5ee13ad72876e6a8f2445ce5ca",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794417774792,
+  "expires": null,
+  "frame": [
+    {
+      "address": "43f06e1c521039f504c59418b68322685a80e246",
+      "hash": "sha256:f2016633a50701c0c919bad83e485e59222aeda46c56917a8123b5e4ae6c7c59",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "68"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb78-d2d4-770d-9d90-5aa3f5577115"
+    }
+  ],
+  "id": "01a1cba2-5106-712c-8c15-0ab20228e223",
+  "kind": "decision",
+  "reason": "js-test registers beside the other spaces and cannot suggest moves; REQ-27 is grounded on F-38 and DEC-60 restated (#90); checked by a blind review",
+  "revision": "b9582a9c2292e3acb00c08ed97ba4fae279839fa",
+  "seen": "sha256:ddf122e726d92fe58de416e537b617b6f6d31883a058b5710c98fdb240d68f19",
+  "seen_address": "8df2ae5c242e9267fc5912e849d1ee7252842fce",
+  "subject": "01a1cb78-d506-7713-a7ec-8a792c57d276",
+  "v": 1,
+  "verb": "approve"
+}

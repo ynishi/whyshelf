@@ -17,7 +17,9 @@
 //!                                                    for `rust-item`: the item in
 //!                                                    the docs `cargo doc` wrote;
 //!                                                    for `rust-test`: the test
-//!                                                    function's tokens in its file)
+//!                                                    function's tokens in its file;
+//!                                                    for `js-test`: the test call's
+//!                                                    tokens in its file)
 //!   an address of an approval          --docs / artifact-->  content read back, by the
 //!                                                    adapter that named it
 //!   Git: HEAD                          --git---->  Revision
@@ -89,6 +91,7 @@ use whyshelf_core::domain::shelf::artifact::ContentAddress;
 
 use artifact::ArtifactSpaces;
 use artifact::file::FileSpace;
+use artifact::js_test::JsTestSpace;
 use artifact::rust_item::RustItemSpace;
 use artifact::rust_test::RustTestSpace;
 use books::BooksToml;
@@ -140,6 +143,7 @@ impl Project {
                 FileSpace::new(root.clone()),
                 RustItemSpace::new(root.clone(), cargo_target_dir),
                 RustTestSpace::new(root.clone()),
+                JsTestSpace::new(root.clone()),
             ),
             files: FileSpace::new(root.clone()),
             git: Git::new(root.clone()),

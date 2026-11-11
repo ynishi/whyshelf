@@ -1,0 +1,11 @@
+---
+id: "01a1cb78-d2d4-770d-9d90-5aa3f5577115"
+key: "DEC-68"
+issues: ["#90"]
+rejected: ["Run the test runner to list the tests: it would run a program the project chooses", "Parse the file with a full TypeScript parser: a recursive parser can be made to overflow the stack, and a new dependency would be large", "Drop line ends from the compared text: an edit that automatic semicolon insertion reads as a new statement would stay fresh"]
+related: ["DEC-64", "DEC-60"]
+rustdoc: ["whyshelf_infra::shelf::artifact::js_test::JsTestSpace", "whyshelf_infra::shelf::artifact::js_test::JS_TEST_PRESET", "whyshelf_infra::shelf::artifact::js_test::DESCRIBES", "whyshelf_infra::shelf::artifact::js_test::TESTS", "whyshelf_infra::shelf::artifact::js_test::HARMLESS", "whyshelf_infra::shelf::artifact::js_test::MAX_DEPTH"]
+serves: ["REQ-27", "REQ-1", "REQ-10"]
+title: "A space js-test names tests by their titles, found by a lexer of its own and a scan of calls that runs no program"
+---
+A name of the space js-test is <file>::<title>(::<title>)*: a path of the space file ending in a JavaScript or TypeScript extension, then the describe titles and the test's, where a backslash escapes a colon or itself. Its adapter runs no program: it reads the file by the rules of the space file within a byte bound, off the async threads, and lexes it iteratively with brackets and substitutions bounded in depth, telling a regular expression from division by the token before, a TypeScript non-null from a negation, and in JSX files tags and text from code. It indexes the file once: every level, the top and each describe body with a literal title, is scanned once for describe and test calls, Playwright's test.describe and the usual aliases and modifiers among them, stepping over type arguments, and their children are kept by title, so many names cost time in proportion to the file. Present gives the test call's own tokens, comments dropped, a line end kept only where automatic semicolon insertion makes it mean something; absent, when the file or the test is not there; cannot tell, with a bounded why, when the file cannot be read or lexed or something on the way may make the test, a title that is not literal, an each, or a helper called where tests are made. The built-in preset js-test compares bytes and depends; js-test cannot suggest moves.

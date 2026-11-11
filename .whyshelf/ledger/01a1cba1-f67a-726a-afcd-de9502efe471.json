@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794417751649,
+  "expires": null,
+  "frame": [],
+  "id": "01a1cba1-f67a-726a-afcd-de9502efe471",
+  "kind": "decision",
+  "reason": "A space js-test names TypeScript and JavaScript tests by their titles, found by a lexer of its own and one index per file, running no program (#90); checked by two rounds of blind review with real and hostile files on the binary, every finding fixed",
+  "revision": "b9582a9c2292e3acb00c08ed97ba4fae279839fa",
+  "seen": "sha256:0fd442dc64811e9ed27506c493db7b94bc80c0b3f853bbe9c473f68d8085571e",
+  "seen_address": "8dd77ca7d69ef62fb6491e186143c5d98889ebbb",
+  "subject": "01a1cb78-d08f-75ac-b5ae-e22459f6eb53",
+  "v": 1,
+  "verb": "approve"
+}

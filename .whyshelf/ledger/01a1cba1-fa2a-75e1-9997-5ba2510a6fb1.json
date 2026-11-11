@@ -1,0 +1,113 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::moves",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::MoveSource",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::GoneNames",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::PinnedNames",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794417752560,
+  "expires": null,
+  "frame": [
+    {
+      "address": "80b7ca88aa572685d4aa25aa6a50260a271f8243",
+      "hash": "sha256:36a8f23657089860a548249154b9d58c9d02474608ce556359475db853a351c9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    },
+    {
+      "address": "257107f9c4cfa8d4e68128f4526c814bad5edcf8",
+      "hash": "sha256:3dee90053e30522f4e521b929944c3e772a08261b80be3834f10916f64cae9b9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1137-7513-ab9a-0c7fb1ba82da"
+    },
+    {
+      "address": "8174854ca590a4ec6575d66b26b676d25ac35cfd",
+      "hash": "sha256:ff092ee86db4f8f3df11e4875803a3fc3820f18955fbf4a9580a5e7d11aac95c",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "23"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c912-1691-7698-adfe-26b7440a52ad"
+    }
+  ],
+  "id": "01a1cba1-fa2a-75e1-9997-5ba2510a6fb1",
+  "kind": "decision",
+  "reason": "js-test registers beside the other spaces and cannot suggest moves; REQ-27 is grounded on F-38 and DEC-60 restated (#90); checked by a blind review",
+  "revision": "b9582a9c2292e3acb00c08ed97ba4fae279839fa",
+  "seen": "sha256:4762795853e498b35b00f43437cdd6063995a56fcc534ca7db00085b49302409",
+  "seen_address": "a1aeaeeaaf77be11fa434a175b0ec90e0a0a89e6",
+  "subject": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6",
+  "v": 1,
+  "verb": "approve"
+}
