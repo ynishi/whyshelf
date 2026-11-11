@@ -142,6 +142,11 @@ and this project adheres to
   no gap of that cover, `check` lists it, and an exemption that is no longer
   needed, or is held twice, is told until it is withdrawn. An exemption that
   would be unneeded at once is refused (#78).
+- `whyshelf init --template minimal | sample | qa-first` chooses a built-in
+  template; `--sample` stays as a shorthand for `--template sample`.
+  `qa-first` is the sample's four books with two rules loosened and marked, so
+  verifications can be written before the decisions they check, and the manual
+  says how to tighten them at release (#82).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
