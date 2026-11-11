@@ -163,6 +163,10 @@ and this project adheres to
 
 ### Fixed
 
+- A front matter that holds several values of kinds it does not hold tells
+  every one, each with its key and kind, not only the first; and a whole
+  number beyond 64 bits is told as too large or too small, not as a front
+  matter that is not valid YAML (#21).
 - `init` and `new` follow a link on a path only while it stays inside the
   root: a book's directory, or another parent, that links out of the root is
   in the way, where a document could be written outside the project (#93).
