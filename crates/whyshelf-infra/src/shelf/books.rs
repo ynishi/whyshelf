@@ -68,23 +68,15 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+use super::create;
 use serde::Deserialize;
-use whyshelf_core::app::shelf::BookSchemaSource;
+use whyshelf_core::app::shelf::{BookSchemaSource, Creation, DeclarationText, DeclarationWrite};
+use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::schema::{
     ARTIFACT_TARGET, BookSchemaDecl, Cardinality, CoverDecl, DefaultsDecl, FieldEntryDecl,
     FieldPresence, FieldTypeDecl, KeyPatternDecl, LinkTargetDecl, PresetDecl, PresetValues,
     Propagation, ShelfDecl, WrittenBookDecl, WrittenLinkDecl,
 };
-
-/// A declaration of a Finding -> Spec -> Design chain, as a project could write it.
-///
-/// whyshelf has no kind of document of its own; this sample is data, not a mode of
-/// the program. Its test checks that it reads and that
-/// [`Schema::validate`](whyshelf_core::domain::shelf::schema::Schema::validate)
-/// accepts it, so the manual that shows it cannot drift from what the program reads.
-///
-#[doc = concat!("```toml\n", include_str!("books.sample.toml"), "```")]
-pub const SAMPLE: &str = include_str!("books.sample.toml");
 
 /// Why the declaration of the books could not be read.
 #[derive(Debug, thiserror::Error)]
@@ -108,24 +100,41 @@ pub enum BooksError {
     /// The text is not TOML of the shape above. The parser's message says where.
     #[error("{} is not a declaration of books", .path.display())]
     Shape {
-        /// The file.
+        /// The file (for a text not read from it, the file it would be written to).
         path: PathBuf,
         /// What the parser said.
         #[source]
         source: toml::de::Error,
     },
+    /// A step of writing the file failed: what it was, with the path and what
+    /// became of the file it made.
+    #[error("cannot {step}")]
+    Write {
+        /// The step, with its path.
+        step: String,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
 }
 
-/// The declaration of the books, read from a TOML file.
+/// The declaration of the books, read from a TOML file, and written once, where none
+/// is, when a project is started ([`DeclarationWrite`]).
 #[derive(Debug, Clone)]
 pub struct BooksToml {
+    root: PathBuf,
+    file: RelPath,
     path: PathBuf,
 }
 
 impl BooksToml {
-    /// The declaration in the file at `path`.
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
+    /// The declaration in the file `file` of the project at `root`.
+    pub fn new(root: &Path, file: RelPath) -> Self {
+        Self {
+            root: root.to_path_buf(),
+            path: root.join(file.as_str()),
+            file,
+        }
     }
 
     /// The file.
@@ -134,8 +143,44 @@ impl BooksToml {
     }
 }
 
+/// The file is created only where nothing is (`create_new`), with its directory, and
+/// the text is written as it is, comments and all; a write that fails removes the
+/// file it made, and only it.
+impl DeclarationWrite for BooksToml {
+    type Error = BooksError;
+
+    fn file(&self) -> RelPath {
+        self.file.clone()
+    }
+
+    async fn in_the_way(&self) -> Result<Option<RelPath>, BooksError> {
+        create::in_the_way(&self.root, &self.file)
+            .await
+            .map_err(|source| BooksError::Io {
+                path: self.path.clone(),
+                source,
+            })
+    }
+
+    async fn create(&self, text: &DeclarationText) -> Result<Creation, BooksError> {
+        create::create_new(&self.path, text.as_str().as_bytes())
+            .await
+            .map_err(|failed| BooksError::Write {
+                step: failed.step,
+                source: failed.source,
+            })
+    }
+}
+
 impl BookSchemaSource for BooksToml {
     type Error = BooksError;
+
+    fn declarations_in(&self, text: &DeclarationText) -> Result<ShelfDecl, BooksError> {
+        parse(text.as_str()).map_err(|source| BooksError::Shape {
+            path: self.path.clone(),
+            source,
+        })
+    }
 
     async fn declarations(&self) -> Result<ShelfDecl, BooksError> {
         let text = match tokio::fs::read_to_string(&self.path).await {
@@ -152,10 +197,7 @@ impl BookSchemaSource for BooksToml {
                 });
             }
         };
-        parse(&text).map_err(|source| BooksError::Shape {
-            path: self.path.clone(),
-            source,
-        })
+        self.declarations_in(&DeclarationText::new(text))
     }
 }
 
@@ -739,24 +781,67 @@ means = "informs"
     }
 
     #[test]
-    fn the_sample_reads_and_is_a_sound_declaration() {
-        // `super::SAMPLE` is the public sample; this module has a small one of its own.
-        let decls = parse(super::SAMPLE).unwrap();
+    fn the_sample_of_init_reads_and_is_a_sound_declaration() {
+        // `init::SAMPLE` is the public sample, the one `whyshelf init --sample`
+        // writes; this module has a small one of its own.
+        let decls = parse(crate::shelf::init::SAMPLE).unwrap();
         let names: Vec<&str> = decls.books.iter().map(|d| d.name.as_str()).collect();
-        assert_eq!(names, ["finding", "spec", "design"]);
+        assert_eq!(
+            names,
+            ["finding", "requirement", "decision", "verification"]
+        );
+        assert_eq!(decls.defaults.artifact.as_deref(), Some("file"));
         let schema = validate(decls).unwrap();
-        assert_eq!(schema.books().len(), 3);
-        let design = schema.book("design").unwrap();
-        assert!(design.artifact_links().contains_key("tests"));
+        assert_eq!(schema.books().len(), 4);
+        let verification = schema.book("verification").unwrap();
+        let tests = verification.artifact_links().get("tests").unwrap();
+        assert_eq!(tests.space.as_str(), "file");
+        assert!(
+            verification
+                .preset_of("tests")
+                .is_some_and(|p| p.is_default())
+        );
     }
 
     #[tokio::test]
     async fn a_missing_file_is_an_error_and_not_an_empty_shelf() {
         let dir = tempfile::tempdir().unwrap();
-        let source = BooksToml::new(dir.path().join("books.toml"));
+        let source = BooksToml::new(dir.path(), "books.toml".parse().unwrap());
         assert!(matches!(
             source.declarations().await,
             Err(BooksError::Missing { .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn a_declaration_is_written_as_it_is_once_and_never_over_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let books = BooksToml::new(dir.path(), ".whyshelf/books.toml".parse().unwrap());
+        assert_eq!(books.file().as_str(), ".whyshelf/books.toml");
+        assert_eq!(books.in_the_way().await.unwrap(), None);
+        let text = DeclarationText::new("# a comment\n[[book]]\nname='a'\ndir='a'\nkey='slug'\n");
+        assert_eq!(books.create(&text).await.unwrap(), Creation::Created);
+        assert_eq!(books.in_the_way().await.unwrap(), Some(books.file()));
+        let written = tokio::fs::read_to_string(books.path()).await.unwrap();
+        assert_eq!(written, text.as_str());
+        assert_eq!(books.declarations().await.unwrap().books[0].name, "a");
+
+        let other = DeclarationText::new("");
+        assert_eq!(books.create(&other).await.unwrap(), Creation::AlreadyThere);
+        let kept = tokio::fs::read_to_string(books.path()).await.unwrap();
+        assert_eq!(kept, text.as_str());
+    }
+
+    #[test]
+    fn a_text_is_read_by_the_reader_of_the_file() {
+        let books = BooksToml::new(Path::new("/p"), "books.toml".parse().unwrap());
+        assert!(matches!(
+            books.declarations_in(&DeclarationText::new("[[book]]\nname=1\n")),
+            Err(BooksError::Shape { .. })
+        ));
+        let decl = books
+            .declarations_in(&DeclarationText::new(crate::shelf::init::MINIMAL))
+            .unwrap();
+        assert_eq!(decl.books.len(), 1);
     }
 }

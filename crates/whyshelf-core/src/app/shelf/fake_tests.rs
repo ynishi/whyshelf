@@ -26,8 +26,9 @@ use crate::domain::shelf::schema::{
 
 use super::ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DocReplace, DocSource, DocWrite, FileForm, Form, IdSource, LedgerAppend, LedgerContents,
-    LedgerRead, MoveSource, Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
+    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileForm, Form, IdSource,
+    LedgerAppend, LedgerContents, LedgerRead, MoveSource, Replacement, RevisionSource, ShelfRead,
+    ShelfWrite, UnreadableRecord,
 };
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{
@@ -251,6 +252,17 @@ pub(super) struct FakeShelf {
     pub(super) move_answers: Mutex<BTreeMap<Space, SpaceSuggestions>>,
     /// What each asking for suggestions asked: the space and its gone names, in order.
     pub(super) suggest_asked: Mutex<Vec<(Space, Vec<ArtifactName>)>>,
+    /// The texts the fake reads as a declaration, with what each declares; any other
+    /// text is no declaration.
+    pub(super) declaration_texts: Mutex<BTreeMap<String, ShelfDecl>>,
+    /// The text of the file of the declaration, when one is there.
+    pub(super) declaration_file: Mutex<Option<String>>,
+    /// How many documents' files are created before the next one fails (none:
+    /// none fails).
+    pub(super) creates_before_failing: Mutex<Option<usize>>,
+    /// The paths where a file comes to be after any look at them and before the
+    /// document's file is created.
+    pub(super) appear_before_create: Mutex<BTreeSet<RelPath>>,
 }
 
 /// The space of the files.
@@ -324,7 +336,21 @@ impl FakeShelf {
             edited_before_replace: Mutex::new(BTreeSet::new()),
             move_answers: Mutex::new(BTreeMap::new()),
             suggest_asked: Mutex::new(Vec::new()),
+            declaration_texts: Mutex::new(BTreeMap::new()),
+            declaration_file: Mutex::new(None),
+            creates_before_failing: Mutex::new(None),
+            appear_before_create: Mutex::new(BTreeSet::new()),
         }
+    }
+
+    /// From now on the fake reads `text` as a declaration of `decl`.
+    pub(super) fn read_text_as(&self, text: &str, decl: ShelfDecl) {
+        lock(&self.declaration_texts).insert(text.to_owned(), decl);
+    }
+
+    /// The text of the file of the declaration, when one is there.
+    pub(super) fn declaration_file(&self) -> Option<String> {
+        lock(&self.declaration_file).clone()
     }
 
     /// From now on the source of suggested moves answers `answer` for `space`.
@@ -458,6 +484,40 @@ impl BookSchemaSource for FakeShelf {
             Some(written) => written,
             None => ShelfDecl::of_books(lock(&self.decls).clone()),
         })
+    }
+
+    fn declarations_in(&self, text: &DeclarationText) -> Result<ShelfDecl, FakeError> {
+        self.check()?;
+        lock(&self.declaration_texts)
+            .get(text.as_str())
+            .cloned()
+            .ok_or(FakeError("not a declaration"))
+    }
+}
+
+impl DeclarationWrite for FakeShelf {
+    type Error = FakeError;
+
+    fn file(&self) -> RelPath {
+        path(".whyshelf/books.toml")
+    }
+
+    async fn in_the_way(&self) -> Result<Option<RelPath>, FakeError> {
+        self.check()?;
+        Ok(lock(&self.declaration_file).is_some().then(|| self.file()))
+    }
+
+    /// Keeps the text, and what it declares as the declaration the fake's
+    /// [`BookSchemaSource`] gives from then on.
+    async fn create(&self, text: &DeclarationText) -> Result<Creation, FakeError> {
+        self.check()?;
+        let mut file = lock(&self.declaration_file);
+        if file.is_some() {
+            return Ok(Creation::AlreadyThere);
+        }
+        *file = Some(text.as_str().to_owned());
+        *lock(&self.written) = lock(&self.declaration_texts).get(text.as_str()).cloned();
+        Ok(Creation::Created)
     }
 }
 
@@ -611,6 +671,24 @@ impl IdSource for FakeShelf {
 impl DocWrite for FakeShelf {
     type Error = FakeError;
 
+    /// A file that is no document at a parent of the path (a parent that is no
+    /// directory), else a reading or such a file at the path.
+    async fn in_the_way(&self, at: &RelPath) -> Result<Option<RelPath>, FakeError> {
+        self.check()?;
+        let files = lock(&self.files);
+        let segments: Vec<&str> = at.as_str().split('/').collect();
+        for end in 1..segments.len() {
+            let parent = path(&segments[..end].join("/"));
+            if files.contains_key(&parent) {
+                return Ok(Some(parent));
+            }
+        }
+        let read = lock(&self.readings).iter().any(|r| match r {
+            DocReading::Parsed { origin, .. } | DocReading::Unparsed { origin, .. } => origin == at,
+        });
+        Ok((read || files.contains_key(at)).then(|| at.clone()))
+    }
+
     /// Keeps the file as the reading the fake's [`DocSource`] gives from then on.
     async fn create(
         &self,
@@ -619,6 +697,17 @@ impl DocWrite for FakeShelf {
         body: &str,
     ) -> Result<Creation, FakeError> {
         self.check()?;
+        {
+            let mut left = lock(&self.creates_before_failing);
+            match *left {
+                Some(0) => return Err(FakeError("the disk is full")),
+                Some(n) => *left = Some(n - 1),
+                None => {}
+            }
+        }
+        if lock(&self.appear_before_create).contains(at) {
+            return Ok(Creation::AlreadyThere);
+        }
         let mut readings = lock(&self.readings);
         let there = readings.iter().any(|r| match r {
             DocReading::Parsed { origin, .. } | DocReading::Unparsed { origin, .. } => origin == at,
@@ -818,6 +907,11 @@ impl ShelfWrite for FakeShelf {
     type Revisions = Self;
     type DocWriter = Self;
     type DocReplacer = Self;
+    type DeclarationWriter = Self;
+
+    fn declaration_writer(&self) -> &Self {
+        self
+    }
 
     fn revisions(&self) -> &Self {
         self

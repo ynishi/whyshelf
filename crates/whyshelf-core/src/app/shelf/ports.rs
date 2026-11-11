@@ -2,22 +2,29 @@
 //!
 //! Each port is a trait declared here, by its consumer, and implemented by the
 //! `whyshelf-infra` crate (and by an in-memory fake in the tests). They keep to
-//! these rules: a method returns
+//! these rules: a method that does I/O returns
 //! `impl Future<Output = Result<_, Self::Error>> + Send`, so this crate names no
-//! runtime; there is no `dyn`; every port has a typed `type Error`, which reaches the
-//! caller as [`ShelfError::Port`] with the cause kept; and what crosses the
-//! boundary is a value of the domain or of this layer, never a file, a JSON text or
-//! a TOML table.
+//! runtime; a method that does none is a plain function, and returns a `Result` only
+//! when it can fail ([`ArtifactSource::spaces`] and [`ArtifactSource::presets`]
+//! answer from what the adapter is; [`BookSchemaSource::declarations_in`] parses a
+//! text in memory; [`DeclarationWrite::file`] names a file it was made with), so a
+//! caller is not made to wait on what does not wait; there is no `dyn`; every port
+//! has a typed `type Error`, which reaches the caller as [`ShelfError::Port`] with
+//! the cause kept; and what crosses the boundary is a value of the domain or of this
+//! layer, never a file, a JSON text or a TOML table, with one exception: a text or
+//! bytes in an adapter's own format that the core carries from one port to another
+//! and never reads ([`DeclarationText`], the `read` and `text` of a [`FileForm`]).
 //!
 //! | port | gives the use cases |
 //! |---|---|
-//! | [`BookSchemaSource`] | the declaration of the project, as an adapter read it: the books, the presets and the defaults |
+//! | [`BookSchemaSource`] | the declaration of the project, as an adapter read it: the books, the presets and the defaults; and the declaration a text of its format holds, read by the same reader |
 //! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books, the bytes and the [`ContentAddress`] of a document's file now, and how each file stands to the one form documents are written in ([`FileForm`]) |
 //! | [`LedgerRead`] | the records of the ledger, and the files of it that could not be read as one |
 //! | [`LedgerAppend`] | one record added, never in place of another |
 //! | [`Clock`] | now, as a [`JudgedAt`] |
 //! | [`IdSource`] | the identity of a new record, and of a new document |
-//! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there |
+//! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there; and what is in the way of one at a path |
+//! | [`DeclarationWrite`] | the file of the declaration, from a text in its format, never in place of a file that is there; and what is in the way of it |
 //! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten) |
 //! | [`ActorSource`] | who is acting |
 //! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
@@ -34,7 +41,8 @@
 //!        |      what `check`, `status`, `get`, `trace`, `stale`, `get --approved`,
 //!        |      `diff`, `moves` and `fmt --check` are generic over
 //!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite  DocReplace
-//!               what `judge`, `new_doc` and `fmt` are generic over
+//!               DeclarationWrite
+//!               what `judge`, `new_doc`, `init` and `fmt` are generic over
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -89,6 +97,8 @@ pub enum ShelfPort {
     DocReplace,
     /// [`MoveSource`].
     Moves,
+    /// [`DeclarationWrite`].
+    DeclarationWrite,
 }
 
 impl fmt::Display for ShelfPort {
@@ -107,6 +117,7 @@ impl fmt::Display for ShelfPort {
             Self::DocWrite => "document write",
             Self::DocReplace => "document replace",
             Self::Moves => "move suggestions",
+            Self::DeclarationWrite => "declaration write",
         })
     }
 }
@@ -122,6 +133,34 @@ pub trait BookSchemaSource: Send + Sync {
     /// A project with no declaration is an error, not an empty one: it is far more
     /// likely a wrong place than a shelf with no book.
     fn declarations(&self) -> impl Future<Output = Result<ShelfDecl, Self::Error>> + Send;
+
+    /// The declaration `text` holds, read by the reader
+    /// [`declarations`](Self::declarations) reads the project's file with, and
+    /// nothing checked: what `init` holds a declaration against before it writes
+    /// it. A text that is not of the adapter's format is an error.
+    fn declarations_in(&self, text: &DeclarationText) -> Result<ShelfDecl, Self::Error>;
+}
+
+/// The text of a declaration of books, in the format of the adapter that reads and
+/// writes the project's declaration.
+///
+/// The use cases carry it and never read it: what it declares is
+/// [`BookSchemaSource::declarations_in`]'s answer, and it is written as it is, by
+/// [`DeclarationWrite::create`], so that what is written in it beside the
+/// declaration (comments) stays for a person to read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclarationText(String);
+
+impl DeclarationText {
+    /// A text, as written.
+    pub fn new(text: impl Into<String>) -> Self {
+        Self(text.into())
+    }
+
+    /// The text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 /// The documents of a project, read.
@@ -309,18 +348,56 @@ pub trait DocWrite: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
+    /// What is in the way of a new file at `path` (relative to the project root)
+    /// now, if anything, by its path: a parent inside the root that is there and is
+    /// no directory (a file, a link to nothing, a link to what is no directory),
+    /// else anything at the path itself (a file of any content, a directory, a
+    /// link, even one that leads nowhere). A parent that is a link to a directory
+    /// is none: [`create`](Self::create) makes the file through it. What `create`
+    /// would find in its way, asked before it is called.
+    fn in_the_way(
+        &self,
+        path: &RelPath,
+    ) -> impl Future<Output = Result<Option<RelPath>, Self::Error>> + Send;
+
     /// Write the file at `path` (relative to the project root) with this front matter
     /// and body. The entries are values; their text (YAML) is the adapter's, and must
     /// read back through [`DocSource`] into the same entries.
     ///
     /// Create-only: a file already at the path is never replaced, and is
     /// [`Creation::AlreadyThere`], not an error. Missing directories are made. Writing
-    /// over a file is another port, [`DocReplace`], which only `fmt` calls.
+    /// over a file is another port, [`DocReplace`], which only `fmt` calls. A write
+    /// that fails after the file was made removes that file (and no other), so a
+    /// failure leaves no part of a document behind.
     fn create(
         &self,
         path: &RelPath,
         entries: &BTreeMap<String, RawValue>,
         body: &str,
+    ) -> impl Future<Output = Result<Creation, Self::Error>> + Send;
+}
+
+/// Writing the file of a project's declaration, the file [`BookSchemaSource`] reads.
+pub trait DeclarationWrite: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// The file, relative to the project root.
+    fn file(&self) -> RelPath;
+
+    /// What is in the way of the file now, if anything, by the rule of
+    /// [`DocWrite::in_the_way`]: a parent that is no directory, or anything at the
+    /// file itself.
+    fn in_the_way(&self) -> impl Future<Output = Result<Option<RelPath>, Self::Error>> + Send;
+
+    /// Write the file with `text`, as it is. Missing directories are made.
+    ///
+    /// Create-only, as [`DocWrite::create`]: something already at the file is never
+    /// replaced, and is [`Creation::AlreadyThere`], not an error. A write that fails
+    /// after the file was made removes that file, as `DocWrite::create` does.
+    fn create(
+        &self,
+        text: &DeclarationText,
     ) -> impl Future<Output = Result<Creation, Self::Error>> + Send;
 }
 
@@ -517,8 +594,8 @@ pub trait ShelfRead: Send + Sync {
     fn moves(&self) -> &Self::Moves;
 }
 
-/// The ports that `judge`, `new_doc` and `fmt` are generic over: everything a read has, and
-/// the things only a write needs.
+/// The ports that `judge`, `new_doc`, `init` and `fmt` are generic over: everything a
+/// read has, and the things only a write needs.
 pub trait ShelfWrite: ShelfRead {
     /// The ledger, to append to.
     type Append: LedgerAppend;
@@ -532,6 +609,8 @@ pub trait ShelfWrite: ShelfRead {
     type DocWriter: DocWrite;
     /// The files of documents that are there, written over in the form.
     type DocReplacer: DocReplace;
+    /// The file of the declaration, written when a project is started.
+    type DeclarationWriter: DeclarationWrite;
 
     /// The ledger, to write.
     fn append(&self) -> &Self::Append;
@@ -539,6 +618,8 @@ pub trait ShelfWrite: ShelfRead {
     fn doc_writer(&self) -> &Self::DocWriter;
     /// The writer over documents' files that are there.
     fn doc_replacer(&self) -> &Self::DocReplacer;
+    /// The writer of the declaration's file.
+    fn declaration_writer(&self) -> &Self::DeclarationWriter;
     /// The source of identities.
     fn ids(&self) -> &Self::Ids;
     /// The acting person.

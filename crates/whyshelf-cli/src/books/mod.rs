@@ -21,10 +21,12 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
-//! | 3 | the run failed (a file could not be read or written) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
+//! | 3 | the run failed (a file could not be read or written; for `init`, part way too, with the files written listed in `problems`; or a template `init` ships cannot be read) |
 //!
-//! `new` is the one command that writes a new document. Its values arrive as text
+//! `init` writes the declaration and the documents of a template of
+//! `whyshelf_infra::shelf::init`, each where nothing is, or nothing at all.
+//! `new` is the one command that writes a new document of a person's. Its values arrive as text
 //! and are given to the use case as text; the use case reads them by the book's
 //! declaration, and the domain judges the document before anything is written.
 //! `fmt` is the one command that writes over a document's file, in the form `new`
@@ -63,6 +65,7 @@ use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::ledger::JudgementId;
 use whyshelf_core::domain::shelf::schema::BookName;
 use whyshelf_infra::shelf::Project;
+use whyshelf_infra::shelf::init;
 use whyshelf_infra::shelf::system::parse_time;
 
 pub use args::BooksCommand;
@@ -125,13 +128,43 @@ pub fn refuse_arguments(error: &clap::Error) -> ExitCode {
 }
 
 /// Run a command on the project at `root`.
-pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
+///
+/// `root` is the `--root` given, if one was (the current directory otherwise): the
+/// `next` commands of `init` carry it as it was typed.
+pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
+    let typed_root = root.clone();
     let project = Project::new(
-        root,
+        root.unwrap_or_else(|| PathBuf::from(".")),
         std::env::var(ACTOR_VAR).ok(),
         std::env::var_os(CARGO_TARGET_DIR_VAR).map(PathBuf::from),
     );
     let result = match command {
+        BooksCommand::Init { sample } => {
+            let (request, book) = if sample {
+                match init::sample() {
+                    Ok(request) => (request, None),
+                    Err(error) => return failed_run(&error),
+                }
+            } else {
+                (init::minimal(), Some(init::MINIMAL_BOOK))
+            };
+            let root = match &typed_root {
+                None => output::NextRoot::Current,
+                Some(root) => root
+                    .to_str()
+                    .map_or(output::NextRoot::NotText, output::NextRoot::Given),
+            };
+            ShelfApp::new(project).init(request).await.map(|done| {
+                let exit = print(&output::initialized(&done, book, root));
+                if let (output::NextRoot::NotText, Some(typed)) = (root, &typed_root) {
+                    eprintln!(
+                        "warning: no next command is given: the root {} is no UTF-8 text, so a command cannot be written with it",
+                        typed.display()
+                    );
+                }
+                exit
+            })
+        }
         BooksCommand::Schema => Ok(print(&output::schemas())),
         BooksCommand::Check => ShelfApp::new(project).books_check().await.map(|check| {
             print(&output::books_check(&check));
@@ -576,6 +609,21 @@ fn print<T: serde::Serialize>(value: &T) -> Exit {
             Exit::Failed
         }
     }
+}
+
+/// The end of a command when the program cannot make what it runs on (a template
+/// `init` ships that is no request): a failure of this program, told as every
+/// failed run is.
+fn failed_run(error: &dyn std::error::Error) -> ExitCode {
+    let mut chain = vec![error.to_string()];
+    let mut source = error.source();
+    while let Some(cause) = source {
+        chain.push(cause.to_string());
+        source = cause.source();
+    }
+    eprintln!("error: {}", chain.join(": "));
+    print(&output::failure(chain));
+    ExitCode::from(Exit::Failed as u8)
 }
 
 /// Print an error as JSON on stdout and its chain on stderr, and give its exit.

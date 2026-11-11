@@ -4,6 +4,8 @@ Books of documents whose kinds a project declares, linked to the files they stan
 
 ```sh
 cargo install whyshelf-cli   # installs the `whyshelf` command
+whyshelf init --sample       # in a project: four books and a chain of sample documents
+whyshelf check
 ```
 
 ## Documentation

@@ -14,6 +14,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem};
+use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::ledger::{
     DecisionProblem, FrameRefusal, MovedRefusal, SameMeaningProblem, SameMeaningRefusal,
     WithdrawRefusal,
@@ -169,6 +170,86 @@ pub enum ShelfError {
         /// The file.
         path: RelPath,
     },
+    /// A project cannot be started here: something is at the declaration's file or
+    /// at a document's, or a file of a book already writes a key a document would
+    /// take. Nothing was written.
+    #[error("{}; nothing was written", in_the_way(.obstacles))]
+    InTheWay {
+        /// Each thing in the way: the paths first (the declaration's before the
+        /// documents'), then the keys taken.
+        obstacles: NonEmptyVec<Obstacle>,
+    },
+    /// `init` wrote some files and then failed to write one: those it wrote stay
+    /// (the declaration first, then documents, each whole), and the rest were not
+    /// written. The class is the cause's: a port that failed, or a file that came
+    /// to be at a path between the check and the write.
+    #[error("{} written, then {failed} was not", and_list(.written.iter(), "was", "were"))]
+    PartWay {
+        /// The files written, in order.
+        written: NonEmptyVec<RelPath>,
+        /// The file that was not.
+        failed: RelPath,
+        /// Why.
+        #[source]
+        cause: Box<ShelfError>,
+    },
+}
+
+/// One thing in the way of `init` ([`ShelfError::InTheWay`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Obstacle {
+    /// Something is at a path it would write: a file, a directory, a link.
+    There(RelPath),
+    /// A file of a book already writes a key a document it makes would take.
+    KeyTaken {
+        /// The key.
+        key: DocKey,
+        /// The file that writes it.
+        file: RelPath,
+    },
+}
+
+impl std::fmt::Display for Obstacle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::There(path) => write!(f, "{path} is already there"),
+            Self::KeyTaken { key, file } => write!(f, "{file} already writes the key {key}"),
+        }
+    }
+}
+
+/// The sentence of what is in the way: `a and b are already there; c already
+/// writes the key k`.
+fn in_the_way(obstacles: &NonEmptyVec<Obstacle>) -> String {
+    let there: Vec<&RelPath> = obstacles
+        .iter()
+        .filter_map(|o| match o {
+            Obstacle::There(path) => Some(path),
+            Obstacle::KeyTaken { .. } => None,
+        })
+        .collect();
+    let mut clauses = Vec::new();
+    if !there.is_empty() {
+        clauses.push(format!(
+            "{} already there",
+            and_list(there.into_iter(), "is", "are")
+        ));
+    }
+    clauses.extend(obstacles.iter().filter_map(|o| match o {
+        Obstacle::KeyTaken { .. } => Some(o.to_string()),
+        Obstacle::There(_) => None,
+    }));
+    clauses.join("; ")
+}
+
+/// `a is`, `a and b are`, `a, b and c are`.
+fn and_list<T: std::fmt::Display>(items: impl Iterator<Item = T>, one: &str, many: &str) -> String {
+    let items: Vec<String> = items.map(|i| i.to_string()).collect();
+    match items.as_slice() {
+        [] => String::new(),
+        [only] => format!("{only} {one}"),
+        [rest @ .., last] => format!("{} and {last} {many}", rest.join(", ")),
+    }
 }
 
 /// What kind of trouble an error is, for a surface to decide how to end.
@@ -205,7 +286,8 @@ impl ShelfError {
             | Self::EntryTwice { .. }
             | Self::ItemOfNoList { .. }
             | Self::EmptyItem { .. }
-            | Self::FileTaken { .. } => ErrorClass::Request,
+            | Self::FileTaken { .. }
+            | Self::InTheWay { .. } => ErrorClass::Request,
             // As a reference that names nothing and a revocation of nothing: a name of
             // an artifact no document links or that is linked in two spaces, a hash
             // that names nothing pinned, an earlier hash that cannot be told
@@ -245,6 +327,7 @@ impl ShelfError {
                 | MovedRefusal::ToUntold { .. },
             ) => ErrorClass::Refused,
             Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,
+            Self::PartWay { cause, .. } => cause.class(),
         }
     }
 }

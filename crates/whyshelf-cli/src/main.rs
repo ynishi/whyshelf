@@ -13,7 +13,6 @@
 mod args;
 mod books;
 
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -26,6 +25,5 @@ async fn main() -> ExitCode {
         Ok(cli) => cli,
         Err(error) => return books::refuse_arguments(&error),
     };
-    let root = cli.root.unwrap_or_else(|| PathBuf::from("."));
-    books::run(root, cli.command).await
+    books::run(cli.root, cli.command).await
 }
