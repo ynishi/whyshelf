@@ -849,7 +849,9 @@ pub struct MovesNoteOut {
     /// `no_repository`, `no_revision` (no approval that pins it kept one),
     /// `unknown_revision`, `history_unreadable` (renames were not looked for, for
     /// each reason), `scan_truncated`, `unreadable_skipped`, `too_large_skipped`
-    /// (the search for the same content stopped at a bound, or passed files over).
+    /// (the search for the same content stopped at a bound, or passed files over),
+    /// `no_content` (every pin of it compares presence only: there is no content to
+    /// search for, and only renames were looked for).
     pub kind: &'static str,
     /// A sentence for a person.
     pub detail: String,
@@ -1303,6 +1305,10 @@ pub struct CreatedOut {
 pub struct InitOut {
     /// The file of the declaration, relative to the project root.
     pub declaration: String,
+    /// The other files written beside it, relative to the project root, in the
+    /// order they were written: what the documents name as artifacts (the table of
+    /// the template `experiment`); none for the other templates.
+    pub files: Vec<String>,
     /// The documents made beside it, in the order they were written; none for
     /// the template `minimal`.
     pub documents: Vec<InitDocOut>,
@@ -2812,6 +2818,10 @@ fn move_note(note: &MoveNote) -> MovesNoteOut {
             "too_large_skipped",
             format!("{count} files larger than {limit} bytes were not read"),
         ),
+        MoveNote::NoContent => (
+            "no_content",
+            "it is pinned by its presence only, so there is no content to search for: only renames were looked for".to_owned(),
+        ),
     };
     MovesNoteOut { kind, detail }
 }
@@ -3570,6 +3580,7 @@ pub fn initialized(done: &Initialized, book: Option<&str>, root: NextRoot<'_>) -
     }
     InitOut {
         declaration: done.declaration.to_string(),
+        files: done.files.iter().map(ToString::to_string).collect(),
         documents: done
             .docs
             .iter()

@@ -11,7 +11,9 @@
 //! standard library, so the file at the path is removed as it is.
 //!
 //! [`in_the_way`] tells, before anything is written, what `create_new` would find
-//! in its way: something at the path, or a parent that is no directory.
+//! in its way: something at the path, or a parent that is no directory, or a
+//! parent that is a link leading out of the root (followed, as the space `file`
+//! reads, only while its canonical path stays inside the canonical root).
 
 use std::io;
 use std::path::Path;
@@ -36,8 +38,10 @@ pub(crate) struct CreateFailed {
 /// inside the root that is there and is no directory (a file, a link to nothing,
 /// a link to what is no directory), else anything at the path itself (a file, a
 /// directory, a link, even one to nothing; the link is looked at, not what it
-/// leads to). A parent that is a link to a directory is no obstacle: the file is
-/// made through it, as [`create_new`] makes it.
+/// leads to). A parent that is a link to a directory inside the root (by their
+/// canonical paths) is no obstacle: the file is made through it, as [`create_new`]
+/// makes it. A parent that is a link leading out of the root is in the way, by its
+/// path: nothing is written outside the project.
 pub(crate) async fn in_the_way(root: &Path, file: &RelPath) -> io::Result<Option<RelPath>> {
     let segments: Vec<&str> = file.as_str().split('/').collect();
     let Some((_, parents)) = segments.split_last() else {
@@ -77,8 +81,14 @@ enum Walk {
 }
 
 /// Walk down `segments` under `root`, each prefix once, to the first that is not a
-/// directory there.
+/// directory there, or is a link whose canonical path leaves the canonical root.
+///
+/// A link is followed only while its canonical path stays inside the canonical
+/// root, the rule the space `file` reads by (`place_of` in
+/// [`artifact::file`](super::artifact::file)), so nothing is ever written outside
+/// the project through a link: a link that leads out is in the way, by its path.
 async fn walk(root: &Path, segments: &[&str]) -> io::Result<Walk> {
+    let mut canonical_root = None;
     for end in 1..=segments.len() {
         let rel = segments[..end].join("/");
         let path = root.join(&rel);
@@ -92,10 +102,17 @@ async fn walk(root: &Path, segments: &[&str]) -> io::Result<Walk> {
         // is written in full so the workspace's lint of blocking calls, which goes
         // by the method's name, does not take it for `Path::is_dir`.
         let a_directory = if meta.is_symlink() {
-            match tokio::fs::metadata(&path).await {
+            let to_dir = match tokio::fs::metadata(&path).await {
                 Ok(target) => std::fs::Metadata::is_dir(&target),
                 Err(error) if error.kind() == io::ErrorKind::NotFound => false,
                 Err(error) => return Err(error),
+            };
+            to_dir && {
+                let inside = match &canonical_root {
+                    Some(inside) => inside,
+                    None => canonical_root.insert(tokio::fs::canonicalize(root).await?),
+                };
+                tokio::fs::canonicalize(&path).await?.starts_with(inside)
             }
         } else {
             std::fs::Metadata::is_dir(&meta)
@@ -273,6 +290,42 @@ mod tests {
                 .unwrap();
             assert_eq!(in_the_way(root, &rel("to-dir/new.md")).await.unwrap(), None);
         }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_link_that_leads_out_of_the_root_is_in_the_way() {
+        let outer = tempfile::tempdir().unwrap();
+        let root = outer.path().join("project");
+        tokio::fs::create_dir_all(root.join("inside"))
+            .await
+            .unwrap();
+        tokio::fs::create_dir_all(outer.path().join("out"))
+            .await
+            .unwrap();
+        tokio::fs::symlink("../out", root.join("away"))
+            .await
+            .unwrap();
+        tokio::fs::symlink("inside", root.join("near"))
+            .await
+            .unwrap();
+        assert_eq!(
+            in_the_way(&root, &rel("away/table.csv")).await.unwrap(),
+            Some(rel("away"))
+        );
+        assert_eq!(
+            dir_in_the_way(&root, &rel("away/books")).await.unwrap(),
+            Some(rel("away"))
+        );
+        assert_eq!(
+            dir_in_the_way(&root, &rel("away")).await.unwrap(),
+            Some(rel("away"))
+        );
+        // One that stays inside is still a way through.
+        assert_eq!(
+            in_the_way(&root, &rel("near/table.csv")).await.unwrap(),
+            None
+        );
     }
 
     /// A write step that writes part of the bytes and then fails.

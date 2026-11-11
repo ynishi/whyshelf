@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "eb45ec7c213249e9768757af42b32a0d37977dbe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add6a62b4d788f2cd49cd160f6d9d5fb9a833d563ecdfc82c15e43804340145c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "06cdbb16d58d634f2800d11946750f1f1d7f96e2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:031026cc5538d5209c59dfde4236236747409ca2458bf6b63c85a0052c7e3bc2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d1a7f5073122daefd436b3f8fff02e8d2142bff0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2e23c787af40dd75ef222f3b49ac413f29b538d6d653ff99e60c17b6227f4b27",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794413562704,
+  "expires": null,
+  "frame": [
+    {
+      "address": "43c7aed3068adf5ff0099876e27b75ed4b8a0191",
+      "hash": "sha256:5e11fce2ac18d5188272f6c0580f60cbb83665ae17b9dbd633506dd201def3a0",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "61"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9b4-0443-7020-ab73-b9e48af448eb"
+    }
+  ],
+  "id": "01a1cb62-1112-7515-a512-eac1ececc2b4",
+  "kind": "decision",
+  "reason": "init writes other files through FileWrite with the same checks, never through a link that leads out of the root; DEC-61 and DEC-66 restated (#87); checked by a blind review",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:a59803f729339394ccd524a9710bd9c2b755f62b7fc60ef299eaf5b02f087788",
+  "seen_address": "81203abe35aebded40c26ad752f048e1b02fd292",
+  "subject": "01a1c9b4-060d-759a-83f7-41d99d7c5f62",
+  "v": 1,
+  "verb": "approve"
+}

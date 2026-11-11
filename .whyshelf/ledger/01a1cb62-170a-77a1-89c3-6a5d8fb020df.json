@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "eb45ec7c213249e9768757af42b32a0d37977dbe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add6a62b4d788f2cd49cd160f6d9d5fb9a833d563ecdfc82c15e43804340145c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b95e10c3a02e1291bf51fb0574cb21eda3ecc5ab",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:165e71b1dce0b95e4e191d75a2f96176579a897cb4b7ffbf1f21766aff9cd774",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d1a7f5073122daefd436b3f8fff02e8d2142bff0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2e23c787af40dd75ef222f3b49ac413f29b538d6d653ff99e60c17b6227f4b27",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794413565681,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b0cfbb4ec854e2cd3aa9e349eb5dfde1046fb03c",
+      "hash": "sha256:a063950ead4702f1cd5de12b7f9fdebb4f6c650c96fde3fecf8f3450d4d9b9a5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "67"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+    }
+  ],
+  "id": "01a1cb62-170a-77a1-89c3-6a5d8fb020df",
+  "kind": "decision",
+  "reason": "The preset code, the template experiment and the order of its plan and result are tested as DEC-67 says (#87); checked by a blind review",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:82ea163ce150897b496b2f81e4802ffbb0bc32f7e2c0a04be4c08ae3e6220b2a",
+  "seen_address": "f24f6219288068f02a888970923262b023ec08a5",
+  "subject": "01a1cb50-ffb0-76e1-92c3-a31d7baca809",
+  "v": 1,
+  "verb": "approve"
+}

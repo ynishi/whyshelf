@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "c7a76af86959d13c44655edb06d4bb32cdb8b0f3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:92057aae58d7cc01409eb222ed6e7e411f8869a38da80419bf4bd79ec8858371",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/code_preset.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3e2fc5213bf03e885505295d2bf70b10caf31db5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fc2e7cbc21a89b422d89b2796dc665766187ee3a0976c25eb14910d6b4a9c462",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/experiment.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794413565681,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b0cfbb4ec854e2cd3aa9e349eb5dfde1046fb03c",
+      "hash": "sha256:a063950ead4702f1cd5de12b7f9fdebb4f6c650c96fde3fecf8f3450d4d9b9a5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "67"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+    }
+  ],
+  "id": "01a1cb62-179a-73c1-8f12-3407d1176091",
+  "kind": "decision",
+  "reason": "The preset code, the template experiment and the order of its plan and result are tested as DEC-67 says (#87); checked by a blind review",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:2b888f0c73ba200e9cf1b1f9daf35f180da04dc4a70f58c4ddbe954e62e62746",
+  "seen_address": "006550498483927c936925d248b628b486bc5222",
+  "subject": "01a1cb51-02c3-725c-99f7-665bea5c0aac",
+  "v": 1,
+  "verb": "approve"
+}

@@ -127,15 +127,15 @@ pub use approve_chosen::{
 pub use error::{ErrorClass, Obstacle, ShelfError};
 pub use exempt::{ExemptRequest, Exempted};
 pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
-pub use init::{InitRequest, Initialized};
+pub use init::{InitFile, InitRequest, Initialized};
 pub use judge::{JudgeRequest, Judgement};
 pub use moved::MovedRequest;
 pub use new_doc::{Created, NewDocRequest};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileForm, Form, IdSource,
-    LedgerAppend, LedgerContents, LedgerRead, MoveSource, Replacement, RevisionSource, ShelfPort,
-    ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
+    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileForm, FileWrite, Form,
+    IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Replacement, RevisionSource,
+    ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,

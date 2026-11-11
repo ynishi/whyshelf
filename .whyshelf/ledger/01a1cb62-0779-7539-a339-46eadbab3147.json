@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794413561696,
+  "expires": null,
+  "frame": [],
+  "id": "01a1cb62-0779-7539-a339-46eadbab3147",
+  "kind": "decision",
+  "reason": "A template experiment keeps a plan and its result as two verifications, and a preset code pins only that a file is there (#87); checked by a blind review on the binary, every finding fixed",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:717d6c30f2d91244a9f4a1819e80c58c3ad2ccd01e7bb679910b809d306bd64c",
+  "seen_address": "56f68552ea1241435649aa7427645137401f7605",
+  "subject": "01a1cb50-f89a-776e-a5a5-b64840f9b244",
+  "v": 1,
+  "verb": "approve"
+}

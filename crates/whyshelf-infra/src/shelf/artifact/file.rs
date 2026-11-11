@@ -7,7 +7,8 @@
 //! | [`FileSpace::current`] | the bytes of a named file now | `tokio::fs` |
 //! | [`FileSpace::read_back`] | the content of a blob, by its name | [`Git::read_blob`] |
 //! | [`FileSpace::suggest`] | for each gone file, the files it may have moved to | [`Git::work_tree_files`], `tokio::fs`, [`Git::renames_since`] |
-//! | [`presets`] | the preset `file`: the space, `compare = "bytes"`, `means = "depends"` | values |
+//! | [`presets`] | the preset `file`: the space, `compare = "bytes"`, `means = "depends"`; and the preset `code`: the space, `compare = "presence"`, `means = "depends"` | values |
+//! | [`FileWrite`] for [`FileSpace`] | a new file at a path, where nothing is, for `init` | `tokio::fs` (`create_new`) |
 //!
 //! ```text
 //!   name ──a path under the root?── no ──► not a name (why)
@@ -45,7 +46,8 @@
 //!
 //! 1. **The same content.** Each file there now whose hash, under the comparison of
 //!    a pin of the gone file, is the hash pinned (`same_content`). A pin that
-//!    compares presence only has no content to look for. The files read are those
+//!    compares presence only has no content to look for: a name pinned by such
+//!    pins only is not searched, and has the note `NoContent`. The files read are those
 //!    Git lists (tracked, and untracked ones no ignore rule leaves out); outside a
 //!    repository, the regular files under the root, in no directory or file whose
 //!    name starts with `.`. The two differ on purpose: in a repository the ignore
@@ -93,6 +95,7 @@ use std::io;
 use std::path::PathBuf;
 
 use tokio::io::AsyncReadExt;
+use whyshelf_core::app::shelf::{Creation, FileWrite};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonBlank;
@@ -106,6 +109,7 @@ use whyshelf_core::domain::shelf::ledger::{
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
+use super::super::create;
 use super::super::git::{Git, GitError, RenamesSince, first_line};
 
 /// The name of the space this adapter resolves names in: the space a record written
@@ -114,23 +118,90 @@ use super::super::git::{Git, GitError, RenamesSince, first_line};
 /// for.
 pub const FILE_SPACE: &str = PATH_ONLY_SPACE;
 
-/// The name of the preset this adapter offers.
+/// The name of the preset of a link to files that stands on each byte of them.
 pub const FILE_PRESET: &str = "file";
 
-/// The presets this adapter offers when it resolves the names of `space`: one,
-/// [`FILE_PRESET`], for a link to files that stands on each byte of them
-/// (`space` that space, `compare = "bytes"`, `means = "depends"`).
+/// The name of the preset of a link to files that stands on their being there.
+pub const CODE_PRESET: &str = "code";
+
+/// The presets this adapter offers when it resolves the names of `space`, each
+/// `space` that space and `means = "depends"`:
+///
+/// | preset | `compare` | an edit of a file | a file removed or renamed |
+/// |---|---|---|---|
+/// | [`FILE_PRESET`] | `bytes` | makes the approvals that pin it stale | breaks them |
+/// | [`CODE_PRESET`] | `presence` | changes nothing | breaks them |
+///
+/// `code` is for a decision's link to the code that carries it out: the code is
+/// edited all the time without the decision changing, so only that the file is
+/// there is pinned, and a file that goes away, or moves, breaks them. `judge
+/// moved` follows a move; `moves` can suggest one only from Git's renames (a
+/// rename staged in the index, or committed), since a presence pin has no content
+/// to search for (its note `no_content`).
 pub fn presets(space: &Space) -> BuiltinPresets {
-    let values = PresetValues {
+    let values = |compare: &str| PresetValues {
         space: Some(space.as_str().to_owned()),
-        compare: Some("bytes".to_owned()),
+        compare: Some(compare.to_owned()),
         ignore: None,
         means: Some(Propagation::Depends),
     };
-    match PresetName::new(FILE_PRESET) {
-        Ok(name) => BuiltinPresets::from([(name, values)]),
-        // Not a name: no preset. The test of this module holds it to be one.
-        Err(_) => BuiltinPresets::new(),
+    [(FILE_PRESET, "bytes"), (CODE_PRESET, "presence")]
+        .into_iter()
+        // Not a name: no preset. The test of this module holds each to be one.
+        .filter_map(|(name, compare)| {
+            PresetName::new(name)
+                .ok()
+                .map(|name| (name, values(compare)))
+        })
+        .collect()
+}
+
+/// Why a file could not be written.
+#[derive(Debug, thiserror::Error)]
+pub enum WriteError {
+    /// What is at the path, or at a parent of it, could not be looked at.
+    #[error("cannot look at {}", .path.display())]
+    Io {
+        /// The path.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// A step of writing the file failed: what it was, with the path and what
+    /// became of the file it made.
+    #[error("cannot {step}")]
+    Write {
+        /// The step, with its path.
+        step: String,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+}
+
+/// A new file of the project, by its path under the root, written whole where
+/// nothing is (`create_new`, with its directories), as the declaration and a new
+/// document are; a write that fails removes the file it made, and only it.
+impl FileWrite for FileSpace {
+    type Error = WriteError;
+
+    async fn in_the_way(&self, path: &RelPath) -> Result<Option<RelPath>, WriteError> {
+        create::in_the_way(&self.root, path)
+            .await
+            .map_err(|source| WriteError::Io {
+                path: self.root.join(path.as_str()),
+                source,
+            })
+    }
+
+    async fn create(&self, path: &RelPath, bytes: &[u8]) -> Result<Creation, WriteError> {
+        create::create_new(&self.root.join(path.as_str()), bytes)
+            .await
+            .map_err(|failed| WriteError::Write {
+                step: failed.step,
+                source: failed.source,
+            })
     }
 }
 
@@ -392,6 +463,16 @@ impl FileSpace {
                         .or_default()
                         .extend(scanned.iter().cloned());
                 }
+            }
+        }
+        // A name pinned by its presence only has no content to look for: say so, so
+        // that no candidate is not read as nothing found.
+        for name in gone {
+            if !name.pins().iter().any(|pin| pin.content().is_some()) {
+                notes
+                    .entry(name.name().clone())
+                    .or_default()
+                    .push(MoveNote::NoContent);
             }
         }
 
@@ -945,21 +1026,174 @@ mod tests {
     }
 
     #[test]
-    fn the_adapter_offers_the_preset_file_for_its_space() {
+    fn the_adapter_offers_the_presets_file_and_code_for_its_space() {
         let space = Space::new(FILE_SPACE).unwrap();
         let offered = presets(&space);
-        let name = PresetName::new(FILE_PRESET).unwrap();
+        let values = |compare: &str| PresetValues {
+            space: Some("file".to_owned()),
+            compare: Some(compare.to_owned()),
+            ignore: None,
+            means: Some(Propagation::Depends),
+        };
         assert_eq!(
             offered,
-            BuiltinPresets::from([(
-                name,
-                PresetValues {
-                    space: Some("file".to_owned()),
-                    compare: Some("bytes".to_owned()),
-                    ignore: None,
-                    means: Some(Propagation::Depends),
-                }
-            )])
+            BuiltinPresets::from([
+                (PresetName::new(FILE_PRESET).unwrap(), values("bytes")),
+                (PresetName::new(CODE_PRESET).unwrap(), values("presence")),
+            ])
+        );
+    }
+
+    #[test]
+    fn the_preset_code_expands_a_link_to_files_pinned_by_their_being_there() {
+        use whyshelf_core::domain::shelf::schema::Schema;
+        let space = Space::new(FILE_SPACE).unwrap();
+        let decls = super::super::super::books::parse(
+            "[[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [[book.link]]\nname='code'\ntarget='artifact'\npreset='code'\n",
+        )
+        .unwrap();
+        let schema = Schema::declared(decls, &presets(&space), &BTreeSet::from([space])).unwrap();
+        let book = schema.book("a").unwrap();
+        let kind = book.artifact_links().get("code").unwrap();
+        assert_eq!(kind.space.as_str(), "file");
+        assert_eq!(kind.comparison.kind_word(), "presence");
+        assert_eq!(kind.propagation.propagation(), Propagation::Depends);
+        assert!(
+            book.preset_of("code")
+                .is_some_and(|p| p.name().as_str() == CODE_PRESET && !p.is_default())
+        );
+    }
+
+    /// A project whose note links `src/a.rs` through the preset `code`, approved.
+    async fn approved_by_code(root: &std::path::Path) -> ShelfAppOf {
+        use whyshelf_core::app::shelf::{JudgeRequest, Judgement};
+        let books = BOOKS.replace(
+            "space = \"file\"\nmeans = \"depends\"\n",
+            "preset = \"code\"\n",
+        );
+        write(root, ".whyshelf/books.toml", &books).await;
+        write(root, "notes/N-1.md", NOTE).await;
+        write(root, "src/a.rs", CODE).await;
+        let mut app = whyshelf_core::app::shelf::ShelfApp::new(super::super::super::Project::new(
+            root.to_path_buf(),
+            Some("t".to_owned()),
+            None,
+        ));
+        app.judge_all(vec![JudgeRequest {
+            judgement: Judgement::Approve {
+                until: None,
+                reason: None,
+                again: false,
+            },
+            reference: "N-1".parse().unwrap(),
+            actor: None,
+        }])
+        .await
+        .unwrap();
+        app
+    }
+
+    type ShelfAppOf = whyshelf_core::app::shelf::ShelfApp<super::super::super::Project>;
+
+    /// Where N-1 stands now.
+    async fn standing_of_n1(
+        app: &ShelfAppOf,
+    ) -> whyshelf_core::domain::shelf::freshness::StandingKind {
+        let status = app.status().await.unwrap();
+        assert_eq!(status.rows.len(), 1);
+        status.rows[0].standing.kind()
+    }
+
+    #[tokio::test]
+    async fn a_link_of_the_preset_code_stays_fresh_on_an_edit_and_breaks_on_a_removal() {
+        use whyshelf_core::domain::shelf::freshness::{FreshnessLevel, StandingKind};
+        let dir = tempfile::tempdir().unwrap();
+        let app = approved_by_code(dir.path()).await;
+        let fresh = StandingKind::Approved(FreshnessLevel::Fresh);
+        assert_eq!(standing_of_n1(&app).await, fresh);
+        // An edit of the code changes nothing.
+        write(dir.path(), "src/a.rs", "fn one() { two() }\n").await;
+        assert_eq!(standing_of_n1(&app).await, fresh);
+        // The file gone breaks the approval, and `moves` names it.
+        tokio::fs::remove_file(dir.path().join("src/a.rs"))
+            .await
+            .unwrap();
+        assert_eq!(
+            standing_of_n1(&app).await,
+            StandingKind::Approved(FreshnessLevel::Broken)
+        );
+        // `moves` cannot search it by content, and says so.
+        let moves = app.moves().await.unwrap();
+        assert_eq!(moves.suggestions.absent.len(), 1);
+        let gone = &moves.suggestions.absent[0];
+        assert_eq!(gone.gone().name().as_str(), "src/a.rs");
+        assert!(gone.candidates().is_empty());
+        assert!(
+            gone.notes().iter().any(|n| n.kind() == NoteKind::NoContent),
+            "{:?}",
+            gone.notes()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_of_the_preset_code_renamed_holds_again_once_judge_moved_follows_it() {
+        use whyshelf_core::app::shelf::MovedRequest;
+        use whyshelf_core::domain::shelf::freshness::{FreshnessLevel, StandingKind};
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = approved_by_code(dir.path()).await;
+        // A plain rename, and the link written anew: broken until the move is
+        // declared, as the pin still names the old file.
+        tokio::fs::rename(dir.path().join("src/a.rs"), dir.path().join("src/b.rs"))
+            .await
+            .unwrap();
+        write(
+            dir.path(),
+            "notes/N-1.md",
+            &NOTE.replace("src/a.rs", "src/b.rs"),
+        )
+        .await;
+        assert_ne!(
+            standing_of_n1(&app).await,
+            StandingKind::Approved(FreshnessLevel::Fresh)
+        );
+        app.moved(vec![MovedRequest {
+            from: p("src/a.rs"),
+            to: p("src/b.rs"),
+            reason: NonBlank::new("renamed").unwrap(),
+            actor: None,
+        }])
+        .await
+        .unwrap();
+        assert_eq!(
+            standing_of_n1(&app).await,
+            StandingKind::Approved(FreshnessLevel::Fresh)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_new_file_is_written_where_nothing_is_and_never_over_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let files = FileSpace::new(dir.path().to_path_buf());
+        let at: RelPath = "data/t.csv".parse().unwrap();
+        assert_eq!(FileWrite::in_the_way(&files, &at).await.unwrap(), None);
+        assert_eq!(
+            files.create(&at, b"a,b\n").await.unwrap(),
+            Creation::Created
+        );
+        assert_eq!(
+            FileWrite::in_the_way(&files, &at).await.unwrap(),
+            Some(at.clone())
+        );
+        assert_eq!(
+            files.create(&at, b"other\n").await.unwrap(),
+            Creation::AlreadyThere
+        );
+        assert_eq!(
+            tokio::fs::read(dir.path().join("data/t.csv"))
+                .await
+                .unwrap(),
+            b"a,b\n"
         );
     }
 

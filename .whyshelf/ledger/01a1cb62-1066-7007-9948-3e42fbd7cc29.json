@@ -1,0 +1,102 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::init",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::DeclarationWrite",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::init::Template",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794413562704,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a174d7bb687f87965de365b49240d343368349b2",
+      "hash": "sha256:e5215bb3745ef02a80711bbdbaaa3998a3bfdacd680180831d4add57c39fff78",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-36e2-72bb-8529-f374820e1565"
+    },
+    {
+      "address": "e4666bcbff936c60cfa627503082d756316940fd",
+      "hash": "sha256:237f766886a7ab23b3b74164f6ee0624b7802e3323ee86ea88353d981fe8fde9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "9"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-10e0-77f2-9f27-abcf3bbfd1d0"
+    },
+    {
+      "address": "db6f51fe2d99e9409767716429df85cbe2bcc3de",
+      "hash": "sha256:785f2463798582b47dbc3a8d8fd00009f4506de4edb516f3e5c5dab58391d8b8",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "24"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c9b4-0262-74b9-b0c8-d15f578bcdf5"
+    }
+  ],
+  "id": "01a1cb62-1066-7007-9948-3e42fbd7cc29",
+  "kind": "decision",
+  "reason": "init writes other files through FileWrite with the same checks, never through a link that leads out of the root; DEC-61 and DEC-66 restated (#87); checked by a blind review",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:5e11fce2ac18d5188272f6c0580f60cbb83665ae17b9dbd633506dd201def3a0",
+  "seen_address": "43c7aed3068adf5ff0099876e27b75ed4b8a0191",
+  "subject": "01a1c9b4-0443-7020-ab73-b9e48af448eb",
+  "v": 1,
+  "verb": "approve"
+}

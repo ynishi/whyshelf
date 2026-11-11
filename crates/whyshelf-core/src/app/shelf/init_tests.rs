@@ -4,8 +4,8 @@ use crate::domain::shelf::schema::{BookName, LinkTargetDecl, ShelfDecl};
 
 use super::fake_tests::{FakeShelf, block_on, decls, file, path};
 use super::{
-    DeclarationText, ErrorClass, InitRequest, NewDocRequest, Obstacle, ShelfApp, ShelfError,
-    ShelfPort,
+    DeclarationText, ErrorClass, InitFile, InitRequest, NewDocRequest, Obstacle, ShelfApp,
+    ShelfError, ShelfPort,
 };
 
 /// The text the fake reads as the two books of [`decls`].
@@ -28,6 +28,7 @@ fn doc(book: &str, key: &str, entries: &[(&str, &str)]) -> NewDocRequest {
 fn request(text: &str) -> InitRequest {
     InitRequest {
         declaration: DeclarationText::new(text),
+        files: Vec::new(),
         docs: vec![
             doc("finding", "FR-1", &[("title", "a finding")]),
             doc("spec", "SP-1", &[("title", "a spec"), ("grounds", "FR-1")]),
@@ -73,11 +74,140 @@ fn init_with_no_document_writes_the_declaration_alone() {
     let mut app = ShelfApp::new(fake());
     let done = block_on(app.init(InitRequest {
         declaration: DeclarationText::new(TEXT),
+        files: Vec::new(),
         docs: Vec::new(),
     }))
     .unwrap();
     assert!(done.docs.is_empty());
+    assert!(done.files.is_empty());
     assert_eq!(app.ports().declaration_file().as_deref(), Some(TEXT));
+    assert_eq!(app.ports().created_count(), 0);
+}
+
+/// [`request`], with a table beside the documents.
+fn with_table() -> InitRequest {
+    InitRequest {
+        files: vec![InitFile {
+            path: path("data/table.csv"),
+            bytes: b"a,b\n1,2\n".to_vec(),
+        }],
+        ..request(TEXT)
+    }
+}
+
+#[test]
+fn init_writes_the_other_files_as_they_are_after_the_declaration() {
+    let mut app = ShelfApp::new(fake());
+    let done = block_on(app.init(with_table())).unwrap();
+    assert_eq!(done.files, [path("data/table.csv")]);
+    assert_eq!(
+        app.ports()
+            .files
+            .lock()
+            .unwrap()
+            .get(&path("data/table.csv")),
+        Some(&b"a,b\n1,2\n".to_vec())
+    );
+    assert_eq!(app.ports().created_count(), 2);
+}
+
+#[test]
+fn two_writes_at_one_path_or_one_under_another_are_refused_before_anything_is_written() {
+    let at = |text: &str| InitFile {
+        path: path(text),
+        bytes: b"x".to_vec(),
+    };
+    for (files, later, earlier) in [
+        // Two files at one path.
+        (
+            vec![at("data/t.csv"), at("data/t.csv")],
+            "data/t.csv",
+            "data/t.csv",
+        ),
+        // A file at a document's path.
+        (vec![at("specs/SP-1.md")], "specs/SP-1.md", "specs/SP-1.md"),
+        // A file under another.
+        (vec![at("data"), at("data/t.csv")], "data/t.csv", "data"),
+        // A file under the declaration's path.
+        (
+            vec![at(".whyshelf/books.toml/x")],
+            ".whyshelf/books.toml/x",
+            ".whyshelf/books.toml",
+        ),
+        // A document under a file.
+        (vec![at("findings")], "findings/FR-1.md", "findings"),
+    ] {
+        let mut app = ShelfApp::new(fake());
+        let error = block_on(app.init(InitRequest {
+            files,
+            ..request(TEXT)
+        }))
+        .unwrap_err();
+        let ShelfError::Overlapping { path: got, with } = &error else {
+            panic!("{error:?}");
+        };
+        assert_eq!((got.as_str(), with.as_str()), (later, earlier));
+        assert_eq!(error.class(), ErrorClass::Request);
+        assert_nothing_written(&app, None);
+        assert!(app.ports().files.lock().unwrap().is_empty());
+    }
+    // A name that only starts as another does is no overlap.
+    let mut app = ShelfApp::new(fake());
+    block_on(app.init(InitRequest {
+        files: vec![at("data"), at("data2/t.csv")],
+        ..request(TEXT)
+    }))
+    .unwrap();
+}
+
+#[test]
+fn another_file_in_the_way_is_named_after_the_declaration_and_nothing_is_written() {
+    let fake = fake();
+    *fake.declaration_file.lock().unwrap() = Some("old".to_owned());
+    fake.put_file("data/table.csv", b"the user's");
+    fake.put_file("specs/SP-1.md", b"old");
+    let mut app = ShelfApp::new(fake);
+    let error = block_on(app.init(with_table())).unwrap_err();
+    assert_eq!(
+        obstacles(&error),
+        [
+            Obstacle::There(path(".whyshelf/books.toml")),
+            Obstacle::There(path("data/table.csv")),
+            Obstacle::There(path("specs/SP-1.md"))
+        ]
+    );
+    assert_eq!(
+        app.ports()
+            .files
+            .lock()
+            .unwrap()
+            .get(&path("data/table.csv")),
+        Some(&b"the user's".to_vec())
+    );
+    assert_nothing_written(&app, Some("old"));
+}
+
+#[test]
+fn another_file_that_appears_before_its_write_stops_the_run_before_the_documents() {
+    let fake = fake();
+    // It is not there when looked for, and is when written.
+    fake.appear_before_create
+        .lock()
+        .unwrap()
+        .insert(path("data/table.csv"));
+    let mut app = ShelfApp::new(fake);
+    let error = block_on(app.init(with_table())).unwrap_err();
+    let ShelfError::PartWay {
+        written,
+        failed,
+        cause,
+    } = &error
+    else {
+        panic!("{error:?}");
+    };
+    assert_eq!(written.clone().into_vec(), [path(".whyshelf/books.toml")]);
+    assert_eq!(*failed, path("data/table.csv"));
+    assert!(matches!(**cause, ShelfError::FileTaken { .. }));
     assert_eq!(app.ports().created_count(), 0);
 }
 
@@ -135,6 +265,7 @@ fn a_book_directory_that_is_no_directory_is_in_the_way_though_no_document_goes_t
     // Only the finding is made; the spec's directory is still read.
     let error = block_on(app.init(InitRequest {
         declaration: DeclarationText::new(TEXT),
+        files: Vec::new(),
         docs: vec![doc("finding", "FR-1", &[("title", "a finding")])],
     }))
     .unwrap_err();
@@ -143,6 +274,7 @@ fn a_book_directory_that_is_no_directory_is_in_the_way_though_no_document_goes_t
     // With no document at all, too.
     let error = block_on(app.init(InitRequest {
         declaration: DeclarationText::new(TEXT),
+        files: Vec::new(),
         docs: Vec::new(),
     }))
     .unwrap_err();

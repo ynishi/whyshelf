@@ -1,0 +1,155 @@
+# The books of this project: a chain of reasons, from what was seen to how it is
+# checked.
+#
+#   finding <-grounds- requirement <-serves- decision <-checks- verification
+#                                                                   ^ plans
+#                                                          (a result, to its plan)
+#
+# This is for checks that are measurements registered before they are run. A
+# plan writes down what will be measured and a table of what is expected, and is
+# approved before the run; after the run, a result links the plan and the record
+# of the run, and is approved then. They are two verifications, not one: one
+# approval stands per document, so the record of the run added to the plan and
+# approved would stand in the place of the approval made before the run, and the
+# plan approved again unchanged is left out as `repeats`.
+#
+# Which half names what, and the order of the approvals, are conventions of this
+# template: `check` does not enforce them. A result may name a sheet, a plan a
+# log, and `plans` a verification that is no plan; a result may be approved
+# before its plan, as `plans` pins the plan's document, not its approval. The
+# ledger records the time of each approval, so a reader can see the order;
+# whyshelf does not refuse the other order, and the ledger does not record when
+# the run happened. Each choice made for this flow is marked "experiment" below.
+#
+# whyshelf knows no kind of document of its own; these four are one way to keep
+# reasons, and every one of them is declared here. Change what you need:
+# `whyshelf check` says whether this file can be used, and `whyshelf map` draws it.
+
+# A link to artifacts that names no preset and no space takes the preset `file`:
+# files of the project, by their path.
+[defaults]
+artifact = "file"
+
+[[book]]
+name = "finding"
+dir = "books/finding"
+key = { prefix = "F" }      # F-1, F-2, ...
+description = "what was seen: a fault, a report, a measure"
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.field]]
+name = "source"             # where it was seen
+type = "text"
+
+[[book]]
+name = "requirement"
+dir = "books/requirement"
+key = { prefix = "REQ" }
+description = "what is needed, and why"
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.link]]
+name = "grounds"            # informs: a finding fixed and retired must not break what it grounded
+target = "finding"
+means = "informs"
+cover = "warn"              # every finding is expected to ground a requirement; one that does not yet is listed, not a failure
+[[book.link]]
+name = "replaces"
+target = "requirement"
+count = "optional"
+means = "replaces"
+
+[[book]]
+name = "decision"
+dir = "books/decision"
+key = { prefix = "DEC" }
+description = "how it is met, and what was rejected"
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.field]]
+name = "rejected"           # the ways not taken
+type = "list"
+[[book.link]]
+name = "serves"             # depends: a changed requirement makes the decision stale
+target = "requirement"
+count = "at-least-one"
+means = "depends"
+cover = true                # every requirement is expected to have a decision that serves it
+[[book.link]]
+name = "replaces"
+target = "decision"
+count = "optional"
+means = "replaces"
+# experiment: the files of the code that carries the decision out, by path. Code
+# is edited all the time while the decision stays what it was, so the preset
+# `code` pins only that each file is there: an edit makes nothing stale, and a
+# file removed or renamed breaks the decision. `whyshelf judge moved` follows a
+# rename; `whyshelf moves` can suggest one only from Git's renames, as there is
+# no content to search for.
+[[book.link]]
+name = "code"
+target = "artifact"
+preset = "code"             # space = "file", compare = "presence", means = "depends"
+
+[[book]]
+name = "verification"
+dir = "books/verification"
+key = { prefix = "V" }
+description = "how a decision is checked"
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+# experiment: two more methods, the halves of a measurement. A `plan` says what
+# will be measured and what is expected, before the run; a `result` says what
+# the run gave, after it.
+[[book.field]]
+name = "method"
+type = { enum = ["test", "review", "plan", "result"] }
+required = true
+[[book.link]]
+name = "checks"             # depends: a changed decision makes its check stale
+target = "decision"
+count = "at-least-one"
+means = "depends"
+cover = true                # every decision is expected to have a verification that checks it
+[[book.link]]
+name = "tests"              # the files that show it holds, by path; editing one makes the check stale
+target = "artifact"
+# experiment: a plan's table of what is expected, by path, written before the
+# run. The preset `file` pins every byte of it (compare = "bytes", means =
+# "depends"), so an edit of the table after the plan is approved makes the plan
+# stale: the table cannot change after the plan's approval without it showing.
+# By convention only a plan names one (not enforced: see the head); the count
+# lets a verification name none.
+[[book.link]]
+name = "sheet"
+target = "artifact"
+preset = "file"
+count = "many"
+# experiment: a result's record of the run (what it printed, what it measured),
+# by path, pinned as the sheet is. By convention only a result names one, and a
+# plan none, since the run has not happened when the plan is approved (not
+# enforced: see the head).
+[[book.link]]
+name = "log"
+target = "artifact"
+preset = "file"
+count = "many"
+# experiment: the plan a result reports on, one at most. depends: the result's
+# approval pins the plan's document, so an edit of the plan makes its result
+# stale; it does not pin the plan's approval, and a result may be approved
+# before its plan. By convention a plan names none, and only a plan is named
+# (not enforced: see the head). A result names in `checks` the decision its plan
+# checks.
+[[book.link]]
+name = "plans"
+target = "verification"
+count = "optional"
+means = "depends"

@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e09a81641ae4977d4a14721ba82c8cc202e3a6c9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9444746ab4cff5363dc9710ad35743cae8fedb90e102002da4c7acdd1489f720",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "55282fc649bd708cb40d526668ce670c3de61054",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6cc0ff6492297c4b8ae059df2303fe081f4e2860e370b6e3f5b0f907c5d013c7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4df11725bbf50f8077f5af50bc1a0c43738f222f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ea2f392deb53ece57954aeed00bac274def66f50e79ca418687946c4fa069273",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9a724ba5c26808a35260fed85d311fb9c1e01363",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6205057c463931a73c3eb92e7381e86a74322b327f730c823bc964dc496e7c71",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b95e10c3a02e1291bf51fb0574cb21eda3ecc5ab",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:165e71b1dce0b95e4e191d75a2f96176579a897cb4b7ffbf1f21766aff9cd774",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9295d87d959d8eda1c0edd07faedf7363eae3cc6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9b6fb352d803d886bd64123733db7c2fe26ab93a6b3a97b652daa61ce1f068e5",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794413562704,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b4b013c3072c7576e998eb74980d082fbbbb3fe",
+      "hash": "sha256:3e379866f327b70afe6acdbf819f6f9b6a902810c5855c79becb1bd1a19be061",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "53"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7e2-6f31-74e1-8aa9-4de2bd6986d2"
+    }
+  ],
+  "id": "01a1cb62-0ef5-7562-93fb-3d0f545d2d39",
+  "kind": "decision",
+  "reason": "init writes other files through FileWrite with the same checks, never through a link that leads out of the root; DEC-61 and DEC-66 restated (#87); checked by a blind review",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:4fff836039815d80bd297e529a5fe506a514de3f56b81886db7efd092b08f941",
+  "seen_address": "f56aa84f441b058e2d794fd63dfecf8045c4d8ac",
+  "subject": "01a1c7e2-7061-7778-9bec-d92f955d4598",
+  "v": 1,
+  "verb": "approve"
+}
