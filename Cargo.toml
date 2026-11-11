@@ -25,6 +25,7 @@ schemars = { version = "1.2", default-features = false, features = ["derive", "s
 serde_norway = "0.9"
 toml = { version = "1.2", default-features = false, features = ["parse", "serde", "std"] }
 jiff = { version = "0.2", default-features = false, features = ["std"] }
+unicode-width = { version = "0.2", default-features = false }
 tokio = { version = "1.54", default-features = false }
 tempfile = "3.27"
 clap = { version = "4.6", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }

@@ -657,6 +657,9 @@ pub struct StatsOut {
     pub origins: Vec<OriginCountOut>,
     /// What is wrong around the documents.
     pub health: HealthOut,
+    /// The same measures as text for a person (`jq -r .drawing`), made from this
+    /// answer alone, so the same answer is the same text.
+    pub drawing: String,
 }
 
 /// The approvals, per document and per book.
@@ -2002,7 +2005,7 @@ pub fn stats(report: &StatsReport, since: Option<&str>) -> StatsOut {
         key: key.map(ToString::to_string),
     };
     let book = |b: Option<&BookName>| b.map(ToString::to_string);
-    StatsOut {
+    let mut out = StatsOut {
         since: since.map(str::to_owned),
         approvals: ApprovalsOut {
             docs: stats
@@ -2072,7 +2075,10 @@ pub fn stats(report: &StatsReport, since: Option<&str>) -> StatsOut {
             })
             .collect(),
         health: namer.health(&report.health),
-    }
+        drawing: String::new(),
+    };
+    out.drawing = summary::draw(&out);
+    out
 }
 
 impl Namer<'_> {
@@ -2730,6 +2736,7 @@ fn join<T: std::fmt::Display>(items: impl Iterator<Item = T>) -> String {
 }
 
 mod diagram;
+mod summary;
 
 #[cfg(test)]
 mod comparison_tests;
@@ -2739,6 +2746,8 @@ mod cover_tests;
 mod map_tests;
 #[cfg(test)]
 mod same_meaning_tests;
+#[cfg(test)]
+mod stats_tests;
 
 #[cfg(test)]
 mod tests {
@@ -2804,6 +2813,7 @@ mod tests {
             "largest",
             "origins",
             "health",
+            "drawing",
         ] {
             assert!(stats.contains(&format!("\"{field}\"")), "{field}");
         }
