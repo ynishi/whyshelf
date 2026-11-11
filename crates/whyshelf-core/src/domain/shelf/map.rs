@@ -5,12 +5,13 @@
 //! adds nothing the declaration does not say (the model knows no kind of document,
 //! so no meaning of a book is guessed here); a book is its name, directory, key
 //! grammar, description and fields, and a link its holder, name, target, meaning,
-//! count, cover and, for artifacts, its comparison. Drawing it is the adapter's.
+//! count, cover and, for artifacts, its comparison and the preset it was expanded
+//! from. Drawing it is the adapter's.
 
 use super::artifact::{Comparison, Space};
 use super::schema::{
     BookDescription, BookDir, BookName, Cardinality, CoverSeverity, DeclaredLink, EntryName,
-    FieldDecl, KeyPattern, Propagation, Schema,
+    FieldDecl, KeyPattern, PresetOrigin, Propagation, Schema,
 };
 
 /// Every book and every link of a declaration, in the order it writes them.
@@ -70,6 +71,10 @@ pub enum MapTarget {
         space: Space,
         /// What of each artifact is compared.
         comparison: Comparison,
+        /// The preset the link was expanded from, or none
+        /// ([`BookSchema::preset_of`](super::schema::BookSchema::preset_of)). The
+        /// values above are the link's, whichever it is.
+        preset: Option<PresetOrigin>,
     },
 }
 
@@ -109,6 +114,7 @@ impl ShelfMap {
                             MapTarget::Artifact {
                                 space: kind.space.clone(),
                                 comparison: kind.comparison.clone(),
+                                preset: book.preset_of(name).cloned(),
                             },
                             kind.propagation.propagation(),
                             kind.cardinality,

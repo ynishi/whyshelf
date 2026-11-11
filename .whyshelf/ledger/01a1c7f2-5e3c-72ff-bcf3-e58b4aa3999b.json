@@ -1,0 +1,195 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "611e02a84a07984a11b6a110351593805d6731c2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6dc2cd4fa60cdbd1243e889c6efe58dadd835a9208c71edb8fd6e1cc04a4e57c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b894f794d5b4c7f0e7ac1a7f67e10e9bd1f142ea",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bf0d4bb44cd56633a23d67ce9304a968f8589d987948b3e59732005ada416378",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b1496af4d4f3cf3ceed1e192ecb49bc72e94d2d3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f5c28888eb130ef7af0346d401ccb8c93d06690f728561145eea183512305a86",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c68624c44fb93cfe96e1c2f4aa003a45f706c007",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5527394f2a0f74b74fbe48e46d895b7ff36bedd41f7621fabea3205517f506a9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "64445d9b162d341a4a9527a1577064298d96ff14",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:79d229cd4c88c7289966d1b745ec84d65b44fcc4812433a91f7b4eeb2009c0cd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9b1117c995c97dac2b151b09bda1843a979f37d3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4d7f3d3410e2dd47bc0947db714c47172ddbe0a4543f0da9cb2d17893e58067e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3e1d97999d586074da516877941290e03bf21938",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:001a84f4990e270ec31f78dcea6a53f0cce47cc90e937cd0b08734f78945e46c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "60cad8baefa94bdfb9d4310d8d4ad407701bfdf2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8d460052aaa7b6f85abf37b8df4e61d8a0eb5c6348866fed5f0533e46ddb54c1",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ec8bce6309637829ccd3e9670a027307992f5cfd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ae31721e3d9ef4be030f675045896dfbaed05ff6836aab0b74c327c09e0c26d0",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794355911041,
+  "expires": null,
+  "frame": [
+    {
+      "address": "52e5e2c522fd1fc1ba63fb0d09085313ace42a6b",
+      "hash": "sha256:364de544ac28bb97e3e194c979cdcac4e57c18c3658ed454c37bbe1bb34ec4c3",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "44"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bb53-7733-93f1-bf8478b9df23"
+    },
+    {
+      "address": "c8c66165f59c148a1109fbb097b13ada90786524",
+      "hash": "sha256:6c7901d7bef43007a54fed99e0e517535cad18f35efa145c94f98aaebc19076d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bc99-7728-b8d7-deea06f9c49b"
+    },
+    {
+      "address": "e4894a2b3e0e23aa63e7a3936ccc1ddaf023bd48",
+      "hash": "sha256:cb58335814d4bb6089497d3f145dfc4d77325175f1fd66c238dfa13a74f4c87e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "46"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bf0d-70d9-a6b0-d454e6662c4d"
+    }
+  ],
+  "id": "01a1c7f2-5e3c-72ff-bcf3-e58b4aa3999b",
+  "kind": "decision",
+  "reason": "DEC-44 lets the space come through a preset or the default, and shared tests changed for #54; checked by a blind review",
+  "revision": "5f0ce0e9ef270f23e2d443607d5df5d0e987b79e",
+  "seen": "sha256:05512f35c7c53eec2f7d1284cd598ff0f74fbd4fac95c8692f019808978b4e09",
+  "seen_address": "fc33b4be85776f2351ae3a0fec4b349b8d4d0566",
+  "subject": "01a1c60b-c0d7-702a-9bc0-a229ded269d9",
+  "v": 1,
+  "verb": "approve"
+}
