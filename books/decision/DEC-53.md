@@ -5,7 +5,7 @@ issues: ["#54"]
 rejected: ["Build a default space into the core: files would be special again", "Keep the preset's name in a pin: editing the preset would change how an old pin reads", "Expand presets in the adapter that reads the TOML: the rule of precedence would be the adapter's"]
 related: ["DEC-44", "DEC-10", "DEC-47"]
 revisit: "When a space offers parts of an artifact to compare (facets), and a preset must name one"
-rustdoc: ["whyshelf_core::domain::shelf::schema::preset::expand", "whyshelf_core::app::shelf::ports::ArtifactSource::presets", "whyshelf"]
+rustdoc: ["whyshelf_core::domain::shelf::schema::expand", "whyshelf_core::app::shelf::ports::ArtifactSource::presets", "whyshelf"]
 serves: ["REQ-20", "REQ-1"]
 title: "Presets and a default are expanded from the declaration before it is checked, and only their values are kept"
 ---

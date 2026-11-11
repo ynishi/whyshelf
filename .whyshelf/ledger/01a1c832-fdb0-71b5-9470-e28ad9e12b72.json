@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794360147350,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c832-fdb0-71b5-9470-e28ad9e12b72",
+  "kind": "decision",
+  "reason": "Rust items are a space resolved in the built docs, and rustdoc is a preset that pins their presence (#56); checked by two rounds of blind review on real rustdoc output, every finding fixed",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:0b81f8be92bc7c72a798cffef0b37bc6b8a214727676a484c20384fc8af44c0b",
+  "seen_address": "e96f15ccaf8a1aeb62f8d0f322f9ead7c40007e7",
+  "subject": "01a1c811-c9dd-72fe-99e9-7153c8ab37ab",
+  "v": 1,
+  "verb": "approve"
+}

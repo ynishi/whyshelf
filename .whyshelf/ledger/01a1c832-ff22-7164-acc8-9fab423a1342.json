@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "65b507cce87abe851d5d0c67a56e31084a4212ce",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:37933b61f1c76dc9e31ddf6ed6ce8fa224cda573491e2e2a2321ebb68c8589ce",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794360147350,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f9dc8fc79db836111cf6fae457d425ee33ef822b",
+      "hash": "sha256:c6ef0f92361e2d1659090198b4cf196e98913c967f54cd592c5e601d289932bd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "54"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c811-cfe5-739d-9535-559effdfed85"
+    }
+  ],
+  "id": "01a1c832-ff22-7164-acc8-9fab423a1342",
+  "kind": "decision",
+  "reason": "Rust items are a space resolved in the built docs, and rustdoc is a preset that pins their presence (#56); checked by two rounds of blind review on real rustdoc output, every finding fixed",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:539e1fdd15fa96db2070406f94d826b8df4363ef7fb2dc6bfb6d4efebc99b227",
+  "seen_address": "f32bd4acd2f3b5b03d2b357764e68ed8e197bf6b",
+  "subject": "01a1c811-de0a-70c2-aff0-e988ee3e70e0",
+  "v": 1,
+  "verb": "approve"
+}

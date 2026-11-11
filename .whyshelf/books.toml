@@ -57,11 +57,12 @@ type = "list"
 name = "revisit"
 type = "text"
 [[book.field]]
-name = "rustdoc"            # where the contract is written (rustdoc item paths)
-type = "list"
-[[book.field]]
 name = "issues"             # the issues of the repository it answers, as `#<number>`
 type = "list"
+[[book.link]]
+name = "rustdoc"            # where the contract is written: Rust items, resolved in the built docs; one that goes away breaks the decision
+target = "artifact"
+preset = "rustdoc"
 [[book.link]]
 name = "serves"             # depends: a changed requirement makes the decision stale
 target = "requirement"

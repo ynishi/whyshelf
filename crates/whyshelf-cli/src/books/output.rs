@@ -572,6 +572,10 @@ pub struct StaleOut {
     /// starts at, with the approvals of `stale` it degrades; the one that degrades
     /// the most first.
     pub origins: Vec<OriginOut>,
+    /// The names approved documents pin through a `depends` link that their
+    /// adapter cannot tell about now: their freshness is unchanged, whether their
+    /// approvals hold cannot be said, and `--exit-code` exits 1 for any.
+    pub unknown: Vec<UnknownOut>,
     /// What is wrong around the documents.
     pub health: HealthOut,
 }
@@ -1469,13 +1473,21 @@ impl Namer<'_> {
 }
 
 /// The lines `check` writes on stderr: one per document a covering link of
-/// strength `warn` does not reach, in the order of `uncovered`. A gap of strength
-/// `error` has none: it fails the check, and the answer is shown.
+/// strength `warn` does not reach, in the order of `uncovered`, then one per name
+/// that cannot be told now, in the order of `unknown`, then one per name with
+/// nothing there, in the order of `absent`. A gap of strength `error` has none: it
+/// fails the check, and the answer is shown. None of them changes the exit.
 pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
-    let BooksCheck::Checked { uncovered, .. } = check else {
+    let BooksCheck::Checked {
+        uncovered,
+        unknown,
+        absent,
+        ..
+    } = check
+    else {
         return Vec::new();
     };
-    uncovered
+    let gaps = uncovered
         .iter()
         .filter(|u| u.severity == CoverSeverity::Warn)
         .map(|u| {
@@ -1486,6 +1498,50 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
             format!(
                 "warning: {doc} is reached by no {}.{} (cover = \"warn\")",
                 u.book, u.link
+            )
+        });
+    let untold = unknown.iter().map(|u| {
+        let doc = u
+            .key
+            .as_ref()
+            .map_or_else(|| u.doc.to_string(), ToString::to_string);
+        format!(
+            "warning: {doc} names {} in {}, which cannot be told: {}",
+            u.artifact.name(),
+            u.artifact.space(),
+            u.why
+        )
+    });
+    let nothing = absent.iter().map(|a| {
+        let doc = a
+            .key
+            .as_ref()
+            .map_or_else(|| a.doc.to_string(), ToString::to_string);
+        format!(
+            "warning: {doc} names {} in {}, which has nothing behind it",
+            a.artifact.name(),
+            a.artifact.space()
+        )
+    });
+    gaps.chain(untold).chain(nothing).collect()
+}
+
+/// The lines `stale` writes on stderr: one per name an approval stands on that
+/// cannot be told now, in the order of `unknown`.
+pub fn stale_warnings(report: &StaleReport) -> Vec<String> {
+    report
+        .unknown
+        .iter()
+        .map(|u| {
+            let doc = u
+                .key
+                .as_ref()
+                .map_or_else(|| u.doc.to_string(), ToString::to_string);
+            format!(
+                "warning: {doc} pins {} in {}, which cannot be told now, so whether its approval holds cannot be said: {}",
+                u.artifact.name(),
+                u.artifact.space(),
+                u.why
             )
         })
         .collect()
@@ -1780,6 +1836,20 @@ pub fn stale(report: &StaleReport) -> StaleOut {
                     },
                 },
                 degraded: group.degraded.iter().map(|id| namer.doc(*id)).collect(),
+            })
+            .collect(),
+        unknown: report
+            .unknown
+            .iter()
+            .map(|u| UnknownOut {
+                doc: DocRef {
+                    id: u.doc.to_string(),
+                    key: u.key.as_ref().map(ToString::to_string),
+                },
+                link: u.link.to_string(),
+                name: u.artifact.name().to_string(),
+                space: u.artifact.space().to_string(),
+                why: u.why.to_string(),
             })
             .collect(),
         health: namer.health(&report.health),

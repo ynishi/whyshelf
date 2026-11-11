@@ -13,7 +13,9 @@
 //!   <root>/.whyshelf/ledger/<id>.json  <-ledger->  Record (through Canon)
 //!   a name a link to artifacts writes --artifact-->  ArtifactReadings, by the adapter
 //!                                                    of its space (for `file`: the
-//!                                                    file at the path, blob name?)
+//!                                                    file at the path, blob name?;
+//!                                                    for `rust-item`: the item in
+//!                                                    the docs `cargo doc` wrote)
 //!   an address of an approval          --docs / artifact-->  content read back, by the
 //!                                                    adapter that named it
 //!   Git: HEAD                          --git---->  Revision
@@ -75,6 +77,7 @@ use whyshelf_core::domain::shelf::artifact::ContentAddress;
 
 use artifact::ArtifactSpaces;
 use artifact::file::FileSpace;
+use artifact::rust_item::RustItemSpace;
 use books::BooksToml;
 use docs::MarkdownDocs;
 use git::Git;
@@ -100,8 +103,14 @@ pub struct Project {
 impl Project {
     /// The adapters of the project at `root`. `actor` is who judges when the
     /// environment says so (`WHYSHELF_ACTOR`, read by the caller); without it the
-    /// Git setting `user.name` of the project is asked.
-    pub fn new(root: impl Into<PathBuf>, actor: Option<String>) -> Self {
+    /// Git setting `user.name` of the project is asked. `cargo_target_dir` is the
+    /// build directory the environment names (`CARGO_TARGET_DIR`, read by the
+    /// caller), where the space `rust-item` looks for the docs first.
+    pub fn new(
+        root: impl Into<PathBuf>,
+        actor: Option<String>,
+        cargo_target_dir: Option<PathBuf>,
+    ) -> Self {
         let root: PathBuf = root.into();
         Self {
             books: BooksToml::new(root.join(WHYSHELF_DIR).join("books.toml")),
@@ -109,7 +118,10 @@ impl Project {
             ledger: JsonLedger::new(root.join(WHYSHELF_DIR).join("ledger"), WHYSHELF_DIR),
             clock: SystemClock,
             ids: UuidV7Ids,
-            artifacts: ArtifactSpaces::of_project(FileSpace::new(root.clone())),
+            artifacts: ArtifactSpaces::of_project(
+                FileSpace::new(root.clone()),
+                RustItemSpace::new(root.clone(), cargo_target_dir),
+            ),
             git: Git::new(root.clone()),
             actor: ProjectActor::new(root, actor),
         }
