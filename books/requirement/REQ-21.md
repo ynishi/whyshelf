@@ -1,7 +1,7 @@
 ---
 id: "01a1c847-f021-72d4-8a44-6048c2025c77"
 key: "REQ-21"
-grounds: ["F-25"]
+grounds: ["F-25", "F-27"]
 issues: ["#58"]
 title: "How the work goes is derived from the ledger, the same each time it is asked"
 ---

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794369178161,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c8bc-ca49-7121-ab39-fdf38db8de82",
+  "kind": "decision",
+  "reason": "stats carries a drawing a person reads, made from the answer alone, and --since and --until take an RFC 3339 time with an offset or a date YYYY-MM-DD and refuse anything else (#64); checked by a blind review, every finding fixed",
+  "revision": "e560741b6a658ab0d6ac806d1a831ef65d5e35f1",
+  "seen": "sha256:8265860c1c76dbedba09842bf079798ac3ca8bfc90881265c3bb3eaf60e12a5b",
+  "seen_address": "9aaf8850e1a4a9662c3e71e632f1297d3f27b4e2",
+  "subject": "01a1c8ad-9a23-7783-926f-90846179e45d",
+  "v": 1,
+  "verb": "approve"
+}

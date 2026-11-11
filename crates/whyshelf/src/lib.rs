@@ -496,9 +496,15 @@
 //! "revoked"}], "books": [{"book", "docs", "approvals", "again", "revoked"}]},
 //! "pending": [{"book", "count", "median_ms", "p90_ms", "max_ms"}], "runs": {"count",
 //! "median", "p90", "max", "largest": [{"at", "actor", "size"}]}, "origins":
-//! [{"origin", "count"}], "health"}`: `since` as given (RFC 3339 or a date, as
-//! `--until`; null without it), an origin as `stale` names one (`{"kind": "doc",
-//! "doc"}` or `{"kind": "artifact", "path", "name", "space"}`). Each measure, what
+//! [{"origin", "count"}], "health", "drawing"}`: `since` as given (as `--until`: an
+//! RFC 3339 time with an offset or `Z`, or a date `YYYY-MM-DD`, the start of that
+//! day in UTC; a time with no offset is refused, exit 2; null without it), an origin as `stale` names one (`{"kind": "doc",
+//! "doc"}` or `{"kind": "artifact", "path", "name", "space"}`). `drawing` is the
+//! same as text for a person (`jq -r .drawing`), made from the answer alone: the
+//! approvals per book, the documents approved again most often, the pending time
+//! per book in hours and minutes, the runs and the largest (their times RFC 3339
+//! in UTC), and the origins most often under an approval made again, each section
+//! in aligned columns and saying so when it has nothing. Each measure, what
 //! `--since` keeps and the order of every list are defined on
 //! [`stats`](domain::shelf::stats). No measure reads a clock: the times are those of
 //! the records and of the identities, so the same ledger and documents always give
