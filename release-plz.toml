@@ -1,0 +1,34 @@
+# release-plz: the release PR and the publish that follows it.
+#
+# A release is cut in two steps, both run by a human hand (CONTRIBUTING), each with a
+# GitHub token. `release-plz release-pr` opens a release PR at the current main, on a
+# branch named `release-plz-…`: the version bump of the workspace. Merge it with a merge
+# commit and keep its branch name. Then `release-plz release` on main publishes the four
+# crates, each after the crates it depends on, and pushes the `v<version>` tag. With
+# `release_always = false` it publishes only when the latest commit of main comes from a
+# release PR; after any other merge it publishes nothing.
+#
+# The next version is read from the commits since the last release. The commits of this
+# repository are not Conventional Commits (CONTRIBUTING § Commits), so release-plz bumps
+# the patch. On 0.x the minor is the compatibility unit: when a release changes a public
+# API or a reading of the books, set the minor in the release PR before merging it.
+
+[workspace]
+semver_check = false
+# CHANGELOG.md is written by hand under `## [Unreleased]`, one entry per change, in its
+# own commit (CONTRIBUTING). release-plz does not update it: rename `[Unreleased]` to the
+# new version in a commit on the release PR's branch, before it is merged.
+changelog_update = false
+dependencies_update = false
+# No GitHub Release: the tag is the release; the notes are CHANGELOG.md.
+git_release_enable = false
+git_tag_enable = false
+git_tag_name = "v{{ version }}"
+release_always = false
+pr_labels = ["release"]
+
+# The four crates move in lockstep through `[workspace.package] version`, so one tag is
+# enough. It is put on whyshelf-cli, the crate of the `whyshelf` command.
+[[package]]
+name = "whyshelf-cli"
+git_tag_enable = true
