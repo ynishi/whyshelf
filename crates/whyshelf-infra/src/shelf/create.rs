@@ -43,13 +43,49 @@ pub(crate) async fn in_the_way(root: &Path, file: &RelPath) -> io::Result<Option
     let Some((_, parents)) = segments.split_last() else {
         return Ok(None);
     };
-    for end in 1..=parents.len() {
-        let rel = parents[..end].join("/");
+    match walk(root, parents).await? {
+        Walk::Blocked(at) => return Ok(Some(at)),
+        Walk::Missing => return Ok(None),
+        Walk::Directories => {}
+    }
+    match tokio::fs::symlink_metadata(root.join(file.as_str())).await {
+        Ok(_) => Ok(Some(file.clone())),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// What is in the way of a directory at `dir` under `root`, if anything: `dir`
+/// itself or a parent inside the root that is there and is no directory, by the
+/// rule [`in_the_way`] gives a parent. A directory there, or a link to one, is none.
+pub(crate) async fn dir_in_the_way(root: &Path, dir: &RelPath) -> io::Result<Option<RelPath>> {
+    let segments: Vec<&str> = dir.as_str().split('/').collect();
+    match walk(root, &segments).await? {
+        Walk::Blocked(at) => Ok(Some(at)),
+        Walk::Missing | Walk::Directories => Ok(None),
+    }
+}
+
+/// Where a walk down a path, a segment at a time, ended.
+enum Walk {
+    /// At a segment that is there and is no directory.
+    Blocked(RelPath),
+    /// At a segment that is not there: nothing below it is either.
+    Missing,
+    /// Every segment is a directory, or a link to one.
+    Directories,
+}
+
+/// Walk down `segments` under `root`, each prefix once, to the first that is not a
+/// directory there.
+async fn walk(root: &Path, segments: &[&str]) -> io::Result<Walk> {
+    for end in 1..=segments.len() {
+        let rel = segments[..end].join("/");
         let path = root.join(&rel);
         let meta = match tokio::fs::symlink_metadata(&path).await {
             Ok(meta) => meta,
             // Nothing below a parent that is not there can be there either.
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Walk::Missing),
             Err(error) => return Err(error),
         };
         // `Metadata::is_dir` reads a value already read, by the async calls here; it
@@ -65,14 +101,10 @@ pub(crate) async fn in_the_way(root: &Path, file: &RelPath) -> io::Result<Option
             std::fs::Metadata::is_dir(&meta)
         };
         if !a_directory {
-            return rel.parse().map(Some).map_err(io::Error::other);
+            return rel.parse().map(Walk::Blocked).map_err(io::Error::other);
         }
     }
-    match tokio::fs::symlink_metadata(root.join(file.as_str())).await {
-        Ok(_) => Ok(Some(file.clone())),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error),
-    }
+    Ok(Walk::Directories)
 }
 
 /// Write `bytes` to a new file at `file`, or find something there and write

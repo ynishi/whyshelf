@@ -363,6 +363,16 @@ pub trait DocWrite: Send + Sync {
         path: &RelPath,
     ) -> impl Future<Output = Result<Option<RelPath>, Self::Error>> + Send;
 
+    /// What is in the way of a directory at `dir` (a book's, relative to the project
+    /// root) now, if anything, by its path: `dir` itself or a parent inside the root
+    /// that is there and is no directory, by the rule [`in_the_way`](Self::in_the_way)
+    /// gives a parent. A directory there, or a link to one, is none: documents are
+    /// read from it and made in it.
+    fn dir_in_the_way(
+        &self,
+        dir: &RelPath,
+    ) -> impl Future<Output = Result<Option<RelPath>, Self::Error>> + Send;
+
     /// Write the file at `path` (relative to the project root) with this front matter
     /// and body. The entries are values; their text (YAML) is the adapter's, and must
     /// read back through [`DocSource`] into the same entries.

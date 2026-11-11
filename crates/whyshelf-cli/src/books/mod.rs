@@ -139,15 +139,17 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
         std::env::var_os(CARGO_TARGET_DIR_VAR).map(PathBuf::from),
     );
     let result = match command {
-        BooksCommand::Init { sample } => {
-            let (request, book) = if sample {
-                match init::sample() {
-                    Ok(request) => (request, None),
-                    Err(error) => return failed_run(&error),
-                }
+        BooksCommand::Init { template, sample } => {
+            let template = if sample {
+                init::Template::Sample
             } else {
-                (init::minimal(), Some(init::MINIMAL_BOOK))
+                template.unwrap_or_default()
             };
+            let request = match template.request() {
+                Ok(request) => request,
+                Err(error) => return failed_run(&error),
+            };
+            let book = template.first_book();
             let root = match &typed_root {
                 None => output::NextRoot::Current,
                 Some(root) => root
