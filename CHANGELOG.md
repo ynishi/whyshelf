@@ -147,11 +147,20 @@ and this project adheres to
   `qa-first` is the sample's four books with two rules loosened and marked, so
   verifications can be written before the decisions they check, and the manual
   says how to tighten them at release (#82).
+- A template `experiment` keeps a pre-registered measurement as two
+  verifications: a plan that pins its table (`sheet`), approved before the run,
+  and a result that pins its record (`log`) and names its plan (`plans`),
+  approved after it. `init` writes the table beside the documents. A built-in
+  preset `code` pins only that a file is there, for a decision's link to its
+  code (#87).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
 ### Fixed
 
+- `init` and `new` follow a link on a path only while it stays inside the
+  root: a book's directory, or another parent, that links out of the root is
+  in the way, where a document could be written outside the project (#87).
 - Every call of Git goes through one runner that lets nothing of the
   repository choose a program or write: a clean or process filter the
   repository configures no longer runs when an address is made, a partial
