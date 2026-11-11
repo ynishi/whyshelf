@@ -243,6 +243,50 @@
 //!   preset = "rustdoc"       # space = "rust-item", compare = "presence", means = "depends"
 //! ```
 //!
+//! The space `rust-test` holds the test functions of the project's Rust source,
+//! each by its file and its path in the file: `<file>.rs::<module>::<function>`,
+//! the file a path of the space `file` ending in `.rs` (as written, case included,
+//! never out of the root), then the inline modules it is in, outermost first, then
+//! the function, each a Rust identifier (a raw one, `r#type`, included), compared
+//! as written (not normalized). A function is a test when it carries an attribute
+//! whose path ends in `test` (`#[test]`, `#[tokio::test]`), itself or in a
+//! `cfg_attr`; `#[rstest]`, `#[test_case]` and `#[cfg(test)]` are not such an
+//! attribute. Twin modules or functions of the name (each under its own `#[cfg]`)
+//! are all searched, and twin tests are one. Finding them runs no program: the file
+//! is read (at most 16 MiB), lexed, and its items scanned; no expression or type is
+//! parsed. What is compared is the function item's own tokens, from its first
+//! attribute to the end of its body, with its doc attributes left out (not those in
+//! a macro call's tokens, which are data). So an edit of white space, comments or
+//! doc comments changes nothing, an edit of another test in the file changes
+//! nothing, any other edit of the function makes the approvals that name it stale,
+//! and a test renamed or removed breaks them, save where a module on the way
+//! holds an item macro or an attribute that is not inert (below): there a test
+//! removed cannot be told, and the approval stays fresh, with a notice that it
+//! cannot be told. Nothing outside the function counts:
+//! an edit of a helper it calls, of a `use` at the top of the file, or a `cfg` that
+//! stops its module from being compiled leaves it fresh, and a test in a file no
+//! crate compiles reads as there. A file that cannot be read, is too large or does
+//! not lex cannot be told, nor can a test under a module declared out of line
+//! (`mod x;`), whose file is not followed: name such a test by the file of its
+//! module. Macros are not expanded: a test not found where a macro may make it (an
+//! item macro call, `include!`, an attribute macro on a module on the way or on a
+//! function of the name) cannot be told; one an attribute macro on another item
+//! makes reads as absent. A twin of a module declared out of line is not
+//! followed: a test not found in its inline twins cannot be told. The text
+//! is made, not stored, so `diff` has nothing to set beside it. The rules and the
+//! limits are on the page of `whyshelf_infra::shelf::artifact::rust_test`. A link
+//! to tests, and a name in it:
+//!
+//! ```text
+//!   [[book.link]]
+//!   name = "tests"
+//!   target = "artifact"
+//!   preset = "test"          # space = "rust-test", compare = "bytes", means = "depends"
+//!
+//!   tests: ["crates/cache/tests/expiry.rs::an_entry_past_its_time_expires",
+//!           "crates/cache/src/lib.rs::tests::a_fresh_entry_is_kept"]
+//! ```
+//!
 //! A text that is no name of the link's space makes the document invalid, with a
 //! problem that names the link, the text and why. For each name, its adapter answers
 //! one of four: the thing is there (with its hash), not there, it cannot tell now
@@ -342,7 +386,9 @@
 //! Each adapter offers presets for its own space (the file adapter offers `file`:
 //! `space = "file"`, `compare = "bytes"`, `means = "depends"`; the adapter of Rust
 //! items offers `rustdoc`: `space = "rust-item"`, `compare = "presence"`,
-//! `means = "depends"`; the page of `whyshelf_infra::shelf::artifact` lists them).
+//! `means = "depends"`; the adapter of Rust tests offers `test`:
+//! `space = "rust-test"`, `compare = "bytes"`, `means = "depends"`; the page of
+//! `whyshelf_infra::shelf::artifact` lists them).
 //! A project declares its own with `[[preset]]`. One of the name of a built-in
 //! preset and with no `from` replaces
 //! the built-in one whole: it takes none of its values. With `from` of its own name
@@ -443,7 +489,7 @@
 //! 16 MiB, and stops at 20,000 files or 512 MiB; a name pins are read as in two
 //! spaces is listed with no candidate, as `judge moved` refuses it. What could not be
 //! looked at is a `note` of the name. A space that has no way to suggest
-//! (`rust-item`, for now) is listed in `cannot_suggest`, and its names with no
+//! (`rust-item` and `rust-test`, for now) is listed in `cannot_suggest`, and its names with no
 //! candidate.
 //!
 //! ## What an approval saw

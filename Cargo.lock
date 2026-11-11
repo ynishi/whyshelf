@@ -1400,6 +1400,7 @@ name = "whyshelf-infra"
 version = "0.1.0"
 dependencies = [
  "jiff",
+ "proc-macro2",
  "serde",
  "serde_json",
  "serde_norway",
