@@ -161,9 +161,10 @@ name_type!(
 
 /// The directory of a book, relative to the project root.
 ///
-/// A file belongs to a book when it is under the directory of that book (see
-/// `Schema::membership`). Two books cannot share a directory or nest one in the
-/// other, so a file belongs to at most one.
+/// A file belongs to a book when it is under the directory of that book and the
+/// book's range takes it ([`BookRange::takes`], see `Schema::membership`). Two books
+/// cannot share a directory or nest one in the other, whatever their ranges, so a
+/// file belongs to at most one.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BookDir(RelPath);
 
@@ -180,7 +181,15 @@ impl BookDir {
 
     /// Whether `path` is a file under this directory.
     pub fn contains(&self, path: &RelPath) -> bool {
-        Self::is_below(self.0.as_str(), path.as_str())
+        self.relative(path).is_some()
+    }
+
+    /// The path below this directory (`a/b.md` for `dir/a/b.md`), or none when
+    /// `path` is not under it.
+    pub fn relative<'a>(&self, path: &'a RelPath) -> Option<&'a str> {
+        path.as_str()
+            .strip_prefix(self.0.as_str())
+            .and_then(|rest| rest.strip_prefix('/'))
     }
 
     /// Whether the two directories are the same or one is under the other.
@@ -787,7 +796,7 @@ pub enum CoverDecl {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BookSchema {
     name: BookName,
-    dir: BookDir,
+    range: BookRange,
     key: KeyPattern,
     description: Option<BookDescription>,
     fields: Declared<EntryName, FieldDecl>,
@@ -841,7 +850,23 @@ impl BookSchema {
 
     /// The directory of the book.
     pub fn dir(&self) -> &BookDir {
-        &self.dir
+        self.range.dir()
+    }
+
+    /// The range of the book inside its directory.
+    pub fn scope(&self) -> &BookScope {
+        self.range.scope()
+    }
+
+    /// The directory with its range: what a listing of files and `new` ask whether
+    /// a path is a document of the book.
+    pub fn range(&self) -> &BookRange {
+        &self.range
+    }
+
+    /// Whether `path` is a document of the book ([`BookRange::takes`]).
+    pub fn takes(&self, path: &RelPath) -> bool {
+        self.range.takes(path)
     }
 
     /// The grammar of the keys of the book.
@@ -890,6 +915,9 @@ pub struct BookSchemaDecl<L = LinkEntryDecl> {
     pub name: String,
     /// The directory of the book, relative to the project root.
     pub dir: String,
+    /// Which files under the directory are documents, and what one with no front
+    /// matter is, as written.
+    pub scope: ScopeDecl,
     /// The grammar of the keys.
     pub key: KeyPatternDecl,
     /// What the book is for, as written (one line), when the declaration says.
@@ -1134,6 +1162,35 @@ pub enum SchemaProblem {
         /// The other.
         second: BookName,
     },
+    /// A pattern of `include` or `exclude` that is not a relative glob staying in the
+    /// directory of the book.
+    #[error("book `{book}`: the `{list}` pattern `{pattern}` {why}")]
+    BadScopePattern {
+        /// The book, as written.
+        book: String,
+        /// The list the pattern is in.
+        list: ScopeList,
+        /// The pattern, as written.
+        pattern: String,
+        /// What is wrong with it.
+        why: PatternProblem,
+    },
+    /// `include = []`: the book would take no file.
+    #[error("book `{book}`: `include` lists no pattern, so the book would take no file")]
+    EmptyInclude {
+        /// The book, as written.
+        book: String,
+    },
+    /// A `without_front_matter` that is neither `"invalid"` nor `"skip"`.
+    #[error(
+        "book `{book}`: `without_front_matter` is \"{word}\", and it takes \"invalid\" or \"skip\""
+    )]
+    BadWithoutFrontMatter {
+        /// The book, as written.
+        book: String,
+        /// The word, as written.
+        word: String,
+    },
     /// A `Replaces` link that points outside its own book.
     #[error(
         "book `{book}`: the link `{link}` replaces, so it points into this book, not `{target}`"
@@ -1368,6 +1425,7 @@ struct Draft {
     label: String,
     name: Option<BookName>,
     dir: Option<BookDir>,
+    scope: Option<BookScope>,
     key: Option<KeyPattern>,
     description: Option<BookDescription>,
     fields: Declared<EntryName, FieldDecl>,
@@ -1404,6 +1462,7 @@ impl Draft {
         let name = read_book_name(&decl.name, problems);
         let dir = read_dir(&label, &decl.dir, problems);
         let key = read_key_pattern(&label, &decl.key, problems);
+        let scope = read_scope(&label, decl.scope, problems);
         let description = read_description(&label, decl.description.as_deref(), problems);
         let fields = read_fields(&label, decl.fields, problems);
         let links = read_links(&label, decl.links, &fields, spaces, problems);
@@ -1416,6 +1475,7 @@ impl Draft {
             label,
             name,
             dir,
+            scope,
             key,
             description,
             fields,
@@ -1457,7 +1517,7 @@ impl Draft {
         }
         Some(BookSchema {
             name: self.name?,
-            dir: self.dir?,
+            range: BookRange::new(self.dir?, self.scope?),
             key: self.key?,
             description: self.description,
             fields: self.fields,
@@ -1904,7 +1964,9 @@ impl Schema {
     /// nest, a `Replaces` link that leaves its own book, a link to artifacts that
     /// replaces, one that names no space, a text that is no space, or a space not in
     /// `spaces` (the spaces the adapters offer, given as a value), a book named
-    /// [`ARTIFACT_TARGET`], and a description that is no [`BookDescription`]. A
+    /// [`ARTIFACT_TARGET`], a description that is no [`BookDescription`], a
+    /// pattern of `include` or `exclude` that is no [`Pattern`], an `include` with
+    /// none, and a `without_front_matter` that is no [`WithoutFrontMatter`]. A
     /// [`Schema`] exists only when there is none, so nothing after this re-checks a
     /// declaration. The books, and the fields and links of each, are kept in the
     /// order the declaration writes them, once ([`Declared`]).
@@ -1983,8 +2045,17 @@ impl Schema {
     pub(super) fn membership(&self, path: &RelPath) -> Membership<'_> {
         self.books
             .values()
-            .find(|book| book.dir.contains(path))
+            .find(|book| book.takes(path))
             .map_or(Membership::Outside, Membership::In)
+    }
+
+    /// The directory and range of every book, in the order of the declaration: what
+    /// a listing of the documents is given.
+    pub fn ranges(&self) -> Vec<BookRange> {
+        self.books
+            .values()
+            .map(|book| book.range().clone())
+            .collect()
     }
 
     /// A book by name, given as a [`BookName`] or as the text of one.
@@ -2004,6 +2075,12 @@ impl Schema {
 
 mod declared;
 mod preset;
+mod scope;
+
+use scope::read_scope;
+pub use scope::{
+    BookRange, BookScope, Pattern, PatternProblem, ScopeDecl, ScopeList, WithoutFrontMatter,
+};
 
 pub use declared::{Declared, Picked};
 pub use preset::{
@@ -2018,5 +2095,7 @@ mod comparison_tests;
 mod cover_tests;
 #[cfg(test)]
 mod preset_tests;
+#[cfg(test)]
+mod scope_tests;
 #[cfg(test)]
 mod tests;

@@ -122,6 +122,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
         BookSchemaDecl {
             name: "finding".to_owned(),
             dir: "findings".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Prefixed {
                 prefix: "FR".to_owned(),
             },
@@ -147,6 +148,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
         BookSchemaDecl {
             name: "spec".to_owned(),
             dir: "specs".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Prefixed {
                 prefix: "SP".to_owned(),
             },
@@ -161,6 +163,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
         BookSchemaDecl {
             name: "design".to_owned(),
             dir: "designs".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Slug,
             description: None,
             fields: vec![field("title", FieldTypeDecl::Text, FieldPresence::Required)],

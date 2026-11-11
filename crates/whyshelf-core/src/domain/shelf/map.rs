@@ -10,8 +10,8 @@
 
 use super::artifact::{Comparison, Space};
 use super::schema::{
-    BookDescription, BookDir, BookName, Cardinality, CoverSeverity, DeclaredLink, EntryName,
-    FieldDecl, KeyPattern, PresetOrigin, Propagation, Schema,
+    BookDescription, BookDir, BookName, BookScope, Cardinality, CoverSeverity, DeclaredLink,
+    EntryName, FieldDecl, KeyPattern, PresetOrigin, Propagation, Schema,
 };
 
 /// Every book and every link of a declaration, in the order it writes them.
@@ -31,6 +31,9 @@ pub struct BookMap {
     pub name: BookName,
     /// The directory.
     pub dir: BookDir,
+    /// Which files under the directory are its documents, and what one with no front
+    /// matter is.
+    pub scope: BookScope,
     /// The grammar of its keys.
     pub key: KeyPattern,
     /// What it is for, when the declaration says.
@@ -87,6 +90,7 @@ impl ShelfMap {
             .map(|book| BookMap {
                 name: book.name().clone(),
                 dir: book.dir().clone(),
+                scope: book.scope().clone(),
                 key: book.key().clone(),
                 description: book.description().cloned(),
                 fields: book

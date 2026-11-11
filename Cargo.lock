@@ -1389,6 +1389,7 @@ name = "whyshelf-core"
 version = "0.1.0"
 dependencies = [
  "arch-lint",
+ "globset",
  "sha2",
  "thiserror",
  "uuid",

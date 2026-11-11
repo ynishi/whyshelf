@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794401172857,
+  "expires": null,
+  "frame": [],
+  "id": "01a1caa4-fe1d-730f-8d01-2fbe6d54f41e",
+  "kind": "decision",
+  "reason": "A book declares its range by include and exclude of *, ? and ** and a rule for files without front matter, asked by every reader and writer, and nothing declared changes nothing (#75); checked by a blind review on the binary, every finding fixed",
+  "revision": "5551962100bd31d21bf93859dc4048a3cd2a6153",
+  "seen": "sha256:e60d4249e0ac615c1b47306fb8c85414b2a150b647f7db8ac662883e772f3c5a",
+  "seen_address": "aac2548e166a79f565e2fefd817dcee503a0d698",
+  "subject": "01a1ca93-4b55-70de-b302-a6a84134cf40",
+  "v": 1,
+  "verb": "approve"
+}

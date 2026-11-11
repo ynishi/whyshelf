@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
-use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc};
+use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, SkippedFile};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
 use crate::domain::shelf::freshness::{
     Degradation, Notice, OriginGroup, RootCause, Severity, Standing, Successors,
@@ -109,6 +109,13 @@ pub struct BookCount {
     pub dir: BookDir,
     /// What it holds.
     pub tally: BookTally,
+    /// The files in its range that are not its documents, each with why, in the
+    /// order they were read ([`Shelf::skipped`]): never counted as valid or invalid,
+    /// and never left unsaid. Empty unless the book says
+    /// `without_front_matter = "skip"`.
+    ///
+    /// [`Shelf::skipped`]: crate::domain::shelf::build::Shelf::skipped
+    pub skipped: Vec<SkippedFile>,
 }
 
 /// The result of `check`.
