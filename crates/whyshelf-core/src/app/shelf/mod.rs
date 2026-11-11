@@ -18,7 +18,7 @@
 //! | [`stats`](ShelfApp::stats) | no | [`StatsReport`]: how the work went, from the ledger: approvals made again, pending time, runs, and the pins that changed under approvals made again |
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
-//! | [`judge`](ShelfApp::judge) | **yes** | [`Judged`]: the record that was appended, with the addresses of what an approval stood on and the revision |
+//! | [`judge`](ShelfApp::judge) | **yes** | [`JudgedAll`]: the records that were appended ([`Judged`]), with the addresses of what an approval stood on and the revision, and the approvals left out because they would only repeat a fresh one, each with why |
 //! | [`approve_stale`](ShelfApp::approve_stale) | **yes** | [`StaleApproved`]: the approvals made again, upstream first and in one run, of every expired or stale one that would hold once made, and those left out, each with why |
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
@@ -70,6 +70,8 @@ mod withdraw;
 #[cfg(test)]
 mod actor_tests;
 #[cfg(test)]
+mod approve_fresh_tests;
+#[cfg(test)]
 mod approve_stale_tests;
 #[cfg(test)]
 mod artifact_tests;
@@ -98,7 +100,7 @@ mod tests;
 #[cfg(test)]
 mod unlinked_tests;
 
-pub use approve_stale::{ApproveStaleRequest, LeftOut, LeftOutWhy, StaleApproved};
+pub use approve_stale::{ApproveStaleRequest, StaleApproved};
 pub use error::{ErrorClass, ShelfError};
 pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
 pub use judge::{JudgeRequest, Judgement};
@@ -111,9 +113,9 @@ pub use ports::{
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
-    DownstreamEdge, GetReport, Health, Judged, MapReport, Names, Row, StaleEntry, StaleReport,
-    StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry, UnlinkedLists,
-    UnlinkedReport, UpstreamEdge, UpstreamEnd,
+    DownstreamEdge, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport, Names,
+    Row, StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown,
+    UnlinkedEntry, UnlinkedLists, UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use unlinked::{UnlinkedAsk, UnlinkedFilter};

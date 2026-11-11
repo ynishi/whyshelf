@@ -24,6 +24,7 @@ fn approve(reference: &str, until: Option<i64>) -> JudgeRequest {
         judgement: Judgement::Approve {
             until: until.map(JudgedAt::new),
             reason: None,
+            again: false,
         },
         reference: reference.parse::<Reference>().unwrap(),
         actor: None,

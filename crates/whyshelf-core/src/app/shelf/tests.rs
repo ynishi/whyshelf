@@ -23,6 +23,7 @@ fn approve(reference: &str) -> JudgeRequest {
         judgement: Judgement::Approve {
             until: None,
             reason: None,
+            again: false,
         },
         reference: r(reference),
         actor: None,
@@ -156,7 +157,10 @@ fn get_of_a_short_id_two_documents_end_with_is_ambiguous() {
 fn an_approval_is_appended_and_holds_until_an_upstream_is_edited() {
     let mut app = app(vec![fr(1, "slow", &[]), sp(2, "cache", &["FR-1"])]);
     block_on(app.judge(approve("FR-1"))).unwrap();
-    let judged = block_on(app.judge(approve("SP-2"))).unwrap();
+    let judged = block_on(app.judge(approve("SP-2")))
+        .unwrap()
+        .judged
+        .remove(0);
     assert_eq!(judged.subject, docid(2));
     assert!(matches!(judged.record, Record::Decision(_)));
     assert_eq!(app.ports().record_count(), 2);
@@ -238,8 +242,9 @@ fn a_row_carries_the_decision_that_stands_with_who_when_and_why() {
     approval.judgement = Judgement::Approve {
         until: None,
         reason: Some(NonBlank::new("as seen").unwrap()),
+        again: false,
     };
-    let approved = block_on(app.judge(approval)).unwrap();
+    let approved = block_on(app.judge(approval)).unwrap().judged.remove(0);
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;
     let decision = row.decision.expect("approved: a decision");
     assert_eq!(decision.id(), approved.record.id());
@@ -251,7 +256,9 @@ fn a_row_carries_the_decision_that_stands_with_who_when_and_why() {
         reference: r("FR-1"),
         actor: None,
     }))
-    .unwrap();
+    .unwrap()
+    .judged
+    .remove(0);
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;
     let decision = row.decision.expect("denied: a decision");
     assert_eq!(decision.id(), denied.record.id());
@@ -299,6 +306,7 @@ fn an_approval_with_an_expiry_lapses_when_the_clock_reaches_it() {
         judgement: Judgement::Approve {
             until: Some(JudgedAt::new(2000)),
             reason: None,
+            again: false,
         },
         reference: r("FR-1"),
         actor: None,
@@ -328,7 +336,10 @@ fn revoke_withdraws_the_standing_decision_and_needs_one() {
     assert_eq!(app.ports().append_count(), 0);
 
     block_on(app.judge(approve("FR-1"))).unwrap();
-    let judged = block_on(app.judge(revoke("changed my mind"))).unwrap();
+    let judged = block_on(app.judge(revoke("changed my mind")))
+        .unwrap()
+        .judged
+        .remove(0);
     assert!(matches!(judged.record, Record::Revocation(_)));
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;
     assert_eq!(row.standing, Standing::Pending);
@@ -338,7 +349,9 @@ fn revoke_withdraws_the_standing_decision_and_needs_one() {
 #[test]
 fn judge_all_approves_an_upstream_and_its_downstream_in_one_run() {
     let mut app = app(vec![fr(1, "slow", &[]), sp(2, "cache", &["FR-1"])]);
-    let judged = block_on(app.judge_all(vec![approve("FR-1"), approve("SP-2")])).unwrap();
+    let judged = block_on(app.judge_all(vec![approve("FR-1"), approve("SP-2")]))
+        .unwrap()
+        .judged;
     assert_eq!(judged.len(), 2);
     assert_eq!(judged[0].subject, docid(1));
     assert_eq!(judged[1].subject, docid(2));
@@ -375,8 +388,8 @@ fn judge_all_writes_nothing_when_a_later_request_is_refused() {
 #[test]
 fn judge_all_of_nothing_is_an_empty_run_that_writes_nothing() {
     let mut app = app(vec![fr(1, "slow", &[])]);
-    let judged = block_on(app.judge_all(vec![])).unwrap();
-    assert!(judged.is_empty());
+    let run = block_on(app.judge_all(vec![])).unwrap();
+    assert!(run.judged.is_empty() && run.left_out.is_empty());
     assert_eq!(app.ports().append_count(), 0);
 }
 

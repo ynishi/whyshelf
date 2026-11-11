@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "07ae5311c5f53933bf554b7f86131fc909691991",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7b9dd8a50a797d44013c7bb633a4ada19e403f6a64bc4c39a4c0abe8bf27fb8e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/approve.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "674f81af5e918067800d8c676b03ea799c908604",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2bb3f2fa245bd1661e0d9089bca3429c4e240cc4c9a269b3afed8b24e79877f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794371906245,
+  "expires": null,
+  "frame": [
+    {
+      "address": "832e07ac0f18bb9380e50a600e626b2cc6d87f3a",
+      "hash": "sha256:54dc10fd2845a59a86d41eeeb5c733c25dd551fa819ff8d662ef5e96e6258113",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "58"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8cf-dfdb-771f-bea4-6b65c56de737"
+    }
+  ],
+  "id": "01a1c8e6-6ce1-7632-bc31-f372fe88f6d2",
+  "kind": "decision",
+  "reason": "judge approve leaves out a document whose standing approval a new one would only repeat, by comparing the frames, unless --again (#66); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "0d0285d4c1ba4da16cad3d2227b39c0796d531e0",
+  "seen": "sha256:de6babce2ca0f0912772aecc209912b18722171acbd6da2855ed9260b14faf3b",
+  "seen_address": "8cc745ac4e51300889902c00b8b924fabdc9e011",
+  "subject": "01a1c8cf-e77f-7466-8e8c-cf03a522db1d",
+  "v": 1,
+  "verb": "approve"
+}

@@ -308,7 +308,9 @@
 //!                             documents stayed pending, the runs of judge, and what changed
 //!                             under approvals made again
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
-//!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
+//!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>] [--again]
+//!                             approve each; one whose standing approval a new one would
+//!                             repeat exactly is left out, unless --again
 //!   judge approve --stale --reason <text> [--until <time>] [--actor <name>]
 //!                             approve again, in one run and upstream first, every approval
 //!                             that is expired or stale and would hold; the rest are left out
@@ -334,7 +336,35 @@
 //! - `judge` takes several references and decides them in order on one reading of
 //!   the project, each on what the ones before it left (so `judge approve F-1 S-1`
 //!   frames S-1 on F-1's new approval); it writes all of them, or none when one is
-//!   refused.
+//!   refused. The answer is `{"judged": [...], "left_out": [...]}`.
+//! - `judge approve` leaves out a document whose approval would only repeat the
+//!   one that stands (the rule is on
+//!   [`repeated`](domain::shelf::ledger::repeated)): the approval it would make pins
+//!   exactly what the standing one pins (the document's hash; each upstream's link,
+//!   identity, key and hash; each artifact's link, space, name, comparison, and
+//!   whether it was there and its hash), and `--until` gives the expiry it has (none
+//!   and none, or the same time, which must still be after now: an expiry already
+//!   past is refused, exit 1, as for any approval). Addresses, the revision, who approves and why are
+//!   not compared, and freshness is not asked: an approval stale only through an
+//!   upstream (one pending, say) is left out too, as a new one would be as stale.
+//!   An edit kept by `judge same` is a new hash, so that document is approved. No
+//!   record is written for it; it is listed under `left_out` with `"reason":
+//!   "repeats"` (it is the repeat that is told, not a freshness), its `detail` and the id of
+//!   the approval that stands as `approval`, in the shape `--stale` uses, and
+//!   written on stderr as `warning: <key> was not approved again: <detail>; pass
+//!   --again to approve it anyway`. Leaving out is no refusal: the others of the run
+//!   are judged and written as before, and a run that leaves out every document
+//!   writes nothing, exits 0 and asks for no actor (`WHYSHELF_ACTOR` and Git's
+//!   `user.name` are read only for a record to write). One whose `depends` link
+//!   names an artifact that cannot be told now is refused as before. A denied,
+//!   deprecated or retired document, a pending one, and one whose approval was
+//!   withdrawn with nothing before it are approved as before; withdrawing a later
+//!   approval leaves the earlier one standing, and it is that one that is compared.
+//!   `--again` makes the approval anyway, for a person who read the document again
+//!   and wants that recorded (it is counted as an approval made again by `stats`).
+//!   `--again` cannot be given with `--stale`. In the library,
+//!   [`ShelfApp::judge`](app::shelf::ShelfApp::judge) and `judge_all` return a
+//!   [`JudgedAll`](app::shelf::JudgedAll), the records written and those left out.
 //! - `judge approve --stale` takes no reference (one given beside it is a request
 //!   error, exit 2) and needs `--reason`. It approves again, in one such run, every
 //!   approval whose standing is `expired` or `stale` and that would hold once
@@ -346,10 +376,15 @@
 //!   that is not valid, a cycle), `refused` (the approval would be refused now, as
 //!   below: an upstream decided against, an artifact that cannot be told), or
 //!   `stands_on` (a `depends` link names a document that is broken, pending, or
-//!   itself left out; a pending one is approved first, with `judge approve`). Each is
+//!   itself left out for any reason but `repeats`; a pending one is approved first, with `judge approve`), or
+//!   `repeats` (it was stale only through its upstream's upstream, whose hash is new,
+//!   and the run approved its upstream again: nothing it pinned changed, so it holds
+//!   again with no new approval, as `judge approve` leaves out one that would
+//!   repeat; such a document stands, and holds back nothing on it). Each is
 //!   listed under `left_out` as `{"doc", "reason", "detail", "upstream", "link",
-//!   "upstream_is", "kinds", "causes"}` (`kinds` and `causes` for `broken`,
-//!   `upstream`, `link` and `upstream_is` for `stands_on`), and written as a line on
+//!   "upstream_is", "approval", "kinds", "causes"}` (`kinds` and `causes` for
+//!   `broken`, `upstream`, `link` and `upstream_is` for `stands_on`, `approval`, the
+//!   id of the approval that stands, for `repeats`), and written as a line on
 //!   stderr: `warning: <key> is broken and was not approved again (<kinds>)`, or
 //!   `warning: <key> was not approved again: <detail>`. A name with nothing there is
 //!   pinned as absent, as by any approval, listed in the judgement's `absent`, and
