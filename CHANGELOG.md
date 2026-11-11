@@ -67,6 +67,17 @@ and this project adheres to
   would hold once approved. The rest are left out, listed under `left_out` with
   why (`broken`, `refused`, `stands_on`) and warned of on stderr; pending
   documents are not touched (#41).
+- Presets of links to artifacts, and a default: a link may name
+  `preset = "<name>"` and write only what differs; a project declares its own
+  with `[[preset]]` (optionally `from` another), and `[defaults] artifact =
+  "<preset>"` is the preset of a link that names neither a preset nor a space.
+  The file adapter offers `file` (space `file`, `bytes`, `depends`). Presets
+  are expanded before the declaration is checked, so pins, causes and notices
+  see only the values; `map` gives each link's `preset` and
+  `preset_by_default`, and draws `preset=<name>`. `means` may be left to a
+  preset. `compare` and its `ignore` are one value, and a `from` of a preset's
+  own name refines the built-in of that name. A problem of the declaration now
+  says its reason (#54).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 

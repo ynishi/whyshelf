@@ -19,8 +19,9 @@ use crate::domain::location::RelPath;
 use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record};
 use crate::domain::shelf::schema::{
-    BookDir, BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl,
-    KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation,
+    BookDir, BookSchemaDecl, BuiltinPresets, Cardinality, FieldEntryDecl, FieldPresence,
+    FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, PresetName, PresetValues,
+    Propagation, ShelfDecl,
 };
 
 use super::ports::{
@@ -195,6 +196,10 @@ pub(super) fn sp_tested(n: u128, title: &str, grounds: &[&str], tests: &[&str]) 
 #[derive(Debug)]
 pub(super) struct FakeShelf {
     pub(super) decls: Mutex<Vec<BookSchemaDecl>>,
+    /// The declaration as written, presets and defaults with it, in the place of
+    /// `decls` when there is one. The artifact source offers one preset, `file`:
+    /// space `file`, compare `bytes`, means `depends`.
+    pub(super) written: Mutex<Option<ShelfDecl>>,
     pub(super) readings: Mutex<Vec<DocReading>>,
     pub(super) records: Mutex<Vec<Record>>,
     pub(super) unreadable: Mutex<Vec<UnreadableRecord>>,
@@ -284,6 +289,7 @@ impl FakeShelf {
     pub(super) fn new() -> Self {
         Self {
             decls: Mutex::new(decls()),
+            written: Mutex::new(None),
             readings: Mutex::new(Vec::new()),
             records: Mutex::new(Vec::new()),
             unreadable: Mutex::new(Vec::new()),
@@ -420,9 +426,12 @@ impl FakeShelf {
 impl BookSchemaSource for FakeShelf {
     type Error = FakeError;
 
-    async fn declarations(&self) -> Result<Vec<BookSchemaDecl>, FakeError> {
+    async fn declarations(&self) -> Result<ShelfDecl, FakeError> {
         self.check()?;
-        Ok(lock(&self.decls).clone())
+        Ok(match lock(&self.written).clone() {
+            Some(written) => written,
+            None => ShelfDecl::of_books(lock(&self.decls).clone()),
+        })
     }
 }
 
@@ -649,6 +658,18 @@ impl ArtifactSource for FakeShelf {
 
     fn spaces(&self) -> BTreeSet<Space> {
         lock(&self.spaces).clone()
+    }
+
+    fn presets(&self) -> BuiltinPresets {
+        BuiltinPresets::from([(
+            PresetName::new("file").expect("a name"),
+            PresetValues {
+                space: Some("file".to_owned()),
+                compare: Some("bytes".to_owned()),
+                ignore: None,
+                means: Some(Propagation::Depends),
+            },
+        )])
     }
 
     async fn resolve(&self, asks: &ArtifactAsks) -> Result<ArtifactReadings, FakeError> {

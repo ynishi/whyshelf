@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "33a5b6fc561c68bea1c80c67f00f19e2a398bf27",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:23ea83527a1bc02544470ac6f81b76afc0c313dda8ba755190481fcfcb4dbd00",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/command_line.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794355911041,
+  "expires": null,
+  "frame": [
+    {
+      "address": "70a5dd9de54859341dbb149ca40373305205c37d",
+      "hash": "sha256:b6b314f85490356abb039bbaf4261c563f8173e5527c897862e5bea967bd34c5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a1c7f2-6375-74d5-9daf-8ab56659cd65",
+  "kind": "decision",
+  "reason": "DEC-44 lets the space come through a preset or the default, and shared tests changed for #54; checked by a blind review",
+  "revision": "5f0ce0e9ef270f23e2d443607d5df5d0e987b79e",
+  "seen": "sha256:6da13e5689cd278afbdef461d589d83c52ce9d06c81b2cff6be421c021314e4a",
+  "seen_address": "b5c2489145638ad7ac1da26a77a7a29a3e7ceb4a",
+  "subject": "01a1c765-2032-71f6-a0ec-ae9a7f747e4d",
+  "v": 1,
+  "verb": "approve"
+}

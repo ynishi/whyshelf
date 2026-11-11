@@ -68,9 +68,11 @@ dir = "books/note"
 key = "slug"
 "##;
 
+/// The declaration, expanded with the presets of the file adapter and checked.
 fn schema_of(books: &str) -> Schema {
-    let spaces = BTreeSet::from([Space::new("file").unwrap()]);
-    Schema::validate(parse(books).unwrap(), &spaces).unwrap()
+    let space = Space::new("file").unwrap();
+    let builtins = whyshelf_infra::shelf::artifact::file::presets(&space);
+    Schema::declared(parse(books).unwrap(), &builtins, &BTreeSet::from([space])).unwrap()
 }
 
 fn schema() -> Schema {
@@ -167,6 +169,8 @@ fn the_json_holds_the_books_and_links_as_data() {
             "count": "many",
             "cover": false,
             "cover_severity": null,
+            "preset": null,
+            "preset_by_default": false,
         })
     );
     assert_eq!(
@@ -179,6 +183,8 @@ fn the_json_holds_the_books_and_links_as_data() {
             "count": "at-least-one",
             "cover": true,
             "cover_severity": "error",
+            "preset": null,
+            "preset_by_default": false,
         })
     );
     // `cover` is true for either strength, and the strength stands beside it.
@@ -191,6 +197,85 @@ fn the_json_holds_the_books_and_links_as_data() {
     assert_eq!(links[4]["count"], "one");
 }
 
+/// A book whose links to artifacts take a preset each way: named, of the project
+/// `from` a built-in one, by default, and none (a space written).
+const PRESETS: &str = r##"
+[defaults]
+artifact = "file"
+
+[[preset]]
+name = "rust"
+from = "file"
+compare = "lines"
+ignore = ["//"]
+
+[[book]]
+name = "verification"
+dir = "books/verification"
+key = { prefix = "V" }
+[[book.link]]
+name = "tests"
+target = "artifact"
+[[book.link]]
+name = "code"
+target = "artifact"
+preset = "rust"
+means = "informs"
+[[book.link]]
+name = "data"
+target = "artifact"
+space = "file"
+means = "depends"
+[[book.link]]
+name = "checks"
+target = "verification"
+means = "informs"
+"##;
+
+#[test]
+fn the_drawing_shows_the_preset_of_each_link_in_a_column_of_its_own() {
+    let expected = "\
+verification  V-
+├─ tests   depends  0..  preset=file(default)  ──► artifact space=file  compare=bytes
+├─ code    informs  0..  preset=rust           ──► artifact space=file  compare=lines ignore=\"//\"
+├─ data    depends  0..                        ──► artifact space=file  compare=bytes
+└─ checks  informs  0..                        ──► verification (own book)
+";
+    let drawn = map(&MapReport::Mapped(ShelfMap::of(&schema_of(PRESETS))));
+    assert_eq!(drawn.diagram.as_deref(), Some(expected));
+}
+
+#[test]
+fn the_json_tells_the_expanded_values_and_the_preset_of_each_link() {
+    let answer =
+        serde_json::to_value(map(&MapReport::Mapped(ShelfMap::of(&schema_of(PRESETS))))).unwrap();
+    let links = answer["links"].as_array().unwrap();
+    assert_eq!(
+        links[0],
+        serde_json::json!({
+            "from": "verification",
+            "name": "tests",
+            "target": {"kind": "artifact", "space": "file", "compare": "bytes", "ignore": []},
+            "means": "depends",
+            "count": "many",
+            "cover": false,
+            "cover_severity": null,
+            "preset": "file",
+            "preset_by_default": true,
+        })
+    );
+    assert_eq!(
+        links[1]["target"],
+        serde_json::json!({"kind": "artifact", "space": "file", "compare": "lines", "ignore": ["//"]})
+    );
+    assert_eq!(links[1]["means"], "informs");
+    assert_eq!(links[1]["preset"], "rust");
+    assert_eq!(links[1]["preset_by_default"], false);
+    assert_eq!(links[2]["preset"], serde_json::Value::Null);
+    assert_eq!(links[3]["preset"], serde_json::Value::Null);
+    assert_eq!(links[3]["preset_by_default"], false);
+}
+
 #[test]
 fn a_declaration_that_cannot_be_used_is_its_problems_and_no_drawing() {
     let problems = NonEmptyVec::from_vec(vec![SchemaProblem::ReservedBookName]).unwrap();
@@ -198,4 +283,26 @@ fn a_declaration_that_cannot_be_used_is_its_problems_and_no_drawing() {
     assert_eq!(answer.schema_problems.len(), 1);
     assert!(answer.books.is_empty() && answer.links.is_empty());
     assert_eq!(answer.diagram, None);
+}
+
+#[test]
+fn a_problem_of_the_declaration_says_its_reason() {
+    let books = "[[preset]]\nname='odd'\ncompare='words'\n\
+         [[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+         [[book.link]]\nname='tests'\ntarget='artifact'\nspace='file'\nmeans='depends'\n\
+         compare='bytes'\nignore=['//']\n";
+    let space = Space::new("file").unwrap();
+    let builtins = whyshelf_infra::shelf::artifact::file::presets(&space);
+    let problems =
+        Schema::declared(parse(books).unwrap(), &builtins, &BTreeSet::from([space])).unwrap_err();
+    let answer = map(&MapReport::SchemaInvalid(problems));
+    assert_eq!(
+        answer.schema_problems,
+        [
+            "the `compare` of the preset `odd` is not one: `words` is no comparison \
+             (`bytes`, `lines` or `presence`)",
+            "book `a`: the `compare` of the link `tests` is not one: `ignore` is for \
+             `compare = \"lines\"`: `bytes` counts every byte",
+        ]
+    );
 }

@@ -83,6 +83,8 @@ mod fmt_tests;
 #[cfg(test)]
 mod new_doc_tests;
 #[cfg(test)]
+mod preset_tests;
+#[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]
 mod space_tests;

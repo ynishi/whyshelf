@@ -1,0 +1,142 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "dd52ddb1c15878b73abee3a8af50de93b2f7dc4a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0343353487bbe89cf6fbaf27db52dab051368927cc2e0f80b766d0df01cff545",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "993af2b3212e6912d2f19d8cf1ad6ecadbd9c998",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5abb4c5d5b3e880dc1c66ea7babceb0c43a3f0a9ed89c015ee6dad758be2ac3e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9137a1aa23eb1d6db5c465dfff52bbb589cf6d1f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3304c33d9d28650e55eca40465f4f5d58e3ae6f1718a4a7823aecb3bf2d9b300",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "84b76b5045ecca4bc6be6cbe46bb8cab00c86c50",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:991c3c5035bdeec5a7bd435d965c86d9019bcfd4bae0eb389011a35a8bbe7a77",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794355911041,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1b87bc28bf8099cb7ccbadd2a10c0f2bb5aec6c4",
+      "hash": "sha256:29a9e797a7b663f15d704ddd576bd48c5e4ca4de5b3b33c81c1d8ae843ed2fdf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "30"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d626-73e6-9e17-45d0aef14328"
+    },
+    {
+      "address": "a0fd6d7c9569173efcc54a424e59fc4fb1320f63",
+      "hash": "sha256:43b7be0c15e5f03f546deba6051a6077e27f2f5adab430f35a7f76d3d6c136d2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d99a-72ad-86a3-e75931d0b50a"
+    },
+    {
+      "address": "ec2f4abc7c0b28d7a26689284802a8b803d178f6",
+      "hash": "sha256:f28a92d28151052d0295cfdce49cbacc12b1e8538962cb1c6e8c81a0f78e8a59",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "32"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dcde-76e2-a624-77aadb435255"
+    },
+    {
+      "address": "8ea9966b54a032c0bd52b4fa8d9ba4f612763c3e",
+      "hash": "sha256:ee5b023c8b0ffac33a7ac16fd28d716315715c27fabd918eb3351172ae4f54ce",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce"
+    }
+  ],
+  "id": "01a1c7f2-5b83-77c5-8cc8-2009467fa0a4",
+  "kind": "decision",
+  "reason": "DEC-44 lets the space come through a preset or the default, and shared tests changed for #54; checked by a blind review",
+  "revision": "5f0ce0e9ef270f23e2d443607d5df5d0e987b79e",
+  "seen": "sha256:c3c6a1fe7298e512e2c3c9f06d0c7a785e7fc0bb7d1d19f98aa95a3812adb33c",
+  "seen_address": "87ecbca78bddcf4962bfb803689e5c5b1d8669ff",
+  "subject": "01a1c4ba-1a9f-7201-9b7f-62a0f1be9e14",
+  "v": 1,
+  "verb": "approve"
+}
