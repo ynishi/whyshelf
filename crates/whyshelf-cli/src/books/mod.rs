@@ -219,6 +219,10 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
                 }
             }
         }
+        BooksCommand::Moves => ShelfApp::new(project)
+            .moves()
+            .await
+            .map(|r| print(&output::moves(&r))),
         BooksCommand::Diff { reference } => ShelfApp::new(project)
             .diff(&reference)
             .await

@@ -67,6 +67,11 @@ pub enum BooksCommand {
         #[arg(long)]
         since: Option<String>,
     },
+    /// The names approvals pinned something at that have nothing behind them now
+    /// (read through the moves declared), each with the documents that pin it and
+    /// where its space's adapter suggests it moved (for files: the same content, then
+    /// Git's renames since the approval); it declares nothing and writes nothing.
+    Moves,
     /// Each item of the approval that stands about a document, as it was approved and
     /// as it is now, with a line diff where both are text.
     Diff {

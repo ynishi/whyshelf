@@ -1,0 +1,96 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::artifact::ArtifactReading",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::freshness::Notice",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::FrameRefusal",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794382006919,
+  "expires": null,
+  "frame": [
+    {
+      "address": "07522f832291156bffbc20595ddc6f91106498f5",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "address": "271f9aadb94f1a31cbae5145aa1889a38fa7b77a",
+      "hash": "sha256:74a75042c5f67aad20a2140eabf2b07750e2afcf7caa003baf93dc8b6de49487",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4d3-a2e6-7651-a588-ca95e98cfe67"
+    }
+  ],
+  "id": "01a1c980-9033-70e4-b5c5-b994e2c20ebf",
+  "kind": "decision",
+  "reason": "Every Git call goes through one runner that lets nothing of the repository choose a program or write; addresses keep Git's own conversions with every filter driver shut out; a link is followed while it stays inside the root; moves joins the reading commands every e2e test runs (#69); checked by three rounds of blind review",
+  "revision": "cd81a89022f654f78f7867fce54d41ff31af007b",
+  "seen": "sha256:1cce62a572259e1e57a23ec85cec8acc40c478dcedee3048d8120f97a37cd32a",
+  "seen_address": "c74b2ee2aed6c8bcfcc57f138bfa6926eb92d61f",
+  "subject": "01a1c60b-bc99-7728-b8d7-deea06f9c49b",
+  "v": 1,
+  "verb": "approve"
+}

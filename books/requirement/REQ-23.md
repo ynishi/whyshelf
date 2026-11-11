@@ -1,7 +1,7 @@
 ---
 id: "01a1c912-1691-7698-adfe-26b7440a52ad"
 key: "REQ-23"
-grounds: ["F-29"]
+grounds: ["F-29", "F-30"]
 issues: ["#42"]
 title: "An artifact that moved is declared once, and the approvals on its old name are read through it"
 ---

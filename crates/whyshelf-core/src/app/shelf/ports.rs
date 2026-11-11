@@ -23,15 +23,16 @@
 //! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
 //! | [`ContentStore`] | content read back by its [`ContentAddress`], by the adapter of the document or the space it is of, or "not readable" |
 //! | [`RevisionSource`] | the point of the project's history now, if there is one |
+//! | [`MoveSource`] | for the names of a space with nothing behind them now, the names each may have moved to, each with how it was found, or that the space cannot suggest |
 //!
 //! The ports are bundled in two traits, so that a use case that only reads is generic
 //! over a type that has nothing to write with:
 //!
 //! ```text
 //!   ShelfRead   BookSchemaSource  DocSource  LedgerRead  Clock  ArtifactSource  ContentStore
-//!        ^
+//!        ^      MoveSource
 //!        |      what `check`, `status`, `get`, `trace`, `stale`, `get --approved`,
-//!        |      `diff` and `fmt --check` are generic over
+//!        |      `diff`, `moves` and `fmt --check` are generic over
 //!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite  DocReplace
 //!               what `judge`, `new_doc` and `fmt` are generic over
 //! ```
@@ -50,7 +51,11 @@ use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactKey, ArtifactReadings, ContentAddress, Revision, Space,
 };
 use crate::domain::shelf::build::{DocReading, RawValue};
-use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record, RecordProblem};
+#[cfg(doc)]
+use crate::domain::shelf::ledger::GoneNames;
+use crate::domain::shelf::ledger::{
+    GoneName, JudgedAt, JudgementId, Record, RecordProblem, SpaceSuggestions,
+};
 use crate::domain::shelf::schema::{BookDir, BuiltinPresets, ShelfDecl};
 
 use super::error::ShelfError;
@@ -82,6 +87,8 @@ pub enum ShelfPort {
     DocWrite,
     /// [`DocReplace`].
     DocReplace,
+    /// [`MoveSource`].
+    Moves,
 }
 
 impl fmt::Display for ShelfPort {
@@ -99,6 +106,7 @@ impl fmt::Display for ShelfPort {
             Self::Revision => "revision",
             Self::DocWrite => "document write",
             Self::DocReplace => "document replace",
+            Self::Moves => "move suggestions",
         })
     }
 }
@@ -409,6 +417,34 @@ pub trait ArtifactSource: Send + Sync {
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
 }
 
+/// Where the artifacts that are gone may have moved to, as each space's adapter can
+/// see: what `moves` asks, and nothing else does.
+///
+/// A port of its own, beside [`ArtifactSource`] and not a method of it: that port
+/// answers what is at a name now, in four ways, for every reading of the project,
+/// and a space answers it whether or not it has any way to suggest; this one
+/// searches (the content of what is there, the space's history since an approval)
+/// and may say it has no way to. The domain decides which names are asked about
+/// ([`PinnedNames`](crate::domain::shelf::ledger::PinnedNames)) and orders what comes
+/// back ([`GoneNames::suggest`]); the adapter only looks.
+pub trait MoveSource: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// For each of `gone`, names of `space` with nothing behind them now, the names
+    /// it may have moved to, found by what each approval pinned of it (the hash
+    /// under its comparison, the address, the revision the approval was made at),
+    /// each with how it was found and whether something is there now; or that the
+    /// space cannot suggest. What could not be looked at (a history the adapter
+    /// cannot read) is a note of the name, never an error: an error is for what
+    /// stops the looking itself.
+    fn suggest(
+        &self,
+        space: &Space,
+        gone: &[GoneName],
+    ) -> impl Future<Output = Result<SpaceSuggestions, Self::Error>> + Send;
+}
+
 /// Whose content an address is of: a document's file, or an artifact of a space. The
 /// address is read back by the adapter that named it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -462,6 +498,8 @@ pub trait ShelfRead: Send + Sync {
     type Artifacts: ArtifactSource;
     /// The content that was approved, read back.
     type Store: ContentStore;
+    /// Where the artifacts that are gone may have moved to.
+    type Moves: MoveSource;
 
     /// The source of the declarations.
     fn schemas(&self) -> &Self::Schemas;
@@ -475,6 +513,8 @@ pub trait ShelfRead: Send + Sync {
     fn artifacts(&self) -> &Self::Artifacts;
     /// The store content is read back from.
     fn store(&self) -> &Self::Store;
+    /// The source of suggested moves.
+    fn moves(&self) -> &Self::Moves;
 }
 
 /// The ports that `judge`, `new_doc` and `fmt` are generic over: everything a read has, and
