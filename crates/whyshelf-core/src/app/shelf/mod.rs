@@ -21,6 +21,7 @@
 //! | [`judge`](ShelfApp::judge) | **yes** | [`JudgedAll`]: the records that were appended ([`Judged`]), with the addresses of what an approval stood on and the revision, and the approvals left out because they would only repeat a fresh one, each with why |
 //! | [`approve_stale`](ShelfApp::approve_stale) | **yes** | [`StaleApproved`]: the approvals made again, upstream first and in one run, of every expired or stale one that would hold once made, and those left out, each with why |
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
+//! | [`moved`](ShelfApp::moved) | **yes** | [`Moved`](crate::domain::shelf::ledger::Moved): the declarations that an artifact moved from one name to another, after the space's adapter said the old name has nothing and the new one has something |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
 //! | [`fmt_check`](ShelfApp::fmt_check) | no | [`FmtReport`]: the documents' files not in the one form, those in it, and those `fmt` would leave as they are, each with why |
@@ -31,7 +32,7 @@
 //! A use case that reads takes `&self` and is generic over [`ShelfRead`], which has no
 //! way to write. [`judge`](ShelfApp::judge),
 //! [`approve_stale`](ShelfApp::approve_stale), [`same_meaning`](ShelfApp::same_meaning),
-//! [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc) and
+//! [`moved`](ShelfApp::moved), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc) and
 //! [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
 //! program run one at a time, by the type. Two processes can still write at once;
 //! that is safe because a record is a file of its own named by its own identity, and
@@ -59,6 +60,7 @@ mod error;
 mod fmt;
 mod judge;
 mod load;
+mod moved;
 mod new_doc;
 pub mod ports;
 mod read;
@@ -84,6 +86,8 @@ mod fake_tests;
 #[cfg(test)]
 mod fmt_tests;
 #[cfg(test)]
+mod moved_tests;
+#[cfg(test)]
 mod new_doc_tests;
 #[cfg(test)]
 mod preset_tests;
@@ -104,6 +108,7 @@ pub use approve_stale::{ApproveStaleRequest, StaleApproved};
 pub use error::{ErrorClass, ShelfError};
 pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
 pub use judge::{JudgeRequest, Judgement};
+pub use moved::MovedRequest;
 pub use new_doc::{Created, NewDocRequest};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
@@ -113,9 +118,9 @@ pub use ports::{
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
-    DownstreamEdge, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport, Names,
-    Row, StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown,
-    UnlinkedEntry, UnlinkedLists, UnlinkedReport, UpstreamEdge, UpstreamEnd,
+    DownstreamEdge, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport,
+    MovedAway, Names, Row, StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport,
+    Uncovered, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use unlinked::{UnlinkedAsk, UnlinkedFilter};

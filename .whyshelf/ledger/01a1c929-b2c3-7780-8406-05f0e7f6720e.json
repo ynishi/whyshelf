@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e42759009bb1382afbcfd6c68a0bae5b038a1fed",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a043eb31561d47e6985d6feeffad3a9303665d35fbe062335a8b7b5b77a2cc0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6087c4c5d5ac020c50f4071be54a0b62b47ed819",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:be3d8ac8912e5aca92cbdac72d3fe88fbf7967bcb52f455b988238a1512e4c72",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "974726e9a37fdea55aa261dae2d4635675948e65",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2a8f9e0b2f748be933afd5617c060af8371f61531657b8f44d5fee0fa3ab66e1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794376315163,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ed2d8800e4e0b5b6488ba2e5aa64172a96750903",
+      "hash": "sha256:30e6e11b84fb90a5af811e25fa8637aa65f92e5f41c716515d5b686941f42254",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "59"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c912-1826-76a6-838e-509c842f7e41"
+    }
+  ],
+  "id": "01a1c929-b2c3-7780-8406-05f0e7f6720e",
+  "kind": "decision",
+  "reason": "judge moved records that an artifact moved, and the pins made before it are read through it as a separate value; a link left behind is one cause (#42); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "cfd16634e0a889968935ad230e1b909ceef8509f",
+  "seen": "sha256:a7899f6b54a3a23aa1ea3b99964b3f000a85ccef4d0181212b15cbae44596beb",
+  "seen_address": "b94861ec5d692d790288f3cf4f8542a4dae6db35",
+  "subject": "01a1c912-19c0-7572-98be-116b5c92ca97",
+  "v": 1,
+  "verb": "approve"
+}

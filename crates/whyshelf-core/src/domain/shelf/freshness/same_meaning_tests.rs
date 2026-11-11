@@ -320,7 +320,7 @@ fn a_declared_change_of_a_file_is_a_notice_and_not_a_cause() {
     assert!(assessment.roots_of(docid(2)).is_empty());
     assert!(
         matches!(assessment.notices_of(docid(2)), [Notice::ArtifactSameMeaning { pin, now, declared }]
-            if pin.artifact() == &file_artifact("tests/a.rs")
+            if pin.pin().artifact() == &file_artifact("tests/a.rs")
                 && *now == h("b")
                 && declared.clone().into_vec() == [jid(2001)]),
         "{:?}",

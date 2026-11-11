@@ -37,13 +37,13 @@ use whyshelf_core::domain::shelf::freshness::{
 };
 use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::ledger::{
-    ArtifactPin, DeclaredStatus, FramePin, FrameRefusal, Record,
+    ArtifactPin, DeclaredStatus, FramePin, FrameRefusal, Moved, ReadPin, Record,
 };
 use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::order::Hold;
 use whyshelf_core::domain::shelf::schema::{
-    Cardinality, CoverSeverity, FieldPresence, FieldType, KeyPattern, PresetOrigin, Propagation,
-    SchemaProblem,
+    Cardinality, CoverSeverity, EntryName, FieldPresence, FieldType, KeyPattern, PresetOrigin,
+    Propagation, SchemaProblem,
 };
 use whyshelf_infra::shelf::ledger::to_json;
 
@@ -101,6 +101,11 @@ pub struct CauseOut {
     pub artifact: Option<String>,
     /// The space of that artifact, beside `artifact`.
     pub space: Option<String>,
+    /// The name `artifact` is read as now, when people declared it moved since it
+    /// was pinned (`judge moved`); none when it is read as written. For
+    /// `artifact_moved`, `artifact` is the name the link writes and `read_as` the
+    /// name it is to write.
+    pub read_as: Option<String>,
     /// A sentence for a person.
     pub detail: String,
 }
@@ -124,6 +129,9 @@ pub struct NoticeOut {
     pub artifact: Option<String>,
     /// The space of that artifact, beside `artifact`.
     pub space: Option<String>,
+    /// For `artifact_same_meaning`, the name the pin of `artifact` is read as now,
+    /// when people declared it moved since (`judge moved`); none otherwise.
+    pub read_as: Option<String>,
     /// For an edit declared to keep the meaning, the declarations (record ids) that
     /// join the hash pinned to the hash now, in order; empty otherwise.
     pub declared: Vec<String>,
@@ -244,6 +252,29 @@ pub struct BooksCheckOut {
     /// The names of pending and approved documents their adapter cannot tell about
     /// now; they leave `clean` as it is, and no approval can be made on one.
     pub unknown: Vec<UnknownOut>,
+    /// The names links still write that an approval pinned and people declared
+    /// moved since (`judge moved`): the approval is stale, and the link is to write
+    /// `moved_to`. They leave `clean` as it is.
+    pub moved: Vec<MovedNameOut>,
+}
+
+/// A name a link writes that an approval pinned, declared moved since.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MovedNameOut {
+    /// The document.
+    pub doc: DocRef,
+    /// The link.
+    pub link: String,
+    /// The name as written, the one pinned.
+    pub name: String,
+    /// The space of the name.
+    pub space: String,
+    /// The name the pin is read as now, which the link is to write.
+    pub moved_to: String,
+    /// The declarations of the moves (record ids), in order.
+    pub declared: Vec<String>,
+    /// A sentence for a person.
+    pub detail: String,
 }
 
 /// The answer of `map`: what the declaration says.
@@ -780,6 +811,10 @@ pub struct ItemOut {
     pub name: Option<String>,
     /// The space, for an artifact.
     pub space: Option<String>,
+    /// For an artifact pinned under `name` and declared moved since (`judge moved`),
+    /// the name it is read as now, which what it is now is asked of; none when it is
+    /// read as written, and for a document.
+    pub read_as: Option<String>,
     /// The hash the approval pinned; none for an artifact that was not there.
     pub approved_hash: Option<String>,
     /// Where its content, as it was approved, can be read back; none when the record
@@ -949,6 +984,27 @@ pub struct DeclaredOut {
     pub record: Value,
 }
 
+/// The answer of `judge moved`: every declaration of a move written.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MovedAllOut {
+    /// The declarations.
+    pub moved: Vec<MovedOut>,
+}
+
+/// One declaration that an artifact moved.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MovedOut {
+    /// The space both names are of.
+    pub space: String,
+    /// The old name: for the space `file`, a path under the root.
+    pub from: String,
+    /// The new name.
+    pub to: String,
+    /// The record written, as it is in the ledger (its `id` is what `judge withdraw`
+    /// takes).
+    pub record: Value,
+}
+
 /// The answer of `judge withdraw`: the revocation written.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct WithdrawnOut {
@@ -1088,6 +1144,7 @@ pub fn schemas() -> SchemasOut {
     put("judge", schema_for!(JudgedAllOut));
     put("judge approve --stale", schema_for!(StaleApprovedOut));
     put("judge same", schema_for!(DeclaredAllOut));
+    put("judge moved", schema_for!(MovedAllOut));
     put("judge withdraw", schema_for!(WithdrawnOut));
     put("new", schema_for!(CreatedOut));
     put("fmt", schema_for!(FmtOut));
@@ -1193,16 +1250,25 @@ impl Namer<'_> {
             link: upstream.map(|p| p.link().to_string()),
             artifact: None,
             space: None,
+            read_as: None,
             detail,
         };
-        let artifact = |kind, pin: &ArtifactPin, detail: String| CauseOut {
+        // What was pinned, and beside it the name it is read as after a move.
+        let artifact = |kind, read: &ReadPin, detail: String| CauseOut {
             kind,
             severity,
             upstream: None,
-            link: Some(pin.link().to_string()),
-            artifact: Some(pin.name().to_string()),
-            space: Some(pin.space().to_string()),
-            detail,
+            link: Some(read.pin().link().to_string()),
+            artifact: Some(read.pin().name().to_string()),
+            space: Some(read.pin().space().to_string()),
+            read_as: read.moved_away().map(|a| a.name().to_string()),
+            detail: match read.moved_away() {
+                Some(_) => format!(
+                    "{detail} (pinned as {}, declared moved since)",
+                    read.pin().artifact()
+                ),
+                None => detail,
+            },
         };
         match cause {
             Cause::SelfChanged { approved, now } => out(
@@ -1285,6 +1351,7 @@ impl Namer<'_> {
                 link: Some(link.to_string()),
                 artifact: None,
                 space: None,
+                read_as: None,
                 detail: format!(
                     "the link `{link}` changed since the approval: {} added, {} removed, {} unresolved",
                     added.len(),
@@ -1297,8 +1364,8 @@ impl Namer<'_> {
                 pin,
                 format!(
                     "{} changed since the approval pinned it ({} -> {now})",
-                    pin.artifact(),
-                    pinned_hash(pin)
+                    pin.read_as(),
+                    pinned_hash(pin.pin())
                 ),
             ),
             Cause::ArtifactComparisonChanged { pin, now } => artifact(
@@ -1306,18 +1373,30 @@ impl Namer<'_> {
                 pin,
                 format!(
                     "the link `{}` compares {} as {} now, and it was pinned as {}: the hashes are not compared",
-                    pin.link(),
-                    pin.artifact(),
+                    pin.pin().link(),
+                    pin.read_as(),
                     comparison(now),
-                    comparison(pin.comparison())
+                    comparison(pin.pin().comparison())
                 ),
             ),
+            // The name the link writes is the cause's `artifact`; the name it is to
+            // write, the one the pin is read as, is `read_as`.
+            Cause::ArtifactMoved { link, written, pin } => CauseOut {
+                kind: "artifact_moved",
+                severity,
+                upstream: None,
+                link: Some(link.to_string()),
+                artifact: Some(written.name().to_string()),
+                space: Some(written.space().to_string()),
+                read_as: Some(pin.read_as().name().to_string()),
+                detail: moved_detail(link, written, pin.read_as()),
+            },
             Cause::ArtifactGone { pin } => artifact(
                 "artifact_gone",
                 pin,
                 format!(
                     "{} was there when it was pinned and has nothing behind it now",
-                    pin.artifact()
+                    pin.read_as()
                 ),
             ),
             Cause::ArtifactArrived { pin, now } => artifact(
@@ -1325,7 +1404,7 @@ impl Namer<'_> {
                 pin,
                 format!(
                     "{} was not there when it was pinned and is now ({now}): look again",
-                    pin.artifact()
+                    pin.read_as()
                 ),
             ),
             Cause::ArtifactLinksChanged {
@@ -1348,6 +1427,7 @@ impl Namer<'_> {
                         Some(_) | None => None,
                     }
                 },
+                read_as: None,
                 detail: format!(
                     "the link `{link}` to artifacts changed since the approval: {} added ({}), {} removed ({})",
                     added.len(),
@@ -1382,6 +1462,7 @@ impl Namer<'_> {
                 target: Some(self.doc(*target)),
                 artifact: None,
                 space: None,
+                read_as: None,
                 declared: Vec::new(),
                 detail: format!("a document it informs of is {}", standing(*kind)),
             },
@@ -1392,6 +1473,7 @@ impl Namer<'_> {
                 target: None,
                 artifact: None,
                 space: None,
+                read_as: None,
                 declared: Vec::new(),
                 detail: self.unresolved(unresolved),
             },
@@ -1402,6 +1484,7 @@ impl Namer<'_> {
                 target: Some(self.pin(pin)),
                 artifact: None,
                 space: None,
+                read_as: None,
                 declared: Vec::new(),
                 detail: format!(
                     "the approval of {} lapsed at {} (unix ms)",
@@ -1420,6 +1503,7 @@ impl Namer<'_> {
                 target: None,
                 artifact: None,
                 space: None,
+                read_as: None,
                 declared: declared.iter().map(ToString::to_string).collect(),
                 detail: format!(
                     "the document was edited since its approval ({approved} -> {now}), and the edit was declared to keep the meaning"
@@ -1432,6 +1516,7 @@ impl Namer<'_> {
                 target: Some(self.pin(pin)),
                 artifact: None,
                 space: None,
+                read_as: None,
                 declared: declared.iter().map(ToString::to_string).collect(),
                 detail: format!(
                     "{} was edited since it was pinned ({} -> {now}), and the edit was declared to keep the meaning",
@@ -1442,14 +1527,15 @@ impl Namer<'_> {
             Notice::ArtifactSameMeaning { pin, now, declared } => NoticeOut {
                 kind: "artifact_same_meaning",
                 severity: None,
-                link: pin.link().to_string(),
+                link: pin.pin().link().to_string(),
                 target: None,
-                artifact: Some(pin.name().to_string()),
-                space: Some(pin.space().to_string()),
+                artifact: Some(pin.pin().name().to_string()),
+                space: Some(pin.pin().space().to_string()),
+                read_as: pin.moved_away().map(|a| a.name().to_string()),
                 declared: declared.iter().map(ToString::to_string).collect(),
                 detail: format!(
                     "{} changed since it was pinned (now {now}), and the change was declared to keep the meaning",
-                    pin.artifact()
+                    pin.read_as()
                 ),
             },
             Notice::ArtifactAbsent { link, artifact } => NoticeOut {
@@ -1459,6 +1545,7 @@ impl Namer<'_> {
                 target: None,
                 artifact: Some(artifact.name().to_string()),
                 space: Some(artifact.space().to_string()),
+                read_as: None,
                 declared: Vec::new(),
                 detail: absent_detail(artifact),
             },
@@ -1473,6 +1560,7 @@ impl Namer<'_> {
                 target: None,
                 artifact: Some(artifact.name().to_string()),
                 space: Some(artifact.space().to_string()),
+                read_as: None,
                 declared: Vec::new(),
                 detail: unknown_detail(artifact, why.as_str()),
             },
@@ -1487,6 +1575,7 @@ impl Namer<'_> {
                 target: None,
                 artifact: None,
                 space: None,
+                read_as: None,
                 declared: Vec::new(),
                 detail: format!(
                     "no document of `{book}` reaches this one through `{link}`, which is declared to cover its book"
@@ -1630,13 +1719,16 @@ impl Namer<'_> {
 /// The lines `check` writes on stderr: one per document a covering link of
 /// strength `warn` does not reach, in the order of `uncovered`, then one per name
 /// that cannot be told now, in the order of `unknown`, then one per name with
-/// nothing there, in the order of `absent`. A gap of strength `error` has none: it
-/// fails the check, and the answer is shown. None of them changes the exit.
+/// nothing there, in the order of `absent`, then one per name a link still writes
+/// that was declared moved since an approval pinned it, in the order of `moved`. A
+/// gap of strength `error` has none: it fails the check, and the answer is shown.
+/// None of them changes the exit.
 pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
     let BooksCheck::Checked {
         uncovered,
         unknown,
         absent,
+        moved,
         ..
     } = check
     else {
@@ -1678,7 +1770,23 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
             a.artifact.space()
         )
     });
-    gaps.chain(untold).chain(nothing).collect()
+    let moved_away = moved.iter().map(|m| {
+        let doc = m
+            .key
+            .as_ref()
+            .map_or_else(|| m.doc.to_string(), ToString::to_string);
+        format!(
+            "warning: {doc} names {} in {} under `{}`, which was declared moved to {}: write the new name",
+            m.artifact.name(),
+            m.artifact.space(),
+            m.link,
+            m.moved_to.name()
+        )
+    });
+    gaps.chain(untold)
+        .chain(nothing)
+        .chain(moved_away)
+        .collect()
 }
 
 /// The lines `stale` writes on stderr: one per name an approval stands on that
@@ -1728,6 +1836,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             uncovered: Vec::new(),
             absent: Vec::new(),
             unknown: Vec::new(),
+            moved: Vec::new(),
         },
         BooksCheck::Checked {
             books,
@@ -1735,6 +1844,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             uncovered,
             absent,
             unknown,
+            moved,
         } => {
             let names = Names::default();
             BooksCheckOut {
@@ -1787,6 +1897,21 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                         name: u.artifact.name().to_string(),
                         space: u.artifact.space().to_string(),
                         why: u.why.to_string(),
+                    })
+                    .collect(),
+                moved: moved
+                    .iter()
+                    .map(|m| MovedNameOut {
+                        doc: DocRef {
+                            id: m.doc.to_string(),
+                            key: m.key.as_ref().map(ToString::to_string),
+                        },
+                        link: m.link.to_string(),
+                        name: m.artifact.name().to_string(),
+                        space: m.artifact.space().to_string(),
+                        moved_to: m.moved_to.name().to_string(),
+                        declared: m.declared.iter().map(ToString::to_string).collect(),
+                        detail: moved_detail(&m.link, &m.artifact, &m.moved_to),
                     })
                     .collect(),
             }
@@ -2120,6 +2245,12 @@ impl Namer<'_> {
             path: artifact.map(|a| a.name().to_string()),
             name: artifact.map(|a| a.name().to_string()),
             space: artifact.map(|a| a.space().to_string()),
+            // Only a name other than the one pinned: a way back is read as written.
+            read_as: item
+                .moved()
+                .map(|m| m.artifact())
+                .filter(|a| Some(*a) != artifact)
+                .map(|a| a.name().to_string()),
             approved_hash,
             address: item.address().map(ToString::to_string),
         }
@@ -2199,6 +2330,8 @@ fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
         .or_else(|| item.file.as_ref().map(ToString::to_string))
         .or_else(|| out.doc.as_ref().and_then(|d| d.key.clone()))
         .unwrap_or_default();
+    // What is now is at the name a declared move took the artifact to.
+    let now_label = out.read_as.clone().unwrap_or_else(|| label.clone());
     // The diff says what `changed` says: empty when the hash is the same. A document's
     // hash is taken over its text after the reader's normalization (line breaks,
     // trailing white space), so its diff is taken over the normalized texts too. An
@@ -2212,20 +2345,27 @@ fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
             &normalize(then),
             &normalize(now),
             &format!("approved/{label}"),
-            &format!("now/{label}"),
+            &format!("now/{now_label}"),
         )),
         (Some(then), Some(now)) => Some(textdiff::unified(
             then,
             now,
             &format!("approved/{label}"),
-            &format!("now/{label}"),
+            &format!("now/{now_label}"),
         )),
         _ => None,
     };
-    // An artifact that is there now is held by its name, as `file` has always said.
+    // An artifact that is there now is held by its name, as `file` has always said:
+    // the name it is read as, after a declared move.
     let file = match (&item.now, item.item.role()) {
         (ItemNow::Artifact(ArtifactState::Present(_)), ItemRole::Artifact { artifact, .. }) => {
-            Some(artifact.name().to_string())
+            Some(
+                item.item
+                    .moved()
+                    .map_or(artifact, |m| m.artifact())
+                    .name()
+                    .to_string(),
+            )
         }
         _ => item.file.as_ref().map(ToString::to_string),
     };
@@ -2566,6 +2706,21 @@ pub fn same_meaning(all: &[Declared]) -> DeclaredAllOut {
     }
 }
 
+/// The answer of `judge moved`.
+pub fn moved(all: &[Moved]) -> MovedAllOut {
+    MovedAllOut {
+        moved: all
+            .iter()
+            .map(|one| MovedOut {
+                space: one.of().space().to_string(),
+                from: one.of().from_name().to_string(),
+                to: one.of().to_name().to_string(),
+                record: to_json(&Record::Moved(one.clone()).to_canon()),
+            })
+            .collect(),
+    }
+}
+
 /// The answer of `judge withdraw`.
 pub fn withdrawn(record: &Record) -> WithdrawnOut {
     WithdrawnOut {
@@ -2651,6 +2806,14 @@ fn presence(presence: &DocPresence) -> PresenceOut {
 fn absent_detail(artifact: &ArtifactKey) -> String {
     format!(
         "{artifact} has nothing behind it now: the evidence is not written yet, or the name is wrong"
+    )
+}
+
+/// The sentence for a link that still writes a name its pin was moved away from.
+fn moved_detail(link: &EntryName, written: &ArtifactKey, read_as: &ArtifactKey) -> String {
+    format!(
+        "the link `{link}` writes {written}, which was declared moved away since the approval pinned it: the pin is read as `{}` now, and the link is to write that name",
+        read_as.name()
     )
 }
 

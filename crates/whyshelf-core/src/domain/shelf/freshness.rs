@@ -57,9 +57,10 @@
 //!   [`Cause::ArtifactComparisonChanged`] and no comparison of hashes; otherwise rule
 //!   A3: an artifact whose hash differs is [`Cause::ArtifactChanged`], one that went
 //!   is [`Cause::ArtifactGone`], one that came where there was none is
-//!   [`Cause::ArtifactArrived`], and nothing then and nothing now is nothing; for
-//!   each `Depends` link to artifacts, the names it writes now against those pinned
-//!   ([`Cause::ArtifactLinksChanged`]);
+//!   [`Cause::ArtifactArrived`], and nothing then and nothing now is nothing; a link
+//!   that writes a name a pin was moved away from is [`Cause::ArtifactMoved`]; for
+//!   each `Depends` link to artifacts, the names it writes now against those pinned,
+//!   leaving out what a move accounts for ([`Cause::ArtifactLinksChanged`]);
 //! - a cycle the document is in, among links or among frames;
 //! - an expiry: `now >= expires`.
 //!
@@ -71,6 +72,17 @@
 //! both, so an edit is either a cause or a notice, never both.
 //!
 //! [`SameMeaning`]: super::ledger::SameMeaning
+//!
+//! A pinned artifact is read by the name it is read as ([`ReadPin::read_as`]): when
+//! people declared it moved after it was pinned ([`Moved`]), the new name, with the
+//! hash and state it pinned, so an unchanged move is no cause, a move with an edit is
+//! an `ArtifactChanged` at the new name, and a link that still writes a name the move
+//! left (the old name, or one a chain passed) is one fact, [`Cause::ArtifactMoved`],
+//! and no `ArtifactLinksChanged`. The reading is the ledger's ([`Ledger::read_pins`]); nothing
+//! here follows a move. An artifact cause carries the [`ReadPin`]: the pin as it was
+//! made, and the name it is read as.
+//!
+//! [`Moved`]: super::ledger::Moved
 //!
 //! Freshness is decided by hashes alone (rule A4): the [`ContentAddress`] a pin may
 //! carry and the [`Revision`] of a record are never read here, so a project outside
@@ -93,7 +105,7 @@ use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
 use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
 use super::graph::{Cycle, CycleId};
 use super::ledger::{
-    ArtifactPin, DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem,
+    DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, ReadPin,
 };
 use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
 
@@ -217,20 +229,20 @@ pub enum Cause {
     /// A pinned artifact is there and is not what was pinned (rule A3).
     ArtifactChanged {
         /// The pin, with its space and its name.
-        pin: ArtifactPin,
+        pin: ReadPin,
         /// The hash it has now.
         now: ArtifactHash,
     },
     /// A pinned artifact was there when it was pinned and is not now (rule A3).
     ArtifactGone {
         /// The pin.
-        pin: ArtifactPin,
+        pin: ReadPin,
     },
     /// A pinned artifact was not there when it was pinned and is now: the evidence
     /// came, so look again (rule A3).
     ArtifactArrived {
         /// The pin.
-        pin: ArtifactPin,
+        pin: ReadPin,
         /// The hash it has now.
         now: ArtifactHash,
     },
@@ -239,12 +251,24 @@ pub enum Cause {
     /// again, as for a change.
     ArtifactComparisonChanged {
         /// The pin, with the comparison it was made with.
-        pin: ArtifactPin,
+        pin: ReadPin,
         /// The comparison the link declares now.
         now: Comparison,
     },
+    /// The link a pin was made under writes a name people declared the artifact
+    /// moved away from since (the name pinned, or one a chain of moves passed), and
+    /// not only the name the pin is read as now: the link is to write that name.
+    ArtifactMoved {
+        /// The link.
+        link: EntryName,
+        /// The name the link writes, which the pin's way left.
+        written: ArtifactKey,
+        /// The pin, with the name it is read as and the moves it is read through.
+        pin: ReadPin,
+    },
     /// What a `Depends` link to artifacts names now is not what the approval pinned
-    /// for it: names written since, and names pinned that it no longer writes.
+    /// for it: names written since, and names pinned that it no longer writes. A name
+    /// a pin was moved away from is not counted here ([`Cause::ArtifactMoved`]).
     ArtifactLinksChanged {
         /// The link.
         link: EntryName,
@@ -278,13 +302,16 @@ impl Cause {
             | Self::SelfNotValid(_)
             | Self::LinksChanged { .. }
             | Self::ArtifactLinksChanged { .. }
+            | Self::ArtifactMoved { .. }
             | Self::Expired { .. } => Some(Origin::Doc(holder)),
             Self::UpstreamNotValid { pin, .. }
             | Self::UpstreamChanged { pin, .. }
             | Self::UpstreamDeclared { pin, .. } => Some(Origin::Doc(pin.target())),
+            // The name the pin is read as: an edit after a move is of the new name,
+            // whichever name each approval pinned.
             Self::ArtifactChanged { pin, .. }
             | Self::ArtifactGone { pin }
-            | Self::ArtifactArrived { pin, .. } => Some(Origin::Artifact(pin.artifact().clone())),
+            | Self::ArtifactArrived { pin, .. } => Some(Origin::Artifact(pin.read_as().clone())),
             Self::ArtifactComparisonChanged { .. } => Some(Origin::Declaration),
             Self::InCycle { cycle } => Some(Origin::Cycle(*cycle)),
         }
@@ -302,7 +329,7 @@ impl Cause {
     /// | `UpstreamDeclared` of `Denied`, `Retired`, or of `Deprecated` with none | `Broken` |
     /// | `Via` | the strength it carries (`Stale` or `Broken`; an upstream that is only `Expired` makes no `Via`) |
     /// | `LinksChanged` | `Broken` when some key cannot be followed, otherwise `Stale` |
-    /// | `ArtifactChanged`, `ArtifactArrived`, `ArtifactComparisonChanged`, `ArtifactLinksChanged` | `Stale` |
+    /// | `ArtifactChanged`, `ArtifactArrived`, `ArtifactComparisonChanged`, `ArtifactLinksChanged`, `ArtifactMoved` | `Stale` |
     /// | `ArtifactGone` | `Broken` |
     /// | `InCycle` | `Broken` |
     /// | `Expired` | `Expired` |
@@ -317,7 +344,8 @@ impl Cause {
             | Self::ArtifactChanged { .. }
             | Self::ArtifactArrived { .. }
             | Self::ArtifactComparisonChanged { .. }
-            | Self::ArtifactLinksChanged { .. } => Severity::Stale,
+            | Self::ArtifactLinksChanged { .. }
+            | Self::ArtifactMoved { .. } => Severity::Stale,
             Self::SelfNotValid(_) | Self::UpstreamNotValid { .. } | Self::ArtifactGone { .. } => {
                 Severity::Broken
             }
@@ -565,7 +593,7 @@ pub enum Notice {
     /// keeps the meaning: no [`Cause::ArtifactChanged`].
     ArtifactSameMeaning {
         /// The pin.
-        pin: ArtifactPin,
+        pin: ReadPin,
         /// The hash it has now.
         now: ArtifactHash,
         /// The declarations that join the two, in order.
@@ -905,7 +933,6 @@ fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
             DeclaredStatus::Approved {
                 seen,
                 frame,
-                artifacts,
                 expires,
                 ..
             } => Standing::Approved(freshness_of(
@@ -914,7 +941,8 @@ fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
                 Pinned {
                     seen,
                     frame,
-                    artifacts,
+                    // The artifacts as the ledger reads them now, through moves.
+                    artifacts: &ledger.read_pins(id),
                 },
                 *expires,
                 &standings,
@@ -949,7 +977,7 @@ fn invalid_files(shelf: &Shelf) -> Vec<InvalidDoc> {
 struct Pinned<'a> {
     seen: &'a DocHash,
     frame: &'a BTreeSet<FramePin>,
-    artifacts: &'a BTreeSet<ArtifactPin>,
+    artifacts: &'a [ReadPin],
 }
 
 fn freshness_of(
@@ -1033,11 +1061,16 @@ fn valid_causes(
 /// of what its `Depends` links to artifacts name.
 ///
 /// Only the [`ArtifactState`] is compared: an address in a pin is never read (A4).
+/// A pin is taken by the name it is read as ([`ReadPin::read_as`]): the name it
+/// wrote, or the one a declared move took it to, with the hash and state it pinned.
 /// An artifact still named under the link it was pinned for is compared with what
 /// is there now, unless its adapter cannot tell now (no cause: the notice
-/// [`Notice::ArtifactUnknown`] says so); a pinned artifact no longer named, and one
-/// named that was not pinned, are an [`Cause::ArtifactLinksChanged`] of that link.
-fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, found: Found<'_>) {
+/// [`Notice::ArtifactUnknown`] says so). A link that writes a name the pin's way left
+/// ([`ReadPin::left_behind`]: the name pinned, or one a chain of moves passed) is one
+/// fact, [`Cause::ArtifactMoved`]. What is left, a pinned artifact the link names in
+/// no way, and a name the link writes that no pin accounts for, is an
+/// [`Cause::ArtifactLinksChanged`] of that link.
+fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &[ReadPin], found: Found<'_>) {
     let Found { causes: out, kept } = found;
     let current: BTreeMap<(&EntryName, &ArtifactKey), &ArtifactState> = doc
         .artifact_links_of(ArtifactPropagation::Depends)
@@ -1050,8 +1083,21 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, f
         .collect();
 
     let mut causes = Vec::new();
-    for pin in pinned {
-        let Some(now) = current.get(&(pin.link(), pin.artifact())) else {
+    // Each pin with the names its way left that its link still writes.
+    let mut behind_of: Vec<(&ReadPin, Vec<&ArtifactKey>)> = Vec::new();
+    for read in pinned {
+        let pin = read.pin();
+        let behind: Vec<&ArtifactKey> = read
+            .left_behind()
+            .filter(|name| current.contains_key(&(pin.link(), *name)))
+            .collect();
+        causes.extend(behind.iter().map(|written| Cause::ArtifactMoved {
+            link: pin.link().clone(),
+            written: (*written).clone(),
+            pin: read.clone(),
+        }));
+        behind_of.push((read, behind));
+        let Some(now) = current.get(&(pin.link(), read.read_as())) else {
             continue;
         };
         let now = match now {
@@ -1074,30 +1120,30 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, f
             {
                 if let Some(declared) = changed_comparison {
                     causes.push(Cause::ArtifactComparisonChanged {
-                        pin: pin.clone(),
+                        pin: read.clone(),
                         now: declared.clone(),
                     });
                 }
             }
             (ArtifactState::Present(then), ArtifactState::Present(now)) if then != now => {
-                match ledger.artifact_same_meaning(pin.artifact(), &then, &now) {
+                match ledger.pin_same_meaning(read, &then, &now) {
                     Some(declared) => kept.push(Notice::ArtifactSameMeaning {
-                        pin: pin.clone(),
+                        pin: read.clone(),
                         now,
                         declared,
                     }),
                     None => causes.push(Cause::ArtifactChanged {
-                        pin: pin.clone(),
+                        pin: read.clone(),
                         now,
                     }),
                 }
             }
             (ArtifactState::Present(_), ArtifactState::Absent) => {
-                causes.push(Cause::ArtifactGone { pin: pin.clone() });
+                causes.push(Cause::ArtifactGone { pin: read.clone() });
             }
             (ArtifactState::Absent, ArtifactState::Present(now)) => {
                 causes.push(Cause::ArtifactArrived {
-                    pin: pin.clone(),
+                    pin: read.clone(),
                     now,
                 });
             }
@@ -1110,21 +1156,30 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &BTreeSet<ArtifactPin>, f
         }
     }
 
-    let mut names: BTreeSet<&EntryName> = pinned.iter().map(ArtifactPin::link).collect();
+    let mut names: BTreeSet<&EntryName> = pinned.iter().map(|r| r.pin().link()).collect();
     names.extend(current.keys().map(|(link, _)| *link));
     for name in names {
-        let was: BTreeSet<&ArtifactKey> = pinned
-            .iter()
-            .filter(|p| p.link() == name)
-            .map(ArtifactPin::artifact)
-            .collect();
         let is: BTreeSet<&ArtifactKey> = current
             .keys()
             .filter(|(link, _)| *link == name)
             .map(|(_, artifact)| *artifact)
             .collect();
-        let added: Vec<ArtifactKey> = is.difference(&was).map(|a| (*a).clone()).collect();
-        let removed: Vec<ArtifactKey> = was.difference(&is).map(|a| (*a).clone()).collect();
+        // What each pin of the link accounts for of what it writes now: the name it
+        // is read as, and the names behind it (each an `ArtifactMoved` already). A pin
+        // the link writes in no way is removed, as the name the link wrote then (the
+        // name pinned), which is written now by no way of it.
+        let mut accounted: BTreeSet<&ArtifactKey> = BTreeSet::new();
+        let mut gone: BTreeSet<&ArtifactKey> = BTreeSet::new();
+        for (read, behind) in behind_of.iter().filter(|(r, _)| r.pin().link() == name) {
+            if is.contains(read.read_as()) {
+                accounted.insert(read.read_as());
+            } else if behind.is_empty() {
+                gone.insert(read.pin().artifact());
+            }
+            accounted.extend(behind.iter().copied());
+        }
+        let added: Vec<ArtifactKey> = is.difference(&accounted).map(|a| (*a).clone()).collect();
+        let removed: Vec<ArtifactKey> = gone.into_iter().cloned().collect();
         if !added.is_empty() || !removed.is_empty() {
             causes.push(Cause::ArtifactLinksChanged {
                 link: name.clone(),
@@ -1485,6 +1540,8 @@ mod artifact_tests;
 mod comparison_tests;
 #[cfg(test)]
 mod cover_tests;
+#[cfg(test)]
+mod moved_tests;
 #[cfg(test)]
 mod notice_tests;
 #[cfg(test)]

@@ -63,7 +63,7 @@ fn a_comparison_declared_since_the_approval_is_a_cause_and_no_hash_is_compared()
     let causes = causes_of(&assessment, 2);
     assert!(
         matches!(causes.as_slice(), [Cause::ArtifactComparisonChanged { pin, now }]
-            if pin.comparison() == &Comparison::Bytes && *now == lines(&["//"])),
+            if pin.pin().comparison() == &Comparison::Bytes && *now == lines(&["//"])),
         "{causes:?}"
     );
     assert_eq!(causes[0].severity(), Severity::Stale);
@@ -137,7 +137,7 @@ fn under_lines_a_change_of_code_is_a_change() {
     let causes = causes_of(&assess(&spec_shelf(&s, edited), &l, now()), 2);
     assert!(
         matches!(causes.as_slice(), [Cause::ArtifactChanged { pin, now }]
-            if pin.artifact() == &file_artifact("tests/a.rs")
+            if pin.pin().artifact() == &file_artifact("tests/a.rs")
                 && *now == lines(&["//"]).fingerprint(edited)),
         "{causes:?}"
     );
@@ -169,7 +169,7 @@ fn a_declaration_of_the_same_meaning_holds_under_lines() {
     assert!(causes_of(&assessment, 2).is_empty());
     assert!(
         matches!(assessment.notices_of(docid(2)), [Notice::ArtifactSameMeaning { pin, .. }]
-            if pin.comparison() == &lines(&["//"])),
+            if pin.pin().comparison() == &lines(&["//"])),
         "{:?}",
         assessment.notices_of(docid(2))
     );
@@ -226,7 +226,7 @@ fn one_file_under_two_comparisons_is_judged_by_each_link_s_own() {
     assert!(causes_of(&assessment, 2).is_empty());
     assert!(
         matches!(causes_of(&assessment, 3).as_slice(), [Cause::ArtifactChanged { pin, .. }]
-            if pin.comparison() == &Comparison::Bytes),
+            if pin.pin().comparison() == &Comparison::Bytes),
         "{:?}",
         causes_of(&assessment, 3)
     );
@@ -383,7 +383,7 @@ fn a_changed_comparison_of_a_file_gone_is_gone_and_of_none_both_times_is_nothing
     let l = ledger(approvals(&spec_shelf(&bytes, CODE), &[1, 2]));
     let causes = causes_of(&assess(&no_file(&slashes), &l, now()), 2);
     assert!(
-        matches!(causes.as_slice(), [Cause::ArtifactGone { pin }] if pin.artifact() == &file_artifact("tests/a.rs")),
+        matches!(causes.as_slice(), [Cause::ArtifactGone { pin }] if pin.pin().artifact() == &file_artifact("tests/a.rs")),
         "{causes:?}"
     );
     assert_eq!(causes[0].severity(), Severity::Broken);
