@@ -181,6 +181,10 @@ and this project adheres to
 
 ### Changed
 
+- The README is the way in: what whyshelf does, getting started with
+  `init --template`, the model in brief, the commands at a glance and the gate
+  for CI. Every command it shows runs as written; the manual keeps the rules
+  (#84).
 - A link to artifacts names its space (`space = "file"` for files of the
   project); one with no space, or an unknown one, is refused. Everything
   outside the documents is an artifact of a space, resolved by that space's
