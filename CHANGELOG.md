@@ -160,6 +160,9 @@ and this project adheres to
   stale. It reads the file with a lexer of its own and runs no program (#90).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
+- `release-plz.toml`: a release is a release PR that bumps the workspace
+  version; after its merge, `release-plz release` publishes the four crates
+  and tags `v<version>`.
 
 ### Fixed
 
