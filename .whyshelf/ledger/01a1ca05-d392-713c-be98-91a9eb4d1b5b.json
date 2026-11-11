@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794390741883,
+  "expires": null,
+  "frame": [],
+  "id": "01a1ca05-d392-713c-be98-91a9eb4d1b5b",
+  "kind": "decision",
+  "reason": "judge approve --pending chooses pending documents as --stale chooses stale ones, for one run upstream first, each held back only by what the run has left so far (#73); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "e2717d89113a4435ddd60c63c7016f33e0434094",
+  "seen": "sha256:76346740c82dadd531833adcba9921ef2b071920dc6b9a89bdae75e1e87fac37",
+  "seen_address": "2574cd21a4686d86d5cbf274a531116ce586890a",
+  "subject": "01a1c9f3-a9c4-74e2-a865-013238365b50",
+  "v": 1,
+  "verb": "approve"
+}

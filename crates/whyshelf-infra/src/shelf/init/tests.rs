@@ -100,7 +100,14 @@ fn the_sample_documents_are_requests_for_one_chain_with_no_file_named() {
 async fn the_sample_makes_a_project_that_reads_clean_in_the_form_and_linked_in_one_chain() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = ShelfApp::new(project(&dir));
-    let Initialized { declaration, docs } = app.init(sample().unwrap()).await.unwrap();
+    let Initialized {
+        declaration,
+        docs,
+        heads,
+    } = app.init(sample().unwrap()).await.unwrap();
+    // F-1 is stood on by no `depends` link (REQ-1 only grounds on it), V-1 by none.
+    let heads: Vec<String> = heads.iter().map(|k| k.form.to_string()).collect();
+    assert_eq!(heads, ["F-1", "V-1"]);
     assert_eq!(declaration.as_str(), ".whyshelf/books.toml");
     let files: Vec<&str> = docs.iter().map(|d| d.file.as_str()).collect();
     assert_eq!(

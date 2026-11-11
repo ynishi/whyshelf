@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f5a084b6426398d21014372a87532107e1a9384c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:41ad0041cb9e9f2ba88630da797200888e0323448efb1e0079818204e2b94558",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_fresh_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794390742933,
+  "expires": null,
+  "frame": [
+    {
+      "address": "832e07ac0f18bb9380e50a600e626b2cc6d87f3a",
+      "hash": "sha256:54dc10fd2845a59a86d41eeeb5c733c25dd551fa819ff8d662ef5e96e6258113",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "58"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8cf-dfdb-771f-bea4-6b65c56de737"
+    }
+  ],
+  "id": "01a1ca05-da80-7404-9109-8aa312391251",
+  "kind": "decision",
+  "reason": "The approvals of --stale and --pending are one use case, each entry naming its rule; init gives next the approval of only what it made; DEC-51 and DEC-61 restated (#73); checked by a blind review",
+  "revision": "e2717d89113a4435ddd60c63c7016f33e0434094",
+  "seen": "sha256:68246fe9f309f68f95b17898fba7a37a9e12928ac9767b846f6bc6b01d248a97",
+  "seen_address": "98ca12bfa66e4483c7abd379e00f7228cb233732",
+  "subject": "01a1c8cf-e3a9-72bd-ba84-6cac2acc3365",
+  "v": 1,
+  "verb": "approve"
+}

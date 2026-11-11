@@ -1,0 +1,11 @@
+---
+id: "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+key: "DEC-62"
+issues: ["#73"]
+rejected: ["Follow informs links from a named document: an approval does not stand on what only informs it", "Leave out a named document that is not pending: a misnamed document would be approved around in silence"]
+related: ["DEC-51", "DEC-58", "DEC-27"]
+rustdoc: ["whyshelf_core::domain::shelf::order::pending", "whyshelf_core::domain::shelf::order::pending_upstream", "whyshelf_core::domain::shelf::order::stale", "whyshelf_core::domain::shelf::order::held_back", "whyshelf_core::app::shelf::ShelfApp::approve_chosen"]
+serves: ["REQ-25", "REQ-18"]
+title: "judge approve --pending chooses pending documents, as --stale chooses stale ones, for one run upstream first"
+---
+Which documents a run takes is a rule of the domain, one per kind: stale takes the approvals that are expired or stale, and pending takes every valid document with no standing decision, never approved or every approval withdrawn; denied, deprecated, retired and invalid documents are not taken. judge approve --pending takes them all, and --pending <ref>... takes the named documents and every pending document reached through the depends links the documents hold now, transitively, walking through ones that are not pending; a named document that is not pending, or not valid, is an error of the request. --pending and --stale may be given together. One use case, approve_chosen, decides the run as --stale does: on one reading, upstream first, each on what the ones before it left, left out as broken, refused, stands_on or repeats and told on stderr, every record written together with one time; which documents the run takes is read once, before it, but whether an upstream holds a candidate back is judged on the ledger as the approvals decided before it in the run left it, so an upstream the run made fresh holds nothing back; an upstream the run took and left out holds back as left_out, and one still pending or stale holds back as that. Each judged and each left out entry names the rule that took it, stale or pending; under --pending alone nothing can repeat, as a pending document has no approval, and a superseded pending document is approved with its replacement. A reason is required; --until and --actor reach every record; --again conflicts with both.

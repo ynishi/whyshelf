@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9859d9aa3defae34e4e47f516ce6636596452b54",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:046165edd29c0f64be8815c7d31a0315260e1f0822f72cec07d0a651419f0171",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7f0487226dc92fada179c7773e206f4d6b54b57a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a9f5f26aed990742b19f552299e50be4ee603f4dcbd208e9cae0a49498b35a10",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794390744927,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ece782932737ef8fe1483f6e43a97c15bbe1188d",
+      "hash": "sha256:32de01c1a46930ee0ba007358b7a0f8847d6dfda3383d1fa8fe0da09a543454a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a1ca05-df79-7379-aee1-ee88581b9e02",
+  "kind": "decision",
+  "reason": "The pending rule, the run held back only by what it left, and the sample approved in one step are tested as DEC-62 says (#73); checked by a blind review",
+  "revision": "e2717d89113a4435ddd60c63c7016f33e0434094",
+  "seen": "sha256:5b1c2f7ab122b40b82fda145d65666ad2572b1bc4857745be1c93d22d6f6559c",
+  "seen_address": "fa1da8c7bf4098f7dd3fcfb641b049e127490913",
+  "subject": "01a1c9f3-b108-73b3-b1df-7e62e073cb0b",
+  "v": 1,
+  "verb": "approve"
+}

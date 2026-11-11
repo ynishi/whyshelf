@@ -24,9 +24,17 @@
 //!   whyshelf check            nothing wrong: exit 0
 //!   whyshelf map              the books and their links, with a drawing of them in `diagram`
 //!   whyshelf trace V-1        the chain, from the verification up to the finding
-//!   whyshelf judge approve F-1 REQ-1 DEC-1 V-1 --reason "read, and it holds"
+//!   whyshelf judge approve --pending F-1 V-1 --reason "read, and it holds"
+//!                             the four, upstream first: F-1, REQ-1, DEC-1, V-1
 //!   whyshelf status           each document, approved and fresh
 //! ```
+//!
+//! `--pending F-1 V-1` approves F-1 and V-1 and the pending documents V-1 stands on
+//! through `depends` links, DEC-1 and REQ-1, and nothing else, so a document of your
+//! own already in a book's directory is left as it is. `judge approve --pending V-1
+//! --reason …` alone would leave F-1 pending: REQ-1 only `grounds` on it, an
+//! `informs` link, which an approval does not stand on. `init --sample` answers this
+//! command in its `next`.
 //!
 //! `init --sample` writes `.whyshelf/books.toml` with four books, `finding`,
 //! `requirement`, `decision` and `verification`, and one pending document of each
@@ -412,6 +420,10 @@
 //!   judge approve --stale --reason <text> [--until <time>] [--actor <name>]
 //!                             approve again, in one run and upstream first, every approval
 //!                             that is expired or stale and would hold; the rest are left out
+//!   judge approve --pending [<ref>...] [--stale] --reason <text> [--until <time>] [--actor <name>]
+//!                             approve, in one run and upstream first, every pending document,
+//!                             or those named and the pending ones they stand on, that would
+//!                             hold; the rest are left out (with --stale, both in one run)
 //!   judge deny|deprecate|retire <ref>... [--reason <text>]   (deprecate: [--successor <ref>])
 //!   judge revoke <ref>... --reason <text>
 //!   judge same <ref>... [--artifact <name>]... [--from <hash>] --reason <text>
@@ -463,7 +475,7 @@
 //!   approval leaves the earlier one standing, and it is that one that is compared.
 //!   `--again` makes the approval anyway, for a person who read the document again
 //!   and wants that recorded (it is counted as an approval made again by `stats`).
-//!   `--again` cannot be given with `--stale`. In the library,
+//!   `--again` cannot be given with `--stale` or `--pending`. In the library,
 //!   [`ShelfApp::judge`](app::shelf::ShelfApp::judge) and `judge_all` return a
 //!   [`JudgedAll`](app::shelf::JudgedAll), the records written and those left out.
 //! - `judge approve --stale` takes no reference (one given beside it is a request
@@ -471,13 +483,15 @@
 //!   approval whose standing is `expired` or `stale` and that would hold once
 //!   approved, each after every one of them it stands on (the rule is on
 //!   [`upstream_first`](domain::shelf::order::upstream_first)); no order of books is
-//!   read. A pending document is not touched: it was never approved. Every other
+//!   read. A pending document is not touched (it was never approved) unless
+//!   `--pending` is given too, below. Every other
 //!   approval that does not hold is left out, never in silence, with a `reason`:
 //!   `broken` (it is broken now: an artifact pinned there that is gone, an upstream
 //!   that is not valid, a cycle), `refused` (the approval would be refused now, as
 //!   below: an upstream decided against, an artifact that cannot be told), or
 //!   `stands_on` (a `depends` link names a document that is broken, pending, or
-//!   itself left out for any reason but `repeats`; a pending one is approved first, with `judge approve`), or
+//!   itself left out for any reason but `repeats`; a pending one is approved first, with `judge approve`
+//!   or in the same run with `--pending`), or
 //!   `repeats` (it was stale only through its upstream's upstream, whose hash is new,
 //!   and the run approved its upstream again: nothing it pinned changed, so it holds
 //!   again with no new approval, as `judge approve` leaves out one that would
@@ -494,9 +508,38 @@
 //!   Leaving out is no failure. One `--until` applies to every approval of the run
 //!   (an expiry an approval had before is not carried over), and one not after now
 //!   is refused, exit 1, even when nothing is stale. The answer is `{"judged":
-//!   [...], "left_out": [...]}`, `judged` as `judge approve` answers it, and empty,
+//!   [...], "left_out": [...]}`, each of `judged` as `judge approve` answers it and
+//!   each of `left_out` as above, both with `"rule": "stale"`, and `judged` empty,
 //!   with exit 0, when nothing can be approved. Otherwise the exits are those of
 //!   `judge`.
+//! - `judge approve --pending` needs `--reason`, and approves in the same way, in one
+//!   run upstream first, every pending document: a valid document no decision stands
+//!   about, never approved or with every decision about it withdrawn (`status` says
+//!   `"declared": "pending"` of it). An invalid one (its `presence` there has
+//!   `"state": "invalid"`, though it is pending in the ledger) is not taken, nor one
+//!   approved, denied, deprecated or retired. The ledger knows no standing
+//!   "superseded": a pending document another replaces is pending, and is approved
+//!   with its replacement. With references, it takes the documents named, each
+//!   pending, and every pending document they stand on through `depends` links,
+//!   transitively, as the documents link now (through documents that are not
+//!   pending too), and nothing else; a named one that is not pending is a request
+//!   error, exit 2, that names it and says what it is. Nothing that is not pending
+//!   is approved. Each document is decided on the ledger the earlier ones of the run
+//!   left, and so is what holds it back: a document whose `depends` link names one
+//!   that is broken, or pending or stale and not in the run, or left out, as it
+//!   stands after the approvals made before it in the run, is left out as
+//!   `stands_on` (`upstream_is` `broken`, `pending`, `stale` or `left_out`); an
+//!   upstream stale only through one the run approved holds nothing back. One whose
+//!   approval the model refuses is left out as `refused`. Each is told on stderr as
+//!   `warning: <key> was not approved: <detail>`. A pending document has no approval
+//!   to repeat, so `repeats` comes only from a stale document in a run with
+//!   `--stale`. With `--stale` too, both are one run on one reading, upstream first,
+//!   so a pending upstream is approved before the stale document on it, and a stale
+//!   upstream again before the pending document on it; each entry of `judged` and
+//!   of `left_out` says which rule took it, `"rule": "stale"` or `"pending"`.
+//!   `--until` and `--actor` reach every approval of the run, and the answer, the
+//!   exits and the time of the records are those of `--stale`; nothing pending is an
+//!   empty run.
 //! - An approval is refused when the document is not valid, a `depends` link cannot
 //!   be followed, it would close a cycle, a `depends` link names an artifact its
 //!   adapter cannot tell about now, or a `depends` link names a document people

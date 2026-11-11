@@ -191,7 +191,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
     }
 
     /// Append the records of a run, every one decided, in order.
-    pub(super) async fn write(&mut self, judged: &[Judged]) -> Result<(), ShelfError> {
+    pub(super) async fn write<'a>(
+        &mut self,
+        judged: impl IntoIterator<Item = &'a Judged>,
+    ) -> Result<(), ShelfError> {
         for one in judged {
             self.ports
                 .append()
