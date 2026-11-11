@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "82ff7ad8acc6437f26d36e325c75feaa83226ce2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:90d5f1aeee031c0cd4f62ebacb4b5c84cd02a14db41d95525be6c1c0c62cf584",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "20997ef5737d03aab149946ee64a395c55678fef",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:42d20691a136223527a212a3f00792a7aade35bb8e0be7f36c9d287082401de4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "78b7b52311eef529ab4ab8c6d76317b8188e6824",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:189a4e799235ebe7470d9386fa00266befef44e39e73c5f3ae4f3ed453806ce0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794406447718,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a5566531a340794ca412df27a0c1df8bcb11f9b6",
+      "hash": "sha256:b44e18044ae5dc64af29a6e118ad5449ad5a677ea478fcf266eef0a0390b63bc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    }
+  ],
+  "id": "01a1caf5-7a84-7042-836f-dc7bbdff3b93",
+  "kind": "decision",
+  "reason": "Accepting and reading an exemption, and each reason it is unneeded, are tested as DEC-65 says (#78); checked by a blind review",
+  "revision": "962f50de34b2388c7f1b3048fa6e2d2b9b30c36f",
+  "seen": "sha256:8b73afc4a26e873ffa19b02281f0653d1b0ba9f736bdfc04b2a18924732b15bd",
+  "seen_address": "06f9347c1cf95df628de13b1a9c5af08dc3ffb43",
+  "subject": "01a1cae7-1aa8-740a-9ad6-de66b9638908",
+  "v": 1,
+  "verb": "approve"
+}

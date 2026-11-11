@@ -93,6 +93,52 @@
 //! expectation, and a link into its own book is met only by another document of
 //! that book.
 //!
+//! The rule stays declared for the whole book; one document can be exempt from it.
+//! `judge exempt <ref>... --from <book>.<link> --reason <text>` records, by an
+//! actor, at a time, for a reason, that the document is not expected to be reached
+//! by that link (a finding kept on purpose that grounds no requirement). It is
+//! accepted only when it would be needed the moment it is written: the document is
+//! valid now, the link is declared with a cover (of either strength) and points
+//! into the document's book, the document is not denied, deprecated or retired (no
+//! cover expects it), and the link does not reach it now (the refusal names the
+//! documents it is reached from); and when no exemption that stands already exempts
+//! the document from the link (a second is refused, not repeated: withdraw the
+//! first to say it again). An exemption is accepted and read by the one rule, so
+//! whatever would read as unneeded at once is refused; anything else is refused
+//! too, and the run writes nothing. An exempt document has no `not_covered` notice for that link
+//! but an `exempt` one, is not in `uncovered`, and does not fail `check` under a
+//! `true` cover; `check` lists the exemptions apart in `exempt`, with who, when and
+//! why. When the link reaches the document again, or no longer expects to (it is
+//! no longer declared, or declared with no cover, or into another book), or the
+//! document is not valid or decided against, the exemption is no longer needed, as
+//! Rust's `#[expect]` tells an expectation no longer met: the notice
+//! `exemption_unneeded`, with why, listed by `check` in `exemption_unneeded` and
+//! warned of on stderr, one line each, every document by its key (by its identity
+//! when it has none, as a document that is not valid):
+//!
+//! ```text
+//!   warning: <record id> exempts <key> from `<book>.<link>` and is not needed: <why>; withdraw it with `judge withdraw <record id>`
+//! ```
+//!
+//! where `<why>` is one of `` `<book>.<link>` reaches it now, from <key>, <key> ``,
+//! `` no link `<book>.<link>` into a book is declared now ``, `` `<book>.<link>` is
+//! declared with no cover now ``, `` `<book>.<link>` points into `<book>` now, and
+//! the document is of `<book>` ``, `the document is not valid now: its files are
+//! invalid` (or `no file in the books' ranges carries it`, for a document whose file
+//! is gone or that a book's range leaves out, or `whether a file carries it cannot be
+//! told`), and `the document is decided against, and no covering link expects to
+//! reach it`. It does not fail `check`. `judge withdraw <record id>` takes an
+//! exemption back. Two exemptions that stand of one document from one link (branches
+//! merged, each with one) are the notice `exemption_repeated`, listed by `check` in
+//! `exemption_repeated` and warned of on stderr:
+//!
+//! ```text
+//!   warning: 2 exemptions exempt <key> from `<book>.<link>` (<record id>, <record id>): one is enough, withdraw the others, with `judge withdraw <id>`
+//! ```
+//!
+//! `unlinked` asks nothing of a cover, and lists an exempt document as it lists any
+//! other.
+//!
 //! The files:
 //!
 //! ```text
@@ -559,6 +605,9 @@
 //!   judge moved <old> <new> --reason <text>
 //!                             the artifact at the old name is now at the new one: a pin of the
 //!                             old name made before is read as a pin of the new one
+//!   judge exempt <ref>... --from <book>.<link> --reason <text>
+//!                             the documents are not expected to be reached by that covering
+//!                             link: no `not_covered` for it, and `check` lists them apart
 //!   judge withdraw <record id>... --reason <text>
 //!                             take back decisions or declarations by the id of their record
 //!   new <book> [--title <text>] [--key <key>] [<entry>=<value> | <entry>+=<item>]... [--body <text>]
@@ -778,8 +827,8 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now; for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands) |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written (for `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
 //!
 //! `check` answers `clean` (whether it exits 0) beside what it found; each of its
@@ -787,7 +836,21 @@
 //! `uncovered` lists each document a covering link does not reach as `{"doc",
 //! "book", "link", "severity"}`, the book and link expected to reach it and their
 //! strength (`warn` or `error`), and the `not_covered` notice carries the same
-//! `severity`.
+//! `severity` and `book`. Its `exempt` lists each exemption that stands in the place
+//! of a gap as `{"doc", "book", "link", "severity", "exemption", "actor", "at",
+//! "reason"}` (`exemption` is the record id `judge withdraw` takes); its
+//! `exemption_unneeded` each exemption no longer needed as `{"doc", "book", "link",
+//! "exemption", "actor", "at", "reason", "why", "detail"}`, with `why` one of
+//! `reached`, `not_declared`, `no_cover`, `other_book`, `not_valid` or
+//! `decided_against` and `detail` the sentence of the stderr line, after
+//! `warning: ` and before `; withdraw it`; and its `exemption_repeated` each
+//! document two or more exemptions exempt from one link as `{"doc", "book",
+//! "link", "exemptions", "detail"}`. A `doc` is `{"id", "key"}`, with a null key
+//! for a document that is not valid. The notices `not_covered`, `exempt`,
+//! `exemption_unneeded` and `exemption_repeated` carry the `book` and the `link`;
+//! `exempt` and `exemption_unneeded` carry the exemption in `declared`, and
+//! `exemption_repeated` every one of them; `exemption_unneeded` carries the same
+//! `why`, and its `detail` names the document `it`.
 //!
 //! `map` answers `{"schema_problems": [...], "books": [...], "links": [...],
 //! "diagram": ...}`: each book with its `name`, `dir`, `key` (`{"kind": "prefix",

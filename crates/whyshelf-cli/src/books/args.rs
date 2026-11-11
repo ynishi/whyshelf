@@ -1,8 +1,38 @@
 //! The commands, as clap types.
 
+use std::str::FromStr;
+
 use clap::{Args, Subcommand};
 use whyshelf_core::domain::shelf::artifact::ArtifactName;
 use whyshelf_core::domain::shelf::lookup::Reference;
+use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
+
+/// A link of a book as written in `--from`: `<book>.<link>`, read once by clap.
+///
+/// Neither grammar lets a name hold a `.` (a name is `a-z 0-9 - _`, at most 64
+/// characters), so the text is split at its one `.`; a text with none, or more than
+/// one, is no link of a book.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BookLink {
+    /// The book that declares the link.
+    pub book: BookName,
+    /// The link.
+    pub link: EntryName,
+}
+
+impl FromStr for BookLink {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let (book, link) = text
+            .split_once('.')
+            .ok_or_else(|| format!("`{text}` is not `<book>.<link>`"))?;
+        Ok(Self {
+            book: BookName::new(book).map_err(|e| format!("the book of `{text}`: {e}"))?,
+            link: EntryName::new(link).map_err(|e| format!("the link of `{text}`: {e}"))?,
+        })
+    }
+}
 
 /// The commands on the documents whose kinds the project declares in
 /// `.whyshelf/books.toml`.
@@ -257,6 +287,26 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         #[arg(long)]
         actor: Option<String>,
     },
+    /// Declare that each document is not expected to be reached by one covering link
+    /// (needs --reason): it is not listed in `check`'s `uncovered` for that link, and
+    /// does not fail `check` under `cover = true`. The link is declared with a cover
+    /// and points into the document's book, does not reach the document now, and the
+    /// document is not decided against.
+    Exempt {
+        /// The documents, in order: keys, identifiers or short identifiers.
+        #[arg(required = true, num_args = 1..)]
+        references: Vec<Reference>,
+        /// The covering link, as `<book>.<link>`: the book that declares it, and its
+        /// name.
+        #[arg(long, required = true, value_name = "BOOK.LINK", value_parser = BookLink::from_str)]
+        from: BookLink,
+        /// Why the document is meant to stay unreached.
+        #[arg(long, required = true)]
+        reason: String,
+        /// Who declares it (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
+        #[arg(long)]
+        actor: Option<String>,
+    },
     /// Withdraw decisions or declarations by the `id` of their record (needs
     /// --reason), with one revocation.
     Withdraw {
@@ -270,4 +320,32 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         #[arg(long)]
         actor: Option<String>,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_book_link_is_split_at_its_one_dot_with_names_of_the_most_characters() {
+        // A name is at most 64 characters of `a-z 0-9 - _`; neither holds a `.`.
+        let book = "b".repeat(64);
+        let link = "l_-9".repeat(16);
+        let parsed: BookLink = format!("{book}.{link}").parse().unwrap();
+        assert_eq!(parsed.book.as_str(), book);
+        assert_eq!(parsed.link.as_str(), link);
+
+        for refused in [
+            format!("{}.{link}", "b".repeat(65)),
+            format!("{book}.{}", "l".repeat(65)),
+            "note".to_owned(),
+            "note.see.more".to_owned(),
+            ".see".to_owned(),
+            "note.".to_owned(),
+            "note.key".to_owned(),
+            "No.see".to_owned(),
+        ] {
+            assert!(refused.parse::<BookLink>().is_err(), "{refused}");
+        }
+    }
 }
