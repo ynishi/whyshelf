@@ -10,10 +10,15 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// A project of one book of notes and the note N-1, removed when dropped.
 struct Project(PathBuf);
+
+/// How many projects this process has made: with the test's name, it keeps two
+/// tests that run at once (in the same tick of a coarse clock) out of one directory.
+static MADE: AtomicUsize = AtomicUsize::new(0);
 
 impl Project {
     fn new(name: &str) -> Self {
@@ -21,8 +26,9 @@ impl Project {
             .duration_since(UNIX_EPOCH)
             .expect("a clock after 1970")
             .as_nanos();
+        let count = MADE.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!(
-            "whyshelf-stats-{name}-{}-{nanos}",
+            "whyshelf-stats-{name}-{}-{count}-{nanos}",
             std::process::id()
         ));
         fs::create_dir_all(dir.join(".whyshelf")).unwrap();

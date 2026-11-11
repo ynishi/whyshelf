@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "427fd439065f80a6a49ff7d40d5c4aa88d69f477",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:76b1fb30f854d5e5f587fda725787b6e52cfa5e6db811ade0e89e97d29fce329",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/verification_spread.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794365041256,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e5a274a6e1888c63aedc31de7d7d8ae92a07fc4d",
+      "hash": "sha256:13256f0030e58425f7c910edee07e3981a2ffede880608ffe74fda1cecdb6eca",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "56"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c877-8fbd-7353-9e60-cfe043fb39a9"
+    }
+  ],
+  "id": "01a1c87d-ab69-73bc-ba33-9daa378073a0",
+  "kind": "decision",
+  "reason": "The end-to-end tests are one file per feature, and a guard keeps one file from serving many verifications (#60); checked by a blind review that compared every moved test with the old file, every finding fixed",
+  "revision": "d080c20bf062d54086f8b98e199abcee01a57f2c",
+  "seen": "sha256:c8e8a091eab678b160f3b0c3c7021b7b0c7f8f42276bd3aefaa01b90219500b7",
+  "seen_address": "ca76ab85e1b0b7373ec0334c076ad48edf2b844f",
+  "subject": "01a1c877-9138-726f-9e0d-817c5f8f866f",
+  "v": 1,
+  "verb": "approve"
+}

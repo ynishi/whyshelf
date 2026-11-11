@@ -1,0 +1,80 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a2617b67dc805fdaa29be40d462e2e08bf5ba47c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:26ad60a4a1f6d38d866b9ef97bd3267fd5a17b4b94e5526adc09dfed91d3c969",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/absent_path.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "674f81af5e918067800d8c676b03ea799c908604",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2bb3f2fa245bd1661e0d9089bca3429c4e240cc4c9a269b3afed8b24e79877f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794365042003,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11891129d27429b1a8097e576d0f157c6b3cd482",
+      "hash": "sha256:11cccbc99d5bcad0b080459ad707cac5bce11386aecf2af95545c684c1ce5a1a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-778a-7288-ae20-3289a8a7a718"
+    },
+    {
+      "address": "d7a292650bcffaef1d0c947abe40235c719878dc",
+      "hash": "sha256:c03e03305a381cb0aae097cab40d04c7bfd71505936711141eaa0c160fa3ff01",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "43"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-7849-7632-b126-5a6b72f508b0"
+    }
+  ],
+  "id": "01a1c87d-b1a0-7699-b69c-0471ac3ab563",
+  "kind": "decision",
+  "reason": "Each verification names the file of its own feature and the shared helpers instead of command_line.rs, the tests unchanged in what they check; V-28, V-30, V-35, V-44 and REQ-13 restated; stats joins the reading commands; temporary directories hold a counter (#60); checked by a blind review",
+  "revision": "d080c20bf062d54086f8b98e199abcee01a57f2c",
+  "seen": "sha256:943f43067e99eaf8c356ea9168071ff1522b9ef9da9305c6bc36007d99646e1d",
+  "seen_address": "7b5760ba9c47ad8c89a6ec8a7b05ef45874ecfad",
+  "subject": "01a1c765-25d4-76c7-88ae-78e4f8ea1119",
+  "v": 1,
+  "verb": "approve"
+}
