@@ -115,6 +115,12 @@ and this project adheres to
   the moves each space can suggest for them: for files, one whose content is
   what was pinned, and the renames Git sees between the approval's revision
   and the index. It declares nothing and writes nothing (#69).
+- `whyshelf init` writes a minimal declaration, and `whyshelf init --sample` a
+  declaration of four books (finding, requirement, decision, verification)
+  with one pending document each, in one chain. Neither writes over anything,
+  a parent directory included, nor approves; a write that fails part way names
+  what was written and leaves no file half written. The manual starts with
+  Getting started (#71).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
@@ -177,3 +183,5 @@ and this project adheres to
 ### Removed
 
 - The fixed-stage model that came before books (#9).
+- The sample declaration `books.sample.toml` and `whyshelf_infra::shelf::books::SAMPLE`,
+  in favour of `whyshelf init --sample` (#71).

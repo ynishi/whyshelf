@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "744b453e310b1f3bb82a78c83ec542445c4ad935",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4b8afe04232807d95bf502f439cf71b2897c7b6bfc0797114ed5e4f68b42e377",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f5c8c095132833dfc0d177b08e6a08b0a65ec8cc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b86c5c88bc7c66fdaefd2a264a60b3848d9b890100c8f724397c272a745d324e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "275bc6a320a3f51baa088ca0d80024972ff47f08",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1eb9b52952f8a6677fe28723f3e023b20d437263d87704646ff28e96455195a2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794387457734,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a0877e8afd5233ff9c2bd815f5d764b00b0f44a0",
+      "hash": "sha256:493a0d4fa68c132038cc9a1d3a63ff33d92b87ec5e196628e7ca6ed5e54294fa",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "61"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9b4-0443-7020-ab73-b9e48af448eb"
+    }
+  ],
+  "id": "01a1c9d3-bd92-71e2-a484-7738c8d70e29",
+  "kind": "decision",
+  "reason": "init writes a template declaration and its documents after checking all of it, never over a file and approving nothing; init --sample is a chain of four books (#71); checked by three rounds of blind review on the binary, every finding fixed",
+  "revision": "cc5db5b7d17dfe3a9e7bea11421e39077a15f5c8",
+  "seen": "sha256:4d3633271f13b2222a7549e826d632efa62e4daa754847d3b61af275e42de845",
+  "seen_address": "accd1cb0acc348716f949a6aac597c98016e2a0e",
+  "subject": "01a1c9b4-060d-759a-83f7-41d99d7c5f62",
+  "v": 1,
+  "verb": "approve"
+}

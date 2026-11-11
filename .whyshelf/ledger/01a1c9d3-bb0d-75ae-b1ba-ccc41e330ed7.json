@@ -1,0 +1,113 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::init",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::DeclarationWrite",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::init::minimal",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::init::sample",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794387457734,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a174d7bb687f87965de365b49240d343368349b2",
+      "hash": "sha256:e5215bb3745ef02a80711bbdbaaa3998a3bfdacd680180831d4add57c39fff78",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-36e2-72bb-8529-f374820e1565"
+    },
+    {
+      "address": "e4666bcbff936c60cfa627503082d756316940fd",
+      "hash": "sha256:237f766886a7ab23b3b74164f6ee0624b7802e3323ee86ea88353d981fe8fde9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "9"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-10e0-77f2-9f27-abcf3bbfd1d0"
+    },
+    {
+      "address": "3ce534fac5cc67cab30287f9079831b74b5081bb",
+      "hash": "sha256:785f2463798582b47dbc3a8d8fd00009f4506de4edb516f3e5c5dab58391d8b8",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "24"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c9b4-0262-74b9-b0c8-d15f578bcdf5"
+    }
+  ],
+  "id": "01a1c9d3-bb0d-75ae-b1ba-ccc41e330ed7",
+  "kind": "decision",
+  "reason": "init writes a template declaration and its documents after checking all of it, never over a file and approving nothing; init --sample is a chain of four books (#71); checked by three rounds of blind review on the binary, every finding fixed",
+  "revision": "cc5db5b7d17dfe3a9e7bea11421e39077a15f5c8",
+  "seen": "sha256:493a0d4fa68c132038cc9a1d3a63ff33d92b87ec5e196628e7ca6ed5e54294fa",
+  "seen_address": "a0877e8afd5233ff9c2bd815f5d764b00b0f44a0",
+  "subject": "01a1c9b4-0443-7020-ab73-b9e48af448eb",
+  "v": 1,
+  "verb": "approve"
+}

@@ -25,6 +25,7 @@
 //! | [`moved`](ShelfApp::moved) | **yes** | [`Moved`](crate::domain::shelf::ledger::Moved): the declarations that an artifact moved from one name to another, after the space's adapter said the old name has nothing and the new one has something |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
+//! | [`init`](ShelfApp::init) | **yes** | [`Initialized`]: the file of the declaration it wrote, and the documents it made beside it, each as `new_doc` makes one |
 //! | [`fmt_check`](ShelfApp::fmt_check) | no | [`FmtReport`]: the documents' files not in the one form, those in it, and those `fmt` would leave as they are, each with why |
 //! | [`fmt`](ShelfApp::fmt) | **yes** | [`FmtReport`]: the files written over in the one form, those in it already, and those left as they are, each with why |
 //!
@@ -33,8 +34,8 @@
 //! A use case that reads takes `&self` and is generic over [`ShelfRead`], which has no
 //! way to write. [`judge`](ShelfApp::judge),
 //! [`approve_stale`](ShelfApp::approve_stale), [`same_meaning`](ShelfApp::same_meaning),
-//! [`moved`](ShelfApp::moved), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc) and
-//! [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
+//! [`moved`](ShelfApp::moved), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc),
+//! [`init`](ShelfApp::init) and [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
 //! program run one at a time, by the type. Two processes can still write at once;
 //! that is safe because a record is a file of its own named by its own identity, and
 //! no write but `fmt`'s replaces a file that is there (see the adapter). Two
@@ -59,6 +60,7 @@ mod approve_stale;
 mod approved;
 mod error;
 mod fmt;
+mod init;
 mod judge;
 mod load;
 mod moved;
@@ -88,6 +90,8 @@ mod fake_tests;
 #[cfg(test)]
 mod fmt_tests;
 #[cfg(test)]
+mod init_tests;
+#[cfg(test)]
 mod moved_tests;
 #[cfg(test)]
 mod moves_tests;
@@ -109,16 +113,17 @@ mod tests;
 mod unlinked_tests;
 
 pub use approve_stale::{ApproveStaleRequest, StaleApproved};
-pub use error::{ErrorClass, ShelfError};
+pub use error::{ErrorClass, Obstacle, ShelfError};
 pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
+pub use init::{InitRequest, Initialized};
 pub use judge::{JudgeRequest, Judgement};
 pub use moved::MovedRequest;
 pub use new_doc::{Created, NewDocRequest};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DocReplace, DocSource, DocWrite, FileForm, Form, IdSource, LedgerAppend, LedgerContents,
-    LedgerRead, MoveSource, Replacement, RevisionSource, ShelfPort, ShelfRead, ShelfWrite,
-    UnreadableRecord, UnreadableWhy,
+    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileForm, Form, IdSource,
+    LedgerAppend, LedgerContents, LedgerRead, MoveSource, Replacement, RevisionSource, ShelfPort,
+    ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,

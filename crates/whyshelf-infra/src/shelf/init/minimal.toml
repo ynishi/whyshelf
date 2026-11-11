@@ -1,0 +1,41 @@
+# The books of this project: the kinds of document it keeps, and how they link.
+#
+# whyshelf knows no kind of document of its own; every book is declared here.
+# `whyshelf check` says whether this file can be used, and `whyshelf map` draws it.
+# Make a document with `whyshelf new note --title "..."`.
+
+[[book]]
+name = "note"
+dir = "books/note"
+key = { prefix = "N" }      # keys N-1, N-2, ...; or key = "slug"
+description = "something worth keeping, and why"
+
+[[book.field]]
+name = "title"
+type = "text"               # or "integer", "bool", "list", { enum = ["a", "b"] }
+required = true
+
+# A field: another entry of the front matter of each note.
+#
+# [[book.field]]
+# name = "source"
+# type = "text"
+
+# A link to other documents, by their keys: here, a note that stands on notes
+# before it. `depends`: an approval pins them, and a change of one makes it
+# stale; `informs`: they are worth reading, and change nothing.
+#
+# [[book.link]]
+# name = "grounds"
+# target = "note"           # a book declared in this file
+# means = "depends"         # or "informs", "replaces"
+# count = "many"            # or "one", "optional", "at-least-one"
+
+# A link to artifacts: things outside the documents, here the files of the
+# project, by their path. The preset `file` gives the space and the meaning
+# (`depends`): editing a file a note names makes its approval stale.
+#
+# [[book.link]]
+# name = "tests"
+# target = "artifact"
+# preset = "file"

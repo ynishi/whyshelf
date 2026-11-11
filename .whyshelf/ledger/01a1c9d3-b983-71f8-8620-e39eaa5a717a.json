@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794387457734,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c9d3-b983-71f8-8620-e39eaa5a717a",
+  "kind": "decision",
+  "reason": "init writes a template declaration and its documents after checking all of it, never over a file and approving nothing; init --sample is a chain of four books (#71); checked by three rounds of blind review on the binary, every finding fixed",
+  "revision": "cc5db5b7d17dfe3a9e7bea11421e39077a15f5c8",
+  "seen": "sha256:785f2463798582b47dbc3a8d8fd00009f4506de4edb516f3e5c5dab58391d8b8",
+  "seen_address": "3ce534fac5cc67cab30287f9079831b74b5081bb",
+  "subject": "01a1c9b4-0262-74b9-b0c8-d15f578bcdf5",
+  "v": 1,
+  "verb": "approve"
+}
