@@ -1,0 +1,94 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f997aa9cde214a99367e103551eb5305da9c3ac1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:65a0e729c73fdd3077dea1f67be318ea6dcb25109de17313b88ca36acbceca35",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/actor.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a95d3eadbf75fe22937251061a67c1aded761b08",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:992aaf99f67751fc51f00e33f49330453b823f4b9520521bded35415ab956b62",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/answers.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "674f81af5e918067800d8c676b03ea799c908604",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2bb3f2fa245bd1661e0d9089bca3429c4e240cc4c9a269b3afed8b24e79877f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794365956169,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a0fd6d7c9569173efcc54a424e59fc4fb1320f63",
+      "hash": "sha256:cf9125b01846eca0cd37787576126b89184375347877f62c68a93b275816df30",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d99a-72ad-86a3-e75931d0b50a"
+    },
+    {
+      "address": "8ea9966b54a032c0bd52b4fa8d9ba4f612763c3e",
+      "hash": "sha256:0d9ebbcb94bc5a1af2d9dab8f06e4b89349ed39c7e025cac11ff3b01c70980ed",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce"
+    }
+  ],
+  "id": "01a1c88b-a1f2-763e-9b3a-654e5ad3630b",
+  "kind": "decision",
+  "reason": "DEC-34 says what the code does: a blank or non-text variable counts as not set, Git's user.name is the one git config gives in the project, no file names anyone, and with no name the judgement is refused; actor.rs shows the whole order on the binary with the person's Git settings shut out; ProjectActor's doc says the command line wins first (#62); checked by a blind review",
+  "revision": "eae62e663a913f4b8001cd70924767be01b9c7a9",
+  "seen": "sha256:182958f76818f87f8989bc0c43c59537c69c15207251c2e34f40aa9b3296b116",
+  "seen_address": "b7689d7948e8b201eb091c1cd54b51bb99abcd7e",
+  "subject": "01a1c765-21d2-758d-ab46-8928cc29c746",
+  "v": 1,
+  "verb": "approve"
+}
