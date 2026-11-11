@@ -19,6 +19,7 @@
 //! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"`; `code`: `space = "file"`, `compare = "presence"`, `means = "depends"` | the same content, then Git's renames ([`file`](mod@file#suggesting-moves)) |
 //! | `rust-item` | [`rust_item::RustItemSpace`] | Rust paths (`crate::module::Item`, `Type::member`), looked up in the docs `cargo doc` wrote | `rustdoc`: `space = "rust-item"`, `compare = "presence"`, `means = "depends"` | cannot suggest |
 //! | `rust-test` | [`rust_test::RustTestSpace`] | test functions by their file and path in it (`<file>.rs::<module>::<function>`), parsed from the source | `test`: `space = "rust-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest |
+//! | `js-test` | [`js_test::JsTestSpace`] | JavaScript and TypeScript tests by their file and titles (`<file>.ts::<describe>::<test>`), lexed from the source | `js-test`: `space = "js-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest |
 //!
 //! The same adapters answer [`MoveSource`]: a space with no adapter cannot suggest.
 //!
@@ -32,6 +33,7 @@
 //! [`ArtifactReading`]: whyshelf_core::domain::shelf::artifact::ArtifactReading
 
 pub mod file;
+pub mod js_test;
 pub mod rust_item;
 pub mod rust_test;
 
@@ -48,6 +50,7 @@ use whyshelf_core::domain::shelf::ledger::{GoneName, SpaceSuggestions};
 use whyshelf_core::domain::shelf::schema::BuiltinPresets;
 
 use file::{ArtifactError, FileSpace};
+use js_test::{JsTestError, JsTestSpace};
 use rust_item::{RustItemError, RustItemSpace};
 use rust_test::{RustTestError, RustTestSpace};
 
@@ -60,6 +63,9 @@ pub enum Adapter {
     RustItem(RustItemSpace),
     /// The test functions of the Rust source of the project ([`rust_test`]).
     RustTest(RustTestSpace),
+    /// The tests of the JavaScript and TypeScript source of the project
+    /// ([`js_test`]).
+    JsTest(JsTestSpace),
 }
 
 impl Adapter {
@@ -69,6 +75,7 @@ impl Adapter {
             Self::File(_) => file::presets(space),
             Self::RustItem(_) => rust_item::presets(space),
             Self::RustTest(_) => rust_test::presets(space),
+            Self::JsTest(_) => js_test::presets(space),
         }
     }
 
@@ -77,6 +84,7 @@ impl Adapter {
             Self::File(files) => Ok(files.resolve(asks).await?),
             Self::RustItem(items) => Ok(items.resolve(asks).await?),
             Self::RustTest(tests) => Ok(tests.resolve(asks).await?),
+            Self::JsTest(tests) => Ok(tests.resolve(asks).await?),
         }
     }
 
@@ -85,15 +93,19 @@ impl Adapter {
             Self::File(files) => Ok(files.current(key.name()).await?),
             Self::RustItem(items) => Ok(items.current(key.name()).await?),
             Self::RustTest(tests) => Ok(tests.current(key.name()).await?),
+            Self::JsTest(tests) => Ok(tests.current(key.name()).await?),
         }
     }
 
     /// What it suggests the gone names of its space moved to: the files look; the
-    /// items and the tests of the Rust crates cannot suggest yet.
+    /// items and the tests of the Rust crates, and the JavaScript tests, cannot
+    /// suggest yet.
     async fn suggest(&self, gone: &[GoneName]) -> Result<SpaceSuggestions, SpacesError> {
         match self {
             Self::File(files) => Ok(SpaceSuggestions::Suggested(files.suggest(gone).await?)),
-            Self::RustItem(_) | Self::RustTest(_) => Ok(SpaceSuggestions::CannotSuggest),
+            Self::RustItem(_) | Self::RustTest(_) | Self::JsTest(_) => {
+                Ok(SpaceSuggestions::CannotSuggest)
+            }
         }
     }
 
@@ -102,7 +114,7 @@ impl Adapter {
     async fn read_back(&self, address: &ContentAddress) -> Result<Option<Vec<u8>>, SpacesError> {
         match self {
             Self::File(files) => Ok(files.read_back(address).await?),
-            Self::RustItem(_) | Self::RustTest(_) => Ok(None),
+            Self::RustItem(_) | Self::RustTest(_) | Self::JsTest(_) => Ok(None),
         }
     }
 }
@@ -119,6 +131,9 @@ pub enum SpacesError {
     /// The adapter of the space `rust-test`.
     #[error(transparent)]
     RustTest(#[from] RustTestError),
+    /// The adapter of the space `js-test`.
+    #[error(transparent)]
+    JsTest(#[from] JsTestError),
     /// The domain refused a reason this module gave (a bug if it ever happens: the
     /// reason is never blank).
     #[error("the domain refused a reason of the artifact source")]
@@ -145,17 +160,20 @@ impl ArtifactSpaces {
     }
 
     /// The spaces of a project at its root: `file`, the files under it,
-    /// `rust-item`, the items of its Rust crates, and `rust-test`, the test
-    /// functions of its Rust source.
+    /// `rust-item`, the items of its Rust crates, `rust-test`, the test
+    /// functions of its Rust source, and `js-test`, the tests of its JavaScript and
+    /// TypeScript source.
     pub fn of_project(
         files: FileSpace,
         rust_items: RustItemSpace,
         rust_tests: RustTestSpace,
+        js_tests: JsTestSpace,
     ) -> Self {
         let adapters = [
             (file::FILE_SPACE, Adapter::File(files)),
             (rust_item::RUST_ITEM_SPACE, Adapter::RustItem(rust_items)),
             (rust_test::RUST_TEST_SPACE, Adapter::RustTest(rust_tests)),
+            (js_test::JS_TEST_SPACE, Adapter::JsTest(js_tests)),
         ];
         adapters
             .into_iter()
@@ -265,6 +283,7 @@ mod tests {
             FileSpace::new(root.to_path_buf()),
             RustItemSpace::new(root.to_path_buf(), None),
             RustTestSpace::new(root.to_path_buf()),
+            JsTestSpace::new(root.to_path_buf()),
         )
     }
 
@@ -277,13 +296,19 @@ mod tests {
         let source = of_project(dir.path());
         assert_eq!(
             source.spaces(),
-            BTreeSet::from([space("file"), space("rust-item"), space("rust-test")])
+            BTreeSet::from([
+                space("file"),
+                space("js-test"),
+                space("rust-item"),
+                space("rust-test")
+            ])
         );
         let mut presets = file::presets(&space("file"));
         presets.extend(rust_item::presets(&space("rust-item")));
         presets.extend(rust_test::presets(&space("rust-test")));
+        presets.extend(js_test::presets(&space("js-test")));
         assert_eq!(source.presets(), presets);
-        assert_eq!(presets.len(), 4);
+        assert_eq!(presets.len(), 5);
 
         let mut asks = ArtifactAsks::new();
         asks.ask(space("file"), name("a.rs"), Comparison::Bytes);

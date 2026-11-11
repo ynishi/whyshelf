@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "703fb2a080cee8f342f9c92f77fb81b4b4c63bbd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ded4cd952a854736f8d4d8ceb502c72a71346548fa2ee545fbdee32e6bd66c64",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/js_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794418477391,
+  "expires": null,
+  "frame": [
+    {
+      "address": "43f06e1c521039f504c59418b68322685a80e246",
+      "hash": "sha256:f2016633a50701c0c919bad83e485e59222aeda46c56917a8123b5e4ae6c7c59",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "68"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb78-d2d4-770d-9d90-5aa3f5577115"
+    }
+  ],
+  "id": "01a1cbad-0a38-7530-b526-65fdc73a87fd",
+  "kind": "decision",
+  "reason": "The tests of js-test check the grammar, the lexer, the index and the four answers as DEC-68 says, on made-up fixtures (#90); checked by a blind review",
+  "revision": "b9582a9c2292e3acb00c08ed97ba4fae279839fa",
+  "seen": "sha256:4e999c6ae2cde6c4933cff2574579d0e0b74edd1aa3f397a59690a52fa1a3e18",
+  "seen_address": "bed3035fd8286c04835e4176d9f305d82be4ae9f",
+  "subject": "01a1cb78-d7ac-744a-9c93-9945b8e199b1",
+  "v": 1,
+  "verb": "approve"
+}

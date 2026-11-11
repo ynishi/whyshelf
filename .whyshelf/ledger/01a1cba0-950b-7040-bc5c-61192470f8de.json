@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794417660406,
+  "expires": null,
+  "frame": [],
+  "id": "01a1cba0-950b-7040-bc5c-61192470f8de",
+  "kind": "decision",
+  "reason": "Only the issue number changed, as the issue was opened again; what the document states is unchanged",
+  "revision": "584481e3aab19a2db001921500f80bc101105c92",
+  "seen": "sha256:a1d3c7d9dd6878d59b258cac9686c15b0f7afabf6cf3aec79f04e4ef19b49304",
+  "seen_address": "f8d312a1e41d9bb6093d8880cdff42b48bb64613",
+  "subject": "01a1cb50-fae9-7092-a289-1be22004cfbd",
+  "v": 1,
+  "verb": "approve"
+}

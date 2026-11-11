@@ -1,7 +1,7 @@
 ---
 id: "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
 key: "DEC-63"
-issues: ["#75"]
+issues: ["#92"]
 rejected: ["Refuse a declaration whose range leaves out the path of a key: a book whose documents sit in a subdirectory could not be declared; new refuses such a key instead", "Skip every file whose front matter does not parse: a mistyped delimiter would hide a document", "Write a glob matcher of our own: globset is pure and widely used, and the grammar is narrowed to *, ? and ** on top of it"]
 related: ["DEC-61"]
 rustdoc: ["whyshelf_core::domain::shelf::schema::BookRange", "whyshelf_core::domain::shelf::schema::BookScope", "whyshelf_core::domain::shelf::schema::WithoutFrontMatter", "whyshelf_core::domain::shelf::build::Shelf::skip_of", "whyshelf_core::domain::shelf::build::SkippedFile"]

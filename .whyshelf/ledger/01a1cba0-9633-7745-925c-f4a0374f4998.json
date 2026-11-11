@@ -1,0 +1,107 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::Shelf::skip_of",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::SkippedFile",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::BookRange",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::BookScope",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::WithoutFrontMatter",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794417660406,
+  "expires": null,
+  "frame": [
+    {
+      "address": "55caec0db41d7ace38636bc3417988db1d4944ab",
+      "hash": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    },
+    {
+      "address": "9da79bb25597e7fe8ae9aecf975067a3d5779d0e",
+      "hash": "sha256:79cb12a96f9433e7ffd2683604251131ded6a404d93247d609cd915774d17996",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "26"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1ca93-4b55-70de-b302-a6a84134cf40"
+    }
+  ],
+  "id": "01a1cba0-9633-7745-925c-f4a0374f4998",
+  "kind": "decision",
+  "reason": "Only the issue number changed, as the issue was opened again; what the document states is unchanged",
+  "revision": "584481e3aab19a2db001921500f80bc101105c92",
+  "seen": "sha256:37551d47d732d115fabf4690772c5a8bb1a11f245275691eb3cb1759c5804e0e",
+  "seen_address": "ab1f7fb4185be121d516904cdc8aa26b670e3d00",
+  "subject": "01a1ca93-4e19-75ff-a0c4-3554a083eccd",
+  "v": 1,
+  "verb": "approve"
+}

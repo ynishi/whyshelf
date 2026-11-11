@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "c7a76af86959d13c44655edb06d4bb32cdb8b0f3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:92057aae58d7cc01409eb222ed6e7e411f8869a38da80419bf4bd79ec8858371",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/code_preset.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3e2fc5213bf03e885505295d2bf70b10caf31db5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fc2e7cbc21a89b422d89b2796dc665766187ee3a0976c25eb14910d6b4a9c462",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/experiment.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794417678622,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b706870cbac06039fa6de0e42af08f4ba530dcb",
+      "hash": "sha256:a6fb5160c904b99530d18041760c34aafc39a0c6d75b4ca92f70e630f1c5f0bf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "67"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+    }
+  ],
+  "id": "01a1cba0-dce7-761a-a2ab-6b29dfdd3c39",
+  "kind": "decision",
+  "reason": "Only the issue number of a document upstream changed, as the issue was opened again; what this verification shows is unchanged",
+  "revision": "584481e3aab19a2db001921500f80bc101105c92",
+  "seen": "sha256:2b888f0c73ba200e9cf1b1f9daf35f180da04dc4a70f58c4ddbe954e62e62746",
+  "seen_address": "006550498483927c936925d248b628b486bc5222",
+  "subject": "01a1cb51-02c3-725c-99f7-665bea5c0aac",
+  "v": 1,
+  "verb": "approve"
+}

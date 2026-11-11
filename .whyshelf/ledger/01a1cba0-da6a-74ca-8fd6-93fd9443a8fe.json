@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "29c707d0841a2182df29db51a4ef478f3f536aa6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c921908043e150e9268f1ffd775703ba9497ae2e0ba028cd3ca38e70b41dc997",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794417678622,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dd0e5707780e85491b9c13754b478a42dafef598",
+      "hash": "sha256:5089b781fd38bcf72981af3eb39b0e32da52504204ae0e7b58be839c82ba3cd8",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a1cba0-da6a-74ca-8fd6-93fd9443a8fe",
+  "kind": "decision",
+  "reason": "Only the issue number of a document upstream changed, as the issue was opened again; what this verification shows is unchanged",
+  "revision": "584481e3aab19a2db001921500f80bc101105c92",
+  "seen": "sha256:fbd6891cd47adffc0ac78b78549be02cb383128c3c9fb5bd7f3396a8970bef5f",
+  "seen_address": "d065d94786ddbdd2bc7fa522def265ed285c2200",
+  "subject": "01a1c9f3-b3c3-738c-a1ed-412012185ef6",
+  "v": 1,
+  "verb": "approve"
+}

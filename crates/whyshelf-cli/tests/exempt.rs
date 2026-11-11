@@ -430,7 +430,7 @@ fn every_why_of_an_unneeded_exemption_is_told_on_the_binary() {
         )
     );
 
-    // The book's range leaves the note out (#75): no file is said to be gone.
+    // The book's range leaves the note out (#92): no file is said to be gone.
     let (unneeded, _, _) = unneeded_after("why-out-of-range", |p| {
         fs::write(
             books(p),

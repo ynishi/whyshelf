@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "64d9f90f09a4bbb6addd810ec2d03a2bd70512db",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c56fcc6ca2d7f58bed66a76cdb980f46a99c205e69ce0fc30eeb844519be54fb",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/moves.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794417752560,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a1aeaeeaaf77be11fa434a175b0ec90e0a0a89e6",
+      "hash": "sha256:4762795853e498b35b00f43437cdd6063995a56fcc534ca7db00085b49302409",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "60"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6"
+    }
+  ],
+  "id": "01a1cba1-fb95-70fc-87e2-632f0bb9fc0c",
+  "kind": "decision",
+  "reason": "js-test registers beside the other spaces and cannot suggest moves; REQ-27 is grounded on F-38 and DEC-60 restated (#90); checked by a blind review",
+  "revision": "b9582a9c2292e3acb00c08ed97ba4fae279839fa",
+  "seen": "sha256:1568324a75741b09215ea0c93c1a24f91dfe2df9b1a5ed77e30039c36899d376",
+  "seen_address": "be29180efc5ab6c864203a9b36882ca7b805ad08",
+  "subject": "01a1c952-62b7-758a-a32f-5b59538e7dfa",
+  "v": 1,
+  "verb": "approve"
+}
