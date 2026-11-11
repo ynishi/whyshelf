@@ -78,6 +78,16 @@ and this project adheres to
   preset. `compare` and its `ignore` are one value, and a `from` of a preset's
   own name refines the built-in of that name. A problem of the declaration now
   says its reason (#54).
+- The space `rust-item`: a Rust path (`crate::module::Item`, `Type::member`)
+  is looked up in the docs rustdoc wrote in the project's build directory
+  (`CARGO_TARGET_DIR`, `build.target-dir`, or beside `Cargo.toml`; no program
+  is run), and is there, absent, or cannot be told when the docs of its crate
+  are not built or not rustdoc's. Its adapter offers the preset `rustdoc`
+  (space `rust-item`, `presence`, `depends`): an edit of an item changes
+  nothing, and an item that goes away breaks the approvals that stand on it.
+  `check` writes each name that is absent or cannot be told on stderr, and
+  `stale --exit-code` exits 1 while an approval stands on a name that cannot
+  be told (#56).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
