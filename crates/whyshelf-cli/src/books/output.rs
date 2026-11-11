@@ -10,9 +10,10 @@ use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, Created, Declared, DeclaredAbout, DiffItem, DiffReport,
-    DownstreamEdge, ErrorClass, FmtReport, GetReport, Health, Judged, LeftAloneWhy, LeftOut,
-    LeftOutWhy, MapReport, Names, Row, ShelfError, StaleApproved, StaleReport, StatsReport,
-    StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport, UpstreamEdge, UpstreamEnd,
+    DownstreamEdge, ErrorClass, FmtReport, GetReport, Health, Judged, JudgedAll, LeftAloneWhy,
+    LeftOut, LeftOutWhy, MapReport, Names, Row, ShelfError, StaleApproved, StaleReport,
+    StatsReport, StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport, UpstreamEdge,
+    UpstreamEnd,
 };
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::build::NewDocProblem;
@@ -871,12 +872,16 @@ pub struct DiffOut {
     pub health: HealthOut,
 }
 
-/// The answer of `judge`: every record written, in the order the documents
-/// were named.
+/// The answer of `judge`: every record written, and every approval left out, each in
+/// the order the documents were named.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct JudgedAllOut {
     /// The judgements.
     pub judged: Vec<JudgedOut>,
+    /// The approvals not made, each `repeats`: one made now would pin exactly what
+    /// the approval that stands pins and lapse when it lapses (`--again` makes it
+    /// anyway). Empty for every verb but `approve`.
+    pub left_out: Vec<LeftOutOut>,
 }
 
 /// The answer of `judge approve --stale`: every approval made again, upstream first,
@@ -890,14 +895,17 @@ pub struct StaleApprovedOut {
     pub left_out: Vec<LeftOutOut>,
 }
 
-/// An approval that `judge approve --stale` did not approve again.
+/// An approval that `judge approve` or `judge approve --stale` did not make.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct LeftOutOut {
     /// The document.
     pub doc: DocRef,
-    /// Why: `broken` (its approval is broken now), `refused` (the model refuses its
-    /// approval now) or `stands_on` (a `depends` link names a document that is
-    /// broken, pending or left out).
+    /// Why: of `--stale`, `broken` (its approval is broken now), `refused` (the
+    /// model refuses its approval now) or `stands_on` (a `depends` link names a
+    /// document that is broken, pending or left out); of either, `repeats` (one made
+    /// now would pin exactly what the approval that stands pins and lapse when it
+    /// lapses; of `--stale`, one stale only through an upstream's upstream the run
+    /// approved again on a new hash).
     pub reason: &'static str,
     /// A sentence for a person.
     pub detail: String,
@@ -906,8 +914,11 @@ pub struct LeftOutOut {
     /// For `stands_on`, the link that names it.
     pub link: Option<String>,
     /// For `stands_on`, why that document holds it back: `broken`, `pending` or
-    /// `left_out`.
+    /// `left_out` (refused or broken in the run; one that `repeats` stands, and holds
+    /// nothing back).
     pub upstream_is: Option<&'static str>,
+    /// For `repeats`, the approval that stands (its record's id).
+    pub approval: Option<String>,
     /// For `broken`, the kinds of its causes, each once, in the order of `causes`;
     /// empty otherwise.
     pub kinds: Vec<&'static str>,
@@ -2296,12 +2307,37 @@ fn left_alone_detail(why: &LeftAloneWhy) -> String {
 }
 
 /// The answer of `judge`.
-pub fn judged(all: &[Judged]) -> JudgedAllOut {
+pub fn judged(all: &JudgedAll) -> JudgedAllOut {
     let names = Names::default();
     let namer = Namer(&names);
     JudgedAllOut {
-        judged: all.iter().map(|judged| namer.judged(judged)).collect(),
+        judged: all
+            .judged
+            .iter()
+            .map(|judged| namer.judged(judged))
+            .collect(),
+        left_out: all
+            .left_out
+            .iter()
+            .map(|left| namer.left_out(left))
+            .collect(),
     }
+}
+
+/// The lines `judge` writes on stderr: one per approval it left out, in the order of
+/// `left_out`, each with the flag that makes it anyway.
+pub fn judged_warnings(all: &JudgedAll) -> Vec<String> {
+    let names = Names::default();
+    let namer = Namer(&names);
+    all.left_out
+        .iter()
+        .map(|left| {
+            format!(
+                "{}; pass --again to approve it anyway",
+                left_out_warning(&namer, left)
+            )
+        })
+        .collect()
 }
 
 /// The answer of `judge approve --stale`.
@@ -2316,41 +2352,28 @@ pub fn stale_approved(done: &StaleApproved) -> StaleApprovedOut {
         left_out: done
             .left_out
             .iter()
-            .map(|left| {
-                let (upstream, link, upstream_is) = match &left.why {
-                    LeftOutWhy::StandsOn { held, .. } => (
-                        Some(namer.doc(held.upstream)),
-                        Some(held.link.to_string()),
-                        Some(hold_word(held.hold)),
-                    ),
-                    LeftOutWhy::Broken(_) | LeftOutWhy::Refused(_) => (None, None, None),
-                };
-                LeftOutOut {
-                    doc: DocRef {
-                        id: left.doc.to_string(),
-                        key: left.key.as_ref().map(ToString::to_string),
-                    },
-                    reason: match left.why {
-                        LeftOutWhy::Broken(_) => "broken",
-                        LeftOutWhy::Refused(_) => "refused",
-                        LeftOutWhy::StandsOn { .. } => "stands_on",
-                    },
-                    detail: left_out_detail(&namer, left),
-                    upstream,
-                    link,
-                    upstream_is,
-                    kinds: left_out_kinds(&namer, left),
-                    causes: match &left.why {
-                        LeftOutWhy::Broken(degradation) => degradation
-                            .causes()
-                            .iter()
-                            .map(|c| namer.cause(c))
-                            .collect(),
-                        LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } => Vec::new(),
-                    },
-                }
-            })
+            .map(|left| namer.left_out(left))
             .collect(),
+    }
+}
+
+/// The line on stderr for an approval left out.
+fn left_out_warning(namer: &Namer<'_>, left: &LeftOut) -> String {
+    let doc = left
+        .key
+        .as_ref()
+        .map_or_else(|| left.doc.to_string(), ToString::to_string);
+    match &left.why {
+        LeftOutWhy::Broken(_) => format!(
+            "warning: {doc} is broken and was not approved again ({})",
+            left_out_kinds(namer, left).join(", ")
+        ),
+        LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } | LeftOutWhy::Repeats { .. } => {
+            format!(
+                "warning: {doc} was not approved again: {}",
+                left_out_detail(namer, left)
+            )
+        }
     }
 }
 
@@ -2359,22 +2382,10 @@ pub fn stale_approved(done: &StaleApproved) -> StaleApprovedOut {
 /// made pinned as absent, in the order of `judged`.
 pub fn stale_approved_warnings(done: &StaleApproved) -> Vec<String> {
     let namer = Namer(&done.names);
-    let left = done.left_out.iter().map(|left| {
-        let doc = left
-            .key
-            .as_ref()
-            .map_or_else(|| left.doc.to_string(), ToString::to_string);
-        match &left.why {
-            LeftOutWhy::Broken(_) => format!(
-                "warning: {doc} is broken and was not approved again ({})",
-                left_out_kinds(&namer, left).join(", ")
-            ),
-            LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } => format!(
-                "warning: {doc} was not approved again: {}",
-                left_out_detail(&namer, left)
-            ),
-        }
-    });
+    let left = done
+        .left_out
+        .iter()
+        .map(|left| left_out_warning(&namer, left));
     let absent = done.judged.iter().flat_map(|judged| {
         let doc = judged
             .key
@@ -2426,6 +2437,9 @@ fn left_out_detail(namer: &Namer<'_>, left: &LeftOut) -> String {
                 .map_or_else(|| target.to_string(), ToString::to_string)
         ),
         LeftOutWhy::Refused(refusal) => refusal.to_string(),
+        LeftOutWhy::Repeats { approval } => format!(
+            "an approval now would pin what its approval {approval} pins and lapse when it lapses: it would only repeat it"
+        ),
         LeftOutWhy::StandsOn { held, key } => {
             let upstream = key
                 .as_ref()
@@ -2454,6 +2468,50 @@ fn hold_word(hold: Hold) -> &'static str {
 }
 
 impl Namer<'_> {
+    fn left_out(&self, left: &LeftOut) -> LeftOutOut {
+        let (upstream, link, upstream_is) = match &left.why {
+            LeftOutWhy::StandsOn { held, .. } => (
+                Some(self.doc(held.upstream)),
+                Some(held.link.to_string()),
+                Some(hold_word(held.hold)),
+            ),
+            LeftOutWhy::Broken(_) | LeftOutWhy::Refused(_) | LeftOutWhy::Repeats { .. } => {
+                (None, None, None)
+            }
+        };
+        LeftOutOut {
+            doc: DocRef {
+                id: left.doc.to_string(),
+                key: left.key.as_ref().map(ToString::to_string),
+            },
+            reason: match left.why {
+                LeftOutWhy::Broken(_) => "broken",
+                LeftOutWhy::Refused(_) => "refused",
+                LeftOutWhy::StandsOn { .. } => "stands_on",
+                LeftOutWhy::Repeats { .. } => "repeats",
+            },
+            detail: left_out_detail(self, left),
+            upstream,
+            link,
+            upstream_is,
+            approval: match &left.why {
+                LeftOutWhy::Repeats { approval } => Some(approval.to_string()),
+                LeftOutWhy::Broken(_) | LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } => {
+                    None
+                }
+            },
+            kinds: left_out_kinds(self, left),
+            causes: match &left.why {
+                LeftOutWhy::Broken(degradation) => {
+                    degradation.causes().iter().map(|c| self.cause(c)).collect()
+                }
+                LeftOutWhy::Refused(_)
+                | LeftOutWhy::StandsOn { .. }
+                | LeftOutWhy::Repeats { .. } => Vec::new(),
+            },
+        }
+    }
+
     fn judged(&self, judged: &Judged) -> JudgedOut {
         JudgedOut {
             doc: DocRef {
@@ -2793,6 +2851,10 @@ mod tests {
             "reason",
         ] {
             assert!(fmt.contains(&format!("\"{field}\"")), "{field}");
+        }
+        let judge = serde_json::to_string(&outputs["judge"]).unwrap();
+        for field in ["judged", "left_out", "reason", "approval"] {
+            assert!(judge.contains(&format!("\"{field}\"")), "{field}");
         }
         let error = serde_json::to_string(&outputs["error"]).unwrap();
         assert!(error.contains("\"problems\""));

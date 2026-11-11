@@ -27,6 +27,7 @@ fn approve(reference: &str) -> JudgeRequest {
         judgement: Judgement::Approve {
             until: None,
             reason: None,
+            again: false,
         },
         reference: r(reference),
         actor: None,

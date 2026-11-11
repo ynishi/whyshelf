@@ -145,6 +145,11 @@ pub enum Verb {
         /// out, each with a warning on stderr (needs --reason, takes no document).
         #[arg(long, requires = "reason")]
         stale: bool,
+        /// Approve even a document whose approval is fresh and would be repeated
+        /// exactly (same pins, same expiry), for a person who read it again; without
+        /// it, such a document is left out, with a warning on stderr.
+        #[arg(long, conflicts_with = "stale")]
+        again: bool,
         /// Why.
         #[arg(long)]
         reason: Option<String>,

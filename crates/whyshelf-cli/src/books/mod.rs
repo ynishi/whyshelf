@@ -259,10 +259,15 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
             }
         },
         BooksCommand::Judge(verb) => match judge_run(verb) {
-            Ok(JudgeRun::Decide(requests)) => ShelfApp::new(project)
-                .judge_all(requests)
-                .await
-                .map(|r| print(&output::judged(&r))),
+            Ok(JudgeRun::Decide(requests)) => {
+                ShelfApp::new(project).judge_all(requests).await.map(|r| {
+                    let exit = print(&output::judged(&r));
+                    for warning in output::judged_warnings(&r) {
+                        eprintln!("{warning}");
+                    }
+                    exit
+                })
+            }
             Ok(JudgeRun::Stale(request)) => ShelfApp::new(project)
                 .approve_stale(request)
                 .await
@@ -375,6 +380,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
         Verb::Approve {
             references,
             stale,
+            again,
             reason: text,
             actor,
             until,
@@ -397,6 +403,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
                 Judgement::Approve {
                     until,
                     reason: reason(&text)?,
+                    again,
                 },
                 Common {
                     references,

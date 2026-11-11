@@ -16,6 +16,7 @@ fn approve(reference: &str) -> JudgeRequest {
         judgement: Judgement::Approve {
             until: None,
             reason: None,
+            again: false,
         },
         reference: reference.parse::<Reference>().unwrap(),
         actor: None,
