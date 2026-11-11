@@ -1,0 +1,139 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "3003b2616105a3c810ad570d980f7561cf8e4e69",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:eb825a54b8908605c4cb958a39757ad5c265546fed235f6b9f7d6de4555d2f9b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "512cc58ee31a36a2f7784cf1a27d5da51469341f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b67e44743e71e27ea589c678675b57015868f74449559a1f6e17496d1d94b2aa",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6d076870ceb719e2097551a8ff94c80aa544f093",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2ba7dd1c649fe606c6ddf1a49e47e8671ec6fe71b115a913a4d91d08fb98e48e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8c126d0505c752efc0ad9fbcfbb287737b7fad56",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0573e91a7b4c88e96ba5619c6e6ad81b60b327fbabe128a270ee123d72e90851",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ec8bce6309637829ccd3e9670a027307992f5cfd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ae31721e3d9ef4be030f675045896dfbaed05ff6836aab0b74c327c09e0c26d0",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794382006919,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d1d881bcfe383a435dc95a44292907393ab16dbc",
+      "hash": "sha256:b0d7183d426e1c555cd1199b5ace3d0a55ce10fd6f4a7b4d8cf1fa9ffd2e9c12",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "b2658e3ea467b40ba29fb5f907ece7c9fffb8c1b",
+      "hash": "sha256:4801f4277e4358483975f11c893726ace7decb09a0fc761397164c782163738e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ce54-705b-a4fb-17382395564a"
+    },
+    {
+      "address": "70a5dd9de54859341dbb149ca40373305205c37d",
+      "hash": "sha256:cd35831f4a42399efcdeb7bd78922f5392b0d77c54ab52fe052d07d73e6453b5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a1c980-8d68-76c8-bc42-eacca2552726",
+  "kind": "decision",
+  "reason": "Every Git call goes through one runner that lets nothing of the repository choose a program or write; addresses keep Git's own conversions with every filter driver shut out; a link is followed while it stays inside the root; moves joins the reading commands every e2e test runs (#69); checked by three rounds of blind review",
+  "revision": "cd81a89022f654f78f7867fce54d41ff31af007b",
+  "seen": "sha256:d62fa60dd298e63c294806ae4a292703e599438d10324162c2b31b39e5b73ffd",
+  "seen_address": "34f9a655305375885329cdbacec1b1458349b989",
+  "subject": "01a1c4ba-19a6-76f9-a7c1-40f9f8460ecf",
+  "v": 1,
+  "verb": "approve"
+}

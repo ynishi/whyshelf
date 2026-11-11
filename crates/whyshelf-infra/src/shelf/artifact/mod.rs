@@ -14,10 +14,12 @@
 //!   (space, ContentAddress) ──► the adapter of the space ──► content, or not readable
 //! ```
 //!
-//! | space | adapter | its names | the presets it offers |
-//! |---|---|---|---|
-//! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"` |
-//! | `rust-item` | [`rust_item::RustItemSpace`] | Rust paths (`crate::module::Item`, `Type::member`), looked up in the docs `cargo doc` wrote | `rustdoc`: `space = "rust-item"`, `compare = "presence"`, `means = "depends"` |
+//! | space | adapter | its names | the presets it offers | suggested moves ([`MoveSource`]) |
+//! |---|---|---|---|---|
+//! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"` | the same content, then Git's renames ([`file`](mod@file#suggesting-moves)) |
+//! | `rust-item` | [`rust_item::RustItemSpace`] | Rust paths (`crate::module::Item`, `Type::member`), looked up in the docs `cargo doc` wrote | `rustdoc`: `space = "rust-item"`, `compare = "presence"`, `means = "depends"` | cannot suggest |
+//!
+//! The same adapters answer [`MoveSource`]: a space with no adapter cannot suggest.
 //!
 //! Each adapter offers its presets of links to artifacts for its own space, as
 //! values ([`ArtifactSource::presets`]); the domain knows none. A project may write
@@ -25,6 +27,7 @@
 //! preset nor a space is one to files.
 //!
 //! [`ArtifactSource`]: whyshelf_core::app::shelf::ArtifactSource
+//! [`MoveSource`]: whyshelf_core::app::shelf::MoveSource
 //! [`ArtifactReading`]: whyshelf_core::domain::shelf::artifact::ArtifactReading
 
 pub mod file;
@@ -32,13 +35,14 @@ pub mod rust_item;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use whyshelf_core::app::shelf::ArtifactSource;
+use whyshelf_core::app::shelf::{ArtifactSource, MoveSource};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactAsks, ArtifactKey, ArtifactReading, ArtifactReadings, ContentAddress, Space, SpaceAsks,
     SpaceReadings,
 };
+use whyshelf_core::domain::shelf::ledger::{GoneName, SpaceSuggestions};
 use whyshelf_core::domain::shelf::schema::BuiltinPresets;
 
 use file::{ArtifactError, FileSpace};
@@ -76,12 +80,21 @@ impl Adapter {
         }
     }
 
+    /// What it suggests the gone names of its space moved to: the files look; the
+    /// items of the Rust crates cannot suggest yet.
+    async fn suggest(&self, gone: &[GoneName]) -> Result<SpaceSuggestions, SpacesError> {
+        match self {
+            Self::File(files) => Ok(SpaceSuggestions::Suggested(files.suggest(gone).await?)),
+            Self::RustItem(_) => Ok(SpaceSuggestions::CannotSuggest),
+        }
+    }
+
     /// The content at `address`, if this adapter can read it back. An adapter that
     /// keeps nothing by address answers none.
-    async fn read_back(&self, address: &ContentAddress) -> Option<Vec<u8>> {
+    async fn read_back(&self, address: &ContentAddress) -> Result<Option<Vec<u8>>, SpacesError> {
         match self {
-            Self::File(files) => files.read_back(address).await,
-            Self::RustItem(_) => None,
+            Self::File(files) => Ok(files.read_back(address).await?),
+            Self::RustItem(_) => Ok(None),
         }
     }
 }
@@ -141,11 +154,16 @@ impl ArtifactSpaces {
 
     /// The content of an artifact of `space` at `address`, read back by the adapter
     /// of the space: none when no adapter is registered for it, the adapter cannot
-    /// read back, or nothing is behind the address.
-    pub async fn read_back(&self, space: &Space, address: &ContentAddress) -> Option<Vec<u8>> {
+    /// read back, or nothing is behind the address; an error when the adapter could
+    /// not ask its store (Git could not be run, or took too long).
+    pub async fn read_back(
+        &self,
+        space: &Space,
+        address: &ContentAddress,
+    ) -> Result<Option<Vec<u8>>, SpacesError> {
         match self.adapters.get(space) {
             Some(adapter) => adapter.read_back(address).await,
-            None => None,
+            None => Ok(None),
         }
     }
 }
@@ -190,6 +208,23 @@ impl ArtifactSource for ArtifactSpaces {
         match self.adapters.get(artifact.space()) {
             Some(adapter) => adapter.current(artifact).await,
             None => Ok(None),
+        }
+    }
+}
+
+/// Suggested moves, by the adapter of each space: a space with no adapter, or whose
+/// adapter has no way to look, cannot suggest.
+impl MoveSource for ArtifactSpaces {
+    type Error = SpacesError;
+
+    async fn suggest(
+        &self,
+        space: &Space,
+        gone: &[GoneName],
+    ) -> Result<SpaceSuggestions, SpacesError> {
+        match self.adapters.get(space) {
+            Some(adapter) => adapter.suggest(gone).await,
+            None => Ok(SpaceSuggestions::CannotSuggest),
         }
     }
 }
@@ -256,7 +291,10 @@ mod tests {
         assert_eq!(source.current(&elsewhere).await.unwrap(), None);
         // Read back by the space's adapter; a space with none reads nothing back.
         let address = ContentAddress::from_validated("a".repeat(40)).unwrap();
-        assert_eq!(source.read_back(&space("other"), &address).await, None);
+        assert_eq!(
+            source.read_back(&space("other"), &address).await.unwrap(),
+            None
+        );
     }
 
     #[test]

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794382006178,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c980-87bb-76b7-b96d-5f44cc4821b3",
+  "kind": "decision",
+  "reason": "whyshelf moves lists the pinned names that are gone and the moves each space can suggest, and declares none (#69); checked by three rounds of blind review on the binary, with hostile repositories, every finding fixed",
+  "revision": "cd81a89022f654f78f7867fce54d41ff31af007b",
+  "seen": "sha256:2fa1c2c1894d1c7165fd91cfe6fbb3a956ba96fd90a2f4d7cdc6aeb214647c08",
+  "seen_address": "f9b9c4ecb28a45696fb5eb9dd3203cb832e5a80c",
+  "subject": "01a1c952-5ddb-7642-804f-fa1a620a8f40",
+  "v": 1,
+  "verb": "approve"
+}

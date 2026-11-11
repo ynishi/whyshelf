@@ -12,6 +12,8 @@
 use std::path::PathBuf;
 
 use uuid::Uuid;
+
+use super::git::{Git, GitError};
 use whyshelf_core::app::shelf::{ActorSource, Clock, IdSource};
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::error::ValueError;
@@ -115,9 +117,9 @@ pub enum ActorError {
     /// Neither `WHYSHELF_ACTOR` nor Git's `user.name` names anyone.
     #[error("no one to judge as: set WHYSHELF_ACTOR or git config user.name")]
     NoName,
-    /// Git could not be run.
-    #[error("cannot run git")]
-    Git(#[source] std::io::Error),
+    /// Git could not be run, or took too long.
+    #[error("cannot ask git for user.name")]
+    Git(#[from] GitError),
     /// The name is refused by its rule.
     #[error("`{name}` is not a name of an actor")]
     Refused {
@@ -153,20 +155,12 @@ impl ActorSource for ProjectActor {
     async fn actor(&self) -> Result<Actor, ActorError> {
         let name = match self.declared.as_deref().map(str::trim) {
             Some(name) if !name.is_empty() => name.to_owned(),
-            _ => {
-                let output = tokio::process::Command::new("git")
-                    .arg("-C")
-                    .arg(&self.root)
-                    .args(["config", "--get", "user.name"])
-                    .output()
-                    .await
-                    .map_err(ActorError::Git)?;
-                let name = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-                if !output.status.success() || name.is_empty() {
-                    return Err(ActorError::NoName);
-                }
-                name
-            }
+            // Git is run as every call of it is, by `Git` (its page says what a
+            // call may do).
+            _ => match Git::new(self.root.clone()).user_name().await? {
+                Some(name) => name,
+                None => return Err(ActorError::NoName),
+            },
         };
         Actor::new(&name).map_err(|source| ActorError::Refused { name, source })
     }
