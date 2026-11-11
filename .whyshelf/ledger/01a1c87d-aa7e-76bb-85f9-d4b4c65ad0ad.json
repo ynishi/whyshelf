@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794365041256,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c87d-aa7e-76bb-85f9-d4b4c65ad0ad",
+  "kind": "decision",
+  "reason": "The end-to-end tests are one file per feature, and a guard keeps one file from serving many verifications (#60); checked by a blind review that compared every moved test with the old file, every finding fixed",
+  "revision": "d080c20bf062d54086f8b98e199abcee01a57f2c",
+  "seen": "sha256:c9199192a184d66b0d9135c3219da3cd8c24acea97d94c2ea3e8de777701cfcd",
+  "seen_address": "6e23aab1584b8fbac5f4c6bdda920481e4b456e4",
+  "subject": "01a1c877-8e2e-738b-b3bd-d254c3f7a58b",
+  "v": 1,
+  "verb": "approve"
+}

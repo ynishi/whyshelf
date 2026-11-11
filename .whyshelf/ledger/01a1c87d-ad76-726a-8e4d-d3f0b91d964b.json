@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e9dca40556f523b65e5e3fe5ed9dc18a298ad32b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3e12da201581d378c21d9050bcb00c9d1c8c416eca75ba996b3abb098f5c6641",
+      "link": "tests",
+      "name": "Justfile",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fad84ed27754c0d25412d416141c5f7373f65f35",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b3ec772a8d6f93ca2d613d6a9c73bf0d8897f98a87134faf283c058ef5e2519d",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stale_exit_code.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794365042003,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7be0df5049f65d2552671b62cefef868eba9923e",
+      "hash": "sha256:4fa6326aa0e0751099b232a1a0aff2d3ee2afc794261237260d6f143e58d49db",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "26"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c532-68dc-71dd-a7c8-35e9618f81f6"
+    }
+  ],
+  "id": "01a1c87d-ad76-726a-8e4d-d3f0b91d964b",
+  "kind": "decision",
+  "reason": "Each verification names the file of its own feature and the shared helpers instead of command_line.rs, the tests unchanged in what they check; V-28, V-30, V-35, V-44 and REQ-13 restated; stats joins the reading commands; temporary directories hold a counter (#60); checked by a blind review",
+  "revision": "d080c20bf062d54086f8b98e199abcee01a57f2c",
+  "seen": "sha256:a7283b58789bd65e97866818dc2a6baa34475ba446e570d6e0d47a6549ac4562",
+  "seen_address": "a4ec3e26f2ff838143110cc2b588cc8effca6636",
+  "subject": "01a1c532-6b46-7549-a494-9b3bfa21561d",
+  "v": 1,
+  "verb": "approve"
+}
