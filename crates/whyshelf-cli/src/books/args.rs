@@ -145,24 +145,33 @@ pub struct Common {
 #[derive(Debug, Subcommand)]
 pub enum Verb {
     /// The document is sound as it is now.
+    #[command(override_usage = "\
+whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <ACTOR>] [--until <UNTIL>]
+       whyshelf judge approve --stale --reason <REASON> [--actor <ACTOR>] [--until <UNTIL>]
+       whyshelf judge approve --pending [<REFERENCES>...] [--stale] --reason <REASON> [--actor <ACTOR>] [--until <UNTIL>]")]
     Approve {
-        /// The documents, as for every verb ([`Common::references`]); none with
-        /// --stale.
-        #[arg(
-            num_args = 1..,
-            required_unless_present = "stale",
-            conflicts_with = "stale"
-        )]
+        /// The documents, as for every verb ([`Common::references`]); with
+        /// --pending, the pending documents to approve with the pending ones they
+        /// stand on; none with --stale alone.
+        #[arg(num_args = 1.., required_unless_present_any = ["stale", "pending"])]
         references: Vec<Reference>,
         /// Approve again, in one run and upstream first by the links, every approval
         /// that is expired or stale and would hold once approved; the rest are left
         /// out, each with a warning on stderr (needs --reason, takes no document).
         #[arg(long, requires = "reason")]
         stale: bool,
+        /// Approve, in one run and upstream first by the links, every pending
+        /// document (never approved, or every approval withdrawn) that would hold
+        /// once approved, or only the documents named, each pending, and the pending
+        /// documents they stand on through `depends` links; the rest are left out,
+        /// each with a warning on stderr (needs --reason; may be given with --stale,
+        /// as one run).
+        #[arg(long, requires = "reason")]
+        pending: bool,
         /// Approve even a document whose approval is fresh and would be repeated
         /// exactly (same pins, same expiry), for a person who read it again; without
         /// it, such a document is left out, with a warning on stderr.
-        #[arg(long, conflicts_with = "stale")]
+        #[arg(long, conflicts_with_all = ["stale", "pending"])]
         again: bool,
         /// Why.
         #[arg(long)]

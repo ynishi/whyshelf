@@ -32,10 +32,15 @@
 //! leaves, at worst, the declaration with fewer documents, each whole, and says
 //! which were written ([`ShelfError::PartWay`]).
 
+use std::collections::BTreeSet;
+
+use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::{DocReading, NewDoc, Shelf};
+use crate::domain::shelf::doc::DocKey;
+use crate::domain::shelf::order::heads;
 use crate::domain::shelf::schema::{BookDir, Schema};
 
 use super::ShelfApp;
@@ -63,6 +68,12 @@ pub struct Initialized {
     pub declaration: RelPath,
     /// The documents, in the order they were written.
     pub docs: Vec<Created>,
+    /// Those of `docs` that no other of them stands on through a `Depends` link
+    /// ([`heads`]), in the same order: named to `judge approve --pending`, they take
+    /// every document it made and nothing else.
+    ///
+    /// [`heads`]: crate::domain::shelf::order::heads
+    pub heads: Vec<DocKey>,
 }
 
 impl<P: ShelfWrite> ShelfApp<P> {
@@ -100,6 +111,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
             });
             planned.push(new);
         }
+        let made: BTreeSet<DocId> = planned.iter().map(|new| new.doc().id()).collect();
+        let heads = heads(&shelf_of(ports, &schema, readings).await?, &made);
 
         let declaration = ports.declaration_writer().file();
         let obstacles = in_the_way(ports, &schema, &planned).await?;
@@ -137,7 +150,16 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 }
             }
         }
-        Ok(Initialized { declaration, docs })
+        let heads = docs
+            .iter()
+            .filter(|created| heads.contains(&created.id))
+            .map(|created| created.key.clone())
+            .collect();
+        Ok(Initialized {
+            declaration,
+            docs,
+            heads,
+        })
     }
 }
 

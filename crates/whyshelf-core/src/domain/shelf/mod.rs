@@ -44,7 +44,8 @@
 //!                                                        and what the declaration lets be)
 //!   snapshot  ──► artifact, doc, build, ledger         Snapshot::of ──► Snapshot (what an approval saw),
 //!                                                        SnapshotItem::retrieval ──► Retrieval
-//!   order     ──► schema, doc, graph, build, ledger    upstream_first ──► the order approvals are
+//!   order     ──► schema, doc, graph, build, ledger,   stale, pending ──► the documents a run takes;
+//!                 freshness                            upstream_first ──► the order approvals are
 //!                                                        judged in again
 //!   stats     ──► artifact, doc, build, ledger,        stats::of ──► Stats         (how the work went,
 //!                 schema                                 from the records alone)
@@ -120,6 +121,7 @@
 //! | freshness, propagation, notices | [`assess`] | an [`Assessment`] |
 //! | where one identity stands, listed or not | [`Assessment::standing_of`] | a [`Standing`] |
 //! | where a degradation starts | [`Assessment::roots_of`] | [`RootCause`]s |
+//! | which documents a run of approvals takes: the expired or stale ones, or the pending ones | [`order::stale`], [`order::pending`] and [`order::pending_upstream`] (one document: [`order::pending_of`]), from an [`Assessment`] | the identities, with the broken ones told apart for `stale` |
 //! | the order a set of approvals is judged in again | [`upstream_first`](order::upstream_first), from the links and the pins | the identities, upstream first |
 //! | how the work went: approvals made again, pending time, runs, the pins that changed | [`stats::of`], from every decision and the keys now; the measures are defined on its page | a [`Stats`](stats::Stats) |
 //!

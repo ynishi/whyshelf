@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "744b453e310b1f3bb82a78c83ec542445c4ad935",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4b8afe04232807d95bf502f439cf71b2897c7b6bfc0797114ed5e4f68b42e377",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f5c8c095132833dfc0d177b08e6a08b0a65ec8cc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b86c5c88bc7c66fdaefd2a264a60b3848d9b890100c8f724397c272a745d324e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e0dc432e4697bf8e5649e6f26eab4c0dde8c88d4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:92993353ae21947d9c1d0c9846e1a1e9e25226de599bcef75eb619b10428c970",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794390742933,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3fbf750426f325dc1554416818a114dbe02ddc41",
+      "hash": "sha256:d9d18fbc88d7f1c120c52d5ba0478d73a97d82839834a9ecbe3a470618bbeec3",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "61"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9b4-0443-7020-ab73-b9e48af448eb"
+    }
+  ],
+  "id": "01a1ca05-dbd9-721c-9980-53897578402f",
+  "kind": "decision",
+  "reason": "The approvals of --stale and --pending are one use case, each entry naming its rule; init gives next the approval of only what it made; DEC-51 and DEC-61 restated (#73); checked by a blind review",
+  "revision": "e2717d89113a4435ddd60c63c7016f33e0434094",
+  "seen": "sha256:a59803f729339394ccd524a9710bd9c2b755f62b7fc60ef299eaf5b02f087788",
+  "seen_address": "81203abe35aebded40c26ad752f048e1b02fd292",
+  "subject": "01a1c9b4-060d-759a-83f7-41d99d7c5f62",
+  "v": 1,
+  "verb": "approve"
+}

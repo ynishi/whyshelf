@@ -54,14 +54,14 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
-    ApproveStaleRequest, ErrorClass, JudgeRequest, Judgement, MapReport, MovedRequest,
-    NewDocRequest, SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError, StaleReport,
-    UnlinkedAsk, UnlinkedFilter, UnlinkedReport, WithdrawRequest,
+    ApproveChosenRequest, Choose, ErrorClass, JudgeRequest, Judgement, MapReport, MovedRequest,
+    NewDocRequest, PendingScope, SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError,
+    StaleReport, UnlinkedAsk, UnlinkedFilter, UnlinkedReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::id::EntityId;
-use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::shelf::ledger::JudgementId;
 use whyshelf_core::domain::shelf::schema::BookName;
 use whyshelf_infra::shelf::Project;
@@ -305,12 +305,12 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
                     exit
                 })
             }
-            Ok(JudgeRun::Stale(request)) => ShelfApp::new(project)
-                .approve_stale(request)
+            Ok(JudgeRun::Chosen(request)) => ShelfApp::new(project)
+                .approve_chosen(request)
                 .await
                 .map(|r| {
-                    let exit = print(&output::stale_approved(&r));
-                    for warning in output::stale_approved_warnings(&r) {
+                    let exit = print(&output::chosen_approved(&r));
+                    for warning in output::chosen_approved_warnings(&r) {
                         eprintln!("{warning}");
                     }
                     exit
@@ -346,7 +346,7 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
 /// requests of its own.
 enum JudgeRun {
     Decide(Vec<JudgeRequest>),
-    Stale(ApproveStaleRequest),
+    Chosen(ApproveChosenRequest),
     Same(Vec<SameMeaningRequest>),
     Moved(Vec<MovedRequest>),
     Withdraw(WithdrawRequest),
@@ -436,6 +436,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
         Verb::Approve {
             references,
             stale,
+            pending,
             again,
             reason: text,
             actor,
@@ -444,13 +445,33 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             let until = until
                 .map(|t| parse_time(&t).map_err(|e| format!("--until `{t}`: {e}")))
                 .transpose()?;
-            if stale {
-                // clap keeps references away from --stale, and --reason beside it, so
-                // the `None` arm below is not reached; it is kept so that the request,
-                // whose reason is required, is still made from the type alone should
-                // the arguments change.
-                return Ok(JudgeRun::Stale(ApproveStaleRequest {
-                    reason: reason(&text)?.ok_or_else(|| "--stale needs --reason".to_owned())?,
+            if stale || pending {
+                // No reference is every pending document.
+                let scope = if references.is_empty() {
+                    PendingScope::All
+                } else {
+                    PendingScope::UpstreamOf(
+                        NonEmptyVec::from_vec(references).map_err(|e| e.to_string())?,
+                    )
+                };
+                let choose = match (stale, pending, scope) {
+                    (true, false, PendingScope::UpstreamOf(_)) => {
+                        return Err(
+                            "--stale takes no document; name documents with --pending".to_owned()
+                        );
+                    }
+                    (true, false, PendingScope::All) => Choose::Stale,
+                    (false, _, scope) => Choose::Pending(scope),
+                    (true, true, scope) => Choose::StaleAndPending(scope),
+                };
+                // clap keeps --reason beside --stale and --pending, so the `None` arm
+                // below is not reached; it is kept so that the request, whose reason
+                // is required, is still made from the type alone should the arguments
+                // change.
+                let flag = if stale { "--stale" } else { "--pending" };
+                return Ok(JudgeRun::Chosen(ApproveChosenRequest {
+                    choose,
+                    reason: reason(&text)?.ok_or_else(|| format!("{flag} needs --reason"))?,
                     actor: actor_of(actor)?,
                     until,
                 }));

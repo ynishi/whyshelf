@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "fd4f309f6104ad5f501224dc2c2d454906a2e2ac",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:985bb67c22e8f87548a34fe05453f6900a9a6657f77c5d6cce5b2de497df5697",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/approve_stale.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794390742933,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7529c36ca9174fa21f8ea12318cfeeaed583a657",
+      "hash": "sha256:0a9a2355f2ac260f6b791dc43f6a67340d722c5c427ca82bc98c5537e4f59dbb",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    }
+  ],
+  "id": "01a1ca05-d9d6-730c-aa22-77242a287ce6",
+  "kind": "decision",
+  "reason": "The approvals of --stale and --pending are one use case, each entry naming its rule; init gives next the approval of only what it made; DEC-51 and DEC-61 restated (#73); checked by a blind review",
+  "revision": "e2717d89113a4435ddd60c63c7016f33e0434094",
+  "seen": "sha256:f93d51aead4a8644a1b1818d30199af57a48ea04a751ada92408310537dd5e48",
+  "seen_address": "2c93af96c6885a9a6814023363c9cd37aebefccd",
+  "subject": "01a1c6a9-7aa1-7043-95a3-0a89a1618ae7",
+  "v": 1,
+  "verb": "approve"
+}
