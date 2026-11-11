@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d1a7f5073122daefd436b3f8fff02e8d2142bff0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2e23c787af40dd75ef222f3b49ac413f29b538d6d653ff99e60c17b6227f4b27",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794413562704,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4181d40e89264f003a05072849315f2bbfe3750b",
+      "hash": "sha256:7eadac6a9ad1e3958244c3a3864969fa9b52cd3d3c7b78fb6d8080d20c921193",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "66"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb06-d455-710f-8a4e-5bd7fa7cd3c8"
+    }
+  ],
+  "id": "01a1cb62-1320-7633-bfe0-bc340658d113",
+  "kind": "decision",
+  "reason": "init writes other files through FileWrite with the same checks, never through a link that leads out of the root; DEC-61 and DEC-66 restated (#87); checked by a blind review",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:bec2db8e9dae2fdd83d15b27cc6fef30586b6b18cec5ddeeb614696418512d4f",
+  "seen_address": "e961eec29c1b9474cbbea0c6050e7974c366759a",
+  "subject": "01a1cb06-d737-7530-9290-115fa03aad66",
+  "v": 1,
+  "verb": "approve"
+}

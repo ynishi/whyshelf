@@ -1,0 +1,5 @@
+size_mb,saves,slowest_expected_seconds
+1,5,0.1
+10,5,0.2
+40,5,0.5
+100,5,1.0

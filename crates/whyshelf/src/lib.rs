@@ -68,6 +68,8 @@
 //!   sample      the four books above, and one pending document of each
 //!   qa-first    the four books, with two rules loosened for checks written before
 //!               decisions; a finding, a requirement and a verification
+//!   experiment  the four books, for measurements planned before they are run, and
+//!               one chain ending in a plan, with the table it expects
 //! ```
 //!
 //! Each is a template of `whyshelf_infra::shelf::init`, a whole set of files;
@@ -104,6 +106,54 @@
 //!    `judge approve --pending` (or `--stale`) approves every pending (or stale)
 //!    document of the project that would hold, not only these.
 //! 4. `whyshelf check`: clean, with nothing uncovered.
+//!
+//! ## Measurements planned first: `experiment`
+//!
+//! Where a check is a measurement, what it expects is worth fixing before it is
+//! run, and the ledger's times of the approvals let a reader see that it was.
+//! `whyshelf init --template
+//! experiment` writes the four books with the changes for that, each marked
+//! `experiment` in `.whyshelf/books.toml`: a decision names the files of its code
+//! in `code` (the preset `code`, below), and a verification's `method` may be
+//! `plan` or `result` as well as `test` and `review`. A plan names its table of
+//! what is expected in `sheet`; a result names the record of its run in `log`,
+//! and its plan in `plans`, a `depends` link. `sheet` and `log` take the preset
+//! `file`, so every byte of them is pinned, and neither is required: a plan names
+//! no log, and a result no sheet. A result checks the decision its plan checks,
+//! and names it in `checks` as well. Beside the declaration are F-1, REQ-1 and
+//! DEC-1, a chain about a save that is too slow, the plan V-1, whose `sheet` names
+//! `measurements/save-time.csv`, and that table, written too, so `check` is clean
+//! and names nothing with nothing behind it. There is no result: the run has not
+//! happened.
+//!
+//! The plan and the result are two verifications, approved in order:
+//!
+//! 1. Before the run, approve the plan: `whyshelf judge approve --pending F-1 V-1
+//!    --reason "read, and it holds"`, which `init` gives in its `next`, approves it
+//!    with what it stands on, and the ledger records its time.
+//! 2. Run the measurement, and write what it gave to a file, say
+//!    `measurements/run-1.txt`.
+//! 3. Write the result, linking its decision, its plan and the log: `whyshelf new
+//!    verification --title "Result: the four sizes timed" method=result
+//!    checks+=DEC-1 plans+=V-1 log+=measurements/run-1.txt` makes V-2.
+//! 4. Approve it: `whyshelf judge approve V-2 --reason "the run is as planned"`.
+//!
+//! Edit the table after the plan is approved, and `whyshelf stale` lists V-1 as
+//! stale (`artifact_changed`, through `sheet`), and V-2 with it, as it stands on
+//! its plan.
+//!
+//! Which half names what, and the order of the two approvals, are conventions of
+//! the template, and `check` does not enforce them: a result may name a `sheet`, a
+//! plan a `log`, and `plans` a verification that is no plan, and a result may be
+//! approved before its plan, as `plans` pins the plan's document, not its
+//! approval. The ledger records the time of each approval, so a reader can see
+//! the order; whyshelf does not refuse the other order, and the ledger does not
+//! record when the run happened.
+//!
+//! One verification cannot be both halves: one approval stands per document. The
+//! log added to the plan and approved after the run would stand in the place of
+//! the approval made before it, and the plan approved again unchanged is left out
+//! as `repeats` (see `judge approve`, below).
 //!
 //! # Books: kinds of document you declare
 //!
@@ -475,11 +525,30 @@
 //! ```
 //!
 //! Each adapter offers presets for its own space (the file adapter offers `file`:
-//! `space = "file"`, `compare = "bytes"`, `means = "depends"`; the adapter of Rust
+//! `space = "file"`, `compare = "bytes"`, `means = "depends"`, and `code`:
+//! `space = "file"`, `compare = "presence"`, `means = "depends"`; the adapter of Rust
 //! items offers `rustdoc`: `space = "rust-item"`, `compare = "presence"`,
 //! `means = "depends"`; the adapter of Rust tests offers `test`:
 //! `space = "rust-test"`, `compare = "bytes"`, `means = "depends"`; the page of
 //! `whyshelf_infra::shelf::artifact` lists them).
+//!
+//! `code` suits a decision's link to the code that carries it out. Under `file`
+//! every edit of the code would make the decision stale, though the decision is
+//! the same; an `informs` link would notice nothing, even the file removed. Under
+//! `code` an edit changes nothing, and a file removed or renamed breaks the
+//! decision (`artifact_gone`). `judge moved` follows a rename, and the decision
+//! holds again. `moves` can suggest the new name only from Git's renames (one
+//! staged with `git mv`, or committed): a presence pin has no content to search
+//! for, so after a plain `mv` it gives no candidate, with the note `no_content`.
+//! A link of the preset:
+//!
+//! ```text
+//!   [[book.link]]
+//!   name = "code"
+//!   target = "artifact"
+//!   preset = "code"          # space = "file", compare = "presence", means = "depends"
+//! ```
+//!
 //! A project declares its own with `[[preset]]`. One of the name of a built-in
 //! preset and with no `from` replaces
 //! the built-in one whole: it takes none of its values. With `from` of its own name
@@ -603,9 +672,10 @@
 //!   init [--template <name>]  start a project: the declaration and the documents of a
 //!        [--sample]           template, `minimal` (one book of notes; the default), `sample`
 //!                             (four books and one pending document of each; --sample is a
-//!                             shorthand) or `qa-first` (the four, loosened for checks before
-//!                             decisions); it writes nothing when one of those files is there
-//!                             already
+//!                             shorthand), `qa-first` (the four, loosened for checks before
+//!                             decisions) or `experiment` (the four, for measurements planned
+//!                             first, with the table its plan names); it writes nothing when
+//!                             one of those files is there already
 //!   check                     the declaration, the documents and the ledger, what no covering
 //!                             link reaches, the names with nothing there and those that cannot
 //!                             be told now; exit 1 if anything is wrong (neither of those is;
@@ -784,7 +854,8 @@
 //!   listed; a link to a key no document has yet is allowed, and listed in
 //!   `unresolved_links`. The identity is a new UUID v7.
 //! - `init` writes `.whyshelf/books.toml` as its template is written, comments
-//!   included, and each document of the template as `new` makes
+//!   included, each other file of the template as it is (the table of
+//!   `experiment`, which its plan names), and each document of the template as `new` makes
 //!   one: a new identity, the key the template gives, in the one form, pending. The
 //!   declaration is read by the reader of every command and checked, and each
 //!   document by the rules of `new`, before anything is written. A template that
@@ -792,23 +863,24 @@
 //!   front matter cannot be read) is a failure of this program, exit 3; a
 //!   declaration template that reads and is not sound is refused as every
 //!   declaration that cannot be used is, exit 2, with its problems. Then everything
-//!   in the way is looked for: anything at the declaration's path or a document's
-//!   (a file, a directory, a link even to nothing), or at a parent of one, inside
+//!   in the way is looked for: anything at the declaration's path, another file's
+//!   or a document's (a file, a directory, a link even to nothing), or at a parent of one, inside
 //!   the root, that is no directory (a file, a link to nothing or to what is no
 //!   directory; a link to a directory is a way through, as for `new`); and, when no
 //!   path is in the way, each file of a book that already writes a key the
 //!   template gives. Any of it is exit 2, nothing written,
 //!   and each is named in `problems` (`<path> is already there`, `<file> already
 //!   writes the key <book>:<key>`). It writes no approval, and never over a file.
-//!   The declaration is written first, then the documents, and a write that fails
+//!   The declaration is written first, then the other files, then the documents, and a write that fails
 //!   removes the file it made (on Unix only while the file at the path is still
 //!   the one it made; elsewhere the file at the path): a run that fails part way leaves, at worst, the
-//!   declaration with fewer documents, each whole, and its error lists in
+//!   declaration with fewer files, each whole, and its error lists in
 //!   `problems` each file written (`<path> was written`) and the one that was not,
 //!   with why; it exits 3 when a write failed, and 2 when a file came to be at a
 //!   path after it was looked at. `new` removes a file it made and could not write
-//!   too. The answer is `{"declaration": <file>, "documents": [{"key", "path"}],
-//!   "next": [...]}`, `next` the commands to run after it, as they are typed, each
+//!   too. The answer is `{"declaration": <file>, "files": [<file>], "documents":
+//!   [{"key", "path"}], "next": [...]}`, `files` the other files written (none but
+//!   for `experiment`), `next` the commands to run after it, as they are typed, each
 //!   with `--root=<dir>` when it ran with one (in single quotes when a shell would
 //!   read anything in it); for a root that is no UTF-8 text, `next` is empty and a
 //!   line on stderr says why.
@@ -840,7 +912,7 @@
 //!   any of either: a file left alone is not in the form either.
 //! - Only `judge`, `new`, `init` and `fmt` write: `judge` one new file per decision
 //!   or declaration, `new` one new document's file, never in place of a file that is
-//!   there, `init` the declaration and its documents, never in place of a file that
+//!   there, `init` the declaration, its other files and its documents, never in place of a file that
 //!   is there either, and `fmt` over documents' files that are there, as above; every other
 //!   command, `fmt --check` among them, only reads and creates nothing. Who judges
 //!   is `--actor`, else `WHYSHELF_ACTOR`, else Git's `user.name`; never a committed
@@ -876,7 +948,7 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now; for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written (for `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
 //!
 //! `check` answers `clean` (whether it exits 0) beside what it found; each of its
@@ -974,7 +1046,9 @@
 //! candidate now; `notes` what could not be looked at, each `kind` one of
 //! `in_two_spaces`, `no_repository`, `no_revision`, `unknown_revision`,
 //! `history_unreadable`, `scan_truncated`, `unreadable_skipped`, `too_large_skipped`,
-//! in that order, each once, with a `detail` sentence; `cannot_suggest` the spaces
+//! `no_content` (every pin of it compares presence only, as the preset `code` does:
+//! there is no content to search for, and only Git's renames can suggest), in that
+//! order, each once, with a `detail` sentence; `cannot_suggest` the spaces
 //! of gone names whose adapter cannot suggest, sorted. `drawing` is the same as text
 //! (`jq -r .drawing`). A file or a directory that cannot be read, a history that
 //! cannot be read and a bound reached are notes, and the answer is given: exit 0. A

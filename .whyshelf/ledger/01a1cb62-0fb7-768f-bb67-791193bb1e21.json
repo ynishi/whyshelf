@@ -1,0 +1,125 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a1584536cadfafd014ea0d9aff59d0b0b1561a09",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:624577b483b2ebfa483b9831cec860700650caf0be8945d4da75fd913ac54270",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moves_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8c40b2ca9a36d54847299494e50312c2ab2fa7f7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:93cc6b7e0a72a563b4a260b219e5b20ba465330eba2fb7b38b7b84885a8849c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b95e10c3a02e1291bf51fb0574cb21eda3ecc5ab",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:165e71b1dce0b95e4e191d75a2f96176579a897cb4b7ffbf1f21766aff9cd774",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d18969e777fb863707be4c41260eede7c91fc2f6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f06c5af594a6d2abba629586829e234a0c9b803896694a00a509fbd8dc09158e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/git.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794413562704,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7b851de2655aeec6ed6d7f8845f16438a7968ab8",
+      "hash": "sha256:f87f51b8bd50ed101be705f87f2cdc0cdb37eef87c02a532672312696010a175",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    },
+    {
+      "address": "c74b2ee2aed6c8bcfcc57f138bfa6926eb92d61f",
+      "hash": "sha256:1cce62a572259e1e57a23ec85cec8acc40c478dcedee3048d8120f97a37cd32a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bc99-7728-b8d7-deea06f9c49b"
+    },
+    {
+      "address": "ac8efd08d9204c8be295b450fa54e61d367f6716",
+      "hash": "sha256:359e9e3207b22832aaf5ff97f648aebf107a8a3d24a022939af1b6a62cdd7352",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "60"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6"
+    }
+  ],
+  "id": "01a1cb62-0fb7-768f-bb67-791193bb1e21",
+  "kind": "decision",
+  "reason": "init writes other files through FileWrite with the same checks, never through a link that leads out of the root; DEC-61 and DEC-66 restated (#87); checked by a blind review",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:6ae92222abf041166e3a6578db83d7fc371feb73d70ad4b3b9a2d5e43c887063",
+  "seen_address": "d52809895bef57a7db569c0a8781840bdebccd6f",
+  "subject": "01a1c952-60fb-7278-821f-98cf49e06403",
+  "v": 1,
+  "verb": "approve"
+}

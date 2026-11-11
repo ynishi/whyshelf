@@ -26,9 +26,9 @@ use crate::domain::shelf::schema::{
 
 use super::ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileForm, Form, IdSource,
-    LedgerAppend, LedgerContents, LedgerRead, MoveSource, Replacement, RevisionSource, ShelfRead,
-    ShelfWrite, UnreadableRecord,
+    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileForm, FileWrite, Form,
+    IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Replacement, RevisionSource,
+    ShelfRead, ShelfWrite, UnreadableRecord,
 };
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{
@@ -523,6 +523,30 @@ impl DeclarationWrite for FakeShelf {
     }
 }
 
+impl FileWrite for FakeShelf {
+    type Error = FakeError;
+
+    /// As for a document's file.
+    async fn in_the_way(&self, at: &RelPath) -> Result<Option<RelPath>, FakeError> {
+        DocWrite::in_the_way(self, at).await
+    }
+
+    /// Keeps the bytes as a file that is no document: an artifact of the space
+    /// `file` from then on.
+    async fn create(&self, at: &RelPath, bytes: &[u8]) -> Result<Creation, FakeError> {
+        self.check()?;
+        if lock(&self.appear_before_create).contains(at) {
+            return Ok(Creation::AlreadyThere);
+        }
+        let mut files = lock(&self.files);
+        if files.contains_key(at) {
+            return Ok(Creation::AlreadyThere);
+        }
+        files.insert(at.clone(), bytes.to_vec());
+        Ok(Creation::Created)
+    }
+}
+
 /// Whether a real listing of these ranges would read the file of a reading: it is
 /// under no book's directory (kept, see `read_docs`), or some range takes it.
 fn listed(ranges: &[BookRange], reading: &DocReading) -> bool {
@@ -936,8 +960,13 @@ impl ShelfWrite for FakeShelf {
     type DocWriter = Self;
     type DocReplacer = Self;
     type DeclarationWriter = Self;
+    type FileWriter = Self;
 
     fn declaration_writer(&self) -> &Self {
+        self
+    }
+
+    fn file_writer(&self) -> &Self {
         self
     }
 

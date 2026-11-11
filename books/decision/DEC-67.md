@@ -1,0 +1,11 @@
+---
+id: "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+key: "DEC-67"
+issues: ["#87"]
+rejected: ["One verification for the plan and the result: one approval stands per document, and the same frame approved again is left out (DEC-58)", "Write the table from the command line after init: it would lose the check for anything in the way and the promise to write over nothing", "Let a verification check no decision, so a result need not name one: a test or a review could then check nothing"]
+related: ["DEC-66", "DEC-61", "DEC-53"]
+rustdoc: ["whyshelf_infra::shelf::artifact::file::CODE_PRESET", "whyshelf_infra::shelf::init::Template", "whyshelf_core::app::shelf::ports::FileWrite"]
+serves: ["REQ-29", "REQ-24", "REQ-13"]
+title: "A template experiment keeps a plan and its result as two verifications, and a preset code pins only that a file is there"
+---
+The space file offers a second built-in preset, code: compare presence, means depends, so an edit of the file makes nothing stale and a removal or a rename breaks what names it; judge moved follows a move, and moves can suggest one only from Git's renames, as a presence pin holds no content to search for, which it tells as the note no_content. The template experiment is the sample's four books with every change marked: decision gains a code link of the preset code; verification gains the methods plan and result, a sheet link for a plan's table and a log link for a result's record, both bytes and depends, and a plans link from a result to its plan, depends; checks stays at-least-one, so a result names its decision too. Its documents are a finding, a requirement, a decision and a plan that pins a table init writes beside them, and no result yet. init writes such files through a port of its own, FileWrite, checked for anything in the way with the rest before anything is written and created after the declaration, never over a file. A plan is approved before the run; after it the result is made with its log and its plan and approved, and an edit of the table makes the plan stale and the result through it. Which method takes which link, and the order of the two approvals, are the template's conventions: check does not enforce them, and whyshelf does not refuse a result approved before its plan; the ledger keeps the time of each approval, so a reader can see the order, but not when the run happened.

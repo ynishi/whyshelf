@@ -16,9 +16,14 @@
 //! | [`Template::Minimal`] | [`MINIMAL`]: one book, `note` (keys `N-<n>`, a required `title`), with comments that show how to add a field, a link and a link to artifacts with a preset | none |
 //! | [`Template::Sample`] | [`SAMPLE`]: four books, `finding`, `requirement`, `decision` and `verification`, linked by `grounds` (informs, `cover = "warn"`), `serves` and `checks` (depends, `cover = true`, a verification checks `at-least-one` decision), a verification's `method` and its `tests`, files by the default preset `file` | `init/sample/*.md`: one of each book, in one chain `F-1 -> REQ-1 -> DEC-1 -> V-1`, about a small command that must not lose a user's file; `V-1` is a `review` and names no file |
 //! | [`Template::QaFirst`] | [`QA_FIRST`]: the four books of [`SAMPLE`] with two rules loosened, each commented, for a flow that writes the checks before the decisions: `serves` has `cover = "warn"`, and `checks` is `count = "many"` | `init/qa-first/*.md`: `F-1 -> REQ-1` and `V-1`, a `review` that checks no decision yet, about the same command; no decision |
+//! | [`Template::Experiment`] | [`EXPERIMENT`]: the four books of [`SAMPLE`], each change commented, for checks that are measurements registered before they are run: a decision's `code` (the preset `code`), a verification's `method` of `plan` or `result` beside `test` and `review`, its `sheet` and `log` (files, by the preset `file`, neither required), and `plans` (a result to its plan, `depends`, optional); `checks` stays `at-least-one`, so a result names its decision too | `init/experiment/*.md`: `F-1 -> REQ-1 -> DEC-1 -> V-1`, about a save that is too slow; `V-1` is a `plan` whose `sheet` names `measurements/save-time.csv`, the one other file, written beside them; no result, since the run has not happened |
+//!
+//! A template's other files ([`InitFile`]) are what its documents name as
+//! artifacts, so a project starts with no name that has nothing behind it.
 //!
 //! A test of this module makes a project of each in an empty directory, through
-//! the real adapters, and holds it clean: `check` finds nothing wrong, and no gap
+//! the real adapters, and holds it clean: `check` finds nothing wrong, no name
+//! with nothing behind it, and no gap
 //! but the one a template means (under [`QA_FIRST`], REQ-1 reached by no
 //! `decision.serves`, a warning), every document is in the one form, and the
 //! links reach as the template draws them.
@@ -27,7 +32,7 @@
 //!
 #![doc = concat!("```toml\n", include_str!("init/sample.toml"), "```")]
 
-use whyshelf_core::app::shelf::{DeclarationText, InitRequest, NewDocRequest};
+use whyshelf_core::app::shelf::{DeclarationText, InitFile, InitRequest, NewDocRequest};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::build::{DocReading, RawProblem, RawValue};
@@ -53,8 +58,17 @@ pub const SAMPLE: &str = include_str!("init/sample.toml");
 /// serves listed, not failed, until both rules are tightened at release.
 pub const QA_FIRST: &str = include_str!("init/qa-first.toml");
 
+/// The declaration of [`Template::Experiment`]: the books of [`SAMPLE`], with a
+/// decision that names its code and a verification that is either half of a
+/// measurement registered before it is run, each choice commented.
+pub const EXPERIMENT: &str = include_str!("init/experiment.toml");
+
 /// A document of a template: the book, the template's name, and its text.
 type DocTemplate = (&'static str, &'static str, &'static str);
+
+/// Another file of a template, neither a document nor the declaration: its path
+/// under the root, and its text.
+type FileTemplate = (&'static str, &'static str);
 
 /// The documents of [`Template::Sample`], in the order they are made (each links
 /// to the one before it).
@@ -85,6 +99,35 @@ const QA_FIRST_DOCS: [DocTemplate; 3] = [
     ),
 ];
 
+/// The documents of [`Template::Experiment`], in the order they are made: the
+/// chain of [`SAMPLE_DOCS`], ending in a plan, approved before its run, of which
+/// there is no result yet.
+const EXPERIMENT_DOCS: [DocTemplate; 4] = [
+    ("finding", "F-1.md", include_str!("init/experiment/F-1.md")),
+    (
+        "requirement",
+        "REQ-1.md",
+        include_str!("init/experiment/REQ-1.md"),
+    ),
+    (
+        "decision",
+        "DEC-1.md",
+        include_str!("init/experiment/DEC-1.md"),
+    ),
+    (
+        "verification",
+        "V-1.md",
+        include_str!("init/experiment/V-1.md"),
+    ),
+];
+
+/// The other files of [`Template::Experiment`]: the table of what is expected,
+/// which the plan's `sheet` names, so it is there from the start.
+const EXPERIMENT_FILES: [FileTemplate; 1] = [(
+    "measurements/save-time.csv",
+    include_str!("init/experiment/measurements/save-time.csv"),
+)];
+
 /// A template of `whyshelf init`: one of a closed set, each a declaration and the
 /// documents beside it, kept as data with no conditionals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -97,18 +140,22 @@ pub enum Template {
     /// [`QA_FIRST`], and a finding, a requirement and a verification, with no
     /// decision yet.
     QaFirst,
+    /// [`EXPERIMENT`], the chain of [`Template::Sample`] ending in a plan of a
+    /// measurement, and the table of what it expects.
+    Experiment,
 }
 
 impl Template {
     /// Every template, in the order a list of them is shown.
-    pub const ALL: [Self; 3] = [Self::Minimal, Self::Sample, Self::QaFirst];
+    pub const ALL: [Self; 4] = [Self::Minimal, Self::Sample, Self::QaFirst, Self::Experiment];
 
-    /// The name a person gives it: `minimal`, `sample`, `qa-first`.
+    /// The name a person gives it: `minimal`, `sample`, `qa-first`, `experiment`.
     pub const fn name(self) -> &'static str {
         match self {
             Self::Minimal => "minimal",
             Self::Sample => "sample",
             Self::QaFirst => "qa-first",
+            Self::Experiment => "experiment",
         }
     }
 
@@ -121,6 +168,9 @@ impl Template {
             }
             Self::QaFirst => {
                 "the four books of sample, loosened for checks written before decisions, and a finding, a requirement and a verification"
+            }
+            Self::Experiment => {
+                "the four books of sample, for measurements planned before they are run, and one chain ending in a plan with its table"
             }
         }
     }
@@ -136,6 +186,7 @@ impl Template {
             Self::Minimal => MINIMAL,
             Self::Sample => SAMPLE,
             Self::QaFirst => QA_FIRST,
+            Self::Experiment => EXPERIMENT,
         }
     }
 
@@ -144,7 +195,7 @@ impl Template {
     pub const fn first_book(self) -> Option<&'static str> {
         match self {
             Self::Minimal => Some(MINIMAL_BOOK),
-            Self::Sample | Self::QaFirst => None,
+            Self::Sample | Self::QaFirst | Self::Experiment => None,
         }
     }
 
@@ -154,13 +205,36 @@ impl Template {
             Self::Minimal => &[],
             Self::Sample => &SAMPLE_DOCS,
             Self::QaFirst => &QA_FIRST_DOCS,
+            Self::Experiment => &EXPERIMENT_DOCS,
         }
     }
 
-    /// What `whyshelf init` makes of it: its declaration, and its documents.
+    /// Its other files, neither documents nor the declaration, in the order they
+    /// are written.
+    const fn files(self) -> &'static [FileTemplate] {
+        match self {
+            Self::Minimal | Self::Sample | Self::QaFirst => &[],
+            Self::Experiment => &EXPERIMENT_FILES,
+        }
+    }
+
+    /// What `whyshelf init` makes of it: its declaration, its other files, and its
+    /// documents.
     pub fn request(self) -> Result<InitRequest, TemplateError> {
         Ok(InitRequest {
             declaration: DeclarationText::new(self.declaration()),
+            files: self
+                .files()
+                .iter()
+                .map(|&(template, text)| {
+                    Ok(InitFile {
+                        path: template
+                            .parse()
+                            .map_err(|source| TemplateError::Name { template, source })?,
+                        bytes: text.as_bytes().to_vec(),
+                    })
+                })
+                .collect::<Result<_, _>>()?,
             docs: self
                 .docs()
                 .iter()

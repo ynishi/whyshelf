@@ -16,7 +16,7 @@
 //!
 //! | space | adapter | its names | the presets it offers | suggested moves ([`MoveSource`]) |
 //! |---|---|---|---|---|
-//! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"` | the same content, then Git's renames ([`file`](mod@file#suggesting-moves)) |
+//! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"`; `code`: `space = "file"`, `compare = "presence"`, `means = "depends"` | the same content, then Git's renames ([`file`](mod@file#suggesting-moves)) |
 //! | `rust-item` | [`rust_item::RustItemSpace`] | Rust paths (`crate::module::Item`, `Type::member`), looked up in the docs `cargo doc` wrote | `rustdoc`: `space = "rust-item"`, `compare = "presence"`, `means = "depends"` | cannot suggest |
 //! | `rust-test` | [`rust_test::RustTestSpace`] | test functions by their file and path in it (`<file>.rs::<module>::<function>`), parsed from the source | `test`: `space = "rust-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest |
 //!
@@ -283,7 +283,7 @@ mod tests {
         presets.extend(rust_item::presets(&space("rust-item")));
         presets.extend(rust_test::presets(&space("rust-test")));
         assert_eq!(source.presets(), presets);
-        assert_eq!(presets.len(), 3);
+        assert_eq!(presets.len(), 4);
 
         let mut asks = ArtifactAsks::new();
         asks.ask(space("file"), name("a.rs"), Comparison::Bytes);
