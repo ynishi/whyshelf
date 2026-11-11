@@ -41,7 +41,7 @@ use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::{DocReading, NewDoc, Shelf};
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::order::heads;
-use crate::domain::shelf::schema::{BookDir, Schema};
+use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
 use super::error::{Obstacle, ShelfError};
@@ -197,10 +197,9 @@ async fn in_the_way<P: ShelfWrite>(
         return Ok(paths.into_iter().map(Obstacle::There).collect());
     }
     let mut obstacles = Vec::new();
-    let dirs: Vec<BookDir> = schema.books().values().map(|b| b.dir().clone()).collect();
     let there = ports
         .docs()
-        .read_docs(&dirs)
+        .read_docs(&schema.ranges())
         .await
         .map_err(port(ShelfPort::Docs))?;
     let shelf = Shelf::build(schema, there, &ArtifactReadings::new());

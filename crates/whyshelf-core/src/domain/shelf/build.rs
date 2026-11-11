@@ -69,11 +69,12 @@ use super::graph::{Cycle, CycleSource, cycles_of};
 use super::schema::{
     ArtifactLinkKind, BookName, BookSchema, Cardinality, EntryName, FieldPresence, FieldType,
     FieldWord, ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
+    WithoutFrontMatter,
 };
 
 mod new;
 
-pub use new::{ClaimKeyProblem, NewDoc, NewDocProblem, NewKey, NextKeyProblem};
+pub use new::{ClaimKeyProblem, NewDoc, NewDocProblem, NewKey, NextKeyProblem, OutOfRange};
 
 /// A value of the front matter, as the adapter's YAML parser gave it: not yet
 /// checked against a field's type.
@@ -120,9 +121,24 @@ impl RawValue {
 /// show a key that was written twice.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RawProblem {
-    /// The file does not start with a `---` line, so it has no front matter.
+    /// The file has no front matter: no line `---` opens it. A file that has one is
+    /// not this, even when the front matter is broken; what counts as none is stated
+    /// once, beside the adapter's reader of a front matter.
     #[error("the file has no front matter: it must start with a line `---`")]
     NoFrontMatter,
+    /// The first line with anything on it begins with `---`, but the file does not
+    /// open with the exact line `---` at its first byte: a byte order mark or blank
+    /// lines come before it, or the line is `----`, `---x` or `--- x`. The file
+    /// tried to have a front matter, so it is not "no front matter", and a book that
+    /// skips files with none does not skip it.
+    ///
+    /// Only such a book tells it so: for any other the file is told as
+    /// [`NoFrontMatter`](Self::NoFrontMatter), as it was before a book could skip
+    /// ([`Shelf::told`]).
+    #[error(
+        "the front matter must open with a line that is exactly `---` at the start of the file"
+    )]
+    BadOpening,
     /// The front matter is opened by `---` and never closed.
     #[error("the front matter is not closed: add a line `---` after the last entry")]
     Unclosed,
@@ -267,6 +283,49 @@ pub enum DocReading {
         /// What was wrong.
         why: RawProblem,
     },
+}
+
+/// Why a file in the range of a book is not one of its documents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkipWhy {
+    /// The file has no front matter at all ([`RawProblem::NoFrontMatter`]), and the
+    /// book says `without_front_matter = "skip"`.
+    NoFrontMatter,
+}
+
+impl SkipWhy {
+    /// The reason as a word, `no_front_matter`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::NoFrontMatter => "no_front_matter",
+        }
+    }
+}
+
+/// A file in the range of a book that is not one of its documents, and why. It is
+/// told by `check` and counted nowhere else: it is neither valid nor invalid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkippedFile {
+    origin: RelPath,
+    book: BookName,
+    why: SkipWhy,
+}
+
+impl SkippedFile {
+    /// The file.
+    pub fn origin(&self) -> &RelPath {
+        &self.origin
+    }
+
+    /// The book whose range holds it.
+    pub fn book(&self) -> &BookName {
+        &self.book
+    }
+
+    /// Why it is not a document.
+    pub fn why(&self) -> SkipWhy {
+        self.why
+    }
 }
 
 /// One thing that makes a document invalid.
@@ -774,6 +833,7 @@ impl Candidate {
                     ReadId::Read(id) => IdSeen::Read(id),
                     ReadId::Unreadable => IdSeen::Unreadable,
                 };
+                let why = Shelf::told(schema, &origin, why);
                 return Self::unusable(origin, id, DocProblem::Unreadable(why));
             }
             DocReading::Parsed {
@@ -1201,6 +1261,7 @@ pub struct Shelf {
     invalid: BTreeMap<DocId, NonEmptyVec<InvalidDoc>>,
     unreadable: Vec<InvalidDoc>,
     anonymous: Vec<InvalidDoc>,
+    skipped: Vec<SkippedFile>,
     index: KeyIndex,
     /// Every key a file of a book writes in the book's grammar, valid file or not,
     /// identity read or not: the keys a new document cannot take, and the numbers
@@ -1240,9 +1301,16 @@ impl Shelf {
     /// order of the steps. A name written in a link to artifacts with no answer in
     /// `artifacts` is a name with nothing there.
     pub fn build(schema: &Schema, readings: Vec<DocReading>, artifacts: &ArtifactReadings) -> Self {
+        let mut skipped = Vec::new();
+        let mut kept = Vec::with_capacity(readings.len());
+        for reading in readings {
+            match Self::skip_of(schema, &reading) {
+                Some(skip) => skipped.push(skip),
+                None => kept.push(reading),
+            }
+        }
         let candidates = flag_duplicates(
-            readings
-                .into_iter()
+            kept.into_iter()
                 .map(|reading| Candidate::read(schema, reading, artifacts))
                 .collect(),
         );
@@ -1286,10 +1354,65 @@ impl Shelf {
             invalid,
             unreadable,
             anonymous,
+            skipped,
             index,
             written_keys,
             cycles,
         }
+    }
+
+    /// Whether a file, as the adapter read it, is not a document of its book: the
+    /// file has no front matter at all, and its book says
+    /// `without_front_matter = "skip"`.
+    ///
+    /// The one place a file is skipped; [`Shelf::build`] leaves out what it answers,
+    /// and `fmt` does not look at it either. Only the reading
+    /// [`RawProblem::NoFrontMatter`] can be skipped: a front matter that is opened
+    /// and not closed, or that is not YAML, is a file with a front matter that is
+    /// broken, and that is invalid whatever the book says, so that a mistyped
+    /// delimiter is never passed over.
+    pub fn skip_of(schema: &Schema, reading: &DocReading) -> Option<SkippedFile> {
+        let DocReading::Unparsed {
+            origin,
+            why: RawProblem::NoFrontMatter,
+            ..
+        } = reading
+        else {
+            return None;
+        };
+        let Membership::In(book) = schema.membership(origin) else {
+            return None;
+        };
+        (book.scope().without_front_matter() == WithoutFrontMatter::Skip).then(|| SkippedFile {
+            origin: origin.clone(),
+            book: book.name().clone(),
+            why: SkipWhy::NoFrontMatter,
+        })
+    }
+
+    /// What the front matter of a file that could not be read is told as:
+    /// [`RawProblem::BadOpening`] only in a book that skips files with no front
+    /// matter, where it is what keeps the file from being skipped; in any other it
+    /// is [`RawProblem::NoFrontMatter`], so that a declaration that says nothing of
+    /// files with no front matter reads every file as before. Every other problem
+    /// is told as it is.
+    ///
+    /// The one place this is decided; the build and `fmt` both ask it.
+    pub fn told(schema: &Schema, origin: &RelPath, why: RawProblem) -> RawProblem {
+        let skips = matches!(
+            schema.membership(origin),
+            Membership::In(book) if book.scope().without_front_matter() == WithoutFrontMatter::Skip
+        );
+        match why {
+            RawProblem::BadOpening if !skips => RawProblem::NoFrontMatter,
+            why => why,
+        }
+    }
+
+    /// The files in the range of a book that are not its documents, in the order
+    /// they were read.
+    pub fn skipped(&self) -> &[SkippedFile] {
+        &self.skipped
     }
 
     /// What a key in a book comes to.

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8419175afbd02987f11a2bd891bcf9edfc373310",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:16ba18b52f4d9db6046708f88d4986cdb8154300d8aa3c9150f254663952cfe3",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a183d0b3f4fc73ed254bd7d456c1c9b158c8a0c0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:be12e1d8ea62e32b69b23a16192d79d16704ce3a533506e980a13adf259fba0f",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794401174143,
+  "expires": null,
+  "frame": [
+    {
+      "address": "da9032def055fc8f6a38d45583eae70d26c36b31",
+      "hash": "sha256:37d652c3acd0936f23b7fc2380c93f508cfd99f394f0e24a4d5849fec42d1f24",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "52"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+    }
+  ],
+  "id": "01a1caa5-0d1c-71e5-97f1-e084c6217c2d",
+  "kind": "decision",
+  "reason": "Every reader and writer of a book's files asks its range; the tests carry the range in their declarations and the map writes it (#75); checked by a blind review",
+  "revision": "5551962100bd31d21bf93859dc4048a3cd2a6153",
+  "seen": "sha256:4cc7cf9e3ad8b44953649ea0f523268c1e3196959072b3da6e8bd94e4a80bdf9",
+  "seen_address": "48b5909bf7e7847e0540a31b7acafc7b31ec908f",
+  "subject": "01a1c7ad-001a-777b-8fe2-cc8909aaffa0",
+  "v": 1,
+  "verb": "approve"
+}

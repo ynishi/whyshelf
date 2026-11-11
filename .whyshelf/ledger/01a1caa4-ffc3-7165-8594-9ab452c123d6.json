@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "4187fe8d02e484f8712df0341bdc5119f843d74b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:88c6c3a9bc0f41560f879360f5687d90238d281f9dd59f8b4576b62315e13c40",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794401172857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "69ae922b3d9d0be27eb3c2815a9eb716a6cf0448",
+      "hash": "sha256:1b2a60d2ceb5091165777ee24182d1e28051717f48cdc6618b623b9539d943e9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "63"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
+    }
+  ],
+  "id": "01a1caa4-ffc3-7165-8594-9ab452c123d6",
+  "kind": "decision",
+  "reason": "A book declares its range by include and exclude of *, ? and ** and a rule for files without front matter, asked by every reader and writer, and nothing declared changes nothing (#75); checked by a blind review on the binary, every finding fixed",
+  "revision": "5551962100bd31d21bf93859dc4048a3cd2a6153",
+  "seen": "sha256:dc14d5095c5e41220db22fc0f42866f431fbc751b45687b5890c2a2108be91fb",
+  "seen_address": "d68350d6cd0ed185368411bb47fcfef8c21e866a",
+  "subject": "01a1ca93-52da-772f-b994-aa8b79f1fd65",
+  "v": 1,
+  "verb": "approve"
+}

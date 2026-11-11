@@ -171,6 +171,9 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
             for warning in output::check_warnings(&check) {
                 eprintln!("{warning}");
             }
+            for note in output::check_notes(&check) {
+                eprintln!("{note}");
+            }
             if check.is_clean() {
                 Exit::Ok
             } else {

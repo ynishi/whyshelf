@@ -39,6 +39,7 @@ fn schema(compare: Option<CompareDecl>) -> Schema {
         vec![BookSchemaDecl {
             name: "spec".to_owned(),
             dir: "specs".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Prefixed {
                 prefix: "SP".to_owned(),
             },

@@ -1,8 +1,11 @@
 //! Tests of `new_doc`, over the in-memory fake.
 
-use crate::domain::shelf::build::{ClaimKeyProblem, DocProblem, NewDocProblem, RawValue};
+use crate::domain::shelf::build::{
+    ClaimKeyProblem, DocProblem, NewDocProblem, NextKeyProblem, RawValue,
+};
 use crate::domain::shelf::schema::{
     BookName, BookSchemaDecl, FieldEntryDecl, FieldPresence, FieldTypeDecl, KeyPatternDecl,
+    ScopeDecl,
 };
 
 use super::fake_tests::{FakeShelf, block_on, file, fr};
@@ -124,6 +127,7 @@ fn measures() -> BookSchemaDecl {
     BookSchemaDecl {
         name: "measure".to_owned(),
         dir: "measures".to_owned(),
+        scope: Default::default(),
         key: KeyPatternDecl::Prefixed {
             prefix: "M".to_owned(),
         },
@@ -278,4 +282,38 @@ fn a_file_already_at_the_path_is_never_replaced() {
     assert!(matches!(error, ShelfError::FileTaken { .. }));
     assert_eq!(error.class(), ErrorClass::Request);
     assert_eq!(app.ports().created_count(), 0);
+}
+
+/// The book `measure`, with a range that takes only `notes/**` below its directory.
+fn measures_in_notes() -> BookSchemaDecl {
+    BookSchemaDecl {
+        scope: ScopeDecl {
+            include: Some(vec!["notes/**".to_owned()]),
+            exclude: None,
+            without_front_matter: None,
+        },
+        ..measures()
+    }
+}
+
+#[test]
+fn a_new_document_outside_the_range_is_a_request_error_that_writes_nothing() {
+    for key in [None, Some("M-3")] {
+        let fake = FakeShelf::new();
+        fake.decls.lock().unwrap().push(measures_in_notes());
+        let ids_before = *fake.next_id.lock().unwrap();
+        let mut app = ShelfApp::new(fake);
+        let error = block_on(app.new_doc(request("measure", key, &[]))).unwrap_err();
+        let (ShelfError::NextKey(NextKeyProblem::OutOfRange(out))
+        | ShelfError::ClaimKey(ClaimKeyProblem::OutOfRange(out))) = &error
+        else {
+            panic!("{key:?}: {error:?}");
+        };
+        let said = out.to_string();
+        assert!(said.contains("include `notes/**`"), "{said}");
+        assert_eq!(error.class(), ErrorClass::Request);
+        assert_eq!(app.ports().created_count(), 0);
+        // Refused before an identity was asked for.
+        assert_eq!(*app.ports().next_id.lock().unwrap(), ids_before);
+    }
 }

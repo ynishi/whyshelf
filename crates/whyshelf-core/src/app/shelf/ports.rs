@@ -64,7 +64,7 @@ use crate::domain::shelf::ledger::GoneNames;
 use crate::domain::shelf::ledger::{
     GoneName, JudgedAt, JudgementId, Record, RecordProblem, SpaceSuggestions,
 };
-use crate::domain::shelf::schema::{BookDir, BuiltinPresets, ShelfDecl};
+use crate::domain::shelf::schema::{BookRange, BuiltinPresets, ShelfDecl};
 
 use super::error::ShelfError;
 
@@ -168,15 +168,18 @@ pub trait DocSource: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// One reading for every Markdown file under one of these directories.
+    /// One reading for every Markdown file the range of one of these books takes
+    /// ([`BookRange::takes`]: under the directory, matching its `include` and none
+    /// of its `exclude`). A file the range does not take is not read at all.
     ///
     /// A file whose front matter cannot be read is a
     /// [`DocReading::Unparsed`], not an error: the shelf makes it an invalid
-    /// document that says why. A directory that is not there has no file. An error
+    /// document that says why (or leaves it out, when its book skips a file with no
+    /// front matter). A directory that is not there has no file. An error
     /// is for what stops the reading itself (a disk that cannot be read).
     fn read_docs(
         &self,
-        dirs: &[BookDir],
+        ranges: &[BookRange],
     ) -> impl Future<Output = Result<Vec<DocReading>, Self::Error>> + Send;
 
     /// The bytes of the file of a document (relative to the project root) as they
@@ -195,13 +198,13 @@ pub trait DocSource: Send + Sync {
         files: &BTreeSet<RelPath>,
     ) -> impl Future<Output = Result<BTreeMap<RelPath, ContentAddress>, Self::Error>> + Send;
 
-    /// For every Markdown file under one of these directories, as
+    /// For every Markdown file the ranges take, as
     /// [`read_docs`](Self::read_docs) finds them: its reading, its bytes, and how it
     /// stands to the one form the adapter writes a document in (the form
     /// [`DocWrite::create`] writes). Reading creates nothing.
     fn forms(
         &self,
-        dirs: &[BookDir],
+        ranges: &[BookRange],
     ) -> impl Future<Output = Result<Vec<FileForm>, Self::Error>> + Send;
 }
 
