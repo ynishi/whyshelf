@@ -207,7 +207,7 @@ impl Shelf {
         };
         let highest = self
             .written_keys
-            .iter()
+            .keys()
             .filter(|key| key.book == *book)
             .filter_map(|key| match &key.form {
                 KeyForm::Prefixed {
@@ -259,10 +259,20 @@ impl Shelf {
             book: book.clone(),
             form,
         };
-        if self.written_keys.contains(&key) {
+        if self.written_keys.contains_key(&key) {
             return Err(ClaimKeyProblem::Taken { key });
         }
         Ok(NewKey { key })
+    }
+
+    /// The files that write `key` in its book's grammar, valid or not, in the order
+    /// of their paths: what makes the key taken ([`Shelf::claim_key`]). None for a
+    /// key no file writes.
+    pub fn files_writing(&self, key: &DocKey) -> Vec<RelPath> {
+        self.written_keys
+            .get(key)
+            .map(|files| files.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// What the links to artifacts of a new document of `key`'s book with these

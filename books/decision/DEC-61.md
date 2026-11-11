@@ -1,0 +1,11 @@
+---
+id: "01a1c9b4-0443-7020-ab73-b9e48af448eb"
+key: "DEC-61"
+issues: ["#71"]
+rejected: ["Keep the templates in the core: the core knows no kind of document", "Approve the sample: an approval is a person's judgement, with a reason", "Take the next key of each book: a link in the sample names a fixed key, which must be the one written"]
+related: ["DEC-29"]
+rustdoc: ["whyshelf_core::app::shelf::ShelfApp::init", "whyshelf_core::app::shelf::ports::DeclarationWrite", "whyshelf_infra::shelf::init::sample", "whyshelf_infra::shelf::init::minimal"]
+serves: ["REQ-24", "REQ-1", "REQ-9"]
+title: "init writes a template declaration and its documents through the ports, after checking all of it"
+---
+The templates are data in the infra: a minimal declaration of one book with comments on how to extend it, and a sample of four books, finding, requirement, decision and verification, with their links, covers and the default artifact space file, and one document per book in one chain whose verification is a review that names no file. ShelfApp::init checks the declaration text with the parser and schema check every read uses, plans each document as new does on the documents planned before it, with its fixed key and a fresh identity, and refuses, naming every file in the way, when anything is at the declaration's path or a document's path, a directory or a link included, or a parent of one inside the root is there and is no directory, or when a file of a book already writes a key the template gives; only then it writes the declaration through DeclarationWrite, create-only, and then each document, removing a file it made when writing it fails, and only that file, so a failure part way leaves at worst a declaration with fewer documents, and the error names what was written and what failed. Nothing is approved. whyshelf init and init --sample answer the files written and the commands to run next; a refusal exits 2, as does a declaration template the schema refuses or a file that appears in between; a document template that cannot be read, or a port that fails, exits 3. Each command it gives next carries the --root it was given.

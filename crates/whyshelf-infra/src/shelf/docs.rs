@@ -24,7 +24,9 @@
 //! [`MarkdownDocs`] is also the [`DocWrite`] of a new document: [`render`] makes the
 //! text from the entries (a flat front matter, every text in double quotes, `id` and
 //! `key` first, the whole text after the normalization rule), and the file is
-//! created only where none is (`create_new`), with its directories. What [`render`]
+//! created only where nothing is (`create_new`: a directory or a link there, even one
+//! to nothing, is in the way too), with its directories; a write that fails after
+//! the file was made removes it, and only it. What [`render`]
 //! writes, [`read`] reads back into the same entries; a test holds the two together.
 //!
 //! # Writing a document in the form
@@ -82,6 +84,7 @@ use whyshelf_core::domain::shelf::build::{
 use whyshelf_core::domain::shelf::doc::normalize;
 use whyshelf_core::domain::shelf::schema::BookDir;
 
+use super::create;
 use super::git::{Git, GitError};
 
 /// Why the documents could not be read at all, or a document's file could not be
@@ -588,6 +591,17 @@ fn raw_value(value: Value) -> Result<RawValue, UnheldKind> {
 impl DocWrite for MarkdownDocs {
     type Error = DocsError;
 
+    async fn in_the_way(&self, path: &RelPath) -> Result<Option<RelPath>, DocsError> {
+        create::in_the_way(&self.root, path)
+            .await
+            .map_err(|source| DocsError::Io {
+                path: self.root.join(path.as_str()),
+                source,
+            })
+    }
+
+    /// Created `create_new` with its directories; a write that fails removes the
+    /// file it made, and only it.
     async fn create(
         &self,
         path: &RelPath,
@@ -595,35 +609,12 @@ impl DocWrite for MarkdownDocs {
         body: &str,
     ) -> Result<Creation, DocsError> {
         let file = self.root.join(path.as_str());
-        if let Some(dir) = file.parent() {
-            tokio::fs::create_dir_all(dir)
-                .await
-                .map_err(write_step(format!(
-                    "create the directory {}",
-                    dir.display()
-                )))?;
-        }
-        let mut out = match tokio::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&file)
+        create::create_new(&file, render(entries, body).as_bytes())
             .await
-        {
-            Ok(out) => out,
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                return Ok(Creation::AlreadyThere);
-            }
-            Err(source) => {
-                return Err(write_step(format!("create {}", file.display()))(source));
-            }
-        };
-        out.write_all(render(entries, body).as_bytes())
-            .await
-            .map_err(write_step(format!("write {}", file.display())))?;
-        out.sync_all()
-            .await
-            .map_err(write_step(format!("write {} to disk", file.display())))?;
-        Ok(Creation::Created)
+            .map_err(|failed| DocsError::Write {
+                step: failed.step,
+                source: failed.source,
+            })
     }
 }
 
