@@ -4,7 +4,7 @@
 //! |---|---|---|
 //! | [`SystemClock`] | [`Clock`] | the system time, in unix milliseconds |
 //! | [`UuidV7Ids`] | [`IdSource`] | a UUID v7 (sorts by creation, the surrogate key of a record and the identity of a new document) |
-//! | [`ProjectActor`] | [`ActorSource`] | the name the caller took from `WHYSHELF_ACTOR`, else Git's `user.name` of the project |
+//! | [`ProjectActor`] | [`ActorSource`] | the name the caller took from `WHYSHELF_ACTOR`, else Git's `user.name` of the project (asked only when no actor was given on the command line) |
 //!
 //! Who acts is never read from a file that is committed: a committed file would let
 //! anyone write a judgement in another person's name.
@@ -93,7 +93,10 @@ pub enum ActorError {
     },
 }
 
-/// Who acts in a project.
+/// Who acts in a project, when the command line names no one.
+///
+/// A name given on the command line (`--actor`) wins before this adapter is
+/// asked: the application takes it as the actor and never calls the port.
 #[derive(Debug, Clone)]
 pub struct ProjectActor {
     root: PathBuf,
