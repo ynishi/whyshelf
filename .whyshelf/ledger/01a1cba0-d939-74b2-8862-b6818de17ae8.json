@@ -1,0 +1,195 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "c4ca5cb2ae1cb29108bfdba689ac7225ce2493e1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:cb5da022645cb249d1f8f79e05def1b140f55f10c47de632ddfceb88070bd462",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e487ef31061452a9cfec86ab5821b61d097e868",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add768ddd5406e06645e18dda7518815a659d1f748b4a8cb827a8c355216144d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b1496af4d4f3cf3ceed1e192ecb49bc72e94d2d3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f5c28888eb130ef7af0346d401ccb8c93d06690f728561145eea183512305a86",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f519e8946880d5542fc968bdb6970adc872bd15c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:29c4fa5a844b93d5072f2685353fa60473d05e13c24261c26a4215ddc4a01418",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "64445d9b162d341a4a9527a1577064298d96ff14",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:79d229cd4c88c7289966d1b745ec84d65b44fcc4812433a91f7b4eeb2009c0cd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "60094becd5fb7a5d0efd7c100818e70750757430",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:359bef7d7d0f114db6ae8665041d18858840b596c9e1370ef89be33f5d3856c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b95e10c3a02e1291bf51fb0574cb21eda3ecc5ab",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:165e71b1dce0b95e4e191d75a2f96176579a897cb4b7ffbf1f21766aff9cd774",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ff404ca45a2e1d5d9244acc5f601bbbf90a0a0f6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a7408254cc57f52d6b04d7631838f9c752457e227714345d7b80afe3a7092803",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ec8bce6309637829ccd3e9670a027307992f5cfd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ae31721e3d9ef4be030f675045896dfbaed05ff6836aab0b74c327c09e0c26d0",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794417678622,
+  "expires": null,
+  "frame": [
+    {
+      "address": "52e5e2c522fd1fc1ba63fb0d09085313ace42a6b",
+      "hash": "sha256:396dbbf0430120d2a819e65987bc767f28d271cb80461d7b41e40106d44a7099",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "44"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bb53-7733-93f1-bf8478b9df23"
+    },
+    {
+      "address": "c74b2ee2aed6c8bcfcc57f138bfa6926eb92d61f",
+      "hash": "sha256:1cce62a572259e1e57a23ec85cec8acc40c478dcedee3048d8120f97a37cd32a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bc99-7728-b8d7-deea06f9c49b"
+    },
+    {
+      "address": "e4894a2b3e0e23aa63e7a3936ccc1ddaf023bd48",
+      "hash": "sha256:728a8801003dacb50886f495ac9a9d364b391f894c9a8a5f95e67250e8a23e73",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "46"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bf0d-70d9-a6b0-d454e6662c4d"
+    }
+  ],
+  "id": "01a1cba0-d939-74b2-8862-b6818de17ae8",
+  "kind": "decision",
+  "reason": "Only the issue number of a document upstream changed, as the issue was opened again; what this verification shows is unchanged",
+  "revision": "584481e3aab19a2db001921500f80bc101105c92",
+  "seen": "sha256:05512f35c7c53eec2f7d1284cd598ff0f74fbd4fac95c8692f019808978b4e09",
+  "seen_address": "fc33b4be85776f2351ae3a0fec4b349b8d4d0566",
+  "subject": "01a1c60b-c0d7-702a-9bc0-a229ded269d9",
+  "v": 1,
+  "verb": "approve"
+}

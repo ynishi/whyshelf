@@ -1,7 +1,7 @@
 ---
 id: "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
 key: "DEC-62"
-issues: ["#73"]
+issues: ["#91"]
 rejected: ["Follow informs links from a named document: an approval does not stand on what only informs it", "Leave out a named document that is not pending: a misnamed document would be approved around in silence"]
 related: ["DEC-51", "DEC-58", "DEC-27"]
 rustdoc: ["whyshelf_core::domain::shelf::order::pending", "whyshelf_core::domain::shelf::order::pending_upstream", "whyshelf_core::domain::shelf::order::stale", "whyshelf_core::domain::shelf::order::held_back", "whyshelf_core::app::shelf::ShelfApp::approve_chosen"]

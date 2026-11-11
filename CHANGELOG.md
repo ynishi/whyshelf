@@ -125,13 +125,13 @@ and this project adheres to
   approved, or those the named ones stand on through `depends` links, upstream
   first in one run, as `--stale` does for stale ones; the two may be given
   together, and each entry names the rule that took it. In the library,
-  `ShelfApp::approve_chosen` is the one use case of both (#73).
+  `ShelfApp::approve_chosen` is the one use case of both (#91).
 - A book may declare which files under its `dir` are its documents: `include`
   and `exclude` patterns of `*`, `?` and `**`, and `without_front_matter =
   "skip"` to leave aside a file with no front matter at all, which `check`
   lists. A front matter that opens wrongly is never skipped, `new` refuses a
   key outside the range, and a book that declares none of them reads as
-  before (#75).
+  before (#92).
 - A space `rust-test` names test functions (`<file>.rs::<module>::<fn>`), and
   the built-in preset `test` pins each one's own tokens, so an edit of another
   test in the file, or of whitespace, comments or docs, makes nothing stale.
@@ -152,7 +152,7 @@ and this project adheres to
   and a result that pins its record (`log`) and names its plan (`plans`),
   approved after it. `init` writes the table beside the documents. A built-in
   preset `code` pins only that a file is there, for a decision's link to its
-  code (#87).
+  code (#93).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
@@ -160,7 +160,7 @@ and this project adheres to
 
 - `init` and `new` follow a link on a path only while it stays inside the
   root: a book's directory, or another parent, that links out of the root is
-  in the way, where a document could be written outside the project (#87).
+  in the way, where a document could be written outside the project (#93).
 - Every call of Git goes through one runner that lets nothing of the
   repository choose a program or write: a clean or process filter the
   repository configures no longer runs when an address is made, a partial

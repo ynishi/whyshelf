@@ -1,7 +1,7 @@
 ---
 id: "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
 key: "DEC-67"
-issues: ["#87"]
+issues: ["#93"]
 rejected: ["One verification for the plan and the result: one approval stands per document, and the same frame approved again is left out (DEC-58)", "Write the table from the command line after init: it would lose the check for anything in the way and the promise to write over nothing", "Let a verification check no decision, so a result need not name one: a test or a review could then check nothing"]
 related: ["DEC-66", "DEC-61", "DEC-53"]
 rustdoc: ["whyshelf_infra::shelf::artifact::file::CODE_PRESET", "whyshelf_infra::shelf::init::Template", "whyshelf_core::app::shelf::ports::FileWrite"]
