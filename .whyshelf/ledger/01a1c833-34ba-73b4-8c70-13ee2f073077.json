@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::ArtifactPin",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "07522f832291156bffbc20595ddc6f91106498f5",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "address": "4688be8cacf41b29a960b9c94d619a04177bfb77",
+      "hash": "sha256:38cf703829644940a576121efe151b02ea5d0ed46f333c2150a735d6cbba9860",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c3d2-f82b-7c4e-92a5-6c0b968a5474"
+    }
+  ],
+  "id": "01a1c833-34ba-73b4-8c70-13ee2f073077",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:728a8801003dacb50886f495ac9a9d364b391f894c9a8a5f95e67250e8a23e73",
+  "seen_address": "e4894a2b3e0e23aa63e7a3936ccc1ddaf023bd48",
+  "subject": "01a1c60b-bf0d-70d9-a6b0-d454e6662c4d",
+  "v": 1,
+  "verb": "approve"
+}

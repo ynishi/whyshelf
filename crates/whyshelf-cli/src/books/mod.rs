@@ -71,6 +71,10 @@ use args::{Common, Verb};
 /// The environment variable that names who judges.
 const ACTOR_VAR: &str = "WHYSHELF_ACTOR";
 
+/// The environment variable that names cargo's build directory, where the docs of
+/// the space `rust-item` are looked for first.
+const CARGO_TARGET_DIR_VAR: &str = "CARGO_TARGET_DIR";
+
 /// The exit status of a command.
 #[derive(Debug, Clone, Copy)]
 enum Exit {
@@ -122,7 +126,11 @@ pub fn refuse_arguments(error: &clap::Error) -> ExitCode {
 
 /// Run a command on the project at `root`.
 pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
-    let project = Project::new(root, std::env::var(ACTOR_VAR).ok());
+    let project = Project::new(
+        root,
+        std::env::var(ACTOR_VAR).ok(),
+        std::env::var_os(CARGO_TARGET_DIR_VAR).map(PathBuf::from),
+    );
     let result = match command {
         BooksCommand::Schema => Ok(print(&output::schemas())),
         BooksCommand::Check => ShelfApp::new(project).books_check().await.map(|check| {
@@ -184,15 +192,16 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
                 return ExitCode::from(Exit::Request as u8);
             }
         },
-        BooksCommand::Stale { exit_code } => {
-            ShelfApp::new(project)
-                .stale()
-                .await
-                .map(|r| match print(&output::stale(&r)) {
-                    Exit::Ok => stale_exit(&r, exit_code),
-                    failed => failed,
-                })
-        }
+        BooksCommand::Stale { exit_code } => ShelfApp::new(project).stale().await.map(|r| {
+            let exit = print(&output::stale(&r));
+            for warning in output::stale_warnings(&r) {
+                eprintln!("{warning}");
+            }
+            match exit {
+                Exit::Ok => stale_exit(&r, exit_code),
+                failed => failed,
+            }
+        }),
         BooksCommand::Diff { reference } => ShelfApp::new(project)
             .diff(&reference)
             .await
@@ -486,9 +495,10 @@ fn unlinked_exit(report: &UnlinkedReport) -> Exit {
 }
 
 /// The exit of `stale` once its answer is printed: with `--exit-code`, 1 when any
-/// approval does not hold; otherwise 0.
+/// approval does not hold, or when one stands on a name that cannot be told now (a
+/// gate cannot say it holds); otherwise 0.
 fn stale_exit(report: &StaleReport, exit_code: bool) -> Exit {
-    if exit_code && !report.entries.is_empty() {
+    if exit_code && (!report.entries.is_empty() || !report.unknown.is_empty()) {
         Exit::Stopped
     } else {
         Exit::Ok

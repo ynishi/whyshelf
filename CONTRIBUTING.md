@@ -160,7 +160,9 @@ issue -> finding -> requirement / decision / verification (pending)
 - Conventions of these books that the declaration does not state: a finding
   gives the issue it came from in `source`; a requirement and a decision name
   their issues in `issues`; a decision says in `revisit` when to look at it
-  again, and names in `rustdoc` the items whose docs state its rule; a
+  again, and names in `rustdoc` the public items whose docs state its rule (a
+  link resolved in the docs `just rust-doc` builds: an item that goes away
+  breaks the decision); a
   verification's `method` `e2e` is for tests that run the binary (those under
   `crates/whyshelf-cli/tests/`), `unit` for the tests inside the crates, and
   `review` for a check made by reading, such as the blind review. A

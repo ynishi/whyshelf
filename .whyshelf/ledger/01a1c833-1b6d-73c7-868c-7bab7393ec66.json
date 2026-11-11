@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1b99d97fe22a3ee50dbbb6895bb09759d18a59b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9e9b056fdc375fe334988271d8e3ebbcf8b8c147b6a767b0de4f4dcfd34d2689",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fb5d348ec63da10c858dfc33c6613ab174bf2972",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8933bae4f557ee88e3bebc58cf33cd0256916b048e0f40a67056055e3cb59b96",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "5edc41db98e0c4cc578c9cedb438a41761e27bf3",
+      "hash": "sha256:14ebd03b9f4e41442f3d8fbd85ec8cdfe2ecd72fb50895c5b6a1cc84e84a4dab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "22"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-155d-70fa-a267-9044c79b42b7"
+    }
+  ],
+  "id": "01a1c833-1b6d-73c7-868c-7bab7393ec66",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:e3de39ac2dc540f4da63078dfa3a57861de5e48834610e26af035950f33815b7",
+  "seen_address": "f3284e3edb747920e4fc1085b4cb45d959af678e",
+  "subject": "01a1c4ba-1c7a-7445-809d-046cf7ef0267",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "26c93dfb5937e2c387845f4a6ea175484cada4f8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9ab56bf945e03c5985233ba6063d7e4a6818d179170caaa9801822ba07cd45f1",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5cd6ea0129d205ffbca15cc45a7d42fcdc882b31",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:42a2498ab22cfb0a4645b51c38c615d8531808943ac1b5544a8d75a475b60bbf",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b1c7978d476a7e612ffc24bb7f70020d619f2942",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1a565e11e35d4e7d635374f3e7fc2e09096d715533169d264504cf7df06fa847",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "53ffa65ebac6b2cee3fbb7d07963cff6b56e52ed",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21a776b44f7bb8fa5789232e17476e3c3c32f3cf9a849421468956d684dff309",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9b11195c42bff6d7b0dca5f22d38ff48f586dcb0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c8b3b31d1671dddb9be9dd62cf7e09cf81e5d6eb50bbec397fd351d099388f0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e2f572897ad3d9b4dd5a02827830a2dec99e4109",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f450ddb2a23789ba019f5accfa25d46b718b822058431fe982e02b1a6a1b3562",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1306c7b12267619130e508101e554839a1538cd4",
+      "hash": "sha256:edf26bda57d2ff07d897ed8942d5d8f1d91afd6708af69fd426c163a7b14de1a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "50"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c690-6834-77b2-8c4a-bd554e7eb233"
+    }
+  ],
+  "id": "01a1c833-3eea-72b1-bd41-0af404ae0f2e",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:0ac782ead7a06f751294db5fc30120fb164c098342a8b681988f77207b1e795e",
+  "seen_address": "9f23ec79bd87f7942d4d20af44038fb38849dbef",
+  "subject": "01a1c690-6934-715f-b849-9529ca617d8a",
+  "v": 1,
+  "verb": "approve"
+}

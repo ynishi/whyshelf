@@ -1,0 +1,68 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ErrorClass",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfError::class",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e29456b4ed8b459da677b79f25de9bdfe483716b",
+      "hash": "sha256:0f0dc2ad41413994dc6572780a21a6417af6a2f38038b3c173d65af913147e1c",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "4"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-38d9-72fc-8ee9-4bc78bdcca4c"
+    }
+  ],
+  "id": "01a1c833-153d-7765-849b-ee091e7c9b49",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:0d9ebbcb94bc5a1af2d9dab8f06e4b89349ed39c7e025cac11ff3b01c70980ed",
+  "seen_address": "8ea9966b54a032c0bd52b4fa8d9ba4f612763c3e",
+  "subject": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce",
+  "v": 1,
+  "verb": "approve"
+}

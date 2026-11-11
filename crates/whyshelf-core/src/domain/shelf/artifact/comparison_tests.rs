@@ -217,6 +217,28 @@ fn presence_ignores_the_content_and_tells_present_from_absent() {
 }
 
 #[test]
+fn a_thing_there_with_no_content_read_has_the_presence_hash_only() {
+    let why = NonBlank::new("only presence is compared here").unwrap();
+    let there = ArtifactReading::there(why.clone());
+    assert!(there.is_present());
+    assert_eq!(there.address(), None);
+    let asked = BTreeSet::from([Comparison::Presence]);
+    assert_eq!(
+        there.state(&Comparison::Presence),
+        ArtifactReading::of_bytes(CODE.as_bytes(), &asked, None).state(&Comparison::Presence)
+    );
+    // No bytes were read, so no comparison of bytes or lines can be told of it, for
+    // the reason the adapter gave.
+    for other in [Comparison::Bytes, lines(&[])] {
+        assert_eq!(
+            there.state(&other),
+            ArtifactState::Unknown(Untold::Said(why.clone())),
+            "{other:?}"
+        );
+    }
+}
+
+#[test]
 fn a_reading_has_the_hash_of_each_comparison_asked_and_of_its_bytes() {
     let asked = BTreeSet::from([lines(&["//"])]);
     let reading = ArtifactReading::of_bytes(CODE.as_bytes(), &asked, None);

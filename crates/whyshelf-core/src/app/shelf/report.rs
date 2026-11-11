@@ -368,6 +368,10 @@ pub struct StaleReport {
     ///
     /// [`Assessment::origins`]: crate::domain::shelf::freshness::Assessment::origins
     pub origins: Vec<OriginGroup>,
+    /// The names that approved documents stand on through a `depends` link and
+    /// that their adapter cannot tell about now: their freshness is unchanged, and
+    /// whether their approvals hold cannot be said.
+    pub unknown: Vec<Unknown>,
     /// The keys of the valid documents.
     pub names: Names,
     /// What is wrong around them.
