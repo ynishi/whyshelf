@@ -204,6 +204,8 @@ pub(super) struct FakeShelf {
     pub(super) records: Mutex<Vec<Record>>,
     pub(super) unreadable: Mutex<Vec<UnreadableRecord>>,
     pub(super) now: Mutex<i64>,
+    /// How far the clock moves after each reading of it (0: it stands still).
+    pub(super) clock_step: Mutex<i64>,
     pub(super) next_id: Mutex<u128>,
     pub(super) actor: Option<Actor>,
     pub(super) appends: Mutex<usize>,
@@ -294,6 +296,7 @@ impl FakeShelf {
             records: Mutex::new(Vec::new()),
             unreadable: Mutex::new(Vec::new()),
             now: Mutex::new(1000),
+            clock_step: Mutex::new(0),
             next_id: Mutex::new(9000),
             actor: Some(Actor::new("alice").expect("a name")),
             appends: Mutex::new(0),
@@ -401,6 +404,11 @@ impl FakeShelf {
 
     pub(super) fn set_now(&self, millis: i64) {
         *lock(&self.now) = millis;
+    }
+
+    /// From now on the clock moves `millis` after each reading of it.
+    pub(super) fn set_clock_step(&self, millis: i64) {
+        *lock(&self.clock_step) = millis;
     }
 
     pub(super) fn record_count(&self) -> usize {
@@ -558,7 +566,11 @@ impl Clock for FakeShelf {
     type Error = FakeError;
 
     async fn now(&self) -> Result<JudgedAt, FakeError> {
-        Ok(JudgedAt::new(*lock(&self.now)))
+        let step = *lock(&self.clock_step);
+        let mut now = lock(&self.now);
+        let read = *now;
+        *now += step;
+        Ok(JudgedAt::new(read))
     }
 }
 

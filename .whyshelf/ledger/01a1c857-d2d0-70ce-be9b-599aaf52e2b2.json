@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "0496c454ceb0a2c498e02ff1f697e0149f22792e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0063de42e77aca079bc7f4da10b686a9a44544f02afc57da2a9406920df1bb28",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ed78081898f239099af12d9920d20d82165b84b3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0175bb57361579365c6f80650f2bf9051ecec2367fcd8f934356d11545e72f74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/id.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4d3c3061622c730f9d73ea9b13ce3a27ff405dec",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a1d81c812cd5b53a3465b254a0ae4b6705fd57af01ca8839c6b0fbc9c5e2afee",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/lookup/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794362561196,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1cd79c3c236ee5e2f0fc31826019a3f88abbedc8",
+      "hash": "sha256:3b7c44094447631e7b4f38e3f8770c05c1f083eeb4634f473c309729ba7c7c4f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "17"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-13c1-71ff-8447-3222d6d270df"
+    }
+  ],
+  "id": "01a1c857-d2d0-70ce-be9b-599aaf52e2b2",
+  "kind": "decision",
+  "reason": "DocId gives the time its identity carries, every decision of a run takes one time (DEC-27 restated), the stats output shares the named views, and the rust-item tests no longer share a directory (#58); checked by a blind review",
+  "revision": "fb8a971b32f24f2986c165b1294b4da42a47a65d",
+  "seen": "sha256:5fef89319cf556b0a98b45eb1472235f78da67dee6880a69cd16908ca841b3a4",
+  "seen_address": "0cd33547b0b36dee54c63cbfea4b0ffb379fd884",
+  "subject": "01a1c4ba-1878-7520-ab7b-54358c7ed69e",
+  "v": 1,
+  "verb": "approve"
+}
