@@ -139,6 +139,10 @@ and this project adheres to
   files of their feature; a test fails when one file is named by more than two
   verifications. Temporary directories of these tests hold a counter, so tests
   run in parallel never share one (#60).
+- The end-to-end tests show on the binary the whole order of who judges: the
+  actor given, else `WHYSHELF_ACTOR`, else Git's `user.name`, and with none the
+  judgement is refused, whatever a file of the project says; they run with the
+  person's Git settings shut out (#62).
 
 ### Removed
 
