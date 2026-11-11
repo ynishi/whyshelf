@@ -212,6 +212,28 @@ pub enum Verb {
         #[arg(long)]
         actor: Option<String>,
     },
+    /// Declare that an artifact moved from one name to another (needs --reason), one
+    /// move per run: an approval's pin of something at the old name, made at or
+    /// before the declaration, is read as a pin of the new one, with the hash it
+    /// pinned (a pin of the old name as absent is read as written). The old
+    /// name has nothing behind it now and the new one has something, as the space's
+    /// adapter says.
+    Moved {
+        /// The old name (for the space `file`, its path under the root): the name a
+        /// pin of something there, of an approval that stands, is read as now, in the
+        /// one space it is in.
+        #[arg(value_name = "OLD")]
+        from: ArtifactName,
+        /// The new name, in the same space.
+        #[arg(value_name = "NEW")]
+        to: ArtifactName,
+        /// Why it is the same thing.
+        #[arg(long, required = true)]
+        reason: String,
+        /// Who declares it (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
+        #[arg(long)]
+        actor: Option<String>,
+    },
     /// Withdraw decisions or declarations by the `id` of their record (needs
     /// --reason), with one revocation.
     Withdraw {

@@ -2,7 +2,8 @@
 //!
 //! A [`Record`] is a [`Decision`] about one document (approve, deny, deprecate,
 //! retire), a [`SameMeaning`] (a declaration that an edit of a document or a file
-//! keeps the meaning; see its page), or a [`Revocation`] of decisions and
+//! keeps the meaning; see its page), a [`Moved`] (a declaration that an artifact moved
+//! from one name to another; see its page), or a [`Revocation`] of decisions and
 //! declarations. The domain holds a record as a value
 //! with no wire format: [`Record::to_canon`] and [`Record::from_canon`] are the two
 //! ends of its canonical form, and an adapter turns that form into JSON and back.
@@ -261,7 +262,8 @@ impl ArtifactPin {
         &self.link
     }
 
-    /// The space and the name of the artifact.
+    /// The space and the name of the artifact, as the pin wrote them. The name it is
+    /// read as now, after a declared move, is a [`ReadPin`]'s.
     pub fn artifact(&self) -> &ArtifactKey {
         &self.artifact
     }
@@ -752,6 +754,8 @@ pub enum Record {
     Revocation(Revocation),
     /// A declaration that an edit keeps the meaning.
     SameMeaning(SameMeaning),
+    /// A declaration that an artifact moved from one name to another.
+    Moved(Moved),
 }
 
 /// The hash of a record's canonical form, which tells two records of one id apart.
@@ -882,6 +886,9 @@ pub enum RecordProblem {
     /// The name of an artifact is no name.
     #[error("the name of an artifact in the record is not one")]
     BadArtifactName(#[source] ArtifactNameProblem),
+    /// The record is well formed but breaks an invariant of a declaration of a move.
+    #[error("the record breaks an invariant of a declaration of a move")]
+    Moved(#[source] MovedProblem),
 }
 
 type CanonMap = BTreeMap<String, Canon>;
@@ -1038,6 +1045,7 @@ tags!(
         Decision => "decision",
         Revocation => "revocation",
         SameMeaning => "same_meaning",
+        Moved => "moved",
     }
 );
 
@@ -1420,6 +1428,11 @@ const SAME_MEANING_KEYS: [&str; 9] = [
     "v", "kind", "id", "subject", "from", "to", "actor", "at", "reason",
 ];
 
+/// The keys a declaration of a move has, and no more.
+const MOVED_KEYS: [&str; 9] = [
+    "v", "kind", "id", "space", "from", "to", "actor", "at", "reason",
+];
+
 impl Record {
     /// The identity of the record.
     pub fn id(&self) -> JudgementId {
@@ -1427,6 +1440,7 @@ impl Record {
             Self::Decision(d) => d.id,
             Self::Revocation(r) => r.id,
             Self::SameMeaning(s) => s.id,
+            Self::Moved(m) => m.id,
         }
     }
 
@@ -1448,6 +1462,7 @@ impl Record {
                 ("reason", Canon::str(r.reason.as_str())),
             ]),
             Self::SameMeaning(s) => same_meaning_canon(s),
+            Self::Moved(m) => moved_canon(m),
         }
     }
 
@@ -1471,6 +1486,7 @@ impl Record {
             Some(RecordKind::Decision) => decision_from(map).map(Self::Decision),
             Some(RecordKind::Revocation) => revocation_from(map).map(Self::Revocation),
             Some(RecordKind::SameMeaning) => same_meaning_from(map).map(Self::SameMeaning),
+            Some(RecordKind::Moved) => moved_from(map).map(Self::Moved),
             None => Err(RecordProblem::UnknownKind {
                 found: kind.to_owned(),
             }),
@@ -1756,6 +1772,35 @@ fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
     Ok(declared)
 }
 
+fn moved_canon(m: &Moved) -> Canon {
+    Canon::map([
+        ("v", Canon::Int(VERSION)),
+        ("kind", Canon::str(RecordKind::Moved.as_str())),
+        ("id", Canon::str(m.id.to_string())),
+        ("space", Canon::str(m.of.space().as_str())),
+        ("from", Canon::str(m.of.from_name().as_str())),
+        ("to", Canon::str(m.of.to_name().as_str())),
+        ("actor", Canon::str(m.actor.as_str())),
+        ("at", Canon::Int(m.at.0)),
+        ("reason", Canon::str(m.reason.as_str())),
+    ])
+}
+
+fn moved_from(map: &CanonMap) -> Result<Moved, RecordProblem> {
+    exact(map, &MOVED_KEYS)?;
+    let Common {
+        id,
+        actor,
+        at,
+        reason,
+    } = read_common(map, required_reason)?;
+    let space = Space::new(text(map, "space")?).map_err(RecordProblem::BadSpace)?;
+    let name_of =
+        |key: &str| ArtifactName::new(text(map, key)?).map_err(RecordProblem::BadArtifactName);
+    let of = MovedOf::new(space, name_of("from")?, name_of("to")?).map_err(RecordProblem::Moved)?;
+    Ok(Moved::new(id, of, actor, at, reason))
+}
+
 /// What the records of a ledger say about one document: the declared status.
 ///
 /// It says what people decided, not whether it still holds: that is what
@@ -1842,6 +1887,7 @@ struct Grouped {
     decisions: BTreeMap<JudgementId, Decision>,
     revocations: BTreeMap<JudgementId, Revocation>,
     same_meanings: BTreeMap<JudgementId, SameMeaning>,
+    moveds: BTreeMap<JudgementId, Moved>,
     conflicted: BTreeSet<JudgementId>,
     /// The conflicts.
     problems: Vec<LedgerProblem>,
@@ -1863,6 +1909,7 @@ impl Grouped {
             decisions: BTreeMap::new(),
             revocations: BTreeMap::new(),
             same_meanings: BTreeMap::new(),
+            moveds: BTreeMap::new(),
             conflicted: BTreeSet::new(),
             problems: Vec::new(),
         };
@@ -1877,6 +1924,9 @@ impl Grouped {
                 }
                 Count::One(Record::SameMeaning(s)) => {
                     grouped.same_meanings.insert(id, s);
+                }
+                Count::One(Record::Moved(m)) => {
+                    grouped.moveds.insert(id, m);
                 }
                 Count::Many(records) => {
                     grouped.conflicted.insert(id);
@@ -1898,6 +1948,7 @@ fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<
         decisions,
         revocations,
         same_meanings,
+        moveds,
         conflicted,
         ..
     } = grouped;
@@ -1914,7 +1965,10 @@ fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<
                     revocation: *id,
                     target,
                 });
-            } else if decisions.contains_key(&target) || same_meanings.contains_key(&target) {
+            } else if decisions.contains_key(&target)
+                || same_meanings.contains_key(&target)
+                || moveds.contains_key(&target)
+            {
                 revoked.insert(target);
             } else {
                 problems.push(LedgerProblem::RevokesUnknown {
@@ -1933,6 +1987,8 @@ pub struct Ledger {
     decisions: BTreeMap<JudgementId, Decision>,
     /// The declarations of the same meaning that are not revoked.
     same_meanings: BTreeMap<JudgementId, SameMeaning>,
+    /// The declarations of moves that are not revoked.
+    moveds: BTreeMap<JudgementId, Moved>,
     revoked: BTreeSet<JudgementId>,
     subjects: BTreeSet<DocId>,
     problems: Vec<LedgerProblem>,
@@ -1954,13 +2010,16 @@ impl Ledger {
         let Grouped {
             decisions,
             mut same_meanings,
+            mut moveds,
             ..
         } = grouped;
         same_meanings.retain(|id, _| !revoked.contains(id));
+        moveds.retain(|id, _| !revoked.contains(id));
         let subjects = decisions.values().map(|d| d.subject).collect();
         Self {
             decisions,
             same_meanings,
+            moveds,
             revoked,
             subjects,
             problems,
@@ -2003,9 +2062,74 @@ impl Ledger {
         declared_way(edges, *a, *b)
     }
 
+    /// As [`Ledger::artifact_same_meaning`], for a pin as it is read now: the
+    /// declarations about each name of its way count (the name it wrote, and each
+    /// name a move took it to), since what moved is one thing under each of them.
+    pub fn pin_same_meaning(
+        &self,
+        pin: &ReadPin,
+        a: &ArtifactHash,
+        b: &ArtifactHash,
+    ) -> Option<NonEmptyVec<JudgementId>> {
+        let mut names: BTreeSet<&ArtifactKey> =
+            BTreeSet::from([pin.pin().artifact(), pin.read_as()]);
+        names.extend(pin.moved().into_iter().flat_map(MovedTo::moved_from));
+        let edges = self.same_meanings.values().flat_map(|s| match &s.of {
+            SameMeaningOf::Artifact {
+                artifact: of,
+                from,
+                to,
+            } if names.contains(of) => from.iter().map(|f| (s.id, *f, *to)).collect::<Vec<_>>(),
+            _ => Vec::new(),
+        });
+        declared_way(edges, *a, *b)
+    }
+
     /// A declaration that is not revoked, by its identity.
     pub fn same_meaning(&self, id: JudgementId) -> Option<&SameMeaning> {
         self.same_meanings.get(&id)
+    }
+
+    /// The way the name `artifact`, pinned by an approval made at `made`, is read
+    /// now: through the declarations of moves, not revoked, of its space, made at or
+    /// after `made`, in the order of time, each from the name the ones before it led
+    /// to; of two moves of one name at one time, the larger identity, as for a
+    /// decision. None when no move applies. The one place a pin is read through moves
+    /// (see [`Moved`]).
+    pub fn moved_to(&self, artifact: &ArtifactKey, made: JudgedAt) -> Option<MovedTo> {
+        moved_way(self.moveds.values(), artifact, made)
+    }
+
+    /// A declaration of a move that is not revoked, by its identity.
+    pub fn moved(&self, id: JudgementId) -> Option<&Moved> {
+        self.moveds.get(&id)
+    }
+
+    /// The artifact pins of the approval that stands about `id`, each as it is read
+    /// now ([`Ledger::moved_to`], at the time of that approval), in the order of the
+    /// record; none when no approval stands. A move is of something that was there,
+    /// so a pin that pinned its name as absent is read as written. The one maker of
+    /// a [`ReadPin`]: what
+    /// freshness, a declaration and a snapshot compare with what is there now.
+    pub fn read_pins(&self, id: DocId) -> Vec<ReadPin> {
+        let Some(decision) = self.standing_decision(id) else {
+            return Vec::new();
+        };
+        let DecisionVerb::Approve { artifacts, .. } = &decision.verb else {
+            return Vec::new();
+        };
+        artifacts
+            .iter()
+            .map(|pin| ReadPin {
+                pin: pin.clone(),
+                // A move is of something that was there: a pin of a name with nothing
+                // behind it held no content to move, and is read as written.
+                moved: match pin.seen {
+                    PinnedArtifact::Present { .. } => self.moved_to(&pin.artifact, decision.at),
+                    PinnedArtifact::Absent => None,
+                },
+            })
+            .collect()
     }
 
     /// Whether the record `id` can be withdrawn: it is a decision or a declaration of
@@ -2014,7 +2138,10 @@ impl Ledger {
     pub fn check_withdraw(&self, id: JudgementId) -> Result<(), WithdrawRefusal> {
         if self.revoked.contains(&id) {
             Err(WithdrawRefusal::AlreadyWithdrawn { id })
-        } else if self.decisions.contains_key(&id) || self.same_meanings.contains_key(&id) {
+        } else if self.decisions.contains_key(&id)
+            || self.same_meanings.contains_key(&id)
+            || self.moveds.contains_key(&id)
+        {
             Ok(())
         } else {
             Err(WithdrawRefusal::Unknown { id })
@@ -2301,6 +2428,10 @@ fn expires_after(at: JudgedAt, expires: Option<JudgedAt>) -> Result<(), Decision
 /// now, which would stand on the same and be as stale; a document fresh only because
 /// people declared an edit keeps the meaning has a new hash, and is not. Who
 /// approves and why are not what an approval stands on, and are not compared.
+///
+/// The pins compared are the stored ones ([`ArtifactPin`]), never as read through a
+/// move ([`ReadPin`]): a new approval would record the name it pins now, so one made
+/// after a move pins the new name, which the record that stands does not, and adds it.
 pub fn repeated(
     ledger: &Ledger,
     frame: &ApproveFrame,
@@ -2372,8 +2503,13 @@ pub fn frame_retire(shelf: &Shelf, id: DocId) -> RetireFrame {
     RetireFrame { subject: id, seen }
 }
 
+mod moved;
 mod same_meaning;
 
+use moved::moved_way;
+pub use moved::{
+    Moved, MovedOf, MovedProblem, MovedRefusal, MovedTo, ReadPin, frame_moved, moved_space,
+};
 use same_meaning::declared_way;
 pub use same_meaning::{
     SameMeaning, SameMeaningOf, SameMeaningProblem, SameMeaningRefusal, SameMeaningTarget,
@@ -2388,6 +2524,8 @@ mod comparison_tests;
 mod frame_tests;
 #[cfg(test)]
 mod merge_tests;
+#[cfg(test)]
+mod moved_tests;
 #[cfg(test)]
 mod revocation_tests;
 #[cfg(test)]

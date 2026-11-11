@@ -81,7 +81,7 @@ fn a_changed_artifact_makes_the_approval_stale_and_is_its_root() {
     let causes = causes_of(&assessment, 2);
     assert!(
         matches!(causes.as_slice(), [Cause::ArtifactChanged { pin, now }]
-            if pin.artifact() == &file_artifact("tests/a.rs") && *now == h("b")),
+            if pin.pin().artifact() == &file_artifact("tests/a.rs") && *now == h("b")),
         "{causes:?}"
     );
     assert_eq!(causes[0].severity(), Severity::Stale);

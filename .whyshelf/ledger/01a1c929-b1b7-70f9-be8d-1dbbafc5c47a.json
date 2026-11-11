@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794376315163,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c929-b1b7-70f9-be8d-1dbbafc5c47a",
+  "kind": "decision",
+  "reason": "judge moved records that an artifact moved, and the pins made before it are read through it as a separate value; a link left behind is one cause (#42); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "cfd16634e0a889968935ad230e1b909ceef8509f",
+  "seen": "sha256:ff092ee86db4f8f3df11e4875803a3fc3820f18955fbf4a9580a5e7d11aac95c",
+  "seen_address": "bd5696c569e486393147f833c76914a4d3ca4652",
+  "subject": "01a1c912-1691-7698-adfe-26b7440a52ad",
+  "v": 1,
+  "verb": "approve"
+}

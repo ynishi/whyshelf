@@ -29,8 +29,8 @@
 use std::collections::BTreeSet;
 
 use crate::domain::id::DocId;
-use crate::domain::shelf::freshness::{Freshness, Notice, Standing};
-use crate::domain::shelf::ledger::JudgedAt;
+use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing};
+use crate::domain::shelf::ledger::{JudgedAt, MovedTo};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::schema::{ArtifactPropagation, EntryName};
@@ -42,8 +42,9 @@ use super::error::ShelfError;
 use super::load::{Loaded, View, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
-    Absent, BookCount, BooksCheck, DownstreamEdge, GetReport, MapReport, StaleEntry, StaleReport,
-    StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
+    Absent, BookCount, BooksCheck, DownstreamEdge, GetReport, MapReport, MovedAway, StaleEntry,
+    StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge,
+    UpstreamEnd,
 };
 
 /// The identity a reference names, or why it names none.
@@ -170,12 +171,36 @@ impl<P: ShelfRead> ShelfApp<P> {
                     })
             })
             .collect();
+        // The links behind a move: the `ArtifactMoved` causes of every approval.
+        let moved = assessment
+            .standings()
+            .iter()
+            .flat_map(|(id, standing)| {
+                let key = loaded.shelf.doc(*id).map(|doc| doc.key().clone());
+                let causes = match standing {
+                    Standing::Approved(Freshness::Degraded(d)) => d.causes().iter().collect(),
+                    _ => Vec::new(),
+                };
+                causes.into_iter().filter_map(move |cause| match cause {
+                    Cause::ArtifactMoved { link, written, pin } => Some(MovedAway {
+                        doc: *id,
+                        key: key.clone(),
+                        link: link.clone(),
+                        artifact: written.clone(),
+                        moved_to: pin.read_as().clone(),
+                        declared: pin.moved().map(MovedTo::declared)?,
+                    }),
+                    _ => None,
+                })
+            })
+            .collect();
         Ok(BooksCheck::Checked {
             books,
             health: view.health(),
             uncovered,
             absent,
             unknown,
+            moved,
         })
     }
 

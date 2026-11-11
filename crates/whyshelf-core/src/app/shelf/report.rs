@@ -137,7 +137,31 @@ pub enum BooksCheck {
         /// [`Notice::ArtifactUnknown`](crate::domain::shelf::freshness::Notice::ArtifactUnknown)
         /// notices of every document). They leave the check clean too.
         unknown: Vec<Unknown>,
+        /// The names links write that a pin of an approval was moved away from since
+        /// (the
+        /// [`Cause::ArtifactMoved`](crate::domain::shelf::freshness::Cause::ArtifactMoved)
+        /// causes of every approval): the approval is stale, and the link is to
+        /// write the name the pin is read as. They leave the check clean too.
+        moved: Vec<MovedAway>,
     },
+}
+
+/// A name a link writes that an approval pinned, declared moved since.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MovedAway {
+    /// The document.
+    pub doc: DocId,
+    /// Its key.
+    pub key: Option<DocKey>,
+    /// The link.
+    pub link: EntryName,
+    /// The space and the name the link writes, which the pin's way left (the name
+    /// pinned, or one a chain of moves passed).
+    pub artifact: ArtifactKey,
+    /// The name the pin is read as now.
+    pub moved_to: ArtifactKey,
+    /// The declarations of the moves, in order.
+    pub declared: NonEmptyVec<JudgementId>,
 }
 
 /// A name a link to artifacts writes that has nothing there.

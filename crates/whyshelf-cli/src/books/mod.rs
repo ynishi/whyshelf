@@ -20,8 +20,8 @@
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
+//! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
 //! | 3 | the run failed (a file could not be read or written) |
 //!
 //! `new` is the one command that writes a new document. Its values arrive as text
@@ -52,9 +52,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
-    ApproveStaleRequest, ErrorClass, JudgeRequest, Judgement, MapReport, NewDocRequest,
-    SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError, StaleReport, UnlinkedAsk,
-    UnlinkedFilter, UnlinkedReport, WithdrawRequest,
+    ApproveStaleRequest, ErrorClass, JudgeRequest, Judgement, MapReport, MovedRequest,
+    NewDocRequest, SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError, StaleReport,
+    UnlinkedAsk, UnlinkedFilter, UnlinkedReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -282,6 +282,10 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
                 .same_meaning(requests)
                 .await
                 .map(|r| print(&output::same_meaning(&r))),
+            Ok(JudgeRun::Moved(requests)) => ShelfApp::new(project)
+                .moved(requests)
+                .await
+                .map(|r| print(&output::moved(&r))),
             Ok(JudgeRun::Withdraw(request)) => ShelfApp::new(project)
                 .withdraw(request)
                 .await
@@ -300,12 +304,14 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
     ExitCode::from(exit as u8)
 }
 
-/// What a `judge` command asks for: decisions, or declarations that an edit keeps
-/// the meaning. They are two use cases, with requests of their own.
+/// What a `judge` command asks for: decisions, declarations that an edit keeps the
+/// meaning or that an artifact moved, or a withdrawal. Each is a use case, with
+/// requests of its own.
 enum JudgeRun {
     Decide(Vec<JudgeRequest>),
     Stale(ApproveStaleRequest),
     Same(Vec<SameMeaningRequest>),
+    Moved(Vec<MovedRequest>),
     Withdraw(WithdrawRequest),
 }
 
@@ -357,6 +363,19 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
                     })
                     .collect(),
             ));
+        }
+        Verb::Moved {
+            from,
+            to,
+            reason,
+            actor,
+        } => {
+            return Ok(JudgeRun::Moved(vec![MovedRequest {
+                from,
+                to,
+                reason: NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?,
+                actor: actor_of(actor)?,
+            }]));
         }
         Verb::Withdraw {
             records,
