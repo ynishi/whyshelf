@@ -11,14 +11,17 @@ use serde_json::Value;
 use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, Created, Declared, DeclaredAbout, DiffItem, DiffReport,
     DownstreamEdge, ErrorClass, FmtReport, GetReport, Health, Judged, LeftAloneWhy, LeftOut,
-    LeftOutWhy, MapReport, Names, Row, ShelfError, StaleApproved, StaleReport, StatusReport,
-    TraceReport, UnlinkedEntry, UnlinkedReport, UpstreamEdge, UpstreamEnd,
+    LeftOutWhy, MapReport, Names, Row, ShelfError, StaleApproved, StaleReport, StatsReport,
+    StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::build::NewDocProblem;
+use whyshelf_core::domain::shelf::doc::DocKey;
+use whyshelf_core::domain::shelf::schema::BookName;
 use whyshelf_core::domain::shelf::snapshot::{
     ItemNow, ItemRole, Retrieval, SeenHash, SnapshotItem,
 };
+use whyshelf_core::domain::shelf::stats::Origin as ChangedPin;
 
 use super::textdiff;
 use whyshelf_core::domain::id::DocId;
@@ -594,19 +597,9 @@ pub struct OriginOut {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StartOut {
     /// A document (its key is null when no valid document has it now).
-    Doc {
-        /// The document.
-        doc: DocRef,
-    },
+    Doc(DocNamed),
     /// An artifact.
-    Artifact {
-        /// Its name (kept from when every name was a path; the same as `name`).
-        path: String,
-        /// Its name.
-        name: String,
-        /// Its space.
-        space: String,
-    },
+    Artifact(ArtifactNamed),
     /// The declaration of the books: a link to artifacts declares another comparison.
     Declaration,
     /// A cycle (see `health.cycles`).
@@ -616,6 +609,153 @@ pub enum StartOut {
         /// Its smallest member, by identity.
         smallest: DocRef,
     },
+}
+
+/// A document an origin names, in `stale` and in `stats`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DocNamed {
+    /// The document.
+    pub doc: DocRef,
+}
+
+/// An artifact an origin names, in `stale` and in `stats`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ArtifactNamed {
+    /// Its name (kept from when every name was a path; the same as `name`).
+    pub path: String,
+    /// Its name.
+    pub name: String,
+    /// Its space.
+    pub space: String,
+}
+
+impl ArtifactNamed {
+    fn of(artifact: &ArtifactKey) -> Self {
+        Self {
+            path: artifact.name().to_string(),
+            name: artifact.name().to_string(),
+            space: artifact.space().to_string(),
+        }
+    }
+}
+
+/// The answer of `stats`. The measures and the order of every list are defined on
+/// the page of `whyshelf_core::domain::shelf::stats`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct StatsOut {
+    /// The `--since` as it was given; null without it.
+    pub since: Option<String>,
+    /// The approvals, revoked ones included, per document and per book.
+    pub approvals: ApprovalsOut,
+    /// Per book, the milliseconds from a document's identity to its first approval
+    /// that is not revoked.
+    pub pending: Vec<BookPendingOut>,
+    /// The runs of `judge`: the decisions that share their time and their actor.
+    pub runs: RunsOut,
+    /// The documents and artifacts whose pinned hash differed under an approval made
+    /// again from the approval before it, the most counted first.
+    pub origins: Vec<OriginCountOut>,
+    /// What is wrong around the documents.
+    pub health: HealthOut,
+}
+
+/// The approvals, per document and per book.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ApprovalsOut {
+    /// Each document with an approval, the most approved again first, then by key.
+    pub docs: Vec<DocApprovalsOut>,
+    /// Each book in the order of the declaration, then (`book` null) the documents
+    /// that are no valid document now.
+    pub books: Vec<BookApprovalsOut>,
+}
+
+/// The approvals of one document.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DocApprovalsOut {
+    /// The document.
+    pub doc: DocRef,
+    /// Its approvals, revoked or not.
+    pub approvals: usize,
+    /// Those after an earlier approval of it that is not revoked.
+    pub again: usize,
+    /// Those revoked.
+    pub revoked: usize,
+}
+
+/// The approvals of the documents of one book.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct BookApprovalsOut {
+    /// The book; null for the documents that are no valid document now.
+    pub book: Option<String>,
+    /// Its documents with an approval.
+    pub docs: usize,
+    /// Their approvals, revoked or not.
+    pub approvals: usize,
+    /// Those after an earlier approval of the same document that is not revoked.
+    pub again: usize,
+    /// Those revoked.
+    pub revoked: usize,
+}
+
+/// The pending times of one book.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct BookPendingOut {
+    /// The book; null for the documents that are no valid document now.
+    pub book: Option<String>,
+    /// How many documents were approved.
+    pub count: usize,
+    /// The median, nearest-rank, in milliseconds; null when none.
+    pub median_ms: Option<i64>,
+    /// The 90th percentile, nearest-rank, in milliseconds; null when none.
+    pub p90_ms: Option<i64>,
+    /// The longest, in milliseconds; null when none.
+    pub max_ms: Option<i64>,
+}
+
+/// The runs of `judge`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct RunsOut {
+    /// How many runs.
+    pub count: usize,
+    /// The median number of decisions of a run, nearest-rank; null when none.
+    pub median: Option<i64>,
+    /// The 90th percentile of the same, nearest-rank; null when none.
+    pub p90: Option<i64>,
+    /// The most decisions of a run; null when none.
+    pub max: Option<i64>,
+    /// The largest runs, the largest first, then the earliest.
+    pub largest: Vec<RunOut>,
+}
+
+/// One run.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct RunOut {
+    /// When (unix milliseconds).
+    pub at: i64,
+    /// Who.
+    pub actor: String,
+    /// How many decisions.
+    pub size: usize,
+}
+
+/// A document or an artifact that changed under approvals made again.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct OriginCountOut {
+    /// What it is.
+    pub origin: ChangedOut,
+    /// Under how many approvals made again.
+    pub count: usize,
+}
+
+/// What an origin over time is: a document or an artifact, written as `stale`'s
+/// origins write them.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ChangedOut {
+    /// A document (its key is null when no valid document has it now).
+    Doc(DocNamed),
+    /// An artifact.
+    Artifact(ArtifactNamed),
 }
 
 /// What an item of an approval is, and which document or file it names.
@@ -929,6 +1069,7 @@ pub fn schemas() -> SchemasOut {
     put("trace", schema_for!(TraceOut));
     put("unlinked", schema_for!(UnlinkedOut));
     put("stale", schema_for!(StaleOut));
+    put("stats", schema_for!(StatsOut));
     put("diff", schema_for!(DiffOut));
     put("judge", schema_for!(JudgedAllOut));
     put("judge approve --stale", schema_for!(StaleApprovedOut));
@@ -1818,14 +1959,10 @@ pub fn stale(report: &StaleReport) -> StaleOut {
             .iter()
             .map(|group| OriginOut {
                 start: match &group.origin {
-                    Origin::Doc(id) => StartOut::Doc {
+                    Origin::Doc(id) => StartOut::Doc(DocNamed {
                         doc: namer.doc(*id),
-                    },
-                    Origin::Artifact(artifact) => StartOut::Artifact {
-                        path: artifact.name().to_string(),
-                        name: artifact.name().to_string(),
-                        space: artifact.space().to_string(),
-                    },
+                    }),
+                    Origin::Artifact(artifact) => StartOut::Artifact(ArtifactNamed::of(artifact)),
                     Origin::Declaration => StartOut::Declaration,
                     Origin::Cycle(cycle) => StartOut::Cycle {
                         among: match cycle.source {
@@ -1850,6 +1987,88 @@ pub fn stale(report: &StaleReport) -> StaleOut {
                 name: u.artifact.name().to_string(),
                 space: u.artifact.space().to_string(),
                 why: u.why.to_string(),
+            })
+            .collect(),
+        health: namer.health(&report.health),
+    }
+}
+
+/// The answer of `stats`, with `--since` as it was given.
+pub fn stats(report: &StatsReport, since: Option<&str>) -> StatsOut {
+    let namer = Namer(&report.names);
+    let stats = &report.stats;
+    let doc = |id: DocId, key: Option<&DocKey>| DocRef {
+        id: id.to_string(),
+        key: key.map(ToString::to_string),
+    };
+    let book = |b: Option<&BookName>| b.map(ToString::to_string);
+    StatsOut {
+        since: since.map(str::to_owned),
+        approvals: ApprovalsOut {
+            docs: stats
+                .approvals
+                .docs
+                .iter()
+                .map(|d| DocApprovalsOut {
+                    doc: doc(d.doc, d.key.as_ref()),
+                    approvals: d.approvals,
+                    again: d.again,
+                    revoked: d.revoked,
+                })
+                .collect(),
+            books: stats
+                .approvals
+                .books
+                .iter()
+                .map(|b| BookApprovalsOut {
+                    book: book(b.book.as_ref()),
+                    docs: b.docs,
+                    approvals: b.approvals,
+                    again: b.again,
+                    revoked: b.revoked,
+                })
+                .collect(),
+        },
+        pending: stats
+            .pending
+            .iter()
+            .map(|p| BookPendingOut {
+                book: book(p.book.as_ref()),
+                count: p.millis.count,
+                median_ms: p.millis.median,
+                p90_ms: p.millis.p90,
+                max_ms: p.millis.max,
+            })
+            .collect(),
+        runs: RunsOut {
+            count: stats.runs.sizes.count,
+            median: stats.runs.sizes.median,
+            p90: stats.runs.sizes.p90,
+            max: stats.runs.sizes.max,
+            largest: stats
+                .runs
+                .largest
+                .iter()
+                .map(|r| RunOut {
+                    at: r.at.millis(),
+                    actor: r.actor.to_string(),
+                    size: r.size,
+                })
+                .collect(),
+        },
+        origins: stats
+            .origins
+            .iter()
+            .map(|o| OriginCountOut {
+                origin: match &o.origin {
+                    ChangedPin::Doc { doc: id, key } => ChangedOut::Doc(DocNamed {
+                        doc: doc(*id, key.as_ref()),
+                    }),
+                    ChangedPin::Artifact(artifact) => {
+                        ChangedOut::Artifact(ArtifactNamed::of(artifact))
+                    }
+                },
+                count: o.count,
             })
             .collect(),
         health: namer.health(&report.health),
@@ -2538,6 +2757,7 @@ mod tests {
             "get --approved",
             "trace",
             "stale",
+            "stats",
             "diff",
             "judge",
             "judge approve --stale",
@@ -2570,6 +2790,22 @@ mod tests {
         let diff = serde_json::to_string(&outputs["diff"]).unwrap();
         for field in ["approved_hash", "current_hash", "retrieval", "diff"] {
             assert!(diff.contains(field), "{field}");
+        }
+        let stats = serde_json::to_string(&outputs["stats"]).unwrap();
+        for field in [
+            "since",
+            "approvals",
+            "again",
+            "revoked",
+            "pending",
+            "median_ms",
+            "p90_ms",
+            "runs",
+            "largest",
+            "origins",
+            "health",
+        ] {
+            assert!(stats.contains(&format!("\"{field}\"")), "{field}");
         }
         // A cause names the artifact it is about, beside the fields it had.
         let stale = serde_json::to_string(&outputs["stale"]).unwrap();

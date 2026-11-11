@@ -133,6 +133,11 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// Make several judgements in order, on one reading of the project, and append
     /// them all, or none.
     ///
+    /// Every record of the run takes one time, the time of the reading: the clock
+    /// is read once, by the load, and never again in the run. So the records of one
+    /// run share their time and their actor, which is how
+    /// [`stats`](crate::domain::shelf::stats) tells a run.
+    ///
     /// Each is decided on the ledger as the ones before it left it, so a run that
     /// approves a finding and then the spec that stands on it frames the spec on
     /// that approval. Every judgement is decided before anything is written: when one

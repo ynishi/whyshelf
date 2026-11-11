@@ -1,0 +1,68 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::judge_all",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::same_meaning",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::LedgerAppend",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794362561196,
+  "expires": null,
+  "frame": [
+    {
+      "address": "80b7ca88aa572685d4aa25aa6a50260a271f8243",
+      "hash": "sha256:36a8f23657089860a548249154b9d58c9d02474608ce556359475db853a351c9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    }
+  ],
+  "id": "01a1c857-d340-7419-896b-83bf6231ca35",
+  "kind": "decision",
+  "reason": "DocId gives the time its identity carries, every decision of a run takes one time (DEC-27 restated), the stats output shares the named views, and the rust-item tests no longer share a directory (#58); checked by a blind review",
+  "revision": "fb8a971b32f24f2986c165b1294b4da42a47a65d",
+  "seen": "sha256:87a8e277def26c6df1d57bde85def6121b2782a0fa7a29f3a48ae050991f52e2",
+  "seen_address": "5f03e98906d459101f2a30647ce8fe0177c1d5aa",
+  "subject": "01a1c55d-ce54-705b-a4fb-17382395564a",
+  "v": 1,
+  "verb": "approve"
+}

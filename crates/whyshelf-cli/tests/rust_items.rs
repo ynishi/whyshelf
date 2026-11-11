@@ -12,6 +12,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const BOOKS: &str = r#"[[book]]
@@ -54,14 +55,20 @@ fn page(ids: &[&str], text: &str) -> String {
 /// removed when it goes out of scope.
 struct Project(PathBuf);
 
+/// How many projects this process has made: with the test's name, it keeps two
+/// tests that run at once (in the same tick of a coarse clock) out of one directory.
+static MADE: AtomicUsize = AtomicUsize::new(0);
+
 impl Project {
-    fn new(items: &[&str]) -> Self {
+    /// The project of the test `test`, whose note links to these items.
+    fn new(test: &str, items: &[&str]) -> Self {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("a clock after 1970")
             .as_nanos();
+        let count = MADE.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!(
-            "whyshelf-rust-items-{}-{nanos}",
+            "whyshelf-rust-items-{test}-{}-{count}-{nanos}",
             std::process::id()
         ));
         fs::create_dir_all(dir.join(".whyshelf")).unwrap();
@@ -138,7 +145,10 @@ fn stderr(output: &Output) -> Vec<String> {
 
 #[test]
 fn a_link_of_the_preset_rustdoc_stands_on_the_items_being_there() {
-    let project = Project::new(&["demo::Shelf", "demo::Shelf::build", "demo::Missing"]);
+    let project = Project::new(
+        "preset",
+        &["demo::Shelf", "demo::Shelf::build", "demo::Missing"],
+    );
     let map = project.json(&["map"]);
     assert_eq!(map["links"][0]["preset"], "rustdoc");
 
@@ -178,7 +188,7 @@ fn a_link_of_the_preset_rustdoc_stands_on_the_items_being_there() {
 
 #[test]
 fn a_crate_whose_docs_are_not_built_is_unknown_and_no_approval_stands_on_it() {
-    let project = Project::new(&["demo::Shelf", "other::Item"]);
+    let project = Project::new("not-built", &["demo::Shelf", "other::Item"]);
     let output = project.run(&["check"]);
     assert_eq!(output.status.code(), Some(0));
     let check = json(&output);
@@ -201,7 +211,7 @@ fn a_crate_whose_docs_are_not_built_is_unknown_and_no_approval_stands_on_it() {
 
 #[test]
 fn the_gate_fails_while_an_approval_stands_on_a_name_that_cannot_be_told() {
-    let project = Project::new(&["demo::Shelf"]);
+    let project = Project::new("gate", &["demo::Shelf"]);
     assert_eq!(
         project.run(&["judge", "approve", "N-1"]).status.code(),
         Some(0)
@@ -247,7 +257,7 @@ fn the_gate_fails_while_an_approval_stands_on_a_name_that_cannot_be_told() {
 
 #[test]
 fn a_text_that_is_no_rust_path_makes_the_document_invalid() {
-    let project = Project::new(&["demo::Vec<T>"]);
+    let project = Project::new("no-path", &["demo::Vec<T>"]);
     let check = project.json(&["check"]);
     assert_eq!(check["clean"], false, "{check}");
     assert!(check.to_string().contains("no Rust path"), "{check}");

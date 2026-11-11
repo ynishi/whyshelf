@@ -54,6 +54,16 @@ pub enum BooksCommand {
         #[arg(long)]
         exit_code: bool,
     },
+    /// How the work went, from the ledger and the documents: approvals made again,
+    /// the time documents stayed pending, the runs of `judge` (one that writes no
+    /// decision, as `revoke`, `same` and `withdraw`, is no run here), and the
+    /// documents and artifacts that changed under approvals made again; it writes
+    /// nothing.
+    Stats {
+        /// Only the records at or after this time (RFC 3339, or a date).
+        #[arg(long)]
+        since: Option<String>,
+    },
     /// Each item of the approval that stands about a document, as it was approved and
     /// as it is now, with a line diff where both are text.
     Diff {
