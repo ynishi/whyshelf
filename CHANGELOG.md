@@ -111,11 +111,21 @@ and this project adheres to
   link that still writes a name left behind is the cause `artifact_moved`,
   listed by `check` and warned of on stderr. `get --approved`, `diff` and the
   causes show the name pinned and, beside it, `read_as` (#42).
+- `whyshelf moves` lists the names approvals pinned that are gone now, and
+  the moves each space can suggest for them: for files, one whose content is
+  what was pinned, and the renames Git sees between the approval's revision
+  and the index. It declares nothing and writes nothing (#69).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
 ### Fixed
 
+- Every call of Git goes through one runner that lets nothing of the
+  repository choose a program or write: a clean or process filter the
+  repository configures no longer runs when an address is made, a partial
+  clone fetches nothing, and every call stops after a bound of time. A name of
+  a file whose path leaves the root through a symbolic link cannot be told,
+  where it was read from outside the root (#69).
 - `--since` and `--until` take an RFC 3339 time with an offset or `Z`, or a
   date written `YYYY-MM-DD` (the start of that day in UTC). A time with no
   offset was read as its date, its time dropped in silence; it is now refused
