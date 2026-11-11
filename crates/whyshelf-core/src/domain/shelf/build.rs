@@ -534,6 +534,20 @@ pub enum FailureTag {
     Unknown,
 }
 
+/// What the tag says of the document, as a clause: `its files are invalid`, `no file
+/// in the books' ranges carries it` (a file a book's range leaves out, or none at
+/// all: the shelf reads no file outside the ranges, so it cannot tell the two
+/// apart), `whether a file carries it cannot be told`.
+impl std::fmt::Display for FailureTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Invalid => "its files are invalid",
+            Self::Gone => "no file in the books' ranges carries it",
+            Self::Unknown => "whether a file carries it cannot be told",
+        })
+    }
+}
+
 impl DocFailure {
     /// Which of the three it is.
     pub fn tag(&self) -> FailureTag {

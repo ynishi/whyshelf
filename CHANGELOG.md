@@ -137,6 +137,11 @@ and this project adheres to
   test in the file, or of whitespace, comments or docs, makes nothing stale.
   It reads the file with a shallow scan of its tokens and runs no program
   (#79).
+- `whyshelf judge exempt <ref>... --from <book>.<link> --reason` records that
+  one document is not expected to be reached by one covering link. It is then
+  no gap of that cover, `check` lists it, and an exemption that is no longer
+  needed, or is held twice, is told until it is withdrawn. An exemption that
+  would be unneeded at once is refused (#78).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 

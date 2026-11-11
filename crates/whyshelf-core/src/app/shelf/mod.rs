@@ -24,6 +24,7 @@
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
 //! | [`moves`](ShelfApp::moves) | no | [`MovesReport`]: the names approvals that stand pinned something at that have nothing behind them now, each with the documents that pin it and the names its space's adapter suggests it moved to (by the same content, or by a rename in the space's history), and the spaces that cannot suggest |
 //! | [`moved`](ShelfApp::moved) | **yes** | [`Moved`](crate::domain::shelf::ledger::Moved): the declarations that an artifact moved from one name to another, after the space's adapter said the old name has nothing and the new one has something |
+//! | [`exempt`](ShelfApp::exempt) | **yes** | [`Exempted`]: the declarations that a document is not expected to be reached by one covering link, each with the document's key |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
 //! | [`init`](ShelfApp::init) | **yes** | [`Initialized`]: the file of the declaration it wrote, and the documents it made beside it, each as `new_doc` makes one |
@@ -36,7 +37,7 @@
 //! way to write. [`judge`](ShelfApp::judge),
 //! [`approve_chosen`](ShelfApp::approve_chosen), [`approve_stale`](ShelfApp::approve_stale),
 //! [`same_meaning`](ShelfApp::same_meaning),
-//! [`moved`](ShelfApp::moved), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc),
+//! [`moved`](ShelfApp::moved), [`exempt`](ShelfApp::exempt), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc),
 //! [`init`](ShelfApp::init) and [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
 //! program run one at a time, by the type. Two processes can still write at once;
 //! that is safe because a record is a file of its own named by its own identity, and
@@ -61,6 +62,7 @@
 mod approve_chosen;
 mod approved;
 mod error;
+mod exempt;
 mod fmt;
 mod init;
 mod judge;
@@ -89,6 +91,8 @@ mod artifact_tests;
 mod comparison_tests;
 #[cfg(test)]
 mod cover_tests;
+#[cfg(test)]
+mod exempt_tests;
 #[cfg(test)]
 mod fake_tests;
 #[cfg(test)]
@@ -121,6 +125,7 @@ pub use approve_chosen::{
     PendingScope,
 };
 pub use error::{ErrorClass, Obstacle, ShelfError};
+pub use exempt::{ExemptRequest, Exempted};
 pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
 pub use init::{InitRequest, Initialized};
 pub use judge::{JudgeRequest, Judgement};
@@ -134,10 +139,10 @@ pub use ports::{
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
-    DownstreamEdge, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport,
-    MovedAway, MovesReport, Names, Row, StaleEntry, StaleReport, StatsReport, StatusReport,
-    TraceReport, Uncovered, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport, UpstreamEdge,
-    UpstreamEnd,
+    DownstreamEdge, ExemptEntry, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy,
+    MapReport, MovedAway, MovesReport, Names, RepeatedExemption, Row, StaleEntry, StaleReport,
+    StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry, UnlinkedLists,
+    UnlinkedReport, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use unlinked::{UnlinkedAsk, UnlinkedFilter};

@@ -12,16 +12,18 @@
 use std::collections::BTreeMap;
 
 use crate::domain::id::DocId;
-use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, SkippedFile};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
+use crate::domain::shelf::exemption::Unneeded;
 use crate::domain::shelf::freshness::{
     Degradation, Notice, OriginGroup, RootCause, Severity, Standing, Successors,
 };
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{
-    Decision, DeclaredStatus, FrameRefusal, JudgementId, LedgerProblem, MoveSuggestions, Record,
+    Decision, DeclaredStatus, Exempt, FrameRefusal, JudgementId, LedgerProblem, MoveSuggestions,
+    Record,
 };
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::HeldBack;
@@ -150,7 +152,66 @@ pub enum BooksCheck {
         /// causes of every approval): the approval is stale, and the link is to
         /// write the name the pin is read as. They leave the check clean too.
         moved: Vec<MovedAway>,
+        /// The exemptions that stand and take the place of a gap (the
+        /// [`Notice::Exempt`](crate::domain::shelf::freshness::Notice::Exempt)
+        /// notices of every document), each with who made it, when and why. An
+        /// exempt document is not in `uncovered`, and leaves the check clean
+        /// whatever the strength of the link.
+        exempt: Vec<ExemptEntry>,
+        /// The exemptions that stand and are no longer needed (the
+        /// [`Notice::ExemptionUnneeded`](crate::domain::shelf::freshness::Notice::ExemptionUnneeded)
+        /// notices), each with why. They leave the check clean too.
+        unneeded: Vec<UnneededExemption>,
+        /// The (document, link)s two or more exemptions that stand are of (the
+        /// [`Notice::ExemptionRepeated`](crate::domain::shelf::freshness::Notice::ExemptionRepeated)
+        /// notices), as merged branches can leave them. They leave the check clean
+        /// too.
+        repeated: Vec<RepeatedExemption>,
+        /// The keys of the valid documents, for the documents the entries name
+        /// (such as those an unneeded exemption's link reaches it from).
+        names: Names,
     },
+}
+
+/// Two or more exemptions that stand of one document from one link.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepeatedExemption {
+    /// The document.
+    pub doc: DocId,
+    /// Its key, when it is valid.
+    pub key: Option<DocKey>,
+    /// The book the exemptions name.
+    pub book: BookName,
+    /// The link they name.
+    pub link: EntryName,
+    /// The exemptions, in the order of identity.
+    pub exemptions: TwoOrMore<JudgementId>,
+}
+
+/// An exemption that stands and takes the place of a gap.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExemptEntry {
+    /// The document.
+    pub doc: DocId,
+    /// Its key.
+    pub key: Option<DocKey>,
+    /// How strongly the link expects to reach the documents of its book.
+    pub severity: CoverSeverity,
+    /// The exemption, with the book and the link, who, when and why.
+    pub record: Exempt,
+}
+
+/// An exemption that stands and is no longer needed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnneededExemption {
+    /// The document.
+    pub doc: DocId,
+    /// Its key, when it is valid.
+    pub key: Option<DocKey>,
+    /// The exemption, with the book and the link, who, when and why.
+    pub record: Exempt,
+    /// Why it is not needed.
+    pub why: Unneeded,
 }
 
 /// A name a link writes that an approval pinned, declared moved since.
@@ -220,7 +281,8 @@ impl BooksCheck {
     /// [`Error`](CoverSeverity::Error) fails to reach. A document a link of
     /// strength [`Warn`](CoverSeverity::Warn) fails to reach is listed in
     /// `uncovered` with its strength and leaves the check clean, as `absent` and
-    /// `unknown` do.
+    /// `unknown` do. A document exempt from a link is not a gap of it, whatever the
+    /// strength, and an exemption no longer needed leaves the check clean too.
     pub fn is_clean(&self) -> bool {
         match self {
             Self::SchemaInvalid(_) => false,

@@ -15,6 +15,7 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem};
 use crate::domain::shelf::doc::DocKey;
+use crate::domain::shelf::exemption::ExemptRefusal;
 use crate::domain::shelf::ledger::{
     DecisionProblem, FrameRefusal, MovedRefusal, SameMeaningProblem, SameMeaningRefusal,
     WithdrawRefusal,
@@ -103,6 +104,11 @@ pub enum ShelfError {
     /// the new one, or either cannot be told now.
     #[error("the declaration of a move is refused")]
     MovedRefused(#[from] MovedRefusal),
+    /// The exemption cannot be made: the document is not valid, the link is no
+    /// covering link into its book, it reaches the document now, the document is
+    /// decided against, or an exemption that stands already exempts it.
+    #[error("the exemption is refused")]
+    ExemptRefused(#[from] ExemptRefusal),
     /// A record named to be withdrawn is no decision or declaration, or is already
     /// withdrawn.
     #[error("the withdrawal is refused")]
@@ -320,6 +326,17 @@ impl ShelfError {
             )
             | Self::Withdraw(
                 WithdrawRefusal::Unknown { .. } | WithdrawRefusal::AlreadyWithdrawn { .. },
+            )
+            // As a reference that names nothing and nothing left to declare: a link
+            // that is no covering link into the document's book, a document it
+            // reaches or that is decided against (an exemption unneeded at once), and
+            // an exemption already made.
+            | Self::ExemptRefused(
+                ExemptRefusal::NotCovering { .. }
+                | ExemptRefusal::Reached { .. }
+                | ExemptRefusal::DecidedAgainst { .. }
+                | ExemptRefusal::AlreadyExempt { .. }
+                | ExemptRefusal::AlreadyExemptInRun { .. },
             ) => ErrorClass::Request,
             // As a judgement the model refuses: no valid document, an artifact with
             // nothing behind it now or that cannot be told now.
@@ -331,6 +348,7 @@ impl ShelfError {
                 | SameMeaningRefusal::ArtifactUnknown { .. },
             )
             | Self::SameMeaning(_)
+            | Self::ExemptRefused(ExemptRefusal::DocNotValid { .. })
             // As a judgement the model refuses: a copy, a name with nothing behind it,
             // or one that cannot be told now.
             | Self::MovedRefused(

@@ -10,9 +10,9 @@ use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, ChosenApproved, Created, Declared, DeclaredAbout, DiffItem,
-    DiffReport, DownstreamEdge, ErrorClass, FmtReport, GetReport, Health, Initialized, Judged,
-    JudgedAll, LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, Row, ShelfError,
-    StaleReport, StatsReport, StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport,
+    DiffReport, DownstreamEdge, ErrorClass, Exempted, FmtReport, GetReport, Health, Initialized,
+    Judged, JudgedAll, LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, Row,
+    ShelfError, StaleReport, StatsReport, StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport,
     UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::location::RelPath;
@@ -26,19 +26,21 @@ use whyshelf_core::domain::shelf::stats::Origin as ChangedPin;
 
 use super::textdiff;
 use whyshelf_core::domain::id::DocId;
+use whyshelf_core::domain::nonempty::TwoOrMore;
 use whyshelf_core::domain::shelf::artifact::{Artifact, ArtifactKey, ArtifactState, Comparison};
 use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence};
 use whyshelf_core::domain::shelf::doc::{
     Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy, normalize,
 };
+use whyshelf_core::domain::shelf::exemption::{CoverMiss, Unneeded};
 use whyshelf_core::domain::shelf::freshness::{
     Cause, Freshness, FreshnessLevel, Notice, Origin, RootCause, Severity, Standing, StandingKind,
     Successors, UpstreamStatus,
 };
 use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::ledger::{
-    ArtifactPin, DeclaredStatus, FoundBy, FramePin, FrameRefusal, MoveNote, Moved, ReadPin, Record,
-    Similarity,
+    ArtifactPin, DeclaredStatus, FoundBy, FramePin, FrameRefusal, JudgementId, MoveNote, Moved,
+    ReadPin, Record, Similarity,
 };
 use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::order::{Hold, Rule};
@@ -116,10 +118,11 @@ pub struct CauseOut {
 pub struct NoticeOut {
     /// What kind (`informs_not_fresh`, `informs_unresolved`, `upstream_expired`,
     /// `self_same_meaning`, `upstream_same_meaning`, `artifact_same_meaning`,
-    /// `not_covered`, `artifact_absent`, `artifact_unknown`).
+    /// `not_covered`, `exempt`, `exemption_unneeded`, `exemption_repeated`,
+    /// `artifact_absent`, `artifact_unknown`).
     pub kind: &'static str,
-    /// For `not_covered`, how strongly the link expects to reach the document:
-    /// `warn` or `error`; null for any other kind.
+    /// For `not_covered` and `exempt`, how strongly the link expects to reach the
+    /// document: `warn` or `error`; null for any other kind.
     pub severity: Option<&'static str>,
     /// The link; empty for a notice about the document itself.
     pub link: String,
@@ -134,8 +137,22 @@ pub struct NoticeOut {
     /// when people declared it moved since (`judge moved`); none otherwise.
     pub read_as: Option<String>,
     /// For an edit declared to keep the meaning, the declarations (record ids) that
-    /// join the hash pinned to the hash now, in order; empty otherwise.
+    /// join the hash pinned to the hash now, in order; for `exempt` and
+    /// `exemption_unneeded`, the exemption (`judge withdraw` takes it); for
+    /// `exemption_repeated`, every exemption of the document from the link; empty
+    /// otherwise.
     pub declared: Vec<String>,
+    /// For `not_covered`, `exempt`, `exemption_unneeded` and `exemption_repeated`,
+    /// the book that declares
+    /// `link`; null for any other kind.
+    pub book: Option<String>,
+    /// For `exemption_unneeded`, why the exemption is not needed: `reached` (the
+    /// link reaches the document now), `not_declared` (no such link into a book is
+    /// declared now), `no_cover` (the link is declared with no cover), `other_book`
+    /// (it points into another book than the document's), `not_valid` (the document
+    /// is not valid now) or `decided_against` (it is denied, deprecated or retired);
+    /// null for any other kind.
+    pub why: Option<&'static str>,
     /// A sentence for a person.
     pub detail: String,
 }
@@ -272,6 +289,77 @@ pub struct BooksCheckOut {
     /// moved since (`judge moved`): the approval is stale, and the link is to write
     /// `moved_to`. They leave `clean` as it is.
     pub moved: Vec<MovedNameOut>,
+    /// The exemptions that stand and take the place of a gap (`judge exempt`), each
+    /// with who, when and why: an exempt document is not in `uncovered` for that
+    /// link, and leaves `clean` as it is whatever the strength.
+    pub exempt: Vec<ExemptOut>,
+    /// The exemptions that stand and are no longer needed, each with why (the
+    /// notice `exemption_unneeded`); they leave `clean` as it is.
+    pub exemption_unneeded: Vec<UnneededOut>,
+    /// The documents two or more exemptions that stand exempt from one link (the
+    /// notice `exemption_repeated`), as merged branches can leave them; they leave
+    /// `clean` as it is.
+    pub exemption_repeated: Vec<RepeatedOut>,
+}
+
+/// An exemption that stands and takes the place of a gap.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ExemptOut {
+    /// The document.
+    pub doc: DocRef,
+    /// The book that declares the link.
+    pub book: String,
+    /// The link whose cover the document is exempt from.
+    pub link: String,
+    /// How strongly the link expects to reach the documents of its book: `warn` or
+    /// `error`.
+    pub severity: &'static str,
+    /// The exemption's record id (`judge withdraw` takes it).
+    pub exemption: String,
+    /// Who declared it.
+    pub actor: String,
+    /// When (unix milliseconds).
+    pub at: i64,
+    /// Why.
+    pub reason: String,
+}
+
+/// An exemption that stands and is no longer needed.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct UnneededOut {
+    /// The document.
+    pub doc: DocRef,
+    /// The book that declares the link.
+    pub book: String,
+    /// The link the exemption names.
+    pub link: String,
+    /// The exemption's record id (`judge withdraw` takes it).
+    pub exemption: String,
+    /// Who declared it.
+    pub actor: String,
+    /// When (unix milliseconds).
+    pub at: i64,
+    /// Why it was declared.
+    pub reason: String,
+    /// Why it is not needed now, as the notice `exemption_unneeded` gives it.
+    pub why: &'static str,
+    /// A sentence for a person.
+    pub detail: String,
+}
+
+/// Two or more exemptions that stand of one document from one link.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct RepeatedOut {
+    /// The document.
+    pub doc: DocRef,
+    /// The book that declares the link.
+    pub book: String,
+    /// The link the exemptions name.
+    pub link: String,
+    /// The exemptions' record ids, in the order of identity: withdraw all but one.
+    pub exemptions: Vec<String>,
+    /// A sentence for a person.
+    pub detail: String,
 }
 
 /// A name a link writes that an approval pinned, declared moved since.
@@ -1127,6 +1215,28 @@ pub struct MovedOut {
     pub record: Value,
 }
 
+/// The answer of `judge exempt`: every exemption written, in the order the
+/// documents were named.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ExemptedAllOut {
+    /// The exemptions.
+    pub exempt: Vec<ExemptedOut>,
+}
+
+/// One exemption written.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ExemptedOut {
+    /// The document.
+    pub doc: DocRef,
+    /// The book that declares the link.
+    pub book: String,
+    /// The link whose cover the document is exempt from.
+    pub link: String,
+    /// The record written, as it is in the ledger (its `id` is what `judge withdraw`
+    /// takes).
+    pub record: Value,
+}
+
 /// The answer of `judge withdraw`: the revocation written.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct WithdrawnOut {
@@ -1293,6 +1403,7 @@ pub fn schemas() -> SchemasOut {
     put("judge approve --pending", schema_for!(ChosenApprovedOut));
     put("judge same", schema_for!(DeclaredAllOut));
     put("judge moved", schema_for!(MovedAllOut));
+    put("judge exempt", schema_for!(ExemptedAllOut));
     put("judge withdraw", schema_for!(WithdrawnOut));
     put("new", schema_for!(CreatedOut));
     put("init", schema_for!(InitOut));
@@ -1613,6 +1724,8 @@ impl Namer<'_> {
                 space: None,
                 read_as: None,
                 declared: Vec::new(),
+                book: None,
+                why: None,
                 detail: format!("a document it informs of is {}", standing(*kind)),
             },
             Notice::InformsUnresolved { link, unresolved } => NoticeOut {
@@ -1624,6 +1737,8 @@ impl Namer<'_> {
                 space: None,
                 read_as: None,
                 declared: Vec::new(),
+                book: None,
+                why: None,
                 detail: self.unresolved(unresolved),
             },
             Notice::UpstreamExpired { pin, since } => NoticeOut {
@@ -1635,6 +1750,8 @@ impl Namer<'_> {
                 space: None,
                 read_as: None,
                 declared: Vec::new(),
+                book: None,
+                why: None,
                 detail: format!(
                     "the approval of {} lapsed at {} (unix ms)",
                     pin.key(),
@@ -1654,6 +1771,8 @@ impl Namer<'_> {
                 space: None,
                 read_as: None,
                 declared: declared.iter().map(ToString::to_string).collect(),
+                book: None,
+                why: None,
                 detail: format!(
                     "the document was edited since its approval ({approved} -> {now}), and the edit was declared to keep the meaning"
                 ),
@@ -1667,6 +1786,8 @@ impl Namer<'_> {
                 space: None,
                 read_as: None,
                 declared: declared.iter().map(ToString::to_string).collect(),
+                book: None,
+                why: None,
                 detail: format!(
                     "{} was edited since it was pinned ({} -> {now}), and the edit was declared to keep the meaning",
                     pin.key(),
@@ -1682,6 +1803,8 @@ impl Namer<'_> {
                 space: Some(pin.pin().space().to_string()),
                 read_as: pin.moved_away().map(|a| a.name().to_string()),
                 declared: declared.iter().map(ToString::to_string).collect(),
+                book: None,
+                why: None,
                 detail: format!(
                     "{} changed since it was pinned (now {now}), and the change was declared to keep the meaning",
                     pin.read_as()
@@ -1696,6 +1819,8 @@ impl Namer<'_> {
                 space: Some(artifact.space().to_string()),
                 read_as: None,
                 declared: Vec::new(),
+                book: None,
+                why: None,
                 detail: absent_detail(artifact),
             },
             Notice::ArtifactUnknown {
@@ -1711,6 +1836,8 @@ impl Namer<'_> {
                 space: Some(artifact.space().to_string()),
                 read_as: None,
                 declared: Vec::new(),
+                book: None,
+                why: None,
                 detail: unknown_detail(artifact, why.as_str()),
             },
             Notice::NotCovered {
@@ -1726,9 +1853,66 @@ impl Namer<'_> {
                 space: None,
                 read_as: None,
                 declared: Vec::new(),
+                book: Some(book.to_string()),
+                why: None,
                 detail: format!(
                     "no document of `{book}` reaches this one through `{link}`, which is declared to cover its book"
                 ),
+            },
+            Notice::Exempt {
+                book,
+                link,
+                severity,
+                exemption,
+            } => NoticeOut {
+                kind: "exempt",
+                severity: Some(severity.word()),
+                link: link.to_string(),
+                target: None,
+                artifact: None,
+                space: None,
+                read_as: None,
+                declared: vec![exemption.to_string()],
+                book: Some(book.to_string()),
+                why: None,
+                detail: format!(
+                    "no document of `{book}` reaches this one through `{link}`, and {exemption} declares it is not expected to"
+                ),
+            },
+            Notice::ExemptionUnneeded {
+                book,
+                link,
+                exemption,
+                why,
+            } => NoticeOut {
+                kind: "exemption_unneeded",
+                severity: None,
+                link: link.to_string(),
+                target: None,
+                artifact: None,
+                space: None,
+                read_as: None,
+                declared: vec![exemption.to_string()],
+                book: Some(book.to_string()),
+                why: Some(unneeded_word(why)),
+                detail: self.unneeded(None, book, link, *exemption, why),
+            },
+            Notice::ExemptionRepeated {
+                book,
+                link,
+                exemptions,
+            } => NoticeOut {
+                kind: "exemption_repeated",
+                severity: None,
+                link: link.to_string(),
+                target: None,
+                artifact: None,
+                space: None,
+                read_as: None,
+                declared: exemptions.iter().map(ToString::to_string).collect(),
+                book: Some(book.to_string()),
+                why: None,
+                detail: self.repeated(None, book, link, exemptions),
             },
         }
     }
@@ -1869,15 +2053,20 @@ impl Namer<'_> {
 /// strength `warn` does not reach, in the order of `uncovered`, then one per name
 /// that cannot be told now, in the order of `unknown`, then one per name with
 /// nothing there, in the order of `absent`, then one per name a link still writes
-/// that was declared moved since an approval pinned it, in the order of `moved`. A
-/// gap of strength `error` has none: it fails the check, and the answer is shown.
-/// None of them changes the exit.
+/// that was declared moved since an approval pinned it, in the order of `moved`,
+/// then one per exemption no longer needed, in the order of `exemption_unneeded`,
+/// then one per document exempt from one link more than once, in the order of
+/// `exemption_repeated`. A gap of strength `error` has none: it fails the check,
+/// and the answer is shown. None of them changes the exit.
 pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
     let BooksCheck::Checked {
         uncovered,
         unknown,
         absent,
         moved,
+        unneeded,
+        repeated,
+        names,
         ..
     } = check
     else {
@@ -1932,9 +2121,26 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
             m.moved_to.name()
         )
     });
+    let namer = Namer(names);
+    let not_needed = unneeded.iter().map(|u| {
+        let of = u.record.of();
+        format!(
+            "warning: {}; withdraw it with `judge withdraw {}`",
+            namer.unneeded(Some(u.doc), of.book(), of.link(), u.record.id(), &u.why),
+            u.record.id()
+        )
+    });
+    let twice = repeated.iter().map(|r| {
+        format!(
+            "warning: {}, with `judge withdraw <id>`",
+            namer.repeated(Some(r.doc), &r.book, &r.link, &r.exemptions)
+        )
+    });
     gaps.chain(untold)
         .chain(nothing)
         .chain(moved_away)
+        .chain(not_needed)
+        .chain(twice)
         .collect()
 }
 
@@ -2009,6 +2215,9 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             absent: Vec::new(),
             unknown: Vec::new(),
             moved: Vec::new(),
+            exempt: Vec::new(),
+            exemption_unneeded: Vec::new(),
+            exemption_repeated: Vec::new(),
         },
         BooksCheck::Checked {
             books,
@@ -2017,8 +2226,12 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             absent,
             unknown,
             moved,
+            exempt,
+            unneeded,
+            repeated,
+            names,
         } => {
-            let names = Names::default();
+            let namer = Namer(names);
             BooksCheckOut {
                 clean: check.is_clean(),
                 schema_problems: Vec::new(),
@@ -2040,7 +2253,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                             .collect(),
                     })
                     .collect(),
-                health: Some(Namer(&names).health(health)),
+                health: Some(Namer(&Names::default()).health(health)),
                 uncovered: uncovered
                     .iter()
                     .map(|u| UncoveredOut {
@@ -2093,6 +2306,61 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                         moved_to: m.moved_to.name().to_string(),
                         declared: m.declared.iter().map(ToString::to_string).collect(),
                         detail: moved_detail(&m.link, &m.artifact, &m.moved_to),
+                    })
+                    .collect(),
+                exempt: exempt
+                    .iter()
+                    .map(|e| ExemptOut {
+                        doc: DocRef {
+                            id: e.doc.to_string(),
+                            key: e.key.as_ref().map(ToString::to_string),
+                        },
+                        book: e.record.of().book().to_string(),
+                        link: e.record.of().link().to_string(),
+                        severity: e.severity.word(),
+                        exemption: e.record.id().to_string(),
+                        actor: e.record.actor().as_str().to_owned(),
+                        at: e.record.at().millis(),
+                        reason: e.record.reason().as_str().to_owned(),
+                    })
+                    .collect(),
+                exemption_unneeded: unneeded
+                    .iter()
+                    .map(|u| {
+                        let of = u.record.of();
+                        UnneededOut {
+                            doc: DocRef {
+                                id: u.doc.to_string(),
+                                key: u.key.as_ref().map(ToString::to_string),
+                            },
+                            book: of.book().to_string(),
+                            link: of.link().to_string(),
+                            exemption: u.record.id().to_string(),
+                            actor: u.record.actor().as_str().to_owned(),
+                            at: u.record.at().millis(),
+                            reason: u.record.reason().as_str().to_owned(),
+                            why: unneeded_word(&u.why),
+                            detail: namer.unneeded(
+                                Some(u.doc),
+                                of.book(),
+                                of.link(),
+                                u.record.id(),
+                                &u.why,
+                            ),
+                        }
+                    })
+                    .collect(),
+                exemption_repeated: repeated
+                    .iter()
+                    .map(|r| RepeatedOut {
+                        doc: DocRef {
+                            id: r.doc.to_string(),
+                            key: r.key.as_ref().map(ToString::to_string),
+                        },
+                        book: r.book.to_string(),
+                        link: r.link.to_string(),
+                        exemptions: r.exemptions.iter().map(ToString::to_string).collect(),
+                        detail: namer.repeated(Some(r.doc), &r.book, &r.link, &r.exemptions),
                     })
                     .collect(),
             }
@@ -3084,6 +3352,98 @@ pub fn moved(all: &[Moved]) -> MovedAllOut {
                 record: to_json(&Record::Moved(one.clone()).to_canon()),
             })
             .collect(),
+    }
+}
+
+/// The answer of `judge exempt`.
+pub fn exempted(all: &[Exempted]) -> ExemptedAllOut {
+    ExemptedAllOut {
+        exempt: all
+            .iter()
+            .map(|one| ExemptedOut {
+                doc: DocRef {
+                    id: one.doc().to_string(),
+                    key: one.key.as_ref().map(ToString::to_string),
+                },
+                book: one.record.of().book().to_string(),
+                link: one.record.of().link().to_string(),
+                record: to_json(&Record::Exempt(one.record.clone()).to_canon()),
+            })
+            .collect(),
+    }
+}
+
+/// The word of why an exemption is not needed, as `exemption_unneeded` gives it.
+fn unneeded_word(why: &Unneeded) -> &'static str {
+    match why {
+        Unneeded::Reached { .. } => "reached",
+        Unneeded::Cover(CoverMiss::NotDeclared) => "not_declared",
+        Unneeded::Cover(CoverMiss::NoCover) => "no_cover",
+        Unneeded::Cover(CoverMiss::OtherBook { .. }) => "other_book",
+        Unneeded::NotValid(_) => "not_valid",
+        Unneeded::DecidedAgainst => "decided_against",
+    }
+}
+
+impl Namer<'_> {
+    /// The sentence of an exemption that is not needed: the one place it is
+    /// written, for the notice, `check`'s list and its warning. The document is
+    /// named by its key (its identity when it has none); a notice, which a row of the
+    /// document carries, names it `it` (`doc` none). The documents the link reaches
+    /// it from are named by their keys.
+    fn unneeded(
+        &self,
+        doc: Option<DocId>,
+        book: &BookName,
+        link: &EntryName,
+        exemption: JudgementId,
+        why: &Unneeded,
+    ) -> String {
+        let because = match why {
+            Unneeded::Reached { by } => format!(
+                "`{book}.{link}` reaches it now, from {}",
+                by.iter()
+                    .map(|id| self.label(*id))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Unneeded::Cover(CoverMiss::NotDeclared) => {
+                format!("no link `{book}.{link}` into a book is declared now")
+            }
+            Unneeded::Cover(CoverMiss::NoCover) => {
+                format!("`{book}.{link}` is declared with no cover now")
+            }
+            Unneeded::Cover(CoverMiss::OtherBook { target, doc_book }) => format!(
+                "`{book}.{link}` points into `{target}` now, and the document is of `{doc_book}`"
+            ),
+            Unneeded::NotValid(tag) => format!("the document is not valid now: {tag}"),
+            Unneeded::DecidedAgainst => {
+                "the document is decided against, and no covering link expects to reach it"
+                    .to_owned()
+            }
+        };
+        let doc = doc.map_or_else(|| "it".to_owned(), |id| self.label(id));
+        format!("{exemption} exempts {doc} from `{book}.{link}` and is not needed: {because}")
+    }
+
+    /// The sentence of two or more exemptions of one document from one link.
+    fn repeated(
+        &self,
+        doc: Option<DocId>,
+        book: &BookName,
+        link: &EntryName,
+        exemptions: &TwoOrMore<JudgementId>,
+    ) -> String {
+        let doc = doc.map_or_else(|| "it".to_owned(), |id| self.label(id));
+        format!(
+            "{} exemptions exempt {doc} from `{book}.{link}` ({}): one is enough, withdraw the others",
+            exemptions.len(),
+            exemptions
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
