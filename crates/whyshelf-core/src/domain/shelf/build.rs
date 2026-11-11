@@ -9,7 +9,7 @@
 //! step is the only place its decision is made.
 //!
 //! ```text
-//!   DocReading ──► 0  Unparsed?            ──► InvalidDoc (Unreadable)
+//!   DocReading ──► 0  Unparsed, Unheld?    ──► InvalidDoc (Unreadable, Unheld)
 //!      │           1  Schema::membership   ──► InvalidDoc (OutsideBooks)
 //!      │           2  the form of the file:  id, key, entries, fields, links
 //!      │           3  same id twice, same key twice in a book
@@ -115,7 +115,10 @@ impl RawValue {
     }
 }
 
-/// Why a file's front matter could not be read as a mapping of values.
+/// Why a file's front matter could not be read as a mapping at all: one reason is
+/// enough to read no further, so a file has one. A value of a kind a front matter
+/// does not hold is not this: the mapping is read, and each such value is an
+/// [`UnheldValue`].
 ///
 /// The adapter's YAML parser finds these, because a mapping built in memory cannot
 /// show a key that was written twice.
@@ -157,15 +160,41 @@ pub enum RawProblem {
     /// The front matter is YAML, but not a mapping.
     #[error("the front matter is not a mapping")]
     NotAMapping,
-    /// A value that is none of a text, a whole number, a truth value and a list of
-    /// texts, with the kind it was read as.
-    #[error("the value of `{key}` is {kind}, which a front matter does not hold{}", kind.hint())]
-    UnsupportedValue {
-        /// The key.
-        key: String,
-        /// What the value was read as.
-        kind: UnheldKind,
-    },
+}
+
+/// A value of a front matter that is none of a text, a whole number, a truth value
+/// and a list of texts, with its key and the kind it was read as.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("the value of `{key}` is {kind}, which a front matter does not hold{}", kind.hint())]
+pub struct UnheldValue {
+    key: String,
+    kind: UnheldKind,
+}
+
+impl UnheldValue {
+    /// The value of `key`, read as `kind`.
+    pub fn new(key: String, kind: UnheldKind) -> Self {
+        Self { key, kind }
+    }
+
+    /// The key.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    /// What the value was read as.
+    pub fn kind(&self) -> UnheldKind {
+        self.kind
+    }
+
+    /// Every one of `values`, each in its own words, one after the other.
+    pub fn told_all(values: &NonEmptyVec<Self>) -> String {
+        values
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
 }
 
 /// What a value of a front matter was read as when it is none of the kinds a front
@@ -179,6 +208,9 @@ pub enum UnheldKind {
     /// A whole number too large for the integers a front matter holds (64-bit,
     /// signed).
     TooLarge,
+    /// A whole number too small for the integers a front matter holds (64-bit,
+    /// signed).
+    TooSmall,
     /// A mapping (`key: {a: 1}`, or an indented block of `a: b`).
     Mapping,
     /// A value with a YAML tag (`!tag`).
@@ -211,6 +243,7 @@ impl std::fmt::Display for UnheldKind {
             Self::Null => "no value".to_owned(),
             Self::Float => "a number written with a decimal point or an exponent".to_owned(),
             Self::TooLarge => "a whole number above the largest one (2^63 - 1)".to_owned(),
+            Self::TooSmall => "a whole number below the smallest one (-2^63)".to_owned(),
             Self::Mapping => "a mapping".to_owned(),
             Self::Tagged => "a tagged value".to_owned(),
             Self::Item(UnheldItem::Null) => item("no value"),
@@ -238,7 +271,7 @@ impl UnheldKind {
             Self::Float => {
                 ": write a whole number with digits only, or put the number in quotes as a text"
             }
-            Self::TooLarge => ": put the number in quotes as a text",
+            Self::TooLarge | Self::TooSmall => ": put the number in quotes as a text",
             Self::Null => ": write a value, or leave the key out",
             Self::Item(UnheldItem::Null) => ": write the item, or take it out",
             Self::Mapping => ": the values are flat; write a text or a list of texts",
@@ -282,6 +315,16 @@ pub enum DocReading {
         id: ReadId,
         /// What was wrong.
         why: RawProblem,
+    },
+    /// The front matter was read as a mapping, and holds values of kinds a front
+    /// matter does not hold.
+    Unheld {
+        /// The file.
+        origin: RelPath,
+        /// The identity, if its line could still be read.
+        id: ReadId,
+        /// Every such value, in the order written.
+        values: NonEmptyVec<UnheldValue>,
     },
 }
 
@@ -338,6 +381,10 @@ pub enum DocProblem {
     /// The front matter could not be read.
     #[error("the file could not be read: {0}")]
     Unreadable(#[source] RawProblem),
+    /// The front matter was read, and a value in it is of a kind a front matter does
+    /// not hold.
+    #[error("the file could not be read: {0}")]
+    Unheld(#[source] UnheldValue),
     /// The file is under no book's directory.
     #[error("the file is under no book")]
     OutsideBooks,
@@ -664,6 +711,14 @@ enum IdSeen {
 }
 
 impl IdSeen {
+    /// What a file that could not be read shows of its identity.
+    fn of_read(id: ReadId) -> Self {
+        match id {
+            ReadId::Read(id) => Self::Read(id),
+            ReadId::Unreadable => Self::Unreadable,
+        }
+    }
+
     fn id(self) -> Option<DocId> {
         match self {
             Self::Read(id) => Some(id),
@@ -763,10 +818,13 @@ impl Identity {
 
     /// A file whose identity is what it is, and which is invalid for `problem`.
     fn unusable(id: IdSeen, problem: DocProblem) -> Self {
-        Self::Broken {
-            id,
-            faults: NonEmptyVec::new(problem, Vec::new()),
-        }
+        Self::unusable_all(id, NonEmptyVec::new(problem, Vec::new()))
+    }
+
+    /// A file whose identity is what it is, and which is invalid for every one of
+    /// `faults`.
+    fn unusable_all(id: IdSeen, faults: NonEmptyVec<DocProblem>) -> Self {
+        Self::Broken { id, faults }
     }
 
     /// The identity, when it could be read.
@@ -826,9 +884,14 @@ enum Judged {
 
 impl Candidate {
     fn unusable(origin: RelPath, id: IdSeen, problem: DocProblem) -> Self {
+        Self::unusable_all(origin, id, NonEmptyVec::new(problem, Vec::new()))
+    }
+
+    /// A file invalid for every one of `faults`, whatever else it holds.
+    fn unusable_all(origin: RelPath, id: IdSeen, faults: NonEmptyVec<DocProblem>) -> Self {
         Self {
             origin,
-            identity: Identity::unusable(id, problem),
+            identity: Identity::unusable_all(id, faults),
             written_key: None,
             problems: Vec::new(),
             fields: BTreeMap::new(),
@@ -843,12 +906,12 @@ impl Candidate {
     fn read(schema: &Schema, reading: DocReading, artifacts: &ArtifactReadings) -> Self {
         let (origin, entries, body) = match reading {
             DocReading::Unparsed { origin, id, why } => {
-                let id = match id {
-                    ReadId::Read(id) => IdSeen::Read(id),
-                    ReadId::Unreadable => IdSeen::Unreadable,
-                };
                 let why = Shelf::told(schema, &origin, why);
-                return Self::unusable(origin, id, DocProblem::Unreadable(why));
+                return Self::unusable(origin, IdSeen::of_read(id), DocProblem::Unreadable(why));
+            }
+            DocReading::Unheld { origin, id, values } => {
+                let faults = values.map(|value| DocProblem::Unheld(value.clone()));
+                return Self::unusable_all(origin, IdSeen::of_read(id), faults);
             }
             DocReading::Parsed {
                 origin,

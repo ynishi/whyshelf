@@ -177,7 +177,9 @@ pub trait DocSource: Send + Sync {
     /// of its `exclude`). A file the range does not take is not read at all.
     ///
     /// A file whose front matter cannot be read is a
-    /// [`DocReading::Unparsed`], not an error: the shelf makes it an invalid
+    /// [`DocReading::Unparsed`] (or, when it is a mapping that holds values of kinds
+    /// a front matter does not hold, a [`DocReading::Unheld`]), not an error: the
+    /// shelf makes it an invalid
     /// document that says why (or leaves it out, when its book skips a file with no
     /// front matter). A directory that is not there has no file. An error
     /// is for what stops the reading itself (a disk that cannot be read).

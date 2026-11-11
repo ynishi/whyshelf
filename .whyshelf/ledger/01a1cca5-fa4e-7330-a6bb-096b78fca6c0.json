@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794434790626,
+  "expires": null,
+  "frame": [],
+  "id": "01a1cca5-fa4e-7330-a6bb-096b78fca6c0",
+  "kind": "decision",
+  "reason": "Issue #21: a front matter tells every value of a kind it does not hold, each with its key and kind, and a whole number beyond 64 bits as too large or too small. Reviewed by an independent design review (pass on v3), rule checks (bugfix, arch: no violation) and /code-review; the reproducing and held-out tests pass, and the test files of the stale verifications changed only to follow the new reading type, with no assertion weakened.",
+  "revision": "f37885624d42b61c76038b12e2cd499c7cf33e42",
+  "seen": "sha256:0462e2188788d3dfa2e93ea443faba413158e29820bcc3ff1f3dee0968f3c683",
+  "seen_address": "1da241a45915658205548b6a654612d1c911ce8e",
+  "subject": "01a1cc04-18f1-7315-8c44-94b873700d00",
+  "v": 1,
+  "verb": "approve"
+}

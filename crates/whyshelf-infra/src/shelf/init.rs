@@ -35,7 +35,8 @@
 use whyshelf_core::app::shelf::{DeclarationText, InitFile, InitRequest, NewDocRequest};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::shelf::build::{DocReading, RawProblem, RawValue};
+use whyshelf_core::domain::nonempty::NonEmptyVec;
+use whyshelf_core::domain::shelf::build::{DocReading, RawProblem, RawValue, UnheldValue};
 use whyshelf_core::domain::shelf::schema::{BookName, NameProblem};
 
 use super::docs;
@@ -279,6 +280,17 @@ pub enum TemplateError {
         #[source]
         why: RawProblem,
     },
+    /// Its front matter holds values of kinds a front matter does not hold.
+    #[error(
+        "the template {template} holds values a front matter does not hold: {}",
+        UnheldValue::told_all(values)
+    )]
+    Unheld {
+        /// The template.
+        template: &'static str,
+        /// Every such value.
+        values: NonEmptyVec<UnheldValue>,
+    },
     /// It writes no key as a text.
     #[error("the template {template} writes no key")]
     NoKey {
@@ -301,6 +313,9 @@ fn doc_request(
     let (mut entries, body) = match docs::read(origin, text) {
         DocReading::Parsed { entries, body, .. } => (entries, body),
         DocReading::Unparsed { why, .. } => return Err(TemplateError::Unread { template, why }),
+        DocReading::Unheld { values, .. } => {
+            return Err(TemplateError::Unheld { template, values });
+        }
     };
     let Some(RawValue::Text(key)) = entries.remove(KEY_ENTRY) else {
         return Err(TemplateError::NoKey { template });

@@ -15,9 +15,10 @@
 //! [`RawValue`]s and hands every entry, `id` and `key` included, to
 //! [`Shelf::build`](whyshelf_core::domain::shelf::build::Shelf::build), which
 //! decides which entry is a field and which a link. A file whose front matter
-//! cannot be read is a [`DocReading::Unparsed`], with its `id:` line if that line
-//! can still be read, so that a broken file is an invalid document with an identity
-//! and not a hole.
+//! cannot be read is a [`DocReading::Unparsed`], and one that is read as a mapping
+//! but holds values of kinds it does not hold is a [`DocReading::Unheld`] with every
+//! such value; each has its `id:` line if that line can still be read, so that a
+//! broken file is an invalid document with an identity and not a hole.
 //!
 //! # Writing a new document
 //!
@@ -38,7 +39,8 @@
 //! `\n`, white space at the end of its lines and blank lines at its end go, and it
 //! ends with one newline. [`read`] normalizes the whole text first, so this changes
 //! nothing it reads. A file whose text is that already is in the form; a file whose
-//! front matter cannot be read has no text in it; a file whose front matter holds a
+//! front matter cannot be read, or holds a value it does not hold, has no text in
+//! it; a file whose front matter holds a
 //! comment is told so ([`comment_line`]), because the form has no place for one;
 //! every other file is given its text in the form, with what that text reads as, for
 //! the use case to hold against the file's own reading, unless the user cannot
@@ -68,8 +70,9 @@ use std::path::{Path, PathBuf};
 use std::fmt;
 
 use serde::Deserialize;
-use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
-use serde_norway::Value;
+use serde::de::{
+    self, Deserializer, EnumAccess, IgnoredAny, MapAccess, SeqAccess, VariantAccess, Visitor,
+};
 use tokio::io::AsyncWriteExt;
 use whyshelf_core::app::shelf::{
     Creation, DocReplace, DocSource, DocWrite, FileForm, Form, Replacement,
@@ -77,9 +80,10 @@ use whyshelf_core::app::shelf::{
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::location::RelPath;
+use whyshelf_core::domain::nonempty::NonEmptyVec;
 use whyshelf_core::domain::shelf::artifact::ContentAddress;
 use whyshelf_core::domain::shelf::build::{
-    DocReading, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind,
+    DocReading, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind, UnheldValue,
 };
 use whyshelf_core::domain::shelf::doc::normalize;
 use whyshelf_core::domain::shelf::schema::BookRange;
@@ -414,9 +418,10 @@ fn front_matter_start(normalized: &str) -> FrontMatterStart<'_> {
 /// A file's text as a reading.
 pub fn read(origin: RelPath, text: &str) -> DocReading {
     let text = normalize(text);
+    let id = || seen_id(&text).map_or(ReadId::Unreadable, ReadId::Read);
     let unparsed = |why| DocReading::Unparsed {
         origin: origin.clone(),
-        id: seen_id(&text).map_or(ReadId::Unreadable, ReadId::Read),
+        id: id(),
         why,
     };
     let rest = match front_matter_start(&text) {
@@ -433,7 +438,12 @@ pub fn read(origin: RelPath, text: &str) -> DocReading {
             entries,
             body: body.to_owned(),
         },
-        Err(why) => unparsed(why),
+        Err(Unread::Whole(why)) => unparsed(why),
+        Err(Unread::Values(values)) => DocReading::Unheld {
+            origin,
+            id: id(),
+            values,
+        },
     }
 }
 
@@ -474,7 +484,7 @@ pub fn form(origin: RelPath, bytes: Vec<u8>) -> FileForm {
                 }
             }
         }
-        DocReading::Unparsed { .. } => Form::Unwritable,
+        DocReading::Unparsed { .. } | DocReading::Unheld { .. } => Form::Unwritable,
     };
     FileForm {
         reading,
@@ -522,53 +532,78 @@ pub fn comment_line(yaml: &str) -> Option<u32> {
     None
 }
 
+/// Why a front matter gives no entries.
+///
+/// The one place the two kinds of fault are told apart ([`entries`]): a fault of the
+/// whole, which ends the reading, or the faults of values, which are independent of
+/// each other.
+#[derive(Debug, PartialEq, Eq)]
+enum Unread {
+    /// The front matter is no mapping of text keys, or is not YAML.
+    Whole(RawProblem),
+    /// The front matter is a mapping, and these values (every one, in the order
+    /// written) are of kinds a front matter does not hold.
+    Values(NonEmptyVec<UnheldValue>),
+}
+
 /// The entries of a front matter.
-fn entries(yaml: &str) -> Result<BTreeMap<String, RawValue>, RawProblem> {
+///
+/// The order of the judgement, the one place it is made: the parser's error; a front
+/// matter that is no mapping; a text key written twice at the top level (the first
+/// such key); a key that is no text; and only then the values, each in the order
+/// written, every one of a kind a front matter does not hold collected.
+fn entries(yaml: &str) -> Result<BTreeMap<String, RawValue>, Unread> {
     if yaml.trim().is_empty() {
         return Ok(BTreeMap::new());
     }
-    let front: Front = serde_norway::from_str(yaml).map_err(|error| RawProblem::Syntax {
-        // The parser counts from the first line of the YAML, which is the second
-        // line of the file.
-        line: error
-            .location()
-            .and_then(|at| u32::try_from(at.line()).ok())
-            .map(|line| line + 1),
+    let front: Front = serde_norway::from_str(yaml).map_err(|error| {
+        Unread::Whole(RawProblem::Syntax {
+            // The parser counts from the first line of the YAML, which is the second
+            // line of the file.
+            line: error
+                .location()
+                .and_then(|at| u32::try_from(at.line()).ok())
+                .map(|line| line + 1),
+        })
     })?;
     let pairs = match front {
         Front::Mapping(pairs) => pairs,
-        Front::Duplicate(key) => return Err(RawProblem::DuplicateKey { key }),
-        Front::NotMapping => return Err(RawProblem::NotAMapping),
+        Front::Duplicate(key) => return Err(Unread::Whole(RawProblem::DuplicateKey { key })),
+        Front::NotMapping => return Err(Unread::Whole(RawProblem::NotAMapping)),
     };
     let mut out = BTreeMap::new();
-    for (key, value) in pairs {
-        let Value::String(key) = key else {
-            return Err(RawProblem::NotAMapping);
+    let mut unheld = Vec::new();
+    for (key, Held(value)) in pairs {
+        let Key::Text(key) = key else {
+            return Err(Unread::Whole(RawProblem::NotAMapping));
         };
-        let raw = raw_value(value).map_err(|kind| RawProblem::UnsupportedValue {
-            key: key.clone(),
-            kind,
-        })?;
-        out.insert(key, raw);
+        match value {
+            Ok(raw) => {
+                out.insert(key, raw);
+            }
+            Err(kind) => unheld.push(UnheldValue::new(key, kind)),
+        }
     }
-    Ok(out)
+    match NonEmptyVec::from_vec(unheld) {
+        Ok(values) => Err(Unread::Values(values)),
+        Err(_) => Ok(out),
+    }
 }
 
 /// The top level of a front matter as the parser streams it.
 ///
 /// A key written twice is found here, in the parser's own stream of keys, and not in
 /// a mapping built from it (which keeps one value per key) and not in the wording of
-/// an error. Only the top level is looked at: a key written twice inside a nested
-/// mapping is not a [`RawProblem::DuplicateKey`], because a nested value is not a
-/// kind a front matter holds and is reported as that
-/// ([`RawProblem::UnsupportedValue`]), or, when the parser itself refuses the
-/// nested mapping, as a [`RawProblem::Syntax`].
+/// an error. Only the top level is looked at: the contents of a value that is a
+/// mapping, a list in a list or a tagged value are skipped as they stream, so a key
+/// written twice inside a nested mapping is no [`RawProblem::DuplicateKey`], and the
+/// value is read as a mapping ([`UnheldKind::Mapping`]).
 enum Front {
     /// A mapping, with every entry in the order written.
-    Mapping(Vec<(Value, Value)>),
+    Mapping(Vec<(Key, Held)>),
     /// A mapping with a text key written twice: the first such key.
     Duplicate(String),
-    /// A scalar, or a sequence.
+    /// A scalar, a sequence, or a tagged value.
     NotMapping,
 }
 
@@ -584,12 +619,13 @@ impl<'de> Deserialize<'de> for Front {
             }
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Front, A::Error> {
-                let mut pairs: Vec<(Value, Value)> = Vec::new();
+                let mut pairs: Vec<(Key, Held)> = Vec::new();
+                let mut seen: BTreeSet<String> = BTreeSet::new();
                 let mut duplicate = None;
-                while let Some((key, value)) = map.next_entry::<Value, Value>()? {
-                    if duplicate.is_none()
-                        && let Value::String(text) = &key
-                        && pairs.iter().any(|(seen, _)| *seen == key)
+                while let Some((key, value)) = map.next_entry::<Key, Held>()? {
+                    if let Key::Text(text) = &key
+                        && !seen.insert(text.clone())
+                        && duplicate.is_none()
                     {
                         duplicate = Some(text.clone());
                     }
@@ -613,6 +649,14 @@ impl<'de> Deserialize<'de> for Front {
                 Ok(Front::NotMapping)
             }
 
+            fn visit_u128<E: de::Error>(self, _: u128) -> Result<Front, E> {
+                Ok(Front::NotMapping)
+            }
+
+            fn visit_i128<E: de::Error>(self, _: i128) -> Result<Front, E> {
+                Ok(Front::NotMapping)
+            }
+
             fn visit_f64<E: de::Error>(self, _: f64) -> Result<Front, E> {
                 Ok(Front::NotMapping)
             }
@@ -629,38 +673,246 @@ impl<'de> Deserialize<'de> for Front {
                 while seq.next_element::<IgnoredAny>()?.is_some() {}
                 Ok(Front::NotMapping)
             }
+
+            fn visit_enum<A: EnumAccess<'de>>(self, data: A) -> Result<Front, A::Error> {
+                skip_tagged(data)?;
+                Ok(Front::NotMapping)
+            }
         }
 
         deserializer.deserialize_any(FrontVisitor)
     }
 }
 
-/// A value of a front matter, if it is a kind a front matter holds.
-fn raw_value(value: Value) -> Result<RawValue, UnheldKind> {
-    match value {
-        Value::String(text) => Ok(RawValue::Text(text)),
-        Value::Bool(b) => Ok(RawValue::Bool(b)),
-        Value::Number(n) => match n.as_i64() {
-            Some(i) => Ok(RawValue::Integer(i)),
-            None if n.is_f64() => Err(UnheldKind::Float),
-            None => Err(UnheldKind::TooLarge),
-        },
-        Value::Sequence(items) => items
-            .into_iter()
-            .map(|item| match item {
-                Value::String(text) => Ok(text),
-                Value::Null => Err(UnheldKind::Item(UnheldItem::Null)),
-                Value::Bool(_) => Err(UnheldKind::Item(UnheldItem::Bool)),
-                Value::Number(_) => Err(UnheldKind::Item(UnheldItem::Number)),
-                Value::Mapping(_) => Err(UnheldKind::Item(UnheldItem::Mapping)),
-                Value::Sequence(_) => Err(UnheldKind::Item(UnheldItem::List)),
-                Value::Tagged(_) => Err(UnheldKind::Item(UnheldItem::Tagged)),
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map(RawValue::List),
-        Value::Null => Err(UnheldKind::Null),
-        Value::Mapping(_) => Err(UnheldKind::Mapping),
-        Value::Tagged(_) => Err(UnheldKind::Tagged),
+/// A scalar as the parser gives it, with the number translated to what a front
+/// matter holds: the one place a number of the parser meets the range of the
+/// integers a front matter holds.
+enum Scalar {
+    Text(String),
+    Bool(bool),
+    Integer(i64),
+    TooLarge,
+    TooSmall,
+    Float,
+    Null,
+}
+
+/// What a node of the YAML is read as, in one of the places it stands: a key
+/// ([`Key`]), the value of a key ([`Held`]), an item of a list ([`HeldItem`]). The
+/// one visitor ([`Node`]) shows the parser's node as a [`Scalar`], a list, a mapping
+/// or a tagged value; each place says what it makes of them. The contents of a
+/// mapping and of a tagged value are skipped as they stream.
+trait Place: Sized {
+    fn scalar(scalar: Scalar) -> Self;
+
+    fn list<'de, A: SeqAccess<'de>>(items: A) -> Result<Self, A::Error>;
+
+    fn mapping() -> Self;
+
+    fn tagged() -> Self;
+}
+
+/// The visitor of a [`Place`].
+struct Node<P>(std::marker::PhantomData<P>);
+
+impl<'de, P: Place> Visitor<'de> for Node<P> {
+    type Value = P;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a YAML node")
+    }
+
+    fn visit_str<E: de::Error>(self, text: &str) -> Result<P, E> {
+        Ok(P::scalar(Scalar::Text(text.to_owned())))
+    }
+
+    fn visit_bool<E: de::Error>(self, value: bool) -> Result<P, E> {
+        Ok(P::scalar(Scalar::Bool(value)))
+    }
+
+    fn visit_i64<E: de::Error>(self, value: i64) -> Result<P, E> {
+        Ok(P::scalar(Scalar::Integer(value)))
+    }
+
+    fn visit_u64<E: de::Error>(self, value: u64) -> Result<P, E> {
+        Ok(P::scalar(
+            i64::try_from(value).map_or(Scalar::TooLarge, Scalar::Integer),
+        ))
+    }
+
+    fn visit_u128<E: de::Error>(self, _: u128) -> Result<P, E> {
+        Ok(P::scalar(Scalar::TooLarge))
+    }
+
+    fn visit_i128<E: de::Error>(self, _: i128) -> Result<P, E> {
+        Ok(P::scalar(Scalar::TooSmall))
+    }
+
+    /// A number with a decimal point or an exponent. The parser also gives a whole
+    /// number beyond its 128-bit integers as a float, and the text it was written
+    /// as is not seen here, so such a number is told as a float too: a known limit.
+    fn visit_f64<E: de::Error>(self, _: f64) -> Result<P, E> {
+        Ok(P::scalar(Scalar::Float))
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<P, E> {
+        Ok(P::scalar(Scalar::Null))
+    }
+
+    fn visit_none<E: de::Error>(self) -> Result<P, E> {
+        Ok(P::scalar(Scalar::Null))
+    }
+
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<P, D::Error> {
+        deserializer.deserialize_any(self)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, items: A) -> Result<P, A::Error> {
+        P::list(items)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<P, A::Error> {
+        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+        Ok(P::mapping())
+    }
+
+    fn visit_enum<A: EnumAccess<'de>>(self, data: A) -> Result<P, A::Error> {
+        skip_tagged(data)?;
+        Ok(P::tagged())
+    }
+}
+
+/// Skips a tagged value: its tag and what it tags.
+fn skip_tagged<'de, A: EnumAccess<'de>>(data: A) -> Result<(), A::Error> {
+    let (IgnoredAny, contents) = data.variant::<IgnoredAny>()?;
+    contents.newtype_variant::<IgnoredAny>()?;
+    Ok(())
+}
+
+/// Skips the rest of a list.
+fn skip_list<'de, A: SeqAccess<'de>>(mut items: A) -> Result<(), A::Error> {
+    while items.next_element::<IgnoredAny>()?.is_some() {}
+    Ok(())
+}
+
+/// A key of the top level: a text, or something else.
+enum Key {
+    Text(String),
+    NotText,
+}
+
+impl Place for Key {
+    fn scalar(scalar: Scalar) -> Self {
+        match scalar {
+            Scalar::Text(text) => Self::Text(text),
+            _ => Self::NotText,
+        }
+    }
+
+    fn list<'de, A: SeqAccess<'de>>(items: A) -> Result<Self, A::Error> {
+        skip_list(items)?;
+        Ok(Self::NotText)
+    }
+
+    fn mapping() -> Self {
+        Self::NotText
+    }
+
+    fn tagged() -> Self {
+        Self::NotText
+    }
+}
+
+impl<'de> Deserialize<'de> for Key {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(Node(std::marker::PhantomData))
+    }
+}
+
+/// The value of a key: what a front matter holds, or the kind it was read as.
+struct Held(Result<RawValue, UnheldKind>);
+
+impl Place for Held {
+    fn scalar(scalar: Scalar) -> Self {
+        Self(match scalar {
+            Scalar::Text(text) => Ok(RawValue::Text(text)),
+            Scalar::Bool(value) => Ok(RawValue::Bool(value)),
+            Scalar::Integer(value) => Ok(RawValue::Integer(value)),
+            Scalar::TooLarge => Err(UnheldKind::TooLarge),
+            Scalar::TooSmall => Err(UnheldKind::TooSmall),
+            Scalar::Float => Err(UnheldKind::Float),
+            Scalar::Null => Err(UnheldKind::Null),
+        })
+    }
+
+    /// A list of texts, or the kind of its first item that is no text.
+    fn list<'de, A: SeqAccess<'de>>(mut items: A) -> Result<Self, A::Error> {
+        let mut texts = Vec::new();
+        let mut unheld = None;
+        while let Some(item) = items.next_element::<HeldItem>()? {
+            match item {
+                HeldItem::Text(text) => texts.push(text),
+                HeldItem::Item(kind) => {
+                    unheld.get_or_insert(kind);
+                }
+            }
+        }
+        Ok(Self(match unheld {
+            Some(kind) => Err(UnheldKind::Item(kind)),
+            None => Ok(RawValue::List(texts)),
+        }))
+    }
+
+    fn mapping() -> Self {
+        Self(Err(UnheldKind::Mapping))
+    }
+
+    fn tagged() -> Self {
+        Self(Err(UnheldKind::Tagged))
+    }
+}
+
+impl<'de> Deserialize<'de> for Held {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(Node(std::marker::PhantomData))
+    }
+}
+
+/// An item of a list: a text, or the kind it was read as.
+enum HeldItem {
+    Text(String),
+    Item(UnheldItem),
+}
+
+impl Place for HeldItem {
+    fn scalar(scalar: Scalar) -> Self {
+        match scalar {
+            Scalar::Text(text) => Self::Text(text),
+            Scalar::Bool(_) => Self::Item(UnheldItem::Bool),
+            Scalar::Integer(_) | Scalar::TooLarge | Scalar::TooSmall | Scalar::Float => {
+                Self::Item(UnheldItem::Number)
+            }
+            Scalar::Null => Self::Item(UnheldItem::Null),
+        }
+    }
+
+    fn list<'de, A: SeqAccess<'de>>(items: A) -> Result<Self, A::Error> {
+        skip_list(items)?;
+        Ok(Self::Item(UnheldItem::List))
+    }
+
+    fn mapping() -> Self {
+        Self::Item(UnheldItem::Mapping)
+    }
+
+    fn tagged() -> Self {
+        Self::Item(UnheldItem::Tagged)
+    }
+}
+
+impl<'de> Deserialize<'de> for HeldItem {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(Node(std::marker::PhantomData))
     }
 }
 
@@ -944,15 +1196,15 @@ mod tests {
     #[test]
     fn a_value_a_front_matter_does_not_hold_is_reported() {
         let text = format!("---\nid: {ID}\nnested: {{a: 1}}\n---\n");
-        let DocReading::Unparsed { why, .. } = read(origin(), &text) else {
-            panic!("unparsed");
+        let DocReading::Unheld { values, .. } = read(origin(), &text) else {
+            panic!("unheld");
         };
         assert_eq!(
-            why,
-            RawProblem::UnsupportedValue {
-                key: "nested".to_owned(),
-                kind: UnheldKind::Mapping,
-            }
+            values,
+            NonEmptyVec::new(
+                UnheldValue::new("nested".to_owned(), UnheldKind::Mapping),
+                Vec::new()
+            )
         );
     }
 
@@ -964,11 +1216,17 @@ mod tests {
             ("v: 1.0", UnheldKind::Float),
             ("v: 1e3", UnheldKind::Float),
             ("v: 18446744073709551615", UnheldKind::TooLarge),
+            ("v: 9223372036854775808", UnheldKind::TooLarge),
+            ("v: -99999999999999999999999", UnheldKind::TooSmall),
             ("v: {a: 1}", UnheldKind::Mapping),
             ("v: !x a", UnheldKind::Tagged),
             ("v: [a, ~]", UnheldKind::Item(UnheldItem::Null)),
             ("v: [a, true]", UnheldKind::Item(UnheldItem::Bool)),
             ("v: [a, 3]", UnheldKind::Item(UnheldItem::Number)),
+            (
+                "v: [a, 18446744073709551616]",
+                UnheldKind::Item(UnheldItem::Number),
+            ),
             (
                 "v: [JSON Lines: one record per line]",
                 UnheldKind::Item(UnheldItem::Mapping),
@@ -978,15 +1236,12 @@ mod tests {
         ];
         for (line, kind) in cases {
             let text = format!("---\nid: {ID}\n{line}\n---\n");
-            let DocReading::Unparsed { why, .. } = read(origin(), &text) else {
-                panic!("unparsed: {line}");
+            let DocReading::Unheld { values, .. } = read(origin(), &text) else {
+                panic!("unheld: {line}");
             };
             assert_eq!(
-                why,
-                RawProblem::UnsupportedValue {
-                    key: "v".to_owned(),
-                    kind,
-                },
+                values,
+                NonEmptyVec::new(UnheldValue::new("v".to_owned(), kind), Vec::new()),
                 "{line}"
             );
         }
@@ -995,10 +1250,10 @@ mod tests {
     #[test]
     fn an_item_read_as_a_mapping_is_told_to_be_quoted() {
         let text = format!("---\nid: {ID}\nrejected: [JSON Lines: one record per line]\n---\n");
-        let DocReading::Unparsed { why, .. } = read(origin(), &text) else {
-            panic!("unparsed");
+        let DocReading::Unheld { values, .. } = read(origin(), &text) else {
+            panic!("unheld");
         };
-        let message = why.to_string();
+        let message = values.first().to_string();
         assert!(
             message.contains("a list with an item that is a mapping"),
             "{message}"
@@ -1031,7 +1286,14 @@ mod tests {
 
     #[test]
     fn a_front_matter_that_is_no_mapping_is_said_so() {
-        for yaml in ["- a\n- b", "just: [", "plain"] {
+        for yaml in [
+            "- a\n- b",
+            "just: [",
+            "plain",
+            "18446744073709551616: a",
+            "!x a",
+            "18446744073709551616",
+        ] {
             let DocReading::Unparsed { why, .. } = read(origin(), &format!("---\n{yaml}\n---\n"))
             else {
                 panic!("unparsed");
@@ -1044,12 +1306,16 @@ mod tests {
     #[test]
     fn a_key_written_twice_inside_a_nested_mapping_is_no_top_level_duplicate() {
         let text = format!("---\nid: {ID}\nnested:\n  a: 1\n  a: 2\n---\n");
-        let DocReading::Unparsed { why, .. } = read(origin(), &text) else {
-            panic!("unparsed");
+        let DocReading::Unheld { values, .. } = read(origin(), &text) else {
+            panic!("unheld");
         };
-        assert!(
-            !matches!(why, RawProblem::DuplicateKey { .. }),
-            "a nested mapping is not a value a front matter holds: {why:?}"
+        assert_eq!(
+            values,
+            NonEmptyVec::new(
+                UnheldValue::new("nested".to_owned(), UnheldKind::Mapping),
+                Vec::new()
+            ),
+            "a nested mapping is not a value a front matter holds"
         );
     }
 
@@ -1583,16 +1849,17 @@ mod tests {
         let listed = |ranges: Vec<BookRange>| {
             let docs = docs.clone();
             async move {
-                let mut names: Vec<String> =
-                    docs.read_docs(&ranges)
-                        .await
-                        .unwrap()
-                        .into_iter()
-                        .map(|r| match r {
-                            DocReading::Parsed { origin, .. }
-                            | DocReading::Unparsed { origin, .. } => origin.to_string(),
-                        })
-                        .collect();
+                let mut names: Vec<String> = docs
+                    .read_docs(&ranges)
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|r| match r {
+                        DocReading::Parsed { origin, .. }
+                        | DocReading::Unparsed { origin, .. }
+                        | DocReading::Unheld { origin, .. } => origin.to_string(),
+                    })
+                    .collect();
                 names.sort();
                 names
             }
@@ -1741,6 +2008,9 @@ mod tests {
         let why = |text: &str| match read(origin(), text) {
             DocReading::Unparsed { why, .. } => Some(why),
             DocReading::Parsed { .. } => None,
+            DocReading::Unheld { values, .. } => {
+                panic!("no case holds an unheld value: {values:?}")
+            }
         };
         assert_eq!(why(""), Some(RawProblem::NoFrontMatter));
         assert_eq!(why("\n"), Some(RawProblem::NoFrontMatter));

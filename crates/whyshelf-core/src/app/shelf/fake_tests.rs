@@ -443,7 +443,7 @@ impl FakeShelf {
             DocReading::Parsed { entries, .. } => {
                 entries.get("id") != Some(&RawValue::Text(wanted.clone()))
             }
-            DocReading::Unparsed { .. } => true,
+            DocReading::Unparsed { .. } | DocReading::Unheld { .. } => true,
         });
         readings.push(replacement);
     }
@@ -550,7 +550,9 @@ impl FileWrite for FakeShelf {
 /// Whether a real listing of these ranges would read the file of a reading: it is
 /// under no book's directory (kept, see `read_docs`), or some range takes it.
 fn listed(ranges: &[BookRange], reading: &DocReading) -> bool {
-    let (DocReading::Parsed { origin, .. } | DocReading::Unparsed { origin, .. }) = reading;
+    let (DocReading::Parsed { origin, .. }
+    | DocReading::Unparsed { origin, .. }
+    | DocReading::Unheld { origin, .. }) = reading;
     let under = |r: &BookRange| r.dir().contains(origin);
     !ranges.iter().any(under) || ranges.iter().any(|r| r.takes(origin))
 }
@@ -602,7 +604,9 @@ impl DocSource for FakeShelf {
             .map(|reading| {
                 let (origin, unparsed) = match reading {
                     DocReading::Parsed { origin, .. } => (origin, false),
-                    DocReading::Unparsed { origin, .. } => (origin, true),
+                    DocReading::Unparsed { origin, .. } | DocReading::Unheld { origin, .. } => {
+                        (origin, true)
+                    }
                 };
                 let form = match forms.get(origin) {
                     Some(form) => form.clone(),
@@ -646,8 +650,9 @@ impl DocReplace for FakeShelf {
         };
         let mut readings = lock(&self.readings);
         for reading in readings.iter_mut() {
-            let (DocReading::Parsed { origin, .. } | DocReading::Unparsed { origin, .. }) =
-                &*reading;
+            let (DocReading::Parsed { origin, .. }
+            | DocReading::Unparsed { origin, .. }
+            | DocReading::Unheld { origin, .. }) = &*reading;
             if origin == at {
                 *reading = reads_as.clone();
             }
@@ -726,7 +731,9 @@ impl DocWrite for FakeShelf {
             }
         }
         let read = lock(&self.readings).iter().any(|r| match r {
-            DocReading::Parsed { origin, .. } | DocReading::Unparsed { origin, .. } => origin == at,
+            DocReading::Parsed { origin, .. }
+            | DocReading::Unparsed { origin, .. }
+            | DocReading::Unheld { origin, .. } => origin == at,
         });
         Ok((read || files.contains_key(at)).then(|| at.clone()))
     }
@@ -762,7 +769,9 @@ impl DocWrite for FakeShelf {
         }
         let mut readings = lock(&self.readings);
         let there = readings.iter().any(|r| match r {
-            DocReading::Parsed { origin, .. } | DocReading::Unparsed { origin, .. } => origin == at,
+            DocReading::Parsed { origin, .. }
+            | DocReading::Unparsed { origin, .. }
+            | DocReading::Unheld { origin, .. } => origin == at,
         });
         if there {
             return Ok(Creation::AlreadyThere);

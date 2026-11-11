@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "de8532f9b43372c5a5a3c31714b833c6160f0bf8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9b94b0c743e0a6def1c657a447df740f3f477a18dad3e11f9650d0385baa574f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ce5c493add52dbd94a6ffdbcdec1b054303c95ae",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4e99eb9548f2f01b1903b4772e2c91b57d58f0d36d1baec6fa6575d5bd138ba3",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794438182137,
+  "expires": null,
+  "frame": [
+    {
+      "address": "77d6d5942adedba53467a0794565412517082ccc",
+      "hash": "sha256:e8610fc16a6715235ba2489ed9fc8c0b702686130cde98bd54f61a87d68ebb50",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    }
+  ],
+  "id": "01a1ccd9-b5d5-71a2-934f-78ac90be6385",
+  "kind": "decision",
+  "reason": "Issue #21: a front matter tells every value of a kind it does not hold, each with its key and kind, and a whole number beyond 64 bits as too large or too small. Reviewed by an independent design review (pass on v3), rule checks (bugfix, arch: no violation) and /code-review; the reproducing and held-out tests pass, and the test files of the stale verifications changed only to follow the new reading type, with no assertion weakened.",
+  "revision": "f37885624d42b61c76038b12e2cd499c7cf33e42",
+  "seen": "sha256:88b4f0dab9fab350a7831ab545d07a095a4bc5d2e120880183e1a6f69e238c13",
+  "seen_address": "a48c1ce442920d277dd7c62c16a289536c011525",
+  "subject": "01a1cc04-8636-721f-a251-50df70adcd68",
+  "v": 1,
+  "verb": "approve"
+}
