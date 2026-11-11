@@ -1,0 +1,125 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9b89b1dac1aafe71458029d0808eb5509cc6833b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a06aa9d1e45227f321e153fa49692929069afda46a672d2d75410db90e1a34fb",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/notice_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a9b809b5f110e3c990e48ab73e9adf2f75b25486",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:720a52845a0bdcbc1c8e6c704425504fdd8c5d8d777e1b9bb312c55c96842f62",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/severity_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "52da244ffc42de62ec97f4f7c0ec7c0cabb0b77c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:33d091e31022850d16429dcfd27704740cc8fe09cf02673f5680ac8bb9d6ed90",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e5a5e3627b9ea64add27c97c6f3edef7f06e3985",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f0c3350540c29f8fc1f330a921567c9f46e6cc9f8ba7d43a738aa1a966e637e7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/graph.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8ba3c117fdb4a0d0ceb43d04396fe74d06e7c223",
+      "hash": "sha256:d05433fd80e351ae6c08f5298c9109dc5cc36c482844ba6313fd7d12665ac88a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3c29-7041-9ec8-42f8da38f9c3"
+    },
+    {
+      "address": "f38d9b5bf5a057913698a1a68cb5d46dab27dd45",
+      "hash": "sha256:f6cb3765ad15e10a061528b11794288b52ea12fe856306b364a8d29c3cc3601f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "15"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-131c-70e3-ae5e-e8e75931bc90"
+    },
+    {
+      "address": "ebfe8f023d1fee99c00a0b3d28b0dc8ed50e7aae",
+      "hash": "sha256:e56a942298044c37c1b8a4f9330354562eefcca2ac5690d8f825d292bf1c65da",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "39"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-f3b7-72cf-8b09-aa059e4584fe"
+    }
+  ],
+  "id": "01a1c833-10ae-7587-9808-01e225ccff6b",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:b085ac9b15cf1efebdb3cc412c20aeb26cd4f795fa131f9aefe7bd05f231e9a4",
+  "seen_address": "648975fd77eef7c85fecf11f471f198bd1d68ab3",
+  "subject": "01a1c4ba-1730-7609-bdae-758e470e1909",
+  "v": 1,
+  "verb": "approve"
+}

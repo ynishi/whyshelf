@@ -89,6 +89,33 @@
 //!   tests: [crates/cache/tests/expiry.rs]      paths under the root, with `/`
 //! ```
 //!
+//! The space `rust-item` holds the items of the project's Rust crates, by their
+//! path (`cache::Expiry`, `cache::Expiry::check`, `cache::Kind::Soft`), as the docs
+//! `cargo doc` builds know them: they are looked up in the HTML rustdoc writes in
+//! the project's build directory (`CARGO_TARGET_DIR`, else `build.target-dir` of
+//! the cargo settings at the root, else the one beside the root's `Cargo.toml`).
+//! Finding them runs no program. A path is there or absent only when the docs of
+//! its crate are built and are rustdoc's; before that, or when the build directory
+//! cannot be told, it cannot be told. Only that an item is there is known of it, so
+//! a link to items compares `presence` (the preset `rustdoc`, below; another
+//! comparison cannot be told): an edit of an item changes nothing, and an item
+//! renamed, moved or removed is gone. The docs are read as they are, so docs left
+//! by an earlier build, of an item or a crate since gone, read as there: build them
+//! afresh before you check or approve (`cargo doc --no-deps`; in this repository
+//! `just rust-doc`, which removes the old ones first). A name reached only through
+//! a glob re-export of a public module, a member reached only through a type alias,
+//! and an item hidden from the docs (`#[doc(hidden)]`) read as absent; a member a
+//! type has through `Deref` or a blanket impl reads as there; a raw identifier
+//! (`r#type`) is no name. The rules and the limits are on the page of
+//! `whyshelf_infra::shelf::artifact::rust_item`. A link to items:
+//!
+//! ```text
+//!   [[book.link]]
+//!   name = "rustdoc"
+//!   target = "artifact"
+//!   preset = "rustdoc"       # space = "rust-item", compare = "presence", means = "depends"
+//! ```
+//!
 //! A text that is no name of the link's space makes the document invalid, with a
 //! problem that names the link, the text and why. For each name, its adapter answers
 //! one of four: the thing is there (with its hash), not there, it cannot tell now
@@ -104,7 +131,15 @@
 //! `artifact_absent` notice. A name its adapter cannot tell about now is listed under
 //! `check`'s `unknown` (the check stays clean) with an `artifact_unknown` notice; an
 //! approval that would pin one is refused, and one already pinned changes nothing of
-//! the approval while it lasts. Afterwards:
+//! the approval while it lasts. `check` also writes each such name on stderr, as it
+//! does a gap of `warn`: `warning: <key> names <name> in <space>, which cannot be
+//! told: <why>`, or `…, which has nothing behind it`. A gate cannot say an approval
+//! holds that stands on a name that cannot be told, so `stale` lists each name an
+//! approved document pins through a `depends` link that cannot be told now in its
+//! `unknown` (`doc`, `link`, `name`, `space`, `why`, as `check`'s), and
+//! `stale --exit-code` exits 1 for one too, with `warning: <key> pins <name> in
+//! <space>, which cannot be told now, …` on stderr; its freshness is still
+//! unchanged. Afterwards:
 //!
 //! | the pinned artifact | now | the approval is |
 //! |---|---|---|
@@ -126,8 +161,8 @@
 //! name. The name is in `artifact` in a cause, a notice and the declarations of
 //! `judge same`; in `path` and, the same, `name` in `check`'s `absent`, `judge
 //! approve`'s `absent`, a link target of `get` and `trace`, an origin of `stale`, and
-//! an item of `get --approved` and `diff`; and in `name` alone in `check`'s
-//! `unknown`. A `links_changed` cause of a link to artifacts gives `space` when every
+//! an item of `get --approved` and `diff`; and in `name` alone in the `unknown` of
+//! `check` and `stale`. A `links_changed` cause of a link to artifacts gives `space` when every
 //! name added and removed is in one space (none when the link moved to another).
 //!
 //! What of an artifact counts is declared per link, with `compare`:
@@ -178,9 +213,11 @@
 //! ```
 //!
 //! Each adapter offers presets for its own space (the file adapter offers `file`:
-//! `space = "file"`, `compare = "bytes"`, `means = "depends"`; the page of
-//! `whyshelf_infra::shelf::artifact` lists them). A project declares its own with
-//! `[[preset]]`. One of the name of a built-in preset and with no `from` replaces
+//! `space = "file"`, `compare = "bytes"`, `means = "depends"`; the adapter of Rust
+//! items offers `rustdoc`: `space = "rust-item"`, `compare = "presence"`,
+//! `means = "depends"`; the page of `whyshelf_infra::shelf::artifact` lists them).
+//! A project declares its own with `[[preset]]`. One of the name of a built-in
+//! preset and with no `from` replaces
 //! the built-in one whole: it takes none of its values. With `from` of its own name
 //! it refines the built-in one instead (`name = "file", from = "file"`); any other
 //! `from` names a preset of the project first, then a built-in one. `compare` and
@@ -263,8 +300,10 @@
 //!                             otherwise 0, whatever it lists)
 //!   stale [--exit-code]       the approvals that no longer hold, strongest first, with their roots,
 //!                             and their origins: each document, artifact, cycle or the declaration where
-//!                             they start, with the approvals it degrades
-//!                             (exit 1 with --exit-code when there is any)
+//!                             they start, with the approvals it degrades, and the names
+//!                             approvals stand on that cannot be told now (`unknown`)
+//!                             (exit 1 with --exit-code when there is any, or when an
+//!                             approval stands on a name that cannot be told now)
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
 //!   judge approve --stale --reason <text> [--until <time>] [--actor <name>]
@@ -398,7 +437,7 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written) |
+//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written) |
 //! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!

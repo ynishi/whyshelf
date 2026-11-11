@@ -11,7 +11,7 @@
 //! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
-//! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`] |
+//! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], and the names approvals stand on that cannot be told now |
 //!
 //! [`Schema::declared`]: crate::domain::shelf::schema::Schema::declared
 //! [`ShelfMap::of`]: crate::domain::shelf::map::ShelfMap::of
@@ -24,10 +24,13 @@
 //! [`resolve`]: crate::domain::shelf::lookup::resolve
 //! [domain_trace]: crate::domain::shelf::trace::trace
 
+use std::collections::BTreeSet;
+
 use crate::domain::id::DocId;
 use crate::domain::shelf::freshness::{Freshness, Notice, Standing};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
+use crate::domain::shelf::schema::{ArtifactPropagation, EntryName};
 use crate::domain::shelf::trace::{LinkEnd, trace};
 
 use super::ShelfApp;
@@ -298,9 +301,44 @@ impl<P: ShelfRead> ShelfApp<P> {
             })
             .collect();
         entries.sort_by(|a, b| b.level.cmp(&a.level).then(a.row.id.cmp(&b.row.id)));
+        let unknown = assessment
+            .standings()
+            .iter()
+            .filter(|(_, standing)| matches!(standing, Standing::Approved(_)))
+            .flat_map(|(id, _)| {
+                let doc = loaded.shelf.doc(*id);
+                let key = doc.map(|doc| doc.key().clone());
+                let depends: BTreeSet<&EntryName> = doc
+                    .map(|doc| {
+                        doc.artifact_links_of(ArtifactPropagation::Depends)
+                            .into_iter()
+                            .map(|(link, _)| link)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                assessment
+                    .notices_of(*id)
+                    .iter()
+                    .filter_map(move |notice| match notice {
+                        Notice::ArtifactUnknown {
+                            link,
+                            artifact,
+                            why,
+                        } if depends.contains(link) => Some(Unknown {
+                            doc: *id,
+                            key: key.clone(),
+                            link: link.clone(),
+                            artifact: artifact.clone(),
+                            why: why.clone(),
+                        }),
+                        _ => None,
+                    })
+            })
+            .collect();
         Ok(StaleReport {
             entries,
             origins: assessment.origins(),
+            unknown,
             names: loaded.names(),
             health: view.health(),
         })

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "03b033e35f0428fd5a47d549de0ef89ab50c1a7a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:537c95dd86b086f35e8cb40e54e4d4b3f1a04ed16e7712fdc88867f9f58665b7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "774b5fe08288446f626a04039762d13807f80059",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6eb91c6d6d17aa86b6805f8de6858aa716128688b564cc3397168979db3f1c73",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b22390f36f69b33a4d51c3e9ab08fc8dc1174f23",
+      "hash": "sha256:14a2a0df1f36311213c5610b73b861839584186bf51d234db1edf8ea0d14e017",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    }
+  ],
+  "id": "01a1c833-40bf-76b6-93fb-11c4dfb64cd3",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:e6b205f9a01b541f65fff69ac82aa0126616317732f174912f9faa0def77ac03",
+  "seen_address": "abb2a367a46d3ab3d96fee6da2cb4e6fb3f085fe",
+  "subject": "01a1c6a9-797b-7261-bf2c-9fa48fea4c5e",
+  "v": 1,
+  "verb": "approve"
+}

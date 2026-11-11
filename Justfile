@@ -7,8 +7,9 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
-# Everything a change owes before it is handed over.
-check: rust-fmt-check rust-clippy rust-test rust-doc deny books
+# Everything a change owes before it is handed over. The docs are built before
+# the tests, which resolve the books' Rust paths in them.
+check: rust-fmt-check rust-clippy rust-doc rust-test deny books
 
 # The repository's own books are sound, every document is in the one form
 # (DEC-52), and every approval in them still holds (DEC-26). The answer is
@@ -30,8 +31,11 @@ rust-test:
 # The documentation is the rustdoc, and it builds without a warning (a broken
 # link counts). The `whyshelf` binary and the umbrella library are both named
 # `whyshelf`, so cargo would write both into one directory; the command line's page
-# is built apart, into a target directory of its own.
+# is built apart, into a target directory of its own. The docs are removed
+# first, so the space `rust-item` (`just books`) reads the docs of this tree
+# only, never pages left by an earlier build of an item or a crate since gone.
 rust-doc:
+    rm -rf "${CARGO_TARGET_DIR:-target}/doc"
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude whyshelf-cli --no-deps
     RUSTDOCFLAGS="-D warnings" cargo doc -p whyshelf-cli --no-deps --target-dir target/doc-cli
 

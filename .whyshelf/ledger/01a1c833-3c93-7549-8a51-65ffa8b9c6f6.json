@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "bfcee6ede720a69302fb1e1ec4e3208e056cc3f3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bd4fc955945024da075fb20293481ee97ff47b7d71320f2c12bd2af83dd51807",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/unlinked_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "eb7890f9bbb4de2506e76f3f4eb0fa7123d18157",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:372375674c7eccaac3614217466e4ff582643da7bb46435167156fdb47c14bcf",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "108928374f6dfadcb9c6da00a7e377f2960f22b4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:74d20d58cfba76afda7e3cf0d111010988219587f8be65e7aa9641bbfa854524",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "573dc5ef3fcd0ec4d1b9d4ef061d37ecf56d23b0",
+      "hash": "sha256:85f4c818721f36f774e93d3e9edf25469f44c19ccc46b4d76040798211c9c323",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "49"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c671-1d95-725c-bd74-8b605650d16c"
+    }
+  ],
+  "id": "01a1c833-3c93-7549-8a51-65ffa8b9c6f6",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:55f96286ec885bbac4531ec6946fa0575870b64e56ee02208d0d4bf24eed13cf",
+  "seen_address": "f3800ec71b7325f4bf54c56848cd56ed6014d8e7",
+  "subject": "01a1c671-1e88-731a-a996-a78758d9570d",
+  "v": 1,
+  "verb": "approve"
+}

@@ -48,8 +48,9 @@ pub enum BooksCommand {
     },
     /// The approvals that no longer hold, with where each starts to fail.
     Stale {
-        /// Exit 1 when any approval does not hold (as `git diff --exit-code`), so a
-        /// script or CI can fail on it; without it the exit is 0.
+        /// Exit 1 when any approval does not hold (as `git diff --exit-code`), or
+        /// stands on a name that cannot be told now, so a script or CI can fail on
+        /// it; without it the exit is 0.
         #[arg(long)]
         exit_code: bool,
     },
