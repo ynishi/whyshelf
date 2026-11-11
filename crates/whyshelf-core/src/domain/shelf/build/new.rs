@@ -38,7 +38,8 @@ use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactReadings};
 use crate::domain::shelf::doc::{Doc, DocKey, LinkState, UnresolvedLink};
 use crate::domain::shelf::schema::{
-    BookName, EntryName, ID_ENTRY, KEY_ENTRY, KeyForm, KeyPattern, KeyProblem, KeyTail,
+    BookName, BookSchema, BookScope, EntryName, ID_ENTRY, KEY_ENTRY, KeyForm, KeyPattern,
+    KeyProblem, KeyTail,
 };
 
 use super::{
@@ -89,6 +90,49 @@ pub enum NextKeyProblem {
         #[source]
         problem: KeyProblem,
     },
+    /// The file of the next key is one the range of the book does not take.
+    #[error(transparent)]
+    OutOfRange(Box<OutOfRange>),
+}
+
+/// A key whose file, `<book dir>/<key>.md`, the range of its book does not take
+/// (`include`, `exclude`): the book would never read the document, so it is not
+/// made. The answer names the patterns.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error(
+    "the book `{book}` does not take `{path}`, the file of the key `{}`: {scope}",
+    .key.form
+)]
+pub struct OutOfRange {
+    /// The book.
+    pub book: BookName,
+    /// The key.
+    pub key: DocKey,
+    /// The file the document would be.
+    pub path: RelPath,
+    /// The range of the book.
+    pub scope: BookScope,
+}
+
+/// The file a document of `key` would be, `<book dir>/<key>.md`: the one place it is
+/// made, for the key steps and for [`Shelf::check_new`]. An error when that is no
+/// path under the root (a slug with a `.` or `..` segment).
+fn file_of(book: &BookSchema, key: &DocKey) -> Result<RelPath, ValueError> {
+    format!("{}/{}.md", book.dir(), key.form).parse()
+}
+
+/// The key, refused when its file is a path the book's range does not take. A key
+/// whose file is no path is let through: [`Shelf::check_new`] refuses it with why.
+fn in_range(book: &BookSchema, key: DocKey) -> Result<DocKey, Box<OutOfRange>> {
+    match file_of(book, &key) {
+        Ok(path) if !book.takes(&path) => Err(Box::new(OutOfRange {
+            book: book.name().clone(),
+            key,
+            path,
+            scope: book.scope().clone(),
+        })),
+        _ => Ok(key),
+    }
 }
 
 /// Why a key given for a new document cannot be its key.
@@ -117,6 +161,9 @@ pub enum ClaimKeyProblem {
         /// The key.
         key: DocKey,
     },
+    /// The file of the key is one the range of the book does not take.
+    #[error(transparent)]
+    OutOfRange(Box<OutOfRange>),
 }
 
 /// Why a new document cannot be made of what was given.
@@ -145,6 +192,11 @@ pub enum NewDocProblem {
         #[source]
         source: ValueError,
     },
+    /// `<book dir>/<key>.md` is a path the range of the book does not take. The key
+    /// steps refuse such a key first; this is the same rule, asked again of the file
+    /// that is judged.
+    #[error(transparent)]
+    OutOfRange(Box<OutOfRange>),
     /// The document would be invalid: every problem the build would find.
     #[error(
         "the new document would be invalid: {}",
@@ -230,12 +282,15 @@ impl Shelf {
                 highest,
                 problem,
             })?;
-        Ok(NewKey {
-            key: DocKey {
+        let key = in_range(
+            schema,
+            DocKey {
                 book: book.clone(),
                 form,
             },
-        })
+        )
+        .map_err(NextKeyProblem::OutOfRange)?;
+        Ok(NewKey { key })
     }
 
     /// A key a person gave for a new document: read in the book's grammar, and
@@ -262,6 +317,7 @@ impl Shelf {
         if self.written_keys.contains_key(&key) {
             return Err(ClaimKeyProblem::Taken { key });
         }
+        let key = in_range(schema, key).map_err(ClaimKeyProblem::OutOfRange)?;
         Ok(NewKey { key })
     }
 
@@ -322,12 +378,13 @@ impl Shelf {
             .ok_or_else(|| NewDocProblem::UnknownBook {
                 book: key.key.book.clone(),
             })?;
-        let origin: RelPath = format!("{}/{}.md", book.dir(), key.key.form)
-            .parse()
-            .map_err(|source| NewDocProblem::PathInvalid {
-                key: key.key.clone(),
-                source,
-            })?;
+        let origin = file_of(book, &key.key).map_err(|source| NewDocProblem::PathInvalid {
+            key: key.key.clone(),
+            source,
+        })?;
+        // The rule the key steps asked, asked again of the file judged, so that the
+        // answer names the range and not "under no book".
+        in_range(book, key.key.clone()).map_err(NewDocProblem::OutOfRange)?;
         entries.insert(ID_ENTRY.to_owned(), RawValue::Text(id.to_string()));
         entries.insert(
             KEY_ENTRY.to_owned(),

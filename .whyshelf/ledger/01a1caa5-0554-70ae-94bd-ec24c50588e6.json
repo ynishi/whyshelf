@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a1727f344d70ad561e8ced30eb4ffe3128aad9ef",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:09c3cd117f8f77fa16731028e722ec919e02bd394cf486ac0ef7ab794cf9d8aa",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "60094becd5fb7a5d0efd7c100818e70750757430",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:359bef7d7d0f114db6ae8665041d18858840b596c9e1370ef89be33f5d3856c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3103496327df4a94a38c1e02127130849ed12cfb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9b6fb352d803d886bd64123733db7c2fe26ab93a6b3a97b652daa61ce1f068e5",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794401174143,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7bbfeb560c708d2332037c3c673f81031f030e54",
+      "hash": "sha256:014c638e8680d3ed28b9be79f3adecede14178e1e68714b68e212c55cece2dfc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "11"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-11d9-7657-8910-6240e23765d9"
+    }
+  ],
+  "id": "01a1caa5-0554-70ae-94bd-ec24c50588e6",
+  "kind": "decision",
+  "reason": "Every reader and writer of a book's files asks its range; the tests carry the range in their declarations and the map writes it (#75); checked by a blind review",
+  "revision": "5551962100bd31d21bf93859dc4048a3cd2a6153",
+  "seen": "sha256:552c5cbdeffde9917d43abfaa8b60fbe297380ecbed886e4b97da0a06c2ebc07",
+  "seen_address": "79a591912f2c1ec455a73bc27f8af837e8982558",
+  "subject": "01a1c4ba-15af-74cf-8ea9-0f39eda83aa0",
+  "v": 1,
+  "verb": "approve"
+}

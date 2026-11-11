@@ -82,7 +82,7 @@ use whyshelf_core::domain::shelf::build::{
     DocReading, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind,
 };
 use whyshelf_core::domain::shelf::doc::normalize;
-use whyshelf_core::domain::shelf::schema::BookDir;
+use whyshelf_core::domain::shelf::schema::BookRange;
 
 use super::create;
 use super::git::{Git, GitError};
@@ -153,9 +153,9 @@ impl MarkdownDocs {
 impl DocSource for MarkdownDocs {
     type Error = DocsError;
 
-    async fn read_docs(&self, dirs: &[BookDir]) -> Result<Vec<DocReading>, DocsError> {
+    async fn read_docs(&self, ranges: &[BookRange]) -> Result<Vec<DocReading>, DocsError> {
         Ok(self
-            .files_of(dirs)
+            .files_of(ranges)
             .await?
             .into_iter()
             .map(|(origin, bytes)| match std::str::from_utf8(&bytes) {
@@ -165,9 +165,9 @@ impl DocSource for MarkdownDocs {
             .collect())
     }
 
-    async fn forms(&self, dirs: &[BookDir]) -> Result<Vec<FileForm>, DocsError> {
+    async fn forms(&self, ranges: &[BookRange]) -> Result<Vec<FileForm>, DocsError> {
         let mut forms = Vec::new();
-        for (origin, bytes) in self.files_of(dirs).await? {
+        for (origin, bytes) in self.files_of(ranges).await? {
             let file = self.root.join(origin.as_str());
             let mut found = form(origin, bytes);
             if matches!(found.form, Form::Other { .. })
@@ -216,12 +216,14 @@ impl DocSource for MarkdownDocs {
 }
 
 impl MarkdownDocs {
-    /// Every `.md` file under these directories, with its bytes, in the order of the
-    /// directories and, under each, a stable order.
-    async fn files_of(&self, dirs: &[BookDir]) -> Result<Vec<(RelPath, Vec<u8>)>, DocsError> {
+    /// Every `.md` file the ranges take, with its bytes, in the order of the books
+    /// and, under each, a stable order. Whether a file is in a range is asked of
+    /// the range and of nothing else here ([`range_files`]); a file out of range is
+    /// not read.
+    async fn files_of(&self, ranges: &[BookRange]) -> Result<Vec<(RelPath, Vec<u8>)>, DocsError> {
         let mut files = Vec::new();
-        for dir in dirs {
-            for file in markdown_files(&self.root.join(dir.as_rel().as_str())).await? {
+        for range in ranges {
+            for file in range_files(&self.root.join(range.dir().as_rel().as_str()), range).await? {
                 let origin = relative(&self.root, &file)?;
                 let bytes = tokio::fs::read(&file)
                     .await
@@ -292,12 +294,20 @@ fn links(_meta: &std::fs::Metadata) -> u64 {
     1
 }
 
-/// Every `.md` file under `dir`, in a stable order. A directory that is not there
-/// has none.
-async fn markdown_files(dir: &Path) -> Result<Vec<PathBuf>, DocsError> {
+/// Every file under `dir`, the directory of `range`, that the range takes, in a
+/// stable order. A directory that is not there has none.
+///
+/// The range is asked before anything else is done with a name: a directory it
+/// takes nothing under (an `exclude` of `<dir>/**`) is not opened, and a file it
+/// does not take is not made a path, so a name that is no path, or a directory
+/// that cannot be read, out of the range is no error. In the range, both are, as
+/// they were. A name is asked of the range as its text; one that is not UTF-8 is
+/// asked with its bad bytes replaced, and when the range takes that, it fails
+/// where every name that is no path fails ([`relative`]).
+async fn range_files(dir: &Path, range: &BookRange) -> Result<Vec<PathBuf>, DocsError> {
     let mut found = Vec::new();
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(next) = pending.pop() {
+    let mut pending = vec![(dir.to_path_buf(), String::new())];
+    while let Some((next, below)) = pending.pop() {
         let mut entries = match tokio::fs::read_dir(&next).await {
             Ok(entries) => entries,
             Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
@@ -309,13 +319,21 @@ async fn markdown_files(dir: &Path) -> Result<Vec<PathBuf>, DocsError> {
         };
         while let Some(entry) = entries.next_entry().await.map_err(io)? {
             let kind = entry.file_type().await.map_err(io)?;
-            let path = entry.path();
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let at = if below.is_empty() {
+                name.into_owned()
+            } else {
+                format!("{below}/{name}")
+            };
             // arch-lint: allow(no-sync-io) reason="`kind` is a FileType fetched with `.await` above: a pure accessor, no I/O"
             if kind.is_dir() {
-                pending.push(path);
+                if !range.leaves_out_dir(&at) {
+                    pending.push((entry.path(), at));
+                }
             // arch-lint: allow(no-sync-io) reason="`kind` is a FileType fetched with `.await` above: a pure accessor, no I/O"
-            } else if kind.is_file() && path.extension().is_some_and(|e| e == "md") {
-                found.push(path);
+            } else if kind.is_file() && range.takes_below(&at) {
+                found.push(entry.path());
             }
         }
     }
@@ -337,6 +355,62 @@ fn relative(root: &Path, file: &Path) -> Result<RelPath, DocsError> {
     segments.join("/").parse().map_err(|e| name(Some(e)))
 }
 
+/// How a text stands to a front matter: the one place "no front matter" is defined.
+///
+/// A front matter is opened by a line that is exactly `---` as the very first line
+/// of the text (after the normalization rule, so a CRLF, and spaces or tabs at the
+/// end of the line, do not matter). The rule, on the text after the normalization
+/// rule:
+///
+/// 1. It begins with the line `---`: a front matter opens
+///    ([`FrontMatterStart::Opens`]); one never closed is
+///    [`RawProblem::Unclosed`].
+/// 2. Otherwise, set aside a leading byte order mark (U+FEFF) and every blank line
+///    before the first line with anything on it. When there is no such line (the
+///    empty text, a text of blank lines, a lone mark), or that line does not begin
+///    with `---`, the text holds *no front matter at all*
+///    ([`FrontMatterStart::None`]): a Markdown file that begins with a heading or
+///    a paragraph, with `---` only later (a thematic break), is one.
+/// 3. Otherwise that line begins with `---` and is not the exact opening at the
+///    first byte (a mark or blank lines come before it, or it is `----`, `---x`,
+///    `--- x`): the text tried to open a front matter, and did not
+///    ([`FrontMatterStart::BadOpening`], [`RawProblem::BadOpening`]). It is
+///    invalid, and a book that skips files with no front matter never skips it, so
+///    a mistyped delimiter is not passed over. In a book that does not skip, the
+///    shelf tells it as [`RawProblem::NoFrontMatter`], as before a book could skip
+///    (`Shelf::told`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FrontMatterStart<'a> {
+    /// The first line is `---`; `rest` is the text after it.
+    Opens {
+        /// What follows the opening line.
+        rest: &'a str,
+    },
+    /// The first line with anything on it begins with `---`, but is not the exact
+    /// opening at the first byte.
+    BadOpening,
+    /// No front matter at all.
+    None,
+}
+
+/// How a text, already normalized by [`normalize`], stands to a front matter
+/// ([`FrontMatterStart`]).
+fn front_matter_start(normalized: &str) -> FrontMatterStart<'_> {
+    if let Some(rest) = normalized.strip_prefix("---\n") {
+        return FrontMatterStart::Opens { rest };
+    }
+    let first_with_content = normalized
+        .strip_prefix('\u{feff}')
+        .unwrap_or(normalized)
+        .lines()
+        .find(|line| !line.is_empty());
+    if first_with_content.is_some_and(|line| line.starts_with("---")) {
+        FrontMatterStart::BadOpening
+    } else {
+        FrontMatterStart::None
+    }
+}
+
 /// A file's text as a reading.
 pub fn read(origin: RelPath, text: &str) -> DocReading {
     let text = normalize(text);
@@ -345,8 +419,10 @@ pub fn read(origin: RelPath, text: &str) -> DocReading {
         id: seen_id(&text).map_or(ReadId::Unreadable, ReadId::Read),
         why,
     };
-    let Some(rest) = text.strip_prefix("---\n") else {
-        return unparsed(RawProblem::NoFrontMatter);
+    let rest = match front_matter_start(&text) {
+        FrontMatterStart::Opens { rest } => rest,
+        FrontMatterStart::BadOpening => return unparsed(RawProblem::BadOpening),
+        FrontMatterStart::None => return unparsed(RawProblem::NoFrontMatter),
     };
     let Some((yaml, body)) = split_closing(rest) else {
         return unparsed(RawProblem::Unclosed);
@@ -814,6 +890,7 @@ fn seen_id(text: &str) -> Option<DocId> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use whyshelf_core::domain::shelf::schema::BookDir;
 
     const ID: &str = "019a6f3e-0000-7000-8000-000000000001";
 
@@ -1158,6 +1235,7 @@ mod tests {
         let decls = vec![BookSchemaDecl {
             name: "spec".to_owned(),
             dir: "docs".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Prefixed {
                 prefix: "S".to_owned(),
             },
@@ -1348,7 +1426,10 @@ mod tests {
             .await
             .is_ok();
 
-        let forms = docs.forms(&[BookDir::new("docs").unwrap()]).await.unwrap();
+        let forms = docs
+            .forms(&[BookRange::of_dir(BookDir::new("docs").unwrap())])
+            .await
+            .unwrap();
         let got: Vec<&Form> = forms.iter().map(|f| &f.form).collect();
         assert!(matches!(got[0], Form::Other { .. }), "{got:?}");
         if !writable_anyway {
@@ -1410,7 +1491,7 @@ mod tests {
         );
         assert_eq!(tokio::fs::read_to_string(&file).await.unwrap(), written);
 
-        let dirs = [BookDir::new("books/design").unwrap()];
+        let dirs = [BookRange::of_dir(BookDir::new("books/design").unwrap())];
         let readings = docs.read_docs(&dirs).await.unwrap();
         let [DocReading::Parsed { entries: back, .. }] = readings.as_slice() else {
             panic!("one parsed file");
@@ -1432,8 +1513,8 @@ mod tests {
             .unwrap();
         let docs = MarkdownDocs::new(root.path().to_path_buf());
         let dirs = [
-            BookDir::new("docs/specs").unwrap(),
-            BookDir::new("docs/missing").unwrap(),
+            BookRange::of_dir(BookDir::new("docs/specs").unwrap()),
+            BookRange::of_dir(BookDir::new("docs/missing").unwrap()),
         ];
         let readings = docs.read_docs(&dirs).await.unwrap();
         assert_eq!(readings.len(), 1);
@@ -1441,5 +1522,342 @@ mod tests {
             panic!("parsed");
         };
         assert_eq!(origin.as_str(), "docs/specs/sub/a.md");
+    }
+
+    /// The range of a book `spec` over `docs/specs` with these settings.
+    fn ranges_of(include: Option<&[&str]>, exclude: &[&str]) -> Vec<BookRange> {
+        use std::collections::BTreeSet;
+        use whyshelf_core::domain::shelf::schema::{
+            BookSchemaDecl, KeyPatternDecl, Schema, ScopeDecl,
+        };
+        let decl = BookSchemaDecl {
+            name: "spec".to_owned(),
+            dir: "docs/specs".to_owned(),
+            scope: ScopeDecl {
+                include: include.map(|l| l.iter().map(|s| (*s).to_owned()).collect()),
+                exclude: (!exclude.is_empty())
+                    .then(|| exclude.iter().map(|s| (*s).to_owned()).collect()),
+                without_front_matter: None,
+            },
+            key: KeyPatternDecl::Slug,
+            description: None,
+            fields: Vec::new(),
+            links: Vec::new(),
+        };
+        Schema::validate(vec![decl], &BTreeSet::new())
+            .unwrap()
+            .ranges()
+    }
+
+    #[tokio::test]
+    async fn only_the_files_the_range_takes_are_listed_and_read() {
+        let root = tempfile::tempdir().unwrap();
+        let base = root.path().join("docs/specs");
+        for (file, text) in [
+            ("a.md", format!("---\nid: {ID}\n---\n")),
+            ("b.md", "no front matter\n".to_owned()),
+            ("archive/c.md", "---\n".to_owned()),
+            ("archive/deep/d.md", "plain\n".to_owned()),
+            ("keep/e.md", format!("---\nid: {ID}\n---\n")),
+        ] {
+            let path = base.join(file);
+            tokio::fs::create_dir_all(path.parent().unwrap())
+                .await
+                .unwrap();
+            tokio::fs::write(path, text).await.unwrap();
+        }
+        // A file that is not UTF-8, out of the range: never read, so never invalid.
+        tokio::fs::write(base.join("archive/bin.md"), [0xff, 0xfe, 0x00])
+            .await
+            .unwrap();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        let listed = |ranges: Vec<BookRange>| {
+            let docs = docs.clone();
+            async move {
+                let mut names: Vec<String> =
+                    docs.read_docs(&ranges)
+                        .await
+                        .unwrap()
+                        .into_iter()
+                        .map(|r| match r {
+                            DocReading::Parsed { origin, .. }
+                            | DocReading::Unparsed { origin, .. } => origin.to_string(),
+                        })
+                        .collect();
+                names.sort();
+                names
+            }
+        };
+        // No setting: every .md file, as before.
+        assert_eq!(listed(ranges_of(None, &[])).await.len(), 6);
+        // An exclude leaves a directory out, at any depth below it.
+        assert_eq!(
+            listed(ranges_of(None, &["archive/**"])).await,
+            ["docs/specs/a.md", "docs/specs/b.md", "docs/specs/keep/e.md"]
+        );
+        // An include narrows to what it names.
+        assert_eq!(
+            listed(ranges_of(Some(&["keep/*.md"]), &[])).await,
+            ["docs/specs/keep/e.md"]
+        );
+        // `forms` (`fmt`) lists the same files.
+        let forms = docs.forms(&ranges_of(None, &["archive/**"])).await.unwrap();
+        assert_eq!(forms.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_name_that_is_no_path_fails_in_the_range_and_not_outside_it() {
+        let root = tempfile::tempdir().unwrap();
+        let base = root.path().join("docs/specs");
+        tokio::fs::create_dir_all(base.join("archive"))
+            .await
+            .unwrap();
+        tokio::fs::write(base.join("a.md"), format!("---\nid: {ID}\n---\n"))
+            .await
+            .unwrap();
+        // A backslash: a name, on Unix, that no relative path of the project is.
+        tokio::fs::write(base.join("archive/a\\b.md"), "x\n")
+            .await
+            .unwrap();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        let out = docs
+            .read_docs(&ranges_of(None, &["archive/**"]))
+            .await
+            .unwrap();
+        assert_eq!(out.len(), 1);
+        let out = docs
+            .read_docs(&ranges_of(None, &["archive/*.md"]))
+            .await
+            .unwrap();
+        assert_eq!(out.len(), 1, "a file the range does not take is not named");
+        assert!(matches!(
+            docs.read_docs(&ranges_of(None, &[])).await,
+            Err(DocsError::Name { .. })
+        ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_directory_the_range_leaves_out_is_not_opened() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let base = root.path().join("docs/specs");
+        let locked = base.join("archive/locked");
+        tokio::fs::create_dir_all(&locked).await.unwrap();
+        tokio::fs::write(base.join("a.md"), format!("---\nid: {ID}\n---\n"))
+            .await
+            .unwrap();
+        tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))
+            .await
+            .unwrap();
+        // Root, or a file system that ignores modes, can read it anyway.
+        let readable = tokio::fs::read_dir(&locked).await.is_ok();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        for exclude in ["archive/**", "**", "*/locked/**", "**/locked/**"] {
+            let got = docs
+                .read_docs(&ranges_of(Some(&["*.md"]), &[exclude]))
+                .await;
+            if exclude == "**" {
+                assert!(got.unwrap().is_empty());
+            } else {
+                assert_eq!(got.unwrap().len(), 1, "{exclude}");
+            }
+        }
+        if !readable {
+            // In the range, a directory that cannot be read fails, as it did.
+            assert!(matches!(
+                docs.read_docs(&ranges_of(None, &[])).await,
+                Err(DocsError::Io { .. })
+            ));
+        }
+        tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))
+            .await
+            .unwrap();
+    }
+
+    #[test]
+    fn what_is_no_front_matter_is_stated_once_and_its_edges_are_exact() {
+        let none =
+            |text: &str| matches!(front_matter_start(&normalize(text)), FrontMatterStart::None);
+        let opens = |text: &str| {
+            matches!(
+                front_matter_start(&normalize(text)),
+                FrontMatterStart::Opens { .. }
+            )
+        };
+        let bad_opening = |text: &str| {
+            matches!(
+                front_matter_start(&normalize(text)),
+                FrontMatterStart::BadOpening
+            )
+        };
+        // An empty file, blank lines and white space only: none.
+        assert!(none(""));
+        assert!(none("\n\n"));
+        assert!(none("  \t\n \n"));
+        // Plain text, a heading, and a `---` that is a thematic break mid-file: none.
+        assert!(none("Just text.\n"));
+        assert!(none("# Title\n\ntext\n\n---\n\nmore\n"));
+        assert!(none("# Title\n---\nid: x\n---\n"));
+        // A first line that does not begin with `---`: none.
+        assert!(none("-- -\n"));
+        assert!(none("--\nid: x\n--\n"));
+        assert!(none("+++\ntitle = \"x\"\n+++\n"));
+        // A first line that begins with `---` but is not the line `---`: a mistyped
+        // delimiter, never none.
+        assert!(bad_opening("----\nid: x\n----\n"));
+        assert!(bad_opening("--- x\n"));
+        assert!(bad_opening("---x\n"));
+        // The line `---`, however the line ends: a front matter opens (CRLF, a lone
+        // CR, spaces and tabs at the end of the line, and with nothing after it).
+        assert!(opens("---\nid: x\n---\n"));
+        assert!(opens("---\r\nid: x\r\n---\r\n"));
+        assert!(opens("---\rid: x\r---\r"));
+        assert!(opens("---  \t\nid: x\n---\n"));
+        assert!(opens("---"));
+        // A byte order mark or blank lines before the line `---`: the file tried to
+        // have a front matter, so it is not "none".
+        assert!(bad_opening("\u{feff}---\nid: x\n---\n"));
+        assert!(bad_opening("\n---\nid: x\n---\n"));
+        assert!(bad_opening("\n\n  \n---\nid: x\n---\n"));
+        assert!(bad_opening("\u{feff}\n---\nid: x\n---\n"));
+        assert!(bad_opening("\u{feff}----\n"));
+        // A byte order mark before anything else is not a front matter either.
+        assert!(none("\u{feff}Just text.\n"));
+        assert!(none("\u{feff}"));
+    }
+
+    #[test]
+    fn a_file_is_read_as_none_misplaced_unclosed_or_broken_by_the_same_rule() {
+        let why = |text: &str| match read(origin(), text) {
+            DocReading::Unparsed { why, .. } => Some(why),
+            DocReading::Parsed { .. } => None,
+        };
+        assert_eq!(why(""), Some(RawProblem::NoFrontMatter));
+        assert_eq!(why("\n"), Some(RawProblem::NoFrontMatter));
+        assert_eq!(why("text\n"), Some(RawProblem::NoFrontMatter));
+        assert_eq!(why("# T\n\n---\n\nbody\n"), Some(RawProblem::NoFrontMatter));
+        assert_eq!(
+            why("\u{feff}---\nid: x\n---\n"),
+            Some(RawProblem::BadOpening)
+        );
+        assert_eq!(why("\n---\nid: x\n---\n"), Some(RawProblem::BadOpening));
+        assert_eq!(why("----\nid: x\n----\n"), Some(RawProblem::BadOpening));
+        // Opened and never closed, and not YAML: broken, never "none".
+        assert_eq!(why("---\nid: x\n"), Some(RawProblem::Unclosed));
+        assert_eq!(why("---"), Some(RawProblem::Unclosed));
+        assert!(matches!(
+            why("---\njust: [\n---\n"),
+            Some(RawProblem::Syntax { .. })
+        ));
+        assert_eq!(why("---\n- a\n---\n"), Some(RawProblem::NotAMapping));
+        // A CRLF file with a front matter is read.
+        assert_eq!(why(&format!("---\r\nid: {ID}\r\n---\r\nbody\r\n")), None);
+    }
+
+    /// What every invalid file of a book `spec` over `docs` is told as, with this
+    /// `without_front_matter`.
+    fn told(without_front_matter: Option<&str>, text: &str) -> String {
+        use std::collections::BTreeSet;
+        use whyshelf_core::domain::shelf::artifact::ArtifactReadings;
+        use whyshelf_core::domain::shelf::build::Shelf;
+        use whyshelf_core::domain::shelf::schema::{
+            BookSchemaDecl, KeyPatternDecl, Schema, ScopeDecl,
+        };
+        let schema = Schema::validate(
+            vec![BookSchemaDecl {
+                name: "spec".to_owned(),
+                dir: "docs".to_owned(),
+                scope: ScopeDecl {
+                    include: None,
+                    exclude: None,
+                    without_front_matter: without_front_matter.map(str::to_owned),
+                },
+                key: KeyPatternDecl::Slug,
+                description: None,
+                fields: Vec::new(),
+                links: Vec::new(),
+            }],
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        let shelf = Shelf::build(
+            &schema,
+            vec![read(origin(), text)],
+            &ArtifactReadings::new(),
+        );
+        shelf
+            .unreadable()
+            .iter()
+            .chain(shelf.anonymous())
+            .flat_map(|doc| doc.problems().iter().map(ToString::to_string))
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
+    #[test]
+    fn with_nothing_declared_every_file_is_told_as_on_main() {
+        // The message of origin/main for a file that does not open with `---`.
+        const MAIN: &str = "the file could not be read: the file has no front matter: it must start with a line `---`";
+        for text in [
+            "",
+            "plain\n",
+            "\u{feff}---\nid: x\n---\n",
+            "\n---\nid: x\n---\n",
+            "----\nid: x\n----\n",
+            "--- x\n",
+            "---x\n",
+        ] {
+            assert_eq!(told(None, text), MAIN, "{text:?}");
+            assert_eq!(told(Some("invalid"), text), MAIN, "{text:?}");
+        }
+        assert_eq!(
+            told(None, "---\nid: x\n"),
+            "the file could not be read: the front matter is not closed: add a line `---` after the last entry"
+        );
+        // Under `skip`, a mistyped opening is what keeps the file from being skipped,
+        // and is told so.
+        assert_eq!(
+            told(Some("skip"), "----\nid: x\n----\n"),
+            "the file could not be read: the front matter must open with a line that is exactly `---` at the start of the file"
+        );
+        assert_eq!(told(Some("skip"), "plain\n"), "");
+    }
+
+    #[test]
+    fn a_skipping_book_skips_none_and_only_none_by_the_readers_own_answer() {
+        use std::collections::BTreeSet;
+        use whyshelf_core::domain::shelf::build::Shelf;
+        use whyshelf_core::domain::shelf::schema::{
+            BookSchemaDecl, KeyPatternDecl, Schema, ScopeDecl,
+        };
+        let schema = Schema::validate(
+            vec![BookSchemaDecl {
+                name: "spec".to_owned(),
+                dir: "docs".to_owned(),
+                scope: ScopeDecl {
+                    include: None,
+                    exclude: None,
+                    without_front_matter: Some("skip".to_owned()),
+                },
+                key: KeyPatternDecl::Slug,
+                description: None,
+                fields: Vec::new(),
+                links: Vec::new(),
+            }],
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        let skipped = |text: &str| Shelf::skip_of(&schema, &read(origin(), text)).is_some();
+        assert!(skipped(""));
+        assert!(skipped("Just text.\n"));
+        assert!(skipped("# T\n\n---\n\nmore\n"));
+        // Broken in any way: not skipped.
+        assert!(!skipped("---\nid: x\n"));
+        assert!(!skipped("\u{feff}---\nid: x\n---\n"));
+        assert!(!skipped("\n---\nid: x\n---\n"));
+        assert!(!skipped("----\nid: x\n----\n"));
+        assert!(!skipped("---\njust: [\n---\n"));
+        assert!(!skipped(&format!("---\nid: {ID}\n---\n")));
     }
 }

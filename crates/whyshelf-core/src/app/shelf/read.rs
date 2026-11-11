@@ -102,6 +102,13 @@ impl<P: ShelfRead> ShelfApp<P> {
                 name: book.name().clone(),
                 dir: book.dir().clone(),
                 tally: tally.get(book.name()).copied().unwrap_or_default(),
+                skipped: loaded
+                    .shelf
+                    .skipped()
+                    .iter()
+                    .filter(|file| file.book() == book.name())
+                    .cloned()
+                    .collect(),
             })
             .collect();
         let uncovered = assessment

@@ -72,6 +72,7 @@ fn shelf(
         books: vec![BookSchemaDecl {
             name: "b".to_owned(),
             dir: "b".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Slug,
             description: None,
             fields: Vec::new(),
@@ -227,6 +228,7 @@ fn a_link_written_in_full_expands_to_itself() {
     let book = BookSchemaDecl {
         name: "b".to_owned(),
         dir: "b".to_owned(),
+        scope: Default::default(),
         key: KeyPatternDecl::Slug,
         description: None,
         fields: Vec::new(),
@@ -618,6 +620,7 @@ fn the_problems_of_expansion_and_of_the_books_are_told_at_once() {
     decl.books.push(BookSchemaDecl {
         name: "Bad Book".to_owned(),
         dir: "c".to_owned(),
+        scope: Default::default(),
         key: KeyPatternDecl::Slug,
         description: None,
         fields: Vec::new(),

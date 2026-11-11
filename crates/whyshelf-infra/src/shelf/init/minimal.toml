@@ -9,6 +9,12 @@ name = "note"
 dir = "books/note"
 key = { prefix = "N" }      # keys N-1, N-2, ...; or key = "slug"
 description = "something worth keeping, and why"
+# In a directory that already holds other files, say which are the documents of
+# this book (patterns of `*`, `?` and `**` relative to `dir`; default: every .md
+# file below it), and what a file with no front matter is ("invalid", the
+# default, or "skip"):
+# exclude = ["archive/**"]
+# without_front_matter = "skip"
 
 [[book.field]]
 name = "title"

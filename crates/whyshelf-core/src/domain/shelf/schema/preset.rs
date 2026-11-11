@@ -167,6 +167,7 @@ impl ShelfDecl {
                 .map(|book| BookSchemaDecl {
                     name: book.name,
                     dir: book.dir,
+                    scope: book.scope,
                     key: book.key,
                     description: book.description,
                     fields: book.fields,
@@ -375,6 +376,7 @@ pub(super) fn expand_all(
         books.push(BookSchemaDecl {
             name: book.name,
             dir: book.dir,
+            scope: book.scope,
             key: book.key,
             description: book.description,
             fields: book.fields,

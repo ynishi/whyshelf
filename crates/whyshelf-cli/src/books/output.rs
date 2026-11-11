@@ -44,7 +44,7 @@ use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::order::{Hold, Rule};
 use whyshelf_core::domain::shelf::schema::{
     Cardinality, CoverSeverity, EntryName, FieldPresence, FieldType, KeyPattern, PresetOrigin,
-    Propagation, SchemaProblem,
+    Propagation, SchemaProblem, WithoutFrontMatter,
 };
 use whyshelf_infra::shelf::ledger::to_json;
 
@@ -225,6 +225,21 @@ pub struct BookOut {
     pub valid: usize,
     /// Files under it that are no valid document.
     pub invalid: usize,
+    /// How many files in its range it skipped, which are no document of it
+    /// (`without_front_matter = "skip"`); the length of `skipped_files`.
+    pub skipped: usize,
+    /// The files it skipped, each with why, in the order they were read. A file out
+    /// of the range (`include`, `exclude`) is not listed: it is not read.
+    pub skipped_files: Vec<SkippedOut>,
+}
+
+/// A file a book skipped.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct SkippedOut {
+    /// The file, relative to the project root.
+    pub path: String,
+    /// Why: `no_front_matter`.
+    pub why: &'static str,
 }
 
 /// The answer of `check`.
@@ -300,6 +315,15 @@ pub struct MapBookOut {
     pub name: String,
     /// The directory.
     pub dir: String,
+    /// The patterns of `include`, relative to the directory, as written; null when
+    /// not written, which is every `.md` file under the directory.
+    pub include: Option<Vec<String>>,
+    /// The patterns of `exclude`, relative to the directory, as written; null when
+    /// not written.
+    pub exclude: Option<Vec<String>>,
+    /// What a file in range with no front matter is, `invalid` or `skip`, as
+    /// written; null when not written, which is `invalid`.
+    pub without_front_matter: Option<&'static str>,
     /// The grammar of its keys.
     pub key: KeyGrammarOut,
     /// What it is for, when the declaration says.
@@ -1914,6 +1938,29 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
         .collect()
 }
 
+/// The lines `check` writes on stderr beside its answer, one per book that skipped
+/// files, in the order of the books: `note: book spec skipped 3 files with no front
+/// matter`. A skipped file is no failure, and the lines change no exit; they are
+/// there so that a run that shows the answer only when it fails still says that
+/// files were left out.
+pub fn check_notes(check: &BooksCheck) -> Vec<String> {
+    let BooksCheck::Checked { books, .. } = check else {
+        return Vec::new();
+    };
+    books
+        .iter()
+        .filter(|book| !book.skipped.is_empty())
+        .map(|book| {
+            let count = book.skipped.len();
+            format!(
+                "note: book {} skipped {count} file{} with no front matter",
+                book.name,
+                if count == 1 { "" } else { "s" }
+            )
+        })
+        .collect()
+}
+
 /// The lines `stale` writes on stderr: one per name an approval stands on that
 /// cannot be told now, in the order of `unknown`.
 pub fn stale_warnings(report: &StaleReport) -> Vec<String> {
@@ -1982,6 +2029,15 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                         dir: b.dir.as_rel().to_string(),
                         valid: b.tally.valid,
                         invalid: b.tally.invalid,
+                        skipped: b.skipped.len(),
+                        skipped_files: b
+                            .skipped
+                            .iter()
+                            .map(|file| SkippedOut {
+                                path: file.origin().to_string(),
+                                why: file.why().word(),
+                            })
+                            .collect(),
                     })
                     .collect(),
                 health: Some(Namer(&names).health(health)),
@@ -2065,6 +2121,18 @@ pub fn map(report: &MapReport) -> MapOut {
             .map(|book| MapBookOut {
                 name: book.name.to_string(),
                 dir: book.dir.as_rel().to_string(),
+                include: book
+                    .scope
+                    .include()
+                    .map(|patterns| patterns.iter().map(ToString::to_string).collect()),
+                exclude: book
+                    .scope
+                    .exclude()
+                    .map(|patterns| patterns.iter().map(ToString::to_string).collect()),
+                without_front_matter: book
+                    .scope
+                    .without_front_matter_declared()
+                    .map(WithoutFrontMatter::word),
                 key: match &book.key {
                     KeyPattern::Prefixed(prefix) => KeyGrammarOut::Prefix {
                         prefix: prefix.to_string(),

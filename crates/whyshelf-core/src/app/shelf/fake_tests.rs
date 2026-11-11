@@ -19,7 +19,7 @@ use crate::domain::location::RelPath;
 use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record};
 use crate::domain::shelf::schema::{
-    BookDir, BookSchemaDecl, BuiltinPresets, Cardinality, FieldEntryDecl, FieldPresence,
+    BookRange, BookSchemaDecl, BuiltinPresets, Cardinality, FieldEntryDecl, FieldPresence,
     FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, PresetName, PresetValues,
     Propagation, ShelfDecl,
 };
@@ -102,6 +102,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
         BookSchemaDecl {
             name: "finding".to_owned(),
             dir: "findings".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Prefixed {
                 prefix: "FR".to_owned(),
             },
@@ -112,6 +113,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
         BookSchemaDecl {
             name: "spec".to_owned(),
             dir: "specs".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Prefixed {
                 prefix: "SP".to_owned(),
             },
@@ -521,12 +523,27 @@ impl DeclarationWrite for FakeShelf {
     }
 }
 
+/// Whether a real listing of these ranges would read the file of a reading: it is
+/// under no book's directory (kept, see `read_docs`), or some range takes it.
+fn listed(ranges: &[BookRange], reading: &DocReading) -> bool {
+    let (DocReading::Parsed { origin, .. } | DocReading::Unparsed { origin, .. }) = reading;
+    let under = |r: &BookRange| r.dir().contains(origin);
+    !ranges.iter().any(under) || ranges.iter().any(|r| r.takes(origin))
+}
+
 impl DocSource for FakeShelf {
     type Error = FakeError;
 
-    async fn read_docs(&self, _dirs: &[BookDir]) -> Result<Vec<DocReading>, FakeError> {
+    /// The readings the test gave, but not the files of a book's directory that its
+    /// range does not take: a real listing never reads them. (A file under no book's
+    /// directory is kept, for the tests that hold such a file to be invalid.)
+    async fn read_docs(&self, ranges: &[BookRange]) -> Result<Vec<DocReading>, FakeError> {
         self.check()?;
-        Ok(lock(&self.readings).clone())
+        Ok(lock(&self.readings)
+            .iter()
+            .filter(|reading| listed(ranges, reading))
+            .cloned()
+            .collect())
     }
 
     async fn current(&self, file: &RelPath) -> Result<Option<Vec<u8>>, FakeError> {
@@ -551,12 +568,13 @@ impl DocSource for FakeShelf {
 
     /// Each reading, with the bytes of its file in `files` (none: empty) and the form
     /// [`FakeShelf::set_form`] gave it.
-    async fn forms(&self, _dirs: &[BookDir]) -> Result<Vec<FileForm>, FakeError> {
+    async fn forms(&self, ranges: &[BookRange]) -> Result<Vec<FileForm>, FakeError> {
         self.check()?;
         let files = lock(&self.files);
         let forms = lock(&self.forms);
         Ok(lock(&self.readings)
             .iter()
+            .filter(|reading| listed(ranges, reading))
             .map(|reading| {
                 let (origin, unparsed) = match reading {
                     DocReading::Parsed { origin, .. } => (origin, false),

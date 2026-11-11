@@ -66,6 +66,7 @@ fn schema() -> Schema {
     let book = |name: &str, dir: &str, prefix: &str, links| BookSchemaDecl {
         name: name.to_owned(),
         dir: dir.to_owned(),
+        scope: Default::default(),
         key: KeyPatternDecl::Prefixed {
             prefix: prefix.to_owned(),
         },

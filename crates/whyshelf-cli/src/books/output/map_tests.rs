@@ -102,6 +102,31 @@ note          slug
     assert_eq!(mapped().diagram, mapped().diagram);
 }
 
+#[test]
+fn the_json_shows_the_range_of_a_book_when_it_is_written() {
+    let books = "[[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+                 include=['*.md', 'notes/**']\nexclude=['archive/**']\n\
+                 without_front_matter='skip'\n\
+                 [[book]]\nname='b'\ndir='b'\nkey='slug'\n\
+                 exclude=[]\nwithout_front_matter='invalid'\n\
+                 [[book]]\nname='c'\ndir='c'\nkey='slug'\n";
+    let answer =
+        serde_json::to_value(map(&MapReport::Mapped(ShelfMap::of(&schema_of(books))))).unwrap();
+    let a = &answer["books"][0];
+    assert_eq!(a["include"], serde_json::json!(["*.md", "notes/**"]));
+    assert_eq!(a["exclude"], serde_json::json!(["archive/**"]));
+    assert_eq!(a["without_front_matter"], "skip");
+    // What is written is shown as written, the default value included.
+    let b = &answer["books"][1];
+    assert_eq!(b["exclude"], serde_json::json!([]));
+    assert_eq!(b["without_front_matter"], "invalid");
+    // A book that writes none of them has every field, null, as `description`.
+    let c = answer["books"][2].as_object().unwrap();
+    for key in ["include", "exclude", "without_front_matter", "description"] {
+        assert_eq!(c.get(key), Some(&serde_json::Value::Null), "{key}");
+    }
+}
+
 /// The line of the link `tests` of a book `a` that ignores these prefixes.
 fn ignore_line(ignore: &str) -> String {
     let books = format!(
@@ -143,6 +168,9 @@ fn the_json_holds_the_books_and_links_as_data() {
         serde_json::json!({
             "name": "verification",
             "dir": "books/verification",
+            "include": null,
+            "exclude": null,
+            "without_front_matter": null,
             "key": {"kind": "prefix", "prefix": "V"},
             "description": "how a decision is checked",
             "fields": [

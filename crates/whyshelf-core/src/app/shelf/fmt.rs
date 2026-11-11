@@ -30,8 +30,8 @@
 //! and the rest as they were.
 
 use crate::domain::location::RelPath;
-use crate::domain::shelf::build::{DocReading, RawProblem};
-use crate::domain::shelf::schema::BookDir;
+use crate::domain::shelf::build::{DocReading, RawProblem, Shelf};
+use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
 use super::error::ShelfError;
@@ -106,7 +106,7 @@ enum Plan {
 }
 
 /// The one rule of which file is written: the plan for one file.
-fn plan(form: FileForm) -> Plan {
+fn plan(schema: &Schema, form: FileForm) -> Plan {
     let FileForm {
         reading,
         read,
@@ -117,7 +117,7 @@ fn plan(form: FileForm) -> Plan {
         DocReading::Unparsed { origin, why, .. } => {
             return Plan::LeaveAlone(LeftAlone {
                 file: origin.clone(),
-                why: LeftAloneWhy::Unparsed(why.clone()),
+                why: LeftAloneWhy::Unparsed(Shelf::told(schema, origin, why.clone())),
             });
         }
     };
@@ -141,13 +141,18 @@ fn plan(form: FileForm) -> Plan {
 /// The plan of every file of the books.
 async fn plans<P: ShelfRead>(ports: &P) -> Result<Vec<Plan>, ShelfError> {
     let schema = schema_of(ports).await?.map_err(ShelfError::Schema)?;
-    let dirs: Vec<BookDir> = schema.books().values().map(|b| b.dir().clone()).collect();
     let forms = ports
         .docs()
-        .forms(&dirs)
+        .forms(&schema.ranges())
         .await
         .map_err(port(ShelfPort::Docs))?;
-    Ok(forms.into_iter().map(plan).collect())
+    // A file its book skips (no front matter at all) is no document: `fmt` has
+    // nothing to say about it, as `check` has not.
+    Ok(forms
+        .into_iter()
+        .filter(|found| Shelf::skip_of(&schema, &found.reading).is_none())
+        .map(|found| plan(&schema, found))
+        .collect())
 }
 
 impl<P: ShelfRead> ShelfApp<P> {

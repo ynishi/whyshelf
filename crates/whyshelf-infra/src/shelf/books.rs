@@ -5,6 +5,9 @@
 //! name = "finding"
 //! dir = "docs/findings"
 //! key = { prefix = "F" }          # keys F-1, F-2, F-name; or key = "slug"
+//! include = ["**/*.md"]            # optional: globs relative to dir; default every .md
+//! exclude = ["archive/**"]         # optional: globs relative to dir; default none
+//! without_front_matter = "skip"    # optional: "invalid" (default) or "skip"
 //! description = "what was seen"    # optional: one line, not blank; `whyshelf map` shows it
 //!
 //! [[book.field]]
@@ -75,7 +78,7 @@ use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::schema::{
     ARTIFACT_TARGET, BookSchemaDecl, Cardinality, CoverDecl, DefaultsDecl, FieldEntryDecl,
     FieldPresence, FieldTypeDecl, KeyPatternDecl, LinkTargetDecl, PresetDecl, PresetValues,
-    Propagation, ShelfDecl, WrittenBookDecl, WrittenLinkDecl,
+    Propagation, ScopeDecl, ShelfDecl, WrittenBookDecl, WrittenLinkDecl,
 };
 
 /// Why the declaration of the books could not be read.
@@ -264,6 +267,15 @@ impl PresetDto {
 struct BookDto {
     name: String,
     dir: String,
+    /// Glob patterns relative to `dir`: the files that are documents. Not written:
+    /// every `.md` file. Checked by the domain.
+    include: Option<Vec<String>>,
+    /// Glob patterns relative to `dir`: files that are not documents. Checked by the
+    /// domain.
+    exclude: Option<Vec<String>>,
+    /// `"invalid"` (default) or `"skip"`: what a file in range with no front matter
+    /// is. Checked by the domain.
+    without_front_matter: Option<String>,
     key: KeyDto,
     /// What the book is for, one line; checked by the domain.
     description: Option<String>,
@@ -392,6 +404,11 @@ impl BookDto {
         BookSchemaDecl {
             name: self.name,
             dir: self.dir,
+            scope: ScopeDecl {
+                include: self.include,
+                exclude: self.exclude,
+                without_front_matter: self.without_front_matter,
+            },
             key: match self.key {
                 KeyDto::Prefixed(PrefixDto { prefix }) => KeyPatternDecl::Prefixed { prefix },
                 KeyDto::Word(KeyWord::Slug) => KeyPatternDecl::Slug,
