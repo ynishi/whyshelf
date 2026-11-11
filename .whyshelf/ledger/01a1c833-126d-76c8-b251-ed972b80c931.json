@@ -1,0 +1,68 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::judge_all",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::same_meaning",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::LedgerAppend",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "80b7ca88aa572685d4aa25aa6a50260a271f8243",
+      "hash": "sha256:36a8f23657089860a548249154b9d58c9d02474608ce556359475db853a351c9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    }
+  ],
+  "id": "01a1c833-126d-76c8-b251-ed972b80c931",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:6daa3bbe7061951d603102eb9c2ab0f7d7c2f8716d6efeeb176c39f17a7e0687",
+  "seen_address": "6a4ec3d1e683547d9a7d9662a853747b18f2450a",
+  "subject": "01a1c55d-ce54-705b-a4fb-17382395564a",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,79 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::Row",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Decision::reason",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::standing_decision",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "2a877cd7a2329b9fe134bc8ec20469b2f1076942",
+      "hash": "sha256:7ae631d245dd8884ce9fe81c4766a2e27fcba0fc30df6238175aa1ee420ccf23",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "14"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c577-324c-70fc-b7a6-0736323b5881"
+    }
+  ],
+  "id": "01a1c833-25f2-767f-bf03-457aa7281e62",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:8a7484e072bdb063dd1c2cfc2af5c5ac0d055149aa9ee10f83fc58495f330902",
+  "seen_address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+  "subject": "01a1c577-33e1-735e-b992-19f40a27438a",
+  "v": 1,
+  "verb": "approve"
+}

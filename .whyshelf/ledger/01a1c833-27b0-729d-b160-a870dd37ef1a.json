@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "0496c454ceb0a2c498e02ff1f697e0149f22792e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0063de42e77aca079bc7f4da10b686a9a44544f02afc57da2a9406920df1bb28",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+      "hash": "sha256:8a7484e072bdb063dd1c2cfc2af5c5ac0d055149aa9ee10f83fc58495f330902",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "40"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c577-33e1-735e-b992-19f40a27438a"
+    }
+  ],
+  "id": "01a1c833-27b0-729d-b160-a870dd37ef1a",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:c3529ebef0122ae9a687c6414bcfe58da3c557a87518a381f44c166dc786bccf",
+  "seen_address": "07db1f1a35a5bf8e858eae090366c1062a967886",
+  "subject": "01a1c577-367b-725d-b911-25170a16cfd6",
+  "v": 1,
+  "verb": "approve"
+}

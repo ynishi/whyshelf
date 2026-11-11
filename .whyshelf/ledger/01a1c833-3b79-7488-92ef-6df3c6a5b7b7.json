@@ -1,0 +1,96 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::UnlinkedReport",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::trace::Linkage",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::trace::linkage",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "271f9aadb94f1a31cbae5145aa1889a38fa7b77a",
+      "hash": "sha256:74a75042c5f67aad20a2140eabf2b07750e2afcf7caa003baf93dc8b6de49487",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4d3-a2e6-7651-a588-ca95e98cfe67"
+    },
+    {
+      "address": "0bf188350bcff41c0ee5170de9d6b8e1200533a1",
+      "hash": "sha256:74a50a66c32539411307d5b327e95c96344908df8ea05126f93483f75e68af7a",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "17"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c671-1c9c-749b-bd8e-66518935992c"
+    }
+  ],
+  "id": "01a1c833-3b79-7488-92ef-6df3c6a5b7b7",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:85f4c818721f36f774e93d3e9edf25469f44c19ccc46b4d76040798211c9c323",
+  "seen_address": "573dc5ef3fcd0ec4d1b9d4ef061d37ecf56d23b0",
+  "subject": "01a1c671-1d95-725c-bd74-8b605650d16c",
+  "v": 1,
+  "verb": "approve"
+}

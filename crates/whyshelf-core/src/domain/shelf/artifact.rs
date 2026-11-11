@@ -548,11 +548,13 @@ enum Answer {
     NotAName(NonBlank),
 }
 
-/// A thing that is there: its hashes, and its address when the adapter can say.
+/// A thing that is there: its hashes, its address when the adapter can say, and,
+/// when the adapter said why no other comparison can be made of it, that reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Found {
     hashes: BTreeMap<Comparison, ArtifactHash>,
     address: Option<ContentAddress>,
+    others: Option<NonBlank>,
 }
 
 impl ArtifactReading {
@@ -568,7 +570,25 @@ impl ArtifactReading {
             .chain([&Comparison::Bytes])
             .map(|c| (c.clone(), c.fingerprint(bytes)))
             .collect();
-        Self(Answer::Present(Found { hashes, address }))
+        Self(Answer::Present(Found {
+            hashes,
+            address,
+            others: None,
+        }))
+    }
+
+    /// The reading of a thing that is there and has no content the adapter reads:
+    /// its hash under [`Comparison::Presence`] only, so that any other comparison
+    /// of it cannot be told, for the reason `others` (`Untold::Said`), rather than
+    /// be made of bytes it does not have. It has no address.
+    pub fn there(others: NonBlank) -> Self {
+        let hashes =
+            BTreeMap::from([(Comparison::Presence, Comparison::Presence.fingerprint(&[]))]);
+        Self(Answer::Present(Found {
+            hashes,
+            address: None,
+            others: Some(others),
+        }))
     }
 
     /// Nothing is there.
@@ -594,7 +614,11 @@ impl ArtifactReading {
         hashes: BTreeMap<Comparison, ArtifactHash>,
         address: Option<ContentAddress>,
     ) -> Self {
-        Self(Answer::Present(Found { hashes, address }))
+        Self(Answer::Present(Found {
+            hashes,
+            address,
+            others: None,
+        }))
     }
 
     /// Whether the thing is there.
@@ -612,18 +636,20 @@ impl ArtifactReading {
 
     /// What the shelf keeps of it under `comparison`: the hash, its absence, or that
     /// it cannot be told, without the address, which no judgement of freshness reads
-    /// (rule A4). A comparison the adapter was not asked for cannot be told
-    /// ([`Untold::NotAsked`]), and neither can a text that is not a name
+    /// (rule A4). A comparison the adapter has no hash for cannot be told: for the
+    /// reason the adapter gave ([`ArtifactReading::there`]), or else because it was
+    /// not asked ([`Untold::NotAsked`]). Neither can a text that is not a name
     /// ([`Untold::NotAName`]; the build makes the document that writes it invalid).
     /// Nothing is read as absent that the adapter did not say is absent.
     pub fn state(&self, comparison: &Comparison) -> ArtifactState {
         match &self.0 {
-            Answer::Present(found) => found
-                .hashes
-                .get(comparison)
-                .map_or(ArtifactState::Unknown(Untold::NotAsked), |h| {
-                    ArtifactState::Present(*h)
+            Answer::Present(found) => match found.hashes.get(comparison) {
+                Some(hash) => ArtifactState::Present(*hash),
+                None => ArtifactState::Unknown(match &found.others {
+                    Some(why) => Untold::Said(why.clone()),
+                    None => Untold::NotAsked,
                 }),
+            },
             Answer::Absent => ArtifactState::Absent,
             Answer::NotAName(why) => ArtifactState::Unknown(Untold::NotAName(why.clone())),
             Answer::CannotTell(why) => ArtifactState::Unknown(Untold::Said(why.clone())),

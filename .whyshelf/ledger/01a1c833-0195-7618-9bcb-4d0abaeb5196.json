@@ -1,0 +1,46 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::ledger",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "07522f832291156bffbc20595ddc6f91106498f5",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    }
+  ],
+  "id": "01a1c833-0195-7618-9bcb-4d0abaeb5196",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:eee898b1ea79b00ed9be51fbef4d0e0f32cb1f8bde2177db71374eb0a5bf484a",
+  "seen_address": "94cca80b8f3d3641d2919034ae935d7ef1ca846d",
+  "subject": "01a1c332-3ad8-7753-b9e1-a7cd0b06ed77",
+  "v": 1,
+  "verb": "approve"
+}

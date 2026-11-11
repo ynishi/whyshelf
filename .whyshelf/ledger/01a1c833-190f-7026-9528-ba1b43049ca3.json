@@ -1,0 +1,74 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::id::EntityId",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::system::UuidV7Ids",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794360148341,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e4666bcbff936c60cfa627503082d756316940fd",
+      "hash": "sha256:237f766886a7ab23b3b74164f6ee0624b7802e3323ee86ea88353d981fe8fde9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "9"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-10e0-77f2-9f27-abcf3bbfd1d0"
+    },
+    {
+      "address": "257107f9c4cfa8d4e68128f4526c814bad5edcf8",
+      "hash": "sha256:3dee90053e30522f4e521b929944c3e772a08261b80be3834f10916f64cae9b9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1137-7513-ab9a-0c7fb1ba82da"
+    }
+  ],
+  "id": "01a1c833-190f-7026-9528-ba1b43049ca3",
+  "kind": "decision",
+  "reason": "A decision's rustdoc is now a link that pins the presence of each Rust item it names (#56), every one resolved in the docs built from this tree; DEC-26 and the verifications restated or their tests changed; checked by a blind review",
+  "revision": "826b5148b388f16eec24e099346fde4c72cea70c",
+  "seen": "sha256:cc1e046186585cdfd094bb911bd9ac0b3dfbf4dde33d9ea9b2ef0294b03781bb",
+  "seen_address": "12b9000513a1af84240cb975aa08345c7d3187c4",
+  "subject": "01a1c55d-e6b5-775e-9fa6-11ec41ab044a",
+  "v": 1,
+  "verb": "approve"
+}
