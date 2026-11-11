@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794404939155,
+  "expires": null,
+  "frame": [],
+  "id": "01a1cade-75ae-744f-8c55-e140f7d26a55",
+  "kind": "decision",
+  "reason": "A space rust-test names test functions, found by a shallow scan of token trees that runs no program (#79); checked by two rounds of blind review with hostile files on the binary, every finding fixed",
+  "revision": "3b1f791eeaad04d687e81c31251a1ac8d8d0c02e",
+  "seen": "sha256:1c5627db420f7bf30adfe3fa0d033f214792a2c1984fa4fdf9b7d0fdcde8dab7",
+  "seen_address": "fd2376c5bdbf7bc1bd2717bd144b9b4e681ee5a0",
+  "subject": "01a1cad2-3137-7316-9dd7-7388b6884a95",
+  "v": 1,
+  "verb": "approve"
+}

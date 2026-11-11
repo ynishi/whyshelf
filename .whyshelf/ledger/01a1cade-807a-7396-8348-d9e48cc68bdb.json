@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "64d9f90f09a4bbb6addd810ec2d03a2bd70512db",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c56fcc6ca2d7f58bed66a76cdb980f46a99c205e69ce0fc30eeb844519be54fb",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/moves.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794404940541,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ac8efd08d9204c8be295b450fa54e61d367f6716",
+      "hash": "sha256:359e9e3207b22832aaf5ff97f648aebf107a8a3d24a022939af1b6a62cdd7352",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "60"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6"
+    }
+  ],
+  "id": "01a1cade-807a-7396-8348-d9e48cc68bdb",
+  "kind": "decision",
+  "reason": "The file space lends its bounded reading to rust-test, which registers beside it, and cannot suggest moves (#79); checked by a blind review",
+  "revision": "3b1f791eeaad04d687e81c31251a1ac8d8d0c02e",
+  "seen": "sha256:1568324a75741b09215ea0c93c1a24f91dfe2df9b1a5ed77e30039c36899d376",
+  "seen_address": "be29180efc5ab6c864203a9b36882ca7b805ad08",
+  "subject": "01a1c952-62b7-758a-a32f-5b59538e7dfa",
+  "v": 1,
+  "verb": "approve"
+}

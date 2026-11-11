@@ -1,0 +1,11 @@
+---
+id: "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+key: "DEC-64"
+issues: ["#79"]
+rejected: ["List tests with cargo test -- --list: a repository's toolchain file could choose the program it runs", "Parse the file with syn: it recurses on nesting without brackets, so a hostile file could overflow the stack", "Compare syn's re-print of the function: its printer may change between releases and make approvals stale"]
+related: ["DEC-44", "DEC-45", "DEC-54"]
+rustdoc: ["whyshelf_infra::shelf::artifact::rust_test::RustTestSpace", "whyshelf_infra::shelf::artifact::rust_test::TEST_PRESET", "whyshelf_infra::shelf::artifact::rust_test::INERT_ATTRIBUTES", "whyshelf_infra::shelf::artifact::rust_test::MAX_DEPTH"]
+serves: ["REQ-27", "REQ-13", "REQ-1", "REQ-10"]
+title: "A space rust-test names test functions, found by a shallow scan of token trees that runs no program"
+---
+A name of the space rust-test is <file>.rs::<segment>(::<segment>)*: a path of the space file, then inline modules and the function, each a Rust identifier as written. Its adapter runs no program: it reads the file by the rules of the space file within a byte bound, lexes it once with proc-macro2, refusing groups deeper than a bound, and scans only items: attributes, inline modules, item macro calls and functions, skipping every body as tokens, so nothing parses an expression or a type. A test is a function under the modules named, twins under their own cfg joined, that carries an attribute whose path ends in test, a cfg_attr holding one included. Present gives the function's own tokens, doc attributes removed except inside macro calls, printed, so whitespace, comments and docs change nothing; absent, when the file or the test is not there; cannot tell, when the file cannot be read, lexed or bounded, a module on the way is out of line, or anything on the way that is not inert may make the test. So a removed test breaks its approvals, except where something on the way may make it, where it reads cannot tell and the approval stays fresh with a notice; the reason names the first few makers and counts the rest. The text is the function alone, so what it calls is not compared. The built-in preset test compares bytes and depends; rust-test cannot suggest moves.

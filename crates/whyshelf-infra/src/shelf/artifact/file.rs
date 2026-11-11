@@ -92,6 +92,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::PathBuf;
 
+use tokio::io::AsyncReadExt;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonBlank;
@@ -674,6 +675,55 @@ async fn bytes(root: &std::path::Path, path: &RelPath) -> Result<Read, ArtifactE
         Ok(Read::Bytes(bytes))
     } else {
         Ok(Read::NoFile)
+    }
+}
+
+/// What reading a named file within a bound of bytes gave, for another space whose
+/// names start with a path of this one (`rust-test`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Bounded {
+    /// Its bytes.
+    Bytes(Vec<u8>),
+    /// No file is there as written.
+    NoFile,
+    /// A symbolic link on the path leads outside the root, or is broken: nothing is
+    /// read.
+    Outside,
+    /// The file is larger than the bound: nothing is read.
+    TooLarge,
+}
+
+/// The bytes of a file under `root` by the rules of this space (`place_of`, the case
+/// of a path as written), when it has at most `max` bytes: an error only when the
+/// file is there and cannot be read.
+pub(super) async fn read_within(
+    root: &std::path::Path,
+    path: &RelPath,
+    max: u64,
+) -> io::Result<Bounded> {
+    match place_of(root, path).await? {
+        Place::File { len } if len > max => return Ok(Bounded::TooLarge),
+        Place::File { .. } => {}
+        Place::NoFile => return Ok(Bounded::NoFile),
+        Place::Outside => return Ok(Bounded::Outside),
+    }
+    let file = match tokio::fs::File::open(root.join(path.as_str())).await {
+        Ok(file) => file,
+        Err(e) if is_absent(&e) => return Ok(Bounded::NoFile),
+        Err(e) => return Err(e),
+    };
+    let mut bytes = Vec::new();
+    file.take(max.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .await?;
+    // It may have grown since it was looked at.
+    if u64::try_from(bytes.len()).map_or(true, |len| len > max) {
+        return Ok(Bounded::TooLarge);
+    }
+    if named_as_written(root, path).await {
+        Ok(Bounded::Bytes(bytes))
+    } else {
+        Ok(Bounded::NoFile)
     }
 }
 
