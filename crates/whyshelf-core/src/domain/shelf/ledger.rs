@@ -3,8 +3,9 @@
 //! A [`Record`] is a [`Decision`] about one document (approve, deny, deprecate,
 //! retire), a [`SameMeaning`] (a declaration that an edit of a document or a file
 //! keeps the meaning; see its page), a [`Moved`] (a declaration that an artifact moved
-//! from one name to another; see its page), or a [`Revocation`] of decisions and
-//! declarations. The domain holds a record as a value
+//! from one name to another; see its page), an [`Exempt`] (a declaration that a
+//! document is not expected to be reached by one covering link; see its page), or a
+//! [`Revocation`] of decisions and declarations. The domain holds a record as a value
 //! with no wire format: [`Record::to_canon`] and [`Record::from_canon`] are the two
 //! ends of its canonical form, and an adapter turns that form into JSON and back.
 //! [`Record::from_canon`] is strict (a version it does not know, a key too many or
@@ -756,6 +757,9 @@ pub enum Record {
     SameMeaning(SameMeaning),
     /// A declaration that an artifact moved from one name to another.
     Moved(Moved),
+    /// A declaration that a document is not expected to be reached by one covering
+    /// link.
+    Exempt(Exempt),
 }
 
 /// The hash of a record's canonical form, which tells two records of one id apart.
@@ -1046,6 +1050,7 @@ tags!(
         Revocation => "revocation",
         SameMeaning => "same_meaning",
         Moved => "moved",
+        Exempt => "exempt",
     }
 );
 
@@ -1433,6 +1438,11 @@ const MOVED_KEYS: [&str; 9] = [
     "v", "kind", "id", "space", "from", "to", "actor", "at", "reason",
 ];
 
+/// The keys an exemption has, and no more.
+const EXEMPT_KEYS: [&str; 9] = [
+    "v", "kind", "id", "subject", "book", "link", "actor", "at", "reason",
+];
+
 impl Record {
     /// The identity of the record.
     pub fn id(&self) -> JudgementId {
@@ -1441,6 +1451,7 @@ impl Record {
             Self::Revocation(r) => r.id,
             Self::SameMeaning(s) => s.id,
             Self::Moved(m) => m.id,
+            Self::Exempt(e) => e.id,
         }
     }
 
@@ -1463,6 +1474,7 @@ impl Record {
             ]),
             Self::SameMeaning(s) => same_meaning_canon(s),
             Self::Moved(m) => moved_canon(m),
+            Self::Exempt(e) => exempt_canon(e),
         }
     }
 
@@ -1487,6 +1499,7 @@ impl Record {
             Some(RecordKind::Revocation) => revocation_from(map).map(Self::Revocation),
             Some(RecordKind::SameMeaning) => same_meaning_from(map).map(Self::SameMeaning),
             Some(RecordKind::Moved) => moved_from(map).map(Self::Moved),
+            Some(RecordKind::Exempt) => exempt_from(map).map(Self::Exempt),
             None => Err(RecordProblem::UnknownKind {
                 found: kind.to_owned(),
             }),
@@ -1801,6 +1814,34 @@ fn moved_from(map: &CanonMap) -> Result<Moved, RecordProblem> {
     Ok(Moved::new(id, of, actor, at, reason))
 }
 
+fn exempt_canon(e: &Exempt) -> Canon {
+    Canon::map([
+        ("v", Canon::Int(VERSION)),
+        ("kind", Canon::str(RecordKind::Exempt.as_str())),
+        ("id", Canon::str(e.id.to_string())),
+        ("subject", Canon::str(e.of.doc().to_string())),
+        ("book", Canon::str(e.of.book().as_str())),
+        ("link", Canon::str(e.of.link().as_str())),
+        ("actor", Canon::str(e.actor.as_str())),
+        ("at", Canon::Int(e.at.0)),
+        ("reason", Canon::str(e.reason.as_str())),
+    ])
+}
+
+fn exempt_from(map: &CanonMap) -> Result<Exempt, RecordProblem> {
+    exact(map, &EXEMPT_KEYS)?;
+    let Common {
+        id,
+        actor,
+        at,
+        reason,
+    } = read_common(map, required_reason)?;
+    let book = BookName::new(text(map, "book")?).map_err(RecordProblem::BadName)?;
+    let link = EntryName::new(text(map, "link")?).map_err(RecordProblem::BadName)?;
+    let of = ExemptOf::new(doc_id(map, "subject")?, book, link);
+    Ok(Exempt::new(id, of, actor, at, reason))
+}
+
 /// What the records of a ledger say about one document: the declared status.
 ///
 /// It says what people decided, not whether it still holds: that is what
@@ -1888,6 +1929,7 @@ struct Grouped {
     revocations: BTreeMap<JudgementId, Revocation>,
     same_meanings: BTreeMap<JudgementId, SameMeaning>,
     moveds: BTreeMap<JudgementId, Moved>,
+    exempts: BTreeMap<JudgementId, Exempt>,
     conflicted: BTreeSet<JudgementId>,
     /// The conflicts.
     problems: Vec<LedgerProblem>,
@@ -1910,6 +1952,7 @@ impl Grouped {
             revocations: BTreeMap::new(),
             same_meanings: BTreeMap::new(),
             moveds: BTreeMap::new(),
+            exempts: BTreeMap::new(),
             conflicted: BTreeSet::new(),
             problems: Vec::new(),
         };
@@ -1927,6 +1970,9 @@ impl Grouped {
                 }
                 Count::One(Record::Moved(m)) => {
                     grouped.moveds.insert(id, m);
+                }
+                Count::One(Record::Exempt(e)) => {
+                    grouped.exempts.insert(id, e);
                 }
                 Count::Many(records) => {
                     grouped.conflicted.insert(id);
@@ -1949,6 +1995,7 @@ fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<
         revocations,
         same_meanings,
         moveds,
+        exempts,
         conflicted,
         ..
     } = grouped;
@@ -1968,6 +2015,7 @@ fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<
             } else if decisions.contains_key(&target)
                 || same_meanings.contains_key(&target)
                 || moveds.contains_key(&target)
+                || exempts.contains_key(&target)
             {
                 revoked.insert(target);
             } else {
@@ -1989,6 +2037,8 @@ pub struct Ledger {
     same_meanings: BTreeMap<JudgementId, SameMeaning>,
     /// The declarations of moves that are not revoked.
     moveds: BTreeMap<JudgementId, Moved>,
+    /// The exemptions that are not revoked.
+    exempts: BTreeMap<JudgementId, Exempt>,
     revoked: BTreeSet<JudgementId>,
     subjects: BTreeSet<DocId>,
     problems: Vec<LedgerProblem>,
@@ -2011,15 +2061,18 @@ impl Ledger {
             decisions,
             mut same_meanings,
             mut moveds,
+            mut exempts,
             ..
         } = grouped;
         same_meanings.retain(|id, _| !revoked.contains(id));
         moveds.retain(|id, _| !revoked.contains(id));
+        exempts.retain(|id, _| !revoked.contains(id));
         let subjects = decisions.values().map(|d| d.subject).collect();
         Self {
             decisions,
             same_meanings,
             moveds,
+            exempts,
             revoked,
             subjects,
             problems,
@@ -2105,6 +2158,18 @@ impl Ledger {
         self.moveds.get(&id)
     }
 
+    /// The exemptions that are not revoked, by identity: the one place the
+    /// exemptions that stand are read, by
+    /// [`exemption`](super::exemption)'s acceptance and reading.
+    pub fn exemptions(&self) -> impl Iterator<Item = &Exempt> {
+        self.exempts.values()
+    }
+
+    /// An exemption that is not revoked, by its identity.
+    pub fn exemption(&self, id: JudgementId) -> Option<&Exempt> {
+        self.exempts.get(&id)
+    }
+
     /// The artifact pins of the approval that stands about `id`, each as it is read
     /// now ([`Ledger::moved_to`], at the time of that approval), in the order of the
     /// record; none when no approval stands. A move is of something that was there,
@@ -2141,6 +2206,7 @@ impl Ledger {
         } else if self.decisions.contains_key(&id)
             || self.same_meanings.contains_key(&id)
             || self.moveds.contains_key(&id)
+            || self.exempts.contains_key(&id)
         {
             Ok(())
         } else {
@@ -2503,9 +2569,11 @@ pub fn frame_retire(shelf: &Shelf, id: DocId) -> RetireFrame {
     RetireFrame { subject: id, seen }
 }
 
+mod exempt;
 mod moved;
 mod same_meaning;
 
+pub use exempt::{Exempt, ExemptOf};
 use moved::moved_way;
 pub use moved::{
     FoundBy, GoneName, GoneNames, MoveCandidate, MoveNote, MoveSuggestion, MoveSuggestions, Moved,
@@ -2522,6 +2590,8 @@ pub use same_meaning::{
 mod artifact_tests;
 #[cfg(test)]
 mod comparison_tests;
+#[cfg(test)]
+mod exempt_tests;
 #[cfg(test)]
 mod frame_tests;
 #[cfg(test)]

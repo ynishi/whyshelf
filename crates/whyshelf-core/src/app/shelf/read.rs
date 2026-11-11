@@ -42,9 +42,9 @@ use super::error::ShelfError;
 use super::load::{Loaded, View, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
-    Absent, BookCount, BooksCheck, DownstreamEdge, GetReport, MapReport, MovedAway, StaleEntry,
-    StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge,
-    UpstreamEnd,
+    Absent, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, GetReport, MapReport, MovedAway,
+    RepeatedExemption, StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered,
+    Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 
 /// The identity a reference names, or why it names none.
@@ -201,6 +201,54 @@ impl<P: ShelfRead> ShelfApp<P> {
                 })
             })
             .collect();
+        // The exemptions, as freshness read them: those that take the place of a gap,
+        // and those no longer needed. Each names its record, which the ledger keeps.
+        let mut exempt = Vec::new();
+        let mut unneeded = Vec::new();
+        let mut repeated = Vec::new();
+        for (id, notices) in assessment.noticed() {
+            let key = loaded.shelf.doc(id).map(|doc| doc.key().clone());
+            for notice in notices {
+                match notice {
+                    Notice::Exempt {
+                        severity,
+                        exemption,
+                        ..
+                    } => {
+                        if let Some(record) = loaded.ledger.exemption(*exemption) {
+                            exempt.push(ExemptEntry {
+                                doc: id,
+                                key: key.clone(),
+                                severity: *severity,
+                                record: record.clone(),
+                            });
+                        }
+                    }
+                    Notice::ExemptionRepeated {
+                        book,
+                        link,
+                        exemptions,
+                    } => repeated.push(RepeatedExemption {
+                        doc: id,
+                        key: key.clone(),
+                        book: book.clone(),
+                        link: link.clone(),
+                        exemptions: exemptions.clone(),
+                    }),
+                    Notice::ExemptionUnneeded { exemption, why, .. } => {
+                        if let Some(record) = loaded.ledger.exemption(*exemption) {
+                            unneeded.push(UnneededExemption {
+                                doc: id,
+                                key: key.clone(),
+                                record: record.clone(),
+                                why: why.clone(),
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         Ok(BooksCheck::Checked {
             books,
             health: view.health(),
@@ -208,6 +256,10 @@ impl<P: ShelfRead> ShelfApp<P> {
             absent,
             unknown,
             moved,
+            exempt,
+            unneeded,
+            repeated,
+            names: loaded.names(),
         })
     }
 

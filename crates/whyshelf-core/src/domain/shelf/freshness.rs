@@ -98,14 +98,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
-use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 
 use super::artifact::{ArtifactHash, ArtifactKey, ArtifactState, Comparison, Untold};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
+use super::cover::{Decided, Reached, counts, covering_reach};
 use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
+use super::exemption::{Unneeded, by_subject, read_exemption};
 use super::graph::{Cycle, CycleId};
 use super::ledger::{
-    DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, ReadPin,
+    DeclaredStatus, Exempt, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, ReadPin,
 };
 use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
 
@@ -476,9 +478,10 @@ pub enum Standing {
 
 impl Standing {
     /// Whether no decision went against it: pending, or approved at any freshness.
-    /// Denied, deprecated and retired are decided against.
+    /// Denied, deprecated and retired are decided against. It is
+    /// [`counts`] of the standing, the one statement of it.
     pub fn stands(&self) -> bool {
-        matches!(self, Self::Pending | Self::Approved(_))
+        counts(Decided::from(self))
     }
 
     /// The standing without the causes and the successors.
@@ -489,6 +492,18 @@ impl Standing {
             Self::Deprecated { .. } => StandingKind::Deprecated,
             Self::Retired => StandingKind::Retired,
             Self::Approved(freshness) => StandingKind::Approved(freshness.level()),
+        }
+    }
+}
+
+impl From<&Standing> for Decided {
+    fn from(standing: &Standing) -> Self {
+        match standing {
+            Standing::Pending => Self::Pending,
+            Standing::Approved(_) => Self::Approved,
+            Standing::Denied => Self::Denied,
+            Standing::Deprecated { .. } => Self::Deprecated,
+            Standing::Retired => Self::Retired,
         }
     }
 }
@@ -548,6 +563,43 @@ pub enum Notice {
         link: EntryName,
         /// How strongly the link expects to reach it.
         severity: CoverSeverity,
+    },
+    /// A covering link does not reach this document, and people declared it is not
+    /// expected to ([`Exempt`]): no [`Notice::NotCovered`] for that link, whatever
+    /// its strength. Given in the place the `NotCovered` would be.
+    Exempt {
+        /// The book whose link would be expected to reach it.
+        book: BookName,
+        /// The link.
+        link: EntryName,
+        /// How strongly the link expects to reach the documents of its book.
+        severity: CoverSeverity,
+        /// The exemption.
+        exemption: JudgementId,
+    },
+    /// An exemption of this document is no longer needed ([`Unneeded`] says why):
+    /// the link reaches it now, or no longer expects to. As Rust's `#[expect]` tells
+    /// an expectation no longer met; withdraw the exemption.
+    ExemptionUnneeded {
+        /// The book the exemption names.
+        book: BookName,
+        /// The link it names.
+        link: EntryName,
+        /// The exemption.
+        exemption: JudgementId,
+        /// Why it is not needed.
+        why: Unneeded,
+    },
+    /// Two or more exemptions that stand are of this document from the same link,
+    /// as branches merged can leave them (`judge exempt` refuses a second): one is
+    /// enough, so withdraw the others. Each is read and told as well.
+    ExemptionRepeated {
+        /// The book the exemptions name.
+        book: BookName,
+        /// The link they name.
+        link: EntryName,
+        /// The exemptions, in the order of identity.
+        exemptions: TwoOrMore<JudgementId>,
     },
     /// A name a link to artifacts writes has nothing there now
     /// ([`Doc::absent_artifacts`]): the evidence is not written yet, or the name is
@@ -670,6 +722,13 @@ impl Assessment {
     /// The notices about one identity; none when it has none or is not listed.
     pub fn notices_of(&self, id: DocId) -> &[Notice] {
         self.notices.get(&id).map_or(&[], Vec::as_slice)
+    }
+
+    /// Every identity that has notices, with them, by identity. Among them may be an
+    /// identity [`Assessment::standings`] does not list: one an exemption names that
+    /// no file and no decision has, whose exemption is then unneeded.
+    pub fn noticed(&self) -> impl Iterator<Item = (DocId, &[Notice])> {
+        self.notices.iter().map(|(id, n)| (*id, n.as_slice()))
     }
 
     /// The cycles among links and among frames.
@@ -1374,20 +1433,20 @@ struct ExpectedReach<'s> {
     /// For each target book, the (book, link) pairs that declare they cover it, with
     /// the strength each declares.
     expectations: BTreeMap<&'s BookName, Vec<(&'s BookName, &'s EntryName, CoverSeverity)>>,
-    /// Each document a covering link reaches from a document that stands, with the
-    /// (book, link) it was reached through.
-    reached: BTreeSet<(DocId, BookName, EntryName)>,
+    /// Each document a covering link reaches from a document that counts, by the
+    /// (book, link) it was reached through, with the documents it was reached from.
+    reached: Reached,
 }
 
-/// Whether a document counts for coverage: it has a standing that
+/// Whether the document `id` counts for coverage: its standing
 /// [stands](Standing::stands). What was denied, deprecated or retired neither
 /// reaches nor is expected to be reached.
-fn stands(standing: Option<&Standing>) -> bool {
-    standing.is_some_and(Standing::stands)
+fn counted(standings: &BTreeMap<DocId, Standing>, id: DocId) -> bool {
+    standings.get(&id).is_some_and(Standing::stands)
 }
 
-/// The expectations of the covering links (a [`LinkKind::cover`] of some strength)
-/// and the documents they reach: the one place a covering link is read.
+/// The expectations of the covering links (a [`LinkKind::cover`] of some strength),
+/// and the documents they reach ([`covering_reach`]).
 ///
 /// [`LinkKind::cover`]: super::schema::LinkKind::cover
 fn expected_reach<'s>(
@@ -1406,29 +1465,40 @@ fn expected_reach<'s>(
             }
         }
     }
-    let mut reached = BTreeSet::new();
-    for doc in shelf.docs().values() {
-        if !stands(standings.get(&doc.id())) {
-            continue;
-        }
-        for (name, link) in doc.links() {
-            if link.kind().cover.is_none() {
-                continue;
-            }
-            for state in link.states() {
-                if let LinkState::Resolved(target) = state {
-                    reached.insert((target.id(), doc.key().book.clone(), name.clone()));
-                }
-            }
-        }
-    }
     ExpectedReach {
         expectations,
-        reached,
+        reached: covering_reach(shelf, |id| counted(standings, id)),
     }
 }
 
-/// The notices of the valid documents. They change no freshness.
+/// The notice of one exemption that stands, as
+/// [`exemption_reading`](super::exemption::exemption_reading) reads it: `Exempt`, in
+/// the place of a `NotCovered`, or `ExemptionUnneeded`.
+fn exemption_notice(
+    shelf: &Shelf,
+    standings: &BTreeMap<DocId, Standing>,
+    reached: &Reached,
+    exempt: &Exempt,
+) -> Notice {
+    let of = exempt.of();
+    match read_exemption(shelf, |id| counted(standings, id), reached, of) {
+        Ok(severity) => Notice::Exempt {
+            book: of.book().clone(),
+            link: of.link().clone(),
+            severity,
+            exemption: exempt.id(),
+        },
+        Err(why) => Notice::ExemptionUnneeded {
+            book: of.book().clone(),
+            link: of.link().clone(),
+            exemption: exempt.id(),
+            why,
+        },
+    }
+}
+
+/// The notices of the valid documents, and those of the exemptions. They change no
+/// freshness.
 ///
 /// | case | notice |
 /// |---|---|
@@ -1436,7 +1506,10 @@ fn expected_reach<'s>(
 /// | an `Informs` link cannot be followed | `InformsUnresolved` |
 /// | a pinned upstream's causes include `Expired` | `UpstreamExpired` |
 /// | a `Replaces` link | none |
-/// | a pending or approved document of a book a covering link points into, that no pending or approved document reaches through it | `NotCovered` |
+/// | a pending or approved document of a book a covering link points into, that no pending or approved document reaches through it, and that no exemption exempts from it | `NotCovered` |
+/// | an exemption that stands, of a document a covering link does not reach | `Exempt` (see `exemption_notice`) |
+/// | an exemption that stands and is not needed now | `ExemptionUnneeded` (see `exemption_notice`) |
+/// | two or more exemptions that stand of one document from one link, after their own notices | `ExemptionRepeated` |
 /// | a pending or approved document whose link to artifacts writes a name with nothing there | `ArtifactAbsent` |
 /// | a pending or approved document whose link to artifacts writes a name its adapter cannot tell about now, pinned or not | `ArtifactUnknown` |
 ///
@@ -1452,27 +1525,50 @@ fn collect_notices(
     statuses: &BTreeMap<DocId, DeclaredStatus>,
     mut same_meaning: BTreeMap<DocId, Vec<Notice>>,
 ) -> BTreeMap<DocId, Vec<Notice>> {
-    let mut all = BTreeMap::new();
+    let mut all: BTreeMap<DocId, Vec<Notice>> = BTreeMap::new();
     let expected = expected_reach(cx.shelf, standings);
+    // Each exemption read once; those of a document with a valid file are told in
+    // the place of the `NotCovered` they take, the rest after every document. Two
+    // or more of one document and link are told as repeated, after their readings.
+    let mut exemptions: BTreeMap<(DocId, BookName, EntryName), Vec<Notice>> = BTreeMap::new();
+    for (of, group) in by_subject(cx.ledger) {
+        let mut read: Vec<Notice> = group
+            .iter()
+            .map(|exempt| exemption_notice(cx.shelf, standings, &expected.reached, exempt))
+            .collect();
+        if let [first, second, rest @ ..] = group.as_slice() {
+            read.push(Notice::ExemptionRepeated {
+                book: of.book().clone(),
+                link: of.link().clone(),
+                exemptions: TwoOrMore::new(
+                    first.id(),
+                    second.id(),
+                    rest.iter().map(|e| e.id()).collect(),
+                ),
+            });
+        }
+        exemptions.insert((of.doc(), of.book().clone(), of.link().clone()), read);
+    }
     for doc in cx.shelf.docs().values() {
         let mut notices = same_meaning.remove(&doc.id()).unwrap_or_default();
-        if stands(standings.get(&doc.id())) {
+        if counted(standings, doc.id()) {
             for (book, link, severity) in expected
                 .expectations
                 .get(&doc.key().book)
                 .into_iter()
                 .flatten()
             {
-                if !expected
-                    .reached
-                    .contains(&(doc.id(), (*book).clone(), (*link).clone()))
-                {
+                let at = (doc.id(), (*book).clone(), (*link).clone());
+                let read = exemptions.remove(&at).unwrap_or_default();
+                let exempt = read.iter().any(|n| matches!(n, Notice::Exempt { .. }));
+                if !exempt && !expected.reached.contains_key(&at) {
                     notices.push(Notice::NotCovered {
                         book: (*book).clone(),
                         link: (*link).clone(),
                         severity: *severity,
                     });
                 }
+                notices.extend(read);
             }
             for (link, artifact) in doc.absent_artifacts() {
                 notices.push(Notice::ArtifactAbsent {
@@ -1529,6 +1625,11 @@ fn collect_notices(
             all.insert(doc.id(), notices);
         }
     }
+    // The exemptions of no expectation now: every one is unneeded, of a document
+    // whose file is valid or not.
+    for ((doc, _, _), read) in exemptions {
+        all.entry(doc).or_default().extend(read);
+    }
     all
 }
 
@@ -1540,6 +1641,8 @@ mod artifact_tests;
 mod comparison_tests;
 #[cfg(test)]
 mod cover_tests;
+#[cfg(test)]
+mod exempt_tests;
 #[cfg(test)]
 mod moved_tests;
 #[cfg(test)]

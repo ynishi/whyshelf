@@ -20,8 +20,8 @@
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
+//! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now; for `judge exempt`, a document whose file is invalid; one no file carries is a reference that names no document, exit 2) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
 //! | 3 | the run failed (a file could not be read or written; for `init`, part way too, with the files written listed in `problems`; or a template `init` ships cannot be read) |
 //!
 //! `init` writes the declaration and the documents of a template of
@@ -54,9 +54,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
-    ApproveChosenRequest, Choose, ErrorClass, JudgeRequest, Judgement, MapReport, MovedRequest,
-    NewDocRequest, PendingScope, SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError,
-    StaleReport, UnlinkedAsk, UnlinkedFilter, UnlinkedReport, WithdrawRequest,
+    ApproveChosenRequest, Choose, ErrorClass, ExemptRequest, JudgeRequest, Judgement, MapReport,
+    MovedRequest, NewDocRequest, PendingScope, SameMeaningAbout, SameMeaningRequest, ShelfApp,
+    ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter, UnlinkedReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -326,6 +326,10 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
                 .moved(requests)
                 .await
                 .map(|r| print(&output::moved(&r))),
+            Ok(JudgeRun::Exempt(requests)) => ShelfApp::new(project)
+                .exempt(requests)
+                .await
+                .map(|r| print(&output::exempted(&r))),
             Ok(JudgeRun::Withdraw(request)) => ShelfApp::new(project)
                 .withdraw(request)
                 .await
@@ -345,13 +349,14 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
 }
 
 /// What a `judge` command asks for: decisions, declarations that an edit keeps the
-/// meaning or that an artifact moved, or a withdrawal. Each is a use case, with
-/// requests of its own.
+/// meaning, that an artifact moved or that a document is exempt from a covering
+/// link, or a withdrawal. Each is a use case, with requests of its own.
 enum JudgeRun {
     Decide(Vec<JudgeRequest>),
     Chosen(ApproveChosenRequest),
     Same(Vec<SameMeaningRequest>),
     Moved(Vec<MovedRequest>),
+    Exempt(Vec<ExemptRequest>),
     Withdraw(WithdrawRequest),
 }
 
@@ -416,6 +421,28 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
                 reason: NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?,
                 actor: actor_of(actor)?,
             }]));
+        }
+        Verb::Exempt {
+            references,
+            from,
+            reason,
+            actor,
+        } => {
+            let args::BookLink { book, link } = from;
+            let reason = NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?;
+            let actor = actor_of(actor)?;
+            return Ok(JudgeRun::Exempt(
+                references
+                    .into_iter()
+                    .map(|reference| ExemptRequest {
+                        reference,
+                        book: book.clone(),
+                        link: link.clone(),
+                        reason: reason.clone(),
+                        actor: actor.clone(),
+                    })
+                    .collect(),
+            ));
         }
         Verb::Withdraw {
             records,
