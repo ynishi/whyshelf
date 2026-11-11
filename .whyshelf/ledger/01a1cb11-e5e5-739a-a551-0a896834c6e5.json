@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "0d9b38b15ea464d65a5c8434f576b7f39fa435ee",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3b606873e8a29ba26e06d495a3cbe73236ee36d438e93a16b696703c3b10ac97",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794408310214,
+  "expires": null,
+  "frame": [
+    {
+      "address": "305daa8521ce0d20f45efab896dbbd45b312c537",
+      "hash": "sha256:fbbee2c721f3322264b579d5ee46489f795f14784586d6475688614cb5cea0f8",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "66"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb06-d455-710f-8a4e-5bd7fa7cd3c8"
+    }
+  ],
+  "id": "01a1cb11-e5e5-739a-a551-0a896834c6e5",
+  "kind": "decision",
+  "reason": "Every template is sound and checks clean at once, and is chosen by name on the binary, as DEC-66 says (#82); checked by a blind review",
+  "revision": "f23af73efc350347c0fc6743b4b4db54585182df",
+  "seen": "sha256:bec2db8e9dae2fdd83d15b27cc6fef30586b6b18cec5ddeeb614696418512d4f",
+  "seen_address": "e961eec29c1b9474cbbea0c6050e7974c366759a",
+  "subject": "01a1cb06-d737-7530-9290-115fa03aad66",
+  "v": 1,
+  "verb": "approve"
+}

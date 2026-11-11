@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5186d5f3552914215ae3220f08820c18736a3ae5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c4e817c74afd33c26582c2e1f509f84175b73cd2415f121ad994fb43164ebd6b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/init.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794408310214,
+  "expires": null,
+  "frame": [
+    {
+      "address": "305daa8521ce0d20f45efab896dbbd45b312c537",
+      "hash": "sha256:fbbee2c721f3322264b579d5ee46489f795f14784586d6475688614cb5cea0f8",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "66"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb06-d455-710f-8a4e-5bd7fa7cd3c8"
+    }
+  ],
+  "id": "01a1cb11-e69f-73fa-9e84-26231cb22366",
+  "kind": "decision",
+  "reason": "Every template is sound and checks clean at once, and is chosen by name on the binary, as DEC-66 says (#82); checked by a blind review",
+  "revision": "f23af73efc350347c0fc6743b4b4db54585182df",
+  "seen": "sha256:177e6b40fd3c4912196e42526c42b1d1eae7016454863ff7d573e9bf4b3e5fbc",
+  "seen_address": "6446e5e45812347e658b5f688692e7655de9d90b",
+  "subject": "01a1cb07-1890-7277-a010-a55ae3658674",
+  "v": 1,
+  "verb": "approve"
+}

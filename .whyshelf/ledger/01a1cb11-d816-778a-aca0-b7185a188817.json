@@ -1,0 +1,46 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::init::Template",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794408306495,
+  "expires": null,
+  "frame": [
+    {
+      "address": "db6f51fe2d99e9409767716429df85cbe2bcc3de",
+      "hash": "sha256:785f2463798582b47dbc3a8d8fd00009f4506de4edb516f3e5c5dab58391d8b8",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "24"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c9b4-0262-74b9-b0c8-d15f578bcdf5"
+    }
+  ],
+  "id": "01a1cb11-d816-778a-aca0-b7185a188817",
+  "kind": "decision",
+  "reason": "init chooses one of a closed set of templates by name, minimal, sample or qa-first, each a complete set of files (#82); checked by a blind review on the binary, every finding fixed",
+  "revision": "f23af73efc350347c0fc6743b4b4db54585182df",
+  "seen": "sha256:fbbee2c721f3322264b579d5ee46489f795f14784586d6475688614cb5cea0f8",
+  "seen_address": "305daa8521ce0d20f45efab896dbbd45b312c537",
+  "subject": "01a1cb06-d455-710f-8a4e-5bd7fa7cd3c8",
+  "v": 1,
+  "verb": "approve"
+}

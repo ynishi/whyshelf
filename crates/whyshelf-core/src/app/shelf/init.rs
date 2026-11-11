@@ -8,6 +8,7 @@
 //!                      of the documents before it
 //!   in the way? ------ DeclarationWrite::in_the_way,
 //!                      DocWrite::in_the_way of each file,
+//!                      DocWrite::dir_in_the_way of each book,
 //!                      Shelf::files_writing each key ---------> refused, nothing written
 //!   text ------------- DeclarationWrite::create (create-only) -> the declaration
 //!   each NewDoc ------ DocWrite::create (create-only) ---------> <book dir>/<key>.md
@@ -24,6 +25,9 @@
 //! anything at a path (a file, a directory, a link even to nothing) is in the way,
 //! and so is a parent of it that is there and is no directory (a file, a link to
 //! nothing or to what is no directory; a link to a directory is a way through).
+//! A book's directory that is there and is no directory, or has such a parent, is
+//! in the way too, for every book declared, whether or not a document is made in
+//! it: the books are read from their directories.
 //! When no path is in the way, each file of a book that already writes a key a
 //! document would take is. Any of it is a refusal that names each.
 //!
@@ -164,8 +168,9 @@ impl<P: ShelfWrite> ShelfApp<P> {
 }
 
 /// Everything in the way of the writes: what is at the declaration's path or a
-/// document's, or at a parent of one that is no directory (each path once, the
-/// declaration's first); when none is, each file of a book that writes a key a
+/// document's, or at a parent of one that is no directory, then each book's
+/// directory, or a parent of it, that is no directory, whether or not a document is
+/// made in it (each path once, the declaration's first); when none is, each file of a book that writes a key a
 /// document would take (one at the document's own path is told as a path).
 async fn in_the_way<P: ShelfWrite>(
     ports: &P,
@@ -184,6 +189,18 @@ async fn in_the_way<P: ShelfWrite>(
         if let Some(path) = ports
             .doc_writer()
             .in_the_way(new.doc().origin())
+            .await
+            .map_err(port(ShelfPort::DocWrite))?
+            && !paths.contains(&path)
+        {
+            paths.push(path);
+        }
+    }
+    // Every book's directory is read, whether or not a document is made in it.
+    for book in schema.books().values() {
+        if let Some(path) = ports
+            .doc_writer()
+            .dir_in_the_way(book.dir().as_rel())
             .await
             .map_err(port(ShelfPort::DocWrite))?
             && !paths.contains(&path)
