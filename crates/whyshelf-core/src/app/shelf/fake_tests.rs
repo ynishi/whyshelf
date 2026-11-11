@@ -707,6 +707,16 @@ impl DocWrite for FakeShelf {
         Ok((read || files.contains_key(at)).then(|| at.clone()))
     }
 
+    /// A file that is no document at the directory or a parent of it.
+    async fn dir_in_the_way(&self, dir: &RelPath) -> Result<Option<RelPath>, FakeError> {
+        self.check()?;
+        let files = lock(&self.files);
+        let segments: Vec<&str> = dir.as_str().split('/').collect();
+        Ok((1..=segments.len())
+            .map(|end| path(&segments[..end].join("/")))
+            .find(|at| files.contains_key(at)))
+    }
+
     /// Keeps the file as the reading the fake's [`DocSource`] gives from then on.
     async fn create(
         &self,

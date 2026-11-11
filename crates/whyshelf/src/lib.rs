@@ -20,7 +20,8 @@
 //! In the root of a project:
 //!
 //! ```text
-//!   whyshelf init --sample    a declaration of four books, and one document of each
+//!   whyshelf init --template sample
+//!                             a declaration of four books, and one document of each
 //!   whyshelf check            nothing wrong: exit 0
 //!   whyshelf map              the books and their links, with a drawing of them in `diagram`
 //!   whyshelf trace V-1        the chain, from the verification up to the finding
@@ -33,10 +34,10 @@
 //! through `depends` links, DEC-1 and REQ-1, and nothing else, so a document of your
 //! own already in a book's directory is left as it is. `judge approve --pending V-1
 //! --reason …` alone would leave F-1 pending: REQ-1 only `grounds` on it, an
-//! `informs` link, which an approval does not stand on. `init --sample` answers this
+//! `informs` link, which an approval does not stand on. `init` answers this
 //! command in its `next`.
 //!
-//! `init --sample` writes `.whyshelf/books.toml` with four books, `finding`,
+//! The template `sample` writes `.whyshelf/books.toml` with four books, `finding`,
 //! `requirement`, `decision` and `verification`, and one pending document of each
 //! under `books/`, linked in one chain about a small command that must not lose a
 //! user's file:
@@ -55,10 +56,54 @@
 //! stale`: REQ-1 no longer holds, nor do DEC-1 and V-1, which depend on it, and
 //! `stale` says where that starts. F-1 still holds: a change makes stale what
 //! depends on the document changed, downstream, and never what it stands on. Change the declaration and the documents to the project's
-//! own, or remove them and start again with `whyshelf init`, one book of notes
-//! with comments that show how to add a field, a link and a link to files. Both
-//! are templates of `whyshelf_infra::shelf::init`; whyshelf itself knows no kind of
-//! document.
+//! own, or remove them and start again with another template.
+//!
+//! `init --template <name>` chooses the template (`--sample` is `--template
+//! sample`), and `init --help` lists them, each with a line on what it is. In
+//! short:
+//!
+//! ```text
+//!   minimal     the default: one book of notes, with comments that show how to add
+//!               a field, a link and a link to files; no document
+//!   sample      the four books above, and one pending document of each
+//!   qa-first    the four books, with two rules loosened for checks written before
+//!               decisions; a finding, a requirement and a verification
+//! ```
+//!
+//! Each is a template of `whyshelf_infra::shelf::init`, a whole set of files;
+//! whyshelf itself knows no kind of document.
+//!
+//! ## Checks first: `qa-first`
+//!
+//! Where the checks are fixed first and the decisions written at release,
+//! `whyshelf init --template qa-first` writes the four books with two rules
+//! loosened, each marked `qa-first` in `.whyshelf/books.toml`: a verification's
+//! `checks` is `count = "many"`, so a verification may check no decision yet, and
+//! `serves` has `cover = "warn"`, so a requirement no decision serves is listed,
+//! not failed. Beside it are F-1, REQ-1, which F-1 grounds, and V-1, a `review`
+//! that checks what REQ-1 asks; it links nothing yet, and gets its link
+//! (`checks`) when the decision is written. `check` is clean, with a warning:
+//!
+//! ```text
+//!   warning: requirement:REQ-1 is reached by no decision.serves (cover = "warn")
+//! ```
+//!
+//! and `next` approves the three with `judge approve --pending F-1 REQ-1 V-1`, as no
+//! `depends` link stands on any of them. At release, tighten the rules:
+//!
+//! 1. In `.whyshelf/books.toml`, set `checks` back to `count = "at-least-one"` and
+//!    the cover of `serves` back to `cover = true`. `check` now fails: V-1 checks
+//!    no decision, and no decision serves REQ-1.
+//! 2. Write the decisions, and link them from the verifications:
+//!    `whyshelf new decision --title "Write a new file, then rename it over the
+//!    old one" serves=REQ-1` makes DEC-1, and `checks: ["DEC-1"]` in the front
+//!    matter of `books/verification/V-1.md` links it.
+//! 3. `whyshelf judge approve --pending DEC-1 --reason "read, and it holds"`
+//!    approves DEC-1, then `whyshelf judge approve V-1 --reason "checks DEC-1
+//!    now"` approves V-1 again: its new link made its approval stale. A bare
+//!    `judge approve --pending` (or `--stale`) approves every pending (or stale)
+//!    document of the project that would hold, not only these.
+//! 4. `whyshelf check`: clean, with nothing uncovered.
 //!
 //! # Books: kinds of document you declare
 //!
@@ -148,7 +193,7 @@
 //! ```
 //!
 //! A chain of four books, finding -> requirement -> decision -> verification, is
-//! what `whyshelf init --sample` writes (a test keeps it clean); change what you
+//! what `whyshelf init --template sample` writes (a test keeps it clean); change what you
 //! need. A document of its `requirement` book:
 //!
 //! ```text
@@ -555,9 +600,12 @@
 //! ```text
 //!   whyshelf [--root <dir>] <command>
 //!
-//!   init [--sample]           start a project: a declaration of one book of notes, or with
-//!                             --sample four books and one pending document of each; it
-//!                             writes nothing when one of those files is there already
+//!   init [--template <name>]  start a project: the declaration and the documents of a
+//!        [--sample]           template, `minimal` (one book of notes; the default), `sample`
+//!                             (four books and one pending document of each; --sample is a
+//!                             shorthand) or `qa-first` (the four, loosened for checks before
+//!                             decisions); it writes nothing when one of those files is there
+//!                             already
 //!   check                     the declaration, the documents and the ledger, what no covering
 //!                             link reaches, the names with nothing there and those that cannot
 //!                             be told now; exit 1 if anything is wrong (neither of those is;
@@ -736,7 +784,7 @@
 //!   listed; a link to a key no document has yet is allowed, and listed in
 //!   `unresolved_links`. The identity is a new UUID v7.
 //! - `init` writes `.whyshelf/books.toml` as its template is written, comments
-//!   included, and with `--sample` each document of the template as `new` makes
+//!   included, and each document of the template as `new` makes
 //!   one: a new identity, the key the template gives, in the one form, pending. The
 //!   declaration is read by the reader of every command and checked, and each
 //!   document by the rules of `new`, before anything is written. A template that

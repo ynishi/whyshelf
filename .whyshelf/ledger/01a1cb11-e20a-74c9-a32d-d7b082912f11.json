@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1628f49668179d24523d230aa0c54ac5c80d84bc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8348d83aa40b77f1091a62bef3b757279f1e3300237d8018882613a31c7dfc8b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f65d39489a1eec371133be615346bf7f621d2633",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:864085be9311ee2378d1dafaffbd76001ed011136dee8b62b4b51398cbfb1ebd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1f9f6317bc9c7c974c98ee748e2a1eaf0e116c92",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0af63d9c101091c9e3641403fbe7c0f68579af9b7c964ce8ad6527b75513260a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/scope_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0ee9e2a66e9074f46c6c9059d4cbca36aa8ed741",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7b6bc9088a89aa0650517a2836c7a9c7b145f04d86da33beed0bb65c6e27c50e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794408307587,
+  "expires": null,
+  "frame": [
+    {
+      "address": "69ae922b3d9d0be27eb3c2815a9eb716a6cf0448",
+      "hash": "sha256:1b2a60d2ceb5091165777ee24182d1e28051717f48cdc6618b623b9539d943e9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "63"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
+    }
+  ],
+  "id": "01a1cb11-e20a-74c9-a32d-d7b082912f11",
+  "kind": "decision",
+  "reason": "DEC-61 names the template set, REQ-24 is grounded on F-36, and the init tests cover every template (#82); checked by a blind review",
+  "revision": "f23af73efc350347c0fc6743b4b4db54585182df",
+  "seen": "sha256:be3985bc5f56363af8f9d6db37cde00d4ba75a6ebc4cfeb216c513965b9d53c1",
+  "seen_address": "c80cacfc3438e5b5f5763d703b90e8fe018b6232",
+  "subject": "01a1ca93-506a-7227-95d5-fba4474cfc64",
+  "v": 1,
+  "verb": "approve"
+}

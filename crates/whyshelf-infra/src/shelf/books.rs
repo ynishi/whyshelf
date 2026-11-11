@@ -799,7 +799,7 @@ means = "informs"
 
     #[test]
     fn the_sample_of_init_reads_and_is_a_sound_declaration() {
-        // `init::SAMPLE` is the public sample, the one `whyshelf init --sample`
+        // `init::SAMPLE` is the public sample, the one `whyshelf init --template sample`
         // writes; this module has a small one of its own.
         let decls = parse(crate::shelf::init::SAMPLE).unwrap();
         let names: Vec<&str> = decls.books.iter().map(|d| d.name.as_str()).collect();

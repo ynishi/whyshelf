@@ -2,10 +2,13 @@
 
 use std::str::FromStr;
 
+use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
+use clap::error::ErrorKind;
 use clap::{Args, Subcommand};
 use whyshelf_core::domain::shelf::artifact::ArtifactName;
 use whyshelf_core::domain::shelf::lookup::Reference;
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
+use whyshelf_infra::shelf::init::Template;
 
 /// A link of a book as written in `--from`: `<book>.<link>`, read once by clap.
 ///
@@ -34,17 +37,55 @@ impl FromStr for BookLink {
     }
 }
 
+/// The name of a template of `init`, read by clap from the one closed set the
+/// templates are ([`Template::ALL`]), so `--help` lists each with what it is, and a
+/// name that is none is refused as every bad value is, with the names there are.
+#[derive(Debug, Clone, Copy)]
+pub struct TemplateName;
+
+impl TemplateName {
+    /// Each template as clap shows it: its name, and what it is.
+    fn possible() -> impl Iterator<Item = PossibleValue> {
+        Template::ALL
+            .into_iter()
+            .map(|t| PossibleValue::new(t.name()).help(t.about()))
+    }
+}
+
+impl TypedValueParser for TemplateName {
+    type Value = Template;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        let name = PossibleValuesParser::new(Self::possible()).parse_ref(cmd, arg, value)?;
+        // The parser above takes only the names of `Template::ALL`.
+        Template::named(&name)
+            .ok_or_else(|| clap::Error::new(ErrorKind::InvalidValue).with_cmd(cmd))
+    }
+
+    fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
+        Some(Box::new(Self::possible()))
+    }
+}
+
 /// The commands on the documents whose kinds the project declares in
 /// `.whyshelf/books.toml`.
 #[derive(Debug, Subcommand)]
 pub enum BooksCommand {
-    /// Start a project: write `.whyshelf/books.toml`, one book of notes with comments
-    /// that show how to extend it, where no declaration is; it never writes over a
-    /// file, and writes no approval.
+    /// Start a project: write `.whyshelf/books.toml` and the documents of a template
+    /// beside it (by default `minimal`, one book of notes with comments that show how
+    /// to extend it), where no declaration is; it never writes over a file, and
+    /// writes no approval.
     Init {
-        /// Write four books instead (finding, requirement, decision,
-        /// verification) and one pending document of each, linked in one chain.
-        #[arg(long)]
+        /// The template to write.
+        #[arg(long, value_name = "NAME", value_parser = TemplateName)]
+        template: Option<Template>,
+        /// A shorthand for `--template sample`.
+        #[arg(long, conflicts_with = "template")]
         sample: bool,
     },
     /// Check the declaration, the documents and the ledger; exit 1 if anything is

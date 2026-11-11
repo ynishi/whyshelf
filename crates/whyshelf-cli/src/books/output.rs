@@ -1304,7 +1304,7 @@ pub struct InitOut {
     /// The file of the declaration, relative to the project root.
     pub declaration: String,
     /// The documents made beside it, in the order they were written; none for
-    /// `init` without `--sample`.
+    /// the template `minimal`.
     pub documents: Vec<InitDocOut>,
     /// The commands to run next, in order, as they are typed, each with
     /// `--root=<dir>` when `init` ran with one; none when that root is no UTF-8
