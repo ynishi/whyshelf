@@ -1,0 +1,50 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794369178161,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e29456b4ed8b459da677b79f25de9bdfe483716b",
+      "hash": "sha256:0f0dc2ad41413994dc6572780a21a6417af6a2f38038b3c173d65af913147e1c",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "4"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-38d9-72fc-8ee9-4bc78bdcca4c"
+    },
+    {
+      "address": "4b5a31ddf68247beac5adbfdac0d49c54eebbafd",
+      "hash": "sha256:ea8368aa501077c2e0cea390b65529bff01ca15907b002ae7145648367573375",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "21"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c847-f021-72d4-8a44-6048c2025c77"
+    }
+  ],
+  "id": "01a1c8bc-caba-7445-9f58-916354a0383d",
+  "kind": "decision",
+  "reason": "stats carries a drawing a person reads, made from the answer alone, and --since and --until take an RFC 3339 time with an offset or a date YYYY-MM-DD and refuse anything else (#64); checked by a blind review, every finding fixed",
+  "revision": "e560741b6a658ab0d6ac806d1a831ef65d5e35f1",
+  "seen": "sha256:d6fe01cfa0864a168ed390e185d99b585cb5416067bf091d402792186f174438",
+  "seen_address": "3400dbc2f7d06a0abae6df7e3c489bd5f4a8f624",
+  "subject": "01a1c8ad-9bab-71bd-a155-f52d9ae7d16d",
+  "v": 1,
+  "verb": "approve"
+}

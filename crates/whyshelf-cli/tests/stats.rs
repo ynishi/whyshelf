@@ -1,7 +1,8 @@
 //! `stats` on the binary and a small project of files: the answer has its version,
-//! counts two approvals of one note as one approved again and two runs, is the same
-//! twice, echoes `--since` and lists no approval before it, is the error of a request
-//! for a `--since` that is no time, and creates and changes no file.
+//! counts two approvals of one note as one approved again and two runs, carries a
+//! drawing, is the same (its drawing too) twice, echoes `--since` and lists no
+//! approval before it, is the error of a request for a `--since` that is no time,
+//! and creates and changes no file.
 //!
 //! The project is made under the system's temporary directory with the standard
 //! library only, and removed when the test ends.
@@ -117,6 +118,14 @@ fn stats_answers_from_the_ledger_and_the_same_twice() {
     assert_eq!(answer["pending"][0]["count"], 1);
     // Two `judge approve` runs, each one run.
     assert_eq!(answer["runs"]["count"], 2);
+    // The drawing is text for a person, and the same on another run.
+    let drawing = answer["drawing"].as_str().expect("the drawing is a string");
+    assert!(!drawing.is_empty());
+    assert_eq!(
+        json(&project.run(&["stats"]))["drawing"].as_str(),
+        Some(drawing),
+        "the same drawing twice"
+    );
     assert_eq!(
         first.stdout,
         project.run(&["stats"]).stdout,

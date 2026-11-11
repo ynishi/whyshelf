@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f24a8832d8ff2330d0b41d1f7d6e370f11b463b9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c80453c64dea45e4d6505b68543fa619466efe0e1a4d2ac6727160b772cb652",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stats.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794369177429,
+  "expires": null,
+  "frame": [
+    {
+      "address": "77f5259deb7389872484170526d57b22e8842f14",
+      "hash": "sha256:97900423ab5115aa7f3a06091e439e0932ce389958ee80d4a703823e95af7237",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "55"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c847-f192-7237-ad26-fff5f77b2194"
+    },
+    {
+      "address": "3400dbc2f7d06a0abae6df7e3c489bd5f4a8f624",
+      "hash": "sha256:d6fe01cfa0864a168ed390e185d99b585cb5416067bf091d402792186f174438",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "57"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8ad-9bab-71bd-a155-f52d9ae7d16d"
+    }
+  ],
+  "id": "01a1c8bc-c785-7549-b8d7-6d439168537a",
+  "kind": "decision",
+  "reason": "The answer of stats carries a drawing made in the output layer, parse_time refuses a time with no offset instead of reading it as its date, and the e2e test of stats checks the drawing (#64); checked by a blind review",
+  "revision": "e560741b6a658ab0d6ac806d1a831ef65d5e35f1",
+  "seen": "sha256:4a6933a73c69f531940b9f70719531f4c7f5a7f401002d82f80a23bb4d93a767",
+  "seen_address": "7dfa18720a1f88ecce40dd2d0f1c16f49b5eaec7",
+  "subject": "01a1c847-f478-75b4-991d-1d40b11c87a8",
+  "v": 1,
+  "verb": "approve"
+}

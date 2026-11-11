@@ -60,7 +60,10 @@ pub enum BooksCommand {
     /// documents and artifacts that changed under approvals made again; it writes
     /// nothing.
     Stats {
-        /// Only the records at or after this time (RFC 3339, or a date).
+        /// Only the records at or after this time: an RFC 3339 time with an offset or
+        /// `Z` (`2026-11-11T00:00:00+09:00`, `2026-11-11T00:00:00Z`), or a date
+        /// `YYYY-MM-DD`, the start of that day in UTC. A time with no offset is
+        /// refused.
         #[arg(long)]
         since: Option<String>,
     },
@@ -148,7 +151,10 @@ pub enum Verb {
         /// Who judges (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
         #[arg(long)]
         actor: Option<String>,
-        /// When the approval lapses (RFC 3339, or a date).
+        /// When the approval lapses: an RFC 3339 time with an offset or `Z`
+        /// (`2026-11-11T00:00:00+09:00`, `2026-11-11T00:00:00Z`), or a date
+        /// `YYYY-MM-DD`, the start of that day in UTC. A time with no offset is
+        /// refused.
         #[arg(long)]
         until: Option<String>,
     },
