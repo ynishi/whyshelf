@@ -8,6 +8,10 @@
 # `release_always = false` it publishes only when the latest commit of main comes from a
 # release PR; after any other merge it publishes nothing.
 #
+# The first version, 0.1.0, is published by hand (`cargo publish --workspace`) and
+# tagged `v0.1.0` by hand: with no crate on crates.io and the changelog not written by
+# release-plz, a release PR has nothing to change, so there is none to merge.
+#
 # The next version is read from the commits since the last release. The commits of this
 # repository are not Conventional Commits (CONTRIBUTING § Commits), so release-plz bumps
 # the patch. On 0.x the minor is the compatibility unit: when a release changes a public
