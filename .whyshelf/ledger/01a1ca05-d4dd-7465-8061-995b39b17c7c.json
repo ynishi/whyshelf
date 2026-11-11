@@ -1,0 +1,107 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::approve_chosen",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::held_back",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::pending",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::pending_upstream",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::stale",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794390741883,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dd0569f50df65c8e603d65945b732663f342f60a",
+      "hash": "sha256:665cc53a4d4f74d28db81b7538b987de5e1845ab18bcd77117dc4cb4fe848add",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "18"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c6a9-7783-7239-aa91-3d22bdc409e0"
+    },
+    {
+      "address": "e740516e3f69bf51c9a974c8162aae5b30f2926a",
+      "hash": "sha256:079d6bc8e87c098242d187daa06a34c2a9c4ffea123c38f2be1d3507e94b8cff",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "25"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c9f3-ac8c-704d-a130-821e5c0f7fbb"
+    }
+  ],
+  "id": "01a1ca05-d4dd-7465-8061-995b39b17c7c",
+  "kind": "decision",
+  "reason": "judge approve --pending chooses pending documents as --stale chooses stale ones, for one run upstream first, each held back only by what the run has left so far (#73); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "e2717d89113a4435ddd60c63c7016f33e0434094",
+  "seen": "sha256:32de01c1a46930ee0ba007358b7a0f8847d6dfda3383d1fa8fe0da09a543454a",
+  "seen_address": "ece782932737ef8fe1483f6e43a97c15bbe1188d",
+  "subject": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a",
+  "v": 1,
+  "verb": "approve"
+}

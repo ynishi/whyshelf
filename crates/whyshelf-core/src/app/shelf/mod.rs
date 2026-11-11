@@ -19,7 +19,8 @@
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
 //! | [`judge`](ShelfApp::judge) | **yes** | [`JudgedAll`]: the records that were appended ([`Judged`]), with the addresses of what an approval stood on and the revision, and the approvals left out because they would only repeat a fresh one, each with why |
-//! | [`approve_stale`](ShelfApp::approve_stale) | **yes** | [`StaleApproved`]: the approvals made again, upstream first and in one run, of every expired or stale one that would hold once made, and those left out, each with why |
+//! | [`approve_chosen`](ShelfApp::approve_chosen) | **yes** | [`ChosenApproved`]: the approvals made, upstream first and in one run, of every document the rules chosen take (expired or stale, pending, or both) that would hold once made, each with the rule that took it, and those left out, each with why |
+//! | [`approve_stale`](ShelfApp::approve_stale) | **yes** | [`ChosenApproved`]: `approve_chosen` with the stale rule alone |
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
 //! | [`moves`](ShelfApp::moves) | no | [`MovesReport`]: the names approvals that stand pinned something at that have nothing behind them now, each with the documents that pin it and the names its space's adapter suggests it moved to (by the same content, or by a rename in the space's history), and the spaces that cannot suggest |
 //! | [`moved`](ShelfApp::moved) | **yes** | [`Moved`](crate::domain::shelf::ledger::Moved): the declarations that an artifact moved from one name to another, after the space's adapter said the old name has nothing and the new one has something |
@@ -33,7 +34,8 @@
 //!
 //! A use case that reads takes `&self` and is generic over [`ShelfRead`], which has no
 //! way to write. [`judge`](ShelfApp::judge),
-//! [`approve_stale`](ShelfApp::approve_stale), [`same_meaning`](ShelfApp::same_meaning),
+//! [`approve_chosen`](ShelfApp::approve_chosen), [`approve_stale`](ShelfApp::approve_stale),
+//! [`same_meaning`](ShelfApp::same_meaning),
 //! [`moved`](ShelfApp::moved), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc),
 //! [`init`](ShelfApp::init) and [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
 //! program run one at a time, by the type. Two processes can still write at once;
@@ -56,7 +58,7 @@
 //! and the files of the ledger that are no record. None is a failure of the use case,
 //! and none is left out.
 
-mod approve_stale;
+mod approve_chosen;
 mod approved;
 mod error;
 mod fmt;
@@ -77,6 +79,8 @@ mod withdraw;
 mod actor_tests;
 #[cfg(test)]
 mod approve_fresh_tests;
+#[cfg(test)]
+mod approve_pending_tests;
 #[cfg(test)]
 mod approve_stale_tests;
 #[cfg(test)]
@@ -112,7 +116,10 @@ mod tests;
 #[cfg(test)]
 mod unlinked_tests;
 
-pub use approve_stale::{ApproveStaleRequest, StaleApproved};
+pub use approve_chosen::{
+    ApproveChosenRequest, ApproveStaleRequest, Choose, ChosenApproved, ChosenJudged, ChosenLeftOut,
+    PendingScope,
+};
 pub use error::{ErrorClass, Obstacle, ShelfError};
 pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
 pub use init::{InitRequest, Initialized};
