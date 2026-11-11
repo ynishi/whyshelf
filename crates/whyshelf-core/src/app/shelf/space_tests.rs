@@ -258,7 +258,7 @@ fn the_same_name_in_two_spaces_is_two_artifacts() {
         .iter()
         .filter_map(|c| match c {
             crate::domain::shelf::freshness::Cause::ArtifactChanged { pin, .. } => {
-                Some(pin.artifact().clone())
+                Some(pin.pin().artifact().clone())
             }
             _ => None,
         })

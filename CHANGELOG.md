@@ -104,6 +104,13 @@ and this project adheres to
   run twice writes its records once; `--again` writes it anyway. In the library,
   `ShelfApp::judge` and `judge_all` return `JudgedAll` (`judged` and
   `left_out`) (#66).
+- `whyshelf judge moved <old> <new> --reason` declares that an artifact moved.
+  An approval's pin of the old name, made at or before the declaration, is
+  read as the new name: an unchanged move leaves the approval as it was, a move
+  with an edit is `artifact_changed` at the new name instead of broken, and a
+  link that still writes a name left behind is the cause `artifact_moved`,
+  listed by `check` and warned of on stderr. `get --approved`, `diff` and the
+  causes show the name pinned and, beside it, `read_as` (#42).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 

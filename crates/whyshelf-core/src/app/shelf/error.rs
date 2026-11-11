@@ -15,7 +15,8 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem};
 use crate::domain::shelf::ledger::{
-    DecisionProblem, FrameRefusal, SameMeaningProblem, SameMeaningRefusal, WithdrawRefusal,
+    DecisionProblem, FrameRefusal, MovedRefusal, SameMeaningProblem, SameMeaningRefusal,
+    WithdrawRefusal,
 };
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
@@ -95,6 +96,11 @@ pub enum ShelfError {
     /// The declaration breaks an invariant of a declaration.
     #[error("the declaration of the same meaning is not sound")]
     SameMeaning(#[from] SameMeaningProblem),
+    /// The move cannot be declared: the two names are one, no pin is read as the old
+    /// name now or pins are in two spaces, something is still at it, nothing is at
+    /// the new one, or either cannot be told now.
+    #[error("the declaration of a move is refused")]
+    MovedRefused(#[from] MovedRefusal),
     /// A record named to be withdrawn is no decision or declaration, or is already
     /// withdrawn.
     #[error("the withdrawal is refused")]
@@ -212,6 +218,11 @@ impl ShelfError {
                 | SameMeaningRefusal::PinnedUnderOtherComparison { .. }
                 | SameMeaningRefusal::NothingToDeclare,
             )
+            | Self::MovedRefused(
+                MovedRefusal::NotAMove(_)
+                | MovedRefusal::NotKnown { .. }
+                | MovedRefusal::InSpaces { .. },
+            )
             | Self::Withdraw(
                 WithdrawRefusal::Unknown { .. } | WithdrawRefusal::AlreadyWithdrawn { .. },
             ) => ErrorClass::Request,
@@ -224,7 +235,15 @@ impl ShelfError {
                 | SameMeaningRefusal::ArtifactAbsent { .. }
                 | SameMeaningRefusal::ArtifactUnknown { .. },
             )
-            | Self::SameMeaning(_) => ErrorClass::Refused,
+            | Self::SameMeaning(_)
+            // As a judgement the model refuses: a copy, a name with nothing behind it,
+            // or one that cannot be told now.
+            | Self::MovedRefused(
+                MovedRefusal::FromPresent { .. }
+                | MovedRefusal::FromUntold { .. }
+                | MovedRefusal::ToAbsent { .. }
+                | MovedRefusal::ToUntold { .. },
+            ) => ErrorClass::Refused,
             Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,
         }
     }

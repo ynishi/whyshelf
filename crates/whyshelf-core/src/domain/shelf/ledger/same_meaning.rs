@@ -41,7 +41,7 @@ use super::super::artifact::{
 };
 use super::super::build::{FailureTag, Shelf};
 use super::super::doc::DocHash;
-use super::{DeclaredStatus, JudgedAt, JudgementId, Ledger, NameForm, PinnedArtifact};
+use super::{DeclaredStatus, JudgedAt, JudgementId, Ledger, NameForm, PinnedArtifact, ReadPin};
 
 /// What a declaration is about, and the hashes it says mean the same.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -331,10 +331,14 @@ pub fn frame_same_meaning(
             let mut pinned: BTreeMap<Comparison, BTreeSet<ArtifactHash>> = BTreeMap::new();
             let mut under_other: BTreeSet<ArtifactHash> = BTreeSet::new();
             for subject in ledger.subjects() {
-                let DeclaredStatus::Approved { artifacts, .. } = ledger.status_of(*subject) else {
-                    continue;
-                };
-                for pin in artifacts.iter().filter(|p| *p.artifact() == artifact) {
+                // A pin is taken by the name it is read as, so an edit made with a
+                // move is declared at the new name.
+                let read = ledger.read_pins(*subject);
+                for pin in read
+                    .iter()
+                    .filter(|p| *p.read_as() == artifact)
+                    .map(ReadPin::pin)
+                {
                     let PinnedArtifact::Present { hash, .. } = pin.seen() else {
                         continue;
                     };

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "674f81af5e918067800d8c676b03ea799c908604",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2bb3f2fa245bd1661e0d9089bca3429c4e240cc4c9a269b3afed8b24e79877f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "39df51df572d57135852410f15ef6f48f2d76ea7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:28cae463725058266533a53155734e2b4765b45582df9bff4b8830525e6384f3",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/moved.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794376315163,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ed2d8800e4e0b5b6488ba2e5aa64172a96750903",
+      "hash": "sha256:30e6e11b84fb90a5af811e25fa8637aa65f92e5f41c716515d5b686941f42254",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "59"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c912-1826-76a6-838e-509c842f7e41"
+    }
+  ],
+  "id": "01a1c929-b33c-7076-b33c-aae1f87cfdd4",
+  "kind": "decision",
+  "reason": "judge moved records that an artifact moved, and the pins made before it are read through it as a separate value; a link left behind is one cause (#42); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "cfd16634e0a889968935ad230e1b909ceef8509f",
+  "seen": "sha256:71b488113d43b8d0147d76f6e8fc6d5547d2efb126c5925e5ab51d47c1396cba",
+  "seen_address": "a2f32ce6b88f6e8c733f9d36afef450e9c969f9e",
+  "subject": "01a1c912-1b7d-737e-9716-f8ad1db33ec3",
+  "v": 1,
+  "verb": "approve"
+}
