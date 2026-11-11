@@ -1,0 +1,57 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::actor::Actor",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::system::ProjectActor",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794365956169,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e4666bcbff936c60cfa627503082d756316940fd",
+      "hash": "sha256:237f766886a7ab23b3b74164f6ee0624b7802e3323ee86ea88353d981fe8fde9",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "9"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-10e0-77f2-9f27-abcf3bbfd1d0"
+    }
+  ],
+  "id": "01a1c88b-a072-72e8-850d-f15b2be04ab0",
+  "kind": "decision",
+  "reason": "DEC-34 says what the code does: a blank or non-text variable counts as not set, Git's user.name is the one git config gives in the project, no file names anyone, and with no name the judgement is refused; actor.rs shows the whole order on the binary with the person's Git settings shut out; ProjectActor's doc says the command line wins first (#62); checked by a blind review",
+  "revision": "eae62e663a913f4b8001cd70924767be01b9c7a9",
+  "seen": "sha256:2b40c7219de6e63b98ee933e423a47e71e0a67775e325f5689d0966fabf8c6be",
+  "seen_address": "18043f59ad21212c02248de6ae6190ae95685067",
+  "subject": "01a1c55d-e310-703a-82cc-fecc69ebdc07",
+  "v": 1,
+  "verb": "approve"
+}
