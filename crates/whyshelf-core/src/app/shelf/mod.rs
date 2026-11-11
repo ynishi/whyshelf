@@ -15,6 +15,7 @@
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
 //! | [`unlinked`](ShelfApp::unlinked) | no | [`UnlinkedReport`]: the problems of the declaration, or the documents linked neither way, those no link reaches and those that hold none, those decided against apart |
 //! | [`stale`](ShelfApp::stale) | no | [`StaleReport`]: the approvals that no longer hold, with where they start to fail |
+//! | [`stats`](ShelfApp::stats) | no | [`StatsReport`]: how the work went, from the ledger: approvals made again, pending time, runs, and the pins that changed under approvals made again |
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
 //! | [`judge`](ShelfApp::judge) | **yes** | [`Judged`]: the record that was appended, with the addresses of what an approval stood on and the revision |
@@ -85,6 +86,8 @@ mod new_doc_tests;
 #[cfg(test)]
 mod preset_tests;
 #[cfg(test)]
+mod run_tests;
+#[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]
 mod space_tests;
@@ -109,8 +112,8 @@ pub use ports::{
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
     DownstreamEdge, GetReport, Health, Judged, MapReport, Names, Row, StaleEntry, StaleReport,
-    StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport,
-    UpstreamEdge, UpstreamEnd,
+    StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry, UnlinkedLists,
+    UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use unlinked::{UnlinkedAsk, UnlinkedFilter};

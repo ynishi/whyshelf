@@ -2021,6 +2021,17 @@ impl Ledger {
         &self.subjects
     }
 
+    /// Every decision of the ledger, revoked or not, by identity; those of an
+    /// identity whose records conflict are not among them.
+    pub fn decisions(&self) -> impl Iterator<Item = &Decision> {
+        self.decisions.values()
+    }
+
+    /// Whether a revocation withdraws the record `id`.
+    pub fn is_revoked(&self, id: JudgementId) -> bool {
+        self.revoked.contains(&id)
+    }
+
     /// The contradictions that were set aside.
     pub fn problems(&self) -> &[LedgerProblem] {
         &self.problems

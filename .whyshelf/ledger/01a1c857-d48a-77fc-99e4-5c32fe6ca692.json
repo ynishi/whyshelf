@@ -1,0 +1,108 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2197bce8bee7e7aaf592ad8930a4624a61cc6278",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8bfe83e5c71fd327834bbb45f4577b703ec62ec4b6268a82a50372f0c2a01760",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "25e8a7b517705295b075b8de3b4f1d6208b06ef8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a41dc5e31e728408af205e23b8d1a86798ed5aa1043800a37b17f3366f8fbfd6",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/actor.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ed78081898f239099af12d9920d20d82165b84b3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0175bb57361579365c6f80650f2bf9051ecec2367fcd8f934356d11545e72f74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/id.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4e5f5d66f524c82f5a0852fae120a0e8bdfd6900",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ef9d95eb838616667bcaeb33ca6989ab7d9df6d941c3420e65e3185b9bdba2c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794362561196,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1c52d02046a22d505f4175e7ce7137d8b60beda9",
+      "hash": "sha256:1bca486c50cd6b585f14cd10be8144edcbc2fdd2c7f023dca11304f65f28fc23",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "34"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e310-703a-82cc-fecc69ebdc07"
+    },
+    {
+      "address": "12b9000513a1af84240cb975aa08345c7d3187c4",
+      "hash": "sha256:cc1e046186585cdfd094bb911bd9ac0b3dfbf4dde33d9ea9b2ef0294b03781bb",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "35"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e6b5-775e-9fa6-11ec41ab044a"
+    }
+  ],
+  "id": "01a1c857-d48a-77fc-99e4-5c32fe6ca692",
+  "kind": "decision",
+  "reason": "DocId gives the time its identity carries, every decision of a run takes one time (DEC-27 restated), the stats output shares the named views, and the rust-item tests no longer share a directory (#58); checked by a blind review",
+  "revision": "fb8a971b32f24f2986c165b1294b4da42a47a65d",
+  "seen": "sha256:004675956edd3fddb92deac8dc692eb4249d7d5af36d3836e1a27325dd5c243a",
+  "seen_address": "be79f226b0e7f20a1a755faac846cc8af2c574a0",
+  "subject": "01a1c4ba-1b8f-732a-b8df-96833f6bcad2",
+  "v": 1,
+  "verb": "approve"
+}

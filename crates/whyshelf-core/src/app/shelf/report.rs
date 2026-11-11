@@ -26,6 +26,7 @@ use crate::domain::shelf::schema::{
     BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
 };
 use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
+use crate::domain::shelf::stats::Stats;
 
 use crate::domain::location::RelPath;
 
@@ -375,6 +376,17 @@ pub struct StaleReport {
     /// The keys of the valid documents.
     pub names: Names,
     /// What is wrong around them.
+    pub health: Health,
+}
+
+/// The result of `stats`: how the work went, as the ledger tells it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatsReport {
+    /// The measures ([`stats::of`](crate::domain::shelf::stats::of)).
+    pub stats: Stats,
+    /// The keys of the valid documents, for the documents `health` names.
+    pub names: Names,
+    /// What is wrong around the documents.
     pub health: Health,
 }
 

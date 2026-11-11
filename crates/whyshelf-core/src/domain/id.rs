@@ -84,6 +84,17 @@ impl DocId {
     pub fn entity(&self) -> EntityId {
         self.0
     }
+
+    /// When the identity was made: the unix milliseconds a UUID v7 carries in its
+    /// first 48 bits.
+    ///
+    /// Arithmetic on the identity alone, with no clock: the time is whatever the
+    /// maker of the identity wrote there (a new document's, by `new`, is the time it
+    /// was made; one written by hand may carry any time).
+    pub fn made_at_millis(&self) -> i64 {
+        // 48 bits always fit an i64.
+        (self.0.as_uuid().as_u128() >> 80) as i64
+    }
 }
 
 impl fmt::Display for DocId {
@@ -264,6 +275,14 @@ mod tests {
         assert_eq!(EntityId::from(d), eid(5));
         assert_eq!(d.entity(), eid(5));
         assert_eq!(d.to_string(), eid(5).to_string());
+    }
+
+    #[test]
+    fn a_doc_id_carries_the_time_it_was_made() {
+        // 2025-01-01T00:00:00Z is 1735689600000 ms, 0x0194_1f29_7c00.
+        let id: DocId = "01941f29-7c00-7000-8000-000000000001".parse().unwrap();
+        assert_eq!(id.made_at_millis(), 1_735_689_600_000);
+        assert_eq!(DocId::new(eid(7)).made_at_millis(), 0);
     }
 
     #[test]

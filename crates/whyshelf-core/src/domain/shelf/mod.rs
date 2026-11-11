@@ -46,6 +46,8 @@
 //!                                                        SnapshotItem::retrieval ──► Retrieval
 //!   order     ──► schema, doc, graph, build, ledger    upstream_first ──► the order approvals are
 //!                                                        judged in again
+//!   stats     ──► artifact, doc, build, ledger,        stats::of ──► Stats         (how the work went,
+//!                 schema                                 from the records alone)
 //! ```
 //!
 //! Each arrow points from a module to what it uses, and nothing points back: a
@@ -119,6 +121,7 @@
 //! | where one identity stands, listed or not | [`Assessment::standing_of`] | a [`Standing`] |
 //! | where a degradation starts | [`Assessment::roots_of`] | [`RootCause`]s |
 //! | the order a set of approvals is judged in again | [`upstream_first`](order::upstream_first), from the links and the pins | the identities, upstream first |
+//! | how the work went: approvals made again, pending time, runs, the pins that changed | [`stats::of`], from every decision and the keys now; the measures are defined on its page | a [`Stats`](stats::Stats) |
 //!
 //! Two of these cannot be enforced by visibility alone: `DocHash::restore` and
 //! `ArtifactHash::restore` are visible to the whole module (the hash is made in
@@ -323,6 +326,7 @@ pub mod map;
 pub mod order;
 pub mod schema;
 pub mod snapshot;
+pub mod stats;
 pub mod trace;
 
 #[cfg(test)]
