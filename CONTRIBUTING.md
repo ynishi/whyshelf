@@ -192,9 +192,9 @@ issue -> finding -> requirement / decision / verification (pending)
 - `whyshelf check` is clean and `whyshelf stale` is empty before a PR goes up:
   `just check`, and so CI, fails otherwise (`just books`). An approval made with
   `--until` fails it once it expires. Pending documents pass it; approve them.
-- `tests` is a link to artifacts in the space `file` (`space = "file"` in
-  `.whyshelf/books.toml`): its names are paths, compared as written, case
-  included. Write a path as Git tracks it (`Justfile`, not `justfile`), or it
+- `tests` is a link to artifacts in the space `file`, through the default of
+  `.whyshelf/books.toml` (`[defaults] artifact = "file"`): its names are
+  paths, compared as written, case included. Write a path as Git tracks it (`Justfile`, not `justfile`), or it
   names no file, on every system. `check` lists the names with nothing there
   (`absent`) and those that cannot be told now (`unknown`).
 

@@ -2,12 +2,13 @@
 //!
 //! This is the whole of the application's part in the question "what is the state of
 //! the documents": it asks the ports for what they hold and hands it to the three
-//! entries of the domain ([`Schema::validate`], [`Shelf::build`], [`Ledger::build`]),
+//! entries of the domain ([`Schema::declared`], [`Shelf::build`], [`Ledger::build`]),
 //! in that order, and decides nothing itself. [`View`] then shows an identity as a
 //! [`Row`], with what the model said about it, and shows no more than the model said.
 //!
 //! ```text
-//!   BookSchemaSource -> Schema::validate <- ArtifactSource::spaces
+//!   BookSchemaSource -> Schema::declared <- ArtifactSource::presets, ::spaces
+//!                          |  (expand, then validate)
 //!                          |  dirs of the books
 //!   DocSource <------------+
 //!        |
@@ -70,12 +71,17 @@ pub(super) async fn load<P: ShelfRead>(ports: &P) -> Result<Loaded, ShelfError> 
 pub(super) async fn schema_of<P: ShelfRead>(
     ports: &P,
 ) -> Result<Result<Schema, NonEmptyVec<SchemaProblem>>, ShelfError> {
-    let decls = ports
+    let decl = ports
         .schemas()
         .declarations()
         .await
         .map_err(port(ShelfPort::Schema))?;
-    Ok(Schema::validate(decls, &ports.artifacts().spaces()))
+    let artifacts = ports.artifacts();
+    Ok(Schema::declared(
+        decl,
+        &artifacts.presets(),
+        &artifacts.spaces(),
+    ))
 }
 
 /// Read the documents and the ledger and build the shelf and the ledger.

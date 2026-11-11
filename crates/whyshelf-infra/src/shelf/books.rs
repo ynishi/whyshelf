@@ -27,22 +27,43 @@
 //! [[book.link]]
 //! name = "tests"
 //! target = "artifact"              # things outside the documents, by name in a space
-//! space = "file"                   # the space: one an adapter offers; always written
+//! space = "file"                   # the space: one an adapter offers
 //! means = "depends"                # "depends" or "informs" (an artifact replaces nothing)
 //! compare = "lines"                # "bytes" (default), "lines" or "presence"
 //! ignore = ["//"]                  # for "lines": the lines it leaves out
+//!
+//! [[book.link]]
+//! name = "code"
+//! target = "artifact"
+//! preset = "rust"                  # the values of a preset; each value written here wins
+//!
+//! [[preset]]                       # a preset of the project
+//! name = "rust"
+//! from = "file"                    # optional: a built-in preset or another of the project
+//! compare = "lines"                # any of space, compare, ignore and means
+//! ignore = ["//"]
+//!
+//! [defaults]
+//! artifact = "file"                # the preset of a link to artifacts that names
+//!                                  # neither a preset nor a space; none when not written
 //! ```
 //!
 //! The word `artifact` as a target is read here into
 //! [`LinkTargetDecl::Artifact`]; the domain refuses a book of that name, so the word
 //! never names both. `space` is read as written onto the link, and the domain says
-//! whether it is one the adapters offer.
+//! whether it is one the adapters offer. `means` may be left out of a link when the
+//! preset it names, or the default, gives it. The built-in presets are the
+//! adapters' (`file`, on the page of [`artifact`](super::artifact)); how a preset of
+//! the project of the same name stands to one is stated on
+//! [`expand`](whyshelf_core::domain::shelf::schema::expand).
 //!
 //! This module reads the text and its shape; whether the books make sense (names,
-//! directories that overlap, links to a book that is not declared) is
-//! [`Schema::validate`](whyshelf_core::domain::shelf::schema::Schema::validate)'s
-//! work. Fields and links stay lists, so a name written twice reaches the domain
-//! twice and is reported there.
+//! directories that overlap, links to a book that is not declared, presets that are
+//! not there) is
+//! [`Schema::declared`](whyshelf_core::domain::shelf::schema::Schema::declared)'s
+//! work, which [`expand`](whyshelf_core::domain::shelf::schema::expand)s the presets
+//! first. Fields, links and presets stay lists, so a name written twice reaches the
+//! domain twice and is reported there.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -50,8 +71,9 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use whyshelf_core::app::shelf::BookSchemaSource;
 use whyshelf_core::domain::shelf::schema::{
-    ARTIFACT_TARGET, BookSchemaDecl, Cardinality, CompareDecl, CoverDecl, FieldEntryDecl,
-    FieldPresence, FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation,
+    ARTIFACT_TARGET, BookSchemaDecl, Cardinality, CoverDecl, DefaultsDecl, FieldEntryDecl,
+    FieldPresence, FieldTypeDecl, KeyPatternDecl, LinkTargetDecl, PresetDecl, PresetValues,
+    Propagation, ShelfDecl, WrittenBookDecl, WrittenLinkDecl,
 };
 
 /// A declaration of a Finding -> Spec -> Design chain, as a project could write it.
@@ -115,7 +137,7 @@ impl BooksToml {
 impl BookSchemaSource for BooksToml {
     type Error = BooksError;
 
-    async fn declarations(&self) -> Result<Vec<BookSchemaDecl>, BooksError> {
+    async fn declarations(&self) -> Result<ShelfDecl, BooksError> {
         let text = match tokio::fs::read_to_string(&self.path).await {
             Ok(text) => text,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -137,10 +159,16 @@ impl BookSchemaSource for BooksToml {
     }
 }
 
-/// The declarations a TOML text holds.
-pub fn parse(text: &str) -> Result<Vec<BookSchemaDecl>, toml::de::Error> {
+/// The declaration a TOML text holds: its books, presets and defaults, as written.
+pub fn parse(text: &str) -> Result<ShelfDecl, toml::de::Error> {
     let file: FileDto = toml::from_str(text)?;
-    Ok(file.book.into_iter().map(BookDto::into_decl).collect())
+    Ok(ShelfDecl {
+        books: file.book.into_iter().map(BookDto::into_decl).collect(),
+        presets: file.preset.into_iter().map(PresetDto::into_decl).collect(),
+        defaults: DefaultsDecl {
+            artifact: file.defaults.and_then(|d| d.artifact),
+        },
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,6 +176,45 @@ pub fn parse(text: &str) -> Result<Vec<BookSchemaDecl>, toml::de::Error> {
 struct FileDto {
     #[serde(default)]
     book: Vec<BookDto>,
+    #[serde(default)]
+    preset: Vec<PresetDto>,
+    defaults: Option<DefaultsDto>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DefaultsDto {
+    /// The preset of a link to artifacts that names neither a preset nor a space.
+    artifact: Option<String>,
+}
+
+/// A preset of the project: a name, the preset it comes from, and the values of a
+/// link to artifacts it gives. Any other key is refused here, as on a link.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PresetDto {
+    name: String,
+    from: Option<String>,
+    space: Option<String>,
+    compare: Option<String>,
+    ignore: Option<Vec<String>>,
+    /// Read with the words of a link; the domain refuses `replaces`.
+    means: Option<MeansWord>,
+}
+
+impl PresetDto {
+    fn into_decl(self) -> PresetDecl {
+        PresetDecl {
+            name: self.name,
+            from: self.from,
+            values: PresetValues {
+                space: self.space,
+                compare: self.compare,
+                ignore: self.ignore,
+                means: self.means.map(MeansWord::propagation),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -223,7 +290,12 @@ struct LinkDto {
     target: String,
     #[serde(default)]
     count: CountWord,
-    means: MeansWord,
+    /// May be left out when the preset or the default gives it; a link left with
+    /// none is a problem of the declaration, which the domain tells.
+    means: Option<MeansWord>,
+    /// For a link to artifacts: the preset whose values it takes; checked by the
+    /// domain.
+    preset: Option<String>,
     /// For a link to artifacts: the space its names are in; checked by the domain.
     space: Option<String>,
     /// For a link to artifacts: `bytes`, `lines` or `presence`; checked by the domain.
@@ -263,8 +335,18 @@ enum MeansWord {
     Replaces,
 }
 
+impl MeansWord {
+    fn propagation(self) -> Propagation {
+        match self {
+            Self::Depends => Propagation::Depends,
+            Self::Informs => Propagation::Informs,
+            Self::Replaces => Propagation::Replaces,
+        }
+    }
+}
+
 impl BookDto {
-    fn into_decl(self) -> BookSchemaDecl {
+    fn into_decl(self) -> WrittenBookDecl {
         BookSchemaDecl {
             name: self.name,
             dir: self.dir,
@@ -295,7 +377,7 @@ impl BookDto {
             links: self
                 .link
                 .into_iter()
-                .map(|l| LinkEntryDecl {
+                .map(|l| WrittenLinkDecl {
                     name: l.name,
                     target: if l.target == ARTIFACT_TARGET {
                         LinkTargetDecl::Artifact
@@ -308,21 +390,11 @@ impl BookDto {
                         CountWord::Many => Cardinality::Many,
                         CountWord::AtLeastOne => Cardinality::AtLeastOne,
                     },
-                    propagation: match l.means {
-                        MeansWord::Depends => Propagation::Depends,
-                        MeansWord::Informs => Propagation::Informs,
-                        MeansWord::Replaces => Propagation::Replaces,
-                    },
+                    propagation: l.means.map(MeansWord::propagation),
+                    preset: l.preset,
                     space: l.space,
-                    // `ignore` without `compare` is a `compare` of no kind, which the
-                    // domain refuses, so it is not lost.
-                    compare: match (l.compare, l.ignore) {
-                        (None, None) => None,
-                        (kind, ignore) => Some(CompareDecl {
-                            kind: kind.unwrap_or_default(),
-                            ignore: ignore.unwrap_or_default(),
-                        }),
-                    },
+                    compare: l.compare,
+                    ignore: l.ignore,
                     cover: l.cover.map(|cover| match cover {
                         CoverDto::Truth(truth) => CoverDecl::Truth(truth),
                         CoverDto::Word(word) => CoverDecl::Word(word),
@@ -373,24 +445,30 @@ means = "informs"
     #[test]
     fn a_declaration_is_read_into_the_values_of_the_domain() {
         let decls = parse(SAMPLE).unwrap();
-        assert_eq!(decls.len(), 2);
-        assert_eq!(decls[0].name, "finding");
+        assert_eq!(decls.books.len(), 2);
+        assert_eq!(decls.books[0].name, "finding");
         assert_eq!(
-            decls[0].key,
+            decls.books[0].key,
             KeyPatternDecl::Prefixed {
                 prefix: "F".to_owned()
             }
         );
         assert_eq!(
-            decls[0].fields[0].ty,
+            decls.books[0].fields[0].ty,
             FieldTypeDecl::Enum(vec!["low".to_owned(), "high".to_owned()])
         );
-        assert_eq!(decls[0].fields[0].presence, FieldPresence::Required);
-        assert_eq!(decls[1].key, KeyPatternDecl::Slug);
-        assert_eq!(decls[1].links[0].cardinality, Cardinality::AtLeastOne);
-        assert_eq!(decls[1].links[0].propagation, Propagation::Depends);
-        assert_eq!(decls[1].links[1].cardinality, Cardinality::Many);
-        assert_eq!(decls[1].links[1].propagation, Propagation::Informs);
+        assert_eq!(decls.books[0].fields[0].presence, FieldPresence::Required);
+        assert_eq!(decls.books[1].key, KeyPatternDecl::Slug);
+        assert_eq!(decls.books[1].links[0].cardinality, Cardinality::AtLeastOne);
+        assert_eq!(
+            decls.books[1].links[0].propagation,
+            Some(Propagation::Depends)
+        );
+        assert_eq!(decls.books[1].links[1].cardinality, Cardinality::Many);
+        assert_eq!(
+            decls.books[1].links[1].propagation,
+            Some(Propagation::Informs)
+        );
     }
 
     /// The spaces the tests hold declarations against.
@@ -398,11 +476,13 @@ means = "informs"
         BTreeSet::from([Space::new("file").unwrap()])
     }
 
+    /// The declaration expanded with the presets of the file adapter, then checked.
     #[allow(clippy::result_large_err)]
     fn validate(
-        decls: Vec<BookSchemaDecl>,
+        decls: ShelfDecl,
     ) -> Result<Schema, whyshelf_core::domain::nonempty::NonEmptyVec<SchemaProblem>> {
-        Schema::validate(decls, &spaces())
+        let builtins = crate::shelf::artifact::file::presets(&Space::new("file").unwrap());
+        Schema::declared(decls, &builtins, &spaces())
     }
 
     #[test]
@@ -412,8 +492,8 @@ means = "informs"
              [[book.link]]\nname='tests'\ntarget='artifact'\nspace='file'\nmeans='depends'\n",
         )
         .unwrap();
-        assert_eq!(decls[0].links[0].target, LinkTargetDecl::Artifact);
-        assert_eq!(decls[0].links[0].space.as_deref(), Some("file"));
+        assert_eq!(decls.books[0].links[0].target, LinkTargetDecl::Artifact);
+        assert_eq!(decls.books[0].links[0].space.as_deref(), Some("file"));
         let schema = validate(decls).unwrap();
         let links = schema.book("a").unwrap().artifact_links();
         assert_eq!(links.len(), 1);
@@ -427,7 +507,7 @@ means = "informs"
              [[book.link]]\nname='tests'\ntarget='artifact'\nmeans='depends'\n",
         )
         .unwrap();
-        assert_eq!(decls[0].links[0].space, None);
+        assert_eq!(decls.books[0].links[0].space, None);
         let problems = validate(decls).unwrap_err();
         assert!(matches!(
             problems.first(),
@@ -452,12 +532,10 @@ means = "informs"
     #[test]
     fn compare_and_ignore_are_read_onto_a_link_and_none_is_no_compare() {
         let decls = parse(&tests_link("compare='lines'\nignore=['//', '#']\n")).unwrap();
+        assert_eq!(decls.books[0].links[0].compare.as_deref(), Some("lines"));
         assert_eq!(
-            decls[0].links[0].compare,
-            Some(CompareDecl {
-                kind: "lines".to_owned(),
-                ignore: vec!["//".to_owned(), "#".to_owned()],
-            })
+            decls.books[0].links[0].ignore,
+            Some(vec!["//".to_owned(), "#".to_owned()])
         );
         let schema = validate(decls).unwrap();
         let kind = schema
@@ -476,28 +554,86 @@ means = "informs"
         );
 
         let plain = parse(&tests_link("")).unwrap();
-        assert_eq!(plain[0].links[0].compare, None);
+        assert_eq!(plain.books[0].links[0].compare, None);
+        assert_eq!(plain.books[0].links[0].ignore, None);
         let bytes = parse(&tests_link("compare='bytes'\n")).unwrap();
-        assert_eq!(
-            bytes[0].links[0].compare,
-            Some(CompareDecl {
-                kind: "bytes".to_owned(),
-                ignore: Vec::new(),
-            })
-        );
+        assert_eq!(bytes.books[0].links[0].compare.as_deref(), Some("bytes"));
+        assert_eq!(bytes.books[0].links[0].ignore, None);
     }
 
     #[test]
     fn ignore_without_compare_is_kept_for_the_domain_to_refuse() {
         let decls = parse(&tests_link("ignore=['//']\n")).unwrap();
-        assert_eq!(
-            decls[0].links[0].compare,
-            Some(CompareDecl {
-                kind: String::new(),
-                ignore: vec!["//".to_owned()],
-            })
-        );
+        assert_eq!(decls.books[0].links[0].compare, None);
+        assert_eq!(decls.books[0].links[0].ignore, Some(vec!["//".to_owned()]));
         assert!(validate(decls).is_err());
+    }
+
+    #[test]
+    fn presets_and_defaults_are_read_as_written() {
+        let decls = parse(
+            "[defaults]\nartifact='rust'\n\
+             [[preset]]\nname='rust'\nfrom='file'\ncompare='lines'\nignore=['//']\nmeans='informs'\n\
+             [[preset]]\nname='bare'\n\
+             [[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [[book.link]]\nname='code'\ntarget='artifact'\npreset='bare'\nspace='file'\n",
+        )
+        .unwrap();
+        assert_eq!(decls.defaults.artifact.as_deref(), Some("rust"));
+        assert_eq!(
+            decls.presets,
+            [
+                PresetDecl {
+                    name: "rust".to_owned(),
+                    from: Some("file".to_owned()),
+                    values: PresetValues {
+                        space: None,
+                        compare: Some("lines".to_owned()),
+                        ignore: Some(vec!["//".to_owned()]),
+                        means: Some(Propagation::Informs),
+                    },
+                },
+                PresetDecl {
+                    name: "bare".to_owned(),
+                    from: None,
+                    values: PresetValues::default(),
+                },
+            ]
+        );
+        let link = &decls.books[0].links[0];
+        assert_eq!(link.preset.as_deref(), Some("bare"));
+        assert_eq!(link.propagation, None);
+        // `bare` gives no meaning, so the link that names it says none.
+        let problems = validate(decls).unwrap_err().into_vec();
+        assert!(
+            matches!(&problems[..], [SchemaProblem::NoMeans { link, .. }] if link == "code"),
+            "{problems:?}"
+        );
+        assert!(parse("").unwrap().defaults.artifact.is_none());
+    }
+
+    #[test]
+    fn a_default_of_the_file_preset_expands_a_link_to_the_space_file() {
+        let decls = parse(
+            "[defaults]\nartifact='file'\n\
+             [[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [[book.link]]\nname='tests'\ntarget='artifact'\n",
+        )
+        .unwrap();
+        let schema = validate(decls).unwrap();
+        let book = schema.book("a").unwrap();
+        let kind = book.artifact_links().get("tests").unwrap();
+        assert_eq!(kind.space.as_str(), "file");
+        assert_eq!(kind.comparison.kind_word(), "bytes");
+        assert_eq!(kind.propagation.propagation(), Propagation::Depends);
+        assert!(book.preset_of("tests").is_some_and(|p| p.is_default()));
+    }
+
+    #[test]
+    fn a_key_a_preset_or_the_defaults_do_not_know_is_refused() {
+        assert!(parse("[[preset]]\nname='p'\ncount='one'\n").is_err());
+        assert!(parse("[[preset]]\nname='p'\ncover=true\n").is_err());
+        assert!(parse("[defaults]\nbook='p'\n").is_err());
     }
 
     #[test]
@@ -536,7 +672,7 @@ means = "informs"
             ("", None, None),
         ] {
             let decls = parse(&book_link(text)).unwrap();
-            assert_eq!(decls[0].links[0].cover, read, "{text}");
+            assert_eq!(decls.books[0].links[0].cover, read, "{text}");
             let schema = validate(decls).unwrap();
             let book = schema.book("a").unwrap();
             let (_, kind) = book
@@ -572,14 +708,17 @@ means = "informs"
     fn a_description_is_read_as_written_and_none_when_not_written() {
         let decls = parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\ndescription='what was seen'\n")
             .unwrap();
-        assert_eq!(decls[0].description.as_deref(), Some("what was seen"));
+        assert_eq!(decls.books[0].description.as_deref(), Some("what was seen"));
         let schema = validate(decls).unwrap();
         assert_eq!(
             schema.book("a").unwrap().description().map(|d| d.as_str()),
             Some("what was seen")
         );
         assert_eq!(
-            parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\n").unwrap()[0].description,
+            parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\n")
+                .unwrap()
+                .books[0]
+                .description,
             None
         );
         let two_lines =
@@ -594,14 +733,16 @@ means = "informs"
 
     #[test]
     fn an_empty_file_declares_no_book() {
-        assert!(parse("").unwrap().is_empty());
+        let decls = parse("").unwrap();
+        assert!(decls.books.is_empty());
+        assert!(decls.presets.is_empty());
     }
 
     #[test]
     fn the_sample_reads_and_is_a_sound_declaration() {
         // `super::SAMPLE` is the public sample; this module has a small one of its own.
         let decls = parse(super::SAMPLE).unwrap();
-        let names: Vec<&str> = decls.iter().map(|d| d.name.as_str()).collect();
+        let names: Vec<&str> = decls.books.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, ["finding", "spec", "design"]);
         let schema = validate(decls).unwrap();
         assert_eq!(schema.books().len(), 3);

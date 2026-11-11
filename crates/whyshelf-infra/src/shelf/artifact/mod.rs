@@ -14,9 +14,14 @@
 //!   (space, ContentAddress) ──► the adapter of the space ──► content, or not readable
 //! ```
 //!
-//! | space | adapter | its names |
-//! |---|---|---|
-//! | `file` | [`file::FileSpace`] | paths under the root of the project |
+//! | space | adapter | its names | the presets it offers |
+//! |---|---|---|---|
+//! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"` |
+//!
+//! Each adapter offers its presets of links to artifacts for its own space, as
+//! values ([`ArtifactSource::presets`]); the domain knows none. A project may write
+//! `[defaults] artifact = "file"` so that a link to artifacts that names neither a
+//! preset nor a space is one to files.
 //!
 //! [`ArtifactSource`]: whyshelf_core::app::shelf::ArtifactSource
 //! [`ArtifactReading`]: whyshelf_core::domain::shelf::artifact::ArtifactReading
@@ -32,6 +37,7 @@ use whyshelf_core::domain::shelf::artifact::{
     ArtifactAsks, ArtifactKey, ArtifactReading, ArtifactReadings, ContentAddress, Space, SpaceAsks,
     SpaceReadings,
 };
+use whyshelf_core::domain::shelf::schema::BuiltinPresets;
 
 use file::{ArtifactError, FileSpace};
 
@@ -43,6 +49,13 @@ pub enum Adapter {
 }
 
 impl Adapter {
+    /// The presets it offers when it resolves the names of `space`.
+    fn presets(&self, space: &Space) -> BuiltinPresets {
+        match self {
+            Self::File(_) => file::presets(space),
+        }
+    }
+
     async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, SpacesError> {
         match self {
             Self::File(files) => Ok(files.resolve(asks).await?),
@@ -123,6 +136,16 @@ impl ArtifactSource for ArtifactSpaces {
         self.adapters.keys().cloned().collect()
     }
 
+    /// The presets of every adapter, each for the space it is registered for. Of two
+    /// adapters that offer a preset of one name, the one of the later space, in the
+    /// order of the names of the spaces, is kept.
+    fn presets(&self) -> BuiltinPresets {
+        self.adapters
+            .iter()
+            .flat_map(|(space, adapter)| adapter.presets(space))
+            .collect()
+    }
+
     async fn resolve(&self, asks: &ArtifactAsks) -> Result<ArtifactReadings, SpacesError> {
         let mut readings = ArtifactReadings::new();
         for (space, names) in asks.spaces() {
@@ -172,6 +195,7 @@ mod tests {
             .unwrap();
         let source = ArtifactSpaces::of_project(FileSpace::new(dir.path().to_path_buf()));
         assert_eq!(source.spaces(), BTreeSet::from([space("file")]));
+        assert_eq!(source.presets(), file::presets(&space("file")));
 
         let mut asks = ArtifactAsks::new();
         asks.ask(space("file"), name("a.rs"), Comparison::Bytes);

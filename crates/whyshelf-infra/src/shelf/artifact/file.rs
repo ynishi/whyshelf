@@ -6,6 +6,7 @@
 //! | [`FileSpace::resolve`] | reads each named file's bytes from the working tree and hashes them; names the blob its content is (or would be) in Git | `tokio::fs`, [`Git::blob_names`] |
 //! | [`FileSpace::current`] | the bytes of a named file now | `tokio::fs` |
 //! | [`FileSpace::read_back`] | the content of a blob, by its name | [`Git::read_blob`] |
+//! | [`presets`] | the preset `file`: the space, `compare = "bytes"`, `means = "depends"` | values |
 //!
 //! ```text
 //!   name ──a path under the root?── no ──► not a name (why)
@@ -47,9 +48,10 @@ use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, ContentAddress, SpaceAsks, SpaceReadings,
+    ArtifactName, ArtifactReading, ContentAddress, Space, SpaceAsks, SpaceReadings,
 };
 use whyshelf_core::domain::shelf::ledger::PATH_ONLY_SPACE;
+use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
 use super::super::git::{Git, GitError};
 
@@ -58,6 +60,26 @@ use super::super::git::{Git, GitError};
 /// ([`PATH_ONLY_SPACE`]), so an old pin always names a space this adapter answers
 /// for.
 pub const FILE_SPACE: &str = PATH_ONLY_SPACE;
+
+/// The name of the preset this adapter offers.
+pub const FILE_PRESET: &str = "file";
+
+/// The presets this adapter offers when it resolves the names of `space`: one,
+/// [`FILE_PRESET`], for a link to files that stands on each byte of them
+/// (`space` that space, `compare = "bytes"`, `means = "depends"`).
+pub fn presets(space: &Space) -> BuiltinPresets {
+    let values = PresetValues {
+        space: Some(space.as_str().to_owned()),
+        compare: Some("bytes".to_owned()),
+        ignore: None,
+        means: Some(Propagation::Depends),
+    };
+    match PresetName::new(FILE_PRESET) {
+        Ok(name) => BuiltinPresets::from([(name, values)]),
+        // Not a name: no preset. The test of this module holds it to be one.
+        Err(_) => BuiltinPresets::new(),
+    }
+}
 
 /// Why the files could not be read.
 #[derive(Debug, thiserror::Error)]
@@ -302,6 +324,25 @@ mod tests {
     #[test]
     fn the_space_of_the_files_is_the_one_an_old_record_names() {
         assert_eq!(FILE_SPACE, PATH_ONLY_SPACE);
+    }
+
+    #[test]
+    fn the_adapter_offers_the_preset_file_for_its_space() {
+        let space = Space::new(FILE_SPACE).unwrap();
+        let offered = presets(&space);
+        let name = PresetName::new(FILE_PRESET).unwrap();
+        assert_eq!(
+            offered,
+            BuiltinPresets::from([(
+                name,
+                PresetValues {
+                    space: Some("file".to_owned()),
+                    compare: Some("bytes".to_owned()),
+                    ignore: None,
+                    means: Some(Propagation::Depends),
+                }
+            )])
+        );
     }
 
     #[tokio::test]

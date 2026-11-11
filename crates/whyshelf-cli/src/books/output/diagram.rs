@@ -18,7 +18,18 @@
 //! A count is `1` (one), `0..1` (optional), `0..` (many) or `1..` (at least one).
 //! A covering link shows `cover` when its strength is `error` and `cover(warn)`
 //! when it is `warn`. The column of `cover` is in every block when any link of the
-//! declaration covers, and in none when none does. A link into the book that
+//! declaration covers, and in none when none does. A link to artifacts expanded
+//! from a preset shows `preset=<name>`, and `preset=<name>(default)` when it is the
+//! default; its column, after the count, is likewise in every block or in none.
+//! The values after `artifact` are the link's, whichever preset gave them:
+//!
+//! ```text
+//!   verification  V-  how a decision is checked
+//!   ├─ tests   depends  0..  preset=file(default)  ──► artifact space=file  compare=bytes
+//!   └─ checks  depends  1..                        ──► decision
+//! ```
+//!
+//! A link into the book that
 //! holds it ends in `(own book)`. Each prefix `ignore` names is a quoted string,
 //! escaped as JSON escapes it, so a prefix that holds a comma or a quote reads as
 //! one; they are joined by `,`, sorted, as the model keeps them. A book with no
@@ -53,7 +64,7 @@ pub(super) fn draw(map: &ShelfMap) -> String {
     let key_width = width(headers.iter().map(|(_, key, _)| key.as_str()));
 
     // The cells of every link, so that each column has one width for the drawing.
-    let rows: Vec<[String; 4]> = map
+    let rows: Vec<[String; 5]> = map
         .links
         .iter()
         .map(|link| {
@@ -68,15 +79,27 @@ pub(super) fn draw(map: &ShelfMap) -> String {
                 } => "cover(warn)",
                 MapTarget::Book { cover: None, .. } | MapTarget::Artifact { .. } => "",
             };
+            let preset = match &link.target {
+                MapTarget::Artifact {
+                    preset: Some(origin),
+                    ..
+                } if origin.is_default() => format!("preset={}(default)", origin.name()),
+                MapTarget::Artifact {
+                    preset: Some(origin),
+                    ..
+                } => format!("preset={}", origin.name()),
+                MapTarget::Artifact { preset: None, .. } | MapTarget::Book { .. } => String::new(),
+            };
             [
                 link.name.to_string(),
                 means(link.propagation).to_owned(),
                 cover.to_owned(),
                 count(link.cardinality).to_owned(),
+                preset,
             ]
         })
         .collect();
-    let widths: Vec<usize> = (0..4)
+    let widths: Vec<usize> = (0..5)
         .map(|i| width(rows.iter().map(|row| row[i].as_str())))
         .collect();
 
@@ -88,7 +111,7 @@ pub(super) fn draw(map: &ShelfMap) -> String {
         );
         out.push_str(header.trim_end());
         out.push('\n');
-        let block: Vec<(&LinkMap, &[String; 4])> = map
+        let block: Vec<(&LinkMap, &[String; 5])> = map
             .links
             .iter()
             .zip(&rows)
@@ -103,7 +126,8 @@ pub(super) fn draw(map: &ShelfMap) -> String {
             let cells: Vec<String> = row
                 .iter()
                 .zip(&widths)
-                // A column no link fills (no link covers) is left out.
+                // A column no link fills (no link covers, or none has a preset) is
+                // left out.
                 .filter(|(_, w)| **w > 0)
                 .map(|(cell, w)| format!("{cell:<w$}"))
                 .collect();
@@ -122,7 +146,9 @@ fn target(link: &LinkMap) -> String {
     match &link.target {
         MapTarget::Book { book, .. } if *book == link.from => format!("{book} (own book)"),
         MapTarget::Book { book, .. } => book.to_string(),
-        MapTarget::Artifact { space, comparison } => {
+        MapTarget::Artifact {
+            space, comparison, ..
+        } => {
             let ignored: Vec<String> = comparison.ignored().map(|p| quoted(p.as_str())).collect();
             let mut text = format!(
                 "artifact space={space}{GAP}compare={}",

@@ -6,7 +6,10 @@
 //! whatever file it reads, and [`Schema::validate`] is the one place that decides
 //! whether the whole of it is sound. It returns every problem at once, so a person
 //! fixes a declaration in one pass, and it returns a [`Schema`] only when there is
-//! none: nothing downstream re-checks a name, a prefix or a link target.
+//! none: nothing downstream re-checks a name, a prefix or a link target. A
+//! declaration as a project writes it may name presets of links to artifacts and a
+//! default ([`ShelfDecl`]); [`expand`] puts their values in first, and
+//! [`Schema::declared`] does both.
 //!
 //! The key grammar of a book ([`KeyPattern`]) is also decided here and only here:
 //! [`KeyPattern::parse`] turns the text of a key into a [`KeyForm`], and both the
@@ -147,6 +150,12 @@ name_type!(
 name_type!(
     /// A word of an enum field: the grammar of [`BookName`].
     FieldWord,
+    reserved = false
+);
+name_type!(
+    /// The name of a preset of links to artifacts ([`expand`]): the grammar of
+    /// [`BookName`].
+    PresetName,
     reserved = false
 );
 
@@ -784,6 +793,8 @@ pub struct BookSchema {
     fields: Declared<EntryName, FieldDecl>,
     /// Every link, into books and to artifacts, in one list: a name is one link.
     links: Declared<EntryName, DeclaredLink>,
+    /// The preset each link to artifacts was expanded from, for the links that were.
+    presets: BTreeMap<EntryName, PresetOrigin>,
 }
 
 /// A link of a book as declared, into a book or to artifacts.
@@ -853,14 +864,28 @@ impl BookSchema {
     pub fn artifact_links(&self) -> Picked<'_, EntryName, DeclaredLink, ArtifactLinkKind> {
         Picked::new(&self.links, DeclaredLink::artifact)
     }
+
+    /// The preset a link to artifacts was expanded from ([`expand`]), or none when
+    /// it names none and no default applied: what `map` tells beside the values,
+    /// which are in [`artifact_links`](Self::artifact_links) whatever their origin.
+    pub fn preset_of<Q>(&self, link: &Q) -> Option<&PresetOrigin>
+    where
+        EntryName: Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
+        self.presets.get(link)
+    }
 }
 
 /// A book as an adapter read it: text and lists, nothing checked.
 ///
 /// Fields and links come as lists of named entries, not as maps, so that a name
-/// written twice can be reported and not silently kept once.
+/// written twice can be reported and not silently kept once. The links are
+/// [`LinkEntryDecl`]s, as [`Schema::validate`] takes them, once [`expand`] has put
+/// the values of the presets into them; as written, they are
+/// [`WrittenLinkDecl`]s ([`WrittenBookDecl`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BookSchemaDecl {
+pub struct BookSchemaDecl<L = LinkEntryDecl> {
     /// The name of the book.
     pub name: String,
     /// The directory of the book, relative to the project root.
@@ -872,7 +897,7 @@ pub struct BookSchemaDecl {
     /// The fields.
     pub fields: Vec<FieldEntryDecl>,
     /// The links.
-    pub links: Vec<LinkEntryDecl>,
+    pub links: Vec<L>,
 }
 
 /// The grammar of keys as declared.
@@ -923,7 +948,8 @@ pub enum LinkTargetDecl {
     Artifact,
 }
 
-/// A link as declared.
+/// A link as declared, with every value a preset gives put in ([`expand`]): what
+/// [`Schema::validate`] checks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkEntryDecl {
     /// The name of the link.
@@ -971,6 +997,8 @@ pub enum NamePlace {
         /// The book, as written.
         book: String,
     },
+    /// The name of a preset.
+    Preset,
     /// The target of a link.
     LinkTarget {
         /// The book, as written.
@@ -993,6 +1021,7 @@ impl fmt::Display for NamePlace {
             Self::Book => f.write_str("the name of a book"),
             Self::Field { book } => write!(f, "a field of book `{book}`"),
             Self::Link { book } => write!(f, "a link of book `{book}`"),
+            Self::Preset => f.write_str("the name of a preset"),
             Self::LinkTarget { book, link } => {
                 write!(f, "the target of link `{link}` of book `{book}`")
             }
@@ -1220,6 +1249,101 @@ pub enum SchemaProblem {
         #[source]
         why: ComparisonProblem,
     },
+    /// A link, a `from` or the default that names a preset that is neither
+    /// declared by the project nor offered by an adapter.
+    #[error(
+        "{place} names the preset `{name}`, which is not where it is looked for (the presets of the project, then those the adapters offer; for a `from` of the preset's own name, only those the adapters offer)"
+    )]
+    UnknownPreset {
+        /// Where the name was written.
+        place: PresetPlace,
+        /// The name, as written.
+        name: String,
+    },
+    /// Presets that each come `from` the next, back to the first.
+    #[error("the presets {} come from one another in a cycle", cycle(presets))]
+    PresetCycle {
+        /// The presets of the cycle: the first is the one of them written first in
+        /// the declaration, and each next one is the `from` of the one before it.
+        /// The `from` of the last is the first again.
+        presets: NonEmptyVec<PresetName>,
+    },
+    /// A preset whose `space` is no space.
+    #[error("the preset `{preset}`: {why}")]
+    PresetBadSpace {
+        /// The preset, as written.
+        preset: String,
+        /// Why.
+        why: SpaceProblem,
+    },
+    /// A preset whose `space` no adapter offers.
+    #[error(
+        "the preset `{preset}` names the space `{space}`, which no adapter offers (it offers: {offered})"
+    )]
+    PresetUnknownSpace {
+        /// The preset, as written.
+        preset: String,
+        /// The space it names.
+        space: Space,
+        /// The spaces offered, as one text.
+        offered: String,
+    },
+    /// A preset whose `compare` and `ignore`, as it writes them over those it comes
+    /// from, are no comparison.
+    #[error("the `compare` of the preset `{preset}` is not one")]
+    PresetBadComparison {
+        /// The preset, as written.
+        preset: String,
+        /// Why.
+        #[source]
+        why: ComparisonProblem,
+    },
+    /// Two presets of one name declared by the project.
+    #[error("the preset `{name}` is declared twice")]
+    DuplicatePreset {
+        /// The name.
+        name: PresetName,
+    },
+    /// `preset` on a link into a book: a preset holds the values of a link to
+    /// artifacts.
+    #[error(
+        "book `{book}`: the link `{link}` points into a book, and only a link to artifacts takes `preset`"
+    )]
+    PresetOnBookLink {
+        /// The book, as written.
+        book: String,
+        /// The link, as written.
+        link: String,
+    },
+    /// A preset that says it replaces: it gives the values of a link to artifacts,
+    /// which depends or informs. The one value a preset cannot hold (a value of
+    /// another kind is no part of a preset at all, and the adapter that reads the
+    /// declaration refuses it).
+    #[error(
+        "the preset `{preset}` means `replaces`, and a preset of links to artifacts depends or informs"
+    )]
+    PresetReplaces {
+        /// The preset, as written.
+        preset: String,
+    },
+    /// A link that says no `means`, and whose preset gives none.
+    #[error("book `{book}`: the link `{link}` says no `means`, and no preset gives one")]
+    NoMeans {
+        /// The book, as written.
+        book: String,
+        /// The link, as written.
+        link: String,
+    },
+}
+
+/// The presets of a cycle, as a problem says them: `` `a` -> `b` -> `a` ``.
+fn cycle(presets: &NonEmptyVec<PresetName>) -> String {
+    presets
+        .iter()
+        .chain([presets.first()])
+        .map(|name| format!("`{name}`"))
+        .collect::<Vec<_>>()
+        .join(" -> ")
 }
 
 /// Whether a file belongs to a book: what `Schema::membership` answers.
@@ -1248,6 +1372,7 @@ struct Draft {
     description: Option<BookDescription>,
     fields: Declared<EntryName, FieldDecl>,
     links: Declared<EntryName, DraftEntry>,
+    presets: BTreeMap<EntryName, PresetOrigin>,
     clean: bool,
 }
 
@@ -1271,6 +1396,7 @@ impl Draft {
     fn read(
         decl: BookSchemaDecl,
         spaces: &BTreeSet<Space>,
+        origins: &Origins,
         problems: &mut Vec<SchemaProblem>,
     ) -> Self {
         let label = decl.name.clone();
@@ -1281,6 +1407,11 @@ impl Draft {
         let description = read_description(&label, decl.description.as_deref(), problems);
         let fields = read_fields(&label, decl.fields, problems);
         let links = read_links(&label, decl.links, &fields, spaces, problems);
+        let presets = links
+            .iter()
+            .filter(|(_, entry)| matches!(entry, DraftEntry::Artifact(_)))
+            .filter_map(|(link, _)| Some((link.clone(), origins.of(&label, link.as_str())?)))
+            .collect();
         Self {
             label,
             name,
@@ -1289,6 +1420,7 @@ impl Draft {
             description,
             fields,
             links,
+            presets,
             clean: problems.len() == first_problem,
         }
     }
@@ -1330,6 +1462,7 @@ impl Draft {
             description: self.description,
             fields: self.fields,
             links,
+            presets: self.presets,
         })
     }
 }
@@ -1660,20 +1793,25 @@ fn read_space(
         }
     };
     if !spaces.contains(&space) {
-        let offered: Vec<String> = spaces.iter().map(|s| format!("`{s}`")).collect();
         problems.push(SchemaProblem::UnknownSpace {
             book: book.to_owned(),
             link: link.clone(),
             space,
-            offered: if offered.is_empty() {
-                "none".to_owned()
-            } else {
-                offered.join(", ")
-            },
+            offered: offered(spaces),
         });
         return None;
     }
     Some(space)
+}
+
+/// The spaces offered, as a problem says them: `` `a`, `b` ``, or `none`.
+fn offered(spaces: &BTreeSet<Space>) -> String {
+    let offered: Vec<String> = spaces.iter().map(|s| format!("`{s}`")).collect();
+    if offered.is_empty() {
+        "none".to_owned()
+    } else {
+        offered.join(", ")
+    }
 }
 
 /// The names of the books declared, each once; a name written twice is reported
@@ -1770,16 +1908,51 @@ impl Schema {
     /// [`Schema`] exists only when there is none, so nothing after this re-checks a
     /// declaration. The books, and the fields and links of each, are kept in the
     /// order the declaration writes them, once ([`Declared`]).
+    ///
+    /// It takes declarations with no preset left in them: those of a project come
+    /// through [`Schema::declared`], which [`expand`]s them first.
     // The problems are the answer, read once per run; it is not a hot path.
     #[allow(clippy::result_large_err)]
     pub fn validate(
         decls: Vec<BookSchemaDecl>,
         spaces: &BTreeSet<Space>,
     ) -> Result<Self, NonEmptyVec<SchemaProblem>> {
+        Self::validate_expanded(Expanded::plain(decls), spaces)
+    }
+
+    /// The declaration of a project as it is written, with its presets and its
+    /// default: [`expand`]ed with the presets the adapters offer (`builtins`), then
+    /// checked as [`validate`](Self::validate) checks it, against `spaces`. What
+    /// expanded is checked even when the expansion has problems (a link it could not
+    /// expand is left out of the check, its problem told once), and the problems of
+    /// both are returned at once, those of the expansion first. The schema keeps,
+    /// for each link to artifacts, the preset it came from
+    /// ([`BookSchema::preset_of`]).
+    #[allow(clippy::result_large_err)]
+    pub fn declared(
+        decl: ShelfDecl,
+        builtins: &BuiltinPresets,
+        spaces: &BTreeSet<Space>,
+    ) -> Result<Self, NonEmptyVec<SchemaProblem>> {
+        let (expanded, problems) = expand_all(decl, builtins, spaces);
+        let checked = Self::validate_expanded(expanded, spaces);
+        match (NonEmptyVec::from_vec(problems), checked) {
+            (Err(_), checked) => checked,
+            (Ok(problems), Ok(_)) => Err(problems),
+            (Ok(problems), Err(more)) => Err(problems.extended(more.into_vec())),
+        }
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn validate_expanded(
+        expanded: Expanded,
+        spaces: &BTreeSet<Space>,
+    ) -> Result<Self, NonEmptyVec<SchemaProblem>> {
+        let (decls, origins) = expanded.into_parts();
         let mut problems = Vec::new();
         let drafts: Vec<Draft> = decls
             .into_iter()
-            .map(|decl| Draft::read(decl, spaces, &mut problems))
+            .map(|decl| Draft::read(decl, spaces, &origins, &mut problems))
             .collect();
 
         let declared = declared_names(&drafts, &mut problems);
@@ -1830,12 +2003,20 @@ impl Schema {
 }
 
 mod declared;
+mod preset;
 
 pub use declared::{Declared, Picked};
+pub use preset::{
+    BuiltinPresets, DefaultsDecl, Expanded, PresetDecl, PresetOrigin, PresetPlace, PresetValues,
+    ShelfDecl, WrittenBookDecl, WrittenLinkDecl, expand,
+};
+use preset::{Origins, expand_all};
 
 #[cfg(test)]
 mod comparison_tests;
 #[cfg(test)]
 mod cover_tests;
+#[cfg(test)]
+mod preset_tests;
 #[cfg(test)]
 mod tests;

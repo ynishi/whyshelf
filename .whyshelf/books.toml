@@ -1,5 +1,10 @@
 # The books of whyshelf's own requirements, decisions and verifications.
 
+# A link to artifacts that names no preset and no space takes the file adapter's
+# built-in preset `file`: files of the repository, by path.
+[defaults]
+artifact = "file"
+
 [[book]]
 name = "finding"
 dir = "books/finding"
@@ -89,7 +94,6 @@ required = true
 [[book.link]]
 name = "tests"              # depends: the test files that show it holds; editing their code makes it stale
 target = "artifact"
-space = "file"              # files of the repository, by path
 means = "depends"
 compare = "lines"           # indentation, how many spaces, blank lines and // comments do not count
 ignore = ["//"]

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794355908122,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c7f2-4e4d-7303-9b7e-cb5d0fecfe63",
+  "kind": "decision",
+  "reason": "Presets and a default for links to artifacts, kept in the declaration (#54); checked by two rounds of blind review on scratch projects, every finding fixed",
+  "revision": "5f0ce0e9ef270f23e2d443607d5df5d0e987b79e",
+  "seen": "sha256:007c436d91ee6e41afef290967a48a54b1e30ed49b46288a1ad52b3c35f99421",
+  "seen_address": "e4173458b93223665a665a331c13f892daf8e581",
+  "subject": "01a1c7e2-6cc9-73e9-8f7c-d1e3203e39cd",
+  "v": 1,
+  "verb": "approve"
+}
