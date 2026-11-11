@@ -126,6 +126,12 @@ and this project adheres to
   first in one run, as `--stale` does for stale ones; the two may be given
   together, and each entry names the rule that took it. In the library,
   `ShelfApp::approve_chosen` is the one use case of both (#73).
+- A book may declare which files under its `dir` are its documents: `include`
+  and `exclude` patterns of `*`, `?` and `**`, and `without_front_matter =
+  "skip"` to leave aside a file with no front matter at all, which `check`
+  lists. A front matter that opens wrongly is never skipped, `new` refuses a
+  key outside the range, and a book that declares none of them reads as
+  before (#75).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
