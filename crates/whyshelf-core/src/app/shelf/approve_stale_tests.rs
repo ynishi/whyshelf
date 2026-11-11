@@ -15,8 +15,8 @@ use super::fake_tests::{
     FakeShelf, block_on, docid, file, file_space, fr, path, reason, sp, sp_tested,
 };
 use super::{
-    ApproveStaleRequest, ErrorClass, JudgeRequest, Judgement, LeftOutWhy, ShelfApp, ShelfError,
-    StaleApproved,
+    ApproveStaleRequest, ChosenApproved, ErrorClass, JudgeRequest, Judgement, LeftOutWhy, ShelfApp,
+    ShelfError,
 };
 
 fn approve(reference: &str, until: Option<i64>) -> JudgeRequest {
@@ -33,7 +33,7 @@ fn approve(reference: &str, until: Option<i64>) -> JudgeRequest {
 
 // The error is the use case's own, read once by each test.
 #[allow(clippy::result_large_err)]
-fn again(app: &mut ShelfApp<FakeShelf>) -> Result<StaleApproved, ShelfError> {
+fn again(app: &mut ShelfApp<FakeShelf>) -> Result<ChosenApproved, ShelfError> {
     block_on(app.approve_stale(ApproveStaleRequest {
         reason: reason("reviewed"),
         actor: None,
@@ -41,27 +41,28 @@ fn again(app: &mut ShelfApp<FakeShelf>) -> Result<StaleApproved, ShelfError> {
     }))
 }
 
-fn judged_ids(done: &StaleApproved) -> Vec<crate::domain::id::DocId> {
-    done.judged.iter().map(|j| j.subject).collect()
+fn judged_ids(done: &ChosenApproved) -> Vec<crate::domain::id::DocId> {
+    done.judged.iter().map(|j| j.judged.subject).collect()
 }
 
-fn why_of(done: &StaleApproved, n: u128) -> LeftOutWhy {
+fn why_of(done: &ChosenApproved, n: u128) -> LeftOutWhy {
     done.left_out
         .iter()
-        .find(|l| l.doc == docid(n))
+        .find(|l| l.left.doc == docid(n))
         .unwrap_or_else(|| panic!("{n} is left out"))
+        .left
         .why
         .clone()
 }
 
-fn broken_of(done: &StaleApproved, n: u128) -> Degradation {
+fn broken_of(done: &ChosenApproved, n: u128) -> Degradation {
     match why_of(done, n) {
         LeftOutWhy::Broken(degradation) => degradation,
         other => panic!("{n} is left out as broken, not {other:?}"),
     }
 }
 
-fn held_of(done: &StaleApproved, n: u128) -> (crate::domain::id::DocId, Hold) {
+fn held_of(done: &ChosenApproved, n: u128) -> (crate::domain::id::DocId, Hold) {
     match why_of(done, n) {
         LeftOutWhy::StandsOn { held, .. } => (held.upstream, held.hold),
         other => panic!("{n} is left out as standing on another, not {other:?}"),
@@ -121,7 +122,7 @@ fn an_edited_upstream_and_what_stands_on_it_are_approved_again_upstream_first() 
     assert_eq!(app.ports().record_count(), 6);
     assert!(block_on(app.stale()).unwrap().entries.is_empty());
     for judged in &done.judged {
-        let crate::domain::shelf::ledger::Record::Decision(decision) = &judged.record else {
+        let crate::domain::shelf::ledger::Record::Decision(decision) = &judged.judged.record else {
             panic!("an approval");
         };
         assert_eq!(decision.reason().map(|r| r.as_str()), Some("reviewed"));
@@ -143,7 +144,7 @@ fn an_expired_approval_is_approved_again() {
     assert_eq!(judged_ids(&done), vec![docid(1)]);
     assert!(block_on(app.stale()).unwrap().entries.is_empty());
     // The expiry it had is not carried over: no --until, no expiry.
-    let Record::Decision(decision) = &done.judged[0].record else {
+    let Record::Decision(decision) = &done.judged[0].judged.record else {
         panic!("an approval");
     };
     assert!(matches!(
@@ -177,7 +178,7 @@ fn a_broken_approval_is_left_out_and_listed() {
 
     let done = again(&mut app).unwrap();
     assert_eq!(judged_ids(&done), vec![docid(1)]);
-    let left: Vec<_> = done.left_out.iter().map(|l| l.doc).collect();
+    let left: Vec<_> = done.left_out.iter().map(|l| l.left.doc).collect();
     assert_eq!(left, vec![docid(2), docid(3), docid(5)]);
     let causes_of = |n: u128| broken_of(&done, n);
     assert!(
@@ -199,6 +200,7 @@ fn a_broken_approval_is_left_out_and_listed() {
     );
     assert_eq!(
         done.left_out[0]
+            .left
             .key
             .as_ref()
             .map(ToString::to_string)
@@ -401,6 +403,7 @@ fn a_name_with_nothing_there_is_pinned_as_absent_and_told() {
     let done = again(&mut app).unwrap();
     assert_eq!(judged_ids(&done), vec![docid(2)]);
     let absent: Vec<String> = done.judged[0]
+        .judged
         .absent
         .iter()
         .map(|(_, a)| a.name().to_string())
@@ -423,7 +426,7 @@ fn until_and_actor_reach_every_record_and_an_old_expiry_is_not_kept() {
     .unwrap();
     assert_eq!(judged_ids(&done), vec![docid(1), docid(2)]);
     for judged in &done.judged {
-        let Record::Decision(decision) = &judged.record else {
+        let Record::Decision(decision) = &judged.judged.record else {
             panic!("an approval");
         };
         assert_eq!(decision.actor().as_str(), "bob");

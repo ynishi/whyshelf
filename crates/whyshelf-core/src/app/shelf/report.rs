@@ -524,12 +524,12 @@ pub struct JudgedAll {
 pub enum LeftOutWhy {
     /// Of `judge approve --stale`: its approval is broken now.
     Broken(Degradation),
-    /// Of `judge approve --stale`: the model refuses its frame now (an upstream
-    /// decided against, an artifact that cannot be told, a link that cannot be
-    /// followed, a cycle it would close).
+    /// Of `judge approve --stale` or `--pending`: the model refuses its frame now (an
+    /// upstream decided against, an artifact that cannot be told, a link that cannot
+    /// be followed, a cycle it would close).
     Refused(FrameRefusal),
-    /// Of `judge approve --stale`: a `Depends` link names an upstream that is broken,
-    /// pending, or left out.
+    /// Of `judge approve --stale` or `--pending`: a `Depends` link names an upstream
+    /// that is broken, pending or stale and not in the run, or left out.
     StandsOn {
         /// The link, the upstream and why.
         held: HeldBack,

@@ -20,6 +20,7 @@ use crate::domain::shelf::ledger::{
     WithdrawRefusal,
 };
 use crate::domain::shelf::lookup::Reference;
+use crate::domain::shelf::order::NotPending;
 use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
 
 use super::ports::ShelfPort;
@@ -106,6 +107,17 @@ pub enum ShelfError {
     /// withdrawn.
     #[error("the withdrawal is refused")]
     Withdraw(#[from] WithdrawRefusal),
+    /// A document named to `judge approve --pending` is not pending: it is approved
+    /// or decided against, or no valid document has it now.
+    #[error("`{reference}` is not pending: it is {why}")]
+    NotPending {
+        /// The reference.
+        reference: Reference,
+        /// The document it names.
+        subject: DocId,
+        /// What it is instead.
+        why: NotPending,
+    },
     /// A decision about a document that no decision stands about cannot be revoked.
     #[error("no decision stands about {subject}, so there is nothing to revoke")]
     NothingToRevoke {
@@ -276,6 +288,7 @@ impl ShelfError {
             | Self::UnknownBook { .. }
             | Self::NotAKeyOf { .. }
             | Self::NotAKeyOfAnyBook { .. }
+            | Self::NotPending { .. }
             | Self::NothingToRevoke { .. }
             | Self::NotASuccessor { .. }
             | Self::NothingRequested

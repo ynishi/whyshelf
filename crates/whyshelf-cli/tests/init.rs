@@ -75,7 +75,7 @@ fn init_sample_makes_a_project_that_checks_clean_maps_four_books_and_traces_one_
     );
     assert!(
         next[2].starts_with(&format!(
-            "{whyshelf} judge approve F-1 REQ-1 DEC-1 V-1 --reason "
+            "{whyshelf} judge approve --pending F-1 V-1 --reason "
         )),
         "{next:?}"
     );

@@ -9,11 +9,11 @@ use schemars::{JsonSchema, Schema, schema_for};
 use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
-    ApprovedReport, BooksCheck, Created, Declared, DeclaredAbout, DiffItem, DiffReport,
-    DownstreamEdge, ErrorClass, FmtReport, GetReport, Health, Initialized, Judged, JudgedAll,
-    LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, Row, ShelfError,
-    StaleApproved, StaleReport, StatsReport, StatusReport, TraceReport, UnlinkedEntry,
-    UnlinkedReport, UpstreamEdge, UpstreamEnd,
+    ApprovedReport, BooksCheck, ChosenApproved, Created, Declared, DeclaredAbout, DiffItem,
+    DiffReport, DownstreamEdge, ErrorClass, FmtReport, GetReport, Health, Initialized, Judged,
+    JudgedAll, LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, Row, ShelfError,
+    StaleReport, StatsReport, StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport,
+    UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::build::NewDocProblem;
@@ -41,7 +41,7 @@ use whyshelf_core::domain::shelf::ledger::{
     Similarity,
 };
 use whyshelf_core::domain::shelf::map::MapTarget;
-use whyshelf_core::domain::shelf::order::Hold;
+use whyshelf_core::domain::shelf::order::{Hold, Rule};
 use whyshelf_core::domain::shelf::schema::{
     Cardinality, CoverSeverity, EntryName, FieldPresence, FieldType, KeyPattern, PresetOrigin,
     Propagation, SchemaProblem,
@@ -983,28 +983,62 @@ pub struct JudgedAllOut {
     pub left_out: Vec<LeftOutOut>,
 }
 
-/// The answer of `judge approve --stale`: every approval made again, upstream first,
-/// and those left out.
+/// The answer of `judge approve --stale` and `--pending`: every approval made, upstream
+/// first, and those left out.
 #[derive(Debug, Serialize, JsonSchema)]
-pub struct StaleApprovedOut {
-    /// The judgements, as `judge` answers them, upstream first; empty when nothing
-    /// could be approved.
-    pub judged: Vec<JudgedOut>,
-    /// The approvals that do not hold and were not approved again, by identity.
-    pub left_out: Vec<LeftOutOut>,
+pub struct ChosenApprovedOut {
+    /// The judgements, upstream first, each as `judge` answers it with the rule that
+    /// took its document; empty when nothing could be approved.
+    pub judged: Vec<ChosenJudgedOut>,
+    /// The documents taken and not approved, by identity, each with the rule that
+    /// took it.
+    pub left_out: Vec<ChosenLeftOutOut>,
 }
 
-/// An approval that `judge approve` or `judge approve --stale` did not make.
+/// The rule that took a document into a run of `judge approve --stale` or
+/// `--pending`.
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleOut {
+    /// Its approval was expired, stale or broken.
+    Stale,
+    /// No decision stood about it.
+    Pending,
+}
+
+/// One approval of `judge approve --stale` or `--pending`.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ChosenJudgedOut {
+    /// The judgement, as `judge` answers it.
+    #[serde(flatten)]
+    pub judged: JudgedOut,
+    /// The rule that took the document.
+    pub rule: RuleOut,
+}
+
+/// One document `judge approve --stale` or `--pending` took and did not approve.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ChosenLeftOutOut {
+    /// The document and why, as `judge` answers it.
+    #[serde(flatten)]
+    pub left: LeftOutOut,
+    /// The rule that took the document.
+    pub rule: RuleOut,
+}
+
+/// An approval that `judge approve`, `judge approve --stale` or `--pending` did not
+/// make.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct LeftOutOut {
     /// The document.
     pub doc: DocRef,
-    /// Why: of `--stale`, `broken` (its approval is broken now), `refused` (the
-    /// model refuses its approval now) or `stands_on` (a `depends` link names a
-    /// document that is broken, pending or left out); of either, `repeats` (one made
-    /// now would pin exactly what the approval that stands pins and lapse when it
-    /// lapses; of `--stale`, one stale only through an upstream's upstream the run
-    /// approved again on a new hash).
+    /// Why: of `--stale`, `broken` (its approval is broken now); of `--stale` and
+    /// `--pending`, `refused` (the model refuses its approval now) or `stands_on` (a
+    /// `depends` link names a document that is broken, pending or stale and not in
+    /// the run, or left out); of every one, `repeats` (one made now would pin exactly
+    /// what the approval that stands pins and lapse when it lapses; of `--stale`, one
+    /// stale only through an upstream's upstream the run approved again on a new
+    /// hash).
     pub reason: &'static str,
     /// A sentence for a person.
     pub detail: String,
@@ -1012,9 +1046,9 @@ pub struct LeftOutOut {
     pub upstream: Option<DocRef>,
     /// For `stands_on`, the link that names it.
     pub link: Option<String>,
-    /// For `stands_on`, why that document holds it back: `broken`, `pending` or
-    /// `left_out` (refused or broken in the run; one that `repeats` stands, and holds
-    /// nothing back).
+    /// For `stands_on`, why that document holds it back: `broken`, `pending` (and
+    /// not in the run), `stale` (and not in the run) or `left_out` (refused or broken
+    /// in the run; one that `repeats` stands, and holds nothing back).
     pub upstream_is: Option<&'static str>,
     /// For `repeats`, the approval that stands (its record's id).
     pub approval: Option<String>,
@@ -1231,7 +1265,8 @@ pub fn schemas() -> SchemasOut {
     put("moves", schema_for!(MovesOut));
     put("diff", schema_for!(DiffOut));
     put("judge", schema_for!(JudgedAllOut));
-    put("judge approve --stale", schema_for!(StaleApprovedOut));
+    put("judge approve --stale", schema_for!(ChosenApprovedOut));
+    put("judge approve --pending", schema_for!(ChosenApprovedOut));
     put("judge same", schema_for!(DeclaredAllOut));
     put("judge moved", schema_for!(MovedAllOut));
     put("judge withdraw", schema_for!(WithdrawnOut));
@@ -2713,71 +2748,91 @@ pub fn judged_warnings(all: &JudgedAll) -> Vec<String> {
         .map(|left| {
             format!(
                 "{}; pass --again to approve it anyway",
-                left_out_warning(&namer, left)
+                left_out_warning(&namer, left, true)
             )
         })
         .collect()
 }
 
-/// The answer of `judge approve --stale`.
-pub fn stale_approved(done: &StaleApproved) -> StaleApprovedOut {
+/// The rule that took a document into a run of approvals, as the answer writes it.
+fn rule_out(rule: Rule) -> RuleOut {
+    match rule {
+        Rule::Stale => RuleOut::Stale,
+        Rule::Pending => RuleOut::Pending,
+    }
+}
+
+/// The answer of `judge approve --stale` and `--pending`.
+pub fn chosen_approved(done: &ChosenApproved) -> ChosenApprovedOut {
     let namer = Namer(&done.names);
-    StaleApprovedOut {
+    ChosenApprovedOut {
         judged: done
             .judged
             .iter()
-            .map(|judged| namer.judged(judged))
+            .map(|one| ChosenJudgedOut {
+                judged: namer.judged(&one.judged),
+                rule: rule_out(one.rule),
+            })
             .collect(),
         left_out: done
             .left_out
             .iter()
-            .map(|left| namer.left_out(left))
+            .map(|one| ChosenLeftOutOut {
+                left: namer.left_out(&one.left),
+                rule: rule_out(one.rule),
+            })
             .collect(),
     }
 }
 
-/// The line on stderr for an approval left out.
-fn left_out_warning(namer: &Namer<'_>, left: &LeftOut) -> String {
+/// The line on stderr for an approval left out: `approved again` of one that had an
+/// approval (`again`), `approved` of a pending one.
+fn left_out_warning(namer: &Namer<'_>, left: &LeftOut, again: bool) -> String {
     let doc = left
         .key
         .as_ref()
         .map_or_else(|| left.doc.to_string(), ToString::to_string);
+    let approved = if again { "approved again" } else { "approved" };
     match &left.why {
         LeftOutWhy::Broken(_) => format!(
-            "warning: {doc} is broken and was not approved again ({})",
+            "warning: {doc} is broken and was not {approved} ({})",
             left_out_kinds(namer, left).join(", ")
         ),
         LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } | LeftOutWhy::Repeats { .. } => {
             format!(
-                "warning: {doc} was not approved again: {}",
+                "warning: {doc} was not {approved}: {}",
                 left_out_detail(namer, left)
             )
         }
     }
 }
 
-/// The lines `judge approve --stale` writes on stderr: one per approval it left out,
-/// in the order of `left_out`, then one per name with nothing there that an approval
-/// made pinned as absent, in the order of `judged`.
-pub fn stale_approved_warnings(done: &StaleApproved) -> Vec<String> {
+/// The lines `judge approve --stale` and `--pending` write on stderr: one per
+/// document left out, in the order of `left_out`, then one per name with nothing
+/// there that an approval made pinned as absent, in the order of `judged`.
+pub fn chosen_approved_warnings(done: &ChosenApproved) -> Vec<String> {
     let namer = Namer(&done.names);
     let left = done
         .left_out
         .iter()
-        .map(|left| left_out_warning(&namer, left));
-    let absent = done.judged.iter().flat_map(|judged| {
-        let doc = judged
-            .key
-            .as_ref()
-            .map_or_else(|| judged.subject.to_string(), ToString::to_string);
-        judged.absent.iter().map(move |(_, artifact)| {
-            format!(
-                "warning: {doc} pins {} in {}, which has nothing behind it",
-                artifact.name(),
-                artifact.space()
-            )
-        })
-    });
+        .map(|one| left_out_warning(&namer, &one.left, one.rule == Rule::Stale));
+    let absent = done
+        .judged
+        .iter()
+        .map(|one| &one.judged)
+        .flat_map(|judged| {
+            let doc = judged
+                .key
+                .as_ref()
+                .map_or_else(|| judged.subject.to_string(), ToString::to_string);
+            judged.absent.iter().map(move |(_, artifact)| {
+                format!(
+                    "warning: {doc} pins {} in {}, which has nothing behind it",
+                    artifact.name(),
+                    artifact.space()
+                )
+            })
+        });
     left.chain(absent).collect()
 }
 
@@ -2829,6 +2884,9 @@ fn left_out_detail(namer: &Namer<'_>, left: &LeftOut) -> String {
                 Hold::Pending => format!(
                     "the link `{link}` names {upstream}, which is pending: approve it first with `judge approve`"
                 ),
+                Hold::Stale => format!(
+                    "the link `{link}` names {upstream}, which is stale: approve it again first, with `--stale`"
+                ),
                 Hold::LeftOut => {
                     format!("the link `{link}` names {upstream}, which was left out of this run")
                 }
@@ -2842,6 +2900,7 @@ fn hold_word(hold: Hold) -> &'static str {
     match hold {
         Hold::Broken => "broken",
         Hold::Pending => "pending",
+        Hold::Stale => "stale",
         Hold::LeftOut => "left_out",
     }
 }
@@ -3072,10 +3131,13 @@ pub fn initialized(done: &Initialized, book: Option<&str>, root: NextRoot<'_>) -
     } else if done.docs.is_empty() {
         next.extend(book.map(|book| format!("{whyshelf} new {book} --title \"A first {book}\"")));
     } else {
-        let keys: Vec<String> = done.docs.iter().map(|d| d.key.form.to_string()).collect();
+        // A book's directory may hold documents of the person's own: name the
+        // documents it made that no other of them stands on, so the run takes those
+        // and the pending ones they stand on, upstream first, and nothing else.
+        let heads: Vec<String> = done.heads.iter().map(|k| k.form.to_string()).collect();
         next.push(format!(
-            "{whyshelf} judge approve {} --reason \"{INIT_REASON}\"",
-            keys.join(" ")
+            "{whyshelf} judge approve --pending {} --reason \"{INIT_REASON}\"",
+            heads.join(" ")
         ));
     }
     InitOut {
@@ -3320,6 +3382,7 @@ mod tests {
             "diff",
             "judge",
             "judge approve --stale",
+            "judge approve --pending",
             "judge same",
             "judge withdraw",
             "new",
@@ -3334,6 +3397,11 @@ mod tests {
         let new = serde_json::to_string(&outputs["new"]).unwrap();
         for field in ["doc", "file", "unresolved_links", "written", "why"] {
             assert!(new.contains(&format!("\"{field}\"")), "{field}");
+        }
+        // The rule of a run is one of two words, in `judged` and in `left_out`.
+        let chosen = serde_json::to_string(&outputs["judge approve --pending"]).unwrap();
+        for word in ["\"const\":\"stale\"", "\"const\":\"pending\"", "\"rule\""] {
+            assert!(chosen.contains(word), "{word}");
         }
         let init = serde_json::to_string(&outputs["init"]).unwrap();
         for field in ["declaration", "documents", "key", "path", "next"] {

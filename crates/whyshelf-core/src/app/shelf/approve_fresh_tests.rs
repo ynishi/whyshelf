@@ -428,12 +428,12 @@ fn approve_stale_leaves_out_as_a_repeat_one_stale_only_through_an_upstream_it_ap
         until: None,
     }))
     .unwrap();
-    let judged: Vec<_> = done.judged.iter().map(|j| j.subject).collect();
+    let judged: Vec<_> = done.judged.iter().map(|j| j.judged.subject).collect();
     assert_eq!(judged, [docid(3), docid(2)]);
     assert_eq!(done.left_out.len(), 1);
-    assert_eq!(done.left_out[0].doc, docid(1));
+    assert_eq!(done.left_out[0].left.doc, docid(1));
     assert_eq!(
-        done.left_out[0].why,
+        done.left_out[0].left.why,
         LeftOutWhy::Repeats {
             approval: first_of_fr1
         }
@@ -468,14 +468,14 @@ fn approve_stale_does_not_hold_back_what_stands_on_a_repeat() {
         until: None,
     }))
     .unwrap();
-    let judged: Vec<_> = done.judged.iter().map(|j| j.subject).collect();
+    let judged: Vec<_> = done.judged.iter().map(|j| j.judged.subject).collect();
     assert_eq!(judged, [docid(4), docid(3)]);
     // FR-2 repeats its approval, which stands; FR-1, on it, is decided as any other
     // and repeats too: neither is held back.
     let left: Vec<_> = done
         .left_out
         .iter()
-        .map(|l| (l.doc, l.why.clone()))
+        .map(|l| (l.left.doc, l.left.why.clone()))
         .collect();
     assert_eq!(
         left,
