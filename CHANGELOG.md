@@ -98,6 +98,12 @@ and this project adheres to
 - The answer of `whyshelf stats` carries a `drawing`, a plain text summary in
   five sections that a person reads with `jq -r .drawing`, made from the
   answer alone (#64).
+- `judge approve` leaves out a document whose standing approval a new one
+  would only repeat (the same frame and the same expiry), lists it under
+  `left_out` with the reason `repeats` and warns of it on stderr, so a command
+  run twice writes its records once; `--again` writes it anyway. In the library,
+  `ShelfApp::judge` and `judge_all` return `JudgedAll` (`judged` and
+  `left_out`) (#66).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
