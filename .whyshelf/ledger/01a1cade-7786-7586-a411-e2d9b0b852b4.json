@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "598492f7b5bc8a01207b33ac465cde7c07f28de8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f1650ca568d7d6d343a6db65784bd655668a8961261d18377aff0579ec15fadf",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794404939155,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ee861d2416d9639a70226f715b5e99fa4dffd003",
+      "hash": "sha256:773669698978e8c21bb33352b3f05e9aecf5edab6a36666a88647d3f60ed204d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    }
+  ],
+  "id": "01a1cade-7786-7586-a411-e2d9b0b852b4",
+  "kind": "decision",
+  "reason": "A space rust-test names test functions, found by a shallow scan of token trees that runs no program (#79); checked by two rounds of blind review with hostile files on the binary, every finding fixed",
+  "revision": "3b1f791eeaad04d687e81c31251a1ac8d8d0c02e",
+  "seen": "sha256:ef9679686db56889965b61250430c1536ba4c1dc48d9cd52e083eb440f062fbc",
+  "seen_address": "2e4f3e3a8517e2e2dfd040a21a3d9110f682e0fd",
+  "subject": "01a1cad2-39f7-7193-ab89-6bfcc17747f4",
+  "v": 1,
+  "verb": "approve"
+}

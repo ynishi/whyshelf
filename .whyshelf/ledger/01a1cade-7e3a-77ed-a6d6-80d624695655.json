@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e09a81641ae4977d4a14721ba82c8cc202e3a6c9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9444746ab4cff5363dc9710ad35743cae8fedb90e102002da4c7acdd1489f720",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "55282fc649bd708cb40d526668ce670c3de61054",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6cc0ff6492297c4b8ae059df2303fe081f4e2860e370b6e3f5b0f907c5d013c7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4df11725bbf50f8077f5af50bc1a0c43738f222f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ea2f392deb53ece57954aeed00bac274def66f50e79ca418687946c4fa069273",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9a724ba5c26808a35260fed85d311fb9c1e01363",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6205057c463931a73c3eb92e7381e86a74322b327f730c823bc964dc496e7c71",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d305d8a150922ca969a4e06696b521a3a6cba473",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:25c96185b9bc17a9628cbf3ae4eb02fa70a994750b3bcc467d4721d2765402a8",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7ae294449e196c65550a8a596dd28645876f248c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9b6fb352d803d886bd64123733db7c2fe26ab93a6b3a97b652daa61ce1f068e5",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794404940541,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b4b013c3072c7576e998eb74980d082fbbbb3fe",
+      "hash": "sha256:3e379866f327b70afe6acdbf819f6f9b6a902810c5855c79becb1bd1a19be061",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "53"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7e2-6f31-74e1-8aa9-4de2bd6986d2"
+    }
+  ],
+  "id": "01a1cade-7e3a-77ed-a6d6-80d624695655",
+  "kind": "decision",
+  "reason": "The file space lends its bounded reading to rust-test, which registers beside it, and cannot suggest moves (#79); checked by a blind review",
+  "revision": "3b1f791eeaad04d687e81c31251a1ac8d8d0c02e",
+  "seen": "sha256:4fff836039815d80bd297e529a5fe506a514de3f56b81886db7efd092b08f941",
+  "seen_address": "f56aa84f441b058e2d794fd63dfecf8045c4d8ac",
+  "subject": "01a1c7e2-7061-7778-9bec-d92f955d4598",
+  "v": 1,
+  "verb": "approve"
+}
