@@ -9,4 +9,4 @@ rustdoc: ["whyshelf_core::domain::shelf::schema::LinkKind", "whyshelf_core::doma
 serves: ["REQ-12", "REQ-1"]
 title: "A link into a book can declare that it is expected to reach every document of that book"
 ---
-A link into a book may declare cover: every pending or approved document of the target book is expected to be reached by that link from a pending or approved document. One that is not is told as a notice on it and listed by check, with the strength the link declares (DEC-50); its freshness is unchanged. A link to files cannot say it.
+A link into a book may declare cover: every pending or approved document of the target book is expected to be reached by that link from a pending or approved document. One that is not is told as a notice on it and listed by check, with the strength the link declares (DEC-50); its freshness is unchanged. One document can be exempted from one covering link, with a reason, and is then not counted as a gap of it (DEC-65). A link to files cannot say it.

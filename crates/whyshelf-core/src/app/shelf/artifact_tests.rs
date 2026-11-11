@@ -41,7 +41,9 @@ fn project() -> ShelfApp<FakeShelf> {
 fn approval_of(record: &Record) -> &DecisionVerb {
     match record {
         Record::Decision(d) => d.verb(),
-        Record::Revocation(_) | Record::SameMeaning(_) | Record::Moved(_) => panic!("a decision"),
+        Record::Revocation(_) | Record::SameMeaning(_) | Record::Moved(_) | Record::Exempt(_) => {
+            panic!("a decision")
+        }
     }
 }
 

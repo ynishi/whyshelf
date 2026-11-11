@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794406443515,
+  "expires": null,
+  "frame": [],
+  "id": "01a1caf5-6a1e-7177-af77-1e6e773bb342",
+  "kind": "decision",
+  "reason": "judge exempt records an exemption of one document from one covering link, read by one rule beside the cover, and tells when it is unneeded or held twice (#78); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "962f50de34b2388c7f1b3048fa6e2d2b9b30c36f",
+  "seen": "sha256:29255e6e60bce2552966802fcdd3d48b59b58b5a22f943e91055975086632a1f",
+  "seen_address": "da0f409904829f3613f0831780fdd5b8027742c6",
+  "subject": "01a1cae7-1275-76e9-9d95-c546a42872b6",
+  "v": 1,
+  "verb": "approve"
+}

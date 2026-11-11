@@ -37,8 +37,13 @@
 //!                                                        └─► ApproveFrame::addressed
 //!                                                        └─► Decision::approve / deny / deprecate / retire
 //!   lookup    ──► schema, build, ledger                resolve ──► Resolution  (what a person typed)
+//!   cover     ──► schema, doc, build, ledger           counts ──► whether a document stands;
+//!                                                      covering_reach ──► what a covering link
+//!                                                        reaches from those that do
+//!   exemption ──► schema, doc, build, ledger, cover    exemption_reading ──► needed or Unneeded;
+//!                                                      frame_exempt ──► ExemptOf (or a refusal)
 //!   freshness ──► schema, artifact, doc, graph,        assess ──► Assessment   (whether it still holds)
-//!                 build, ledger
+//!                 build, ledger, cover, exemption
 //!   trace     ──► schema, artifact, doc, build,        trace ──► Trace         (the links, up and down)
 //!                 freshness                            linkage ──► Linkage     (linked at all, each way,
 //!                                                        and what the declaration lets be)
@@ -319,7 +324,9 @@
 
 pub mod artifact;
 pub mod build;
+pub mod cover;
 pub mod doc;
+pub mod exemption;
 pub mod freshness;
 pub mod graph;
 pub mod ledger;
