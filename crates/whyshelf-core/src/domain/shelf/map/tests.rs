@@ -27,6 +27,7 @@ fn schema() -> Schema {
         BookSchemaDecl {
             name: "decision".to_owned(),
             dir: "books/decision".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Prefixed {
                 prefix: "DEC".to_owned(),
             },
@@ -79,6 +80,7 @@ fn schema() -> Schema {
         BookSchemaDecl {
             name: "requirement".to_owned(),
             dir: "books/requirement".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Slug,
             description: None,
             fields: Vec::new(),
@@ -231,6 +233,7 @@ fn a_link_to_artifacts_is_mapped_with_its_values_and_the_preset_it_came_from() {
         books: vec![BookSchemaDecl {
             name: "decision".to_owned(),
             dir: "books/decision".to_owned(),
+            scope: Default::default(),
             key: KeyPatternDecl::Slug,
             description: None,
             fields: Vec::new(),

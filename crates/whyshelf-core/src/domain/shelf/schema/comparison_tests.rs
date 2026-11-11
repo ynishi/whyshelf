@@ -13,6 +13,7 @@ fn decl(target: LinkTargetDecl, compare: Option<(&str, &[&str])>) -> Vec<BookSch
     vec![BookSchemaDecl {
         name: "a".to_owned(),
         dir: "a".to_owned(),
+        scope: Default::default(),
         key: KeyPatternDecl::Slug,
         description: None,
         fields: Vec::new(),

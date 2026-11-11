@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794401517359,
+  "expires": null,
+  "frame": [],
+  "id": "01a1caaa-3f61-75d7-bed4-e8a6f00856eb",
+  "kind": "decision",
+  "reason": "The example directory of an excluded range is named archive in the tests and docs (#75)",
+  "revision": "5551962100bd31d21bf93859dc4048a3cd2a6153",
+  "seen": "sha256:f0843ead55c85b883c0bc178cc9d9e8e1848dcdb4a6e16d21c669cb56e664021",
+  "seen_address": "08722be2e15346c153b7f117e583f4ddb8b5d7f8",
+  "subject": "01a1ca93-493f-753f-824a-bafdfe730d33",
+  "v": 1,
+  "verb": "approve"
+}

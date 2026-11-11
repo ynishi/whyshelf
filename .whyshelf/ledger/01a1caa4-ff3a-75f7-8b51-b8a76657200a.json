@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1628f49668179d24523d230aa0c54ac5c80d84bc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8348d83aa40b77f1091a62bef3b757279f1e3300237d8018882613a31c7dfc8b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f65d39489a1eec371133be615346bf7f621d2633",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:864085be9311ee2378d1dafaffbd76001ed011136dee8b62b4b51398cbfb1ebd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c9cf3fd0226ad23ac358d6f9af30436f6170aca8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a60e871cc8913e076d9889a8aa9f4ad3990b9c1e894a0faecc7ac547f268d9b3",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/scope_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a183d0b3f4fc73ed254bd7d456c1c9b158c8a0c0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:be12e1d8ea62e32b69b23a16192d79d16704ce3a533506e980a13adf259fba0f",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794401172857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "69ae922b3d9d0be27eb3c2815a9eb716a6cf0448",
+      "hash": "sha256:1b2a60d2ceb5091165777ee24182d1e28051717f48cdc6618b623b9539d943e9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "63"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
+    }
+  ],
+  "id": "01a1caa4-ff3a-75f7-8b51-b8a76657200a",
+  "kind": "decision",
+  "reason": "A book declares its range by include and exclude of *, ? and ** and a rule for files without front matter, asked by every reader and writer, and nothing declared changes nothing (#75); checked by a blind review on the binary, every finding fixed",
+  "revision": "5551962100bd31d21bf93859dc4048a3cd2a6153",
+  "seen": "sha256:be3985bc5f56363af8f9d6db37cde00d4ba75a6ebc4cfeb216c513965b9d53c1",
+  "seen_address": "c80cacfc3438e5b5f5763d703b90e8fe018b6232",
+  "subject": "01a1ca93-506a-7227-95d5-fba4474cfc64",
+  "v": 1,
+  "verb": "approve"
+}

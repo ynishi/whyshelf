@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f65d39489a1eec371133be615346bf7f621d2633",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:864085be9311ee2378d1dafaffbd76001ed011136dee8b62b4b51398cbfb1ebd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794401174143,
+  "expires": null,
+  "frame": [
+    {
+      "address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+      "hash": "sha256:8a7484e072bdb063dd1c2cfc2af5c5ac0d055149aa9ee10f83fc58495f330902",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "40"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c577-33e1-735e-b992-19f40a27438a"
+    }
+  ],
+  "id": "01a1caa5-0a94-755e-9bdd-8615f93809eb",
+  "kind": "decision",
+  "reason": "Every reader and writer of a book's files asks its range; the tests carry the range in their declarations and the map writes it (#75); checked by a blind review",
+  "revision": "5551962100bd31d21bf93859dc4048a3cd2a6153",
+  "seen": "sha256:c3529ebef0122ae9a687c6414bcfe58da3c557a87518a381f44c166dc786bccf",
+  "seen_address": "07db1f1a35a5bf8e858eae090366c1062a967886",
+  "subject": "01a1c577-367b-725d-b911-25170a16cfd6",
+  "v": 1,
+  "verb": "approve"
+}

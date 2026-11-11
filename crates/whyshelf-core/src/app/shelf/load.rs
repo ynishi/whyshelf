@@ -32,7 +32,7 @@ use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::Shelf;
 use crate::domain::shelf::freshness::{Assessment, assess};
 use crate::domain::shelf::ledger::{JudgedAt, Ledger, Record};
-use crate::domain::shelf::schema::{BookDir, Schema, SchemaProblem};
+use crate::domain::shelf::schema::{Schema, SchemaProblem};
 
 use super::error::ShelfError;
 use super::ports::{
@@ -89,10 +89,9 @@ pub(super) async fn load_with<P: ShelfRead>(
     ports: &P,
     schema: &Schema,
 ) -> Result<Loaded, ShelfError> {
-    let dirs: Vec<BookDir> = schema.books().values().map(|b| b.dir().clone()).collect();
     let readings = ports
         .docs()
-        .read_docs(&dirs)
+        .read_docs(&schema.ranges())
         .await
         .map_err(port(ShelfPort::Docs))?;
     let asks = Shelf::artifact_asks(schema, &readings);

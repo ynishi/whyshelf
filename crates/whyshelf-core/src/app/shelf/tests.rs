@@ -47,6 +47,98 @@ fn books_check_of_a_sound_shelf_is_clean_and_counts_the_documents() {
 }
 
 #[test]
+fn books_check_lists_the_files_a_book_skips_and_stays_clean() {
+    use crate::domain::shelf::build::{DocReading, RawProblem, ReadId};
+    use crate::domain::shelf::schema::ScopeDecl;
+    let none = |file: &str| DocReading::Unparsed {
+        origin: file.parse().unwrap(),
+        id: ReadId::Unreadable,
+        why: RawProblem::NoFrontMatter,
+    };
+    let broken = DocReading::Unparsed {
+        origin: "findings/broken.md".parse().unwrap(),
+        id: ReadId::Unreadable,
+        why: RawProblem::Unclosed,
+    };
+    let files = || {
+        vec![
+            fr(1, "slow", &[]),
+            none("findings/notes.md"),
+            none("findings/old/a.md"),
+        ]
+    };
+    let skipping = ScopeDecl {
+        include: None,
+        exclude: None,
+        without_front_matter: Some("skip".to_owned()),
+    };
+
+    let fake = FakeShelf::new().with_files(files());
+    fake.decls.lock().unwrap()[0].scope = skipping.clone();
+    let check = block_on(ShelfApp::new(fake).books_check()).unwrap();
+    assert!(check.is_clean(), "{check:?}");
+    let BooksCheck::Checked { books, .. } = &check else {
+        panic!("the declaration is sound");
+    };
+    let finding = &books[0];
+    assert_eq!((finding.tally.valid, finding.tally.invalid), (1, 0));
+    let skipped: Vec<&str> = finding
+        .skipped
+        .iter()
+        .map(|file| file.origin().as_str())
+        .collect();
+    assert_eq!(skipped, ["findings/notes.md", "findings/old/a.md"]);
+    assert!(books[1].skipped.is_empty());
+
+    // A broken front matter is still invalid under `skip`.
+    let mut with_broken = files();
+    with_broken.push(broken);
+    let fake = FakeShelf::new().with_files(with_broken);
+    fake.decls.lock().unwrap()[0].scope = skipping;
+    let check = block_on(ShelfApp::new(fake).books_check()).unwrap();
+    assert!(!check.is_clean());
+
+    // Without `skip`, the same files make the check fail, as before.
+    let check = block_on(app(files()).books_check()).unwrap();
+    assert!(!check.is_clean());
+    let BooksCheck::Checked { books, .. } = &check else {
+        panic!("the declaration is sound");
+    };
+    assert_eq!(books[0].tally.invalid, 2);
+    assert!(books[0].skipped.is_empty());
+}
+
+#[test]
+fn a_link_to_a_key_only_an_excluded_file_writes_is_unresolved_as_missing() {
+    use crate::domain::shelf::doc::{LinkState, UnresolvedWhy};
+    use crate::domain::shelf::schema::ScopeDecl;
+    let hidden = super::fake_tests::file("findings/hidden/fr-2.md", 2, "FR-2", "hidden", &[]);
+    let fake = FakeShelf::new().with_files(vec![fr(1, "slow", &["FR-2"]), hidden]);
+    fake.decls.lock().unwrap()[0].scope = ScopeDecl {
+        include: None,
+        exclude: Some(vec!["hidden/**".to_owned()]),
+        without_front_matter: None,
+    };
+    let app = ShelfApp::new(fake);
+    let check = block_on(app.books_check()).unwrap();
+    let BooksCheck::Checked { books, .. } = &check else {
+        panic!("the declaration is sound");
+    };
+    // The excluded file is no document: neither valid nor invalid.
+    assert_eq!((books[0].tally.valid, books[0].tally.invalid), (1, 0));
+
+    let doc = block_on(app.get(&r("FR-1"))).unwrap().doc.unwrap();
+    let states = doc.links()["base"].states();
+    let [LinkState::Unresolved(link)] = states else {
+        panic!("{states:?}");
+    };
+    assert_eq!(link.written(), "FR-2");
+    assert_eq!(link.why(), &UnresolvedWhy::Missing);
+    // Nothing answers to its identity either.
+    assert!(block_on(app.get(&r("FR-2"))).is_err());
+}
+
+#[test]
 fn books_check_of_an_unsound_declaration_is_an_answer_and_reads_nothing_else() {
     let app = app(vec![fr(1, "slow", &[])]);
     let mut twice = decls();

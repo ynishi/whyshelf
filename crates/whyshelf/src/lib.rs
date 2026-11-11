@@ -118,6 +118,87 @@
 //! A document's hash covers its book, its fields and its body (not its key, its
 //! place or its links), so it can be renamed or moved and stay approved.
 //!
+//! ## A book in an existing directory
+//!
+//! By default every `.md` file under a book's `dir` is a document of it, and a file
+//! with no front matter is an invalid one. A project that brings a book into a
+//! directory that already holds other files says which are the book's:
+//!
+//! ```text
+//!   [[book]]
+//!   name = "spec"
+//!   dir = "docs"
+//!   key = { prefix = "S" }
+//!   include = ["**/*.md"]                    # globs relative to dir; default: every .md below it
+//!   exclude = ["archive/**", "**/README.md"] # default: none
+//!   without_front_matter = "skip"            # "invalid" (the default) or "skip"
+//! ```
+//!
+//! A file is a document of the book when it is a `.md` file under `dir` whose path
+//! below `dir` (with `/` between its segments) matches some `include` and no
+//! `exclude`. A pattern is matched against that path segment by segment, and has
+//! three wildcards and nothing else:
+//!
+//! | written | matches |
+//! |---|---|
+//! | `**`, a whole segment | any number of segments, none included |
+//! | `*` in a segment | any characters of one segment, none included |
+//! | `?` in a segment | one character of one segment |
+//! | any other character | itself, case and bytes as written |
+//!
+//! So `*.md` is the files of `dir` itself, `**/*.md` every file below it, and
+//! `archive/**` everything under `archive`. Unicode is compared byte for byte: a
+//! pattern written in NFC does not take a name stored in NFD (as macOS may store
+//! one), so write the name as the file system holds it.
+//!
+//! A problem of the declaration, which names the book and the pattern, is: a
+//! pattern that is empty; that leaves `dir` (absolute, or with a `..` segment); that
+//! has an empty or `.` segment; that begins with `!` (write what to leave out in
+//! `exclude`); that holds a `\` (`/` is the one separator), or a `[`, `]`, `{` or
+//! `}` (there is no class and no alternative); that writes `**` inside a segment
+//! (`sub**`); or whose last segment has no `*` or `?` and does not end in `.md`, so
+//! that it takes no file (an `exclude = ["archive"]` is told to write
+//! `archive/**`). So are an `include = []`, which would take no file, and a
+//! `without_front_matter` that is neither word. Two books whose directories are the
+//! same or nest are refused as before, whatever their ranges.
+//!
+//! A file the range leaves out is not read, and a directory an `exclude` takes
+//! whole (`archive/**`) is not even opened, so a name there that is no path, or a
+//! directory there that cannot be read, is no error: `check` does not mention it,
+//! `fmt` does not touch it, a link to a key only it writes is a link to no
+//! document, and the key it writes is not taken. A document that was approved and
+//! that the range comes to leave out is gone, as if its file were deleted: `stale`
+//! lists its approval as broken, because no file carries the document. `new`
+//! refuses a document whose file, `<dir>/<key>.md`, the range leaves out, for a
+//! `--key` and for the next key alike (exit 2, naming the book, the path and the
+//! patterns, before anything is written).
+//!
+//! A file in the range that has *no front matter at all* is invalid, or, with
+//! `without_front_matter = "skip"`, is not a document: it is skipped, and not
+//! silently. `check` gives, for each book, `skipped` (the count) and `skipped_files`
+//! (`{"path", "why": "no_front_matter"}`, in the order they were read), beside
+//! `valid` and `invalid`, and writes a line on stderr per book that skipped any,
+//! `note: book spec skipped 3 files with no front matter`, so that a run which
+//! shows the answer only when it fails still says that files were left out. A
+//! skipped file changes no exit and is no row of `status`. A file has *no front
+//! matter* when its first line with anything on it (after a leading byte order mark
+//! and blank lines) does not begin with `---`: the empty file, a file that opens
+//! with a heading or a paragraph, and one whose only `---` is a thematic break in
+//! the middle are all such files. A file that tries to open a front matter and
+//! does not is *broken*, never skipped, so a mistyped delimiter is not passed over:
+//! an opening line `---` never closed, a front matter that is not YAML or not a
+//! mapping, a byte order mark or blank line before the opening `---`, and a first
+//! line that is `----`, `---x` or `--- x`. Under `skip`, such an opening is told as
+//! "the front matter must open with a line that is exactly `---` at the start of
+//! the file"; a book that does not skip tells every file as it did before it could
+//! (a file that does not open with the line `---` has no front matter). A Markdown
+//! file whose first line is a thematic break `---` is read as opening a front
+//! matter, so under `skip` it is invalid, not skipped: exclude it, or begin it
+//! otherwise.
+//!
+//! `map` gives, for each book, `include`, `exclude` and `without_front_matter` as
+//! written, each null when not written.
+//!
 //! ## Links to artifacts: things outside the documents
 //!
 //! A link may point at *artifacts*, things of the project outside the documents
@@ -652,10 +733,11 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `init` anything at the declaration's path or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written (for `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
 //!
-//! `check` answers `clean` (whether it exits 0) beside what it found; its
+//! `check` answers `clean` (whether it exits 0) beside what it found; each of its
+//! `books` is `{"name", "dir", "valid", "invalid", "skipped", "skipped_files"}`; its
 //! `uncovered` lists each document a covering link does not reach as `{"doc",
 //! "book", "link", "severity"}`, the book and link expected to reach it and their
 //! strength (`warn` or `error`), and the `not_covered` notice carries the same
@@ -663,7 +745,10 @@
 //!
 //! `map` answers `{"schema_problems": [...], "books": [...], "links": [...],
 //! "diagram": ...}`: each book with its `name`, `dir`, `key` (`{"kind": "prefix",
-//! "prefix"}` or `{"kind": "slug"}`), `description` and `fields` (`name`, `type`,
+//! "prefix"}` or `{"kind": "slug"}`), `include`, `exclude` and
+//! `without_front_matter` as written, or null (see "A book in an existing
+//! directory"),
+//! `description` and `fields` (`name`, `type`,
 //! `words` of an enum, `required`); each link with the book it is `from`, its
 //! `name`, its `target` (`{"kind": "book", "book"}` or `{"kind": "artifact",
 //! "space", "compare", "ignore"}`), `means`, `count`, `cover` (true for either
