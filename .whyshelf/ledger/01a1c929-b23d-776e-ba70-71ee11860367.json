@@ -1,0 +1,107 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::moved",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::moved_to",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::read_pins",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Moved",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::ReadPin",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794376315163,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ebc34ec601e505b5bf42173a87ce681430f69229",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    },
+    {
+      "address": "bd5696c569e486393147f833c76914a4d3ca4652",
+      "hash": "sha256:ff092ee86db4f8f3df11e4875803a3fc3820f18955fbf4a9580a5e7d11aac95c",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "23"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c912-1691-7698-adfe-26b7440a52ad"
+    }
+  ],
+  "id": "01a1c929-b23d-776e-ba70-71ee11860367",
+  "kind": "decision",
+  "reason": "judge moved records that an artifact moved, and the pins made before it are read through it as a separate value; a link left behind is one cause (#42); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "cfd16634e0a889968935ad230e1b909ceef8509f",
+  "seen": "sha256:30e6e11b84fb90a5af811e25fa8637aa65f92e5f41c716515d5b686941f42254",
+  "seen_address": "ed2d8800e4e0b5b6488ba2e5aa64172a96750903",
+  "subject": "01a1c912-1826-76a6-838e-509c842f7e41",
+  "v": 1,
+  "verb": "approve"
+}

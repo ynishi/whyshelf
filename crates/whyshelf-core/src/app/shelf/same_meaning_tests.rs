@@ -234,7 +234,7 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
     assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
     assert!(
-        matches!(row.notices.as_slice(), [Notice::ArtifactSameMeaning { pin, .. }] if pin.name() == &aname("tests/a.rs")),
+        matches!(row.notices.as_slice(), [Notice::ArtifactSameMeaning { pin, .. }] if pin.pin().name() == &aname("tests/a.rs")),
         "{:?}",
         row.notices
     );

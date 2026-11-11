@@ -265,6 +265,41 @@
 //! pinned another hash of it. One made by mistake is taken back with `judge withdraw
 //! <record id>` (the id each notice names), and the edit is a change again.
 //!
+//! ## An artifact that moved
+//!
+//! A file moved (or a Rust item renamed) is, to its approvals, a file gone: the pin
+//! of the old name has nothing behind it. When a person knows the two names are one
+//! thing, `judge moved <old> <new> --reason <text>` records it, one move per run. It
+//! is accepted when the old name is the name some pin of an approval that stands,
+//! one that pinned something there, is read as now (through the moves already
+//! declared), in one space; when nothing is
+//! behind it now; and when the new name has something, as the space's adapter says.
+//! A move is of something that was there: a name only a document's link writes, or
+//! only pinned as absent, is not known; a name
+//! already moved away cannot be moved again (no pin reads as it), so a copy in two
+//! steps is refused as a copy in one is (both there), and a move back is accepted.
+//! Anything else is refused and writes nothing. A move onto a name that was there
+//! all along is not refused: the approvals that pinned that name see what replaced
+//! it as a change.
+//!
+//! From then on, a pin of the old name made at or before the declaration is read as a
+//! pin of the new name, with the hash and the state it pinned, and a chain of moves
+//! (A to B, then B to C) is followed in order of time; of two moves of one name at
+//! one time, the larger record id, as for decisions. So a move that changed nothing
+//! leaves the approval as it was; a move with an edit is `artifact_changed` at the new
+//! name (stale, not broken, and the change is the new name's, which `stale` names as
+//! the origin); a pin of a name that had nothing behind it when it was approved held
+//! no content to move, and is read as written, as is a pin made after the
+//! declaration. A link that still writes a name a pin was moved
+//! away from (the old name, or one a chain passed) is one cause, `artifact_moved`
+//! (stale): its `artifact` is the name written and its `read_as` the name to write,
+//! and it is no `links_changed`. `check` lists it in `moved` and warns of it on
+//! stderr. Write the name it is read as in the link and the approval holds again. A
+//! cause, `get --approved` and `diff` show the name pinned and, beside it as
+//! `read_as`, the name it is read as; what it is now is asked of that name. A
+//! declaration is a record like the others, and `judge withdraw <record id>` takes it
+//! back.
+//!
 //! ## What an approval saw
 //!
 //! `get <ref> --approved` lists what the approval that stands saw (the
@@ -319,6 +354,9 @@
 //!   judge same <ref>... [--artifact <name>]... [--from <hash>] --reason <text>
 //!                             the edits named keep the meaning: the approvals that pinned the
 //!                             hashes before them hold again, each with a notice
+//!   judge moved <old> <new> --reason <text>
+//!                             the artifact at the old name is now at the new one: a pin of the
+//!                             old name made before is read as a pin of the new one
 //!   judge withdraw <record id>... --reason <text>
 //!                             take back decisions or declarations by the id of their record
 //!   new <book> [--title <text>] [--key <key>] [<entry>=<value> | <entry>+=<item>]... [--body <text>]
@@ -475,8 +513,8 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now) |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference or `unlinked --book`) or a key its grammar refuses, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, or a file already at the path, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read or written |
 //!
 //! `check` answers `clean` (whether it exits 0) beside what it found; its

@@ -28,6 +28,7 @@ use crate::domain::location::RelPath;
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactReadings, ArtifactState, ContentAddress,
 };
+use crate::domain::shelf::ledger::MovedTo;
 use crate::domain::shelf::snapshot::{
     ItemNow, ItemRole, Retrieval, Snapshot, SnapshotItem, doc_now,
 };
@@ -79,6 +80,8 @@ impl<P: ShelfRead> ShelfApp<P> {
         let (loaded, snapshot) = self.approved(reference).await?;
         let readable = self.read_back(&snapshot).await?;
 
+        // An artifact is asked by the name it is read as (the one a declared move
+        // took it to), as freshness compares it.
         let mut asks = ArtifactAsks::new();
         for item in snapshot.items() {
             if let ItemRole::Artifact {
@@ -87,6 +90,7 @@ impl<P: ShelfRead> ShelfApp<P> {
                 ..
             } = item.role()
             {
+                let artifact = item.moved().map_or(artifact, MovedTo::artifact);
                 asks.ask(
                     artifact.space().clone(),
                     artifact.name().clone(),
@@ -120,6 +124,7 @@ impl<P: ShelfRead> ShelfApp<P> {
                     comparison,
                     ..
                 } => {
+                    let artifact = item.moved().map_or(artifact, MovedTo::artifact);
                     let state = artifacts_now.state_of(artifact, comparison);
                     let current = match state {
                         ArtifactState::Present(_) => self

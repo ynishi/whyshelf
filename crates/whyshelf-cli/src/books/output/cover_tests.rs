@@ -101,6 +101,7 @@ fn check_with(severity: CoverSeverity) -> BooksCheck {
         }],
         absent: Vec::new(),
         unknown: Vec::new(),
+        moved: Vec::new(),
     }
 }
 

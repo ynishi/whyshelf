@@ -17,6 +17,10 @@
 //!   the shelf now / what an adapter read now ────────────► SnapshotItem::changed_from
 //! ```
 //!
+//! An artifact is shown as it was pinned, and beside it the name it is read as now
+//! when people declared it moved since ([`SnapshotItem::moved`], from
+//! [`Ledger::moved_to`]): what it is now is asked of that name, as freshness asks it.
+//!
 //! Reading content back is a port of the application, so the domain is handed what
 //! the store gave and decides only what that comes to. A [`Retrieval`] is one of
 //! three answers, and a content that could not be read always says why: there was
@@ -33,7 +37,7 @@ use crate::domain::location::RelPath;
 use super::artifact::{ArtifactKey, ArtifactState, Comparison, ContentAddress, Revision};
 use super::build::{DocState, Shelf};
 use super::doc::{DocHash, DocKey};
-use super::ledger::{DecisionVerb, JudgedAt, JudgementId, Ledger};
+use super::ledger::{DecisionVerb, JudgedAt, JudgementId, Ledger, MovedTo};
 use super::schema::EntryName;
 
 /// What one item of a snapshot is in the approval.
@@ -79,6 +83,9 @@ pub struct SnapshotItem {
     role: ItemRole,
     seen: SeenHash,
     address: Option<ContentAddress>,
+    /// For an artifact pinned under a name people declared moved since, the name it
+    /// is read as now ([`Ledger::moved_to`]).
+    moved: Option<MovedTo>,
 }
 
 /// Whether the content of an item, as it was approved, could be read back (rule
@@ -119,6 +126,14 @@ impl SnapshotItem {
     /// Where its content, as it was approved, can be read back.
     pub fn address(&self) -> Option<&ContentAddress> {
         self.address.as_ref()
+    }
+
+    /// For an artifact, the move it is read through: the name it is read as now,
+    /// when people declared that what was pinned (the name its role writes) moved
+    /// since. What it is now is asked of that name. None for a document, and for an
+    /// artifact read as written.
+    pub fn moved(&self) -> Option<&MovedTo> {
+        self.moved.as_ref()
     }
 
     /// What reading it back came to, given the contents the store gave back by
@@ -173,7 +188,6 @@ impl Snapshot {
         let DecisionVerb::Approve {
             seen,
             frame,
-            artifacts,
             seen_address,
             revision,
             ..
@@ -185,6 +199,7 @@ impl Snapshot {
             role: ItemRole::Subject { id },
             seen: SeenHash::Doc(*seen),
             address: seen_address.clone(),
+            moved: None,
         }];
         items.extend(frame.iter().map(|pin| SnapshotItem {
             role: ItemRole::Upstream {
@@ -194,15 +209,22 @@ impl Snapshot {
             },
             seen: SeenHash::Doc(*pin.hash()),
             address: pin.address().cloned(),
+            moved: None,
         }));
-        items.extend(artifacts.iter().map(|pin| SnapshotItem {
-            role: ItemRole::Artifact {
-                link: pin.link().clone(),
-                artifact: pin.artifact().clone(),
-                comparison: pin.comparison().clone(),
-            },
-            seen: SeenHash::Artifact(pin.seen().state()),
-            address: pin.seen().address().cloned(),
+        // The pins as the ledger reads them: each as it was made, with the move it is
+        // read through, if any.
+        items.extend(ledger.read_pins(id).into_iter().map(|read| {
+            let pin = read.pin();
+            SnapshotItem {
+                role: ItemRole::Artifact {
+                    link: pin.link().clone(),
+                    artifact: pin.artifact().clone(),
+                    comparison: pin.comparison().clone(),
+                },
+                seen: SeenHash::Artifact(pin.seen().state()),
+                address: pin.seen().address().cloned(),
+                moved: read.moved().cloned(),
+            }
         }));
         Some(Self {
             judgement: decision.id(),
@@ -380,6 +402,7 @@ mod tests {
             role: ItemRole::Subject { id: docid(1) },
             seen: snap.items()[0].seen.clone(),
             address: Some(address("abc")),
+            moved: None,
         };
         assert_eq!(
             item.retrieval(&BTreeMap::new()),
@@ -409,6 +432,7 @@ mod tests {
             },
             seen: SeenHash::Artifact(ArtifactState::Absent),
             address: None,
+            moved: None,
         };
         assert!(!absent.changed_from(&ItemNow::Artifact(ArtifactState::Absent)));
         assert!(
