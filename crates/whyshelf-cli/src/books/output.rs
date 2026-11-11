@@ -38,7 +38,8 @@ use whyshelf_core::domain::shelf::ledger::{
 use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::order::Hold;
 use whyshelf_core::domain::shelf::schema::{
-    Cardinality, CoverSeverity, FieldPresence, FieldType, KeyPattern, Propagation,
+    Cardinality, CoverSeverity, FieldPresence, FieldType, KeyPattern, PresetOrigin, Propagation,
+    SchemaProblem,
 };
 use whyshelf_infra::shelf::ledger::to_json;
 
@@ -320,6 +321,13 @@ pub struct MapLinkOut {
     /// How strongly it is expected, beside `cover`: `warn` or `error`; null when
     /// `cover` is false.
     pub cover_severity: Option<&'static str>,
+    /// The name of the preset a link to artifacts was expanded from, the one it
+    /// names or the default; null when there is none, and for a link into a book.
+    /// The values in `target` are the link's, whichever it is.
+    pub preset: Option<String>,
+    /// Whether `preset` is the default (`[defaults] artifact`), beside `preset`:
+    /// false when the link names its preset, or has none.
+    pub preset_by_default: bool,
 }
 
 /// What a link of `map` points at.
@@ -1483,12 +1491,27 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
         .collect()
 }
 
+/// A problem of the declaration as every answer gives it: its text, then the text
+/// of each reason under it (`Error::source`), joined by `: `, so a problem that
+/// keeps its reason as a source (a comparison that is none, a directory that is no
+/// relative path) says why. The one place a problem of the declaration is written.
+fn schema_problem(problem: &SchemaProblem) -> String {
+    let mut text = problem.to_string();
+    let mut source = std::error::Error::source(problem);
+    while let Some(cause) = source {
+        text.push_str(": ");
+        text.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    text
+}
+
 /// The answer of `check`.
 pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
     match check {
         BooksCheck::SchemaInvalid(problems) => BooksCheckOut {
             clean: false,
-            schema_problems: problems.iter().map(ToString::to_string).collect(),
+            schema_problems: problems.iter().map(schema_problem).collect(),
             books: Vec::new(),
             health: None,
             uncovered: Vec::new(),
@@ -1565,7 +1588,7 @@ pub fn map(report: &MapReport) -> MapOut {
     let map = match report {
         MapReport::SchemaInvalid(problems) => {
             return MapOut {
-                schema_problems: problems.iter().map(ToString::to_string).collect(),
+                schema_problems: problems.iter().map(schema_problem).collect(),
                 books: Vec::new(),
                 links: Vec::new(),
                 diagram: None,
@@ -1609,9 +1632,9 @@ pub fn map(report: &MapReport) -> MapOut {
             .links
             .iter()
             .map(|link| {
-                let cover = match link.target {
-                    MapTarget::Book { cover, .. } => cover,
-                    MapTarget::Artifact { .. } => None,
+                let (cover, preset) = match &link.target {
+                    MapTarget::Book { cover, .. } => (*cover, None),
+                    MapTarget::Artifact { preset, .. } => (None, preset.as_ref()),
                 };
                 MapLinkOut {
                     from: link.from.to_string(),
@@ -1620,7 +1643,9 @@ pub fn map(report: &MapReport) -> MapOut {
                         MapTarget::Book { book, .. } => MapTargetOut::Book {
                             book: book.to_string(),
                         },
-                        MapTarget::Artifact { space, comparison } => MapTargetOut::Artifact {
+                        MapTarget::Artifact {
+                            space, comparison, ..
+                        } => MapTargetOut::Artifact {
                             space: space.to_string(),
                             compare: comparison.kind_word(),
                             ignore: comparison
@@ -1633,6 +1658,8 @@ pub fn map(report: &MapReport) -> MapOut {
                     count: count_word(link.cardinality),
                     cover: cover.is_some(),
                     cover_severity: cover.map(CoverSeverity::word),
+                    preset: preset.map(|p| p.name().to_string()),
+                    preset_by_default: preset.is_some_and(PresetOrigin::is_default),
                 }
             })
             .collect(),
@@ -1680,7 +1707,7 @@ pub fn unlinked(report: &UnlinkedReport) -> UnlinkedOut {
     let no_names = Names::default();
     let (schema_problems, standing, decided_against, names, health) = match report {
         UnlinkedReport::SchemaInvalid { problems, lists } => (
-            problems.iter().map(ToString::to_string).collect(),
+            problems.iter().map(schema_problem).collect(),
             lists,
             lists,
             &no_names,
@@ -2209,7 +2236,7 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
             _ => Vec::new(),
         },
         problems: match error {
-            ShelfError::Schema(problems) => problems.iter().map(ToString::to_string).collect(),
+            ShelfError::Schema(problems) => problems.iter().map(schema_problem).collect(),
             ShelfError::NewDoc(NewDocProblem::Invalid(problems)) => {
                 problems.iter().map(ToString::to_string).collect()
             }

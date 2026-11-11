@@ -183,6 +183,7 @@ fn the_links_are_mapped_as_declared_with_every_count() {
             comparison: Comparison::Lines {
                 ignore: [LinePrefix::new("//").unwrap()].into(),
             },
+            preset: None,
         }
     );
     assert_eq!(
@@ -199,4 +200,72 @@ fn an_empty_declaration_maps_to_nothing() {
     let map = ShelfMap::of(&Schema::validate(Vec::new(), &spaces()).unwrap());
     assert!(map.books.is_empty());
     assert!(map.links.is_empty());
+}
+
+#[test]
+fn a_link_to_artifacts_is_mapped_with_its_values_and_the_preset_it_came_from() {
+    use crate::domain::shelf::schema::{
+        BuiltinPresets, DefaultsDecl, PresetName, PresetValues, ShelfDecl, WrittenLinkDecl,
+    };
+    let artifact = |name: &str, preset: Option<&str>, space: Option<&str>| WrittenLinkDecl {
+        name: name.to_owned(),
+        target: LinkTargetDecl::Artifact,
+        cardinality: Cardinality::Many,
+        propagation: None,
+        preset: preset.map(str::to_owned),
+        space: space.map(str::to_owned),
+        compare: None,
+        ignore: None,
+        cover: None,
+    };
+    let file = PresetName::new("file").unwrap();
+    let builtins = BuiltinPresets::from([(
+        file.clone(),
+        PresetValues {
+            space: Some("file".to_owned()),
+            means: Some(Propagation::Depends),
+            ..PresetValues::default()
+        },
+    )]);
+    let decl = ShelfDecl {
+        books: vec![BookSchemaDecl {
+            name: "decision".to_owned(),
+            dir: "books/decision".to_owned(),
+            key: KeyPatternDecl::Slug,
+            description: None,
+            fields: Vec::new(),
+            links: vec![
+                artifact("named", Some("file"), None),
+                artifact("defaulted", None, None),
+                WrittenLinkDecl {
+                    propagation: Some(Propagation::Informs),
+                    ..artifact("plain", None, Some("file"))
+                },
+            ],
+        }],
+        presets: Vec::new(),
+        defaults: DefaultsDecl {
+            artifact: Some("file".to_owned()),
+        },
+    };
+    let map = ShelfMap::of(&Schema::declared(decl, &builtins, &spaces()).unwrap());
+    let presets: Vec<Option<PresetOrigin>> = map
+        .links
+        .iter()
+        .map(|link| match &link.target {
+            MapTarget::Artifact { space, preset, .. } => {
+                assert_eq!(space.as_str(), "file");
+                preset.clone()
+            }
+            MapTarget::Book { .. } => panic!("a link to artifacts"),
+        })
+        .collect();
+    assert_eq!(
+        presets,
+        [
+            Some(PresetOrigin::Named(file.clone())),
+            Some(PresetOrigin::Default(file)),
+            None,
+        ]
+    );
 }

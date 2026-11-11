@@ -77,10 +77,11 @@
 //! A link may point at *artifacts*, things of the project outside the documents
 //! (code, tests, data), with `target = "artifact"`; it `depends` or `informs`, never
 //! `replaces` (and no book can be called `artifact`). Every such link names the
-//! *space* its names are in, with `space`: there is no space a link has when it names
-//! none, and a space no adapter offers is refused, as a declaration that cannot be
-//! used. The spaces offered, and what the names of each are, are listed on the page
-//! of `whyshelf_infra::shelf::artifact`. The sample's `design` book has one such
+//! *space* its names are in, with `space`, itself or through a preset (below): there
+//! is no space a link has when it names none, and a space no adapter offers is
+//! refused, as a declaration that cannot be used. The spaces offered, and what the
+//! names of each are, are listed on the page of `whyshelf_infra::shelf::artifact`.
+//! The sample's `design` book has one such
 //! link, `tests` in the space `file` (the files of the project, by their path), so a
 //! design names the tests that show it holds:
 //!
@@ -153,6 +154,50 @@
 //! (`artifact_comparison_changed`), and the hashes are not compared, since they were
 //! made differently: look again and approve. An artifact gone or come is told as
 //! such, whatever the comparison.
+//!
+//! ### Presets and a default
+//!
+//! A *preset* names values of a link to artifacts (`space`, `compare`, `ignore`,
+//! `means`), so that a link writes `preset = "<name>"` and only what differs:
+//!
+//! ```text
+//!   [defaults]
+//!   artifact = "file"        # the preset of a link that names neither a preset nor a space
+//!
+//!   [[preset]]
+//!   name = "rust"            # a preset of the project
+//!   from = "file"            # optional: the preset it starts from
+//!   compare = "lines"
+//!   ignore = ["//"]
+//!
+//!   [[book.link]]
+//!   name = "code"
+//!   target = "artifact"
+//!   preset = "rust"
+//!   means = "informs"        # a value the link writes wins over the preset's
+//! ```
+//!
+//! Each adapter offers presets for its own space (the file adapter offers `file`:
+//! `space = "file"`, `compare = "bytes"`, `means = "depends"`; the page of
+//! `whyshelf_infra::shelf::artifact` lists them). A project declares its own with
+//! `[[preset]]`. One of the name of a built-in preset and with no `from` replaces
+//! the built-in one whole: it takes none of its values. With `from` of its own name
+//! it refines the built-in one instead (`name = "file", from = "file"`); any other
+//! `from` names a preset of the project first, then a built-in one. `compare` and
+//! `ignore` go together: a link or preset that writes `compare` takes no `ignore`
+//! from its preset, and one that writes only `ignore` keeps its preset's `compare`.
+//! Without `[defaults]` there is no default, and a link that names no space is
+//! refused as above. How the values are taken is stated on
+//! [`expand`](domain::shelf::schema::expand): the declaration is expanded before it
+//! is checked, and only the expanded values are checked, answered and pinned, so
+//! editing a preset changes the next approval and never how an old pin reads (a
+//! comparison that changes is `artifact_comparison_changed`, as above). A preset that
+//! is not there, a cycle of `from`, a preset named twice, a preset that `replaces`,
+//! a preset's `space` that is not offered or `compare` that is none (checked on the
+//! preset, whether a link uses it or not), `preset` on a link into a book, and a link
+//! left with no `means` are problems of the declaration, told with the others.
+//! `map` gives each link to artifacts its `preset` (null when none)
+//! and `preset_by_default`, and draws `preset=<name>` (`preset=<name>(default)`).
 //!
 //! In a Git repository an approval also records, for the approved document, each
 //! upstream it pinned and each file, the Git blob its content is in, and the commit
@@ -369,13 +414,16 @@
 //! `words` of an enum, `required`); each link with the book it is `from`, its
 //! `name`, its `target` (`{"kind": "book", "book"}` or `{"kind": "artifact",
 //! "space", "compare", "ignore"}`), `means`, `count`, `cover` (true for either
-//! strength) and `cover_severity` (`warn`, `error`, or null when `cover` is false),
-//! as the declaration writes them and in its order, with one exception: the `words`
-//! of an enum and the prefixes of `ignore` are sets, so they are answered sorted.
-//! `diagram` is the same as text, one block per book: a line of its name, key and
-//! description, then a line per link with its meaning, `cover` (`cover`, or
-//! `cover(warn)` for `warn`), count (`1`,
-//! `0..1`, `0..`, `1..`) and target, every column aligned across the drawing. It
+//! strength), `cover_severity` (`warn`, `error`, or null when `cover` is false),
+//! `preset` (the preset a link to artifacts was expanded from, or null) and
+//! `preset_by_default` (whether that preset is the default), as the declaration
+//! writes them, its presets expanded, and in its order, with one exception: the
+//! `words` of an enum and the prefixes of `ignore` are sets, so they are answered
+//! sorted. `diagram` is the same as text, one block per book: a line of its name,
+//! key and description, then a line per link with its meaning, `cover` (`cover`, or
+//! `cover(warn)` for `warn`), count (`1`, `0..1`, `0..`, `1..`), preset
+//! (`preset=<name>`, or `preset=<name>(default)`) and target, every column aligned
+//! across the drawing. It
 //! is null, and `books` and `links` are empty, when `schema_problems` lists why
 //! the declaration cannot be used, as `check` lists it.
 //!

@@ -6,14 +6,14 @@
 //!
 //! | use case | asks |
 //! |---|---|
-//! | `books_check` | [`Schema::validate`], then [`Shelf::tally_by_book`] and [`assess`] for the faults around the documents |
-//! | `map` | [`Schema::validate`], then [`ShelfMap::of`]; nothing else is read |
+//! | `books_check` | [`Schema::declared`] (the declaration expanded, then checked), then [`Shelf::tally_by_book`] and [`assess`] for the faults around the documents |
+//! | `map` | [`Schema::declared`], then [`ShelfMap::of`]; nothing else is read |
 //! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
 //! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`] |
 //!
-//! [`Schema::validate`]: crate::domain::shelf::schema::Schema::validate
+//! [`Schema::declared`]: crate::domain::shelf::schema::Schema::declared
 //! [`ShelfMap::of`]: crate::domain::shelf::map::ShelfMap::of
 //! [`Shelf::tally_by_book`]: crate::domain::shelf::build::Shelf::tally_by_book
 //! [`assess`]: crate::domain::shelf::freshness::assess

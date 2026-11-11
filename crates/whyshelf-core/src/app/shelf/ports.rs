@@ -11,7 +11,7 @@
 //!
 //! | port | gives the use cases |
 //! |---|---|
-//! | [`BookSchemaSource`] | the declarations of the books, as an adapter read them |
+//! | [`BookSchemaSource`] | the declaration of the project, as an adapter read it: the books, the presets and the defaults |
 //! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books, the bytes and the [`ContentAddress`] of a document's file now, and how each file stands to the one form documents are written in ([`FileForm`]) |
 //! | [`LedgerRead`] | the records of the ledger, and the files of it that could not be read as one |
 //! | [`LedgerAppend`] | one record added, never in place of another |
@@ -20,7 +20,7 @@
 //! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there |
 //! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten) |
 //! | [`ActorSource`] | who is acting |
-//! | [`ArtifactSource`] | the spaces it offers; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
+//! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
 //! | [`ContentStore`] | content read back by its [`ContentAddress`], by the adapter of the document or the space it is of, or "not readable" |
 //! | [`RevisionSource`] | the point of the project's history now, if there is one |
 //!
@@ -51,7 +51,7 @@ use crate::domain::shelf::artifact::{
 };
 use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record, RecordProblem};
-use crate::domain::shelf::schema::{BookDir, BookSchemaDecl};
+use crate::domain::shelf::schema::{BookDir, BuiltinPresets, ShelfDecl};
 
 use super::error::ShelfError;
 
@@ -108,12 +108,12 @@ pub trait BookSchemaSource: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// Every book as the project declares it: text and lists, nothing checked (that
-    /// is [`Schema::validate`](crate::domain::shelf::schema::Schema::validate)'s
-    /// work). A project with no declaration is an error, not an empty list: it is far
-    /// more likely a wrong place than a shelf with no book.
-    fn declarations(&self)
-    -> impl Future<Output = Result<Vec<BookSchemaDecl>, Self::Error>> + Send;
+    /// Every book, preset and default as the project declares them: text and
+    /// lists, nothing checked (that is
+    /// [`Schema::declared`](crate::domain::shelf::schema::Schema::declared)'s work).
+    /// A project with no declaration is an error, not an empty one: it is far more
+    /// likely a wrong place than a shelf with no book.
+    fn declarations(&self) -> impl Future<Output = Result<ShelfDecl, Self::Error>> + Send;
 }
 
 /// The documents of a project, read.
@@ -378,6 +378,12 @@ pub trait ArtifactSource: Send + Sync {
     /// [`Schema::validate`](crate::domain::shelf::schema::Schema::validate) holds the
     /// declaration's spaces against.
     fn spaces(&self) -> BTreeSet<Space>;
+
+    /// The presets of links to artifacts it offers, each by the adapter of a space
+    /// for its own, as values: what
+    /// [`expand`](crate::domain::shelf::schema::expand) takes as the built-in ones.
+    /// The domain knows no preset of its own.
+    fn presets(&self) -> BuiltinPresets;
 
     /// For each name asked, in its space, one answer of the four of an
     /// [`ArtifactReading`](crate::domain::shelf::artifact::ArtifactReading): there
