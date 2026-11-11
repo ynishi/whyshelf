@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a55e392fc9e66306e3413b67f95d577e435440d2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d1584469a7a11d53491f708a72a9bb00f1a748a7ef04bb2445ac7d9b25bf703",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4c93dadb3a9137b48e81cc73e7b4e093342badae",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:79db7cd2945ceec8d812c0e151ea3e53be9330c1b4542be810046cb4a38db167",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794369178161,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3400dbc2f7d06a0abae6df7e3c489bd5f4a8f624",
+      "hash": "sha256:d6fe01cfa0864a168ed390e185d99b585cb5416067bf091d402792186f174438",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "57"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8ad-9bab-71bd-a155-f52d9ae7d16d"
+    }
+  ],
+  "id": "01a1c8bc-cb3c-772a-b9b6-39f5c18337b7",
+  "kind": "decision",
+  "reason": "stats carries a drawing a person reads, made from the answer alone, and --since and --until take an RFC 3339 time with an offset or a date YYYY-MM-DD and refuse anything else (#64); checked by a blind review, every finding fixed",
+  "revision": "e560741b6a658ab0d6ac806d1a831ef65d5e35f1",
+  "seen": "sha256:18f6a11a1f7e98ad3ca6a7595bd30be410d525f8328ec6915beef0aa693a7a34",
+  "seen_address": "745a0f77e4c9ac57f1ffe17fc2db8b215b9fa64e",
+  "subject": "01a1c8ad-9d35-7282-94a1-975d88e8c664",
+  "v": 1,
+  "verb": "approve"
+}

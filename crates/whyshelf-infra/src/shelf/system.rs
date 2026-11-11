@@ -35,17 +35,53 @@ impl Clock for SystemClock {
     }
 }
 
-/// A time a person typed, as RFC 3339 (`2026-12-31T00:00:00Z`) or a date
-/// (`2026-12-31`, the start of that day in UTC).
-pub fn parse_time(text: &str) -> Result<JudgedAt, jiff::Error> {
+/// A time a person typed, in one of two forms, and nothing else:
+///
+/// - an RFC 3339 time with an offset or `Z` (`2026-12-31T00:00:00Z`,
+///   `2026-12-31T00:00:00+09:00`, which gives another zone than UTC); a bracketed
+///   zone after the offset (`…+09:00[Asia/Tokyo]`) is read and the offset decides;
+/// - a date written exactly `YYYY-MM-DD` (`2026-12-31`), the start of that day in
+///   UTC.
+///
+/// A time with no offset (`2026-12-31T23:59:00`, `…[Asia/Tokyo]` alone) is refused:
+/// which instant it means depends on a zone it does not say, and reading it as its
+/// date alone would drop the time unseen. So is a date in another form
+/// (`20261231`).
+pub fn parse_time(text: &str) -> Result<JudgedAt, TimeError> {
     let at = match text.parse::<jiff::Timestamp>() {
         Ok(at) => at,
-        Err(error) => match text.parse::<jiff::civil::Date>() {
-            Ok(date) => date.to_zoned(jiff::tz::TimeZone::UTC)?.timestamp(),
-            Err(_) => return Err(error),
-        },
+        Err(error) if !is_plain_date(text) => return Err(TimeError::Unreadable(error)),
+        Err(_) => text
+            .parse::<jiff::civil::Date>()
+            .and_then(|date| date.to_zoned(jiff::tz::TimeZone::UTC))
+            .map_err(TimeError::NoDay)?
+            .timestamp(),
     };
     Ok(JudgedAt::new(at.as_millisecond()))
+}
+
+/// Whether a text is written `YYYY-MM-DD`, digits and dashes, whatever the digits.
+fn is_plain_date(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes.len() == 10
+        && bytes.iter().enumerate().all(|(i, b)| match i {
+            4 | 7 => *b == b'-',
+            _ => b.is_ascii_digit(),
+        })
+}
+
+/// Why a typed time was refused.
+#[derive(Debug, thiserror::Error)]
+pub enum TimeError {
+    /// Neither form: no RFC 3339 time with an offset, and not written `YYYY-MM-DD`.
+    #[error(
+        "not an RFC 3339 time with an offset or `Z` (`2026-12-31T00:00:00Z`, \
+         `2026-12-31T00:00:00+09:00`) nor a date `YYYY-MM-DD`: {0}"
+    )]
+    Unreadable(#[source] jiff::Error),
+    /// Written `YYYY-MM-DD`, but no day of the calendar (`2026-02-30`).
+    #[error("not a day of the calendar: {0}")]
+    NoDay(#[source] jiff::Error),
 }
 
 /// New UUID v7 identities.
@@ -139,6 +175,52 @@ impl ActorSource for ProjectActor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 2026-11-11T00:00:00Z, in unix milliseconds.
+    const NOV_11_UTC: i64 = 1_794_355_200_000;
+
+    fn millis(text: &str) -> i64 {
+        parse_time(text)
+            .unwrap_or_else(|e| panic!("{text}: {e}"))
+            .millis()
+    }
+
+    #[test]
+    fn a_date_is_the_start_of_that_day_in_utc() {
+        assert_eq!(millis("2026-11-11"), NOV_11_UTC);
+    }
+
+    #[test]
+    fn a_time_with_an_offset_is_that_instant() {
+        assert_eq!(millis("2026-11-11T00:00:00Z"), NOV_11_UTC);
+        assert_eq!(millis("2026-11-11T09:00:00+09:00"), NOV_11_UTC);
+        // Midnight in Tokyo is 15:00 UTC the day before.
+        assert_eq!(
+            millis("2026-11-11T00:00:00+09:00"),
+            NOV_11_UTC - 9 * 3_600_000
+        );
+        assert_eq!(
+            millis("2026-11-11T00:00:00+09:00[Asia/Tokyo]"),
+            NOV_11_UTC - 9 * 3_600_000
+        );
+    }
+
+    #[test]
+    fn a_time_with_no_offset_and_a_date_in_another_form_are_refused() {
+        for text in [
+            "2026-11-11T23:59:00",
+            "2026-11-11T23:59",
+            "2026-11-11T23:59:00[Asia/Tokyo]",
+            "2026-11-11 23:59:00",
+            "20261111",
+            "2026-1-11",
+            "2026-02-30",
+            "never",
+            "",
+        ] {
+            assert!(parse_time(text).is_err(), "{text:?} was read");
+        }
+    }
 
     #[tokio::test]
     async fn a_declared_actor_wins() {

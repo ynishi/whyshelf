@@ -1,0 +1,108 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2197bce8bee7e7aaf592ad8930a4624a61cc6278",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8bfe83e5c71fd327834bbb45f4577b703ec62ec4b6268a82a50372f0c2a01760",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "25e8a7b517705295b075b8de3b4f1d6208b06ef8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a41dc5e31e728408af205e23b8d1a86798ed5aa1043800a37b17f3366f8fbfd6",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/actor.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ed78081898f239099af12d9920d20d82165b84b3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0175bb57361579365c6f80650f2bf9051ecec2367fcd8f934356d11545e72f74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/id.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4c93dadb3a9137b48e81cc73e7b4e093342badae",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:79db7cd2945ceec8d812c0e151ea3e53be9330c1b4542be810046cb4a38db167",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794369144467,
+  "expires": null,
+  "frame": [
+    {
+      "address": "18043f59ad21212c02248de6ae6190ae95685067",
+      "hash": "sha256:2b40c7219de6e63b98ee933e423a47e71e0a67775e325f5689d0966fabf8c6be",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "34"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e310-703a-82cc-fecc69ebdc07"
+    },
+    {
+      "address": "12b9000513a1af84240cb975aa08345c7d3187c4",
+      "hash": "sha256:cc1e046186585cdfd094bb911bd9ac0b3dfbf4dde33d9ea9b2ef0294b03781bb",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "35"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e6b5-775e-9fa6-11ec41ab044a"
+    }
+  ],
+  "id": "01a1c8bc-4729-778c-892d-140d4b7e972c",
+  "kind": "decision",
+  "reason": "The answer of stats carries a drawing made in the output layer, parse_time refuses a time with no offset instead of reading it as its date, and the e2e test of stats checks the drawing (#64); checked by a blind review",
+  "revision": "e560741b6a658ab0d6ac806d1a831ef65d5e35f1",
+  "seen": "sha256:004675956edd3fddb92deac8dc692eb4249d7d5af36d3836e1a27325dd5c243a",
+  "seen_address": "be79f226b0e7f20a1a755faac846cc8af2c574a0",
+  "subject": "01a1c4ba-1b8f-732a-b8df-96833f6bcad2",
+  "v": 1,
+  "verb": "approve"
+}
