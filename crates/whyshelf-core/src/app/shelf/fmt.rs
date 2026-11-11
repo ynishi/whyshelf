@@ -8,7 +8,7 @@
 //!        |
 //!        v  plan (here, per file)
 //!   in the form ............................................ counted, not written
-//!   unparsed, a comment, a text in the form that reads otherwise,
+//!   unparsed, unheld, a comment, a text in the form that reads otherwise,
 //!   read-only, or a hard link -----------------------------> left alone
 //!   a text in the form that reads as the file does -------> DocReplace::replace_read
 //! ```
@@ -30,7 +30,8 @@
 //! and the rest as they were.
 
 use crate::domain::location::RelPath;
-use crate::domain::shelf::build::{DocReading, RawProblem, Shelf};
+use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::shelf::build::{DocReading, RawProblem, Shelf, UnheldValue};
 use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
@@ -78,6 +79,9 @@ pub struct LeftAlone {
 pub enum LeftAloneWhy {
     /// Its front matter cannot be read: there is nothing to write it from.
     Unparsed(RawProblem),
+    /// Its front matter is a mapping, and holds values of kinds a front matter does
+    /// not hold: there is nothing to write them from.
+    Unheld(NonEmptyVec<UnheldValue>),
     /// Its front matter holds a comment, which the form would lose; at this line.
     Comment {
         /// The line of the file, counted from 1.
@@ -118,6 +122,12 @@ fn plan(schema: &Schema, form: FileForm) -> Plan {
             return Plan::LeaveAlone(LeftAlone {
                 file: origin.clone(),
                 why: LeftAloneWhy::Unparsed(Shelf::told(schema, origin, why.clone())),
+            });
+        }
+        DocReading::Unheld { origin, values, .. } => {
+            return Plan::LeaveAlone(LeftAlone {
+                file: origin.clone(),
+                why: LeftAloneWhy::Unheld(values.clone()),
             });
         }
     };

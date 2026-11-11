@@ -28,7 +28,7 @@ use super::textdiff;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::nonempty::TwoOrMore;
 use whyshelf_core::domain::shelf::artifact::{Artifact, ArtifactKey, ArtifactState, Comparison};
-use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence};
+use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence, UnheldValue};
 use whyshelf_core::domain::shelf::doc::{
     Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy, normalize,
 };
@@ -3017,7 +3017,7 @@ pub fn fmt(report: &FmtReport, check: bool) -> FmtOut {
             .map(|left| LeftAloneOut {
                 file: left.file.to_string(),
                 reason: match left.why {
-                    LeftAloneWhy::Unparsed(_) => "unparsed",
+                    LeftAloneWhy::Unparsed(_) | LeftAloneWhy::Unheld(_) => "unparsed",
                     LeftAloneWhy::Comment { .. } => "comment",
                     LeftAloneWhy::ReadsOtherwise => "reads_otherwise",
                     LeftAloneWhy::ReadOnly => "read_only",
@@ -3054,6 +3054,10 @@ pub fn fmt_warnings(report: &FmtReport) -> Vec<String> {
 fn left_alone_detail(why: &LeftAloneWhy) -> String {
     match why {
         LeftAloneWhy::Unparsed(problem) => format!("its front matter cannot be read: {problem}"),
+        LeftAloneWhy::Unheld(values) => format!(
+            "its front matter cannot be read: {}",
+            UnheldValue::told_all(values)
+        ),
         LeftAloneWhy::Comment { line } => format!(
             "its front matter holds a comment on line {line}, which the form would lose; remove it, or keep it in the body"
         ),

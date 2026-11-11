@@ -1,12 +1,13 @@
 //! Tests of how a value a front matter does not hold is told: each kind has its own
 //! words, and the usual causes their way out.
 
-use super::{RawProblem, UnheldItem, UnheldKind};
+use super::{UnheldItem, UnheldKind, UnheldValue};
 
-const KINDS: [UnheldKind; 11] = [
+const KINDS: [UnheldKind; 12] = [
     UnheldKind::Null,
     UnheldKind::Float,
     UnheldKind::TooLarge,
+    UnheldKind::TooSmall,
     UnheldKind::Mapping,
     UnheldKind::Tagged,
     UnheldKind::Item(UnheldItem::Null),
@@ -18,11 +19,7 @@ const KINDS: [UnheldKind; 11] = [
 ];
 
 fn message(kind: UnheldKind) -> String {
-    RawProblem::UnsupportedValue {
-        key: "v".to_owned(),
-        kind,
-    }
-    .to_string()
+    UnheldValue::new("v".to_owned(), kind).to_string()
 }
 
 #[test]

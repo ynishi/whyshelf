@@ -81,6 +81,7 @@
 //! | the grammar of a key | [`KeyPattern::parse`] | a [`KeyForm`], or a [`KeyProblem`] |
 //! | a key in a book | `Shelf::find_key` (the same) | a `KeyHit` |
 //! | a file that cannot be read | the adapter's parser makes a [`DocReading::Unparsed`] and [`Shelf::build`] turns it into a [`DocProblem::Unreadable`] | a [`RawProblem`] |
+//! | a file read as a mapping that holds values of kinds a front matter does not hold | the adapter's parser makes a [`DocReading::Unheld`] and [`Shelf::build`] turns each value into a [`DocProblem::Unheld`] | an [`UnheldValue`] per value |
 //! | the entries of a front matter | [`Shelf::build`] | [`FieldValue`]s and the keys written in each [`Link`], or [`DocProblem`]s |
 //! | the form and validity of a document | [`Shelf::build`], which makes each valid [`Doc`] once, whole, with every link its book declares | a valid [`Doc`] or an [`InvalidDoc`] |
 //! | a link | [`Shelf::build`], once: the written key read in the target book's grammar and looked up in the index `Shelf::find_key` reads | a [`LinkState`]: a [`ResolvedLink`] with the target's id, key and hash, or an [`UnresolvedLink`] with the target book and the key it read as |
@@ -253,7 +254,10 @@
 //! [`Shelf::state_of`]: build::Shelf::state_of
 //! [`Shelf::replacers_of`]: build::Shelf::replacers_of
 //! [`DocReading::Unparsed`]: build::DocReading::Unparsed
+//! [`DocReading::Unheld`]: build::DocReading::Unheld
 //! [`DocProblem::Unreadable`]: build::DocProblem::Unreadable
+//! [`DocProblem::Unheld`]: build::DocProblem::Unheld
+//! [`UnheldValue`]: build::UnheldValue
 //! [`DocProblem`]: build::DocProblem
 //! [`RawProblem`]: build::RawProblem
 //! [`InvalidDoc`]: build::InvalidDoc
