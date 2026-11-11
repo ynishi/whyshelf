@@ -1,0 +1,161 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9137a1aa23eb1d6db5c465dfff52bbb589cf6d1f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3304c33d9d28650e55eca40465f4f5d58e3ae6f1718a4a7823aecb3bf2d9b300",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3f7ac0eb6b3974cfc70ce3a55402f27ccda1d836",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2ab7e2ae8ade2c56df3a742efb292c29d58a2c9073d267d61edfad48a7321d58",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e487ef31061452a9cfec86ab5821b61d097e868",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add768ddd5406e06645e18dda7518815a659d1f748b4a8cb827a8c355216144d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3d81d12432bd413ff606fc1186baac4de452268f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0d2b31f38f3108a75ff8da317e5f0e32a8b470f7dc1809501681cfc5e02f2e71",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6f950dda58af9ff3b37a3d3a33940d013c7ad0af",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7a0238c334c7dfa4ac88a9a4f58101cf0d884106794b8fb5139c978bab739ddf",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9ab09115d28eab89e793ca6c234617e4ae97e576",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:10cde3508647333e07bd52f3e58b7a0185eab1d1dc3347db9aa5816ac1df3c17",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "11401c771f1ac0fbdb67d292f3948531062d2212",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c317cd6f14fd9e49916be485a8a85db32f27295e52581b0c9e77a61c21f9851",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2f971e88367484254e5536cd8856378320aa65c7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bd6f103dc7df6be87abfc7baa8fff48b8d791a34c250e2bc0bc7cc0c21f1a636",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e2f572897ad3d9b4dd5a02827830a2dec99e4109",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f450ddb2a23789ba019f5accfa25d46b718b822058431fe982e02b1a6a1b3562",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794382006919,
+  "expires": null,
+  "frame": [
+    {
+      "address": "29f85e7daad22edd540f8203d25570015c2f901e",
+      "hash": "sha256:0e28d87ef7fd94af64d800e7d7168dee93917e568ad032e8a4f62d70b9f904f9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c45a-279c-7672-ac87-9afd9c344dc8"
+    }
+  ],
+  "id": "01a1c980-8c44-7651-bb31-b7193caa97f3",
+  "kind": "decision",
+  "reason": "Every Git call goes through one runner that lets nothing of the repository choose a program or write; addresses keep Git's own conversions with every filter driver shut out; a link is followed while it stays inside the root; moves joins the reading commands every e2e test runs (#69); checked by three rounds of blind review",
+  "revision": "cd81a89022f654f78f7867fce54d41ff31af007b",
+  "seen": "sha256:38d1ebdb1799195f4e7a078afb3ecb4dcfd6e89dcff18444255fafcf5405c286",
+  "seen_address": "c9ee0abf230a0c3d340519086554c780cc6c943a",
+  "subject": "01a1c45a-27fd-75bc-a433-f3e0233f0f72",
+  "v": 1,
+  "verb": "approve"
+}

@@ -2,7 +2,7 @@
 //! ledger reads a pin through them, and the rule of a declaration
 //! ([`moved_space`], [`frame_moved`]).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
@@ -540,4 +540,201 @@ fn a_move_stands_when_the_old_name_is_empty_and_the_new_one_is_not() {
             name: name("a")
         }))
     );
+}
+
+// The names a move may be declared of, and those `moves` asks about.
+
+/// FR-1, and SP-2 tested by `tests/a.rs` (there) and `tests/none.rs` (pinned as
+/// absent), both approved at time 10.
+fn approved_records() -> Vec<Record> {
+    let then = spec_on(
+        &["tests/a.rs", "tests/none.rs"],
+        &[("tests/a.rs", Some(ArtifactHash::of_content(b"a")))],
+    );
+    let first = approve(&then, &ledger(vec![]), 1, 1001, 10, None);
+    vec![
+        first.clone(),
+        approve(&then, &ledger(vec![first]), 2, 1002, 10, None),
+    ]
+}
+
+/// The names [`PinnedNames::asks`] asks about, in order.
+fn asked(l: &Ledger) -> Vec<ArtifactKey> {
+    PinnedNames::of(l)
+        .asks()
+        .iter()
+        .map(|(space, n, _)| ArtifactKey::new(space.clone(), n.clone()))
+        .collect()
+}
+
+#[test]
+fn the_names_asked_about_are_those_pins_of_something_there_are_read_as_now() {
+    let records = approved_records();
+    // A pin of a name as absent is not asked about: it held nothing to move.
+    let l = ledger(records.clone());
+    assert_eq!(asked(&l), [file_artifact("tests/a.rs")]);
+    let pinned = PinnedNames::of(&l);
+    let (_, pins) = pinned.names().next().unwrap();
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins.first().subject(), docid(2));
+    assert_eq!(pins.first().written(), &file_artifact("tests/a.rs"));
+    assert_eq!(pins.first().hash(), &ArtifactHash::of_content(b"a"));
+    assert_eq!(pins.first().comparison(), &Comparison::Bytes);
+    assert!(pins.first().content().is_some());
+
+    // Moved and declared: the pin is asked about as the name it is read as, and the
+    // old name is not asked about.
+    let mut moved_once = records.clone();
+    moved_once.push(moved(2001, "tests/a.rs", "tests/b.rs", 50));
+    let l = ledger(moved_once.clone());
+    assert_eq!(asked(&l), [file_artifact("tests/b.rs")]);
+    let pinned = PinnedNames::of(&l);
+    let (_, pins) = pinned.names().next().unwrap();
+    assert_eq!(pins.first().written(), &file_artifact("tests/a.rs"));
+
+    // The move withdrawn: the pin is read as written, and asked about so.
+    moved_once.push(Record::Revocation(Revocation::new(
+        jid(3001),
+        NonEmptySet::from_set([jid(2001)].into()).unwrap(),
+        actor(),
+        JudgedAt::new(60),
+        NonBlank::new("it was a copy").unwrap(),
+    )));
+    let l = ledger(moved_once);
+    assert!(l.problems().is_empty(), "{:?}", l.problems());
+    assert_eq!(asked(&l), [file_artifact("tests/a.rs")]);
+}
+
+#[test]
+fn a_name_is_gone_when_the_adapter_says_nothing_is_there() {
+    let l = ledger(approved_records());
+    let readings = |reading: Option<ArtifactReading>| {
+        let mut r = ArtifactReadings::new();
+        if let Some(reading) = reading {
+            r.insert(file_space(), name("tests/a.rs"), reading);
+        }
+        r
+    };
+    let gone = |reading| {
+        PinnedNames::of(&l)
+            .gone(&readings(reading))
+            .spaces()
+            .flat_map(|(_, names)| names.into_iter().map(|n| n.artifact().clone()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        gone(Some(ArtifactReading::absent())),
+        [file_artifact("tests/a.rs")]
+    );
+    let why = || NonBlank::new("offline").unwrap();
+    // Something there, a name that cannot be told about now, and no answer: not gone.
+    assert!(
+        gone(Some(ArtifactReading::of_bytes(
+            b"a",
+            &Default::default(),
+            None
+        )))
+        .is_empty()
+    );
+    assert!(gone(Some(ArtifactReading::there(why()))).is_empty());
+    assert!(gone(Some(ArtifactReading::cannot_tell(why()))).is_empty());
+    assert!(gone(None).is_empty());
+
+    let gone = PinnedNames::of(&l).gone(&readings(Some(ArtifactReading::absent())));
+    let (space, names) = gone.spaces().next().unwrap();
+    assert_eq!(space, &file_space());
+    assert_eq!(names[0].pinned_by(), BTreeSet::from([docid(2)]));
+}
+
+#[test]
+fn a_pin_of_presence_only_has_no_content_to_look_for() {
+    // The rule is the comparison's: one hash for everything there.
+    for (comparison, has) in [
+        (Comparison::Bytes, true),
+        (crate::domain::shelf::fixtures_tests::lines(&["//"]), true),
+        (Comparison::Presence, false),
+    ] {
+        let there = PinnedThere {
+            subject: docid(2),
+            written: file_artifact("a"),
+            comparison: comparison.clone(),
+            hash: comparison.fingerprint(b"a"),
+            address: None,
+            revision: None,
+        };
+        assert_eq!(there.content().is_some(), has, "{comparison:?}");
+    }
+}
+
+#[test]
+fn suggestions_keep_every_gone_name_and_put_candidates_in_one_order() {
+    let mut records = approved_records();
+    // SP-2 approved again, on two files.
+    let then = spec_on(
+        &["tests/a.rs", "tests/c.rs"],
+        &[
+            ("tests/a.rs", Some(ArtifactHash::of_content(b"a"))),
+            ("tests/c.rs", Some(ArtifactHash::of_content(b"c"))),
+        ],
+    );
+    records.push(approve(&then, &ledger(records.clone()), 2, 1003, 20, None));
+    let l = ledger(records);
+    let mut readings = ArtifactReadings::new();
+    readings.insert(file_space(), name("tests/a.rs"), ArtifactReading::absent());
+    readings.insert(file_space(), name("tests/c.rs"), ArtifactReading::absent());
+    let gone = PinnedNames::of(&l).gone(&readings);
+
+    let renamed = |n: &str, s: Option<u8>| {
+        MoveCandidate::new(
+            name(n),
+            FoundBy::Renamed {
+                similarity: s.map(|s| Similarity::new(s).unwrap()),
+            },
+            true,
+        )
+    };
+    let same = |n: &str| MoveCandidate::new(name(n), FoundBy::SameContent, true);
+    let answer = SpaceSuggestions::Suggested(BTreeMap::from([(
+        name("tests/a.rs"),
+        NameSuggestions {
+            candidates: vec![
+                renamed("z", Some(60)),
+                renamed("v", None),
+                renamed("y", Some(90)),
+                renamed("w", Some(99)),
+                same("w"),
+                // The other gone name, and the name itself: never a candidate.
+                renamed("tests/c.rs", Some(100)),
+                same("tests/a.rs"),
+            ],
+            notes: Vec::new(),
+        },
+    )]));
+    let out = gone.suggest(BTreeMap::from([(file_space(), answer)]));
+    assert!(out.cannot_suggest.is_empty());
+    let names: Vec<_> = out.absent.iter().map(|s| s.gone().name().clone()).collect();
+    assert_eq!(names, [name("tests/a.rs"), name("tests/c.rs")]);
+    let order: Vec<(&str, FoundBy)> = out.absent[0]
+        .candidates()
+        .iter()
+        .map(|c| (c.name().as_str(), c.found()))
+        .collect();
+    assert_eq!(
+        order,
+        [
+            ("w", FoundBy::SameContent),
+            ("y", renamed("y", Some(90)).found()),
+            ("z", renamed("z", Some(60)).found()),
+            ("v", renamed("v", None).found()),
+        ]
+    );
+    // A name the adapter gave nothing for is listed with none.
+    assert!(out.absent[1].candidates().is_empty());
+
+    // A space with no answer, or one that cannot suggest, keeps its names, with none.
+    let gone = PinnedNames::of(&l).gone(&readings);
+    let out = gone.suggest(BTreeMap::new());
+    assert_eq!(out.cannot_suggest, BTreeSet::from([file_space()]));
+    assert_eq!(out.absent.len(), 2);
+    assert!(Similarity::new(101).is_none());
 }

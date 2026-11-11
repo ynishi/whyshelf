@@ -1,0 +1,125 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a1584536cadfafd014ea0d9aff59d0b0b1561a09",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:624577b483b2ebfa483b9831cec860700650caf0be8945d4da75fd913ac54270",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moves_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8c40b2ca9a36d54847299494e50312c2ab2fa7f7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:93cc6b7e0a72a563b4a260b219e5b20ba465330eba2fb7b38b7b84885a8849c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2f971e88367484254e5536cd8856378320aa65c7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bd6f103dc7df6be87abfc7baa8fff48b8d791a34c250e2bc0bc7cc0c21f1a636",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "68b279b94ebd39b8eac9fac6ecc8b35ef84420ad",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:cf70757dfc449ccc6faa5d4d3d0e009d3dbf1997ce75a3f54e533f0ea53b6047",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/git.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794382011966,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7b851de2655aeec6ed6d7f8845f16438a7968ab8",
+      "hash": "sha256:f87f51b8bd50ed101be705f87f2cdc0cdb37eef87c02a532672312696010a175",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    },
+    {
+      "address": "c74b2ee2aed6c8bcfcc57f138bfa6926eb92d61f",
+      "hash": "sha256:1cce62a572259e1e57a23ec85cec8acc40c478dcedee3048d8120f97a37cd32a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bc99-7728-b8d7-deea06f9c49b"
+    },
+    {
+      "address": "fa682d1cff9fb5403d4f6c666d9b1d28f8c87454",
+      "hash": "sha256:5aaeac3feef8c9479a63212918254e3216c363b8abaeeffeaa5bd0aadb8f402b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "60"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6"
+    }
+  ],
+  "id": "01a1c980-9e57-72f7-9730-00e14728a5bb",
+  "kind": "decision",
+  "reason": "The gone names, the suggestions of the space file, its bounds and its safety, and the command on the binary, are tested as DEC-60, DEC-7 and DEC-45 say (#69); checked by three rounds of blind review",
+  "revision": "cd81a89022f654f78f7867fce54d41ff31af007b",
+  "seen": "sha256:6ae92222abf041166e3a6578db83d7fc371feb73d70ad4b3b9a2d5e43c887063",
+  "seen_address": "d52809895bef57a7db569c0a8781840bdebccd6f",
+  "subject": "01a1c952-60fb-7278-821f-98cf49e06403",
+  "v": 1,
+  "verb": "approve"
+}

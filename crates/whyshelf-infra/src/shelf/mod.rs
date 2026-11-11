@@ -28,6 +28,7 @@
 //! | the Markdown files of the books | [`DocSource`], [`DocWrite`], [`DocReplace`] | [`docs`] |
 //! | `.whyshelf/ledger/<id>.json` | [`LedgerRead`], [`LedgerAppend`] | [`ledger`] |
 //! | what links to artifacts name, by space | [`ArtifactSource`] | [`artifact`] |
+//! | where a pinned artifact that is gone may have moved, by space | [`MoveSource`] | [`artifact`] (for `file`: the same content, Git's renames) |
 //! | content kept by address, read back by the adapter of the documents or of the space | [`ContentStore`] | [`Project`], to [`docs`] or [`artifact`] |
 //! | the project's version control | [`RevisionSource`] | [`git`] |
 //! | none | [`Clock`], [`IdSource`], [`ActorSource`] | [`system`] |
@@ -37,6 +38,7 @@
 //! adapters that use it know they are Git's.
 //!
 //! [`ArtifactSource`]: whyshelf_core::app::shelf::ArtifactSource
+//! [`MoveSource`]: whyshelf_core::app::shelf::MoveSource
 //! [`ContentStore`]: whyshelf_core::app::shelf::ContentStore
 //! [`RevisionSource`]: whyshelf_core::app::shelf::RevisionSource
 //! [`ContentAddress`]: whyshelf_core::domain::shelf::artifact::ContentAddress
@@ -69,7 +71,6 @@ pub mod git;
 pub mod ledger;
 pub mod system;
 
-use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 
 use whyshelf_core::app::shelf::{ContentOf, ContentStore, ShelfRead, ShelfWrite};
@@ -136,18 +137,31 @@ impl Project {
 /// Content read back by the adapter that named its address: the documents' for a
 /// document's file, the space's for an artifact.
 impl ContentStore for Project {
-    type Error = Infallible;
+    type Error = StoreError;
 
     async fn read_back(
         &self,
         of: &ContentOf,
         address: &ContentAddress,
-    ) -> Result<Option<Vec<u8>>, Infallible> {
+    ) -> Result<Option<Vec<u8>>, StoreError> {
         Ok(match of {
-            ContentOf::Doc => self.docs.read_back(address).await,
-            ContentOf::Artifact(space) => self.artifacts.read_back(space, address).await,
+            ContentOf::Doc => self.docs.read_back(address).await?,
+            ContentOf::Artifact(space) => self.artifacts.read_back(space, address).await?,
         })
     }
+}
+
+/// Why content could not be read back: the adapter that named its address could not
+/// ask Git (it could not be run, or took too long). Content that is not there is no
+/// error: it reads back as none.
+#[derive(Debug, thiserror::Error)]
+pub enum StoreError {
+    /// The adapter of the documents.
+    #[error(transparent)]
+    Docs(#[from] docs::DocsError),
+    /// The adapter of a space.
+    #[error(transparent)]
+    Artifacts(#[from] artifact::SpacesError),
 }
 
 impl ShelfRead for Project {
@@ -157,8 +171,13 @@ impl ShelfRead for Project {
     type Clock = SystemClock;
     type Artifacts = ArtifactSpaces;
     type Store = Self;
+    type Moves = ArtifactSpaces;
 
     fn artifacts(&self) -> &ArtifactSpaces {
+        &self.artifacts
+    }
+
+    fn moves(&self) -> &ArtifactSpaces {
         &self.artifacts
     }
 

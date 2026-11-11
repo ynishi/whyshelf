@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a55e392fc9e66306e3413b67f95d577e435440d2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d1584469a7a11d53491f708a72a9bb00f1a748a7ef04bb2445ac7d9b25bf703",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "606356a20ec45d955207fab2fdbfe063145761bf",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:370b60771ba3099105548b1cb39f6f65ad01e9591cc93d7e02ea87380f7cfd6d",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794382006919,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3400dbc2f7d06a0abae6df7e3c489bd5f4a8f624",
+      "hash": "sha256:d6fe01cfa0864a168ed390e185d99b585cb5416067bf091d402792186f174438",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "57"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8ad-9bab-71bd-a155-f52d9ae7d16d"
+    }
+  ],
+  "id": "01a1c980-9973-714f-8d14-2e12d9355a57",
+  "kind": "decision",
+  "reason": "Every Git call goes through one runner that lets nothing of the repository choose a program or write; addresses keep Git's own conversions with every filter driver shut out; a link is followed while it stays inside the root; moves joins the reading commands every e2e test runs (#69); checked by three rounds of blind review",
+  "revision": "cd81a89022f654f78f7867fce54d41ff31af007b",
+  "seen": "sha256:18f6a11a1f7e98ad3ca6a7595bd30be410d525f8328ec6915beef0aa693a7a34",
+  "seen_address": "745a0f77e4c9ac57f1ffe17fc2db8b215b9fa64e",
+  "subject": "01a1c8ad-9d35-7282-94a1-975d88e8c664",
+  "v": 1,
+  "verb": "approve"
+}

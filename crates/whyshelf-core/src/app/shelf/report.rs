@@ -21,7 +21,7 @@ use crate::domain::shelf::freshness::{
 };
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{
-    Decision, DeclaredStatus, FrameRefusal, JudgementId, LedgerProblem, Record,
+    Decision, DeclaredStatus, FrameRefusal, JudgementId, LedgerProblem, MoveSuggestions, Record,
 };
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::HeldBack;
@@ -412,6 +412,20 @@ pub struct StatsReport {
     /// The measures ([`stats::of`](crate::domain::shelf::stats::of)).
     pub stats: Stats,
     /// The keys of the valid documents, for the documents `health` names.
+    pub names: Names,
+    /// What is wrong around the documents.
+    pub health: Health,
+}
+
+/// The result of `moves`: the names approvals pinned something at that have nothing
+/// behind them now, each with where its space's adapter suggests it moved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MovesReport {
+    /// The gone names with their candidates, and the spaces that cannot suggest
+    /// ([`GoneNames::suggest`](crate::domain::shelf::ledger::GoneNames::suggest)).
+    pub suggestions: MoveSuggestions,
+    /// The keys of the valid documents, for the documents that pin a gone name and
+    /// those `health` names.
     pub names: Names,
     /// What is wrong around the documents.
     pub health: Health,
