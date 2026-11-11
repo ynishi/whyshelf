@@ -2508,7 +2508,9 @@ mod same_meaning;
 
 use moved::moved_way;
 pub use moved::{
-    Moved, MovedOf, MovedProblem, MovedRefusal, MovedTo, ReadPin, frame_moved, moved_space,
+    FoundBy, GoneName, GoneNames, MoveCandidate, MoveNote, MoveSuggestion, MoveSuggestions, Moved,
+    MovedOf, MovedProblem, MovedRefusal, MovedTo, NameSuggestions, NoteKind, PinnedNames,
+    PinnedThere, ReadPin, Similarity, SpaceSuggestions, frame_moved, moved_space,
 };
 use same_meaning::declared_way;
 pub use same_meaning::{

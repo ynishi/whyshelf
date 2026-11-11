@@ -300,6 +300,25 @@
 //! declaration is a record like the others, and `judge withdraw <record id>` takes it
 //! back.
 //!
+//! `moves` finds the names to declare, and declares nothing. It lists every name a
+//! `judge moved` could be declared of now (a name some pin of something there, of an
+//! approval that stands, is read as through the moves declared) that has nothing
+//! behind it, and asks the adapter of its space where it may have gone. For `file`,
+//! a file there now with the content pinned comes first (`same_content`, in the
+//! hash the pin was made with, among the files Git lists, or outside Git the files
+//! under the root but those in a directory or of a name that starts with `.`), then
+//! the renames Git's rename detection pairs between the commit the approval was made
+//! at and the index (`renamed`, with Git's similarity). The index holds what `git mv`
+//! and `git add` put there, so a file moved and edited is found once it is added,
+//! and nothing of the work tree is read through a filter. The search for the same
+//! content reads only regular files, through a symbolic link only while it stays
+//! inside the root (as every reading of a file does), each of at most
+//! 16 MiB, and stops at 20,000 files or 512 MiB; a name pins are read as in two
+//! spaces is listed with no candidate, as `judge moved` refuses it. What could not be
+//! looked at is a `note` of the name. A space that has no way to suggest
+//! (`rust-item`, for now) is listed in `cannot_suggest`, and its names with no
+//! candidate.
+//!
 //! ## What an approval saw
 //!
 //! `get <ref> --approved` lists what the approval that stands saw (the
@@ -342,6 +361,9 @@
 //!   stats [--since <time>]    how the work went, from the ledger: approvals made again, the time
 //!                             documents stayed pending, the runs of judge, and what changed
 //!                             under approvals made again
+//!   moves                     the pinned names with nothing behind them now, each with the
+//!                             documents that pin it and where it may have moved (for files:
+//!                             the same content, then Git's renames); it declares nothing
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>] [--again]
 //!                             approve each; one whose standing approval a new one would
@@ -487,8 +509,10 @@
 //!   file.
 //! - None of these commands needs a Git repository. Git is used, when it is there,
 //!   to name and read back the content an approval saw and to keep `HEAD` as a hint
-//!   of the revision; its `user.name`, read even outside a repository, says who
-//!   judges when nothing else does. No freshness depends on any of it.
+//!   of the revision, and for `moves` to list the files of the work tree and the
+//!   renames since an approval's commit; its `user.name`, read even outside a
+//!   repository, says who judges when nothing else does. No freshness depends on any
+//!   of it.
 //!
 //! ## Output and exit status
 //!
@@ -505,7 +529,7 @@
 //! and `reason`, null when none was given), or null while it is pending; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
 //! its `space`) and a `detail` sentence; every answer that reads the documents (`check` and
-//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `stale`, `stats`, `diff`) carries
+//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `stale`, `stats`, `moves`, `diff`) carries
 //! `health` (files that are no document, cycles, records that contradict one another
 //! or cannot be read). The answers of the writes, of `map` and of `schema` carry
 //! none.
@@ -583,6 +607,36 @@
 //! the records and of the identities, so the same ledger and documents always give
 //! the same measures. `health` beside them is read as every answer's is.
 //!
+//! `moves` answers `{"absent": [{"space", "name", "pinned_by": [{"id", "key"}],
+//! "candidates": [{"name", "found", "similarity", "present"}], "notes": [{"kind",
+//! "detail"}]}], "cannot_suggest": [...], "health", "drawing"}`: the gone names by
+//! space and then by name, each with the documents whose approvals pin it; its
+//! candidates `same_content` first, then `renamed` from the most alike
+//! (`similarity`, a percent, null when none was given), then by name, a candidate
+//! that is the name itself or another gone name left out, each a name as written on
+//! disk (a move in case only is one); `present` whether something is at the
+//! candidate now; `notes` what could not be looked at, each `kind` one of
+//! `in_two_spaces`, `no_repository`, `no_revision`, `unknown_revision`,
+//! `history_unreadable`, `scan_truncated`, `unreadable_skipped`, `too_large_skipped`,
+//! in that order, each once, with a `detail` sentence; `cannot_suggest` the spaces
+//! of gone names whose adapter cannot suggest, sorted. `drawing` is the same as text
+//! (`jq -r .drawing`). A file or a directory that cannot be read, a history that
+//! cannot be read and a bound reached are notes, and the answer is given: exit 0. A
+//! declaration that cannot be used is exit 2, as for every reading command, and a
+//! port that fails (a ledger or a document that cannot be read, Git that cannot be
+//! run or takes longer than 30 s for a listing) exit 3.
+//!
+//! What Git may and may not do, for `moves` and every command: it runs as the `git`
+//! on the path, with no shell and no prompt; it reads the repository's settings and
+//! ignore rules; it runs no program a repository's settings name (no file system
+//! monitor, no attributes file of the settings or the system, no filter driver, text
+//! conversion or external diff: every driver the settings define is shut out on the
+//! command line, while Git's own line-ending conversion, which runs no program, is
+//! kept, so the address of a text file of a repository that converts line endings
+//! reads back); it
+//! writes nothing (no object, no refreshed index, no object fetched by a partial
+//! clone); and each call is stopped after 30 s.
+//!
 //! `fmt` answers `{"rewritten": [...], "in_form": <count>, "not_in_form": null,
 //! "left_alone": [{"file", "reason", "line", "detail"}]}`, the files by their path
 //! under the root; `fmt --check` answers the same with `rewritten` empty and
@@ -592,6 +646,14 @@
 //! `linked` or `changed`. A
 //! declaration that cannot be used is exit 2, as for every reading command, and a
 //! file that cannot be read or written exit 3.
+//!
+//! ## For implementers of the ports
+//!
+//! `ShelfRead` has a port more, `type Moves: MoveSource` with `fn moves()`, which
+//! `moves` asks. A type of your own that implements `ShelfRead` does not build
+//! until it names one: a breaking change of the library, before 1.0. A
+//! `MoveSource` that has no way to suggest answers `SpaceSuggestions::CannotSuggest`
+//! for every space.
 //!
 //! ## Not yet in books
 //!

@@ -21,6 +21,7 @@
 //! | [`judge`](ShelfApp::judge) | **yes** | [`JudgedAll`]: the records that were appended ([`Judged`]), with the addresses of what an approval stood on and the revision, and the approvals left out because they would only repeat a fresh one, each with why |
 //! | [`approve_stale`](ShelfApp::approve_stale) | **yes** | [`StaleApproved`]: the approvals made again, upstream first and in one run, of every expired or stale one that would hold once made, and those left out, each with why |
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
+//! | [`moves`](ShelfApp::moves) | no | [`MovesReport`]: the names approvals that stand pinned something at that have nothing behind them now, each with the documents that pin it and the names its space's adapter suggests it moved to (by the same content, or by a rename in the space's history), and the spaces that cannot suggest |
 //! | [`moved`](ShelfApp::moved) | **yes** | [`Moved`](crate::domain::shelf::ledger::Moved): the declarations that an artifact moved from one name to another, after the space's adapter said the old name has nothing and the new one has something |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
@@ -61,6 +62,7 @@ mod fmt;
 mod judge;
 mod load;
 mod moved;
+mod moves;
 mod new_doc;
 pub mod ports;
 mod read;
@@ -88,6 +90,8 @@ mod fmt_tests;
 #[cfg(test)]
 mod moved_tests;
 #[cfg(test)]
+mod moves_tests;
+#[cfg(test)]
 mod new_doc_tests;
 #[cfg(test)]
 mod preset_tests;
@@ -113,14 +117,15 @@ pub use new_doc::{Created, NewDocRequest};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
     DocReplace, DocSource, DocWrite, FileForm, Form, IdSource, LedgerAppend, LedgerContents,
-    LedgerRead, Replacement, RevisionSource, ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord,
-    UnreadableWhy,
+    LedgerRead, MoveSource, Replacement, RevisionSource, ShelfPort, ShelfRead, ShelfWrite,
+    UnreadableRecord, UnreadableWhy,
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
     DownstreamEdge, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport,
-    MovedAway, Names, Row, StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport,
-    Uncovered, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport, UpstreamEdge, UpstreamEnd,
+    MovedAway, MovesReport, Names, Row, StaleEntry, StaleReport, StatsReport, StatusReport,
+    TraceReport, Uncovered, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport, UpstreamEdge,
+    UpstreamEnd,
 };
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use unlinked::{UnlinkedAsk, UnlinkedFilter};

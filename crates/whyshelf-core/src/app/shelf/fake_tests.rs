@@ -27,13 +27,14 @@ use crate::domain::shelf::schema::{
 use super::ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
     DocReplace, DocSource, DocWrite, FileForm, Form, IdSource, LedgerAppend, LedgerContents,
-    LedgerRead, Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
+    LedgerRead, MoveSource, Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
 };
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings,
     Comparison, ContentAddress, Revision, Space,
 };
+use crate::domain::shelf::ledger::{GoneName, SpaceSuggestions};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Drive a future to completion on the current thread. The fakes never wait.
@@ -245,6 +246,11 @@ pub(super) struct FakeShelf {
     pub(super) replaced: Mutex<usize>,
     /// The files someone edits after the reading and before the replacement.
     pub(super) edited_before_replace: Mutex<BTreeSet<RelPath>>,
+    /// What the source of suggested moves answers, by space; a space with none
+    /// suggests nothing for any name.
+    pub(super) move_answers: Mutex<BTreeMap<Space, SpaceSuggestions>>,
+    /// What each asking for suggestions asked: the space and its gone names, in order.
+    pub(super) suggest_asked: Mutex<Vec<(Space, Vec<ArtifactName>)>>,
 }
 
 /// The space of the files.
@@ -316,7 +322,19 @@ impl FakeShelf {
             forms: Mutex::new(BTreeMap::new()),
             replaced: Mutex::new(0),
             edited_before_replace: Mutex::new(BTreeSet::new()),
+            move_answers: Mutex::new(BTreeMap::new()),
+            suggest_asked: Mutex::new(Vec::new()),
         }
+    }
+
+    /// From now on the source of suggested moves answers `answer` for `space`.
+    pub(super) fn answer_moves(&self, space: &Space, answer: SpaceSuggestions) {
+        lock(&self.move_answers).insert(space.clone(), answer);
+    }
+
+    /// What the source of suggested moves was asked, in order.
+    pub(super) fn suggest_asked(&self) -> Vec<(Space, Vec<ArtifactName>)> {
+        lock(&self.suggest_asked).clone()
     }
 
     /// From now on the file at `at` stands to the form as `form` says.
@@ -739,6 +757,26 @@ impl RevisionSource for FakeShelf {
     }
 }
 
+impl MoveSource for FakeShelf {
+    type Error = FakeError;
+
+    async fn suggest(
+        &self,
+        space: &Space,
+        gone: &[GoneName],
+    ) -> Result<SpaceSuggestions, FakeError> {
+        self.check()?;
+        lock(&self.suggest_asked).push((
+            space.clone(),
+            gone.iter().map(|g| g.name().clone()).collect(),
+        ));
+        Ok(lock(&self.move_answers)
+            .get(space)
+            .cloned()
+            .unwrap_or_else(|| SpaceSuggestions::Suggested(BTreeMap::new())))
+    }
+}
+
 impl ShelfRead for FakeShelf {
     type Schemas = Self;
     type Docs = Self;
@@ -746,6 +784,11 @@ impl ShelfRead for FakeShelf {
     type Clock = Self;
     type Artifacts = Self;
     type Store = Self;
+    type Moves = Self;
+
+    fn moves(&self) -> &Self {
+        self
+    }
 
     fn artifacts(&self) -> &Self {
         self

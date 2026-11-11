@@ -8,4 +8,4 @@ rustdoc: ["whyshelf_core::domain::shelf::artifact::ArtifactReading", "whyshelf_c
 serves: ["REQ-12", "REQ-2"]
 title: "A name resolves to present, absent, cannot tell or not a name"
 ---
-Every name asked about has one answer from its adapter: present, with a hash per comparison and an address when it can say; absent; cannot tell now, with why; or not a name, with why. An approval that would pin a name that cannot be told now is refused. A pinned name that cannot be told later is a notice and changes no freshness, and check lists such names under unknown and stays clean.
+Every name asked about has one answer from its adapter: present, with a hash per comparison and an address when it can say; absent; cannot tell now, with why; or not a name, with why. A name of the space file whose path holds a symbolic link is read through it when its canonical path lies inside the root; one that leaves the root, or a link broken or in a loop, cannot be told. An approval that would pin a name that cannot be told now is refused. A pinned name that cannot be told later is a notice and changes no freshness, and check lists such names under unknown and stays clean.
