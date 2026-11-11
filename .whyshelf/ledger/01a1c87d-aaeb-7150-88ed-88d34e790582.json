@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794365041256,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ebc34ec601e505b5bf42173a87ce681430f69229",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    }
+  ],
+  "id": "01a1c87d-aaeb-7150-88ed-88d34e790582",
+  "kind": "decision",
+  "reason": "The end-to-end tests are one file per feature, and a guard keeps one file from serving many verifications (#60); checked by a blind review that compared every moved test with the old file, every finding fixed",
+  "revision": "d080c20bf062d54086f8b98e199abcee01a57f2c",
+  "seen": "sha256:13256f0030e58425f7c910edee07e3981a2ffede880608ffe74fda1cecdb6eca",
+  "seen_address": "e5a274a6e1888c63aedc31de7d7d8ae92a07fc4d",
+  "subject": "01a1c877-8fbd-7353-9e60-cfe043fb39a9",
+  "v": 1,
+  "verb": "approve"
+}

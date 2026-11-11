@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "674f81af5e918067800d8c676b03ea799c908604",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2bb3f2fa245bd1661e0d9089bca3429c4e240cc4c9a269b3afed8b24e79877f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d898c108e68922d7f54b3dd1ee8abafb14de0506",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:328110718dcbd0b7d35b1fd8138adf1c44bb266aea36e96d82c5a9d1820e7be6",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/who_decided.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794365042003,
+  "expires": null,
+  "frame": [
+    {
+      "address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+      "hash": "sha256:8a7484e072bdb063dd1c2cfc2af5c5ac0d055149aa9ee10f83fc58495f330902",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "40"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c577-33e1-735e-b992-19f40a27438a"
+    }
+  ],
+  "id": "01a1c87d-b0b3-753e-a670-dd3e2ab1e46f",
+  "kind": "decision",
+  "reason": "Each verification names the file of its own feature and the shared helpers instead of command_line.rs, the tests unchanged in what they check; V-28, V-30, V-35, V-44 and REQ-13 restated; stats joins the reading commands; temporary directories hold a counter (#60); checked by a blind review",
+  "revision": "d080c20bf062d54086f8b98e199abcee01a57f2c",
+  "seen": "sha256:131d6ebfe4ad800c98d428c187ed282468b923cede40f52785ce9e7fa9009130",
+  "seen_address": "3ce4079a1e8ed0f82c45d44bc70887a2a85d26af",
+  "subject": "01a1c765-2316-73a9-a790-6c7f0154d99b",
+  "v": 1,
+  "verb": "approve"
+}

@@ -7,6 +7,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const BOOKS: &str = r#"[[book]]
@@ -21,13 +22,21 @@ required = true
 
 const NOTE: &str = "---\nid: \"01a1c4f0-0000-7000-8000-000000000001\"\nkey: \"N-1\"\ntitle: \"A note\"\n---\nThe body.\n";
 
-/// A fresh, empty project directory of its own.
-fn project() -> PathBuf {
+/// How many projects this process has made: with the test's name, it keeps two
+/// tests that run at once (in the same tick of a coarse clock) out of one directory.
+static MADE: AtomicUsize = AtomicUsize::new(0);
+
+/// A fresh, empty project directory of its own, for the test `test`.
+fn project(test: &str) -> PathBuf {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("a clock after 1970")
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("whyshelf-stale-{}-{nanos}", std::process::id()));
+    let count = MADE.fetch_add(1, Ordering::SeqCst);
+    let dir = std::env::temp_dir().join(format!(
+        "whyshelf-stale-{test}-{}-{count}-{nanos}",
+        std::process::id()
+    ));
     fs::create_dir_all(dir.join(".whyshelf")).expect("the project directory");
     fs::create_dir_all(dir.join("notes")).expect("the book directory");
     fs::write(dir.join(".whyshelf/books.toml"), BOOKS).expect("the declaration");
@@ -51,7 +60,7 @@ fn exit_of(dir: &Path, args: &[&str]) -> i32 {
 
 #[test]
 fn stale_exit_code_follows_whether_an_approval_holds() {
-    let dir = project();
+    let dir = project("stale_exit_code_follows_whether_an_approval_holds");
     assert_eq!(exit_of(&dir, &["judge", "approve", "N-1"]), 0);
     assert_eq!(exit_of(&dir, &["stale", "--exit-code"]), 0, "fresh");
 
