@@ -88,6 +88,13 @@ and this project adheres to
   `check` writes each name that is absent or cannot be told on stderr, and
   `stale --exit-code` exits 1 while an approval stands on a name that cannot
   be told (#56).
+- `whyshelf stats [--since <time>]`, a reading command that derives from the
+  ledger how the work went: approvals per document and per book with those
+  made again and those revoked, the time from a document's identity to its
+  first approval, the runs of `judge` (decisions of one time and actor) and
+  their sizes, and the documents and files whose pinned hash changed under
+  approvals made again. No measure reads a clock, so the same ledger gives the
+  same answer (#58).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
