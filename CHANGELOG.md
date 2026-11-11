@@ -132,6 +132,11 @@ and this project adheres to
   lists. A front matter that opens wrongly is never skipped, `new` refuses a
   key outside the range, and a book that declares none of them reads as
   before (#75).
+- A space `rust-test` names test functions (`<file>.rs::<module>::<fn>`), and
+  the built-in preset `test` pins each one's own tokens, so an edit of another
+  test in the file, or of whitespace, comments or docs, makes nothing stale.
+  It reads the file with a shallow scan of its tokens and runs no program
+  (#79).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
