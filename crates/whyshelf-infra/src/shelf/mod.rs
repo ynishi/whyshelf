@@ -15,7 +15,9 @@
 //!                                                    of its space (for `file`: the
 //!                                                    file at the path, blob name?;
 //!                                                    for `rust-item`: the item in
-//!                                                    the docs `cargo doc` wrote)
+//!                                                    the docs `cargo doc` wrote;
+//!                                                    for `rust-test`: the test
+//!                                                    function's tokens in its file)
 //!   an address of an approval          --docs / artifact-->  content read back, by the
 //!                                                    adapter that named it
 //!   Git: HEAD                          --git---->  Revision
@@ -86,6 +88,7 @@ use whyshelf_core::domain::shelf::artifact::ContentAddress;
 use artifact::ArtifactSpaces;
 use artifact::file::FileSpace;
 use artifact::rust_item::RustItemSpace;
+use artifact::rust_test::RustTestSpace;
 use books::BooksToml;
 use docs::MarkdownDocs;
 use git::Git;
@@ -133,6 +136,7 @@ impl Project {
             artifacts: ArtifactSpaces::of_project(
                 FileSpace::new(root.clone()),
                 RustItemSpace::new(root.clone(), cargo_target_dir),
+                RustTestSpace::new(root.clone()),
             ),
             git: Git::new(root.clone()),
             actor: ProjectActor::new(root, actor),
