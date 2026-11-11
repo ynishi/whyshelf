@@ -95,11 +95,18 @@ and this project adheres to
   their sizes, and the documents and files whose pinned hash changed under
   approvals made again. No measure reads a clock, so the same ledger gives the
   same answer (#58).
+- The answer of `whyshelf stats` carries a `drawing`, a plain text summary in
+  five sections that a person reads with `jq -r .drawing`, made from the
+  answer alone (#64).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
 ### Fixed
 
+- `--since` and `--until` take an RFC 3339 time with an offset or `Z`, or a
+  date written `YYYY-MM-DD` (the start of that day in UTC). A time with no
+  offset was read as its date, its time dropped in silence; it is now refused
+  with exit 2, as is a date in another form (#64).
 - whyshelf's own verifications say `e2e` for the tests that run the binary: a
   verification that rested on both kinds of test is split in two (#45).
 - A path names a file only as written, ASCII case included: on a file system that
