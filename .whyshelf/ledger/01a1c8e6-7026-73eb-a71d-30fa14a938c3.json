@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "84b76b5045ecca4bc6be6cbe46bb8cab00c86c50",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:991c3c5035bdeec5a7bd435d965c86d9019bcfd4bae0eb389011a35a8bbe7a77",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "604e120a21270dff0c8b3ac38fceae3d837b58eb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:58f74b2cef34f58f1acb67733292d0c5538b7021d11de1921a79a6a67b1cd021",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3cb157329c6b92ae7dd74e1a2345a2b59ee8a87c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ce98ea6d83ee5c9c69b55ee95274a4738ecd0197e5fbc000a62654128ddebe6e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "149bbca1cff8f22e8f44abafeb17f8f8939eaf5c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b4dcaabaeec5acf1a8deaca473ae2357b46fefd16adb6b604c1b34d0480a4e7d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "45d45eb9016f7a3ec1895763cf27d6f9aae30e83",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:36b4966b7d0d71abb9844c1d8e562635f0a5470e06a63225f36c2d11457e0663",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794371907347,
+  "expires": null,
+  "frame": [
+    {
+      "address": "40df97284f46b7fc9cfd0ceb0d410c2f5221e77d",
+      "hash": "sha256:1d5e2748dcb01a60123690bea74c4e74b05d788e33867b6b632a42663b245425",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "9"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c434-c205-7538-9b17-4fe0f9900392"
+    }
+  ],
+  "id": "01a1c8e6-7026-73eb-a71d-30fa14a938c3",
+  "kind": "decision",
+  "reason": "judge answers judged and left_out and its tests unwrap the new answer; DEC-27 and DEC-51 restated for an approval that repeats; the e2e test of stats passes --again (#66); checked by two rounds of blind review",
+  "revision": "0d0285d4c1ba4da16cad3d2227b39c0796d531e0",
+  "seen": "sha256:38358f43b4b51b85481343dca7fc35c56b00810d4eaf83b22793084f5d12fd24",
+  "seen_address": "e0815a96896a7d3441e576a614d6a2ea7f666f11",
+  "subject": "01a1c434-c247-7331-9063-4647de8cf529",
+  "v": 1,
+  "verb": "approve"
+}

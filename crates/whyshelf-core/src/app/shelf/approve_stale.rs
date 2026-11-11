@@ -7,6 +7,7 @@
 //!     expired or stale ── upstream_first ──► one at a time:
 //!        held_back by an upstream ──────────────────────► left out (StandsOn)
 //!        frame_approve refuses ─────────────────────────► left out (Refused)
+//!        would repeat the approval that stands ─────────► left out (Repeats)
 //!        otherwise decided, on the ledger the ones before it left
 //!   every one decided ──► written, all together
 //! ```
@@ -16,8 +17,12 @@
 //! that is gone, an upstream that is not valid, a cycle). Nor is one whose frame the
 //! model refuses now, nor one a `Depends` link of which names a document that is
 //! broken, pending (never approved: approve it first with `judge approve`) or itself
-//! left out ([`held_back`]). Each is left out with why, never passed over in
-//! silence. A pending document is not touched.
+//! left out for any reason but a repeat ([`held_back`]). Nor is one stale only
+//! through its upstream's upstream, whose hash is new, when the run approved its
+//! upstream again: what it pinned is unchanged, so an approval now would repeat it
+//! ([`repeated`]), and it holds again without one. Such a repeat stands, so it holds
+//! back nothing on it. Each is left out with why, never passed over in silence. A
+//! pending document is not touched.
 //!
 //! The documents are taken upstream first ([`upstream_first`]), so every upstream of
 //! the set is decided, or left out, before what stands on it, and one pass is the
@@ -31,24 +36,24 @@
 //!
 //! [`upstream_first`]: crate::domain::shelf::order::upstream_first
 //! [`held_back`]: crate::domain::shelf::order::held_back
+//! [`repeated`]: crate::domain::shelf::ledger::repeated
 
 use std::collections::BTreeSet;
 
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonBlank;
-use crate::domain::shelf::doc::DocKey;
-use crate::domain::shelf::freshness::{Degradation, Freshness, Severity, Standing};
-use crate::domain::shelf::ledger::{DecisionProblem, FrameRefusal, JudgedAt};
+use crate::domain::shelf::freshness::{Freshness, Severity, Standing};
+use crate::domain::shelf::ledger::{DecisionProblem, JudgedAt};
 use crate::domain::shelf::lookup::Reference;
-use crate::domain::shelf::order::{HeldBack, held_back, upstream_first};
+use crate::domain::shelf::order::{held_back, upstream_first};
 
 use super::ShelfApp;
 use super::error::ShelfError;
-use super::judge::{JudgeRequest, Judgement, taken};
+use super::judge::{Decided, JudgeRequest, Judgement, taken};
 use super::load::load;
 use super::ports::ShelfWrite;
-use super::report::{Judged, Names};
+use super::report::{Judged, LeftOut, LeftOutWhy, Names};
 
 /// A request to approve again every approval that is expired or stale.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,34 +65,6 @@ pub struct ApproveStaleRequest {
     /// When every approval made lapses, if they do: one expiry for the whole run. An
     /// expiry an approval had before is not carried over.
     pub until: Option<JudgedAt>,
-}
-
-/// Why an approval that does not hold was not approved again.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LeftOutWhy {
-    /// Its approval is broken now.
-    Broken(Degradation),
-    /// The model refuses its frame now (an upstream decided against, an artifact that
-    /// cannot be told, a link that cannot be followed, a cycle it would close).
-    Refused(FrameRefusal),
-    /// A `Depends` link names an upstream that is broken, pending, or left out.
-    StandsOn {
-        /// The link, the upstream and why.
-        held: HeldBack,
-        /// The upstream's key, when it is valid.
-        key: Option<DocKey>,
-    },
-}
-
-/// An approval that does not hold and was not approved again.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LeftOut {
-    /// The document.
-    pub doc: DocId,
-    /// Its key, when it is valid.
-    pub key: Option<DocKey>,
-    /// Why it was left out.
-    pub why: LeftOutWhy,
 }
 
 /// What `judge approve --stale` wrote, and what it left out.
@@ -152,7 +129,13 @@ impl<P: ShelfWrite> ShelfApp<P> {
 
         let mut judged = Vec::new();
         for id in upstream_first(&loaded.shelf, &loaded.ledger, &again) {
-            let left: BTreeSet<DocId> = left_out.iter().map(|l| l.doc).collect();
+            // An upstream left out because an approval would repeat its own stands,
+            // and holds nothing back: what stands on it is decided as any other.
+            let left: BTreeSet<DocId> = left_out
+                .iter()
+                .filter(|l| !matches!(l.why, LeftOutWhy::Repeats { .. }))
+                .map(|l| l.doc)
+                .collect();
             if let Some(held) = held_back(&loaded.shelf, &assessment, id, &left) {
                 left_out.push(LeftOut {
                     doc: id,
@@ -171,6 +154,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
                         judgement: Judgement::Approve {
                             until: request.until,
                             reason: Some(request.reason.clone()),
+                            again: false,
                         },
                         reference: Reference::Id(id),
                         actor: request.actor.clone(),
@@ -178,10 +162,15 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 )
                 .await;
             match decided {
-                Ok(one) => {
+                Ok(Decided::Judged(one)) => {
                     taken(&mut loaded, &one);
                     judged.push(one);
                 }
+                // A candidate stale only through its upstream's upstream, whose hash
+                // is new: this run approved its upstream again (on the same hash),
+                // so what its own approval pinned has not changed, one made now
+                // would repeat it, and it holds again without one.
+                Ok(Decided::LeftOut(left)) => left_out.push(left),
                 Err(ShelfError::Refused(refusal)) => left_out.push(LeftOut {
                     doc: id,
                     key: key_of(id),

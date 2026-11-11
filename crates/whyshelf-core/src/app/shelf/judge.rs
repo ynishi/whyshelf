@@ -38,6 +38,11 @@
 //! deprecation is therefore a check: the judgement is refused unless the document
 //! named is one of [`Successors::of`] the document deprecated.
 //!
+//! **An approval that adds nothing.** Between the frame and the record, an approval
+//! is asked of the domain whether it would only repeat the one that stands
+//! ([`repeated`]); when it would, and the request does not say `again`, it is left
+//! out ([`LeftOutWhy::Repeats`]): no record, no refusal.
+//!
 //! **`revoke`.** A revocation withdraws a decision, not a document, so the reference
 //! names the document and the decision withdrawn is the one that stands about it now
 //! ([`Ledger::status_of`]).
@@ -54,6 +59,7 @@ use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
     ApproveFrame, Decision, DecisionVerb, DeclaredStatus, JudgedAt, JudgementId, Ledger,
     PresentFrame, Record, RetireFrame, Revocation, frame_approve, frame_present, frame_retire,
+    repeated,
 };
 use crate::domain::shelf::lookup::Reference;
 
@@ -64,7 +70,7 @@ use super::ports::{
     ActorSource, DocSource, IdSource, LedgerAppend, RevisionSource, ShelfPort, ShelfWrite, port,
 };
 use super::read::identity;
-use super::report::Judged;
+use super::report::{Judged, JudgedAll, LeftOut, LeftOutWhy};
 
 /// Take a judgement decided into the reading, so the next of the run is decided on
 /// the ledger as it left it.
@@ -82,6 +88,10 @@ pub enum Judgement {
         until: Option<JudgedAt>,
         /// Why, if the person says.
         reason: Option<NonBlank>,
+        /// Make it even when it would only repeat the approval that stands
+        /// ([`repeated`]): for a person who read the document again and wants that
+        /// recorded. Without it, such an approval is left out.
+        again: bool,
     },
     /// The document is refused as it is now.
     Deny {
@@ -118,16 +128,24 @@ pub struct JudgeRequest {
     pub actor: Option<Actor>,
 }
 
+/// One judgement decided: a record to write, or an approval left out.
+pub(super) enum Decided {
+    /// The judgement, with the record to write.
+    Judged(Judged),
+    /// An approval not made, with why.
+    LeftOut(LeftOut),
+}
+
 impl<P: ShelfWrite> ShelfApp<P> {
-    /// Make a judgement and append it to the ledger. The only use case that writes a
-    /// decision.
+    /// Make a judgement and append it to the ledger, or leave out an approval that
+    /// would only repeat the one that stands: a run of one, as
+    /// [`judge_all`](ShelfApp::judge_all) makes it.
     ///
     /// A judgement the model refuses (a document that is not valid, a link that
     /// cannot be followed, a cycle, an expiry that is not in the future, nothing to
     /// revoke, a successor that is none) writes nothing.
-    pub async fn judge(&mut self, request: JudgeRequest) -> Result<Judged, ShelfError> {
-        let mut judged = self.judge_all(vec![request]).await?;
-        judged.pop().ok_or(ShelfError::NothingRequested)
+    pub async fn judge(&mut self, request: JudgeRequest) -> Result<JudgedAll, ShelfError> {
+        self.judge_all(vec![request]).await
     }
 
     /// Make several judgements in order, on one reading of the project, and append
@@ -144,19 +162,32 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// is refused, the error names it and nothing is written. (A port that fails
     /// half-way through the writes can still leave the first of them written; each is
     /// a record of its own, so what is there is sound.)
+    ///
+    /// An approval that would only repeat the one that stands about its document
+    /// ([`repeated`]: the new one would pin exactly what that one pins and lapse
+    /// when it lapses) is not made unless the request says `again`: it is left out
+    /// with why ([`LeftOutWhy::Repeats`]), and no record is written for it. A document
+    /// left out is no refusal: the others of the run are judged and written as
+    /// before, and a run that leaves out every one writes nothing, fails nothing and
+    /// never asks the actor port (who would judge is fetched only for a record).
     pub async fn judge_all(
         &mut self,
         requests: Vec<JudgeRequest>,
-    ) -> Result<Vec<Judged>, ShelfError> {
+    ) -> Result<JudgedAll, ShelfError> {
         let mut loaded = load(&self.ports).await?;
         let mut judged = Vec::with_capacity(requests.len());
+        let mut left_out = Vec::new();
         for request in requests {
-            let one = self.decide(&loaded, request).await?;
-            taken(&mut loaded, &one);
-            judged.push(one);
+            match self.decide(&loaded, request).await? {
+                Decided::Judged(one) => {
+                    taken(&mut loaded, &one);
+                    judged.push(one);
+                }
+                Decided::LeftOut(left) => left_out.push(left),
+            }
         }
         self.write(&judged).await?;
-        Ok(judged)
+        Ok(JudgedAll { judged, left_out })
     }
 
     /// Append the records of a run, every one decided, in order.
@@ -176,7 +207,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         &self,
         loaded: &Loaded,
         request: JudgeRequest,
-    ) -> Result<Judged, ShelfError> {
+    ) -> Result<Decided, ShelfError> {
         let subject = identity(loaded, &request.reference)?;
         let key = loaded.shelf.doc(subject).map(|doc| doc.key().clone());
         let now = loaded.now;
@@ -192,13 +223,23 @@ impl<P: ShelfWrite> ShelfApp<P> {
         }
         let mut successors = None;
         let (plan, reason) = match request.judgement {
-            Judgement::Approve { until, reason } => (
-                Plan::Approve(
-                    frame_approve(&loaded.shelf, &loaded.ledger, subject)?,
-                    until,
-                ),
+            Judgement::Approve {
+                until,
                 reason,
-            ),
+                again,
+            } => {
+                // The frame first, so what the model refuses stays refused; then
+                // whether the approval would add anything, which is the domain's.
+                let frame = frame_approve(&loaded.shelf, &loaded.ledger, subject)?;
+                if !again && let Some(approval) = repeated(&loaded.ledger, &frame, now, until) {
+                    return Ok(Decided::LeftOut(LeftOut {
+                        doc: subject,
+                        key,
+                        why: LeftOutWhy::Repeats { approval },
+                    }));
+                }
+                (Plan::Approve(frame, until), reason)
+            }
             Judgement::Deny { reason } => {
                 (Plan::Deny(frame_present(&loaded.shelf, subject)?), reason)
             }
@@ -285,13 +326,13 @@ impl<P: ShelfWrite> ShelfApp<P> {
             }
             _ => Vec::new(),
         };
-        Ok(Judged {
+        Ok(Decided::Judged(Judged {
             record,
             subject,
             key,
             successors,
             absent,
-        })
+        }))
     }
 
     /// The frame of an approval with the address of each document and artifact it

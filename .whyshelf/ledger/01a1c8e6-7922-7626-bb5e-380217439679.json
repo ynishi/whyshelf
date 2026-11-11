@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "5cd6ea0129d205ffbca15cc45a7d42fcdc882b31",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:42a2498ab22cfb0a4645b51c38c615d8531808943ac1b5544a8d75a475b60bbf",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6d076870ceb719e2097551a8ff94c80aa544f093",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2ba7dd1c649fe606c6ddf1a49e47e8671ec6fe71b115a913a4d91d08fb98e48e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0da9bc3a72ec49cf5bd244b90dff8f29f0877bb5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5800aa82103a94f93a69bccf4ecc9333efc725fcbbd65b10d9bc2c5c48910261",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9b1117c995c97dac2b151b09bda1843a979f37d3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4d7f3d3410e2dd47bc0947db714c47172ddbe0a4543f0da9cb2d17893e58067e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e2f572897ad3d9b4dd5a02827830a2dec99e4109",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f450ddb2a23789ba019f5accfa25d46b718b822058431fe982e02b1a6a1b3562",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794371907347,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bac0999d408e1c279c43992dc2812b698e24ee5e",
+      "hash": "sha256:5b166291dcdb398fe20cf946c63645890bec99b616c381db2abf7b24ef6099ba",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "47"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c64b-b4b9-723c-b0d7-3a6afd9617d3"
+    },
+    {
+      "address": "39252af38832187b59e9e968207026852ab259e5",
+      "hash": "sha256:c52ca9d0ec8e28a157346adaba371c02ebca30dc741450be4aab6cfcc6f40434",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "48"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c64b-b644-758a-85e6-34c76e900513"
+    }
+  ],
+  "id": "01a1c8e6-7922-7626-bb5e-380217439679",
+  "kind": "decision",
+  "reason": "judge answers judged and left_out and its tests unwrap the new answer; DEC-27 and DEC-51 restated for an approval that repeats; the e2e test of stats passes --again (#66); checked by two rounds of blind review",
+  "revision": "0d0285d4c1ba4da16cad3d2227b39c0796d531e0",
+  "seen": "sha256:6ef84a4d498e500efca487c4d6f0e020fba79d5ff19dcf05396c974dfb5dc924",
+  "seen_address": "4a2006417a18ef16a03d9d1ee03ff26f56a66f36",
+  "subject": "01a1c64b-b81b-7364-8bf1-27b28c0b3680",
+  "v": 1,
+  "verb": "approve"
+}

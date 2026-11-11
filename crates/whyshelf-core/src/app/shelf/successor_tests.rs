@@ -58,7 +58,10 @@ fn deny(reference: &str) -> JudgeRequest {
 #[test]
 fn a_deprecation_naming_a_successor_is_written_and_says_its_successors() {
     let mut app = app();
-    let judged = block_on(app.judge(deprecate("SP-1", Some("SP-2")))).unwrap();
+    let judged = block_on(app.judge(deprecate("SP-1", Some("SP-2"))))
+        .unwrap()
+        .judged
+        .remove(0);
     assert_eq!(judged.subject, docid(1));
     assert_eq!(
         judged.successors,
@@ -76,7 +79,10 @@ fn a_deprecation_naming_a_successor_is_written_and_says_its_successors() {
 #[test]
 fn a_deprecation_naming_no_successor_needs_none() {
     let mut app = app();
-    let judged = block_on(app.judge(deprecate("SP-3", None))).unwrap();
+    let judged = block_on(app.judge(deprecate("SP-3", None)))
+        .unwrap()
+        .judged
+        .remove(0);
     assert_eq!(judged.successors, Some(Successors::None));
     assert_eq!(app.ports().append_count(), 1);
 }

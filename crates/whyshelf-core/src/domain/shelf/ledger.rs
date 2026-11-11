@@ -166,6 +166,13 @@ impl FramePin {
     pub fn hash(&self) -> &DocHash {
         &self.hash
     }
+
+    /// What the pin stands on: the link, the upstream, its key and its hash. The
+    /// address is left out, as freshness never reads it (rule A4), so two pins with
+    /// the same value here stand on the same.
+    fn stands_on(&self) -> (&EntryName, DocId, &DocKey, &DocHash) {
+        (&self.link, self.target, &self.key, &self.hash)
+    }
 }
 
 /// What an approval saw of an artifact it stands on: a thing there with this hash
@@ -272,6 +279,49 @@ impl ArtifactPin {
     /// What was there when it was pinned.
     pub fn seen(&self) -> &PinnedArtifact {
         &self.seen
+    }
+
+    /// What the pin stands on: the link, the space and the name, the comparison and
+    /// what was there (a hash, or nothing). The address is left out (rule A4), and so
+    /// is how the record wrote the name: a record of before spaces names the same
+    /// artifact in [`PATH_ONLY_SPACE`].
+    fn stands_on(&self) -> (&EntryName, &ArtifactKey, &Comparison, ArtifactState) {
+        (
+            &self.link,
+            &self.artifact,
+            &self.comparison,
+            self.seen.state(),
+        )
+    }
+}
+
+/// What an approval stands on, pin by pin, as values: the hash of the approved
+/// document, every pin of an upstream and every pin of an artifact, each by
+/// [`FramePin::stands_on`] and [`ArtifactPin::stands_on`]. The one place two
+/// approvals are compared for what they stand on.
+#[derive(PartialEq, Eq)]
+struct StandsOn<'a> {
+    seen: &'a DocHash,
+    frame: BTreeSet<(&'a EntryName, DocId, &'a DocKey, &'a DocHash)>,
+    artifacts: BTreeSet<(
+        &'a EntryName,
+        &'a ArtifactKey,
+        &'a Comparison,
+        ArtifactState,
+    )>,
+}
+
+impl<'a> StandsOn<'a> {
+    fn of(
+        seen: &'a DocHash,
+        frame: &'a BTreeSet<FramePin>,
+        artifacts: &'a BTreeSet<ArtifactPin>,
+    ) -> Self {
+        Self {
+            seen,
+            frame: frame.iter().map(FramePin::stands_on).collect(),
+            artifacts: artifacts.iter().map(ArtifactPin::stands_on).collect(),
+        }
     }
 }
 
@@ -581,8 +631,9 @@ impl Decision {
         Self::assemble(id, frame.subject, verb, actor, at, reason)
     }
 
-    /// The one place the invariants of a decision are checked: every constructor and
-    /// the reader of the canonical form go through it.
+    /// The one place the invariants of a decision are checked (the expiry's by
+    /// [`expires_after`]): every constructor and the reader of the canonical form go
+    /// through it.
     fn assemble(
         id: JudgementId,
         subject: DocId,
@@ -607,11 +658,7 @@ impl Decision {
                     });
                 }
             }
-            if let Some(expires) = *expires
-                && expires <= at
-            {
-                return Err(DecisionProblem::ExpiresNotAfter { at, expires });
-            }
+            expires_after(at, *expires)?;
             if frame.iter().any(|pin| pin.target() == subject) {
                 return Err(DecisionProblem::FrameNamesSubject);
             }
@@ -2213,6 +2260,70 @@ pub fn frame_approve(
         subject_file: doc.origin().clone(),
         upstream_files,
     })
+}
+
+/// An approval made at `at` that lapses at `expires` lapses after it is made, or
+/// none: the rule of [`DecisionProblem::ExpiresNotAfter`], said once for a decision
+/// and for [`repeated`].
+fn expires_after(at: JudgedAt, expires: Option<JudgedAt>) -> Result<(), DecisionProblem> {
+    match expires {
+        Some(expires) if expires <= at => Err(DecisionProblem::ExpiresNotAfter { at, expires }),
+        _ => Ok(()),
+    }
+}
+
+/// The approval that stands about the document of `frame`, when an approval made on
+/// `frame` at `now`, lapsing at `until`, would only repeat it; none when it would
+/// add something.
+///
+/// `frame` is what [`frame_approve`] took, and `until` must be after `now`
+/// ([`DecisionProblem::ExpiresNotAfter`]): only an approval the model would make repeats one, so a
+/// document it refuses (an artifact a `depends` link names that cannot be told now,
+/// an upstream decided against, an expiry already past) never repeats one, and stays
+/// refused.
+///
+/// It repeats the one that stands when both hold:
+///
+/// - **it stands the same way**: the decision that stands ([`Ledger::status_of`]) is
+///   an approval, with the same expiry as `until` (none and none, or the same time).
+///   A denial, a deprecation, a retirement or nothing (pending, or an approval since
+///   withdrawn with nothing before it) is not repeated by an approval; an approval
+///   withdrawn with an earlier one before it leaves that earlier one standing, and it
+///   is that one that is compared;
+/// - **it pins exactly what that one pins**: the hash of the document, and every pin
+///   of an upstream (link, identity, key, hash) and of an artifact (link, space and
+///   name, comparison, what was there and its hash), compared as values. What
+///   freshness never reads is not compared (rule A4): the addresses and the
+///   revision a new record would carry.
+///
+/// Freshness is not asked. An approval stale only through what it stands on (an
+/// upstream pending, or approved again on the same hash) is repeated by one made
+/// now, which would stand on the same and be as stale; a document fresh only because
+/// people declared an edit keeps the meaning has a new hash, and is not. Who
+/// approves and why are not what an approval stands on, and are not compared.
+pub fn repeated(
+    ledger: &Ledger,
+    frame: &ApproveFrame,
+    now: JudgedAt,
+    until: Option<JudgedAt>,
+) -> Option<JudgementId> {
+    if expires_after(now, until).is_err() {
+        return None;
+    }
+    let DeclaredStatus::Approved {
+        judgement,
+        seen,
+        frame: pinned,
+        artifacts,
+        expires,
+    } = ledger.status_of(frame.subject)
+    else {
+        return None;
+    };
+    let same = expires == until
+        && StandsOn::of(&seen, &pinned, &artifacts)
+            == StandsOn::of(&frame.seen, &frame.frame, &frame.artifacts);
+    same.then_some(judgement)
 }
 
 /// The frame of a denial or a deprecation of `id`: the hash it would see.
