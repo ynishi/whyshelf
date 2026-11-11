@@ -97,11 +97,12 @@ const READS: [&[&str]; 2] = [&["stats"], &["stats", "--since", "2020-01-01"]];
 #[test]
 fn stats_answers_from_the_ledger_and_the_same_twice() {
     let project = Project::new("answer");
-    for _ in 0..2 {
-        assert_eq!(
-            project.run(&["judge", "approve", "N-1"]).status.code(),
-            Some(0)
-        );
+    // The second approval repeats the first (it is fresh), so it is made with
+    // `--again`, as a person who read the document again makes it.
+    for again in [&[][..], &["--again"][..]] {
+        let mut args = vec!["judge", "approve", "N-1"];
+        args.extend_from_slice(again);
+        assert_eq!(project.run(&args).status.code(), Some(0));
     }
     let first = project.run(&["stats"]);
     assert_eq!(first.status.code(), Some(0));

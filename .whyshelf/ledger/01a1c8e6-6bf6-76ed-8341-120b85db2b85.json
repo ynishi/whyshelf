@@ -1,0 +1,74 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::judge_all",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::repeated",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794371906245,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4b5a31ddf68247beac5adbfdac0d49c54eebbafd",
+      "hash": "sha256:ea8368aa501077c2e0cea390b65529bff01ca15907b002ae7145648367573375",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "21"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c847-f021-72d4-8a44-6048c2025c77"
+    },
+    {
+      "address": "512f9c70d17f771ccfa86d969718fb7115f9dfd2",
+      "hash": "sha256:a6166a2775d1cf852339f0d3e1a0b07ff35dba2a85df5fa13efc9131343fb04b",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "22"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c8cf-da4d-771d-9241-c0c21d994cfb"
+    }
+  ],
+  "id": "01a1c8e6-6bf6-76ed-8341-120b85db2b85",
+  "kind": "decision",
+  "reason": "judge approve leaves out a document whose standing approval a new one would only repeat, by comparing the frames, unless --again (#66); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "0d0285d4c1ba4da16cad3d2227b39c0796d531e0",
+  "seen": "sha256:54dc10fd2845a59a86d41eeeb5c733c25dd551fa819ff8d662ef5e96e6258113",
+  "seen_address": "832e07ac0f18bb9380e50a600e626b2cc6d87f3a",
+  "subject": "01a1c8cf-dfdb-771f-bea4-6b65c56de737",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794371906245,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c8e6-6adb-7575-b7ff-e7e3d6a1be4a",
+  "kind": "decision",
+  "reason": "judge approve leaves out a document whose standing approval a new one would only repeat, by comparing the frames, unless --again (#66); checked by two rounds of blind review on the binary, every finding fixed",
+  "revision": "0d0285d4c1ba4da16cad3d2227b39c0796d531e0",
+  "seen": "sha256:4956560e76c905ddb2abee0aaccf7acbcec58302aeefddf431f15a543266317a",
+  "seen_address": "a1cc1aac346c74fc43602080da8f22b7e709c3f4",
+  "subject": "01a1c8cf-d467-7255-9247-f245693420e3",
+  "v": 1,
+  "verb": "approve"
+}

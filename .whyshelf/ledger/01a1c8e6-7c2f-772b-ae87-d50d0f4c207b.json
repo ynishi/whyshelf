@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "fd4f309f6104ad5f501224dc2c2d454906a2e2ac",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:985bb67c22e8f87548a34fe05453f6900a9a6657f77c5d6cce5b2de497df5697",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/approve_stale.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "674f81af5e918067800d8c676b03ea799c908604",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2bb3f2fa245bd1661e0d9089bca3429c4e240cc4c9a269b3afed8b24e79877f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794371907347,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f62588828961cf1ea8da874a3781450fc05fa4fa",
+      "hash": "sha256:2f89a8f7c9ec39042c36108c9c6fb7352752a5f09d956b063720860a2ee72e3f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    }
+  ],
+  "id": "01a1c8e6-7c2f-772b-ae87-d50d0f4c207b",
+  "kind": "decision",
+  "reason": "judge answers judged and left_out and its tests unwrap the new answer; DEC-27 and DEC-51 restated for an approval that repeats; the e2e test of stats passes --again (#66); checked by two rounds of blind review",
+  "revision": "0d0285d4c1ba4da16cad3d2227b39c0796d531e0",
+  "seen": "sha256:f93d51aead4a8644a1b1818d30199af57a48ea04a751ada92408310537dd5e48",
+  "seen_address": "2c93af96c6885a9a6814023363c9cd37aebefccd",
+  "subject": "01a1c6a9-7aa1-7043-95a3-0a89a1618ae7",
+  "v": 1,
+  "verb": "approve"
+}

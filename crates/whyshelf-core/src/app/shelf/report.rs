@@ -17,11 +17,14 @@ use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
 use crate::domain::shelf::freshness::{
-    Notice, OriginGroup, RootCause, Severity, Standing, Successors,
+    Degradation, Notice, OriginGroup, RootCause, Severity, Standing, Successors,
 };
 use crate::domain::shelf::graph::Cycle;
-use crate::domain::shelf::ledger::{Decision, DeclaredStatus, LedgerProblem, Record};
+use crate::domain::shelf::ledger::{
+    Decision, DeclaredStatus, FrameRefusal, JudgementId, LedgerProblem, Record,
+};
 use crate::domain::shelf::map::ShelfMap;
+use crate::domain::shelf::order::HeldBack;
 use crate::domain::shelf::schema::{
     BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
 };
@@ -465,4 +468,57 @@ pub struct Judged {
     /// there ([`Doc::absent_artifacts`]); a `depends` link pins each as absent.
     /// Empty otherwise.
     pub absent: Vec<(EntryName, ArtifactKey)>,
+}
+
+/// What a run of `judge` wrote, and the approvals it left out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JudgedAll {
+    /// The records written, in the order the documents were named.
+    pub judged: Vec<Judged>,
+    /// The approvals not made, in the order the documents were named: each would
+    /// have repeated the approval that stands ([`LeftOutWhy::Repeats`]). Only an
+    /// approval is left out; every other verb is judged or refused.
+    pub left_out: Vec<LeftOut>,
+}
+
+/// Why an approval asked for was not made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LeftOutWhy {
+    /// Of `judge approve --stale`: its approval is broken now.
+    Broken(Degradation),
+    /// Of `judge approve --stale`: the model refuses its frame now (an upstream
+    /// decided against, an artifact that cannot be told, a link that cannot be
+    /// followed, a cycle it would close).
+    Refused(FrameRefusal),
+    /// Of `judge approve --stale`: a `Depends` link names an upstream that is broken,
+    /// pending, or left out.
+    StandsOn {
+        /// The link, the upstream and why.
+        held: HeldBack,
+        /// The upstream's key, when it is valid.
+        key: Option<DocKey>,
+    },
+    /// Of `judge approve`, and of `--stale` for one stale only through what an
+    /// earlier approval of the run approved again: an approval made now would pin
+    /// exactly what the one that stands pins and lapse when it lapses
+    /// ([`repeated`]), so it would add nothing. That one may be fresh or not (stale
+    /// over a pending upstream, say): it is the repeat that is told, not a
+    /// freshness. It stands, and holds back nothing that stands on it.
+    ///
+    /// [`repeated`]: crate::domain::shelf::ledger::repeated
+    Repeats {
+        /// The approval that stands.
+        approval: JudgementId,
+    },
+}
+
+/// An approval asked for that was not made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeftOut {
+    /// The document.
+    pub doc: DocId,
+    /// Its key, when it is valid.
+    pub key: Option<DocKey>,
+    /// Why it was left out.
+    pub why: LeftOutWhy,
 }
