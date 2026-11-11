@@ -121,6 +121,11 @@ and this project adheres to
   a parent directory included, nor approves; a write that fails part way names
   what was written and leaves no file half written. The manual starts with
   Getting started (#71).
+- `judge approve --pending [<ref>...] --reason` approves the documents never
+  approved, or those the named ones stand on through `depends` links, upstream
+  first in one run, as `--stale` does for stale ones; the two may be given
+  together, and each entry names the rule that took it. In the library,
+  `ShelfApp::approve_chosen` is the one use case of both (#73).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
