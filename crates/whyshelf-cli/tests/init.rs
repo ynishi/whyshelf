@@ -2,7 +2,10 @@
 //! that `check` finds clean with no warning, that `map` draws as four books, that
 //! `trace` follows from V-1 to F-1, and whose documents are in the form; a second
 //! `init` exits 2 and changes no file; `init` alone makes a declaration `check` finds
-//! clean.
+//! clean. `--template` writes what its shorthand writes (`--sample`, and `minimal`
+//! as `init` alone), `qa-first` a project `check` finds clean that takes a
+//! verification of no decision, and a name that is none, or `--sample` with it, is
+//! refused with exit 2 and nothing written.
 
 mod common;
 
@@ -245,6 +248,32 @@ fn a_link_to_nothing_where_a_book_directory_goes_is_in_the_way() {
 }
 
 #[test]
+fn a_file_where_a_book_directory_goes_that_gets_no_document_is_in_the_way() {
+    // qa-first declares `decision` and writes no decision; minimal writes no note.
+    for (template, dir) in [("qa-first", "books/decision"), ("minimal", "books/note")] {
+        let project = empty("file-as-empty-book");
+        fs::create_dir_all(project.0.join("books")).unwrap();
+        fs::write(project.0.join(dir), "mine\n").unwrap();
+        let before = project.files();
+        let output = project.run(&["init", "--template", template]);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "{template}: {}",
+            stderr(&output)
+        );
+        let answer = json(&output);
+        assert_eq!(answer["error"], "request");
+        assert_eq!(
+            answer["problems"],
+            serde_json::json!([format!("{dir} is already there")]),
+            "{template}"
+        );
+        assert_eq!(project.files(), before, "{template}");
+    }
+}
+
+#[test]
 fn the_next_commands_carry_a_root_that_starts_with_a_dash() {
     let parent = empty("dash-root");
     fs::create_dir_all(parent.0.join("-proj")).unwrap();
@@ -282,4 +311,129 @@ fn init_alone_writes_a_declaration_that_checks_clean() {
     // The next command it names makes a first note.
     let new = project.run(&["new", "note", "--title", "A first note"]);
     assert_eq!(new.status.code(), Some(0), "{}", stderr(&new));
+}
+
+/// What a project holds, each file by its path under the root, as text with its
+/// `id` line left out (each run of `init` gives new identities), and the answer of
+/// `init` with its `--root` left out.
+fn written(project: &Project, answer: &serde_json::Value) -> (Vec<(String, String)>, String) {
+    let files = project
+        .files()
+        .into_iter()
+        .filter_map(|(path, bytes)| {
+            let text = String::from_utf8(bytes?).unwrap();
+            let text: Vec<&str> = text.lines().filter(|l| !l.starts_with("id: ")).collect();
+            let path = path.strip_prefix(&project.0).unwrap().display().to_string();
+            Some((path, text.join("\n")))
+        })
+        .collect();
+    let answer = answer
+        .to_string()
+        .replace(&format!("--root={}", project.0.display()), "--root=");
+    (files, answer)
+}
+
+#[test]
+fn a_template_named_writes_what_its_shorthand_writes() {
+    for (named, shorthand) in [
+        (
+            &["init", "--template", "sample"][..],
+            &["init", "--sample"][..],
+        ),
+        (&["init", "--template", "minimal"][..], &["init"][..]),
+    ] {
+        let by_name = empty("by-name");
+        let by_shorthand = empty("by-shorthand");
+        let one = by_name.run(named);
+        let other = by_shorthand.run(shorthand);
+        assert_eq!(one.status.code(), Some(0), "{}", stderr(&one));
+        assert_eq!(other.status.code(), Some(0), "{}", stderr(&other));
+        assert_eq!(
+            written(&by_name, &json(&one)),
+            written(&by_shorthand, &json(&other)),
+            "{named:?}"
+        );
+    }
+}
+
+#[test]
+fn init_qa_first_checks_clean_with_requirements_listed_and_takes_a_verification_of_no_decision() {
+    let project = empty("qa-first");
+    let output = project.run(&["init", "--template", "qa-first"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let answer = json(&output);
+    let keys: Vec<&str> = answer["documents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["key"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        keys,
+        ["finding:F-1", "requirement:REQ-1", "verification:V-1"]
+    );
+    // No `depends` link stands on any of the three, so `next` names each.
+    let whyshelf = format!("whyshelf --root={}", project.0.display());
+    assert_eq!(
+        answer["next"][2],
+        format!("{whyshelf} judge approve --pending F-1 REQ-1 V-1 --reason \"read, and it holds\"")
+    );
+    let declaration = fs::read_to_string(project.0.join(".whyshelf/books.toml")).unwrap();
+    assert!(declaration.contains("count = \"many\""));
+
+    let check = project.run(&["check"]);
+    assert_eq!(check.status.code(), Some(0), "{}", stderr(&check));
+    let answer = json(&check);
+    assert_eq!(answer["clean"], true);
+    assert_eq!(answer["absent"], serde_json::json!([]));
+    assert_eq!(answer["uncovered"].as_array().unwrap().len(), 1);
+    assert_eq!(answer["uncovered"][0]["doc"]["key"], "requirement:REQ-1");
+    assert_eq!(answer["uncovered"][0]["severity"], "warn");
+    assert_eq!(
+        stderr(&check),
+        "warning: requirement:REQ-1 is reached by no decision.serves (cover = \"warn\")\n"
+    );
+    assert_eq!(project.run(&["fmt", "--check"]).status.code(), Some(0));
+
+    // A verification that checks no decision is valid there.
+    let new = project.run(&[
+        "new",
+        "verification",
+        "--title",
+        "Save twice at once",
+        "method=review",
+    ]);
+    assert_eq!(new.status.code(), Some(0), "{}", stderr(&new));
+    assert_eq!(json(&new)["doc"]["key"], "verification:V-2");
+    let check = project.run(&["check"]);
+    assert_eq!(check.status.code(), Some(0), "{}", stderr(&check));
+    assert_eq!(json(&check)["health"]["invalid"], serde_json::json!([]));
+}
+
+#[test]
+fn an_unknown_template_or_one_with_sample_is_refused_with_exit_2_and_nothing_written() {
+    let project = empty("unknown-template");
+    let before = project.files();
+    let output = project.run(&["init", "--template", "qa_first"]);
+    assert_eq!(output.status.code(), Some(2));
+    let answer = json(&output);
+    assert_eq!(answer["error"], "request");
+    let message = answer["messages"][0].as_str().unwrap();
+    for name in ["minimal", "sample", "qa-first"] {
+        assert!(message.contains(name), "{message}");
+    }
+    assert_eq!(project.files(), before);
+
+    let output = project.run(&["init", "--sample", "--template", "qa-first"]);
+    assert_eq!(output.status.code(), Some(2));
+    let answer = json(&output);
+    assert_eq!(answer["error"], "request");
+    assert!(
+        answer["messages"][0]
+            .as_str()
+            .unwrap()
+            .contains("cannot be used with"),
+        "{answer}"
+    );
+    assert_eq!(project.files(), before);
 }

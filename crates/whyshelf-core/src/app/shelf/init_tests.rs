@@ -128,6 +128,29 @@ fn a_parent_that_is_no_directory_is_in_the_way_and_named() {
 }
 
 #[test]
+fn a_book_directory_that_is_no_directory_is_in_the_way_though_no_document_goes_there() {
+    let fake = fake();
+    fake.put_file("specs", b"a file where a book's directory goes");
+    let mut app = ShelfApp::new(fake);
+    // Only the finding is made; the spec's directory is still read.
+    let error = block_on(app.init(InitRequest {
+        declaration: DeclarationText::new(TEXT),
+        docs: vec![doc("finding", "FR-1", &[("title", "a finding")])],
+    }))
+    .unwrap_err();
+    assert_eq!(obstacles(&error), [Obstacle::There(path("specs"))]);
+    assert_nothing_written(&app, None);
+    // With no document at all, too.
+    let error = block_on(app.init(InitRequest {
+        declaration: DeclarationText::new(TEXT),
+        docs: Vec::new(),
+    }))
+    .unwrap_err();
+    assert_eq!(obstacles(&error), [Obstacle::There(path("specs"))]);
+    assert_nothing_written(&app, None);
+}
+
+#[test]
 fn everything_in_the_way_is_named_the_declaration_first() {
     let fake = fake();
     *fake.declaration_file.lock().unwrap() = Some("old".to_owned());

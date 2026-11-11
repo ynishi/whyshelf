@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794408306495,
+  "expires": null,
+  "frame": [],
+  "id": "01a1cb11-d75c-77ba-8b3b-af149fe91b81",
+  "kind": "decision",
+  "reason": "init chooses one of a closed set of templates by name, minimal, sample or qa-first, each a complete set of files (#82); checked by a blind review on the binary, every finding fixed",
+  "revision": "f23af73efc350347c0fc6743b4b4db54585182df",
+  "seen": "sha256:26ccde5a92b749d43b152d0fefe5d579bc4b6b2a25b35a10ff2aceb612fd099d",
+  "seen_address": "cc67079b21c074809b0ad5c002cd619c43523ed6",
+  "subject": "01a1cb06-d16d-73bc-8cc6-f356a390a656",
+  "v": 1,
+  "verb": "approve"
+}

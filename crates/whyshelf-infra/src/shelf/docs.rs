@@ -676,6 +676,15 @@ impl DocWrite for MarkdownDocs {
             })
     }
 
+    async fn dir_in_the_way(&self, dir: &RelPath) -> Result<Option<RelPath>, DocsError> {
+        create::dir_in_the_way(&self.root, dir)
+            .await
+            .map_err(|source| DocsError::Io {
+                path: self.root.join(dir.as_str()),
+                source,
+            })
+    }
+
     /// Created `create_new` with its directories; a write that fails removes the
     /// file it made, and only it.
     async fn create(

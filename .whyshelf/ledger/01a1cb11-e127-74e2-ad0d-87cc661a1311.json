@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5186d5f3552914215ae3220f08820c18736a3ae5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c4e817c74afd33c26582c2e1f509f84175b73cd2415f121ad994fb43164ebd6b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/init.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794408307587,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a53d5e13d6bc3a1bd34c1e40498bfe3bbd41c8f4",
+      "hash": "sha256:d306e76f19993bef5f5856daf11cb047fdc0f73c611e5d3652698f73a4ce8093",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "61"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9b4-0443-7020-ab73-b9e48af448eb"
+    }
+  ],
+  "id": "01a1cb11-e127-74e2-ad0d-87cc661a1311",
+  "kind": "decision",
+  "reason": "DEC-61 names the template set, REQ-24 is grounded on F-36, and the init tests cover every template (#82); checked by a blind review",
+  "revision": "f23af73efc350347c0fc6743b4b4db54585182df",
+  "seen": "sha256:0adaf1049382abf0a1b71dabd14eb93a4aa950c13719f8b6ee7730134cbffedd",
+  "seen_address": "05fad2c8f4ad13975697ea65e98b9288447f30db",
+  "subject": "01a1c9b4-0803-7654-8d98-a935c8e024a8",
+  "v": 1,
+  "verb": "approve"
+}
