@@ -10,10 +10,10 @@ use serde::Serialize;
 use serde_json::Value;
 use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, Created, Declared, DeclaredAbout, DiffItem, DiffReport,
-    DownstreamEdge, ErrorClass, FmtReport, GetReport, Health, Judged, JudgedAll, LeftAloneWhy,
-    LeftOut, LeftOutWhy, MapReport, MovesReport, Names, Row, ShelfError, StaleApproved,
-    StaleReport, StatsReport, StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport,
-    UpstreamEdge, UpstreamEnd,
+    DownstreamEdge, ErrorClass, FmtReport, GetReport, Health, Initialized, Judged, JudgedAll,
+    LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, Row, ShelfError,
+    StaleApproved, StaleReport, StatsReport, StatusReport, TraceReport, UnlinkedEntry,
+    UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::build::NewDocProblem;
@@ -1130,6 +1130,29 @@ pub struct CreatedOut {
     pub unresolved_links: Vec<UnresolvedOut>,
 }
 
+/// The answer of `init`: what was written, and what to run next.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct InitOut {
+    /// The file of the declaration, relative to the project root.
+    pub declaration: String,
+    /// The documents made beside it, in the order they were written; none for
+    /// `init` without `--sample`.
+    pub documents: Vec<InitDocOut>,
+    /// The commands to run next, in order, as they are typed, each with
+    /// `--root=<dir>` when `init` ran with one; none when that root is no UTF-8
+    /// text.
+    pub next: Vec<String>,
+}
+
+/// A document `init` made.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct InitDocOut {
+    /// Its key (`book:KEY`).
+    pub key: String,
+    /// Its file, relative to the project root.
+    pub path: String,
+}
+
 /// The answer of `fmt` and `fmt --check`, the files by their path relative to the
 /// project root, in the order the documents are read.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -1176,7 +1199,8 @@ pub struct ErrorOut {
     pub candidates: Vec<String>,
     /// Each problem, one per item, when the error has a list of them: the problems
     /// of a declaration that cannot be used, or of a new document that would be
-    /// invalid.
+    /// invalid; for `init`, each thing in the way, or the files written before a
+    /// failure part way and the one that was not.
     pub problems: Vec<String>,
 }
 
@@ -1212,6 +1236,7 @@ pub fn schemas() -> SchemasOut {
     put("judge moved", schema_for!(MovedAllOut));
     put("judge withdraw", schema_for!(WithdrawnOut));
     put("new", schema_for!(CreatedOut));
+    put("init", schema_for!(InitOut));
     put("fmt", schema_for!(FmtOut));
     put("error", schema_for!(ErrorOut));
     SchemasOut {
@@ -2962,6 +2987,20 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
             ShelfError::NewDoc(NewDocProblem::Invalid(problems)) => {
                 problems.iter().map(ToString::to_string).collect()
             }
+            ShelfError::InTheWay { obstacles } => {
+                obstacles.iter().map(ToString::to_string).collect()
+            }
+            ShelfError::PartWay {
+                written,
+                failed,
+                cause,
+            } => written
+                .iter()
+                .map(|path| format!("{path} was written"))
+                .chain(std::iter::once(format!(
+                    "{failed} was not written: {cause}"
+                )))
+                .collect(),
             _ => Vec::new(),
         },
     }
@@ -2974,6 +3013,82 @@ pub fn usage(message: String) -> ErrorOut {
         messages: vec![message],
         candidates: Vec::new(),
         problems: Vec::new(),
+    }
+}
+
+/// The answer when the program cannot make its own request (a template it ships is
+/// not one): a run that failed.
+pub fn failure(messages: Vec<String>) -> ErrorOut {
+    ErrorOut {
+        error: "failed",
+        messages,
+        candidates: Vec::new(),
+        problems: Vec::new(),
+    }
+}
+
+/// A text as one word of a POSIX shell: as it is when it holds nothing the shell
+/// reads, otherwise in single quotes (a `'` in it as `'\''`).
+fn shell_word(text: &str) -> String {
+    let plain = !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/._-+,:@%=".contains(c));
+    if plain {
+        text.to_owned()
+    } else {
+        format!("'{}'", text.replace('\'', r"'\''"))
+    }
+}
+
+/// The reason the `next` of `init` gives to the approval of the documents it made,
+/// for a person to replace with theirs.
+const INIT_REASON: &str = "read, and it holds";
+
+/// The root `init` ran with, as the `next` commands are to carry it.
+#[derive(Debug, Clone, Copy)]
+pub enum NextRoot<'a> {
+    /// No `--root`: the commands carry none.
+    Current,
+    /// `--root` as typed: each command carries `--root=<it>`, one shell word.
+    Given(&'a str),
+    /// A `--root` that is no UTF-8 text: no command can be written with it, so
+    /// none is given (the command line says so on stderr).
+    NotText,
+}
+
+/// The answer of `init`. `book` is the book `next` makes a first document of, when
+/// `init` made none; `root` the `--root` it ran with, which every command of `next`
+/// carries.
+pub fn initialized(done: &Initialized, book: Option<&str>, root: NextRoot<'_>) -> InitOut {
+    let whyshelf = match root {
+        NextRoot::Given(root) => format!("whyshelf --root={}", shell_word(root)),
+        NextRoot::Current => "whyshelf".to_owned(),
+        NextRoot::NotText => String::new(),
+    };
+    let mut next = vec![format!("{whyshelf} check"), format!("{whyshelf} map")];
+    if matches!(root, NextRoot::NotText) {
+        next.clear();
+    } else if done.docs.is_empty() {
+        next.extend(book.map(|book| format!("{whyshelf} new {book} --title \"A first {book}\"")));
+    } else {
+        let keys: Vec<String> = done.docs.iter().map(|d| d.key.form.to_string()).collect();
+        next.push(format!(
+            "{whyshelf} judge approve {} --reason \"{INIT_REASON}\"",
+            keys.join(" ")
+        ));
+    }
+    InitOut {
+        declaration: done.declaration.to_string(),
+        documents: done
+            .docs
+            .iter()
+            .map(|d| InitDocOut {
+                key: d.key.to_string(),
+                path: d.file.to_string(),
+            })
+            .collect(),
+        next,
     }
 }
 
@@ -3208,6 +3323,7 @@ mod tests {
             "judge same",
             "judge withdraw",
             "new",
+            "init",
             "fmt",
             "error",
         ] {
@@ -3218,6 +3334,10 @@ mod tests {
         let new = serde_json::to_string(&outputs["new"]).unwrap();
         for field in ["doc", "file", "unresolved_links", "written", "why"] {
             assert!(new.contains(&format!("\"{field}\"")), "{field}");
+        }
+        let init = serde_json::to_string(&outputs["init"]).unwrap();
+        for field in ["declaration", "documents", "key", "path", "next"] {
+            assert!(init.contains(&format!("\"{field}\"")), "{field}");
         }
         let fmt = serde_json::to_string(&outputs["fmt"]).unwrap();
         for field in [
@@ -3261,6 +3381,14 @@ mod tests {
         for field in ["kind", "severity", "upstream", "link", "detail", "artifact"] {
             assert!(stale.contains(&format!("\"{field}\"")), "{field}");
         }
+    }
+
+    #[test]
+    fn a_root_is_one_shell_word_in_the_next_commands() {
+        assert_eq!(shell_word("../my-project"), "../my-project");
+        assert_eq!(shell_word("/tmp/a b"), "'/tmp/a b'");
+        assert_eq!(shell_word("it's"), r"'it'\''s'");
+        assert_eq!(shell_word(""), "''");
     }
 
     #[test]

@@ -8,6 +8,15 @@ use whyshelf_core::domain::shelf::lookup::Reference;
 /// `.whyshelf/books.toml`.
 #[derive(Debug, Subcommand)]
 pub enum BooksCommand {
+    /// Start a project: write `.whyshelf/books.toml`, one book of notes with comments
+    /// that show how to extend it, where no declaration is; it never writes over a
+    /// file, and writes no approval.
+    Init {
+        /// Write four books instead (finding, requirement, decision,
+        /// verification) and one pending document of each, linked in one chain.
+        #[arg(long)]
+        sample: bool,
+    },
     /// Check the declaration, the documents and the ledger; exit 1 if anything is
     /// wrong.
     Check,
@@ -19,7 +28,7 @@ pub enum BooksCommand {
     Status,
     /// One document in full, with where its approval stops holding.
     Get {
-        /// A key (`S-1`, `spec:S-1`), an identifier or a short identifier.
+        /// A key (`REQ-1`, `requirement:REQ-1`), an identifier or a short identifier.
         reference: Reference,
         /// Show what the approval that stands saw instead: the document, the
         /// upstreams and the artifacts, each with its content as it was approved, or
@@ -78,8 +87,8 @@ pub enum BooksCommand {
         /// A key, an identifier or a short identifier.
         reference: Reference,
     },
-    /// Record a judgement about a document (it, `new` and `fmt` are the only ones of
-    /// these that write).
+    /// Record a judgement about a document (it, `new`, `init` and `fmt` are the only
+    /// ones of these that write).
     #[command(subcommand)]
     Judge(Verb),
     /// Create one new document, valid for its book, at `<book dir>/<key>.md` (never

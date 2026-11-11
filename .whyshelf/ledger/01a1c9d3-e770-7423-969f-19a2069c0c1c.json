@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "5cd6ea0129d205ffbca15cc45a7d42fcdc882b31",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:42a2498ab22cfb0a4645b51c38c615d8531808943ac1b5544a8d75a475b60bbf",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "55282fc649bd708cb40d526668ce670c3de61054",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6cc0ff6492297c4b8ae059df2303fe081f4e2860e370b6e3f5b0f907c5d013c7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0da9bc3a72ec49cf5bd244b90dff8f29f0877bb5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5800aa82103a94f93a69bccf4ecc9333efc725fcbbd65b10d9bc2c5c48910261",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "588e5c89dc04b842146e0e73c35d8406ca1d3221",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f52e9e821903f4baa964d01132c10cd0808cd63351514c052471311644b1e744",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2f971e88367484254e5536cd8856378320aa65c7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bd6f103dc7df6be87abfc7baa8fff48b8d791a34c250e2bc0bc7cc0c21f1a636",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "98b460ee64cce24cc17162c35b816f7b73d2c996",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:24162f25c9c5f2b56a650fe887cd4aa0ee1696e6c552f192afe340140aa85477",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794387463748,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b4b013c3072c7576e998eb74980d082fbbbb3fe",
+      "hash": "sha256:3e379866f327b70afe6acdbf819f6f9b6a902810c5855c79becb1bd1a19be061",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "53"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7e2-6f31-74e1-8aa9-4de2bd6986d2"
+    }
+  ],
+  "id": "01a1c9d3-e770-7423-969f-19a2069c0c1c",
+  "kind": "decision",
+  "reason": "The declaration and documents are written create-only by one rule that names anything in the way, a parent included, and removes only a file it made and could not write whole; the old sample is retired for init --sample (#71); checked by three rounds of blind review",
+  "revision": "cc5db5b7d17dfe3a9e7bea11421e39077a15f5c8",
+  "seen": "sha256:4fff836039815d80bd297e529a5fe506a514de3f56b81886db7efd092b08f941",
+  "seen_address": "f56aa84f441b058e2d794fd63dfecf8045c4d8ac",
+  "subject": "01a1c7e2-7061-7778-9bec-d92f955d4598",
+  "v": 1,
+  "verb": "approve"
+}

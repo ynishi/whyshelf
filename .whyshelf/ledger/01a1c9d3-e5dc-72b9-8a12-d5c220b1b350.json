@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8419175afbd02987f11a2bd891bcf9edfc373310",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:16ba18b52f4d9db6046708f88d4986cdb8154300d8aa3c9150f254663952cfe3",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "89823cf78c65a62bd3361e0c6100cbdc693f0ea5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ee88b9fb3761a92ddeab5951848a371cff0d7d92cc734b58c823f43ab5424e15",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794387463748,
+  "expires": null,
+  "frame": [
+    {
+      "address": "da9032def055fc8f6a38d45583eae70d26c36b31",
+      "hash": "sha256:37d652c3acd0936f23b7fc2380c93f508cfd99f394f0e24a4d5849fec42d1f24",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "52"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+    }
+  ],
+  "id": "01a1c9d3-e5dc-72b9-8a12-d5c220b1b350",
+  "kind": "decision",
+  "reason": "The declaration and documents are written create-only by one rule that names anything in the way, a parent included, and removes only a file it made and could not write whole; the old sample is retired for init --sample (#71); checked by three rounds of blind review",
+  "revision": "cc5db5b7d17dfe3a9e7bea11421e39077a15f5c8",
+  "seen": "sha256:4cc7cf9e3ad8b44953649ea0f523268c1e3196959072b3da6e8bd94e4a80bdf9",
+  "seen_address": "48b5909bf7e7847e0540a31b7acafc7b31ec908f",
+  "subject": "01a1c7ad-001a-777b-8fe2-cc8909aaffa0",
+  "v": 1,
+  "verb": "approve"
+}

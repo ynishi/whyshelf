@@ -28,7 +28,7 @@ use std::collections::BTreeMap;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::shelf::artifact::ArtifactReadings;
-use crate::domain::shelf::build::{RawValue, Shelf};
+use crate::domain::shelf::build::{NewDoc, RawValue, Shelf};
 use crate::domain::shelf::doc::{DocKey, UnresolvedLink};
 use crate::domain::shelf::schema::{BookName, BookSchema, EntryName, FieldType};
 
@@ -79,54 +79,74 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// written. A file is never replaced.
     pub async fn new_doc(&mut self, request: NewDocRequest) -> Result<Created, ShelfError> {
         let loaded = load(&self.ports).await?;
-        let shelf = &loaded.shelf;
-        let key = match &request.key {
-            Some(text) => shelf.claim_key(&request.book, text)?,
-            None => shelf.next_key(&request.book)?,
-        };
-        let entries = typed_entries(shelf, &request.book, request.entries, request.items)?;
-        let id = self
-            .ports
-            .ids()
-            .new_doc_id()
+        let new = checked_new(&self.ports, &loaded.shelf, request).await?;
+        write_new(&self.ports, &new).await
+    }
+}
+
+/// The document a request makes on `shelf`, judged and not written: its key, its
+/// entries read by its book, a new identity, and the answers of the adapters for
+/// the names its links to artifacts write. The steps of `new`, which `init` takes
+/// too, for each document it makes.
+// The error is read once and ends the use case; it is not a hot path.
+#[allow(clippy::result_large_err)]
+pub(super) async fn checked_new<P: ShelfWrite>(
+    ports: &P,
+    shelf: &Shelf,
+    request: NewDocRequest,
+) -> Result<NewDoc, ShelfError> {
+    let key = match &request.key {
+        Some(text) => shelf.claim_key(&request.book, text)?,
+        None => shelf.next_key(&request.book)?,
+    };
+    let entries = typed_entries(shelf, &request.book, request.entries, request.items)?;
+    let id = ports
+        .ids()
+        .new_doc_id()
+        .await
+        .map_err(port(ShelfPort::Ids))?;
+    // The names its links to artifacts write are asked of their adapters as the
+    // load asks those of every document, so a text that is no name of its space
+    // is refused here as the build would refuse it.
+    let asks = shelf.new_artifact_asks(&key, &entries);
+    let artifacts = if asks.is_empty() {
+        ArtifactReadings::new()
+    } else {
+        ports
+            .artifacts()
+            .resolve(&asks)
             .await
-            .map_err(port(ShelfPort::Ids))?;
-        // The names its links to artifacts write are asked of their adapters as the
-        // load asks those of every document, so a text that is no name of its space
-        // is refused here as the build would refuse it.
-        let asks = shelf.new_artifact_asks(&key, &entries);
-        let artifacts = if asks.is_empty() {
-            ArtifactReadings::new()
-        } else {
-            self.ports
-                .artifacts()
-                .resolve(&asks)
-                .await
-                .map_err(port(ShelfPort::Artifacts))?
-        };
-        let new = shelf.check_new(id, &key, entries, request.body, &artifacts)?;
-        let doc = new.doc();
-        let written = self
-            .ports
-            .doc_writer()
-            .create(doc.origin(), new.entries(), doc.body())
-            .await
-            .map_err(port(ShelfPort::DocWrite))?;
-        match written {
-            Creation::Created => Ok(Created {
-                id: doc.id(),
-                key: doc.key().clone(),
-                file: doc.origin().clone(),
-                unresolved: new
-                    .unresolved()
-                    .into_iter()
-                    .map(|(link, u)| (link.clone(), u.clone()))
-                    .collect(),
-            }),
-            Creation::AlreadyThere => Err(ShelfError::FileTaken {
-                path: doc.origin().clone(),
-            }),
-        }
+            .map_err(port(ShelfPort::Artifacts))?
+    };
+    Ok(shelf.check_new(id, &key, entries, request.body, &artifacts)?)
+}
+
+/// Write a judged document's file, create-only: a file already at its path is
+/// [`ShelfError::FileTaken`], and nothing is written.
+pub(super) async fn write_new<P: ShelfWrite>(
+    ports: &P,
+    new: &NewDoc,
+) -> Result<Created, ShelfError> {
+    let doc = new.doc();
+    let written = ports
+        .doc_writer()
+        .create(doc.origin(), new.entries(), doc.body())
+        .await
+        .map_err(port(ShelfPort::DocWrite))?;
+    match written {
+        Creation::Created => Ok(Created {
+            id: doc.id(),
+            key: doc.key().clone(),
+            file: doc.origin().clone(),
+            unresolved: new
+                .unresolved()
+                .into_iter()
+                .map(|(link, u)| (link.clone(), u.clone()))
+                .collect(),
+        }),
+        Creation::AlreadyThere => Err(ShelfError::FileTaken {
+            path: doc.origin().clone(),
+        }),
     }
 }
 

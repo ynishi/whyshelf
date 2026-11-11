@@ -363,12 +363,9 @@ impl Git {
             let status = child.wait().await?;
             Ok::<_, io::Error>((status, out, err))
         };
-        match tokio::time::timeout(self.timeout, work).await {
+        match bounded(self.timeout, command_word.clone(), work).await {
             // The child is dropped with this function, and killed (`kill_on_drop`).
-            Err(_) => Err(GitError::TimedOut {
-                command: command_word,
-                after: self.timeout,
-            }),
+            Err(timed_out) => Err(timed_out),
             Ok(Err(source)) => Err(failed(source)),
             Ok(Ok((status, mut stdout, stderr))) => {
                 let cut = cap.is_some_and(|cap| stdout.len() > cap);
@@ -574,6 +571,21 @@ pub struct Rename {
 /// The renames of `git diff-index --name-status -z`: a status (`R` and a score for a
 /// rename), then its paths, each ended by a NUL. Every other status (`M`, `A`, `D`,
 /// `C` and the rest) is read past; a path that is no [`RelPath`] leaves its pair out.
+/// `work` within `bound`, or [`GitError::TimedOut`] naming `command`: the one bound
+/// every call of [`Git`] runs under.
+async fn bounded<T>(
+    bound: Duration,
+    command: String,
+    work: impl std::future::Future<Output = T>,
+) -> Result<T, GitError> {
+    tokio::time::timeout(bound, work)
+        .await
+        .map_err(|_| GitError::TimedOut {
+            command,
+            after: bound,
+        })
+}
+
 fn renames_of(output: &[u8]) -> Vec<Rename> {
     let mut fields = output.split(|b| *b == 0).filter(|f| !f.is_empty());
     let mut renames = Vec::new();
@@ -713,29 +725,25 @@ mod tests {
         }
     }
 
+    /// A call past its bound fails and says which. The bound is tested on work that
+    /// never ends, so the test does not depend on how fast Git answers: under a bound
+    /// of zero, a Git that has already exited when first polled would still answer.
     #[tokio::test]
     async fn a_call_past_its_bound_fails_and_says_which() {
-        let dir = tempfile::tempdir().unwrap();
-        let git = Git::new(dir.path().to_path_buf()).with_timeout(Duration::ZERO);
-        match git.revision().await {
-            // `git` not installed: nothing to bound.
-            Ok(None) if which_git_absent().await => {}
+        let bound = Duration::from_millis(10);
+        match bounded(bound, "rev-parse".to_owned(), std::future::pending::<()>()).await {
             Err(GitError::TimedOut { command, after }) => {
                 assert_eq!(command, "rev-parse");
-                assert_eq!(after, Duration::ZERO);
+                assert_eq!(after, bound);
             }
             other => panic!("a call past its bound fails: {other:?}"),
         }
-    }
-
-    /// Whether no `git` can be started here.
-    async fn which_git_absent() -> bool {
-        Command::new("git")
-            .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await
-            .is_err()
+        // Work that ends within its bound gives its answer.
+        assert_eq!(
+            bounded(bound, "rev-parse".to_owned(), async { 7 })
+                .await
+                .unwrap(),
+            7
+        );
     }
 }

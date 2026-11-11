@@ -1204,8 +1204,8 @@ pub struct Shelf {
     index: KeyIndex,
     /// Every key a file of a book writes in the book's grammar, valid file or not,
     /// identity read or not: the keys a new document cannot take, and the numbers
-    /// the next key counts from.
-    written_keys: BTreeSet<DocKey>,
+    /// the next key counts from; each with the files that write it.
+    written_keys: BTreeMap<DocKey, BTreeSet<RelPath>>,
     cycles: Vec<Cycle>,
 }
 
@@ -1247,10 +1247,15 @@ impl Shelf {
                 .collect(),
         );
         let keys = keys_of(&candidates);
-        let written_keys = candidates
-            .iter()
-            .filter_map(|c| c.written_key.clone())
-            .collect();
+        let mut written_keys: BTreeMap<DocKey, BTreeSet<RelPath>> = BTreeMap::new();
+        for candidate in &candidates {
+            if let Some(key) = &candidate.written_key {
+                written_keys
+                    .entry(key.clone())
+                    .or_default()
+                    .insert(candidate.origin.clone());
+            }
+        }
         let Sorted {
             drafts,
             invalid,

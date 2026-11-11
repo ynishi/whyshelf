@@ -1,0 +1,93 @@
+# The books of this project: a chain of reasons, from what was seen to how it is
+# checked.
+#
+#   finding <-grounds- requirement <-serves- decision <-checks- verification
+#
+# whyshelf knows no kind of document of its own; these four are one way to keep
+# reasons, and every one of them is declared here. Change what you need:
+# `whyshelf check` says whether this file can be used, and `whyshelf map` draws it.
+
+# A link to artifacts that names no preset and no space takes the preset `file`:
+# files of the project, by their path.
+[defaults]
+artifact = "file"
+
+[[book]]
+name = "finding"
+dir = "books/finding"
+key = { prefix = "F" }      # F-1, F-2, ...
+description = "what was seen: a fault, a report, a measure"
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.field]]
+name = "source"             # where it was seen
+type = "text"
+
+[[book]]
+name = "requirement"
+dir = "books/requirement"
+key = { prefix = "REQ" }
+description = "what is needed, and why"
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.link]]
+name = "grounds"            # informs: a finding fixed and retired must not break what it grounded
+target = "finding"
+means = "informs"
+cover = "warn"              # every finding is expected to ground a requirement; one that does not yet is listed, not a failure
+[[book.link]]
+name = "replaces"
+target = "requirement"
+count = "optional"
+means = "replaces"
+
+[[book]]
+name = "decision"
+dir = "books/decision"
+key = { prefix = "DEC" }
+description = "how it is met, and what was rejected"
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.field]]
+name = "rejected"           # the ways not taken
+type = "list"
+[[book.link]]
+name = "serves"             # depends: a changed requirement makes the decision stale
+target = "requirement"
+count = "at-least-one"
+means = "depends"
+cover = true                # every requirement is expected to have a decision that serves it
+[[book.link]]
+name = "replaces"
+target = "decision"
+count = "optional"
+means = "replaces"
+
+[[book]]
+name = "verification"
+dir = "books/verification"
+key = { prefix = "V" }
+description = "how a decision is checked"
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[[book.field]]
+name = "method"
+type = { enum = ["test", "review"] }
+required = true
+[[book.link]]
+name = "checks"             # depends: a changed decision makes its check stale
+target = "decision"
+count = "at-least-one"
+means = "depends"
+cover = true                # every decision is expected to have a verification that checks it
+[[book.link]]
+name = "tests"              # the files that show it holds, by path; editing one makes the check stale
+target = "artifact"
