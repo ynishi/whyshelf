@@ -77,7 +77,7 @@ impl TypedValueParser for TemplateName {
 #[derive(Debug, Subcommand)]
 pub enum BooksCommand {
     /// Start a project: write `.whyshelf/books.toml` and the documents of a template
-    /// beside it (by default `minimal`, one book of notes with comments that show how
+    /// beside it, with the files they name (by default `minimal`, one book of notes with comments that show how
     /// to extend it), where no declaration is; it never writes over a file, and
     /// writes no approval.
     Init {

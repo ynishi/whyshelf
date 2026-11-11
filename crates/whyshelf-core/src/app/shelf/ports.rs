@@ -25,6 +25,7 @@
 //! | [`IdSource`] | the identity of a new record, and of a new document |
 //! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there; and what is in the way of one at a path |
 //! | [`DeclarationWrite`] | the file of the declaration, from a text in its format, never in place of a file that is there; and what is in the way of it |
+//! | [`FileWrite`] | a new file of the project that is neither a document nor the declaration (one a template starts a project with, such as a table its documents name), from its bytes, never in place of a file that is there; and what is in the way of one at a path |
 //! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten) |
 //! | [`ActorSource`] | who is acting |
 //! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
@@ -41,7 +42,7 @@
 //!        |      what `check`, `status`, `get`, `trace`, `stale`, `get --approved`,
 //!        |      `diff`, `moves` and `fmt --check` are generic over
 //!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite  DocReplace
-//!               DeclarationWrite
+//!               DeclarationWrite  FileWrite
 //!               what `judge`, `new_doc`, `init` and `fmt` are generic over
 //! ```
 
@@ -99,6 +100,8 @@ pub enum ShelfPort {
     Moves,
     /// [`DeclarationWrite`].
     DeclarationWrite,
+    /// [`FileWrite`].
+    FileWrite,
 }
 
 impl fmt::Display for ShelfPort {
@@ -118,6 +121,7 @@ impl fmt::Display for ShelfPort {
             Self::DocReplace => "document replace",
             Self::Moves => "move suggestions",
             Self::DeclarationWrite => "declaration write",
+            Self::FileWrite => "file write",
         })
     }
 }
@@ -414,6 +418,34 @@ pub trait DeclarationWrite: Send + Sync {
     ) -> impl Future<Output = Result<Creation, Self::Error>> + Send;
 }
 
+/// Writing a new file of the project that is neither a document nor the
+/// declaration: a file a template starts a project with beside its documents (a
+/// table a document links to, say), written as it is.
+pub trait FileWrite: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// What is in the way of a new file at `path` (relative to the project root)
+    /// now, if anything, by the rule of [`DocWrite::in_the_way`]: a parent that is
+    /// no directory, or anything at the path itself.
+    fn in_the_way(
+        &self,
+        path: &RelPath,
+    ) -> impl Future<Output = Result<Option<RelPath>, Self::Error>> + Send;
+
+    /// Write the file at `path` (relative to the project root) with `bytes`, as they
+    /// are. Missing directories are made.
+    ///
+    /// Create-only, as [`DocWrite::create`]: something already at the path is never
+    /// replaced, and is [`Creation::AlreadyThere`], not an error. A write that fails
+    /// after the file was made removes that file, as `DocWrite::create` does.
+    fn create(
+        &self,
+        path: &RelPath,
+        bytes: &[u8],
+    ) -> impl Future<Output = Result<Creation, Self::Error>> + Send;
+}
+
 /// What [`DocReplace::replace_read`] did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Replacement {
@@ -624,6 +656,8 @@ pub trait ShelfWrite: ShelfRead {
     type DocReplacer: DocReplace;
     /// The file of the declaration, written when a project is started.
     type DeclarationWriter: DeclarationWrite;
+    /// The other files a project is started with.
+    type FileWriter: FileWrite;
 
     /// The ledger, to write.
     fn append(&self) -> &Self::Append;
@@ -633,6 +667,8 @@ pub trait ShelfWrite: ShelfRead {
     fn doc_replacer(&self) -> &Self::DocReplacer;
     /// The writer of the declaration's file.
     fn declaration_writer(&self) -> &Self::DeclarationWriter;
+    /// The writer of the other files a project is started with.
+    fn file_writer(&self) -> &Self::FileWriter;
     /// The source of identities.
     fn ids(&self) -> &Self::Ids;
     /// The acting person.

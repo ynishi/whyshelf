@@ -832,6 +832,10 @@ pub enum MoveNote {
         /// The spaces.
         spaces: BTreeSet<Space>,
     },
+    /// Every pin of the name compares its presence only (`compare = "presence"`),
+    /// so there is no content to look for: it was not searched by its content, and
+    /// only the space's history (for files, a rename Git detects) can suggest.
+    NoContent,
 }
 
 /// The kind of a [`MoveNote`], its place in the order of a name's notes.
@@ -853,6 +857,8 @@ pub enum NoteKind {
     UnreadableSkipped,
     /// [`MoveNote::TooLargeSkipped`].
     TooLargeSkipped,
+    /// [`MoveNote::NoContent`].
+    NoContent,
 }
 
 impl MoveNote {
@@ -867,6 +873,7 @@ impl MoveNote {
             Self::UnreadableSkipped { .. } => NoteKind::UnreadableSkipped,
             Self::TooLargeSkipped { .. } => NoteKind::TooLargeSkipped,
             Self::InTwoSpaces { .. } => NoteKind::InTwoSpaces,
+            Self::NoContent => NoteKind::NoContent,
         }
     }
 }

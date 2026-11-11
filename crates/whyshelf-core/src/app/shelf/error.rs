@@ -197,6 +197,18 @@ pub enum ShelfError {
         /// documents'), then the keys taken.
         obstacles: NonEmptyVec<Obstacle>,
     },
+    /// `init` was asked to write two files at one path, or one under the other (the
+    /// declaration, another file or a document): a fault of the request, found
+    /// before anything is written. Nothing was written.
+    #[error(
+        "{path} would be written twice, or under {with}, which is written too; nothing was written"
+    )]
+    Overlapping {
+        /// The later of the two, in the order they would be written.
+        path: RelPath,
+        /// The earlier.
+        with: RelPath,
+    },
     /// `init` wrote some files and then failed to write one: those it wrote stay
     /// (the declaration first, then documents, each whole), and the rest were not
     /// written. The class is the cause's: a port that failed, or a file that came
@@ -306,7 +318,8 @@ impl ShelfError {
             | Self::ItemOfNoList { .. }
             | Self::EmptyItem { .. }
             | Self::FileTaken { .. }
-            | Self::InTheWay { .. } => ErrorClass::Request,
+            | Self::InTheWay { .. }
+            | Self::Overlapping { .. } => ErrorClass::Request,
             // As a reference that names nothing and a revocation of nothing: a name of
             // an artifact no document links or that is linked in two spaces, a hash
             // that names nothing pinned, an earlier hash that cannot be told

@@ -419,7 +419,7 @@ fn an_unknown_template_or_one_with_sample_is_refused_with_exit_2_and_nothing_wri
     let answer = json(&output);
     assert_eq!(answer["error"], "request");
     let message = answer["messages"][0].as_str().unwrap();
-    for name in ["minimal", "sample", "qa-first"] {
+    for name in ["minimal", "sample", "qa-first", "experiment"] {
         assert!(message.contains(name), "{message}");
     }
     assert_eq!(project.files(), before);

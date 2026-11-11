@@ -1,0 +1,102 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::FileWrite",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::file::CODE_PRESET",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::init::Template",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794413561696,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ebc34ec601e505b5bf42173a87ce681430f69229",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    },
+    {
+      "address": "db6f51fe2d99e9409767716429df85cbe2bcc3de",
+      "hash": "sha256:785f2463798582b47dbc3a8d8fd00009f4506de4edb516f3e5c5dab58391d8b8",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "24"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c9b4-0262-74b9-b0c8-d15f578bcdf5"
+    },
+    {
+      "address": "5f5e52c37a4af3f9f4a5058947928e5670216703",
+      "hash": "sha256:81b3a0cbdd2f4cc842310a644f633be56d28524d419da0d5c1c3eb72ee4f11f0",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1cb50-fae9-7092-a289-1be22004cfbd"
+    }
+  ],
+  "id": "01a1cb62-0898-731a-98a5-76e580969ed7",
+  "kind": "decision",
+  "reason": "A template experiment keeps a plan and its result as two verifications, and a preset code pins only that a file is there (#87); checked by a blind review on the binary, every finding fixed",
+  "revision": "3b5df9c25e379bbb0872f02341fa07e06449a9bf",
+  "seen": "sha256:a063950ead4702f1cd5de12b7f9fdebb4f6c650c96fde3fecf8f3450d4d9b9a5",
+  "seen_address": "b0cfbb4ec854e2cd3aa9e349eb5dfde1046fb03c",
+  "subject": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053",
+  "v": 1,
+  "verb": "approve"
+}
