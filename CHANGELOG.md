@@ -134,6 +134,11 @@ and this project adheres to
 - The normalization of a document's text is a function of the domain,
   `whyshelf_core::domain::shelf::doc::normalize`; `whyshelf_infra` no longer
   has one of its own. whyshelf's own decisions state one rule each (#30).
+- The end-to-end tests of `whyshelf-cli` are one file per feature, sharing
+  their helpers in one module, and whyshelf's own verifications each name the
+  files of their feature; a test fails when one file is named by more than two
+  verifications. Temporary directories of these tests hold a counter, so tests
+  run in parallel never share one (#60).
 
 ### Removed
 

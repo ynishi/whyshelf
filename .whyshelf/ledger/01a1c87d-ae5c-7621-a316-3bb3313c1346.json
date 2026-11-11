@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "674f81af5e918067800d8c676b03ea799c908604",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2bb3f2fa245bd1661e0d9089bca3429c4e240cc4c9a269b3afed8b24e79877f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7120c325c2d7f6b08f7bd035c9e9b80988580051",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:41e3540d46fda228e384f0190f1bee940b03e40cab51515c2784f2cb06c8f19d",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/unlinked.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794365042003,
+  "expires": null,
+  "frame": [
+    {
+      "address": "573dc5ef3fcd0ec4d1b9d4ef061d37ecf56d23b0",
+      "hash": "sha256:85f4c818721f36f774e93d3e9edf25469f44c19ccc46b4d76040798211c9c323",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "49"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c671-1d95-725c-bd74-8b605650d16c"
+    }
+  ],
+  "id": "01a1c87d-ae5c-7621-a316-3bb3313c1346",
+  "kind": "decision",
+  "reason": "Each verification names the file of its own feature and the shared helpers instead of command_line.rs, the tests unchanged in what they check; V-28, V-30, V-35, V-44 and REQ-13 restated; stats joins the reading commands; temporary directories hold a counter (#60); checked by a blind review",
+  "revision": "d080c20bf062d54086f8b98e199abcee01a57f2c",
+  "seen": "sha256:9c8bf95cc5ca61287bf3fc6ec5f41ab3962228b82419d7d9ee8d5646f209f8be",
+  "seen_address": "7e3a53aaeef217652e42b92e6930fff102655a44",
+  "subject": "01a1c671-1f9d-76d6-aacd-ed84f9eac803",
+  "v": 1,
+  "verb": "approve"
+}

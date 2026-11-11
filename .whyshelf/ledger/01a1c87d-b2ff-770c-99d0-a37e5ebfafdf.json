@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "469573157fd509d4d6a29fb0576c34466dd08b6e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:88d093130fa1958b6cfab889af022cbcaa4910cc701f984b48c754b7144870d1",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stats.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794365042003,
+  "expires": null,
+  "frame": [
+    {
+      "address": "77f5259deb7389872484170526d57b22e8842f14",
+      "hash": "sha256:97900423ab5115aa7f3a06091e439e0932ce389958ee80d4a703823e95af7237",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "55"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c847-f192-7237-ad26-fff5f77b2194"
+    }
+  ],
+  "id": "01a1c87d-b2ff-770c-99d0-a37e5ebfafdf",
+  "kind": "decision",
+  "reason": "Each verification names the file of its own feature and the shared helpers instead of command_line.rs, the tests unchanged in what they check; V-28, V-30, V-35, V-44 and REQ-13 restated; stats joins the reading commands; temporary directories hold a counter (#60); checked by a blind review",
+  "revision": "d080c20bf062d54086f8b98e199abcee01a57f2c",
+  "seen": "sha256:fd7ff3f20a0b68ee724cc927bb93d3c310654dccbbcb4600a835f22c6443ee2b",
+  "seen_address": "6fba491531df3913d22834f07e121ce0b51f12de",
+  "subject": "01a1c847-f478-75b4-991d-1d40b11c87a8",
+  "v": 1,
+  "verb": "approve"
+}
