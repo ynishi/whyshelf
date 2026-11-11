@@ -160,8 +160,8 @@
 //! two artifacts. Every answer that names an artifact gives its `space` beside the
 //! name. The name is in `artifact` in a cause, a notice and the declarations of
 //! `judge same`; in `path` and, the same, `name` in `check`'s `absent`, `judge
-//! approve`'s `absent`, a link target of `get` and `trace`, an origin of `stale`, and
-//! an item of `get --approved` and `diff`; and in `name` alone in the `unknown` of
+//! approve`'s `absent`, a link target of `get` and `trace`, an origin of `stale` and
+//! of `stats`, and an item of `get --approved` and `diff`; and in `name` alone in the `unknown` of
 //! `check` and `stale`. A `links_changed` cause of a link to artifacts gives `space` when every
 //! name added and removed is in one space (none when the link moved to another).
 //!
@@ -304,6 +304,9 @@
 //!                             approvals stand on that cannot be told now (`unknown`)
 //!                             (exit 1 with --exit-code when there is any, or when an
 //!                             approval stands on a name that cannot be told now)
+//!   stats [--since <time>]    how the work went, from the ledger: approvals made again, the time
+//!                             documents stayed pending, the runs of judge, and what changed
+//!                             under approvals made again
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
 //!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>]
 //!   judge approve --stale --reason <text> [--until <time>] [--actor <name>]
@@ -429,7 +432,7 @@
 //! and `reason`, null when none was given), or null while it is pending; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
 //! its `space`) and a `detail` sentence; every answer that reads the documents (`check` and
-//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `stale`, `diff`) carries
+//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `stale`, `stats`, `diff`) carries
 //! `health` (files that are no document, cycles, records that contradict one another
 //! or cannot be read). The answers of the writes, of `map` and of `schema` carry
 //! none.
@@ -488,6 +491,18 @@
 //! "request" | "failed", "messages": [...], "candidates": [...], "problems": [...]}`
 //! (`problems`: each problem of a declaration that cannot be used, or of a new
 //! document that would be invalid) and the same chain goes to stderr.
+//!
+//! `stats` answers `{"since", "approvals": {"docs": [{"doc", "approvals", "again",
+//! "revoked"}], "books": [{"book", "docs", "approvals", "again", "revoked"}]},
+//! "pending": [{"book", "count", "median_ms", "p90_ms", "max_ms"}], "runs": {"count",
+//! "median", "p90", "max", "largest": [{"at", "actor", "size"}]}, "origins":
+//! [{"origin", "count"}], "health"}`: `since` as given (RFC 3339 or a date, as
+//! `--until`; null without it), an origin as `stale` names one (`{"kind": "doc",
+//! "doc"}` or `{"kind": "artifact", "path", "name", "space"}`). Each measure, what
+//! `--since` keeps and the order of every list are defined on
+//! [`stats`](domain::shelf::stats). No measure reads a clock: the times are those of
+//! the records and of the identities, so the same ledger and documents always give
+//! the same measures. `health` beside them is read as every answer's is.
 //!
 //! `fmt` answers `{"rewritten": [...], "in_form": <count>, "not_in_form": null,
 //! "left_alone": [{"file", "reason", "line", "detail"}]}`, the files by their path

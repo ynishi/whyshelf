@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794362560195,
+  "expires": null,
+  "frame": [],
+  "id": "01a1c857-ced9-759f-aa44-7565ba066e2b",
+  "kind": "decision",
+  "reason": "How the work goes is derived from the ledger and the documents by one pure function, each measure defined once (#58); checked by a blind review that recomputed the numbers of this repository by hand, every finding fixed",
+  "revision": "fb8a971b32f24f2986c165b1294b4da42a47a65d",
+  "seen": "sha256:94b159103d4509fdfc12d3698c57b8dd2656f70e8a018fa280e7fdcef1fcc317",
+  "seen_address": "160ab60e194516c8c393b836e8d056c977041431",
+  "subject": "01a1c847-ee8b-76b4-9a99-82453f8775d3",
+  "v": 1,
+  "verb": "approve"
+}

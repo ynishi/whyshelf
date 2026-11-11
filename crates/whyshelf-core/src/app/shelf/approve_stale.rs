@@ -106,6 +106,9 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// stale and would hold once approved again; leave out the rest, each with why
     /// (the rule is on the module page).
     ///
+    /// Every approval of the run takes one time, the time of the reading, as
+    /// [`judge_all`](ShelfApp::judge_all)'s records do.
+    ///
     /// `until` applies to every approval of the run, and must be after now: one that
     /// is not is refused before anything is selected, even when nothing is stale
     /// ([`DecisionProblem::ExpiresNotAfter`]). Nothing to approve is an empty run,

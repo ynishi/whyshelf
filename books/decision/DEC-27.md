@@ -9,4 +9,4 @@ rustdoc: ["whyshelf_core::app::shelf::ShelfApp::judge_all", "whyshelf_core::app:
 serves: ["REQ-5"]
 title: "A run of judgements is decided whole before anything is written"
 ---
-Several judgements are decided in order on one reading, each on what the ones before it left, and are written only when all are accepted; a refused one writes none of the run. A port that fails part way through the writes can leave the first of them written, each a sound record of its own.
+Several judgements are decided in order on one reading, each on what the ones before it left, and are written only when all are accepted; a refused one writes none of the run. Every decision of a run takes one time, the time of the reading. A port that fails part way through the writes can leave the first of them written, each a sound record of its own.

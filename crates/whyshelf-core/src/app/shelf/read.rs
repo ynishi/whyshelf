@@ -1,4 +1,5 @@
-//! The use cases that only read: `check`, `map`, `status`, `get`, `trace`, `stale`.
+//! The use cases that only read: `check`, `map`, `status`, `get`, `trace`, `stale`,
+//! `stats`.
 //!
 //! Each builds the schema, the shelf and the ledger ([`load`](super::load)) and asks
 //! the entries of the domain; none writes, and the type they are generic over
@@ -12,6 +13,7 @@
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
 //! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], and the names approvals stand on that cannot be told now |
+//! | `stats` | [`stats::of`](crate::domain::shelf::stats::of), from the ledger and the keys of the shelf; [`assess`] only for the health |
 //!
 //! [`Schema::declared`]: crate::domain::shelf::schema::Schema::declared
 //! [`ShelfMap::of`]: crate::domain::shelf::map::ShelfMap::of
@@ -28,9 +30,11 @@ use std::collections::BTreeSet;
 
 use crate::domain::id::DocId;
 use crate::domain::shelf::freshness::{Freshness, Notice, Standing};
+use crate::domain::shelf::ledger::JudgedAt;
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::schema::{ArtifactPropagation, EntryName};
+use crate::domain::shelf::stats;
 use crate::domain::shelf::trace::{LinkEnd, trace};
 
 use super::ShelfApp;
@@ -39,7 +43,7 @@ use super::load::{Loaded, View, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
     Absent, BookCount, BooksCheck, DownstreamEdge, GetReport, MapReport, StaleEntry, StaleReport,
-    StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
+    StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UpstreamEdge, UpstreamEnd,
 };
 
 /// The identity a reference names, or why it names none.
@@ -339,6 +343,28 @@ impl<P: ShelfRead> ShelfApp<P> {
             entries,
             origins: assessment.origins(),
             unknown,
+            names: loaded.names(),
+            health: view.health(),
+        })
+    }
+
+    /// How the work went, from the ledger and the documents: the measures of
+    /// [`stats::of`], of the records at or after
+    /// `since` when it is given.
+    ///
+    /// No measure reads a clock: each time is one a record or an identity carries.
+    /// The project is read as for every answer, and `health` beside the measures is
+    /// read as every answer's is (the load reads the clock for the assessment it
+    /// comes from, which changes no measure).
+    pub async fn stats(&self, since: Option<JudgedAt>) -> Result<StatsReport, ShelfError> {
+        let loaded = load(&self.ports).await?;
+        let assessment = loaded.assess();
+        let view = View {
+            loaded: &loaded,
+            assessment: &assessment,
+        };
+        Ok(StatsReport {
+            stats: stats::of(&loaded.ledger, &loaded.shelf, since),
             names: loaded.names(),
             health: view.health(),
         })

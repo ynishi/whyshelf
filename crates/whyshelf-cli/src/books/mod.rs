@@ -202,6 +202,23 @@ pub async fn run(root: PathBuf, command: BooksCommand) -> ExitCode {
                 failed => failed,
             }
         }),
+        BooksCommand::Stats { since } => {
+            match since
+                .as_deref()
+                .map(|t| parse_time(t).map_err(|e| format!("--since `{t}`: {e}")))
+                .transpose()
+            {
+                Ok(at) => ShelfApp::new(project)
+                    .stats(at)
+                    .await
+                    .map(|r| print(&output::stats(&r, since.as_deref()))),
+                Err(message) => {
+                    eprintln!("error: {message}");
+                    print(&output::usage(message));
+                    return ExitCode::from(Exit::Request as u8);
+                }
+            }
+        }
         BooksCommand::Diff { reference } => ShelfApp::new(project)
             .diff(&reference)
             .await
