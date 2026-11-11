@@ -153,6 +153,11 @@ and this project adheres to
   approved after it. `init` writes the table beside the documents. A built-in
   preset `code` pins only that a file is there, for a decision's link to its
   code (#93).
+- A space `js-test` names TypeScript and JavaScript tests by their titles
+  (`<file>::<describe>::…::<test>`), Playwright's `test.describe` and the usual
+  aliases included, and the built-in preset `js-test` pins each one's own call,
+  so an edit of another test, or of whitespace or comments, makes nothing
+  stale. It reads the file with a lexer of its own and runs no program (#90).
 - whyshelf's own requirements, decisions and verifications are kept as books
   in the repository (#7; extended in #12).
 
