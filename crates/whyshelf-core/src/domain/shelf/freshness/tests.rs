@@ -350,3 +350,21 @@ fn from_outside_a_cycle_one_edit_and_one_cycle_are_one_root_each() {
         "{roots:?}"
     );
 }
+
+#[test]
+fn every_kind_of_standing_is_listed_once_in_order() {
+    // Naming each kind in a match keeps this test whole: a kind added breaks it.
+    let named = |kind: StandingKind| match kind {
+        StandingKind::Pending => 0,
+        StandingKind::Denied => 1,
+        StandingKind::Deprecated => 2,
+        StandingKind::Retired => 3,
+        StandingKind::Approved(FreshnessLevel::Fresh) => 4,
+        StandingKind::Approved(FreshnessLevel::Expired) => 5,
+        StandingKind::Approved(FreshnessLevel::Stale) => 6,
+        StandingKind::Approved(FreshnessLevel::Broken) => 7,
+    };
+    let positions: Vec<usize> = StandingKind::ALL.into_iter().map(named).collect();
+    assert_eq!(positions, (0..8).collect::<Vec<_>>());
+    assert!(StandingKind::ALL.windows(2).all(|w| w[0] < w[1]));
+}

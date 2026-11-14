@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7a5f82f7ad2e00bf3cfd992664472cdc329f0b7a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:29ed56e67da27793c3b244425281a2fc8030a18fe5554b2b9af68fd9b168535e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cdbd8c92a32bac3d260b521a22afeb108107da82",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:36198eeefb8e5e452b64e9b35ecc697b67578f8a77bbebf273e20a5f7920826a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4134880cc2d760ef4fbadba7eaa8e361d13b9d95",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a0a766e236f8ab142d3843f088b4805b34359f2b766255ae68d19afcf0c8e8ed",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794665500824,
+  "expires": null,
+  "frame": [
+    {
+      "address": "cd6d7ed6f1c08a45b27fbee74418ad77c67bc923",
+      "hash": "sha256:2e8b7091aa685730675adbb16a72a7a38d0350db64807e7602a6622cf36d7bc8",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "16"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-136c-718f-b63c-ca159f35530a"
+    }
+  ],
+  "id": "01a1da66-53c4-717a-9900-e740c7bbd76c",
+  "kind": "decision",
+  "reason": "Their test files changed with #101: the one reading of a text as a field value, the one list of the kinds of standing, and their words read both ways; checked by an independent review",
+  "revision": "ec521a5f6691ad38d1570b1f0f71a69718cff3c9",
+  "seen": "sha256:0997a426f4b2ebf847dd05dc57a7f602271ea252960c58a590818640fa920696",
+  "seen_address": "2eb8a1193d250362b9c546549ccc92564f98f83b",
+  "subject": "01a1c4ba-17ad-715e-afe9-e9a4d2a848c2",
+  "v": 1,
+  "verb": "approve"
+}

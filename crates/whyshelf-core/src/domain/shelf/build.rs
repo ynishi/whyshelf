@@ -68,7 +68,7 @@ use super::doc::{
 use super::graph::{Cycle, CycleSource, cycles_of};
 use super::schema::{
     ArtifactLinkKind, BookName, BookSchema, Cardinality, EntryName, FieldPresence, FieldType,
-    FieldWord, ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
+    ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
     WithoutFrontMatter,
 };
 
@@ -1309,14 +1309,12 @@ fn field_value(
         (FieldType::Integer, RawValue::Integer(n)) => Ok(FieldValue::Integer(*n)),
         (FieldType::Bool, RawValue::Bool(b)) => Ok(FieldValue::Bool(*b)),
         (FieldType::TextList, RawValue::List(items)) => Ok(FieldValue::TextList(items.clone())),
-        (FieldType::Enum(words), RawValue::Text(s)) => FieldWord::new(s)
-            .ok()
-            .filter(|word| words.contains(word))
-            .map(FieldValue::Enum)
-            .ok_or_else(|| DocProblem::FieldNotInEnum {
+        (FieldType::Enum(_), RawValue::Text(s)) => {
+            FieldValue::read(ty, s).ok_or_else(|| DocProblem::FieldNotInEnum {
                 field: field.clone(),
                 found: s.clone(),
-            }),
+            })
+        }
         _ => Err(DocProblem::FieldMismatch {
             field: field.clone(),
             expected: ty.clone(),

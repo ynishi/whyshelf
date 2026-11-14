@@ -17,6 +17,7 @@ use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, SkippedFile};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
 use crate::domain::shelf::exemption::Unneeded;
+use crate::domain::shelf::filter::StatusFilterAsk;
 use crate::domain::shelf::freshness::{
     Degradation, Notice, OriginGroup, RootCause, Severity, Standing, Successors,
 };
@@ -378,14 +379,19 @@ pub enum UnlinkedReport {
     },
 }
 
-/// The result of `status`: every document with what was decided and where it stands.
+/// The result of `status`: the documents that pass the filter, each with what was
+/// decided and where it stands.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusReport {
-    /// Every document the shelf or the ledger knows, by identity.
+    /// Every document the shelf or the ledger knows that passes the filter, by
+    /// identity: all of them when the filter is empty.
     pub rows: Vec<Row>,
-    /// The keys of the valid documents.
+    /// The filter as it was given, so that the rows are read with what they were
+    /// chosen by.
+    pub filters: StatusFilterAsk,
+    /// The keys of the valid documents, of the whole project.
     pub names: Names,
-    /// What is wrong around them.
+    /// What is wrong around the documents, of the whole project and not of the rows.
     pub health: Health,
 }
 

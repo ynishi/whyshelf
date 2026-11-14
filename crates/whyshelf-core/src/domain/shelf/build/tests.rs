@@ -5,7 +5,7 @@ use crate::domain::shelf::fixtures_tests::{
     decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, spaces, text,
 };
 use crate::domain::shelf::graph::CycleId;
-use crate::domain::shelf::schema::Cardinality;
+use crate::domain::shelf::schema::{Cardinality, FieldWord};
 
 fn problems_of(shelf: &Shelf, n: u128) -> Vec<DocProblem> {
     match shelf.state_of(docid(n)) {

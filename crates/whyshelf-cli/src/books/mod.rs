@@ -21,7 +21,7 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now; for `judge exempt`, a document whose file is invalid; one no file carries is a reference that names no document, exit 2) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, a filter of `status` that is not a request (a `--book` that is no name or not declared, a `--standing` that is no standing, a `--where` with no `=`, a field no book declares, or a value no book that declares the field reads), `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
 //! | 3 | the run failed (a file could not be read or written; for `init`, part way too, with the files written listed in `problems`; or a template `init` ships cannot be read) |
 //!
 //! `init` writes the declaration and the documents of a template of
@@ -48,6 +48,8 @@ mod new_tests;
 mod same_meaning_tests;
 #[cfg(test)]
 mod stale_tests;
+#[cfg(test)]
+mod status_ask_tests;
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -62,8 +64,10 @@ use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::id::EntityId;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
+use whyshelf_core::domain::shelf::filter::{FieldAsk, StatusFilterAsk};
+use whyshelf_core::domain::shelf::freshness::StandingKind;
 use whyshelf_core::domain::shelf::ledger::JudgementId;
-use whyshelf_core::domain::shelf::schema::BookName;
+use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
 use whyshelf_infra::shelf::Project;
 use whyshelf_infra::shelf::init;
 use whyshelf_infra::shelf::system::parse_time;
@@ -191,10 +195,21 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
                     failed => failed,
                 })
         }
-        BooksCommand::Status => ShelfApp::new(project)
-            .status()
-            .await
-            .map(|r| print(&output::status(&r))),
+        BooksCommand::Status {
+            books,
+            standings,
+            wheres,
+        } => match status_ask(&books, &standings, &wheres) {
+            Ok(ask) => ShelfApp::new(project)
+                .status_filtered(&ask)
+                .await
+                .map(|r| print(&output::status(&r))),
+            Err(message) => {
+                eprintln!("error: {message}");
+                print(&output::usage(message));
+                return ExitCode::from(Exit::Request as u8);
+            }
+        },
         BooksCommand::Get {
             reference,
             approved: false,
@@ -600,6 +615,12 @@ fn new_request(
     })
 }
 
+/// A `--book` argument as a book name, or why it is none: the one wording of the
+/// mistake for every command that takes one.
+fn book_arg(given: &str) -> Result<BookName, String> {
+    BookName::new(given).map_err(|e| format!("--book `{given}`: {e}"))
+}
+
 /// The filter of an `unlinked` command, or why the arguments are not one (clap keeps
 /// the two flags from being given together).
 fn unlinked_filter(
@@ -607,15 +628,67 @@ fn unlinked_filter(
     no_incoming: bool,
     no_outgoing: bool,
 ) -> Result<UnlinkedFilter, String> {
-    let book = book
-        .map(|b| BookName::new(b).map_err(|e| format!("--book `{b}`: {e}")))
-        .transpose()?;
+    let book = book.map(book_arg).transpose()?;
     let ask = match (no_incoming, no_outgoing) {
         (true, _) => UnlinkedAsk::NoIncoming,
         (false, true) => UnlinkedAsk::NoOutgoing,
         (false, false) => UnlinkedAsk::Both,
     };
     Ok(UnlinkedFilter { book, ask })
+}
+
+/// What a `status` command asks, or why its arguments are not a request: the books
+/// as names, the standings by the words [`output::standing`] prints, and each
+/// `--where` split at its first `=` into a field and a value. Whether the filter
+/// fits the declaration is the model's to say
+/// ([`StatusFilter::new`](whyshelf_core::domain::shelf::filter::StatusFilter::new));
+/// here only the shape of each argument is read.
+fn status_ask(
+    books: &[String],
+    standings: &[String],
+    wheres: &[String],
+) -> Result<StatusFilterAsk, String> {
+    let books = books
+        .iter()
+        .map(|b| book_arg(b))
+        .collect::<Result<_, _>>()?;
+    let standings = standings
+        .iter()
+        .map(|word| {
+            StandingKind::ALL
+                .into_iter()
+                .find(|kind| output::standing(*kind) == word)
+                .ok_or_else(|| {
+                    let known: Vec<&str> = StandingKind::ALL
+                        .into_iter()
+                        .map(output::standing)
+                        .collect();
+                    format!(
+                        "--standing `{word}`: not a standing, one of {}",
+                        known.join(", ")
+                    )
+                })
+        })
+        .collect::<Result<_, _>>()?;
+    let fields = wheres
+        .iter()
+        .map(|given| {
+            let (field, value) = given
+                .split_once('=')
+                .ok_or_else(|| format!("--where `{given}`: expected `<field>=<value>`"))?;
+            let field = EntryName::new(field)
+                .map_err(|e| format!("--where `{given}`: the field `{field}`: {e}"))?;
+            Ok(FieldAsk {
+                field,
+                value: value.to_owned(),
+            })
+        })
+        .collect::<Result<_, String>>()?;
+    Ok(StatusFilterAsk {
+        books,
+        standings,
+        fields,
+    })
 }
 
 /// The exit of `unlinked` once its answer is printed: 1 for a declaration that

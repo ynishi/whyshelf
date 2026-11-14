@@ -95,8 +95,28 @@ pub enum BooksCommand {
     /// them; it reads nothing else, and exits 1 as `check` does when the
     /// declaration cannot be used.
     Map,
-    /// Every document, what was decided about it and whether it still holds.
-    Status,
+    /// The documents, what was decided about each and whether it still holds; every
+    /// document unless filtered. A document must pass every kind of filter given, and
+    /// any one of the values of a kind repeated. `health` is of the whole project,
+    /// not of the documents listed. A book or a field that is not declared, a value
+    /// no book reads as the field's type, or a word that is no standing is a request
+    /// error (exit 2).
+    Status {
+        /// Only the documents of this book; repeat it for any of several books.
+        #[arg(long = "book", value_name = "NAME")]
+        books: Vec<String>,
+        /// Only the documents at this standing, in the word an answer gives as a
+        /// document's `standing` (a word that is none is told with the words there
+        /// are); repeat it for any of several.
+        #[arg(long = "standing", value_name = "WORD")]
+        standings: Vec<String>,
+        /// Only the documents of a book that declares the field, with the value
+        /// given: equal to it, or for a list field holding it as an item; the text
+        /// after the first `=` is the value. Repeat it for each condition a
+        /// document must hold.
+        #[arg(long = "where", value_name = "FIELD=VALUE")]
+        wheres: Vec<String>,
+    },
     /// One document in full, with where its approval stops holding.
     Get {
         /// A key (`REQ-1`, `requirement:REQ-1`), an identifier or a short identifier.

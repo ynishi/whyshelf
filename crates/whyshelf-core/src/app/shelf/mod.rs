@@ -11,6 +11,7 @@
 //! | [`books_check`](ShelfApp::books_check) | no | [`BooksCheck`]: the problems of the declaration, or the faults around the documents |
 //! | [`map`](ShelfApp::map) | no | [`MapReport`]: the problems of the declaration, or its books and links (nothing else is read) |
 //! | [`status`](ShelfApp::status) | no | [`StatusReport`]: every document's declared status and standing |
+//! | [`status_filtered`](ShelfApp::status_filtered) | no | [`StatusReport`]: the documents that pass a filter by book, standing and field, with the filter as given; a filter that does not fit the declaration is [`ShelfError::Filter`] |
 //! | [`get`](ShelfApp::get) | no | [`GetReport`]: one document, its standing, notices and root causes |
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
 //! | [`unlinked`](ShelfApp::unlinked) | no | [`UnlinkedReport`]: the problems of the declaration, or the documents linked neither way, those no link reaches and those that hold none, those decided against apart |
@@ -113,6 +114,8 @@ mod run_tests;
 mod same_meaning_tests;
 #[cfg(test)]
 mod space_tests;
+#[cfg(test)]
+mod status_filter_tests;
 #[cfg(test)]
 mod successor_tests;
 #[cfg(test)]

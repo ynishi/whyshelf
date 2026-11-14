@@ -30,8 +30,8 @@ use crate::domain::nonempty::TwoOrMore;
 
 use super::artifact::{Artifact, ArtifactKey, ArtifactState, Untold};
 use super::schema::{
-    ArtifactLinkKind, ArtifactPropagation, BookName, EntryName, FieldWord, KeyForm, KeyProblem,
-    LinkKind, Propagation,
+    ArtifactLinkKind, ArtifactPropagation, BookName, EntryName, FieldType, FieldWord, KeyForm,
+    KeyProblem, LinkKind, Propagation,
 };
 
 /// The key of a document: its book, and its key in the grammar of that book.
@@ -68,6 +68,32 @@ pub enum FieldValue {
 }
 
 impl FieldValue {
+    /// One text as the value of a field of the type `ty`, or none when it is not
+    /// one: a whole number for `Integer`, `true` or `false` for `Bool`, a listed word
+    /// for `Enum`, the text itself for `Text`. A `TextList` takes no single text (its
+    /// items are read one by one), so it is none.
+    ///
+    /// The one place a text is read as the value of a type: a caller that must tell
+    /// a text of a type from one that is not (the typing of what a person gave, the
+    /// check of an enum word, the filter of `status`) asks here and decides only
+    /// what a miss means to it.
+    pub fn read(ty: &FieldType, text: &str) -> Option<FieldValue> {
+        match ty {
+            FieldType::Text => Some(Self::Text(text.to_owned())),
+            FieldType::Integer => text.parse().ok().map(Self::Integer),
+            FieldType::Bool => match text {
+                "true" => Some(Self::Bool(true)),
+                "false" => Some(Self::Bool(false)),
+                _ => None,
+            },
+            FieldType::TextList => None,
+            FieldType::Enum(words) => FieldWord::new(text)
+                .ok()
+                .filter(|word| words.contains(word))
+                .map(Self::Enum),
+        }
+    }
+
     /// The canonical form of a value, tagged with its type, so that a field that
     /// changes type changes a hash even when the text stays.
     pub(super) fn to_canon(&self) -> Canon {
@@ -523,6 +549,91 @@ impl Doc {
     /// The hash of the document.
     pub fn hash(&self) -> &DocHash {
         &self.hash
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use crate::domain::nonempty::NonEmptySet;
+
+    use super::{FieldType, FieldValue, FieldWord};
+
+    fn word(text: &str) -> FieldWord {
+        FieldWord::new(text).expect("a word")
+    }
+
+    fn colours() -> FieldType {
+        let words: BTreeSet<FieldWord> = ["red", "green"].into_iter().map(word).collect();
+        FieldType::Enum(NonEmptySet::from_set(words).expect("not empty"))
+    }
+
+    #[test]
+    fn text_is_read_as_itself() {
+        for text in ["", "a b", "12", "true"] {
+            assert_eq!(
+                FieldValue::read(&FieldType::Text, text),
+                Some(FieldValue::Text(text.to_owned())),
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_integer_is_a_whole_number() {
+        assert_eq!(
+            FieldValue::read(&FieldType::Integer, "12"),
+            Some(FieldValue::Integer(12))
+        );
+        assert_eq!(
+            FieldValue::read(&FieldType::Integer, "-3"),
+            Some(FieldValue::Integer(-3))
+        );
+        for text in ["x", "1.5", "", " 1", "#41"] {
+            assert_eq!(
+                FieldValue::read(&FieldType::Integer, text),
+                None,
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_bool_is_true_or_false() {
+        assert_eq!(
+            FieldValue::read(&FieldType::Bool, "true"),
+            Some(FieldValue::Bool(true))
+        );
+        assert_eq!(
+            FieldValue::read(&FieldType::Bool, "false"),
+            Some(FieldValue::Bool(false))
+        );
+        for text in ["yes", "True", "1", ""] {
+            assert_eq!(FieldValue::read(&FieldType::Bool, text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn an_enum_takes_only_its_words() {
+        assert_eq!(
+            FieldValue::read(&colours(), "red"),
+            Some(FieldValue::Enum(word("red")))
+        );
+        for text in ["blue", "Red", "", "not a word"] {
+            assert_eq!(FieldValue::read(&colours(), text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_text_list_takes_no_single_text() {
+        for text in ["a", "a, b", ""] {
+            assert_eq!(
+                FieldValue::read(&FieldType::TextList, text),
+                None,
+                "{text:?}"
+            );
+        }
     }
 }
 

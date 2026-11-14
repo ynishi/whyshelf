@@ -443,7 +443,10 @@ impl Freshness {
 }
 
 /// A [`Freshness`] without its causes, for a display and for a notice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// The order (`Fresh`, `Expired`, `Stale`, `Broken`, as declared) is for sorting
+/// only, not a weight: how strong a degradation is, is a [`Severity`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FreshnessLevel {
     /// It holds.
     Fresh,
@@ -509,7 +512,10 @@ impl From<&Standing> for Decided {
 }
 
 /// A [`Standing`] without its causes, for a display and for a notice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// The order (as declared, an approval after the other kinds and by its level) is
+/// for sorting only, not a weight: how strong a degradation is, is a [`Severity`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StandingKind {
     /// No decision stands.
     Pending,
@@ -521,6 +527,22 @@ pub enum StandingKind {
     Retired,
     /// Approved, at this level.
     Approved(FreshnessLevel),
+}
+
+impl StandingKind {
+    /// Every kind, in their order: the one list of them, so that a surface that
+    /// names each kind (in words, as an answer prints them) reads them all from here
+    /// and a word can be read back. A test checks that it holds each kind once.
+    pub const ALL: [StandingKind; 8] = [
+        StandingKind::Pending,
+        StandingKind::Denied,
+        StandingKind::Deprecated,
+        StandingKind::Retired,
+        StandingKind::Approved(FreshnessLevel::Fresh),
+        StandingKind::Approved(FreshnessLevel::Expired),
+        StandingKind::Approved(FreshnessLevel::Stale),
+        StandingKind::Approved(FreshnessLevel::Broken),
+    ];
 }
 
 /// Something worth knowing about a document that changes no freshness.

@@ -29,7 +29,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::{NewDoc, RawValue, Shelf};
-use crate::domain::shelf::doc::{DocKey, UnresolvedLink};
+use crate::domain::shelf::doc::{DocKey, FieldValue, UnresolvedLink};
 use crate::domain::shelf::schema::{BookName, BookSchema, EntryName, FieldType};
 
 use super::ShelfApp;
@@ -214,12 +214,11 @@ fn typed(book: &BookSchema, name: &str, text: &str) -> RawValue {
     }
     match book.fields().get(name).map(|decl| &decl.ty) {
         Some(FieldType::TextList) => list(text),
-        Some(FieldType::Bool) => match text {
-            "true" => RawValue::Bool(true),
-            "false" => RawValue::Bool(false),
+        Some(ty @ (FieldType::Bool | FieldType::Integer)) => match FieldValue::read(ty, text) {
+            Some(FieldValue::Bool(b)) => RawValue::Bool(b),
+            Some(FieldValue::Integer(n)) => RawValue::Integer(n),
             _ => as_text(),
         },
-        Some(FieldType::Integer) => text.parse().map_or_else(|_| as_text(), RawValue::Integer),
         Some(FieldType::Text | FieldType::Enum(_)) | None => as_text(),
     }
 }

@@ -16,6 +16,7 @@ use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem};
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::ExemptRefusal;
+use crate::domain::shelf::filter::FilterProblem;
 use crate::domain::shelf::ledger::{
     DecisionProblem, FrameRefusal, MovedRefusal, SameMeaningProblem, SameMeaningRefusal,
     WithdrawRefusal,
@@ -42,6 +43,11 @@ pub enum ShelfError {
     /// Every problem is listed.
     #[error("the declaration of the books has {} problem(s)", .0.len())]
     Schema(NonEmptyVec<SchemaProblem>),
+    /// The filter of `status` does not fit the declaration of the books: a book or a
+    /// field that is not declared, or a value no book that declares the field reads.
+    /// Every problem is listed.
+    #[error("the filter has {} problem(s)", .0.len())]
+    Filter(NonEmptyVec<FilterProblem>),
     /// The reference names nothing: no document, and no record of the ledger.
     #[error("`{reference}` names no document")]
     NotFound {
@@ -301,6 +307,7 @@ impl ShelfError {
     pub fn class(&self) -> ErrorClass {
         match self {
             Self::Schema(_)
+            | Self::Filter(_)
             | Self::NotFound { .. }
             | Self::Ambiguous { .. }
             | Self::UnknownBook { .. }
