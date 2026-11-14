@@ -98,7 +98,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
-use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
+use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
 
 use super::artifact::{ArtifactHash, ArtifactKey, ArtifactState, Comparison, Untold};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
@@ -291,32 +291,115 @@ pub enum Cause {
     },
 }
 
+/// What happened at an origin, as far as it decides what can settle it.
+///
+/// Why: an [`Origin`] says where and not what, and what can settle a document that
+/// was edited is not what can settle an artifact that is gone. A value per kind of
+/// cause would be too fine to settle by (an edit of a document and of an artifact
+/// are settled alike), and the three ways a pinned upstream can be declared (not
+/// decided, replaced, refused) differ in what a person can do, so the events group
+/// the [`Cause`]s that are settled alike. The one place a cause becomes an event is
+/// [`Cause::located`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum OriginEvent {
+    /// A document or an artifact is not what was pinned: [`Cause::SelfChanged`],
+    /// [`Cause::UpstreamChanged`], [`Cause::ArtifactChanged`].
+    Edited,
+    /// An artifact pinned as not there is there now: [`Cause::ArtifactArrived`].
+    Arrived,
+    /// An artifact pinned as there is not there now: [`Cause::ArtifactGone`].
+    Gone,
+    /// An approval lapsed: [`Cause::Expired`].
+    Expired,
+    /// What a link names, or how it compares, is not what was pinned:
+    /// [`Cause::LinksChanged`], [`Cause::ArtifactLinksChanged`],
+    /// [`Cause::ArtifactComparisonChanged`].
+    Relinked,
+    /// A link writes a name the artifact was declared moved away from:
+    /// [`Cause::ArtifactMoved`].
+    LinkBehindMove,
+    /// A pinned upstream has no decision: [`Cause::UpstreamDeclared`] of
+    /// [`UpstreamStatus::Pending`].
+    UpstreamPending,
+    /// A pinned upstream was deprecated and others take its place:
+    /// [`Cause::UpstreamDeclared`] of [`UpstreamStatus::Deprecated`] with successors.
+    UpstreamSuperseded,
+    /// A pinned upstream was decided against with nothing in its place:
+    /// [`Cause::UpstreamDeclared`] of [`UpstreamStatus::Denied`],
+    /// [`UpstreamStatus::Retired`], or [`UpstreamStatus::Deprecated`] with none.
+    UpstreamRefused,
+    /// A document is no valid document now: [`Cause::SelfNotValid`],
+    /// [`Cause::UpstreamNotValid`].
+    NotValid,
+    /// A cycle: [`Cause::InCycle`].
+    Cycle,
+}
+
 impl Cause {
-    /// Where this cause starts, held by the document `holder`: the upstream a pin
-    /// names, the artifact an artifact pin names, the declaration for a comparison
-    /// changed, the cycle for a cycle, else the holder itself (its own text, links
-    /// or expiry). A `Via` starts nowhere of its own (it leads to its upstream's
-    /// causes). The one place an origin is assigned.
-    pub fn origin(&self, holder: DocId) -> Option<Origin> {
+    /// Where this cause starts and what happened there, held by the document
+    /// `holder`: the upstream a pin names, the artifact an artifact pin names, the
+    /// declaration for a comparison changed, the cycle for a cycle, else the holder
+    /// itself (its own text, links or expiry). A `Via` starts nowhere of its own (it
+    /// leads to its upstream's causes), so it has neither.
+    ///
+    /// The one match over the kinds of cause for both answers, so that the origin a
+    /// cause is under and the event it is cannot come apart: a new kind of cause is
+    /// not built until it says both. An `UpstreamDeclared` is split by its
+    /// [`UpstreamStatus`] as [`Cause::severity`] splits it, and its successors are
+    /// read the same way.
+    pub fn located(&self, holder: DocId) -> Option<(Origin, OriginEvent)> {
         match self {
             Self::Via { .. } => None,
-            Self::SelfChanged { .. }
-            | Self::SelfNotValid(_)
-            | Self::LinksChanged { .. }
-            | Self::ArtifactLinksChanged { .. }
-            | Self::ArtifactMoved { .. }
-            | Self::Expired { .. } => Some(Origin::Doc(holder)),
-            Self::UpstreamNotValid { pin, .. }
-            | Self::UpstreamChanged { pin, .. }
-            | Self::UpstreamDeclared { pin, .. } => Some(Origin::Doc(pin.target())),
+            Self::SelfChanged { .. } => Some((Origin::Doc(holder), OriginEvent::Edited)),
+            Self::SelfNotValid(_) => Some((Origin::Doc(holder), OriginEvent::NotValid)),
+            Self::LinksChanged { .. } | Self::ArtifactLinksChanged { .. } => {
+                Some((Origin::Doc(holder), OriginEvent::Relinked))
+            }
+            Self::ArtifactMoved { .. } => Some((Origin::Doc(holder), OriginEvent::LinkBehindMove)),
+            Self::Expired { .. } => Some((Origin::Doc(holder), OriginEvent::Expired)),
+            Self::UpstreamNotValid { pin, .. } => {
+                Some((Origin::Doc(pin.target()), OriginEvent::NotValid))
+            }
+            Self::UpstreamChanged { pin, .. } => {
+                Some((Origin::Doc(pin.target()), OriginEvent::Edited))
+            }
+            Self::UpstreamDeclared { pin, status } => Some((
+                Origin::Doc(pin.target()),
+                match status {
+                    UpstreamStatus::Pending => OriginEvent::UpstreamPending,
+                    UpstreamStatus::Deprecated {
+                        successors: Successors::Some(_),
+                    } => OriginEvent::UpstreamSuperseded,
+                    UpstreamStatus::Denied
+                    | UpstreamStatus::Retired
+                    | UpstreamStatus::Deprecated {
+                        successors: Successors::None,
+                    } => OriginEvent::UpstreamRefused,
+                },
+            )),
             // The name the pin is read as: an edit after a move is of the new name,
             // whichever name each approval pinned.
-            Self::ArtifactChanged { pin, .. }
-            | Self::ArtifactGone { pin }
-            | Self::ArtifactArrived { pin, .. } => Some(Origin::Artifact(pin.read_as().clone())),
-            Self::ArtifactComparisonChanged { .. } => Some(Origin::Declaration),
-            Self::InCycle { cycle } => Some(Origin::Cycle(*cycle)),
+            Self::ArtifactChanged { pin, .. } => {
+                Some((Origin::Artifact(pin.read_as().clone()), OriginEvent::Edited))
+            }
+            Self::ArtifactGone { pin } => {
+                Some((Origin::Artifact(pin.read_as().clone()), OriginEvent::Gone))
+            }
+            Self::ArtifactArrived { pin, .. } => Some((
+                Origin::Artifact(pin.read_as().clone()),
+                OriginEvent::Arrived,
+            )),
+            Self::ArtifactComparisonChanged { .. } => {
+                Some((Origin::Declaration, OriginEvent::Relinked))
+            }
+            Self::InCycle { cycle } => Some((Origin::Cycle(*cycle), OriginEvent::Cycle)),
         }
+    }
+
+    /// Where this cause starts ([`Cause::located`] without the event); the origin is
+    /// assigned there and nowhere else.
+    pub fn origin(&self, holder: DocId) -> Option<Origin> {
+        self.located(holder).map(|(origin, _)| origin)
     }
 
     /// How strongly this cause degrades an approval. The one place a strength is
@@ -686,7 +769,8 @@ pub struct RootCause {
 }
 
 /// Where an event that degrades approvals starts. It names the thing, not what
-/// happened to it, so every approval one edit reaches is under one origin.
+/// happened to it ([`OriginEvent`] says that), so every approval one edit reaches is
+/// under one origin.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Origin {
     /// A document: edited, invalid or gone, declared about, or holding a link or an
@@ -702,13 +786,38 @@ pub enum Origin {
     Cycle(CycleId),
 }
 
-/// One origin, with the approvals it degrades.
+/// One origin, with the approvals it degrades, the ones that hold a cause there
+/// themselves, and what happened there.
+///
+/// Why `held` is kept beside `degraded`: `degraded` says who is hurt, and settling
+/// the origin needs two more facts. The approval that holds the cause itself is the
+/// one whose `diff` shows the change (one degraded only through an upstream shows
+/// none), and the kind of event decides what can settle it ([`settle`](super::settle)
+/// reads both). They are kept as pairs, since the approval whose `diff` shows one
+/// event of an origin may show nothing of another (an approval made again on the
+/// edited text, which lapsed, holds the lapse and not the edit).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OriginGroup {
     /// Where it starts.
     pub origin: Origin,
     /// The degraded approvals one of whose roots starts there.
     pub degraded: BTreeSet<DocId>,
+    /// Each event of a cause under this origin, with an approval that holds that
+    /// cause itself (the last document of a root's path), event first: the
+    /// approvals are a subset of `degraded`, those whose `diff` shows that event.
+    pub held: NonEmptySet<(OriginEvent, DocId)>,
+}
+
+impl OriginGroup {
+    /// What happened here: the events of every cause under this origin, each once.
+    pub fn events(&self) -> BTreeSet<OriginEvent> {
+        self.held.iter().map(|(event, _)| *event).collect()
+    }
+
+    /// The approvals that hold a cause of this origin themselves, of any event.
+    pub fn holders(&self) -> BTreeSet<DocId> {
+        self.held.iter().map(|(_, holder)| *holder).collect()
+    }
 }
 
 /// The standing of every document, and what is wrong around them.
@@ -817,13 +926,19 @@ impl Assessment {
     /// Where the degradations of the approvals start, each origin with every
     /// degraded approval one of whose roots ([`Assessment::roots_of`]) starts there;
     /// the origin that degrades the most first, then by origin. An approval with
-    /// roots at two origins is under both.
+    /// roots at two origins is under both. Each group also keeps each event of the
+    /// causes under it ([`Cause::located`]) with the approvals that hold such a
+    /// cause themselves (the last document of a root's path).
     ///
     /// The one place roots are grouped across documents: an edit of one file that
     /// several approvals pin, or of one document seen from several below, is one
     /// origin, read once.
     pub fn origins(&self) -> Vec<OriginGroup> {
-        let mut by_origin: BTreeMap<Origin, BTreeSet<DocId>> = BTreeMap::new();
+        /// The degraded approvals of an origin, and its events with who holds each.
+        type Gathered = (BTreeSet<DocId>, NonEmptySet<(OriginEvent, DocId)>);
+        // An origin exists only once a cause is under it, so what it holds is made
+        // with that cause's event and holder, and the rest are added to it.
+        let mut by_origin: BTreeMap<Origin, Gathered> = BTreeMap::new();
         for (id, standing) in &self.standings {
             if !matches!(standing, Standing::Approved(Freshness::Degraded(_))) {
                 continue;
@@ -834,14 +949,22 @@ impl Assessment {
                 let Some(&holder) = root.path.last() else {
                     continue;
                 };
-                if let Some(origin) = root.cause.origin(holder) {
-                    by_origin.entry(origin).or_default().insert(*id);
+                if let Some((origin, event)) = root.cause.located(holder) {
+                    let (degraded, held) = by_origin.entry(origin).or_insert_with(|| {
+                        (BTreeSet::new(), NonEmptySet::new((event, holder), []))
+                    });
+                    degraded.insert(*id);
+                    held.insert((event, holder));
                 }
             }
         }
         let mut groups: Vec<OriginGroup> = by_origin
             .into_iter()
-            .map(|(origin, degraded)| OriginGroup { origin, degraded })
+            .map(|(origin, (degraded, held))| OriginGroup {
+                origin,
+                degraded,
+                held,
+            })
             .collect();
         groups.sort_by(|a, b| {
             b.degraded

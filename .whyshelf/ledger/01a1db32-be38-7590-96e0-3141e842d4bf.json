@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794678898205,
+  "expires": null,
+  "frame": [],
+  "id": "01a1db32-be38-7590-96e0-3141e842d4bf",
+  "kind": "decision",
+  "reason": "stale answers, for each origin, the commands that can settle it, decided by one rule of the domain and written from the clap definition (#102); the design passed an independent design review and an architecture rule check, and the code a review and the rule check",
+  "revision": "7ad9d1afdec123597fe7e8c4dca08044559f8cba",
+  "seen": "sha256:2848fa26ff9f29ddb67bd47a8dfb7bf24e37cadceffcf057abbebf3090d737af",
+  "seen_address": "c35b2e2a3048c2003f9ca82c1f7ad58efcd0ec59",
+  "subject": "01a1db32-2726-709b-807c-7fbe6964ff12",
+  "v": 1,
+  "verb": "approve"
+}

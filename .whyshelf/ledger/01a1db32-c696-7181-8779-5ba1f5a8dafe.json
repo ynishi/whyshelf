@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9859d9aa3defae34e4e47f516ce6636596452b54",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:046165edd29c0f64be8815c7d31a0315260e1f0822f72cec07d0a651419f0171",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7980f5131d267bac3f97d85f3e9817974eb66a21",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e15a35a2bbbb0a085a5a2e617ad2689442d34f722ccc3110447ed6e9412d0594",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794678899482,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dd0e5707780e85491b9c13754b478a42dafef598",
+      "hash": "sha256:5089b781fd38bcf72981af3eb39b0e32da52504204ae0e7b58be839c82ba3cd8",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a1db32-c696-7181-8779-5ba1f5a8dafe",
+  "kind": "decision",
+  "reason": "Their files changed with #102: the origins keep what happened and who holds the cause, what --stale takes is foreseen from the same parts as the run, and the commands of next are written from the clap definition; checked by an independent review",
+  "revision": "7ad9d1afdec123597fe7e8c4dca08044559f8cba",
+  "seen": "sha256:5b1c2f7ab122b40b82fda145d65666ad2572b1bc4857745be1c93d22d6f6559c",
+  "seen_address": "fa1da8c7bf4098f7dd3fcfb641b049e127490913",
+  "subject": "01a1c9f3-b108-73b3-b1df-7e62e073cb0b",
+  "v": 1,
+  "verb": "approve"
+}

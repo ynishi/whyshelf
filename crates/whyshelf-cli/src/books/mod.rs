@@ -52,7 +52,7 @@ mod stale_tests;
 mod status_ask_tests;
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
@@ -134,7 +134,7 @@ pub fn refuse_arguments(error: &clap::Error) -> ExitCode {
 /// Run a command on the project at `root`.
 ///
 /// `root` is the `--root` given, if one was (the current directory otherwise): the
-/// `next` commands of `init` carry it as it was typed.
+/// `next` commands of `init` and of `stale` carry it as it was typed.
 pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
     let typed_root = root.clone();
     let project = Project::new(
@@ -154,20 +154,10 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
                 Err(error) => return failed_run(&error),
             };
             let book = template.first_book();
-            let root = match &typed_root {
-                None => output::NextRoot::Current,
-                Some(root) => root
-                    .to_str()
-                    .map_or(output::NextRoot::NotText, output::NextRoot::Given),
-            };
+            let root = next_root(typed_root.as_deref());
             ShelfApp::new(project).init(request).await.map(|done| {
                 let exit = print(&output::initialized(&done, book, root));
-                if let (output::NextRoot::NotText, Some(typed)) = (root, &typed_root) {
-                    eprintln!(
-                        "warning: no next command is given: the root {} is no UTF-8 text, so a command cannot be written with it",
-                        typed.display()
-                    );
-                }
+                warn_no_next(root, typed_root.as_deref());
                 exit
             })
         }
@@ -246,7 +236,9 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
             }
         },
         BooksCommand::Stale { exit_code } => ShelfApp::new(project).stale().await.map(|r| {
-            let exit = print(&output::stale(&r));
+            let root = next_root(typed_root.as_deref());
+            let exit = print(&output::stale(&r, root));
+            warn_no_next(root, typed_root.as_deref());
             for warning in output::stale_warnings(&r) {
                 eprintln!("{warning}");
             }
@@ -697,6 +689,29 @@ fn unlinked_exit(report: &UnlinkedReport) -> Exit {
     match report {
         UnlinkedReport::SchemaInvalid { .. } => Exit::Stopped,
         UnlinkedReport::Answered { .. } => Exit::Ok,
+    }
+}
+
+/// The `--root` a run had, as the commands of a `next` carry it: none when none was
+/// typed, the text as typed, or, for one that is no UTF-8 text, a root no command can
+/// be written with. The one place this is decided, for `init` and `stale`.
+fn next_root(typed: Option<&Path>) -> output::NextRoot<'_> {
+    match typed {
+        None => output::NextRoot::Current,
+        Some(root) => root
+            .to_str()
+            .map_or(output::NextRoot::NotText, output::NextRoot::Given),
+    }
+}
+
+/// Say on stderr that no `next` command is given, when `root` is one none can be
+/// written with ([`next_root`]); nothing otherwise. `typed` is the root as typed.
+fn warn_no_next(root: output::NextRoot<'_>, typed: Option<&Path>) {
+    if let (output::NextRoot::NotText, Some(typed)) = (root, typed) {
+        eprintln!(
+            "warning: no next command is given: the root {} is no UTF-8 text, so a command cannot be written with it",
+            typed.display()
+        );
     }
 }
 

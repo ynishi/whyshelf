@@ -111,6 +111,24 @@ impl<T> NonEmptyVec<T> {
 pub struct NonEmptySet<T: Ord>(BTreeSet<T>);
 
 impl<T: Ord> NonEmptySet<T> {
+    /// A set of one element and more: each element is held once, so a `first` that
+    /// `rest` repeats is one element.
+    ///
+    /// Why: a caller that gathers elements one at a time knows the first one before
+    /// it knows the rest, and can make the set without a check that cannot fail
+    /// ([`NonEmptySet::from_set`] is for a set that may be empty).
+    pub fn new(first: T, rest: impl IntoIterator<Item = T>) -> Self {
+        let mut items = BTreeSet::new();
+        items.insert(first);
+        items.extend(rest);
+        Self(items)
+    }
+
+    /// Add `item`, which the set holds once; a set never becomes empty by it.
+    pub fn insert(&mut self, item: T) {
+        self.0.insert(item);
+    }
+
     /// A set from the elements given, refused when there are none.
     pub fn from_set(items: BTreeSet<T>) -> Result<Self, ValueError> {
         if items.is_empty() {
@@ -288,6 +306,20 @@ mod tests {
         assert!(!set.is_empty());
         assert!(set.contains(&2) && !set.contains(&9));
         assert_eq!(set.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn a_set_made_of_a_first_and_the_rest_holds_a_repeated_element_once_in_order() {
+        let one = NonEmptySet::new(5, []);
+        assert_eq!(one.len(), 1);
+        assert_eq!(one.iter().copied().collect::<Vec<_>>(), vec![5]);
+        let set = NonEmptySet::new(3, [1, 3, 2, 1]);
+        assert_eq!(set.len(), 3);
+        assert_eq!(set.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+        assert_eq!(
+            set,
+            NonEmptySet::from_set(BTreeSet::from([1, 2, 3])).unwrap()
+        );
     }
 
     #[test]
