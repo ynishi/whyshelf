@@ -10,6 +10,14 @@ and this project adheres to
 
 ### Added
 
+- Each origin of `stale` carries `next`: the commands that can settle it, as
+  they are typed and in the order a person would try them (read the diff,
+  declare the edit the same, look for moves and declare one, approve a pending
+  upstream, approve again with an expiry, or approve again what an edit made
+  stale), with the run's `--root`. A command is offered only where it can
+  settle that origin, and whyshelf runs none of them. In the library, an
+  origin keeps what happened there and the approvals that hold its causes, and
+  `settle::settlements` lists what settles it (#102).
 - `status --book <name>`, `--standing <word>` and `--where <field>=<value>`,
   each repeatable: the answer has only the documents that pass, with the
   filters beside the rows. A book or field the declaration does not have, or a
