@@ -32,6 +32,7 @@ use crate::domain::shelf::schema::{
 };
 use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
 use crate::domain::shelf::stats::Stats;
+use crate::domain::shelf::untold::UntoldName;
 
 use crate::domain::location::RelPath;
 
@@ -258,6 +259,20 @@ pub struct Unknown {
     pub artifact: ArtifactKey,
     /// Why it cannot be told.
     pub why: Untold,
+}
+
+impl UntoldName for Unknown {
+    fn doc(&self) -> DocId {
+        self.doc
+    }
+
+    fn artifact(&self) -> &ArtifactKey {
+        &self.artifact
+    }
+
+    fn why(&self) -> &Untold {
+        &self.why
+    }
 }
 
 /// A document a covering link is expected to reach and does not.

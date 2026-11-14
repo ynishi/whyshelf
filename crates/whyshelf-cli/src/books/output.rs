@@ -12,8 +12,8 @@ use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, ChosenApproved, Created, Declared, DeclaredAbout, DiffItem,
     DiffReport, DownstreamEdge, ErrorClass, Exempted, FmtReport, GetReport, Health, Initialized,
     Judged, JudgedAll, LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, Row,
-    ShelfError, StaleReport, StatsReport, StatusReport, TraceReport, UnlinkedEntry, UnlinkedReport,
-    UpstreamEdge, UpstreamEnd,
+    ShelfError, StaleReport, StatsReport, StatusReport, TraceReport, Unknown, UnlinkedEntry,
+    UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::build::NewDocProblem;
@@ -23,6 +23,7 @@ use whyshelf_core::domain::shelf::snapshot::{
     ItemNow, ItemRole, Retrieval, SeenHash, SnapshotItem,
 };
 use whyshelf_core::domain::shelf::stats::Origin as ChangedPin;
+use whyshelf_core::domain::shelf::untold::{Held, UntoldCause, Writers, untold_causes};
 
 use super::textdiff;
 use whyshelf_core::domain::id::DocId;
@@ -2056,9 +2057,12 @@ impl Namer<'_> {
 }
 
 /// The lines `check` writes on stderr: one per document a covering link of
-/// strength `warn` does not reach, in the order of `uncovered`, then one per name
-/// that cannot be told now, in the order of `unknown`, then one per name with
-/// nothing there, in the order of `absent`, then one per name a link still writes
+/// strength `warn` does not reach, in the order of `uncovered`, then one per cause
+/// of names that cannot be told now, in the order the causes first appear in
+/// `unknown` (the names of one cause are one line, as [`untold_causes`] gathers
+/// them, naming the document or documents that write them; the answer on stdout
+/// keeps every name), then one per name with nothing
+/// there, in the order of `absent`, then one per name a link still writes
 /// that was declared moved since an approval pinned it, in the order of `moved`,
 /// then one per exemption no longer needed, in the order of `exemption_unneeded`,
 /// then one per document exempt from one link more than once, in the order of
@@ -2091,18 +2095,9 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
                 u.book, u.link
             )
         });
-    let untold = unknown.iter().map(|u| {
-        let doc = u
-            .key
-            .as_ref()
-            .map_or_else(|| u.doc.to_string(), ToString::to_string);
-        format!(
-            "warning: {doc} names {} in {}, which cannot be told: {}",
-            u.artifact.name(),
-            u.artifact.space(),
-            u.why
-        )
-    });
+    let untold = untold_causes(unknown)
+        .into_iter()
+        .map(|cause| untold_line(&cause, &CHECK_UNTOLD));
     let nothing = absent.iter().map(|a| {
         let doc = a
             .key
@@ -2167,31 +2162,123 @@ pub fn check_notes(check: &BooksCheck) -> Vec<String> {
             format!(
                 "note: book {} skipped {count} file{} with no front matter",
                 book.name,
-                if count == 1 { "" } else { "s" }
+                plural(count)
             )
         })
         .collect()
 }
 
-/// The lines `stale` writes on stderr: one per name an approval stands on that
-/// cannot be told now, in the order of `unknown`.
+/// The lines `stale` writes on stderr: one per cause that stands behind names an
+/// approval stands on that cannot be told now, in the order the causes first
+/// appear in `unknown`, each naming the approving document or documents. The rule
+/// that gathers is [`untold_causes`]; the answer on stdout keeps every name.
 pub fn stale_warnings(report: &StaleReport) -> Vec<String> {
-    report
-        .unknown
-        .iter()
-        .map(|u| {
-            let doc = u
-                .key
-                .as_ref()
-                .map_or_else(|| u.doc.to_string(), ToString::to_string);
-            format!(
-                "warning: {doc} pins {} in {}, which cannot be told now, so whether its approval holds cannot be said: {}",
-                u.artifact.name(),
-                u.artifact.space(),
-                u.why
-            )
-        })
+    untold_causes(&report.unknown)
+        .into_iter()
+        .map(|cause| untold_line(&cause, &STALE_UNTOLD))
         .collect()
+}
+
+/// How many names of one cause, and how many of its documents, a warning line
+/// writes before it says how many more.
+const UNTOLD_NAMES_SHOWN: usize = 3;
+
+/// The words in which `check` and `stale` differ when they write one cause of names
+/// that cannot be told now.
+struct UntoldWords {
+    /// What the document does with the name, for one name: `names`, `pins`.
+    verb: &'static str,
+    /// What follows `which cannot be told`, for one name.
+    one_after: &'static str,
+    /// Before the number of documents, for many names of many documents.
+    by: &'static str,
+    /// What follows `cannot be told`, for many names of one document. Like
+    /// `one_after`, it comes before the reason, which is the adapter's own text.
+    writer_after: &'static str,
+    /// What follows `cannot be told`, for many names of many documents.
+    many_after: &'static str,
+}
+
+const CHECK_UNTOLD: UntoldWords = UntoldWords {
+    verb: "names",
+    one_after: "",
+    by: "named by",
+    writer_after: "",
+    many_after: "",
+};
+
+const STALE_UNTOLD: UntoldWords = UntoldWords {
+    verb: "pins",
+    one_after: " now, so whether its approval holds cannot be said",
+    by: "pinned by the approvals of",
+    writer_after: " now, so whether its approval holds cannot be said",
+    many_after: " now, so whether those approvals hold cannot be said",
+};
+
+/// The one line for one cause of names that cannot be told now, as `words` word it.
+/// The one place a cause is written: for one (document, name) pair the line says
+/// them; for more it says the number of names, the reason once, the document (one,
+/// by its key) or the number of documents with their first [`UNTOLD_NAMES_SHOWN`]
+/// keys, and the first [`UNTOLD_NAMES_SHOWN`] names.
+fn untold_line(cause: &UntoldCause<'_, Unknown>, words: &UntoldWords) -> String {
+    let (space, why) = (cause.space(), cause.why());
+    match cause.held() {
+        Held::One(u) => format!(
+            "warning: {} {} {} in {space}, which cannot be told{}: {why}",
+            document(u),
+            words.verb,
+            u.artifact.name(),
+            words.one_after
+        ),
+        Held::Many { names, docs } => {
+            let n = names.len();
+            let names = first_few(names.iter().map(|name| name.as_str().to_owned()), n);
+            match docs {
+                Writers::One(u) => format!(
+                    "warning: {} {} {n} names in {space}, which cannot be told{}, each for this reason: {why}; names: {names}",
+                    document(u),
+                    words.verb,
+                    words.writer_after
+                ),
+                Writers::Many(writers) => {
+                    let d = writers.len();
+                    let keys = first_few(writers.iter().map(|u| document(u)), d);
+                    format!(
+                        "warning: {n} name{} in {space}, {} {d} documents ({keys}), cannot be told{}, each for this reason: {why}; names: {names}",
+                        plural(n),
+                        words.by,
+                        words.many_after
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// The document of a name as a line writes it: its key, else its identity.
+fn document(u: &Unknown) -> String {
+    u.key
+        .as_ref()
+        .map_or_else(|| u.doc.to_string(), ToString::to_string)
+}
+
+/// The first [`UNTOLD_NAMES_SHOWN`] of `total` items joined by `, `, then `, and N
+/// more` when there are more. The one list a line writes, of names and of
+/// documents.
+fn first_few(items: impl Iterator<Item = String>, total: usize) -> String {
+    let shown = items
+        .take(UNTOLD_NAMES_SHOWN)
+        .collect::<Vec<String>>()
+        .join(", ");
+    match total.checked_sub(UNTOLD_NAMES_SHOWN) {
+        Some(more) if more > 0 => format!("{shown}, and {more} more"),
+        _ => shown,
+    }
+}
+
+/// `s` unless the number is one.
+fn plural(count: usize) -> &'static str {
+    if count == 1 { "" } else { "s" }
 }
 
 /// A problem of the declaration as every answer gives it: its text, then the text
@@ -3803,6 +3890,8 @@ mod map_tests;
 mod same_meaning_tests;
 #[cfg(test)]
 mod stats_tests;
+#[cfg(test)]
+mod untold_tests;
 
 #[cfg(test)]
 mod tests {

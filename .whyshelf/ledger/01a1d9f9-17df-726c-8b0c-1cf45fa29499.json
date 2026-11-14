@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "36e0c2eabdcc5385c39a74e02b8b1362e62e173c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e2e38ba7ea85f14c38eed8b67f091c47fd6ba8c216ca9c535d5ca1c3b136f98a",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5378974f0842e63034bcd91592df32e5fac61607",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9793e5997369b263042565e5298647743dbf2a63ada0dfa23451d464d048a4c0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/untold.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794658342626,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1d3941b06543a1053823591e9c3a787ca8b477f2",
+      "hash": "sha256:b35fa912b51a8f51352a7e31f6c7fc41dc3e5d51f098a6299f43d7b126bdaac7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "69"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1d9f7-a611-74b7-88a2-a58381f213dc"
+    }
+  ],
+  "id": "01a1d9f9-17df-726c-8b0c-1cf45fa29499",
+  "kind": "decision",
+  "reason": "The gathering by cause and the lines it gives are tested as DEC-69 says, in the domain, the command line and on the binary (#99); checked by an independent review",
+  "revision": "979c92d6dca98e377c7a0b6a02b3efc673b1d883",
+  "seen": "sha256:d1e38b5a33b5a44d7d02d2a039ce1e7b7c0730818271a1aed819a37377624d11",
+  "seen_address": "4ae484fdd678e7fff4e77a42615ced6c400f3fec",
+  "subject": "01a1d9f7-b95d-734c-b32e-ff3280f1907c",
+  "v": 1,
+  "verb": "approve"
+}

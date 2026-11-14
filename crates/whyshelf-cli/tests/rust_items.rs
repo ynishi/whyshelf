@@ -1,9 +1,10 @@
 //! The promises of the space `rust-item` and its preset `rustdoc`, on the binary: a
 //! link that uses the preset tells a path its docs do not have as absent and one of
-//! a crate whose docs are not built as unknown, each on stderr too; it refuses an
-//! approval that would pin the latter, keeps an approval through an edit of an
-//! item's docs, and breaks it when the item goes away; `stale --exit-code` fails
-//! while an approval stands on a name that cannot be told.
+//! a crate whose docs are not built as unknown, each on stderr too (the names that
+//! cannot be told for one reason are one line there; the answer keeps every name);
+//! it refuses an approval that would pin the latter, keeps an approval through an
+//! edit of an item's docs, and breaks it when the item goes away; `stale
+//! --exit-code` fails while an approval stands on a name that cannot be told.
 //!
 //! The docs are a small tree of HTML laid out as rustdoc writes it, in a build
 //! directory `CARGO_TARGET_DIR` names, so no crate is built and no program but the
@@ -207,6 +208,28 @@ fn a_crate_whose_docs_are_not_built_is_unknown_and_no_approval_stands_on_it() {
     let refused = project.run(&["judge", "approve", "N-1"]);
     assert_ne!(refused.status.code(), Some(0));
     assert_eq!(project.standing().0, "pending");
+}
+
+#[test]
+fn names_of_one_crate_whose_docs_are_not_built_are_one_line_and_the_answer_keeps_each() {
+    let project = Project::new("one-cause", &["other::Item", "other::Thing"]);
+    let output = project.run(&["check"]);
+    assert_eq!(output.status.code(), Some(0));
+    let check = json(&output);
+    assert_eq!(check["clean"], true, "{check}");
+    assert_eq!(names(&check["unknown"]), ["other::Item", "other::Thing"]);
+    let lines = stderr(&output);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].starts_with(
+            "warning: note:N-1 names 2 names in rust-item, which cannot be told, each for this reason: the docs of the crate `other` are not built"
+        ),
+        "{lines:?}"
+    );
+    assert!(
+        lines[0].ends_with("names: other::Item, other::Thing"),
+        "{lines:?}"
+    );
 }
 
 #[test]

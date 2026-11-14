@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794658331301,
+  "expires": null,
+  "frame": [],
+  "id": "01a1d9f8-eb5b-7570-b267-5f2815948e5e",
+  "kind": "decision",
+  "reason": "Names that cannot be told are warned of once per cause, by the space and the reason, naming the documents; the rule is one function of the domain that check and stale both ask (#99); the design passed an independent design review and the code two rounds of review",
+  "revision": "979c92d6dca98e377c7a0b6a02b3efc673b1d883",
+  "seen": "sha256:e88093488f4c6b4f9c78f39d77541688a130111971aae65ede2106875d8623b3",
+  "seen_address": "edb6ccc8cd1bce338c5d1e0efeeacb14a8f7535b",
+  "subject": "01a1d9f7-95be-73e7-bba4-95d6b97e56c7",
+  "v": 1,
+  "verb": "approve"
+}

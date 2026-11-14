@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `check` and `stale` write one warning line on stderr per cause of names that
+  cannot be told now, not one per name: names of one space with an equal reason
+  are one line, which says the reason once, how many names, and the documents
+  that write them by key. A cause of one name keeps the line it had. The JSON
+  answers still list every name (#99).
+
 ### Fixed
 
 - The page of `whyshelf_core::domain::shelf` and the doc of `Slug` no longer
