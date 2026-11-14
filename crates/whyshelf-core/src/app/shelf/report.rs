@@ -31,6 +31,7 @@ use crate::domain::shelf::order::HeldBack;
 use crate::domain::shelf::schema::{
     BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
 };
+use crate::domain::shelf::settle::Settlement;
 use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
 use crate::domain::shelf::stats::Stats;
 use crate::domain::shelf::untold::UntoldName;
@@ -477,15 +478,32 @@ pub struct StaleEntry {
     pub roots: Vec<RootCause>,
 }
 
+/// An origin of stale approvals with what can settle it.
+///
+/// Why they come together: what can settle an origin is read once, in the domain
+/// ([`settlements`]), from the origin and from the shelf's choice of what
+/// `judge approve --stale` takes, and a surface writes it in its own words; the
+/// application only puts the two side by side.
+///
+/// [`settlements`]: crate::domain::shelf::settle::settlements
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettledOrigin {
+    /// Where the degradations start, and what they degrade.
+    pub group: OriginGroup,
+    /// What can settle it, in the order a person would try it.
+    pub next: Vec<Settlement>,
+}
+
 /// The result of `stale`: the approvals that no longer hold.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StaleReport {
     /// The documents, the strongest degradation first.
     pub entries: Vec<StaleEntry>,
-    /// Where their degradations start ([`Assessment::origins`]).
+    /// Where their degradations start ([`Assessment::origins`]), each with what can
+    /// settle it.
     ///
     /// [`Assessment::origins`]: crate::domain::shelf::freshness::Assessment::origins
-    pub origins: Vec<OriginGroup>,
+    pub origins: Vec<SettledOrigin>,
     /// The names that approved documents stand on through a `depends` link and
     /// that their adapter cannot tell about now: their freshness is unchanged, and
     /// whether their approvals hold cannot be said.

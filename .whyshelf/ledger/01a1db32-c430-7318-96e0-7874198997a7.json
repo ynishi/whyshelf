@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "121e3a3edaa4bb072a69311fcb40c7cde295ed1b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b67b50d66f1657cf90a9dcdfff472d20b4d5e0ba8c8f000ce7165e3b3bcd1337",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794678899482,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a1db32-c430-7318-96e0-7874198997a7",
+  "kind": "decision",
+  "reason": "Their files changed with #102: the origins keep what happened and who holds the cause, what --stale takes is foreseen from the same parts as the run, and the commands of next are written from the clap definition; checked by an independent review",
+  "revision": "7ad9d1afdec123597fe7e8c4dca08044559f8cba",
+  "seen": "sha256:88358390b91499d7e01ee8eca2447d308887c5c4e9a0377c415c34da4434293c",
+  "seen_address": "befd8c4f9003053924576f918f04c779b3cf2e8d",
+  "subject": "01a1c5ae-37cb-7230-9fce-a99ff188132c",
+  "v": 1,
+  "verb": "approve"
+}

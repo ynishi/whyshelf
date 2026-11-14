@@ -61,6 +61,26 @@ pub fn stale(assessment: &Assessment) -> StaleChoice {
     choice
 }
 
+/// The approvals a run of `judge approve --stale` alone would make again, as far as
+/// it can be told before the run: those [`stale`] takes again that no upstream holds
+/// back ([`held_back`]), taken upstream first ([`upstream_first`]) as the run takes
+/// them, so that one standing on a pending upstream, which `--stale` does not
+/// approve, holds back what stands on it in turn. One the run leaves out for what
+/// only the run finds (its frame refused, a repeat) is not foreseen.
+pub fn stale_taken(shelf: &Shelf, ledger: &Ledger, assessment: &Assessment) -> BTreeSet<DocId> {
+    let run = stale(assessment).again;
+    let mut left_out = BTreeSet::new();
+    let mut taken = BTreeSet::new();
+    for id in upstream_first(shelf, ledger, &run) {
+        if held_back(shelf, assessment, id, &run, &left_out).is_some() {
+            left_out.insert(id);
+        } else {
+            taken.insert(id);
+        }
+    }
+    taken
+}
+
 /// What stands about a document that is not pending: a decision. There is no
 /// pending kind, so a [`NotPending`] cannot say "pending".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

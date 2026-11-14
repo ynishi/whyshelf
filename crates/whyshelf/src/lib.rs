@@ -675,7 +675,9 @@
 //! the ledger like a decision: it is read on every run, never stored as a result, and
 //! is refused when the document is not valid, the file is not there, or nothing
 //! pinned another hash of it. One made by mistake is taken back with `judge withdraw
-//! <record id>` (the id each notice names), and the edit is a change again.
+//! <record id>` (the id each notice names), and the edit is a change again. `stale`
+//! lists this declaration, typed, beside the other ways to settle an edit: see
+//! [What settles an origin](#what-settles-an-origin).
 //!
 //! ## An artifact that moved
 //!
@@ -710,7 +712,8 @@
 //! cause, `get --approved` and `diff` show the name pinned and, beside it as
 //! `read_as`, the name it is read as; what it is now is asked of that name. A
 //! declaration is a record like the others, and `judge withdraw <record id>` takes it
-//! back.
+//! back. `stale` lists `moves` and `judge moved` for a file that is gone, with the
+//! old name filled in: see [What settles an origin](#what-settles-an-origin).
 //!
 //! `moves` finds the names to declare, and declares nothing. It lists every name a
 //! `judge moved` could be declared of now (a name some pin of something there, of an
@@ -730,6 +733,49 @@
 //! looked at is a `note` of the name. A space that has no way to suggest
 //! (`rust-item`, `rust-test` and `js-test`, for now) is listed in `cannot_suggest`, and its names with no
 //! candidate.
+//!
+//! ## What settles an origin
+//!
+//! `stale` gives each origin (where degradations start) a `next`: the commands that
+//! can settle it, as they are typed, in the order a person would try them: read
+//! what changed (`diff`), then declare (`judge same`, `moves`, `judge moved`), then
+//! approve. whyshelf does not guess what an edit means: `next` lists what can be
+//! said and says none of it, and whyshelf runs none of it. What a person is to
+//! write is a word in `<...>` (a reason, a time, a new name), which a shell reads
+//! as one quoted word, so it is replaced and not left. A document is written as
+//! `book:KEY`, which no other document has, or by its identity when it has no valid
+//! key; an artifact by its name. Each command carries `--root=<dir>` when the run
+//! had a `--root`, as the `next` of `init` does; a `--root` that is not UTF-8 text
+//! gives an empty `next` and a warning on stderr.
+//!
+//! What can settle an origin depends on what happened there, and the last column is
+//! whether `judge approve --stale` can: the rule is stated once, on the page of
+//! [`domain::shelf::settle`], and this is its summary.
+//!
+//! | what happened | what `next` lists | `judge approve --stale` |
+//! |---|---|---|
+//! | a document or an artifact was edited | `diff` of an approval that holds the cause, `judge same` of the document or the artifact, and `--stale` | listed |
+//! | an artifact came where there was none, or a link names something else, or compares otherwise | `diff`, and `--stale` | listed |
+//! | an artifact is gone | `moves`, and `judge moved <name> '<new name>'` with the old name filled in | not listed: it is broken |
+//! | an approval lapsed | `judge approve <ref> --until '<time>'` | not listed: it would approve without an expiry |
+//! | an upstream has no decision | `judge approve <upstream>` | not listed: approving again changes nothing until it is decided |
+//! | an upstream was replaced, or a link writes a name the artifact moved away from | nothing to type: write the link to the successor, or to the new name | not listed |
+//! | an upstream was decided against, a document is not valid, or a cycle | nothing to type: mend the file, or look at the decision again | not listed |
+//!
+//! `--stale` is listed last, and only when it would take an approval under the
+//! origin. Three things to know before using it:
+//!
+//! - it acts on the whole shelf: every approval that is expired or stale, not only
+//!   those under this origin;
+//! - it approves with no expiry unless `--until` is given, so an approval that had
+//!   one loses it; when an origin holds both an expiry and an edit, `--until` and
+//!   `--stale` are both listed, and the second drops what the first keeps;
+//! - `judge same` may be refused when approvals pinned several earlier hashes that
+//!   do not mean the same: `next` gives it without `--from`, and the refusal lists
+//!   the hashes, from which a person picks one and adds `--from <hash>`.
+//!
+//! An origin that is the declaration (a link to artifacts that now declares another
+//! comparison) is no one document or artifact, so nothing is declared of it.
 //!
 //! ## What an approval saw
 //!
@@ -776,7 +822,8 @@
 //!                             otherwise 0, whatever it lists)
 //!   stale [--exit-code]       the approvals that no longer hold, strongest first, with their roots,
 //!                             and their origins: each document, artifact, cycle or the declaration where
-//!                             they start, with the approvals it degrades, and the names
+//!                             they start, with the approvals it degrades and the commands that can
+//!                             settle it (`next`, see "What settles an origin"), and the names
 //!                             approvals stand on that cannot be told now (`unknown`)
 //!                             (exit 1 with --exit-code when there is any, or when an
 //!                             approval stands on a name that cannot be told now)

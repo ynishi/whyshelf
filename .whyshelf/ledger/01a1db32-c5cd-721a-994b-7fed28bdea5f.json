@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "57949977e4980de76b604c832bdac0e36bcb5960",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e32dadd66771876d8ac32468b2a72dd9baf2ceb13622e6554724a01f2571d057",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794678899482,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a1db32-c5cd-721a-994b-7fed28bdea5f",
+  "kind": "decision",
+  "reason": "Their files changed with #102: the origins keep what happened and who holds the cause, what --stale takes is foreseen from the same parts as the run, and the commands of next are written from the clap definition; checked by an independent review",
+  "revision": "7ad9d1afdec123597fe7e8c4dca08044559f8cba",
+  "seen": "sha256:f0d024aee4843f41683dc9aff36557fefe56a55ba61c442c56d473bfa528e548",
+  "seen_address": "2bae666575c15209babd3fc5e224232627fa8e58",
+  "subject": "01a1c765-24a9-7452-abc1-0e695ee0321d",
+  "v": 1,
+  "verb": "approve"
+}

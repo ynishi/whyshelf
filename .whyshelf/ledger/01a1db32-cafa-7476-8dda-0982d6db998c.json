@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "57949977e4980de76b604c832bdac0e36bcb5960",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e32dadd66771876d8ac32468b2a72dd9baf2ceb13622e6554724a01f2571d057",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794678901297,
+  "expires": null,
+  "frame": [
+    {
+      "address": "16e8b5aedde30ca72b7409d5772911d201ff3199",
+      "hash": "sha256:1d828a6c4409a5402a4834ca62303ea402ab7ca9d6b4accf585cbfb4f88fe1e5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a1db32-cafa-7476-8dda-0982d6db998c",
+  "kind": "decision",
+  "reason": "The location of causes, the settlements of each origin and the commands written for them are tested as DEC-71 says, in the domain, the command line and on the binary (#102); checked by an independent review",
+  "revision": "7ad9d1afdec123597fe7e8c4dca08044559f8cba",
+  "seen": "sha256:d73b471501349e9f372bce51b21d83fe751e57daa6486f2bb054203c3c7af25d",
+  "seen_address": "f3a0524d9fa991dff45b634090f178604dddc855",
+  "subject": "01a1db32-31ed-7567-8c87-09f427a88ec3",
+  "v": 1,
+  "verb": "approve"
+}

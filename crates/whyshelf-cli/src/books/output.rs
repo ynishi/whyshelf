@@ -754,13 +754,23 @@ pub struct StaleOut {
     pub health: HealthOut,
 }
 
-/// Where the degradations of approvals start, with what they degrade.
+/// Where the degradations of approvals start, with what they degrade and what can
+/// settle them.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct OriginOut {
     /// Where it starts.
     pub start: StartOut,
     /// The approvals it degrades, each also an entry of `stale`, by identity.
     pub degraded: Vec<DocRef>,
+    /// The commands that can settle it, as they are typed, in the order a person
+    /// would try them: read what changed, then declare, then approve. Each is for a
+    /// person to run (whyshelf runs none) and to complete: what a person writes
+    /// (a reason, a time, a new name) is a word in `<...>`. whyshelf does not guess
+    /// what an edit means, so none of them is said for you. Each carries the `--root`
+    /// the run had; empty for an origin nothing can be typed for, and when that root
+    /// is no UTF-8 text. What settles what is in the manual, under "What settles an
+    /// origin".
+    pub next: Vec<String>,
 }
 
 /// The thing an origin is.
@@ -2683,8 +2693,9 @@ pub fn unlinked(report: &UnlinkedReport) -> UnlinkedOut {
     }
 }
 
-/// The answer of `stale`.
-pub fn stale(report: &StaleReport) -> StaleOut {
+/// The answer of `stale`. `root` is the `--root` the run had, which each command of
+/// an origin's `next` carries.
+pub fn stale(report: &StaleReport, root: NextRoot<'_>) -> StaleOut {
     let namer = Namer(&report.names);
     StaleOut {
         stale: report
@@ -2698,8 +2709,9 @@ pub fn stale(report: &StaleReport) -> StaleOut {
         origins: report
             .origins
             .iter()
-            .map(|group| OriginOut {
-                start: match &group.origin {
+            .map(|settled| OriginOut {
+                next: next::commands(&settled.next, &report.names, root),
+                start: match &settled.group.origin {
                     Origin::Doc(id) => StartOut::Doc(DocNamed {
                         doc: namer.doc(*id),
                     }),
@@ -2713,7 +2725,12 @@ pub fn stale(report: &StaleReport) -> StaleOut {
                         smallest: namer.doc(cycle.min),
                     },
                 },
-                degraded: group.degraded.iter().map(|id| namer.doc(*id)).collect(),
+                degraded: settled
+                    .group
+                    .degraded
+                    .iter()
+                    .map(|id| namer.doc(*id))
+                    .collect(),
             })
             .collect(),
         unknown: report
@@ -3678,11 +3695,7 @@ fn shell_word(text: &str) -> String {
     }
 }
 
-/// The reason the `next` of `init` gives to the approval of the documents it made,
-/// for a person to replace with theirs.
-const INIT_REASON: &str = "read, and it holds";
-
-/// The root `init` ran with, as the `next` commands are to carry it.
+/// The root `init` or `stale` ran with, as the `next` commands are to carry it.
 #[derive(Debug, Clone, Copy)]
 pub enum NextRoot<'a> {
     /// No `--root`: the commands carry none.
@@ -3698,26 +3711,14 @@ pub enum NextRoot<'a> {
 /// `init` made none; `root` the `--root` it ran with, which every command of `next`
 /// carries.
 pub fn initialized(done: &Initialized, book: Option<&str>, root: NextRoot<'_>) -> InitOut {
-    let whyshelf = match root {
-        NextRoot::Given(root) => format!("whyshelf --root={}", shell_word(root)),
-        NextRoot::Current => "whyshelf".to_owned(),
-        NextRoot::NotText => String::new(),
-    };
-    let mut next = vec![format!("{whyshelf} check"), format!("{whyshelf} map")];
-    if matches!(root, NextRoot::NotText) {
-        next.clear();
-    } else if done.docs.is_empty() {
-        next.extend(book.map(|book| format!("{whyshelf} new {book} --title \"A first {book}\"")));
+    // A book's directory may hold documents of the person's own: `next` names the
+    // documents `init` made that no other of them stands on.
+    let heads: Vec<String> = if done.docs.is_empty() {
+        Vec::new()
     } else {
-        // A book's directory may hold documents of the person's own: name the
-        // documents it made that no other of them stands on, so the run takes those
-        // and the pending ones they stand on, upstream first, and nothing else.
-        let heads: Vec<String> = done.heads.iter().map(|k| k.form.to_string()).collect();
-        next.push(format!(
-            "{whyshelf} judge approve --pending {} --reason \"{INIT_REASON}\"",
-            heads.join(" ")
-        ));
-    }
+        done.heads.iter().map(|k| k.form.to_string()).collect()
+    };
+    let next = next::after_init(book, &heads, root);
     InitOut {
         declaration: done.declaration.to_string(),
         files: done.files.iter().map(ToString::to_string).collect(),
@@ -3931,6 +3932,7 @@ fn join<T: std::fmt::Display>(items: impl Iterator<Item = T>) -> String {
 }
 
 mod diagram;
+mod next;
 mod summary;
 
 #[cfg(test)]

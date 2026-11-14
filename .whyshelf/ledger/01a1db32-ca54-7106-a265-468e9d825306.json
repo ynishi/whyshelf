@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "4c914cc35fed7cf8dae41c5af2f88ed64a85ac57",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:324acb7045eede2515e3829f6135e84c859e8f12742235452b9eb6eef995592c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/next.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "121e3a3edaa4bb072a69311fcb40c7cde295ed1b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b67b50d66f1657cf90a9dcdfff472d20b4d5e0ba8c8f000ce7165e3b3bcd1337",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b094e6ae5911714e4b2d7c11b6478799445d509f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5259d3b5a34d7acd9b8b1646f4e1bf67a776e7bd3c6d544e347e2fb3d2e4cd92",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794678901297,
+  "expires": null,
+  "frame": [
+    {
+      "address": "16e8b5aedde30ca72b7409d5772911d201ff3199",
+      "hash": "sha256:1d828a6c4409a5402a4834ca62303ea402ab7ca9d6b4accf585cbfb4f88fe1e5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a1db32-ca54-7106-a265-468e9d825306",
+  "kind": "decision",
+  "reason": "The location of causes, the settlements of each origin and the commands written for them are tested as DEC-71 says, in the domain, the command line and on the binary (#102); checked by an independent review",
+  "revision": "7ad9d1afdec123597fe7e8c4dca08044559f8cba",
+  "seen": "sha256:cde05d80b1c3a2ab1edabc2715507320075b2e35f76050fd9085b82da44bcbbc",
+  "seen_address": "774f5954aa64cfec89dffa9aa28ea6c238ce66f0",
+  "subject": "01a1db32-2f0d-760c-b870-8844f72644d6",
+  "v": 1,
+  "verb": "approve"
+}
