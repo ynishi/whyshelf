@@ -1,11 +1,9 @@
-//! A shelf of documents whose kinds a project declares: the second model of whyshelf.
+//! A shelf of documents whose kinds a project declares: the model of whyshelf.
 //!
-//! The model of the rest of [`domain`](crate::domain) has three fixed kinds of
-//! document (Finding, Spec, Design), and every rule knows them. A shelf has none
-//! built in. A project declares *books* (a directory, a grammar of keys, fields,
-//! links to other books), and the same rules serve every book: what a document is,
-//! what it links to, what people decided about it, and whether that decision still
-//! holds.
+//! A shelf has no kind of document built in. A project declares *books* (a
+//! directory, a grammar of keys, fields, links to other books), and the same rules
+//! serve every book: what a document is, what it links to, what people decided
+//! about it, and whether that decision still holds.
 //!
 //! # The pieces
 //!
@@ -59,8 +57,8 @@
 //! Each arrow points from a module to what it uses, and nothing points back: a
 //! schema knows no document, a document no shelf, a graph no document at all (only
 //! identities), a ledger no freshness. The problem and refusal types are in the
-//! module that makes them (there is no shared error module, which would turn that
-//! around).
+//! module that makes them (there is no error module shared among them, which would
+//! turn that around).
 //!
 //! The documents are read, and the ledger's records are turned into JSON and back,
 //! by adapters; this module sees only values. It has no file, process,
@@ -168,14 +166,6 @@
 //!
 //! # Known limitations
 //!
-//! - **Files of the older model.** This module uses of the older model only value
-//!   types that do not depend on a kind of document: [`ContentHash`] and
-//!   [`HashKind`], [`Canon`], [`EntityId`], [`DocId`] and [`ShortId`], [`RelPath`],
-//!   [`Actor`], the non-empty collections and [`ValueError`]. Those files still sit
-//!   beside the older model's (`error.rs` and `location.rs` use its types for other
-//!   errors and values), so the whole dependency on it is cut only when the older
-//!   model is removed and these types are split out. Nothing here calls a function
-//!   of the older model.
 //! - **A key is unique within its book.** Across books the same text can be a key,
 //!   which is why a bare key can be [`Resolution::Ambiguous`].
 //! - **An identity in an unreadable file.** When some file's `id:` cannot be read,
@@ -190,15 +180,6 @@
 //!   replaced, and a duplicate key that results is told by the build when the file
 //!   is mended.
 //!
-//! [`ContentHash`]: crate::domain::hash::ContentHash
-//! [`HashKind`]: crate::domain::hash::HashKind
-//! [`Canon`]: crate::domain::canon::Canon
-//! [`EntityId`]: crate::domain::id::EntityId
-//! [`DocId`]: crate::domain::id::DocId
-//! [`ShortId`]: crate::domain::id::ShortId
-//! [`RelPath`]: crate::domain::location::RelPath
-//! [`Actor`]: crate::domain::actor::Actor
-//! [`ValueError`]: crate::domain::error::ValueError
 //! [`Shelf::artifact_asks`]: build::Shelf::artifact_asks
 //! [`Artifact`]: artifact::Artifact
 //! [`ArtifactHash`]: artifact::ArtifactHash

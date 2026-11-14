@@ -437,8 +437,11 @@ impl fmt::Display for KeyName {
 
 /// A key written as a path of lowercase words, such as `cache/timeout`.
 ///
-/// The rules are those of an alias of the older model, and one more: a text in the
-/// form of a UUID is refused too, so that a slug is never mistaken for an identity.
+/// A slug is not empty and has at most 128 characters. It holds only ASCII
+/// lowercase letters, digits, `.`, `-`, `_` and `/`, and none of the segments `/`
+/// parts it into is empty, so it neither begins nor ends with `/`. A text in the
+/// form of a short id or of a UUID is refused, so that a slug is never mistaken
+/// for an identity.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Slug(String);
 
