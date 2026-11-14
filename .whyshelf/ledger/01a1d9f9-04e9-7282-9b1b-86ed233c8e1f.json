@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f955d14b256d3034d0fabd83064837f80864e21d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0bb505eadb2c33b4e4b17d41ca3b599fcf17d52a070375ab95f24145f62e33fb",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794658336393,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f9dc8fc79db836111cf6fae457d425ee33ef822b",
+      "hash": "sha256:c6ef0f92361e2d1659090198b4cf196e98913c967f54cd592c5e601d289932bd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "54"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c811-cfe5-739d-9535-559effdfed85"
+    }
+  ],
+  "id": "01a1d9f9-04e9-7282-9b1b-86ed233c8e1f",
+  "kind": "decision",
+  "reason": "REQ-13 is grounded on F-40, and the lines of check and stale for names that cannot be told are gathered by cause (#99); checked by an independent review",
+  "revision": "979c92d6dca98e377c7a0b6a02b3efc673b1d883",
+  "seen": "sha256:539e1fdd15fa96db2070406f94d826b8df4363ef7fb2dc6bfb6d4efebc99b227",
+  "seen_address": "f32bd4acd2f3b5b03d2b357764e68ed8e197bf6b",
+  "subject": "01a1c811-de0a-70c2-aff0-e988ee3e70e0",
+  "v": 1,
+  "verb": "approve"
+}

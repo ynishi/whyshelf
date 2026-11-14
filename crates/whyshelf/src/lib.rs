@@ -506,15 +506,29 @@
 //! `artifact_absent` notice. A name its adapter cannot tell about now is listed under
 //! `check`'s `unknown` (the check stays clean) with an `artifact_unknown` notice; an
 //! approval that would pin one is refused, and one already pinned changes nothing of
-//! the approval while it lasts. `check` also writes each such name on stderr, as it
-//! does a gap of `warn`: `warning: <key> names <name> in <space>, which cannot be
-//! told: <why>`, or `…, which has nothing behind it`. A gate cannot say an approval
+//! the approval while it lasts. `check` also writes such names on stderr, as it does
+//! a gap of `warn`, one line for each cause, not for each name: what is mended is
+//! the cause (the docs of a crate are built), and names of one space with an equal
+//! reason share one (the adapter of `rust-item` gives one reason for each crate
+//! whose docs are not built). A cause that holds back one name of one document is
+//! `warning: <key> names <name> in <space>, which cannot be told: <why>`; one that
+//! holds back more names of one document is `warning: <key> names <n> names in
+//! <space>, which cannot be told, each for this reason: <why>; names: <names>`, and
+//! of two or more documents `warning: <n> names in <space>, named by <d> documents
+//! (<keys>), cannot be told, each for this reason: <why>; names: <names>` (`1 name`
+//! when the documents write one name). Here
+//! `<names>` is the first three names joined by `, `, followed by `, and <k> more`
+//! when there are more, and `<keys>` the keys of the first three documents the same
+//! way (a document with no key by its identity), so a line says which documents to
+//! look at. The answer on stdout keeps every
+//! name. A name with nothing there is a
+//! line of its own, `…, which has nothing behind it`. A gate cannot say an approval
 //! holds that stands on a name that cannot be told, so `stale` lists each name an
 //! approved document pins through a `depends` link that cannot be told now in its
 //! `unknown` (`doc`, `link`, `name`, `space`, `why`, as `check`'s), and
-//! `stale --exit-code` exits 1 for one too, with `warning: <key> pins <name> in
-//! <space>, which cannot be told now, …` on stderr; its freshness is still
-//! unchanged. Afterwards:
+//! `stale --exit-code` exits 1 for one too, with the lines of that rule, worded as a
+//! pin, on stderr (`warning: <key> pins <name> in <space>, which cannot be told now,
+//! …`); its freshness is still unchanged. Afterwards:
 //!
 //! | the pinned artifact | now | the approval is |
 //! |---|---|---|

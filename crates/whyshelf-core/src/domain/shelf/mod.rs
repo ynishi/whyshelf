@@ -52,6 +52,8 @@
 //!                                                        judged in again
 //!   stats     ──► artifact, doc, build, ledger,        stats::of ──► Stats         (how the work went,
 //!                 schema                                 from the records alone)
+//!   untold    ──► artifact                             untold_causes ──► UntoldCause (names that
+//!                                                        cannot be told, by cause)
 //! ```
 //!
 //! Each arrow points from a module to what it uses, and nothing points back: a
@@ -128,6 +130,7 @@
 //! | which documents a run of approvals takes: the expired or stale ones, or the pending ones | [`order::stale`], [`order::pending`] and [`order::pending_upstream`] (one document: [`order::pending_of`]), from an [`Assessment`] | the identities, with the broken ones told apart for `stale` |
 //! | the order a set of approvals is judged in again | [`upstream_first`](order::upstream_first), from the links and the pins | the identities, upstream first |
 //! | how the work went: approvals made again, pending time, runs, the pins that changed | [`stats::of`], from every decision and the keys now; the measures are defined on its page | a [`Stats`](stats::Stats) |
+//! | which names that cannot be told now share a cause, whether a cause holds back one (document, name) or many, and whether one document or many writes the names of such a cause | [`untold_causes`](untold::untold_causes), by the space and the [`Untold`](artifact::Untold) (`Eq`), once | [`UntoldCause`](untold::UntoldCause) with its [`Held`](untold::Held) and [`Writers`](untold::Writers) |
 //!
 //! Two of these cannot be enforced by visibility alone: `DocHash::restore` and
 //! `ArtifactHash::restore` are visible to the whole module (the hash is made in
@@ -322,6 +325,7 @@ pub mod schema;
 pub mod snapshot;
 pub mod stats;
 pub mod trace;
+pub mod untold;
 
 #[cfg(test)]
 mod fixtures_tests;
