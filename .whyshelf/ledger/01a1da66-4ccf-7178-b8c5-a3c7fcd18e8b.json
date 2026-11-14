@@ -1,0 +1,90 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::doc::FieldValue::read",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::filter::FilterProblem",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::filter::StatusFilter",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::filter::StatusFilterAsk",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794665499430,
+  "expires": null,
+  "frame": [
+    {
+      "address": "26cb25776035a7d173de371b84455e4b7b648aa2",
+      "hash": "sha256:ab8464c469da81401a5e66dff2f64d6b75d189c80dc720917a92e02ba74d0d84",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "30"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1da61-c1f5-72cb-8c42-ac06b87cc358"
+    }
+  ],
+  "id": "01a1da66-4ccf-7178-b8c5-a3c7fcd18e8b",
+  "kind": "decision",
+  "reason": "status takes filters by book, standing and field value, checked against the declaration and admitted by one rule of the domain (#101); the design passed an independent design review and an architecture rule check, and the code a review",
+  "revision": "ec521a5f6691ad38d1570b1f0f71a69718cff3c9",
+  "seen": "sha256:af41c43a0e80b1188cca7939d34ce86874bfb6b296e4304a36bf28c7551d6c70",
+  "seen_address": "78d274ba73a348933ca997fdac74b14d99372799",
+  "subject": "01a1da61-c4da-7651-9e22-b50a80e5726b",
+  "v": 1,
+  "verb": "approve"
+}

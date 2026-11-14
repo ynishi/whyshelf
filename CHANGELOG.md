@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `status --book <name>`, `--standing <word>` and `--where <field>=<value>`,
+  each repeatable: the answer has only the documents that pass, with the
+  filters beside the rows. A book or field the declaration does not have, or a
+  value no book that declares the field can read, is a request error (exit 2)
+  with every problem. In the library, `ShelfApp::status_filtered` beside
+  `status`, which is unchanged (#101).
+
 ### Changed
 
 - `check` and `stale` write one warning line on stderr per cause of names that

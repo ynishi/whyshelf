@@ -549,10 +549,35 @@ pub struct UncoveredOut {
 /// The answer of `status`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct StatusOut {
-    /// Every document.
+    /// The documents that pass the filters; every document when none is given.
     pub docs: Vec<RowOut>,
-    /// What is wrong around them.
+    /// The filters as given: what the documents were chosen by.
+    pub filters: FiltersOut,
+    /// What is wrong around the documents of the whole project, not only those listed.
     pub health: HealthOut,
+}
+
+/// The filters of `status` as given, each kind empty when none was.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct FiltersOut {
+    /// The books asked, in the order of their names and each once; a document of
+    /// any of them passes.
+    pub books: Vec<String>,
+    /// The standings asked, by word and in a fixed order; a document at any of them
+    /// passes.
+    pub standings: Vec<String>,
+    /// The field conditions, in the order given; a document holds every one.
+    #[serde(rename = "where")]
+    pub where_: Vec<WhereOut>,
+}
+
+/// One `--where <field>=<value>` condition as given.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct WhereOut {
+    /// The field.
+    pub field: String,
+    /// The value, as typed.
+    pub value: String,
 }
 
 /// Where the failure of an approval starts.
@@ -2562,6 +2587,29 @@ pub fn status(report: &StatusReport) -> StatusOut {
     let namer = Namer(&report.names);
     StatusOut {
         docs: report.rows.iter().map(|r| namer.row(r)).collect(),
+        filters: FiltersOut {
+            books: report
+                .filters
+                .books
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            standings: report
+                .filters
+                .standings
+                .iter()
+                .map(|kind| standing(*kind).to_owned())
+                .collect(),
+            where_: report
+                .filters
+                .fields
+                .iter()
+                .map(|ask| WhereOut {
+                    field: ask.field.to_string(),
+                    value: ask.value.clone(),
+                })
+                .collect(),
+        },
         health: namer.health(&report.health),
     }
 }
@@ -3572,6 +3620,7 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
         },
         problems: match error {
             ShelfError::Schema(problems) => problems.iter().map(schema_problem).collect(),
+            ShelfError::Filter(problems) => problems.iter().map(ToString::to_string).collect(),
             ShelfError::NewDoc(NewDocProblem::Invalid(problems)) => {
                 problems.iter().map(ToString::to_string).collect()
             }
@@ -3764,7 +3813,11 @@ fn declared(status: &DeclaredStatus) -> (&'static str, Option<i64>) {
     }
 }
 
-fn standing(kind: StandingKind) -> &'static str {
+/// The word of a standing: the one place the words are written. The match is
+/// exhaustive, so a new kind does not build until it has a word. `status --standing`
+/// reads a word back over [`StandingKind::ALL`], so what is printed is what can be
+/// asked.
+pub fn standing(kind: StandingKind) -> &'static str {
     match kind {
         StandingKind::Pending => "pending",
         StandingKind::Denied => "denied",

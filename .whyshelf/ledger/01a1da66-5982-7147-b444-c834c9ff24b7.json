@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f03a6b11699d78c9a18470156acbb77bb132015d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233fb6654f3b31753613b66a7e2e00f276b03dbafa0205dbdf56cfd8e07ce86c",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b0bb42c002cc1cbab81f1dedd60879ec8d7c645d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:72f9959a1595bf4334fea3472518f59cf13c2f4b302f8e28942ad9129b914cb6",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794665502881,
+  "expires": null,
+  "frame": [
+    {
+      "address": "78d274ba73a348933ca997fdac74b14d99372799",
+      "hash": "sha256:af41c43a0e80b1188cca7939d34ce86874bfb6b296e4304a36bf28c7551d6c70",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a1da66-5982-7147-b444-c834c9ff24b7",
+  "kind": "decision",
+  "reason": "The filter, the use case, the arguments and the command on the binary are tested as DEC-70 says (#101); checked by an independent review",
+  "revision": "ec521a5f6691ad38d1570b1f0f71a69718cff3c9",
+  "seen": "sha256:ddf3402c8e742e6f08595b00517767316e83ae0aeb93427429e4a77e164653ee",
+  "seen_address": "247ae090d0b2446dfb22ef7bb9ab7db39f8e4647",
+  "subject": "01a1da61-caff-75ca-b22e-99dc05dc7b25",
+  "v": 1,
+  "verb": "approve"
+}

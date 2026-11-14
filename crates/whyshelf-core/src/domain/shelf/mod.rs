@@ -54,6 +54,9 @@
 //!                 schema                                 from the records alone)
 //!   untold    ──► artifact                             untold_causes ──► UntoldCause (names that
 //!                                                        cannot be told, by cause)
+//!   filter    ──► schema, doc, build, freshness        StatusFilter::new ──► StatusFilter;
+//!                                                      StatusFilter::admits ──► whether a document
+//!                                                        passes
 //! ```
 //!
 //! Each arrow points from a module to what it uses, and nothing points back: a
@@ -83,10 +86,12 @@
 //! | a file that cannot be read | the adapter's parser makes a [`DocReading::Unparsed`] and [`Shelf::build`] turns it into a [`DocProblem::Unreadable`] | a [`RawProblem`] |
 //! | a file read as a mapping that holds values of kinds a front matter does not hold | the adapter's parser makes a [`DocReading::Unheld`] and [`Shelf::build`] turns each value into a [`DocProblem::Unheld`] | an [`UnheldValue`] per value |
 //! | the entries of a front matter | [`Shelf::build`] | [`FieldValue`]s and the keys written in each [`Link`], or [`DocProblem`]s |
+//! | one text as the value of a field of a type | [`FieldValue::read`](doc::FieldValue::read) | the [`FieldValue`](doc::FieldValue), or none when it is no value of the type |
 //! | the form and validity of a document | [`Shelf::build`], which makes each valid [`Doc`] once, whole, with every link its book declares | a valid [`Doc`] or an [`InvalidDoc`] |
 //! | a link | [`Shelf::build`], once: the written key read in the target book's grammar and looked up in the index `Shelf::find_key` reads | a [`LinkState`]: a [`ResolvedLink`] with the target's id, key and hash, or an [`UnresolvedLink`] with the target book and the key it read as |
 //! | what an identity is now | [`Shelf::state_of`], and [`DocState::valid_or_failure`] / [`DocState::presence`] into an owned form | a [`DocState`], a [`DocFailure`] (the one "not valid", carried by refusals and causes; its [`FailureTag`] kept by a retirement), a [`DocPresence`] |
 //! | how many files each book holds | [`Shelf::tally_by_book`] (through `Schema::membership`) | a [`BookTally`] per book |
+//! | whether a filter of `status` fits the declaration, and which documents it admits | [`StatusFilter::new`](filter::StatusFilter::new) against the [`Schema`], then [`StatusFilter::admits`](filter::StatusFilter::admits) per document, read from the [`Shelf`](build::Shelf) | a [`StatusFilter`](filter::StatusFilter), or every [`FilterProblem`](filter::FilterProblem); whether one document passes |
 //! | which keys of a book are taken | [`Shelf::build`], once: every key a file of the book writes in its grammar, valid or not, identity read or not | read by the two entries below only |
 //! | the next key of a book | [`Shelf::next_key`]: the highest number taken plus one (`PREFIX-1` when none; a name tail is no number), the text read by [`KeyPattern::parse`] | a [`NewKey`], or a [`NextKeyProblem`] (a book of slugs has none) |
 //! | a key given for a new document | [`Shelf::claim_key`]: read by [`KeyPattern::parse`], and not taken | a [`NewKey`], or a [`ClaimKeyProblem`] |
@@ -315,6 +320,7 @@ pub mod build;
 pub mod cover;
 pub mod doc;
 pub mod exemption;
+pub mod filter;
 pub mod freshness;
 pub mod graph;
 pub mod ledger;

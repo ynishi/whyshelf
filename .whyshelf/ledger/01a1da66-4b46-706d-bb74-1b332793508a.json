@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794665499430,
+  "expires": null,
+  "frame": [],
+  "id": "01a1da66-4b46-706d-bb74-1b332793508a",
+  "kind": "decision",
+  "reason": "status takes filters by book, standing and field value, checked against the declaration and admitted by one rule of the domain (#101); the design passed an independent design review and an architecture rule check, and the code a review",
+  "revision": "ec521a5f6691ad38d1570b1f0f71a69718cff3c9",
+  "seen": "sha256:a4311cde39018b265f9f651a78ae6be862d28908f2df5f4cedcee5168fda6a5c",
+  "seen_address": "23ff4d2fc255e99f1d4849a6218eab3bc106e0a3",
+  "subject": "01a1da61-bf0b-709c-bdcf-1dd8265ed4e2",
+  "v": 1,
+  "verb": "approve"
+}

@@ -9,7 +9,7 @@
 //! |---|---|
 //! | `books_check` | [`Schema::declared`] (the declaration expanded, then checked), then [`Shelf::tally_by_book`] and [`assess`] for the faults around the documents |
 //! | `map` | [`Schema::declared`], then [`ShelfMap::of`]; nothing else is read |
-//! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it |
+//! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it; with a filter ([`status_filtered`](ShelfApp::status_filtered)), [`StatusFilter::new`] against the declaration and [`StatusFilter::admits`] per identity |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
 //! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], and the names approvals stand on that cannot be told now |
@@ -21,6 +21,8 @@
 //! [`assess`]: crate::domain::shelf::freshness::assess
 //! [`Ledger::status_of`]: crate::domain::shelf::ledger::Ledger::status_of
 //! [`Standing`]: crate::domain::shelf::freshness::Standing
+//! [`StatusFilter::new`]: crate::domain::shelf::filter::StatusFilter::new
+//! [`StatusFilter::admits`]: crate::domain::shelf::filter::StatusFilter::admits
 //! [`Assessment::roots_of`]: crate::domain::shelf::freshness::Assessment::roots_of
 //! [`Freshness::Degraded`]: crate::domain::shelf::freshness::Freshness::Degraded
 //! [`resolve`]: crate::domain::shelf::lookup::resolve
@@ -29,6 +31,7 @@
 use std::collections::BTreeSet;
 
 use crate::domain::id::DocId;
+use crate::domain::shelf::filter::{StatusFilter, StatusFilterAsk};
 use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing};
 use crate::domain::shelf::ledger::{JudgedAt, MovedTo};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
@@ -277,9 +280,25 @@ impl<P: ShelfRead> ShelfApp<P> {
     }
 
     /// Every document with what was decided about it and whether the decision still
-    /// holds.
+    /// holds: [`status_filtered`](Self::status_filtered) with nothing asked.
     pub async fn status(&self) -> Result<StatusReport, ShelfError> {
-        let loaded = load(&self.ports).await?;
+        self.status_filtered(&StatusFilterAsk::default()).await
+    }
+
+    /// The documents that pass a filter by book, standing and field, each with what
+    /// was decided about it and whether the decision still holds.
+    ///
+    /// Whether the filter fits the declaration, and whether a document passes it, are
+    /// [`StatusFilter`]'s (its page says the rule); this reads the declaration, asks
+    /// the first, loads, and keeps the rows the second admits. A declaration that is
+    /// not sound is [`ShelfError::Schema`], as for [`status`](Self::status), and a
+    /// filter that does not fit it is [`ShelfError::Filter`] with every problem; the
+    /// documents are not read then. The answer carries the filter as given, and its
+    /// `health` and `names` are of the whole project, not of the rows.
+    pub async fn status_filtered(&self, ask: &StatusFilterAsk) -> Result<StatusReport, ShelfError> {
+        let schema = schema_of(&self.ports).await?.map_err(ShelfError::Schema)?;
+        let filter = StatusFilter::new(&schema, ask.clone()).map_err(ShelfError::Filter)?;
+        let loaded = load_with(&self.ports, &schema).await?;
         let assessment = loaded.assess();
         let view = View {
             loaded: &loaded,
@@ -287,11 +306,13 @@ impl<P: ShelfRead> ShelfApp<P> {
         };
         let rows = assessment
             .standings()
-            .keys()
-            .map(|id| view.row(*id))
+            .iter()
+            .filter(|(id, standing)| filter.admits(&loaded.shelf, **id, standing.kind()))
+            .map(|(id, _)| view.row(*id))
             .collect();
         Ok(StatusReport {
             rows,
+            filters: filter.ask().clone(),
             names: loaded.names(),
             health: view.health(),
         })
