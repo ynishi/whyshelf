@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- The page of `whyshelf_core::domain::shelf` and the doc of `Slug` no longer
+  describe the earlier model, removed in #9, as present; the doc of `Slug`
+  states its own rules (#98).
+
 ## [0.1.0] - 2026-11-12
 
 ### Added
