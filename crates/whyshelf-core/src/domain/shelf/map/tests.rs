@@ -5,7 +5,7 @@ use crate::domain::shelf::artifact::LinePrefix;
 use crate::domain::shelf::fixtures_tests::spaces;
 use crate::domain::shelf::schema::{
     BookSchemaDecl, CompareDecl, CoverDecl, FieldEntryDecl, FieldPresence, FieldType,
-    FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl,
+    FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, ScalarType,
 };
 
 fn link(name: &str, target: &str, count: Cardinality, means: Propagation) -> LinkEntryDecl {
@@ -35,7 +35,7 @@ fn schema() -> Schema {
             fields: vec![
                 FieldEntryDecl {
                     name: "title".to_owned(),
-                    ty: FieldTypeDecl::Text,
+                    ty: FieldTypeDecl::Word("text".to_owned()),
                     presence: FieldPresence::Required,
                 },
                 FieldEntryDecl {
@@ -119,7 +119,7 @@ fn the_books_are_mapped_as_declared() {
             ("level", FieldPresence::Optional)
         ]
     );
-    assert_eq!(decision.fields[0].1.ty, FieldType::Text);
+    assert_eq!(decision.fields[0].1.ty, FieldType::Scalar(ScalarType::Text));
     assert!(matches!(decision.fields[1].1.ty, FieldType::Enum(_)));
 
     let requirement = &map.books[1];
@@ -212,8 +212,8 @@ fn a_link_to_artifacts_is_mapped_with_its_values_and_the_preset_it_came_from() {
     let artifact = |name: &str, preset: Option<&str>, space: Option<&str>| WrittenLinkDecl {
         name: name.to_owned(),
         target: LinkTargetDecl::Artifact,
-        cardinality: Cardinality::Many,
-        propagation: None,
+        count: None,
+        means: None,
         preset: preset.map(str::to_owned),
         space: space.map(str::to_owned),
         compare: None,
@@ -241,7 +241,7 @@ fn a_link_to_artifacts_is_mapped_with_its_values_and_the_preset_it_came_from() {
                 artifact("named", Some("file"), None),
                 artifact("defaulted", None, None),
                 WrittenLinkDecl {
-                    propagation: Some(Propagation::Informs),
+                    means: Some("informs".to_owned()),
                     ..artifact("plain", None, Some("file"))
                 },
             ],

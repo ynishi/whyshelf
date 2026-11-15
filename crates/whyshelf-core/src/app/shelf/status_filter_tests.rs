@@ -52,7 +52,7 @@ fn app() -> ShelfApp<FakeShelf> {
     ]);
     fake.decls.lock().unwrap()[0].fields.push(FieldEntryDecl {
         name: "topic".to_owned(),
-        ty: FieldTypeDecl::TextList,
+        ty: FieldTypeDecl::Word("list".to_owned()),
         presence: FieldPresence::Optional,
     });
     let mut app = ShelfApp::new(fake);
@@ -199,7 +199,7 @@ fn a_value_no_book_reads_is_a_problem() {
         .fields
         .push(FieldEntryDecl {
             name: "count".to_owned(),
-            ty: FieldTypeDecl::Integer,
+            ty: FieldTypeDecl::Word("integer".to_owned()),
             presence: FieldPresence::Optional,
         });
     let ask = StatusFilterAsk {

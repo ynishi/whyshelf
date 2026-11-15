@@ -55,7 +55,20 @@
 //! [`LinkTargetDecl::Artifact`]; the domain refuses a book of that name, so the word
 //! never names both. `space` is read as written onto the link, and the domain says
 //! whether it is one the adapters offer. `means` may be left out of a link when the
-//! preset it names, or the default, gives it. The built-in presets are the
+//! preset it names, or the default, gives it.
+//!
+//! The words of `type`, `count` and `means` are kept as written, and the domain
+//! reads them: those of `type` are the words of
+//! [`ScalarType`](whyshelf_core::domain::shelf::schema::ScalarType) (an enum is
+//! written as a table, as above), those of `count` the words of
+//! [`Cardinality`](whyshelf_core::domain::shelf::schema::Cardinality) (a link that
+//! writes none has
+//! [`WHEN_UNWRITTEN`](whyshelf_core::domain::shelf::schema::Cardinality::WHEN_UNWRITTEN)),
+//! and those of `means` the words of
+//! [`Propagation`](whyshelf_core::domain::shelf::schema::Propagation), on a link and
+//! on a preset alike. A word that is none of them is a problem of the declaration
+//! ([`SchemaProblem::UnknownWord`](whyshelf_core::domain::shelf::schema::SchemaProblem::UnknownWord)),
+//! not of the TOML. The built-in presets are the
 //! adapters' (`file`, on the page of [`artifact`](super::artifact)); how a preset of
 //! the project of the same name stands to one is stated on
 //! [`expand`](whyshelf_core::domain::shelf::schema::expand).
@@ -76,9 +89,9 @@ use serde::Deserialize;
 use whyshelf_core::app::shelf::{BookSchemaSource, Creation, DeclarationText, DeclarationWrite};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::schema::{
-    ARTIFACT_TARGET, BookSchemaDecl, Cardinality, CoverDecl, DefaultsDecl, FieldEntryDecl,
-    FieldPresence, FieldTypeDecl, KeyPatternDecl, LinkTargetDecl, PresetDecl, PresetValues,
-    Propagation, ScopeDecl, ShelfDecl, WrittenBookDecl, WrittenLinkDecl,
+    ARTIFACT_TARGET, BookSchemaDecl, CoverDecl, DefaultsDecl, FieldEntryDecl, FieldPresence,
+    FieldTypeDecl, KeyPatternDecl, LinkTargetDecl, PresetDecl, ScopeDecl, ShelfDecl,
+    WrittenBookDecl, WrittenLinkDecl, WrittenPresetValues,
 };
 
 /// Why the declaration of the books could not be read.
@@ -243,8 +256,9 @@ struct PresetDto {
     space: Option<String>,
     compare: Option<String>,
     ignore: Option<Vec<String>>,
-    /// Read with the words of a link; the domain refuses `replaces`.
-    means: Option<MeansWord>,
+    /// The word as written, read by the domain with the words of a link, which
+    /// refuses `replaces`.
+    means: Option<String>,
 }
 
 impl PresetDto {
@@ -252,11 +266,11 @@ impl PresetDto {
         PresetDecl {
             name: self.name,
             from: self.from,
-            values: PresetValues {
+            values: WrittenPresetValues {
                 space: self.space,
                 compare: self.compare,
                 ignore: self.ignore,
-                means: self.means.map(MeansWord::propagation),
+                means: self.means,
             },
         }
     }
@@ -314,20 +328,12 @@ struct FieldDto {
     required: bool,
 }
 
+/// A word as written, read by the domain, or the table of an enum.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum TypeDto {
-    Word(TypeWord),
+    Word(String),
     Enum(EnumDto),
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum TypeWord {
-    Text,
-    Integer,
-    Bool,
-    List,
 }
 
 #[derive(Debug, Deserialize)]
@@ -342,11 +348,13 @@ struct EnumDto {
 struct LinkDto {
     name: String,
     target: String,
-    #[serde(default)]
-    count: CountWord,
-    /// May be left out when the preset or the default gives it; a link left with
-    /// none is a problem of the declaration, which the domain tells.
-    means: Option<MeansWord>,
+    /// The word as written; the domain reads it, and takes the count of a link that
+    /// writes none.
+    count: Option<String>,
+    /// The word as written. May be left out when the preset or the default gives
+    /// it; a link left with none is a problem of the declaration, which the domain
+    /// tells.
+    means: Option<String>,
     /// For a link to artifacts: the preset whose values it takes; checked by the
     /// domain.
     preset: Option<String>,
@@ -371,34 +379,6 @@ enum CoverDto {
     Word(String),
 }
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum CountWord {
-    One,
-    Optional,
-    #[default]
-    Many,
-    AtLeastOne,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum MeansWord {
-    Depends,
-    Informs,
-    Replaces,
-}
-
-impl MeansWord {
-    fn propagation(self) -> Propagation {
-        match self {
-            Self::Depends => Propagation::Depends,
-            Self::Informs => Propagation::Informs,
-            Self::Replaces => Propagation::Replaces,
-        }
-    }
-}
-
 impl BookDto {
     fn into_decl(self) -> WrittenBookDecl {
         BookSchemaDecl {
@@ -420,10 +400,7 @@ impl BookDto {
                 .map(|f| FieldEntryDecl {
                     name: f.name,
                     ty: match f.ty {
-                        TypeDto::Word(TypeWord::Text) => FieldTypeDecl::Text,
-                        TypeDto::Word(TypeWord::Integer) => FieldTypeDecl::Integer,
-                        TypeDto::Word(TypeWord::Bool) => FieldTypeDecl::Bool,
-                        TypeDto::Word(TypeWord::List) => FieldTypeDecl::TextList,
+                        TypeDto::Word(word) => FieldTypeDecl::Word(word),
                         TypeDto::Enum(EnumDto { words }) => FieldTypeDecl::Enum(words),
                     },
                     presence: if f.required {
@@ -443,13 +420,8 @@ impl BookDto {
                     } else {
                         LinkTargetDecl::Book(l.target)
                     },
-                    cardinality: match l.count {
-                        CountWord::One => Cardinality::One,
-                        CountWord::Optional => Cardinality::Optional,
-                        CountWord::Many => Cardinality::Many,
-                        CountWord::AtLeastOne => Cardinality::AtLeastOne,
-                    },
-                    propagation: l.means.map(MeansWord::propagation),
+                    count: l.count,
+                    means: l.means,
                     preset: l.preset,
                     space: l.space,
                     compare: l.compare,
@@ -469,7 +441,9 @@ mod tests {
     use std::collections::BTreeSet;
 
     use whyshelf_core::domain::shelf::artifact::Space;
-    use whyshelf_core::domain::shelf::schema::{Schema, SchemaProblem};
+    use whyshelf_core::domain::shelf::schema::{
+        Cardinality, Propagation, Schema, SchemaProblem, WordAt, WordOf,
+    };
 
     use super::*;
 
@@ -518,15 +492,76 @@ means = "informs"
         );
         assert_eq!(decls.books[0].fields[0].presence, FieldPresence::Required);
         assert_eq!(decls.books[1].key, KeyPatternDecl::Slug);
-        assert_eq!(decls.books[1].links[0].cardinality, Cardinality::AtLeastOne);
+        // The words are kept as written; a link that writes no count has none.
         assert_eq!(
-            decls.books[1].links[0].propagation,
-            Some(Propagation::Depends)
+            decls.books[1].links[0].count.as_deref(),
+            Some("at-least-one")
         );
-        assert_eq!(decls.books[1].links[1].cardinality, Cardinality::Many);
+        assert_eq!(decls.books[1].links[0].means.as_deref(), Some("depends"));
+        assert_eq!(decls.books[1].links[1].count, None);
+        assert_eq!(decls.books[1].links[1].means.as_deref(), Some("informs"));
+        let schema = validate(decls).unwrap();
+        let book = schema.book("note").unwrap();
+        let cardinalities: Vec<(String, Cardinality)> = book
+            .links()
+            .iter()
+            .map(|(name, kind)| (name.to_string(), kind.cardinality))
+            .collect();
         assert_eq!(
-            decls.books[1].links[1].propagation,
-            Some(Propagation::Informs)
+            cardinalities,
+            [
+                ("grounds".to_owned(), Cardinality::AtLeastOne),
+                ("see".to_owned(), Cardinality::WHEN_UNWRITTEN),
+            ]
+        );
+        assert_eq!(Cardinality::WHEN_UNWRITTEN, Cardinality::Many);
+    }
+
+    #[test]
+    fn a_word_the_domain_does_not_know_is_a_problem_of_the_declaration_and_not_of_the_toml() {
+        let decls = parse(
+            "[[preset]]\nname='p'\nmeans='x'\n\
+             [[book]]\nname='note'\ndir='n'\nkey='slug'\n\
+             [[book.field]]\nname='n'\ntype='number'\n\
+             [[book.link]]\nname='grounds'\ntarget='note'\ncount='several'\nmeans='leans'\n",
+        )
+        .expect("the TOML is of the shape; its words are the domain's to read");
+        let problems = validate(decls).unwrap_err().into_vec();
+        let at = |at: WordAt, word: &str, of: WordOf| SchemaProblem::UnknownWord {
+            at,
+            word: word.to_owned(),
+            of,
+        };
+        let link = || WordAt::Link {
+            book: "note".to_owned(),
+            link: "grounds".to_owned(),
+        };
+        assert_eq!(
+            problems,
+            [
+                at(
+                    WordAt::Preset {
+                        name: "p".to_owned()
+                    },
+                    "x",
+                    WordOf::Means
+                ),
+                at(link(), "several", WordOf::Count),
+                at(link(), "leans", WordOf::Means),
+                at(
+                    WordAt::Field {
+                        book: "note".to_owned(),
+                        field: "n".to_owned()
+                    },
+                    "number",
+                    WordOf::Type
+                ),
+            ]
+        );
+        assert_eq!(
+            problems[1].to_string(),
+            "book `note`: the count of the link `grounds` is \"several\", and it takes one of \
+             \"one\", \"optional\", \"many\", \"at-least-one\""
         );
     }
 
@@ -645,23 +680,23 @@ means = "informs"
                 PresetDecl {
                     name: "rust".to_owned(),
                     from: Some("file".to_owned()),
-                    values: PresetValues {
+                    values: WrittenPresetValues {
                         space: None,
                         compare: Some("lines".to_owned()),
                         ignore: Some(vec!["//".to_owned()]),
-                        means: Some(Propagation::Informs),
+                        means: Some("informs".to_owned()),
                     },
                 },
                 PresetDecl {
                     name: "bare".to_owned(),
                     from: None,
-                    values: PresetValues::default(),
+                    values: WrittenPresetValues::default(),
                 },
             ]
         );
         let link = &decls.books[0].links[0];
         assert_eq!(link.preset.as_deref(), Some("bare"));
-        assert_eq!(link.propagation, None);
+        assert_eq!(link.means, None);
         // `bare` gives no meaning, so the link that names it says none.
         let problems = validate(decls).unwrap_err().into_vec();
         assert!(

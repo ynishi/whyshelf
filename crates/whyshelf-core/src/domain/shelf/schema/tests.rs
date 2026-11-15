@@ -30,7 +30,7 @@ fn book(name: &str, dir: &str, prefix: &str) -> BookSchemaDecl {
 fn text_field(name: &str) -> FieldEntryDecl {
     FieldEntryDecl {
         name: name.to_owned(),
-        ty: FieldTypeDecl::Text,
+        ty: FieldTypeDecl::Word("text".to_owned()),
         presence: FieldPresence::Optional,
     }
 }

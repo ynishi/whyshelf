@@ -133,10 +133,10 @@ fn measures() -> BookSchemaDecl {
         },
         description: None,
         fields: vec![
-            field("count", FieldTypeDecl::Integer),
-            field("flag", FieldTypeDecl::Bool),
-            field("tags", FieldTypeDecl::TextList),
-            field("note", FieldTypeDecl::Text),
+            field("count", FieldTypeDecl::Word("integer".to_owned())),
+            field("flag", FieldTypeDecl::Word("bool".to_owned())),
+            field("tags", FieldTypeDecl::Word("list".to_owned())),
+            field("note", FieldTypeDecl::Word("text".to_owned())),
         ],
         links: Vec::new(),
     }

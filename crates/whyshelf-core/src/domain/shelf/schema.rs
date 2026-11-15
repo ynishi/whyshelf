@@ -598,12 +598,20 @@ pub(super) fn parse_tail(text: &str) -> Result<KeyTail, KeyProblem> {
     KeyName::new(text).map(KeyTail::Name)
 }
 
-/// The type of a field.
+/// The type of a field that is one word in a declaration: what
+/// [`FieldType::Scalar`] holds.
 ///
 /// There is no floating point type: a measurement is an integer or a text, as in a
 /// canonical form.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FieldType {
+///
+/// The words of a declaration for a type, a count ([`Cardinality`]) and a meaning
+/// ([`Propagation`]) are decided here and only here: each of the three lists its
+/// values (`ALL`), says the word of each (`word`) and reads a word back
+/// (`from_word`, which searches `ALL` by `word`). What reads a word out of a
+/// declaration is [`read_word`]; what an answer or a problem says of a type, a count
+/// or a meaning calls `word` and builds no word of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScalarType {
     /// Free text.
     Text,
     /// A whole number.
@@ -612,8 +620,46 @@ pub enum FieldType {
     Bool,
     /// A list of texts.
     TextList,
+}
+
+impl ScalarType {
+    /// Every scalar type, in the order a problem lists their words.
+    pub const ALL: [Self; 4] = [Self::Text, Self::Integer, Self::Bool, Self::TextList];
+
+    /// The word of the type in a declaration and in the answers: `text`, `integer`,
+    /// `bool` or `list`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Integer => "integer",
+            Self::Bool => "bool",
+            Self::TextList => "list",
+        }
+    }
+
+    /// The type a word names, or none.
+    pub fn from_word(word: &str) -> Option<Self> {
+        find_word(word)
+    }
+}
+
+/// The type of a field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FieldType {
+    /// A type that is one word in a declaration.
+    Scalar(ScalarType),
     /// One of the words listed.
     Enum(NonEmptySet<FieldWord>),
+}
+
+impl FieldType {
+    /// The word of the type in an answer: that of its [`ScalarType`], or `enum`.
+    pub fn word(&self) -> &'static str {
+        match self {
+            Self::Scalar(scalar) => scalar.word(),
+            Self::Enum(_) => "enum",
+        }
+    }
 }
 
 /// Whether a document must carry a field.
@@ -651,6 +697,12 @@ pub enum Cardinality {
 }
 
 impl Cardinality {
+    /// The count of a link that writes none: any number.
+    pub const WHEN_UNWRITTEN: Self = Self::Many;
+
+    /// Every count, in the order a problem lists their words.
+    pub const ALL: [Self; 4] = [Self::One, Self::Optional, Self::Many, Self::AtLeastOne];
+
     /// Whether a document may write `count` links of this kind.
     pub(super) fn admits(self, count: usize) -> bool {
         match self {
@@ -659,6 +711,34 @@ impl Cardinality {
             Self::Many => true,
             Self::AtLeastOne => count >= 1,
         }
+    }
+
+    /// How many links this count admits, in words, as a problem says it: `exactly
+    /// one`, `none or one`, `any number` or `one or more`. It is what `admits` decides,
+    /// said aloud.
+    pub fn admits_in_words(self) -> &'static str {
+        match self {
+            Self::One => "exactly one",
+            Self::Optional => "none or one",
+            Self::Many => "any number",
+            Self::AtLeastOne => "one or more",
+        }
+    }
+
+    /// The word of the count in a declaration and in the answers: `one`, `optional`,
+    /// `many` or `at-least-one`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::One => "one",
+            Self::Optional => "optional",
+            Self::Many => "many",
+            Self::AtLeastOne => "at-least-one",
+        }
+    }
+
+    /// The count a word names, or none.
+    pub fn from_word(word: &str) -> Option<Self> {
+        find_word(word)
     }
 }
 
@@ -674,6 +754,181 @@ pub enum Propagation {
     /// The document takes the place of the target: it is a successor candidate of a
     /// deprecated target, and affects no freshness.
     Replaces,
+}
+
+impl Propagation {
+    /// Every meaning, in the order a problem lists their words.
+    pub const ALL: [Self; 3] = [Self::Depends, Self::Informs, Self::Replaces];
+
+    /// The word of the meaning in a declaration and in the answers: `depends`,
+    /// `informs` or `replaces`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Depends => "depends",
+            Self::Informs => "informs",
+            Self::Replaces => "replaces",
+        }
+    }
+
+    /// The meaning a word names, or none.
+    pub fn from_word(word: &str) -> Option<Self> {
+        find_word(word)
+    }
+}
+
+/// What a word of a declaration says: the part of a problem that tells which word
+/// was refused, and the words it could have been.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WordOf {
+    /// The count of a link ([`Cardinality`]).
+    Count,
+    /// The type of a field ([`ScalarType`]).
+    Type,
+    /// The meaning of a link or a preset ([`Propagation`]).
+    Means,
+}
+
+impl WordOf {
+    /// The words a declaration may write for it, as a problem lists them: `"one",
+    /// "optional"`, each in quotes, in the order of the type's `ALL`.
+    fn accepted(self) -> String {
+        match self {
+            Self::Count => quoted_words::<Cardinality>(),
+            Self::Type => quoted_words::<ScalarType>(),
+            Self::Means => quoted_words::<Propagation>(),
+        }
+    }
+}
+
+impl fmt::Display for WordOf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Count => "count",
+            Self::Type => "type",
+            Self::Means => "meaning",
+        })
+    }
+}
+
+/// Where a word was written, for a problem to say so. A preset has no book.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WordAt {
+    /// A word of a link of a book.
+    Link {
+        /// The book, as written.
+        book: String,
+        /// The link, as written.
+        link: String,
+    },
+    /// A word of a field of a book.
+    Field {
+        /// The book, as written.
+        book: String,
+        /// The field, as written.
+        field: String,
+    },
+    /// A word of a preset of the project.
+    Preset {
+        /// The preset, as written.
+        name: String,
+    },
+}
+
+/// A type that a declaration writes as one word: [`ScalarType`], [`Cardinality`] and
+/// [`Propagation`]. [`read_word`] reads such a word, and a problem lists the words
+/// of the type from its `ALL`.
+pub trait DeclWord: Copy + 'static {
+    /// What the word of this type says in a problem.
+    const OF: WordOf;
+
+    /// Every value of the type: the `ALL` of the type.
+    fn all() -> &'static [Self];
+
+    /// The word of the value: the `word` of the type.
+    fn word(self) -> &'static str;
+}
+
+impl DeclWord for ScalarType {
+    const OF: WordOf = WordOf::Type;
+
+    fn all() -> &'static [Self] {
+        &ScalarType::ALL
+    }
+
+    fn word(self) -> &'static str {
+        ScalarType::word(self)
+    }
+}
+
+impl DeclWord for Cardinality {
+    const OF: WordOf = WordOf::Count;
+
+    fn all() -> &'static [Self] {
+        &Cardinality::ALL
+    }
+
+    fn word(self) -> &'static str {
+        Cardinality::word(self)
+    }
+}
+
+impl DeclWord for Propagation {
+    const OF: WordOf = WordOf::Means;
+
+    fn all() -> &'static [Self] {
+        &Propagation::ALL
+    }
+
+    fn word(self) -> &'static str {
+        Propagation::word(self)
+    }
+}
+
+/// The value of a type whose word is `word`: the one search of `ALL` by `word` that
+/// every `from_word` is.
+fn find_word<T: DeclWord>(word: &str) -> Option<T> {
+    T::all().iter().copied().find(|value| value.word() == word)
+}
+
+/// The words of a type, each in quotes, separated by commas.
+fn quoted_words<T: DeclWord>() -> String {
+    quoted(T::all().iter().map(|value| value.word()))
+}
+
+/// These words, each in quotes, separated by commas.
+fn quoted<'w>(words: impl Iterator<Item = &'w str>) -> String {
+    words
+        .map(|word| format!("\"{word}\""))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The value a word of a declaration names, or why the word is refused.
+///
+/// The one reader of the words of a declaration (a count, a type, a meaning):
+/// whatever puts one in a declaration as written keeps the word as written, and
+/// whatever uses it as a value reads it here, and so refuses a word the type does
+/// not have the same way, saying where it was written.
+// The problem is the answer, read once per run; it is not a hot path.
+#[allow(clippy::result_large_err)]
+pub fn read_word<T: DeclWord>(word: &str, at: WordAt) -> Result<T, SchemaProblem> {
+    find_word(word).ok_or_else(|| SchemaProblem::UnknownWord {
+        at,
+        word: word.to_owned(),
+        of: T::OF,
+    })
+}
+
+/// A read word that is kept, or its problem that is reported: a refused word leaves
+/// the entry it was written in out, and the problem is told with the others.
+fn report<T>(read: Result<T, SchemaProblem>, problems: &mut Vec<SchemaProblem>) -> Option<T> {
+    match read {
+        Ok(value) => Some(value),
+        Err(problem) => {
+            problems.push(problem);
+            None
+        }
+    }
 }
 
 /// What a link to an artifact (a thing outside the documents) means for freshness:
@@ -949,14 +1204,9 @@ pub enum KeyPatternDecl {
 /// The type of a field as declared.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldTypeDecl {
-    /// Free text.
-    Text,
-    /// A whole number.
-    Integer,
-    /// A truth value.
-    Bool,
-    /// A list of texts.
-    TextList,
+    /// A word, as written: [`Schema::validate`] reads it ([`ScalarType::from_word`])
+    /// and refuses one that is no type ([`SchemaProblem::UnknownWord`]).
+    Word(String),
     /// One of these words (an empty list is refused).
     Enum(Vec<String>),
 }
@@ -1397,6 +1647,36 @@ pub enum SchemaProblem {
         /// The link, as written.
         link: String,
     },
+    /// A count, a type or a meaning written as a word the declaration does not
+    /// have ([`read_word`]).
+    #[error("{}", unknown_word(at, word, *of))]
+    UnknownWord {
+        /// Where it was written.
+        at: WordAt,
+        /// The word, as written.
+        word: String,
+        /// What the word says.
+        of: WordOf,
+    },
+}
+
+/// What [`SchemaProblem::UnknownWord`] says: where the word was written, which word
+/// it was, and the words that would have been read.
+fn unknown_word(at: &WordAt, word: &str, of: WordOf) -> String {
+    // The words of the type, as the declaration has them: whether a place takes a
+    // word of them is the check of that place ([`SchemaProblem::PresetReplaces`]).
+    let accepted = of.accepted();
+    match at {
+        WordAt::Link { book, link } => format!(
+            "book `{book}`: the {of} of the link `{link}` is \"{word}\", and it takes one of {accepted}"
+        ),
+        WordAt::Field { book, field } => format!(
+            "book `{book}`: the {of} of the field `{field}` is \"{word}\", and it takes one of {accepted}"
+        ),
+        WordAt::Preset { name } => {
+            format!("preset `{name}`: the {of} is \"{word}\", and it takes one of {accepted}")
+        }
+    }
 }
 
 /// The presets of a cycle, as a problem says them: `` `a` -> `b` -> `a` ``.
@@ -1640,8 +1920,8 @@ fn read_fields(
     fields
 }
 
-/// The type of a field; none when it is an enum that cannot be made (the problem is
-/// reported).
+/// The type of a field; none when its word is no type, or it is an enum that cannot
+/// be made (the problem is reported).
 fn read_field_type(
     book: &str,
     field: &str,
@@ -1649,10 +1929,13 @@ fn read_field_type(
     problems: &mut Vec<SchemaProblem>,
 ) -> Option<FieldType> {
     let words = match ty {
-        FieldTypeDecl::Text => return Some(FieldType::Text),
-        FieldTypeDecl::Integer => return Some(FieldType::Integer),
-        FieldTypeDecl::Bool => return Some(FieldType::Bool),
-        FieldTypeDecl::TextList => return Some(FieldType::TextList),
+        FieldTypeDecl::Word(word) => {
+            let at = WordAt::Field {
+                book: book.to_owned(),
+                field: field.to_owned(),
+            };
+            return report(read_word(&word, at), problems).map(FieldType::Scalar);
+        }
         FieldTypeDecl::Enum(words) => words,
     };
     let mut set = BTreeSet::new();
@@ -1972,7 +2255,8 @@ impl Schema {
     /// `spaces` (the spaces the adapters offer, given as a value), a book named
     /// [`ARTIFACT_TARGET`], a description that is no [`BookDescription`], a
     /// pattern of `include` or `exclude` that is no [`Pattern`], an `include` with
-    /// none, and a `without_front_matter` that is no [`WithoutFrontMatter`]. A
+    /// none, a `without_front_matter` that is no [`WithoutFrontMatter`], and a type
+    /// written as a word that is no [`ScalarType`] ([`SchemaProblem::UnknownWord`]). A
     /// [`Schema`] exists only when there is none, so nothing after this re-checks a
     /// declaration. The books, and the fields and links of each, are kept in the
     /// order the declaration writes them, once ([`Declared`]).
@@ -2091,7 +2375,7 @@ pub use scope::{
 pub use declared::{Declared, Picked};
 pub use preset::{
     BuiltinPresets, DefaultsDecl, Expanded, PresetDecl, PresetOrigin, PresetPlace, PresetValues,
-    ShelfDecl, WrittenBookDecl, WrittenLinkDecl, expand,
+    ShelfDecl, WrittenBookDecl, WrittenLinkDecl, WrittenPresetValues, expand,
 };
 use preset::{Origins, expand_all};
 
@@ -2105,3 +2389,5 @@ mod preset_tests;
 mod scope_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod word_tests;

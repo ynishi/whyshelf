@@ -18,6 +18,16 @@ fn values(space: Option<&str>, compare: Option<&str>, means: Option<Propagation>
     }
 }
 
+/// The values a preset of the project writes, `means` as a word.
+fn written(space: Option<&str>, compare: Option<&str>, means: Option<&str>) -> WrittenPresetValues {
+    WrittenPresetValues {
+        space: space.map(str::to_owned),
+        compare: compare.map(str::to_owned),
+        ignore: None,
+        means: means.map(str::to_owned),
+    }
+}
+
 /// The built-in presets of these tests: `file` (space `file`, `bytes`, `depends`).
 fn builtins() -> BuiltinPresets {
     BuiltinPresets::from([(
@@ -31,7 +41,7 @@ fn spaces() -> BTreeSet<Space> {
     BTreeSet::from([Space::new("file").unwrap(), Space::new("other").unwrap()])
 }
 
-fn preset(name: &str, from: Option<&str>, values: PresetValues) -> PresetDecl {
+fn preset(name: &str, from: Option<&str>, values: WrittenPresetValues) -> PresetDecl {
     PresetDecl {
         name: name.to_owned(),
         from: from.map(str::to_owned),
@@ -44,8 +54,8 @@ fn artifact(name: &str, preset: Option<&str>) -> WrittenLinkDecl {
     WrittenLinkDecl {
         name: name.to_owned(),
         target: LinkTargetDecl::Artifact,
-        cardinality: Cardinality::Many,
-        propagation: None,
+        count: None,
+        means: None,
         preset: preset.map(str::to_owned),
         space: None,
         compare: None,
@@ -57,7 +67,7 @@ fn artifact(name: &str, preset: Option<&str>) -> WrittenLinkDecl {
 fn into_book(name: &str, target: &str) -> WrittenLinkDecl {
     WrittenLinkDecl {
         target: LinkTargetDecl::Book(target.to_owned()),
-        propagation: Some(Propagation::Depends),
+        means: Some("depends".to_owned()),
         ..artifact(name, None)
     }
 }
@@ -105,7 +115,7 @@ fn compare(kind: &str, ignore: &[&str]) -> Option<CompareDecl> {
 #[test]
 fn a_link_takes_the_values_of_its_preset_and_each_value_it_writes_wins() {
     let mut own = artifact("tests", Some("file"));
-    own.propagation = Some(Propagation::Informs);
+    own.means = Some("informs".to_owned());
     own.compare = Some("lines".to_owned());
     own.ignore = Some(vec!["//".to_owned()]);
     let expanded = links(shelf(
@@ -126,17 +136,13 @@ fn a_preset_of_the_project_takes_its_own_values_then_those_of_its_from_chain() {
     let lines = preset(
         "lines",
         Some("file"),
-        PresetValues {
+        WrittenPresetValues {
             compare: Some("lines".to_owned()),
             ignore: Some(vec!["#".to_owned()]),
-            ..PresetValues::default()
+            ..WrittenPresetValues::default()
         },
     );
-    let tests = preset(
-        "tests",
-        Some("lines"),
-        values(None, None, Some(Propagation::Informs)),
-    );
+    let tests = preset("tests", Some("lines"), written(None, None, Some("informs")));
     let expanded = links(shelf(
         vec![artifact("tests", Some("tests"))],
         // Declared before the preset it comes from: the order does not count.
@@ -150,9 +156,9 @@ fn a_preset_of_the_project_takes_its_own_values_then_those_of_its_from_chain() {
 
 #[test]
 fn a_preset_of_the_project_replaces_a_built_in_one_of_its_name() {
-    let file = preset("file", None, values(Some("other"), Some("presence"), None));
+    let file = preset("file", None, written(Some("other"), Some("presence"), None));
     let mut link = artifact("tests", Some("file"));
-    link.propagation = Some(Propagation::Depends);
+    link.means = Some("depends".to_owned());
     let expanded = links(shelf(vec![link], vec![file], None));
     assert_eq!(expanded[0].space.as_deref(), Some("other"));
     assert_eq!(expanded[0].compare, compare("presence", &[]));
@@ -162,8 +168,8 @@ fn a_preset_of_the_project_replaces_a_built_in_one_of_its_name() {
 fn the_default_is_used_only_by_a_link_to_artifacts_that_names_neither_a_preset_nor_a_space() {
     let mut spaced = artifact("spaced", None);
     spaced.space = Some("other".to_owned());
-    spaced.propagation = Some(Propagation::Informs);
-    let lines = preset("lines", Some("file"), values(None, Some("lines"), None));
+    spaced.means = Some("informs".to_owned());
+    let lines = preset("lines", Some("file"), written(None, Some("lines"), None));
     let decl = shelf(
         vec![
             artifact("bare", None),
@@ -201,7 +207,7 @@ fn the_default_is_used_only_by_a_link_to_artifacts_that_names_neither_a_preset_n
 #[test]
 fn without_a_default_a_link_that_names_no_space_is_refused_as_before() {
     let mut link = artifact("tests", None);
-    link.propagation = Some(Propagation::Depends);
+    link.means = Some("depends".to_owned());
     let expanded = expand(shelf(vec![link], Vec::new(), None), &builtins(), &spaces()).unwrap();
     assert_eq!(expanded.books()[0].links[0].space, None);
     let (books, _) = expanded.into_parts();
@@ -247,7 +253,7 @@ fn a_link_written_in_full_expands_to_itself() {
 fn a_name_of_a_preset_that_is_not_there_is_a_problem_where_it_is_written() {
     let found = problems(shelf(
         vec![artifact("tests", Some("nope"))],
-        vec![preset("mine", Some("gone"), PresetValues::default())],
+        vec![preset("mine", Some("gone"), WrittenPresetValues::default())],
         Some("missing"),
     ));
     assert_eq!(
@@ -296,9 +302,9 @@ fn a_cycle_of_from_is_one_problem_and_every_link_on_it_is_left_to_it() {
     let found = problems(shelf(
         vec![artifact("tests", Some("b"))],
         vec![
-            preset("a", Some("b"), PresetValues::default()),
-            preset("b", Some("a"), PresetValues::default()),
-            preset("self", Some("self"), PresetValues::default()),
+            preset("a", Some("b"), WrittenPresetValues::default()),
+            preset("b", Some("a"), WrittenPresetValues::default()),
+            preset("self", Some("self"), WrittenPresetValues::default()),
         ],
         None,
     ));
@@ -326,9 +332,9 @@ fn a_preset_declared_twice_or_misnamed_is_a_problem() {
     let found = problems(shelf(
         Vec::new(),
         vec![
-            preset("twice", None, PresetValues::default()),
-            preset("twice", None, PresetValues::default()),
-            preset("Bad Name", None, PresetValues::default()),
+            preset("twice", None, WrittenPresetValues::default()),
+            preset("twice", None, WrittenPresetValues::default()),
+            preset("Bad Name", None, WrittenPresetValues::default()),
         ],
         None,
     ));
@@ -367,7 +373,7 @@ fn a_preset_that_replaces_is_a_value_it_cannot_hold() {
         vec![preset(
             "swap",
             Some("file"),
-            values(None, None, Some(Propagation::Replaces)),
+            written(None, None, Some("replaces")),
         )],
         None,
     ));
@@ -381,12 +387,70 @@ fn a_preset_that_replaces_is_a_value_it_cannot_hold() {
 }
 
 #[test]
+fn a_preset_whose_means_is_no_word_is_a_problem_at_the_preset_and_gives_no_value() {
+    let found = problems(shelf(
+        vec![artifact("tests", Some("odd"))],
+        vec![preset(
+            "odd",
+            Some("file"),
+            written(None, None, Some("leans")),
+        )],
+        None,
+    ));
+    // The link that names it is left to the problem of the preset.
+    assert_eq!(
+        found,
+        [SchemaProblem::UnknownWord {
+            at: WordAt::Preset {
+                name: "odd".to_owned()
+            },
+            word: "leans".to_owned(),
+            of: WordOf::Means,
+        }]
+    );
+    // The words are those of the meaning; that a preset takes no `replaces` is
+    // told by its own problem.
+    assert_eq!(
+        found[0].to_string(),
+        "preset `odd`: the meaning is \"leans\", and it takes one of \
+         \"depends\", \"informs\", \"replaces\""
+    );
+}
+
+#[test]
+fn a_link_that_writes_an_unknown_count_and_means_is_told_for_both_whatever_its_preset_gives() {
+    let mut link = artifact("tests", Some("file"));
+    link.count = Some("several".to_owned());
+    link.means = Some("leans".to_owned());
+    let found = problems(shelf(vec![link], Vec::new(), None));
+    let at = WordAt::Link {
+        book: "b".to_owned(),
+        link: "tests".to_owned(),
+    };
+    assert_eq!(
+        found,
+        [
+            SchemaProblem::UnknownWord {
+                at: at.clone(),
+                word: "several".to_owned(),
+                of: WordOf::Count,
+            },
+            SchemaProblem::UnknownWord {
+                at,
+                word: "leans".to_owned(),
+                of: WordOf::Means,
+            },
+        ]
+    );
+}
+
+#[test]
 fn a_link_left_with_no_means_is_a_problem() {
     let mut up = into_book("up", "b");
-    up.propagation = None;
+    up.means = None;
     let found = problems(shelf(
         vec![up, artifact("tests", Some("bare"))],
-        vec![preset("bare", None, values(Some("file"), None, None))],
+        vec![preset("bare", None, written(Some("file"), None, None))],
         None,
     ));
     assert_eq!(
@@ -415,7 +479,7 @@ fn a_declaration_with_a_default_is_the_schema_of_one_that_writes_the_space() {
     .unwrap();
     let mut full = artifact("tests", None);
     full.space = Some("file".to_owned());
-    full.propagation = Some(Propagation::Depends);
+    full.means = Some("depends".to_owned());
     let plain =
         Schema::declared(shelf(vec![full], Vec::new(), None), &builtins(), &spaces).unwrap();
     let (a, b) = (written.book("b").unwrap(), plain.book("b").unwrap());
@@ -432,10 +496,10 @@ fn lines_preset() -> PresetDecl {
     preset(
         "lines",
         Some("file"),
-        PresetValues {
+        WrittenPresetValues {
             compare: Some("lines".to_owned()),
             ignore: Some(vec!["//".to_owned()]),
-            ..PresetValues::default()
+            ..WrittenPresetValues::default()
         },
     )
 }
@@ -471,7 +535,7 @@ fn compare_and_its_ignore_are_one_value() {
         ]
     );
     // The same between presets: `bytes` from `lines` takes no `ignore`.
-    let bytes = preset("plain", Some("lines"), values(None, Some("bytes"), None));
+    let bytes = preset("plain", Some("lines"), written(None, Some("bytes"), None));
     let expanded = links(shelf(
         vec![artifact("tests", Some("plain"))],
         vec![lines_preset(), bytes],
@@ -482,11 +546,7 @@ fn compare_and_its_ignore_are_one_value() {
 
 #[test]
 fn a_from_of_the_preset_s_own_name_refines_the_built_in_one() {
-    let refined = preset(
-        "file",
-        Some("file"),
-        values(None, None, Some(Propagation::Informs)),
-    );
+    let refined = preset("file", Some("file"), written(None, None, Some("informs")));
     let expanded = links(shelf(
         vec![artifact("tests", Some("file"))],
         vec![refined],
@@ -499,7 +559,7 @@ fn a_from_of_the_preset_s_own_name_refines_the_built_in_one() {
 
 #[test]
 fn a_preset_of_a_built_in_name_without_from_takes_none_of_its_values() {
-    let replaced = preset("file", None, values(Some("other"), None, None));
+    let replaced = preset("file", None, written(Some("other"), None, None));
     let found = problems(shelf(
         vec![artifact("tests", Some("file"))],
         vec![replaced],
@@ -514,10 +574,10 @@ fn a_preset_of_a_built_in_name_without_from_takes_none_of_its_values() {
         }]
     );
     let mut link = artifact("tests", Some("file"));
-    link.propagation = Some(Propagation::Depends);
+    link.means = Some("depends".to_owned());
     let expanded = links(shelf(
         vec![link],
-        vec![preset("file", None, values(Some("other"), None, None))],
+        vec![preset("file", None, written(Some("other"), None, None))],
         None,
     ));
     assert_eq!(expanded[0].space.as_deref(), Some("other"));
@@ -529,9 +589,9 @@ fn a_chain_that_leads_into_a_cycle_tells_the_cycle_once_from_the_one_declared_fi
     let found = problems(shelf(
         vec![artifact("tests", Some("x"))],
         vec![
-            preset("x", Some("b"), PresetValues::default()),
-            preset("b", Some("a"), PresetValues::default()),
-            preset("a", Some("b"), PresetValues::default()),
+            preset("x", Some("b"), WrittenPresetValues::default()),
+            preset("b", Some("a"), WrittenPresetValues::default()),
+            preset("a", Some("b"), WrittenPresetValues::default()),
         ],
         None,
     ));
@@ -549,25 +609,25 @@ fn the_values_of_a_preset_are_checked_on_it_whether_a_link_uses_it_or_not() {
     let found = problems(shelf(
         Vec::new(),
         vec![
-            preset("far", None, values(Some("nowhere"), None, None)),
-            preset("bad", None, values(Some("Not A Space"), None, None)),
-            preset("odd", None, values(None, Some("words"), None)),
+            preset("far", None, written(Some("nowhere"), None, None)),
+            preset("bad", None, written(Some("Not A Space"), None, None)),
+            preset("odd", None, written(None, Some("words"), None)),
             preset(
                 "blank",
                 Some("file"),
-                PresetValues {
+                WrittenPresetValues {
                     // `bytes` from `file`, and an `ignore` it cannot take.
                     ignore: Some(vec!["//".to_owned()]),
-                    ..PresetValues::default()
+                    ..WrittenPresetValues::default()
                 },
             ),
             preset(
                 "spaced",
                 None,
-                PresetValues {
+                WrittenPresetValues {
                     compare: Some("lines".to_owned()),
                     ignore: Some(vec!["a b".to_owned()]),
-                    ..PresetValues::default()
+                    ..WrittenPresetValues::default()
                 },
             ),
         ],
@@ -599,7 +659,7 @@ fn a_link_on_a_preset_with_a_bad_value_tells_only_the_preset() {
         vec![preset(
             "far",
             Some("file"),
-            values(Some("nowhere"), None, None),
+            written(Some("nowhere"), None, None),
         )],
         None,
     ));

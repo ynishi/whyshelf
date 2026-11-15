@@ -61,7 +61,7 @@ use crate::domain::nonempty::NonEmptyVec;
 use super::build::{DocState, Shelf};
 use super::doc::{Doc, FieldValue};
 use super::freshness::StandingKind;
-use super::schema::{BookName, EntryName, FieldType, Membership, Schema};
+use super::schema::{BookName, EntryName, FieldType, Membership, ScalarType, Schema};
 
 /// What a person asked `status` to show, as given and before it is checked against
 /// the declaration. A caller that reads arguments makes this and nothing more, so the
@@ -173,7 +173,9 @@ impl StatusFilter {
                 };
                 declared = true;
                 let read = match &decl.ty {
-                    FieldType::TextList => Some(Wanted::Item(want.value.clone())),
+                    FieldType::Scalar(ScalarType::TextList) => {
+                        Some(Wanted::Item(want.value.clone()))
+                    }
                     ty => FieldValue::read(ty, &want.value).map(Wanted::Equal),
                 };
                 if let Some(read) = read {
@@ -318,6 +320,10 @@ mod tests {
         }
     }
 
+    fn scalar(word: &str) -> FieldTypeDecl {
+        FieldTypeDecl::Word(word.to_owned())
+    }
+
     fn words(of: &[&str]) -> FieldTypeDecl {
         FieldTypeDecl::Enum(of.iter().map(|w| (*w).to_owned()).collect())
     }
@@ -332,12 +338,12 @@ mod tests {
                 "decisions",
                 "DEC",
                 vec![
-                    field("title", FieldTypeDecl::Text),
-                    field("topic", FieldTypeDecl::TextList),
-                    field("size", FieldTypeDecl::Integer),
+                    field("title", scalar("text")),
+                    field("topic", scalar("list")),
+                    field("size", scalar("integer")),
                     field("level", words(&["low", "high"])),
-                    field("count", FieldTypeDecl::Integer),
-                    field("flag", FieldTypeDecl::Bool),
+                    field("count", scalar("integer")),
+                    field("flag", scalar("bool")),
                 ],
             ),
             book(
@@ -345,17 +351,12 @@ mod tests {
                 "notes",
                 "N",
                 vec![
-                    field("title", FieldTypeDecl::Text),
-                    field("topic", FieldTypeDecl::Text),
+                    field("title", scalar("text")),
+                    field("topic", scalar("text")),
                     field("size", words(&["big", "small"])),
                 ],
             ),
-            book(
-                "plain",
-                "plain",
-                "P",
-                vec![field("title", FieldTypeDecl::Text)],
-            ),
+            book("plain", "plain", "P", vec![field("title", scalar("text"))]),
         ];
         Schema::validate(decls, &Default::default()).expect("a sound declaration")
     }

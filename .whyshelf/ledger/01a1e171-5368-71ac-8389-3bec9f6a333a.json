@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794783658892,
+  "expires": null,
+  "frame": [],
+  "id": "01a1e171-5368-71ac-8389-3bec9f6a333a",
+  "kind": "decision",
+  "reason": "Issue #126: words of a declaration read by the domain; reviewed design, code review and arch rules; tests pass",
+  "revision": "287c3bff0d6ac853642fdff9d2700ae2a722f371",
+  "seen": "sha256:b417507ed23af77cd53c7a3b715cb5e803f3fa08d9bf193fbac09d60775542e2",
+  "seen_address": "7094892d421d8f55c8657b680e5e4923b010443c",
+  "subject": "01a1e170-3d99-7013-8341-aedc0d42306c",
+  "v": 1,
+  "verb": "approve"
+}

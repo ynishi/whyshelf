@@ -38,8 +38,6 @@
 use whyshelf_core::domain::shelf::map::{LinkMap, MapTarget, ShelfMap};
 use whyshelf_core::domain::shelf::schema::{Cardinality, CoverSeverity, KeyPattern};
 
-use super::means;
-
 /// Between two columns.
 const GAP: &str = "  ";
 
@@ -92,7 +90,7 @@ pub(super) fn draw(map: &ShelfMap) -> String {
             };
             [
                 link.name.to_string(),
-                means(link.propagation).to_owned(),
+                link.propagation.word().to_owned(),
                 cover.to_owned(),
                 count(link.cardinality).to_owned(),
                 preset,

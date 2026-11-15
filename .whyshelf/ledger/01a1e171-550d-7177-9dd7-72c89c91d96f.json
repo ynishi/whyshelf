@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "91e3c17ae8b3955045dbc86e68a2a768a313d45c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:baf299611cf077411680805b3670f54e0507ec1c83d84209b0b6301089abe470",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "21bae2b3bc7444f5c05ecdea9fec5e42cb149eb3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:39017f501cb32051a48bb2029c7ff13782abcdf71d6a3665fe2829f2c4236e27",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0c227053b253f0e984d299ec4be9f4d30a82a516",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f7fe2d2e2b404d36891fa22728fcaba98fc5f702fe4ea4004368f5728a1303d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/word_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "75a2893029529a5512d73dbfd7f9541f7352e872",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ced990deea319c92b9c07ea47abedc66a3e805e11ce96d144c71b37e6a071e9e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794783658892,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8819b57b4637e9fa5d39561a09e0405a9fa1b0f5",
+      "hash": "sha256:080d007ba972da3b5fe236cd9e15973593256727f2efb10cc06aa39008ff2986",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "73"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e170-61cb-728f-adea-c80c24e72315"
+    }
+  ],
+  "id": "01a1e171-550d-7177-9dd7-72c89c91d96f",
+  "kind": "decision",
+  "reason": "Issue #126: words of a declaration read by the domain; reviewed design, code review and arch rules; tests pass",
+  "revision": "287c3bff0d6ac853642fdff9d2700ae2a722f371",
+  "seen": "sha256:a83bf20f49262972846862dbb4a66b7eb65fc2abaacf3e9422d289fa72e99135",
+  "seen_address": "7174d9a1c5315921f9a4f731944220b5a2cc920c",
+  "subject": "01a1e170-7f3e-758f-9c98-158cee74311f",
+  "v": 1,
+  "verb": "approve"
+}
