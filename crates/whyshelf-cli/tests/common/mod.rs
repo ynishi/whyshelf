@@ -39,8 +39,8 @@ impl Project {
         Self::with(name, BOOKS, NOTE)
     }
 
-    /// A project with this declaration of books and this text as `notes/N-1.md`.
-    pub(crate) fn with(name: &str, books: &str, note: &str) -> Self {
+    /// An empty directory, with no declaration and no document.
+    pub(crate) fn empty(name: &str) -> Self {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("a clock after 1970")
@@ -50,11 +50,19 @@ impl Project {
             "whyshelf-{name}-{}-{count}-{nanos}",
             std::process::id()
         ));
+        fs::create_dir_all(&dir).unwrap();
+        Self(dir)
+    }
+
+    /// A project with this declaration of books and this text as `notes/N-1.md`.
+    pub(crate) fn with(name: &str, books: &str, note: &str) -> Self {
+        let project = Self::empty(name);
+        let dir = &project.0;
         fs::create_dir_all(dir.join(".whyshelf")).unwrap();
         fs::create_dir_all(dir.join("notes")).unwrap();
         fs::write(dir.join(".whyshelf/books.toml"), books).unwrap();
         fs::write(dir.join("notes/N-1.md"), note).unwrap();
-        Self(dir)
+        project
     }
 
     pub(crate) fn run(&self, args: &[&str]) -> Output {

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794752928853,
+  "expires": null,
+  "frame": [],
+  "id": "01a1df9c-5c73-71d2-9e96-4d95090321bc",
+  "kind": "decision",
+  "reason": "A required field written empty or blank is a problem of the document, judged in one place by the build that new and check share, as DEC-72 says, and tested in the domain and on the binary (#123); checked by an independent design review and code review",
+  "revision": "e5531ab5a530bbb971fffea66bed6afc26cad2a3",
+  "seen": "sha256:f9778d87029b0837518977852107a14195f37ca9de5237d0d1e8f99de6da3686",
+  "seen_address": "10b6f28d71ff02fc7fc23ee31cda486fcf673f9e",
+  "subject": "01a1df93-3fa3-705e-9495-b074cbae98f0",
+  "v": 1,
+  "verb": "approve"
+}
