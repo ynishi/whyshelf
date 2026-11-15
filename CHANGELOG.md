@@ -27,6 +27,13 @@ and this project adheres to
 
 ### Changed
 
+- A required field written with nothing in it makes the document invalid: a
+  `text` that is empty or white space only, or a `list` with no item, is the
+  problem "the required field `<name>` is empty or blank". `new` refuses such a
+  document and writes nothing, and `check` lists a file that has one as
+  invalid. An optional field still takes an empty value. A project whose
+  documents write a required field empty sees them invalid after upgrading;
+  `check` names each field to fill (#123).
 - `check` and `stale` write one warning line on stderr per cause of names that
   cannot be told now, not one per name: names of one space with an equal reason
   are one line, which says the reason once, how many names, and the documents
