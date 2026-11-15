@@ -34,6 +34,18 @@ and this project adheres to
   invalid. An optional field still takes an empty value. A project whose
   documents write a required field empty sees them invalid after upgrading;
   `check` names each field to fill (#123).
+- Problems say a count, a type and a book as the declaration writes them: "the
+  link `grounds` has 2 keys, which its count `optional` (none or one) does not
+  admit", "the field `n` is a text, not `integer`", and "the book `note`
+  declares no field or link `source`: declare it in the book first". A
+  `count`, `type` or `means` that is no word of whyshelf no longer fails the
+  read of the declaration (exit 3, with the TOML line and column): it is a
+  problem in `schema_problems`, naming the book and the entry and the words it
+  takes, told with the others (exit 1). In the library, `FieldType` is
+  `Scalar(ScalarType) | Enum(..)`, a declaration as written keeps these words
+  as text (`FieldTypeDecl::Word`, `WrittenLinkDecl::count` and `means`,
+  `WrittenPresetValues`), and `read_word` reads them, with
+  `SchemaProblem::UnknownWord` for one it does not take (#126).
 - `check` and `stale` write one warning line on stderr per cause of names that
   cannot be told now, not one per name: names of one space with an equal reason
   are one line, which says the reason once, how many names, and the documents
