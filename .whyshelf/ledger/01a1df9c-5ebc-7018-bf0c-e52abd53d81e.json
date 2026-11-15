@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2847aeb7dd2c06dbfe01807cb06ebfb925b9841b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d49d6ac40c3a8200faece3f01643bede8614b48dc97e7a12f64c8c7a375a47e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d6092221a6490173e302b4989c70b556ca64cd6b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8f98323f2ca53f4ee799b65ba8ce84e57c3ff0888f657fa30100289d201bc9f3",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/required_fields.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794752928853,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e13d05bc1936377803393317fe8891510af71920",
+      "hash": "sha256:d8caf3008602620e52125c0652685b85f92db5e452408e79d42b44cf44195d7b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "72"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1df93-423e-76d2-9471-d810f8e8c543"
+    }
+  ],
+  "id": "01a1df9c-5ebc-7018-bf0c-e52abd53d81e",
+  "kind": "decision",
+  "reason": "A required field written empty or blank is a problem of the document, judged in one place by the build that new and check share, as DEC-72 says, and tested in the domain and on the binary (#123); checked by an independent design review and code review",
+  "revision": "e5531ab5a530bbb971fffea66bed6afc26cad2a3",
+  "seen": "sha256:4413f2bc96e693551abbc51bc999953712057fccf4c9a85cf7024f19598123a4",
+  "seen_address": "d8b6ebec9f5d248f6a209d924fa378f17a2cb456",
+  "subject": "01a1df93-475b-7237-a400-9f872f54c2d6",
+  "v": 1,
+  "verb": "approve"
+}

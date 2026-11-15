@@ -2,10 +2,11 @@
 
 use super::*;
 use crate::domain::shelf::fixtures_tests::{
-    decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, spaces, text,
+    decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, shelf_reading,
+    spaces, text,
 };
 use crate::domain::shelf::graph::CycleId;
-use crate::domain::shelf::schema::{Cardinality, FieldWord};
+use crate::domain::shelf::schema::{Cardinality, FieldEntryDecl, FieldTypeDecl, FieldWord};
 
 fn problems_of(shelf: &Shelf, n: u128) -> Vec<DocProblem> {
     match shelf.state_of(docid(n)) {
@@ -291,6 +292,130 @@ fn a_required_field_must_be_there() {
         vec![DocProblem::FieldMissing {
             field: EntryName::new("title").unwrap()
         }]
+    );
+}
+
+fn title() -> EntryName {
+    EntryName::new("title").unwrap()
+}
+
+/// The schema of the fixtures with the finding's `tags` list required.
+fn schema_with_required_tags() -> Schema {
+    let mut decls = decls();
+    let tags = decls[0]
+        .fields
+        .iter_mut()
+        .find(|f| f.name == "tags")
+        .expect("the finding has tags");
+    tags.presence = FieldPresence::Required;
+    Schema::validate(decls, &spaces()).unwrap()
+}
+
+#[test]
+fn a_required_text_that_says_nothing_is_empty() {
+    for written in ["", "   ", "\t\n"] {
+        let s = shelf(vec![reading(
+            "findings/a.md",
+            1,
+            "FR-1",
+            &[("title", text(written))],
+        )]);
+        assert_eq!(
+            problems_of(&s, 1),
+            vec![DocProblem::FieldEmpty { field: title() }],
+            "title {written:?}"
+        );
+    }
+}
+
+#[test]
+fn a_required_text_with_a_character_is_a_value_even_after_a_line_break() {
+    let s = shelf(vec![reading(
+        "findings/a.md",
+        1,
+        "FR-1",
+        &[("title", text("\nsecond line"))],
+    )]);
+    assert!(s.invalid().is_empty());
+    assert_eq!(
+        s.doc(docid(1)).unwrap().fields().get("title"),
+        Some(&FieldValue::Text("\nsecond line".to_owned()))
+    );
+}
+
+#[test]
+fn an_optional_text_and_an_optional_list_may_be_written_empty() {
+    let s = shelf(vec![reading(
+        "findings/a.md",
+        1,
+        "FR-1",
+        &[
+            ("title", text("t")),
+            ("note", text("")),
+            ("tags", list(&[])),
+        ],
+    )]);
+    assert!(s.invalid().is_empty());
+    let doc = s.doc(docid(1)).unwrap();
+    assert_eq!(
+        doc.fields().get("note"),
+        Some(&FieldValue::Text(String::new()))
+    );
+    assert_eq!(
+        doc.fields().get("tags"),
+        Some(&FieldValue::TextList(vec![]))
+    );
+}
+
+#[test]
+fn a_required_list_with_no_item_is_empty() {
+    let schema = schema_with_required_tags();
+    let readings = |tags: &[&str]| {
+        vec![reading(
+            "findings/a.md",
+            1,
+            "FR-1",
+            &[("title", text("t")), ("tags", list(tags))],
+        )]
+    };
+    let empty = shelf_reading(&schema, readings(&[]), &[]);
+    assert_eq!(
+        problems_of(&empty, 1),
+        vec![DocProblem::FieldEmpty {
+            field: EntryName::new("tags").unwrap()
+        }]
+    );
+    let one = shelf_reading(&schema, readings(&["a"]), &[]);
+    assert!(one.invalid().is_empty());
+}
+
+#[test]
+fn a_blank_required_field_is_told_before_a_missing_one() {
+    let mut decls = decls();
+    decls[0].fields.insert(
+        0,
+        FieldEntryDecl {
+            name: "summary".to_owned(),
+            ty: FieldTypeDecl::Text,
+            presence: FieldPresence::Required,
+        },
+    );
+    let schema = Schema::validate(decls, &spaces()).unwrap();
+    // `title` is written blank, `summary` is left out; the declaration writes
+    // `summary` first, so only the build's order of steps puts the empty one first.
+    let s = shelf_reading(
+        &schema,
+        vec![reading("findings/a.md", 1, "FR-1", &[("title", text(" "))])],
+        &[],
+    );
+    assert_eq!(
+        problems_of(&s, 1),
+        vec![
+            DocProblem::FieldEmpty { field: title() },
+            DocProblem::FieldMissing {
+                field: EntryName::new("summary").unwrap()
+            },
+        ]
     );
 }
 

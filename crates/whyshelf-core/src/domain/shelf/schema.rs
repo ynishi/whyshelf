@@ -619,7 +619,10 @@ pub enum FieldType {
 /// Whether a document must carry a field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldPresence {
-    /// A document without the field is invalid.
+    /// A document without the field, or whose value says nothing, is invalid. A
+    /// `text` says something when it is not empty or white space only, a `list`
+    /// when it has at least one item; an enum, integer or bool written is a value.
+    /// The required text of a valid document is therefore never blank.
     Required,
     /// The field may be left out.
     Optional,

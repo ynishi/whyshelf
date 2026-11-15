@@ -181,6 +181,27 @@ fn an_invalid_new_document_has_every_problem_the_build_finds() {
 }
 
 #[test]
+fn a_new_document_with_a_blank_required_title_is_refused() {
+    let s = shelf(vec![]);
+    let key = s.next_key(&book("finding")).unwrap();
+    let Err(NewDocProblem::Invalid(problems)) = s.check_new(
+        docid(5),
+        &key,
+        entries(&[("title", text("  "))]),
+        String::new(),
+        &ArtifactReadings::new(),
+    ) else {
+        panic!("invalid");
+    };
+    assert_eq!(
+        problems.into_vec(),
+        vec![DocProblem::FieldEmpty {
+            field: EntryName::new("title").unwrap()
+        }]
+    );
+}
+
+#[test]
 fn the_identity_and_the_key_cannot_be_given_as_entries() {
     let s = shelf(vec![]);
     let key = s.next_key(&book("finding")).unwrap();

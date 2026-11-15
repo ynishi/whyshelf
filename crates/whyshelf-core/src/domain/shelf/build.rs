@@ -67,8 +67,8 @@ use super::doc::{
 };
 use super::graph::{Cycle, CycleSource, cycles_of};
 use super::schema::{
-    ArtifactLinkKind, BookName, BookSchema, Cardinality, EntryName, FieldPresence, FieldType,
-    ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
+    ArtifactLinkKind, BookName, BookSchema, Cardinality, EntryName, FieldDecl, FieldPresence,
+    FieldType, ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
     WithoutFrontMatter,
 };
 
@@ -432,6 +432,13 @@ pub enum DocProblem {
     /// links to artifacts, each in the order the declaration writes them.
     #[error("the required field `{field}` is missing")]
     FieldMissing {
+        /// The field.
+        field: EntryName,
+    },
+    /// A required field written with a value that says nothing; what counts as a
+    /// value is told at [`FieldPresence::Required`].
+    #[error("the required field `{field}` is empty or blank")]
+    FieldEmpty {
         /// The field.
         field: EntryName,
     },
@@ -1032,10 +1039,8 @@ fn read_entries(
             continue;
         }
         if let Some((field, decl)) = book.fields().get_key_value(name.as_str()) {
-            match field_value(field, &decl.ty, raw) {
-                Ok(value) => {
-                    fields.insert(field.clone(), value);
-                }
+            match declared_field(field, decl, Some(raw)) {
+                Ok(value) => fields.extend(value.map(|value| (field.clone(), value))),
                 Err(problem) => problems.push(problem),
             }
         } else if let Some((link, kind)) = book.links().get_key_value(name.as_str()) {
@@ -1101,8 +1106,9 @@ fn read_entries(
     }
 }
 
-/// What the book requires and the entries leave out: a required field, and a link
-/// whose cardinality does not admit none. The problems come in this order: every
+/// What the book requires and the entries leave out: a field [`declared_field`]
+/// refuses when it is not written, and a link whose cardinality does not admit
+/// none. The problems come in this order: every
 /// [`DocProblem::FieldMissing`], in the order the declaration writes the fields,
 /// then every [`DocProblem::LinkCount`] of a link into a book, then of a link to
 /// artifacts, each in the order the declaration writes the links.
@@ -1112,10 +1118,10 @@ fn check_required(
     problems: &mut Vec<DocProblem>,
 ) {
     for (field, decl) in book.fields() {
-        if decl.presence == FieldPresence::Required && !entries.contains_key(field.as_str()) {
-            problems.push(DocProblem::FieldMissing {
-                field: field.clone(),
-            });
+        if !entries.contains_key(field.as_str())
+            && let Err(problem) = declared_field(field, decl, None)
+        {
+            problems.push(problem);
         }
     }
     let cardinalities = book
@@ -1299,28 +1305,56 @@ fn link_state(index: &KeyIndex, kind: &LinkKind, written: &str) -> LinkState {
     }
 }
 
-fn field_value(
+/// Whether a field meets its declaration, given what the document wrote: `None` when
+/// it leaves the field out, the raw value when it writes it. The one place that
+/// says what a declared field requires: its type and, for a required field, that it
+/// is there and says something (told at [`FieldPresence::Required`]; a text is
+/// judged blank by [`NonBlank::is_blank`]). The value is `None` for an optional
+/// field left out.
+fn declared_field(
     field: &EntryName,
-    ty: &FieldType,
-    raw: &RawValue,
-) -> Result<FieldValue, DocProblem> {
-    match (ty, raw) {
-        (FieldType::Text, RawValue::Text(s)) => Ok(FieldValue::Text(s.clone())),
-        (FieldType::Integer, RawValue::Integer(n)) => Ok(FieldValue::Integer(*n)),
-        (FieldType::Bool, RawValue::Bool(b)) => Ok(FieldValue::Bool(*b)),
-        (FieldType::TextList, RawValue::List(items)) => Ok(FieldValue::TextList(items.clone())),
+    decl: &FieldDecl,
+    raw: Option<&RawValue>,
+) -> Result<Option<FieldValue>, DocProblem> {
+    let Some(raw) = raw else {
+        return match decl.presence {
+            FieldPresence::Required => Err(DocProblem::FieldMissing {
+                field: field.clone(),
+            }),
+            FieldPresence::Optional => Ok(None),
+        };
+    };
+    let ty = &decl.ty;
+    let value = match (ty, raw) {
+        (FieldType::Text, RawValue::Text(s)) => FieldValue::Text(s.clone()),
+        (FieldType::Integer, RawValue::Integer(n)) => FieldValue::Integer(*n),
+        (FieldType::Bool, RawValue::Bool(b)) => FieldValue::Bool(*b),
+        (FieldType::TextList, RawValue::List(items)) => FieldValue::TextList(items.clone()),
         (FieldType::Enum(_), RawValue::Text(s)) => {
             FieldValue::read(ty, s).ok_or_else(|| DocProblem::FieldNotInEnum {
                 field: field.clone(),
                 found: s.clone(),
-            })
+            })?
         }
-        _ => Err(DocProblem::FieldMismatch {
+        _ => {
+            return Err(DocProblem::FieldMismatch {
+                field: field.clone(),
+                expected: ty.clone(),
+                found: raw.kind(),
+            });
+        }
+    };
+    let says_nothing = match &value {
+        FieldValue::Text(s) => NonBlank::is_blank(s),
+        FieldValue::TextList(items) => items.is_empty(),
+        _ => false,
+    };
+    if decl.presence == FieldPresence::Required && says_nothing {
+        return Err(DocProblem::FieldEmpty {
             field: field.clone(),
-            expected: ty.clone(),
-            found: raw.kind(),
-        }),
+        });
     }
+    Ok(Some(value))
 }
 
 /// The documents of a project, checked: valid ones, invalid ones with their

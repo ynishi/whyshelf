@@ -1,0 +1,80 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a2617b67dc805fdaa29be40d462e2e08bf5ba47c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:26ad60a4a1f6d38d866b9ef97bd3267fd5a17b4b94e5526adc09dfed91d3c969",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/absent_path.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2847aeb7dd2c06dbfe01807cb06ebfb925b9841b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d49d6ac40c3a8200faece3f01643bede8614b48dc97e7a12f64c8c7a375a47e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794752930321,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11891129d27429b1a8097e576d0f157c6b3cd482",
+      "hash": "sha256:11cccbc99d5bcad0b080459ad707cac5bce11386aecf2af95545c684c1ce5a1a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-778a-7288-ae20-3289a8a7a718"
+    },
+    {
+      "address": "d7a292650bcffaef1d0c947abe40235c719878dc",
+      "hash": "sha256:c03e03305a381cb0aae097cab40d04c7bfd71505936711141eaa0c160fa3ff01",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "43"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-7849-7632-b126-5a6b72f508b0"
+    }
+  ],
+  "id": "01a1df9c-6df2-72d0-a201-a5d86db48def",
+  "kind": "decision",
+  "reason": "The shared test helpers, the build tests and the format docs of the declaration changed for #123 (a required field that says nothing is invalid); what these documents claim and the tests they name still hold, checked by an independent code review and the full test suite",
+  "revision": "e5531ab5a530bbb971fffea66bed6afc26cad2a3",
+  "seen": "sha256:943f43067e99eaf8c356ea9168071ff1522b9ef9da9305c6bc36007d99646e1d",
+  "seen_address": "7b5760ba9c47ad8c89a6ec8a7b05ef45874ecfad",
+  "subject": "01a1c765-25d4-76c7-88ae-78e4f8ea1119",
+  "v": 1,
+  "verb": "approve"
+}

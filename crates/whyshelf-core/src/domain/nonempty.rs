@@ -254,11 +254,17 @@ impl NonBlank {
     /// A text, refused when it is empty or only white space.
     pub fn new(text: impl Into<String>) -> Result<Self, ValueError> {
         let text = text.into();
-        if text.trim().is_empty() {
+        if Self::is_blank(&text) {
             Err(ValueError::BlankText)
         } else {
             Ok(Self(text))
         }
+    }
+
+    /// Whether a text is empty or only white space: what [`NonBlank::new`] refuses,
+    /// told without taking the text.
+    pub fn is_blank(text: &str) -> bool {
+        text.trim().is_empty()
     }
 
     /// The text.

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2847aeb7dd2c06dbfe01807cb06ebfb925b9841b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d49d6ac40c3a8200faece3f01643bede8614b48dc97e7a12f64c8c7a375a47e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f955d14b256d3034d0fabd83064837f80864e21d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0bb505eadb2c33b4e4b17d41ca3b599fcf17d52a070375ab95f24145f62e33fb",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794752930321,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1d3941b06543a1053823591e9c3a787ca8b477f2",
+      "hash": "sha256:b35fa912b51a8f51352a7e31f6c7fc41dc3e5d51f098a6299f43d7b126bdaac7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "69"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1d9f7-a611-74b7-88a2-a58381f213dc"
+    }
+  ],
+  "id": "01a1df9c-7ee5-7583-b29d-db3d78efd8c8",
+  "kind": "decision",
+  "reason": "The shared test helpers, the build tests and the format docs of the declaration changed for #123 (a required field that says nothing is invalid); what these documents claim and the tests they name still hold, checked by an independent code review and the full test suite",
+  "revision": "e5531ab5a530bbb971fffea66bed6afc26cad2a3",
+  "seen": "sha256:d34664795800eac597cc6176a9f9ed52a5ebc8682d4f6c0f35c87a04bc677945",
+  "seen_address": "551b434903ee8982e051d7f99396c41abe53e2aa",
+  "subject": "01a1d9f7-ca9a-714b-aad6-4b46373c5273",
+  "v": 1,
+  "verb": "approve"
+}

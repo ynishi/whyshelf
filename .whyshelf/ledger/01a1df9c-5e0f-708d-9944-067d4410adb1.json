@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "5549597b8db053be2ce6a0e077abe1d30092ffb4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d9afb78e611fa784ecd33f54709690b156b3889d15a1407e8a77529ed1c1953",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3b30c25655c0cbc829e20e924dc6b686f22f1c0d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:aaffb84a850fb548c440acf6d49ba312435915244933bf5141c0fda1f3f885ed",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794752928853,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e13d05bc1936377803393317fe8891510af71920",
+      "hash": "sha256:d8caf3008602620e52125c0652685b85f92db5e452408e79d42b44cf44195d7b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "72"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1df93-423e-76d2-9471-d810f8e8c543"
+    }
+  ],
+  "id": "01a1df9c-5e0f-708d-9944-067d4410adb1",
+  "kind": "decision",
+  "reason": "A required field written empty or blank is a problem of the document, judged in one place by the build that new and check share, as DEC-72 says, and tested in the domain and on the binary (#123); checked by an independent design review and code review",
+  "revision": "e5531ab5a530bbb971fffea66bed6afc26cad2a3",
+  "seen": "sha256:9c526c9d224a82422155ab1b363dfa28ca7a8385eb8fd2f676dc93024a69aace",
+  "seen_address": "db2cae54614a6feff786eb7e80cfc498eec79d29",
+  "subject": "01a1df93-44b2-7279-9b91-45f43cd24adf",
+  "v": 1,
+  "verb": "approve"
+}
