@@ -1,7 +1,10 @@
 //! Tests of a new document: its key and whether it would be valid.
 
 use super::*;
-use crate::domain::shelf::fixtures_tests::{docid, entries, fr, list, path, reading, shelf, text};
+use crate::domain::shelf::fixtures_tests::{
+    decls, docid, entries, fr, list, path, reading, shelf, spaces, text,
+};
+use crate::domain::shelf::schema::{Schema, ScopeDecl};
 
 fn book(name: &str) -> BookName {
     BookName::new(name).unwrap()
@@ -215,4 +218,125 @@ fn the_identity_and_the_key_cannot_be_given_as_entries() {
         ),
         Err(NewDocProblem::ReservedEntry { name: "key" })
     );
+}
+
+/// The key of a `NewKey`, as text.
+fn text_of(key: &NewKey) -> String {
+    key.key().form.to_string()
+}
+
+/// The search moved on to the next key; anything else is a failure.
+fn moved_on(s: &Shelf, search: KeySearch) -> KeySearch {
+    match s.key_after_taken(search) {
+        AfterTaken::Next(next) => next,
+        other => panic!("expected the next key: {other:?}"),
+    }
+}
+
+#[test]
+fn a_chosen_key_whose_file_was_there_is_followed_by_the_next_number() {
+    let s = shelf(vec![fr(1, &[]), fr(4, &[])]);
+    let first = s.next_key(&book("finding")).unwrap();
+    assert_eq!(text_of(&first), "FR-5");
+    let second = moved_on(&s, KeySearch::start(first));
+    assert_eq!(text_of(second.key()), "FR-6");
+    // The one after is counted from the one chosen, not read from the shelf again.
+    let third = moved_on(&s, second);
+    assert_eq!(text_of(third.key()), "FR-7");
+}
+
+#[test]
+fn a_given_key_whose_file_was_there_is_not_chosen_again() {
+    let s = shelf(vec![fr(1, &[])]);
+    let claimed = s.claim_key(&book("finding"), "FR-5").unwrap();
+    assert_eq!(
+        s.key_after_taken(KeySearch::start(claimed)),
+        AfterTaken::Asked
+    );
+    let design = s.claim_key(&book("design"), "cache/expiry").unwrap();
+    assert_eq!(
+        s.key_after_taken(KeySearch::start(design)),
+        AfterTaken::Asked
+    );
+}
+
+#[test]
+fn the_search_gives_up_after_sixty_four_keys_with_the_first_and_the_last_named() {
+    // Every key from FR-5 is taken: FR-5 ..= FR-68 are the 64 keys tried.
+    let s = shelf(vec![fr(4, &[])]);
+    let first = s.next_key(&book("finding")).unwrap();
+    let mut search = KeySearch::start(first);
+    let mut tried = 1;
+    let problem = loop {
+        match s.key_after_taken(search) {
+            AfterTaken::Next(next) => {
+                tried += 1;
+                search = next;
+            }
+            AfterTaken::NoFreeKey(problem) => break problem,
+            other => panic!("expected the search to go on or to give up: {other:?}"),
+        }
+    };
+    assert_eq!(tried, 64);
+    assert_eq!(problem.book, book("finding"));
+    assert_eq!(problem.first.to_string(), "finding:FR-5");
+    assert_eq!(problem.last.to_string(), "finding:FR-68");
+    assert_eq!(
+        problem.to_string(),
+        "the book `finding` had a file at every key from `FR-5` to `FR-68`"
+    );
+}
+
+#[test]
+fn a_search_goes_on_from_the_key_it_is_at() {
+    let s = shelf(vec![]);
+    let mut search = KeySearch::start(s.next_key(&book("finding")).unwrap());
+    for _ in 0..10 {
+        search = moved_on(&s, search);
+    }
+    assert_eq!(text_of(search.key()), "FR-11");
+    let next = moved_on(&s, search);
+    assert_eq!(text_of(next.key()), "FR-12");
+}
+
+#[test]
+fn no_next_number_in_the_grammar_is_no_next_key() {
+    // The highest key a file writes has 19 digits less one; the key chosen is the
+    // last number that fits, and the one after it is too long.
+    let s = shelf(vec![reading(
+        "findings/x.md",
+        1,
+        "FR-9999999999999999998",
+        &[("title", text("t"))],
+    )]);
+    let chosen = s.next_key(&book("finding")).unwrap();
+    assert_eq!(text_of(&chosen), "FR-9999999999999999999");
+    assert!(matches!(
+        s.key_after_taken(KeySearch::start(chosen)),
+        AfterTaken::NoNextKey(NextKeyProblem::Exhausted {
+            highest: 9_999_999_999_999_999_999,
+            problem: KeyProblem::NumberTooLong { .. },
+            ..
+        })
+    ));
+}
+
+#[test]
+fn a_next_number_the_range_does_not_take_is_no_next_key() {
+    let mut declared = decls();
+    declared[0].scope = ScopeDecl {
+        include: Some(vec!["FR-1.md".to_owned(), "FR-2.md".to_owned()]),
+        exclude: None,
+        without_front_matter: None,
+    };
+    let schema = Schema::validate(declared, &spaces()).unwrap();
+    let s = Shelf::build(&schema, Vec::new(), &ArtifactReadings::new());
+    let first = s.next_key(&book("finding")).unwrap();
+    assert_eq!(text_of(&first), "FR-1");
+    let second = moved_on(&s, KeySearch::start(first));
+    assert_eq!(text_of(second.key()), "FR-2");
+    let AfterTaken::NoNextKey(NextKeyProblem::OutOfRange(out)) = s.key_after_taken(second) else {
+        panic!("FR-3 is out of the range");
+    };
+    assert_eq!(out.key.to_string(), "finding:FR-3");
 }

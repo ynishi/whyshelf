@@ -6,6 +6,7 @@ use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
 use clap::error::ErrorKind;
 use clap::{Args, Subcommand};
 use whyshelf_core::domain::shelf::artifact::ArtifactName;
+use whyshelf_core::domain::shelf::build::NEXT_KEY_TRIES;
 use whyshelf_core::domain::shelf::lookup::Reference;
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
 use whyshelf_infra::shelf::init::Template;
@@ -35,6 +36,17 @@ impl FromStr for BookLink {
             link: EntryName::new(link).map_err(|e| format!("the link of `{text}`: {e}"))?,
         })
     }
+}
+
+/// The help of `new --key`, as `--help` shows it. The number of keys passed over is
+/// the domain's ([`NEXT_KEY_TRIES`]), said here and not decided here, so the help
+/// cannot differ from what `new` does.
+fn key_help() -> String {
+    format!(
+        "The key (default: the book's next number; a book of slugs needs one). \
+         Without --key, a key whose file is already there is passed over for the next \
+         number, up to {NEXT_KEY_TRIES} keys."
+    )
 }
 
 /// The name of a template of `init`, read by clap from the one closed set the
@@ -191,8 +203,8 @@ pub enum BooksCommand {
         /// `title` field; a book declares whether a title is required.
         #[arg(long)]
         title: Option<String>,
-        /// The key (default: the book's next number; a book of slugs needs one).
-        #[arg(long)]
+        /// The key; its help, as `--help` shows it, is `key_help`.
+        #[arg(long, help = key_help())]
         key: Option<String>,
         /// More entries, `<entry>=<value>`. A list field or a link takes `a,b`, or one
         /// item at a time with `<entry>+=<item>`, commas kept; a truth value `true` or

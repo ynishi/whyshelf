@@ -13,7 +13,7 @@ use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
-use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem};
+use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem, NoFreeKey};
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::ExemptRefusal;
 use crate::domain::shelf::filter::FilterProblem;
@@ -188,12 +188,21 @@ pub enum ShelfError {
         name: String,
     },
     /// A file is already where the new document would be written (a file whose key
-    /// is not its name); nothing was written.
+    /// is not its name), for a key that was asked for, or for `init`'s files and
+    /// documents; nothing was written.
     #[error("{path} is already there; nothing was written")]
     FileTaken {
         /// The file.
         path: RelPath,
     },
+    /// A new document's key was chosen, and a file was there at every key tried;
+    /// nothing was written. The files were written by other runs at the same time,
+    /// or are files the shelf did not count (one whose front matter cannot be read,
+    /// say), which `check` lists as no valid document.
+    #[error(
+        "{0}; nothing was written: other runs may be writing at the same time, or files that are no valid document are in the way (`check` lists them); run `new` again once they are done or put right"
+    )]
+    NoFreeKey(NoFreeKey),
     /// A project cannot be started here: something is at the declaration's file or
     /// at a document's, or a file of a book already writes a key a document would
     /// take. Nothing was written.
@@ -325,6 +334,7 @@ impl ShelfError {
             | Self::ItemOfNoList { .. }
             | Self::EmptyItem { .. }
             | Self::FileTaken { .. }
+            | Self::NoFreeKey(_)
             | Self::InTheWay { .. }
             | Self::Overlapping { .. } => ErrorClass::Request,
             // As a reference that names nothing and a revocation of nothing: a name of

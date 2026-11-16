@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -73,6 +73,20 @@ impl Project {
             .env("WHYSHELF_ACTOR", "tester")
             .output()
             .expect("the binary runs")
+    }
+
+    /// Start the binary as [`Project::run`] runs it, without waiting: the process
+    /// runs beside the ones started after it until `wait_with_output` is called.
+    pub(crate) fn spawn(&self, args: &[&str]) -> Child {
+        Command::new(env!("CARGO_BIN_EXE_whyshelf"))
+            .arg("--root")
+            .arg(&self.0)
+            .args(args)
+            .env("WHYSHELF_ACTOR", "tester")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the binary starts")
     }
 
     /// Every file under the project with its bytes, and every directory (with none),

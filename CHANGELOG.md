@@ -57,6 +57,14 @@ and this project adheres to
 - The page of `whyshelf_core::domain::shelf` and the doc of `Slug` no longer
   describe the earlier model, removed in #9, as present; the doc of `Slug`
   states its own rules (#98).
+- `new` with no `--key`, finding a file at the key it chose (another run
+  writing at the same time, or a file whose front matter cannot be read),
+  passes over it to the next number, so runs started together in one working
+  tree each write a document at a key of their own. After 64 keys each with a
+  file it writes nothing and says to run again once the other runs are done or
+  the files `check` lists are put right. `new --key` of a key that is there is
+  refused as before. In the library, `Shelf::key_after_taken` decides, with
+  `KeySearch`, `AfterTaken` and `NoFreeKey` (#124).
 
 ## [0.1.0] - 2026-11-12
 
