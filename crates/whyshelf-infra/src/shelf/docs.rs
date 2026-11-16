@@ -829,19 +829,21 @@ impl<'de> Deserialize<'de> for Key {
     }
 }
 
-/// The value of a key: what a front matter holds, or the kind it was read as.
+/// The value of a key: what a front matter holds, or the kind it was read as. No value
+/// (`key:`, `null`, `~`) is held as it is, [`RawValue::Null`]; what it comes to is
+/// not decided here.
 struct Held(Result<RawValue, UnheldKind>);
 
 impl Place for Held {
     fn scalar(scalar: Scalar) -> Self {
         Self(match scalar {
+            Scalar::Null => Ok(RawValue::Null),
             Scalar::Text(text) => Ok(RawValue::Text(text)),
             Scalar::Bool(value) => Ok(RawValue::Bool(value)),
             Scalar::Integer(value) => Ok(RawValue::Integer(value)),
             Scalar::TooLarge => Err(UnheldKind::TooLarge),
             Scalar::TooSmall => Err(UnheldKind::TooSmall),
             Scalar::Float => Err(UnheldKind::Float),
-            Scalar::Null => Err(UnheldKind::Null),
         })
     }
 
@@ -1092,6 +1094,7 @@ fn yaml_name(name: &str) -> String {
 
 fn yaml_value(value: &RawValue) -> String {
     match value {
+        RawValue::Null => "null".to_owned(),
         RawValue::Text(text) => quoted(text),
         RawValue::Integer(n) => n.to_string(),
         RawValue::Bool(b) => b.to_string(),
@@ -1179,6 +1182,38 @@ mod tests {
     }
 
     #[test]
+    fn no_value_is_read_as_null_whatever_way_it_is_written() {
+        let text = format!("---\nid: {ID}\na:\nb: null\nc: ~\nd: Null\ne: \"\"\n---\n");
+        let DocReading::Parsed { entries, .. } = read(origin(), &text) else {
+            panic!("parsed");
+        };
+        for name in ["a", "b", "c", "d"] {
+            assert_eq!(entries[name], RawValue::Null, "{name}");
+        }
+        // A text that is empty is a text: what it says is not decided here.
+        assert_eq!(entries["e"], RawValue::Text(String::new()));
+    }
+
+    #[test]
+    fn a_null_in_a_list_is_still_a_value_a_front_matter_does_not_hold() {
+        let text = format!("---\nid: {ID}\nv: [a, ~]\n---\n");
+        assert!(matches!(read(origin(), &text), DocReading::Unheld { .. }));
+    }
+
+    #[test]
+    fn no_value_is_written_as_null_and_reads_back() {
+        let mut entries = BTreeMap::new();
+        entries.insert("id".to_owned(), RawValue::Text(ID.to_owned()));
+        entries.insert("key".to_owned(), RawValue::Null);
+        let text = render(&entries, "");
+        assert!(text.contains("\nkey: null\n"), "{text}");
+        let DocReading::Parsed { entries: back, .. } = read(origin(), &text) else {
+            panic!("parsed");
+        };
+        assert_eq!(back, entries);
+    }
+
+    #[test]
     fn a_key_written_twice_is_reported_with_the_identity() {
         let text = format!("---\nid: {ID}\nkey: a\nkey: b\n---\n");
         let DocReading::Unparsed { id, why, .. } = read(origin(), &text) else {
@@ -1211,7 +1246,6 @@ mod tests {
     #[test]
     fn each_kind_a_front_matter_does_not_hold_is_named() {
         let cases = [
-            ("v:", UnheldKind::Null),
             ("v: 1.5", UnheldKind::Float),
             ("v: 1.0", UnheldKind::Float),
             ("v: 1e3", UnheldKind::Float),

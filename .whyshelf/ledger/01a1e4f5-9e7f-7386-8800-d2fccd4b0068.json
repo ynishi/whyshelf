@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b3cc61908f55a21a17d41a936f04176c913f2992",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a0b43f1e5f8162903f9b18e76d84b202f9e7540257c73a365f33ee57ae9ee90e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0f2efc21be5b03ae489f2c68153f9324f679a155",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2260196fad7659492905888e2271c72f56d2af327e1942cb4e50ab0bc41493bc",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "db21b3debdd4e2df3df16a6c4a47f7180b83fdf2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:36e188269c4ffb34945bee5df60ecfb316495e5b83f30c8b5cbe4506aed3ebe7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/new_many.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794842658803,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4937a046e315e71bc5f4a581e4c734265afbc1b0",
+      "hash": "sha256:16441793e0701b6a5c293308826f0028ce5f8fb44f3d80f87a16f35a644eb9bd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "76"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e4f4-a1a7-70a3-a224-a7b68ad2e076"
+    }
+  ],
+  "id": "01a1e4f5-9e7f-7386-8800-d2fccd4b0068",
+  "kind": "decision",
+  "reason": "Issue #128: a written value that says nothing is no value; blank list items are problems; the line type; reviewed design, code review and arch rules; tests pass",
+  "revision": "32b7b248d275c8d7221c292f9ac5fb91fba2fb0a",
+  "seen": "sha256:58baae2f3162fd015c0a8b8ceab915665a626a809f59bbe69dbea7bb6915b3a4",
+  "seen_address": "6f3e4ed14bc97e1a10aefeffa32ab37bf0e000ca",
+  "subject": "01a1e4f4-e2ca-70f8-b581-47184c25b15a",
+  "v": 1,
+  "verb": "approve"
+}

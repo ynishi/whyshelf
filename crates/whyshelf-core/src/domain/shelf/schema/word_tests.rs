@@ -30,7 +30,7 @@ fn every_value_of_a_type_reads_back_from_its_word_and_no_other_text_does() {
 fn the_words_are_those_a_declaration_writes_and_each_is_one_value() {
     assert_eq!(
         word_of(&ScalarType::ALL),
-        ["text", "integer", "bool", "list"]
+        ["text", "line", "integer", "bool", "list"]
     );
     assert_eq!(
         word_of(&Cardinality::ALL),
@@ -219,7 +219,7 @@ fn a_word_that_is_none_is_a_problem_with_the_book_the_entry_and_the_words_it_tak
             "book `note`: the meaning of the link `grounds` is \"leans\", and it takes one of \
              \"depends\", \"informs\", \"replaces\"",
             "book `note`: the type of the field `n` is \"number\", and it takes one of \
-             \"text\", \"integer\", \"bool\", \"list\"",
+             \"text\", \"line\", \"integer\", \"bool\", \"list\"",
         ]
     );
 }

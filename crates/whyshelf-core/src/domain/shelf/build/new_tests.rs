@@ -137,6 +137,96 @@ fn a_valid_new_document_is_made_as_the_build_makes_it_with_its_unresolved_links(
 }
 
 #[test]
+fn an_entry_the_build_reads_as_saying_nothing_is_not_written() {
+    let s = shelf(vec![fr(1, &[])]);
+    let key = s.next_key(&book("finding")).unwrap();
+    let new = s
+        .check_new(
+            docid(5),
+            &key,
+            entries(&[
+                ("title", text("t")),
+                // A field written empty, of each type, and with no value.
+                ("note", text("")),
+                ("count", text("  ")),
+                ("flag", RawValue::Null),
+                ("level", text("")),
+                ("tags", list(&[])),
+                // A link given no key, written as a list, as no value and as a text.
+                ("base", list(&[])),
+                ("related", RawValue::Null),
+                ("supersedes", text("")),
+            ]),
+            String::new(),
+            &ArtifactReadings::new(),
+        )
+        .unwrap();
+    let written: Vec<&str> = new.entries().keys().map(String::as_str).collect();
+    assert_eq!(written, ["id", "key", "title"]);
+    assert!(new.doc().fields().get("note").is_none());
+
+    // Read back as a file, what is written makes the same document.
+    let built = shelf(vec![
+        fr(1, &[]),
+        DocReading::Parsed {
+            origin: new.doc().origin().clone(),
+            entries: new.entries().clone(),
+            body: String::new(),
+        },
+    ]);
+    assert_eq!(built.doc(docid(5)), Some(new.doc()));
+}
+
+#[test]
+fn an_entry_that_says_something_is_written_beside_the_ones_that_say_nothing() {
+    let s = shelf(vec![fr(1, &[])]);
+    let key = s.next_key(&book("finding")).unwrap();
+    let new = s
+        .check_new(
+            docid(5),
+            &key,
+            entries(&[
+                ("title", text("t")),
+                ("note", text(" a ")),
+                ("tags", list(&["x"])),
+                ("base", list(&["FR-1"])),
+                ("count", text("")),
+            ]),
+            String::new(),
+            &ArtifactReadings::new(),
+        )
+        .unwrap();
+    let written: Vec<&str> = new.entries().keys().map(String::as_str).collect();
+    assert_eq!(written, ["base", "id", "key", "note", "tags", "title"]);
+    assert_eq!(new.entries()["note"], text(" a "));
+}
+
+#[test]
+fn a_new_document_with_an_item_that_says_nothing_is_refused_with_its_place() {
+    let s = shelf(vec![]);
+    let key = s.next_key(&book("finding")).unwrap();
+    for (name, items, at) in [("tags", &["a", ""][..], 2), ("base", &[" ", "FR-1"][..], 1)] {
+        let Err(NewDocProblem::Invalid(problems)) = s.check_new(
+            docid(5),
+            &key,
+            entries(&[("title", text("t")), (name, list(items))]),
+            String::new(),
+            &ArtifactReadings::new(),
+        ) else {
+            panic!("invalid");
+        };
+        assert_eq!(
+            problems.into_vec(),
+            vec![DocProblem::ItemBlank {
+                entry: EntryName::new(name).unwrap(),
+                at
+            }],
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn an_invalid_new_document_has_every_problem_the_build_finds() {
     let s = shelf(vec![]);
     let key = s.next_key(&book("finding")).unwrap();

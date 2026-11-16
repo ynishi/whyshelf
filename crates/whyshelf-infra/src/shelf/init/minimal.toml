@@ -18,7 +18,7 @@ description = "something worth keeping, and why"
 
 [[book.field]]
 name = "title"
-type = "text"               # or "integer", "bool", "list", { enum = ["a", "b"] }
+type = "line"               # one line; or "text" (any lines), "integer", "bool", "list", { enum = ["a", "b"] }
 required = true
 
 # A field: another entry of the front matter of each note.

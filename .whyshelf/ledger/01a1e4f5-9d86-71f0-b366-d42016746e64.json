@@ -1,0 +1,161 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7d8b65a4dc7868d6aed2f5cf95b87a9d2ca12bb7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c588f5b35398ba49efbe72e22486114b76a783552c1f641ac163623084ec159",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5add64274ffdfa1a5885a5685653ae9b328fd3e7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6b24ea6cd31ca2b4cfb6ebdb1ad128fb057da6fd529e3e9024e6e25946ea8274",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/nonempty.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8aad8fce505ed6a9c04010d8b37b46fa26cb4547",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:42a85d00cf0e20e51dfbd1ee89032cb0c8c366944528533dd85b479af03cd00c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/empty_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b88480bb52f32f3b9f241ae2e89d4749a2834abe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3f56631f0aa008581a62bfcf1e15397fab7a4051516d58032d8a543356590928",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ea23b089a01a666136af8f813edca009650be344",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0b50eb14f264bd7f0cfe975acc39b223680301cb15d029647ab84943c9a323da",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4c73b72f28fdb8f9fa70ca6b04f4381720f43f0c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2750fb7daf8438c6cf834d96c6e250b14cbeac862160a54098e2231dc28e2609",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/doc.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "147a68063a7cfecb72f3e0195957af6062a33e32",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:55d5c1b57b0b907d453465655418a636089696cd6b5647553576233e2d53019c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "75dff6ff3bf77ea92a445ed8dd8079f86c273038",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d37c6aeec83dd2b3f1ebca45f51e39197d9993c73ad8f326ff80e71f05704074",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7a2344e42d27e0a4a5a2f097566b8f3042b5d86b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:88e9aa3646b16d953aca95766b1a0ffd6b8ddc575bd0d10fa8e9f5f70ac7444a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794842658803,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4937a046e315e71bc5f4a581e4c734265afbc1b0",
+      "hash": "sha256:16441793e0701b6a5c293308826f0028ce5f8fb44f3d80f87a16f35a644eb9bd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "76"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e4f4-a1a7-70a3-a224-a7b68ad2e076"
+    }
+  ],
+  "id": "01a1e4f5-9d86-71f0-b366-d42016746e64",
+  "kind": "decision",
+  "reason": "Issue #128: a written value that says nothing is no value; blank list items are problems; the line type; reviewed design, code review and arch rules; tests pass",
+  "revision": "32b7b248d275c8d7221c292f9ac5fb91fba2fb0a",
+  "seen": "sha256:a01a4fea243bd140cf5cc79fa9ccd3d40283a3e09b59cd453dfb983aa3dab908",
+  "seen_address": "54dfe1b8784cbd087e25903a479972835a1ce4c8",
+  "subject": "01a1e4f4-dfa9-7048-ba05-6ab46b9c87f7",
+  "v": 1,
+  "verb": "approve"
+}

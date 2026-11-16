@@ -341,31 +341,9 @@ fn a_required_text_with_a_character_is_a_value_even_after_a_line_break() {
     assert!(s.invalid().is_empty());
     assert_eq!(
         s.doc(docid(1)).unwrap().fields().get("title"),
-        Some(&FieldValue::Text("\nsecond line".to_owned()))
-    );
-}
-
-#[test]
-fn an_optional_text_and_an_optional_list_may_be_written_empty() {
-    let s = shelf(vec![reading(
-        "findings/a.md",
-        1,
-        "FR-1",
-        &[
-            ("title", text("t")),
-            ("note", text("")),
-            ("tags", list(&[])),
-        ],
-    )]);
-    assert!(s.invalid().is_empty());
-    let doc = s.doc(docid(1)).unwrap();
-    assert_eq!(
-        doc.fields().get("note"),
-        Some(&FieldValue::Text(String::new()))
-    );
-    assert_eq!(
-        doc.fields().get("tags"),
-        Some(&FieldValue::TextList(vec![]))
+        Some(&FieldValue::Text(
+            NonBlank::new("\nsecond line").expect("a text that says something")
+        ))
     );
 }
 
@@ -1226,6 +1204,7 @@ fn ids_are_every_identity_some_file_carries() {
 
 #[test]
 fn raw_values_know_their_kind() {
+    assert_eq!(RawValue::Null.kind(), RawKind::Null);
     assert_eq!(text("a").kind(), RawKind::Text);
     assert_eq!(RawValue::Integer(1).kind(), RawKind::Integer);
     assert_eq!(RawValue::Bool(true).kind(), RawKind::Bool);

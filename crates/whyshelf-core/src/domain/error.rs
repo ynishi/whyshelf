@@ -42,6 +42,9 @@ pub enum ValueError {
     /// A free text that must carry content was empty or only whitespace.
     #[error("the text is empty")]
     BlankText,
+    /// A text that must be one line held a line break (`\n` or `\r`).
+    #[error("the text has a line break")]
+    LineBreak,
     /// A list that must have an element was empty.
     #[error("the list is empty")]
     EmptyList,

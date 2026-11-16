@@ -61,7 +61,7 @@ use thiserror::Error;
 use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{Count, NonBlank, NonEmptyVec, TwoOrMore};
+use crate::domain::nonempty::{Count, NonBlank, NonEmptyVec, OneLine, TwoOrMore};
 
 use super::artifact::{
     Artifact, ArtifactAsks, ArtifactKey, ArtifactName, ArtifactNameProblem, ArtifactReadings, Space,
@@ -88,8 +88,15 @@ pub use plan::{LinkItem, NewPlan, NewRequest, PlanAfterTaken, PlanProblem, Plann
 
 /// A value of the front matter, as the adapter's YAML parser gave it: not yet
 /// checked against a field's type.
+///
+/// What a value says is not decided here: an adapter reads `key:`, `null` and `~` as
+/// [`Null`](Self::Null) and a `""` as an empty [`Text`](Self::Text), as it found them,
+/// and the build reads what any of them comes to for an entry (`Written::of`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RawValue {
+    /// No value: `key:` with nothing after it, `null` or `~`. An item of a list that
+    /// is none is not this but an [`UnheldItem::Null`].
+    Null,
     /// A text.
     Text(String),
     /// A whole number.
@@ -103,6 +110,8 @@ pub enum RawValue {
 /// The kind of a [`RawValue`], for a problem to say what was found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RawKind {
+    /// No value.
+    Null,
     /// A text.
     Text,
     /// A whole number.
@@ -114,10 +123,11 @@ pub enum RawKind {
 }
 
 impl fmt::Display for RawKind {
-    /// The kind in words, as a problem says what was found: `a text`, `a whole
-    /// number`, `a truth value` or `a list`.
+    /// The kind in words, as a problem says what was found: `no value`, `a text`, `a
+    /// whole number`, `a truth value` or `a list`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Null => "no value",
             Self::Text => "a text",
             Self::Integer => "a whole number",
             Self::Bool => "a truth value",
@@ -130,6 +140,7 @@ impl RawValue {
     /// The kind of the value.
     pub fn kind(&self) -> RawKind {
         match self {
+            Self::Null => RawKind::Null,
             Self::Text(_) => RawKind::Text,
             Self::Integer(_) => RawKind::Integer,
             Self::Bool(_) => RawKind::Bool,
@@ -185,8 +196,8 @@ pub enum RawProblem {
     NotAMapping,
 }
 
-/// A value of a front matter that is none of a text, a whole number, a truth value
-/// and a list of texts, with its key and the kind it was read as.
+/// A value of a front matter that is none of no value, a text, a whole number, a
+/// truth value and a list of texts, with its key and the kind it was read as.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("the value of `{key}` is {kind}, which a front matter does not hold{}", kind.hint())]
 pub struct UnheldValue {
@@ -221,11 +232,9 @@ impl UnheldValue {
 }
 
 /// What a value of a front matter was read as when it is none of the kinds a front
-/// matter holds (a text, a whole number, a truth value, a list of texts).
+/// matter holds (no value, a text, a whole number, a truth value, a list of texts).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnheldKind {
-    /// No value (`key:` with nothing after it, or `null`).
-    Null,
     /// A number written with a decimal point or an exponent (`1.5`, `1.0`, `1e3`).
     Float,
     /// A whole number too large for the integers a front matter holds (64-bit,
@@ -263,7 +272,6 @@ impl std::fmt::Display for UnheldKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let item = |kind| format!("a list with an item that is {kind}");
         let text = match self {
-            Self::Null => "no value".to_owned(),
             Self::Float => "a number written with a decimal point or an exponent".to_owned(),
             Self::TooLarge => "a whole number above the largest one (2^63 - 1)".to_owned(),
             Self::TooSmall => "a whole number below the smallest one (-2^63)".to_owned(),
@@ -295,7 +303,6 @@ impl UnheldKind {
                 ": write a whole number with digits only, or put the number in quotes as a text"
             }
             Self::TooLarge | Self::TooSmall => ": put the number in quotes as a text",
-            Self::Null => ": write a value, or leave the key out",
             Self::Item(UnheldItem::Null) => ": write the item, or take it out",
             Self::Mapping => ": the values are flat; write a text or a list of texts",
             Self::Tagged | Self::Item(UnheldItem::List | UnheldItem::Tagged) => "",
@@ -414,6 +421,11 @@ pub enum DocProblem {
     /// There is no `id:`.
     #[error("there is no `id:`")]
     IdMissing,
+    /// The `id:` is written, and says nothing: no value, a blank text or an empty
+    /// list (told at [`FieldPresence::Required`]). It is written, so it is not
+    /// [`IdMissing`](Self::IdMissing).
+    #[error("`id:` is written empty or blank")]
+    IdEmpty,
     /// The `id:` is not a text.
     #[error("`id:` is not a text")]
     IdNotText,
@@ -423,6 +435,10 @@ pub enum DocProblem {
     /// There is no `key:`.
     #[error("there is no `key:`")]
     KeyMissing,
+    /// The `key:` is written, and says nothing, as an `id:` can
+    /// ([`IdEmpty`](Self::IdEmpty)).
+    #[error("`key:` is written empty or blank")]
+    KeyEmpty,
     /// The `key:` is not a text.
     #[error("`key:` is not a text")]
     KeyNotText,
@@ -464,6 +480,26 @@ pub enum DocProblem {
     /// value is told at [`FieldPresence::Required`].
     #[error("the required field `{field}` is empty or blank")]
     FieldEmpty {
+        /// The field.
+        field: EntryName,
+    },
+    /// An item of a list (a list field, a link into a book, a link to artifacts) that
+    /// says nothing: a text that is empty or blank. An item has no "not written", so
+    /// it is never left out as a field is; a null item is an [`UnheldItem::Null`]
+    /// before it gets here.
+    #[error("the item {at} of `{entry}` is empty or blank")]
+    ItemBlank {
+        /// The entry that holds the list.
+        entry: EntryName,
+        /// Which item, counting from 1.
+        at: usize,
+    },
+    /// A field declared `line` written with more than one line: a line break in it, a
+    /// final one included (a `|` block of YAML keeps one; `|-` does not).
+    #[error(
+        "the field `{field}` is a text of more than one line, not `line` (a `|-` block has no line break at its end)"
+    )]
+    NotOneLine {
         /// The field.
         field: EntryName,
     },
@@ -774,17 +810,112 @@ impl IdSeen {
 
     /// What the `id:` entry of a parsed front matter says.
     fn of_entry(entry: Option<&RawValue>) -> Self {
-        match read_id(entry) {
+        match read_id(Written::of(entry)) {
             Ok(id) => Self::Read(id),
             Err(fault) => fault.seen(),
         }
     }
 }
 
+/// What a parsed front matter wrote for one entry, told once for the entry whatever
+/// the type the book declares for it: nothing written, something written that says
+/// nothing, or a value.
+///
+/// The one place it is decided whether a written value says something: no value
+/// (`key:`, `null`), a text that is empty or white space only ([`NonBlank::new`] refuses
+/// it), and a list with no item say nothing, for a field of any type (an integer, a bool or
+/// an enum written `""` says nothing too), for a link, and for the `id:` and the
+/// `key:`. What nothing means is left to the reader of the entry: a field left out when
+/// it is optional and a problem when it is required ([`declared_field`]), a link with
+/// no key, an `id:` or a `key:` that is written empty.
+///
+/// A text that says something travels as the [`NonBlank`] that proves it, so no reader
+/// of an entry asks again whether it is blank. An item of a list is not judged here but
+/// by [`read_items`]: it has no "not written" to read as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Written<'a> {
+    /// The entry is not in the front matter.
+    Absent,
+    /// The entry is there and says nothing.
+    Nothing,
+    /// The entry is a text that says something, as it was written (white space around
+    /// it kept). Built here and nowhere else.
+    Text(NonBlank),
+    /// The entry says something that is not a text: a whole number, a truth value or a
+    /// list with an item, as the adapter read it.
+    Value(&'a RawValue),
+}
+
+impl<'a> Written<'a> {
+    /// What an entry of a front matter, or none, comes to.
+    fn of(raw: Option<&'a RawValue>) -> Self {
+        match raw {
+            None => Self::Absent,
+            Some(RawValue::Null) => Self::Nothing,
+            Some(RawValue::Text(text)) => {
+                NonBlank::new(text.as_str()).map_or(Self::Nothing, Self::Text)
+            }
+            Some(RawValue::List(items)) if items.is_empty() => Self::Nothing,
+            Some(value) => Self::Value(value),
+        }
+    }
+}
+
+/// The items of a list written in `entry`: those that say something, each as a
+/// [`NonBlank`], and a problem for each that does not.
+struct Items {
+    /// The items that say something, in the order they are written.
+    said: Vec<NonBlank>,
+    /// An [`DocProblem::ItemBlank`] for every item that is empty or blank, in the
+    /// order they are written.
+    blank: Vec<DocProblem>,
+}
+
+impl Items {
+    /// The items when every one says something, or every problem of the list.
+    fn whole(self) -> Result<NonEmptyVec<NonBlank>, Vec<DocProblem>> {
+        match NonEmptyVec::from_vec(self.said) {
+            Ok(said) if self.blank.is_empty() => Ok(said),
+            _ => Err(self.blank),
+        }
+    }
+}
+
+/// The items of a list written in `entry`, each made a text that says something: the
+/// one reader of an item, for a list field, a link into a book and a link to
+/// artifacts (before a text is read as a name). Every item that is empty or blank is a
+/// [`DocProblem::ItemBlank`] with its place, counting from 1, and the items that say
+/// something are still read, so that the rest of the list is judged as well.
+///
+/// A list with no item says nothing and is left to [`Written::of`], so the callers
+/// never give it here; were it given, it is told as its first item missing.
+fn read_items(entry: &EntryName, items: &[String]) -> Items {
+    let blank = |at: usize| DocProblem::ItemBlank {
+        entry: entry.clone(),
+        at,
+    };
+    let mut read = Items {
+        said: Vec::new(),
+        blank: Vec::new(),
+    };
+    for (at, item) in items.iter().enumerate() {
+        match NonBlank::new(item.as_str()) {
+            Ok(item) => read.said.push(item),
+            Err(_) => read.blank.push(blank(at + 1)),
+        }
+    }
+    if items.is_empty() {
+        read.blank.push(blank(1));
+    }
+    read
+}
+
 /// Why an `id:` entry gives no identity.
 enum IdFault {
     /// There is no `id:` entry.
     Missing,
+    /// The entry is written and says nothing.
+    Empty,
     /// The entry is not a text.
     NotText,
     /// The entry is a text that is no identifier.
@@ -792,17 +923,19 @@ enum IdFault {
 }
 
 impl IdFault {
-    /// What a file with this entry is known to say about its identity.
+    /// What a file with this entry is known to say about its identity: one that is
+    /// written empty may still have meant one, so it is not known to carry none.
     fn seen(&self) -> IdSeen {
         match self {
             Self::Missing => IdSeen::Absent,
-            Self::NotText | Self::Invalid(_) => IdSeen::Unreadable,
+            Self::Empty | Self::NotText | Self::Invalid(_) => IdSeen::Unreadable,
         }
     }
 
     fn into_problem(self) -> DocProblem {
         match self {
             Self::Missing => DocProblem::IdMissing,
+            Self::Empty => DocProblem::IdEmpty,
             Self::NotText => DocProblem::IdNotText,
             Self::Invalid(e) => DocProblem::IdInvalid(e),
         }
@@ -810,28 +943,30 @@ impl IdFault {
 }
 
 /// The `id:` entry of a parsed front matter: an identity, or why there is none.
-fn read_id(entry: Option<&RawValue>) -> Result<DocId, IdFault> {
+fn read_id(entry: Written<'_>) -> Result<DocId, IdFault> {
     match entry {
-        None => Err(IdFault::Missing),
-        Some(RawValue::Text(text)) => text.parse::<DocId>().map_err(IdFault::Invalid),
-        Some(_) => Err(IdFault::NotText),
+        Written::Absent => Err(IdFault::Missing),
+        Written::Nothing => Err(IdFault::Empty),
+        Written::Text(text) => text.as_str().parse::<DocId>().map_err(IdFault::Invalid),
+        Written::Value(_) => Err(IdFault::NotText),
     }
 }
 
 /// The `key:` entry of a parsed front matter, in the grammar of its book: a key, or
 /// what is wrong with it.
-fn read_key(book: &BookSchema, entry: Option<&RawValue>) -> Result<DocKey, DocProblem> {
+fn read_key(book: &BookSchema, entry: Written<'_>) -> Result<DocKey, DocProblem> {
     match entry {
-        None => Err(DocProblem::KeyMissing),
-        Some(RawValue::Text(text)) => book
+        Written::Absent => Err(DocProblem::KeyMissing),
+        Written::Nothing => Err(DocProblem::KeyEmpty),
+        Written::Text(text) => book
             .key()
-            .parse(text)
+            .parse(text.as_str())
             .map(|form| DocKey {
                 book: book.name().clone(),
                 form,
             })
             .map_err(DocProblem::KeyInvalid),
-        Some(_) => Err(DocProblem::KeyNotText),
+        Written::Value(_) => Err(DocProblem::KeyNotText),
     }
 }
 
@@ -983,9 +1118,9 @@ impl Candidate {
         body: String,
         found: &ArtifactReadings,
     ) -> Self {
-        let key = read_key(book, entries.get(KEY_ENTRY));
+        let key = read_key(book, Written::of(entries.get(KEY_ENTRY)));
         let written_key = key.as_ref().ok().cloned();
-        let identity = Identity::of(read_id(entries.get(ID_ENTRY)), key);
+        let identity = Identity::of(read_id(Written::of(entries.get(ID_ENTRY))), key);
         let mut problems = Vec::new();
         let Entries {
             fields,
@@ -1061,9 +1196,36 @@ fn artifact_name(text: &str) -> Result<ArtifactName, ArtifactNameProblem> {
     ArtifactName::new(text)
 }
 
+/// What a book declares under the name of an entry that is neither `id` nor `key`.
+enum Declared<'b> {
+    /// A field.
+    Field(&'b EntryName, &'b FieldDecl),
+    /// A link into a book.
+    Link(&'b EntryName, &'b LinkKind),
+    /// A link to artifacts.
+    Artifacts(&'b EntryName, &'b ArtifactLinkKind),
+}
+
+impl<'b> Declared<'b> {
+    /// What `book` declares under `name`, or none.
+    fn of(book: &'b BookSchema, name: &str) -> Option<Self> {
+        if let Some((field, decl)) = book.fields().get_key_value(name) {
+            Some(Self::Field(field, decl))
+        } else if let Some((link, kind)) = book.links().get_key_value(name) {
+            Some(Self::Link(link, kind))
+        } else {
+            book.artifact_links()
+                .get_key_value(name)
+                .map(|(link, kind)| Self::Artifacts(link, kind))
+        }
+    }
+}
+
 /// The fields of a file, the keys written in each link and the names written in each
 /// link to artifacts, from every entry but `id` and `key`; what is wrong with an entry
 /// goes to `problems`, a name its adapter answered is none included.
+///
+/// What an entry says is told once, at its head ([`Written::of`]).
 fn read_entries(
     book: &BookSchema,
     entries: &BTreeMap<String, RawValue>,
@@ -1077,68 +1239,58 @@ fn read_entries(
         if name == ID_ENTRY || name == KEY_ENTRY {
             continue;
         }
-        if let Some((field, decl)) = book.fields().get_key_value(name.as_str()) {
-            match declared_field(field, decl, Some(raw)) {
-                Ok(value) => fields.extend(value.map(|value| (field.clone(), value))),
-                Err(problem) => problems.push(problem),
-            }
-        } else if let Some((link, kind)) = book.links().get_key_value(name.as_str()) {
-            match raw {
-                RawValue::List(keys) if kind.cardinality.admits(keys.len()) => {
-                    written.insert(link.clone(), keys.clone());
-                }
-                RawValue::List(keys) => problems.push(DocProblem::LinkCount {
-                    link: link.clone(),
-                    cardinality: kind.cardinality,
-                    found: keys.len(),
-                }),
-                other => problems.push(DocProblem::LinkNotList {
-                    link: link.clone(),
-                    found: other.kind(),
-                }),
-            }
-        } else if let Some((link, kind)) = book.artifact_links().get_key_value(name.as_str()) {
-            match raw {
-                RawValue::List(texts) if kind.cardinality.admits(texts.len()) => {
-                    let mut names = Vec::new();
-                    for text in texts {
-                        match artifact_name(text) {
-                            Ok(name) => match found
-                                .get(&kind.space, &name)
-                                .and_then(|r| r.not_a_name_why())
-                            {
-                                Some(why) => problems.push(DocProblem::NotAnArtifactName {
-                                    link: link.clone(),
-                                    space: kind.space.clone(),
-                                    written: text.clone(),
-                                    why: why.clone(),
-                                }),
-                                None => names.push(name),
-                            },
-                            Err(why) => problems.push(DocProblem::ArtifactNameInvalid {
-                                link: link.clone(),
-                                written: text.clone(),
-                                why,
-                            }),
-                        }
-                    }
-                    artifacts.insert(link.clone(), names);
-                }
-                RawValue::List(texts) => problems.push(DocProblem::LinkCount {
-                    link: link.clone(),
-                    cardinality: kind.cardinality,
-                    found: texts.len(),
-                }),
-                other => problems.push(DocProblem::LinkNotList {
-                    link: link.clone(),
-                    found: other.kind(),
-                }),
-            }
-        } else {
+        let Some(declared) = Declared::of(book, name) else {
             problems.push(DocProblem::UnknownEntry {
                 name: name.clone(),
                 book: book.name().clone(),
             });
+            continue;
+        };
+        let entry = Written::of(Some(raw));
+        match declared {
+            Declared::Field(field, decl) => {
+                if let Some(value) = declared_field(field, decl, entry, problems) {
+                    fields.insert(field.clone(), value);
+                }
+            }
+            Declared::Link(link, kind) => {
+                if let Some(items) = read_link(link, kind.cardinality, entry, problems)
+                    && items.whole
+                {
+                    let keys = items.said.into_iter().map(NonBlank::into_string).collect();
+                    written.insert(link.clone(), keys);
+                }
+            }
+            Declared::Artifacts(link, kind) => {
+                let Some(items) = read_link(link, kind.cardinality, entry, problems) else {
+                    continue;
+                };
+                let mut names = Vec::new();
+                for text in &items.said {
+                    match artifact_name(text.as_str()) {
+                        Ok(name) => match found
+                            .get(&kind.space, &name)
+                            .and_then(|r| r.not_a_name_why())
+                        {
+                            Some(why) => problems.push(DocProblem::NotAnArtifactName {
+                                link: link.clone(),
+                                space: kind.space.clone(),
+                                written: text.as_str().to_owned(),
+                                why: why.clone(),
+                            }),
+                            None => names.push(name),
+                        },
+                        Err(why) => problems.push(DocProblem::ArtifactNameInvalid {
+                            link: link.clone(),
+                            written: text.as_str().to_owned(),
+                            why,
+                        }),
+                    }
+                }
+                if items.whole {
+                    artifacts.insert(link.clone(), names);
+                }
+            }
         }
     }
     Entries {
@@ -1146,6 +1298,65 @@ fn read_entries(
         links: written,
         artifacts,
     }
+}
+
+/// What a file wrote in a link, into a book or to artifacts, as a list.
+struct LinkItems {
+    /// The items that say something ([`read_items`]), in the order they are written.
+    said: Vec<NonBlank>,
+    /// Whether the list is whole: every item says something and their number is one
+    /// the link's count admits. Only a whole list is kept; the items of one that is
+    /// not are still read, for the rest of its faults.
+    whole: bool,
+}
+
+/// The items a file wrote in a link, into a book or to artifacts: each that says
+/// something ([`read_items`]), and whether the list is whole. A link that said nothing,
+/// or was not written, has no item, and its count is then asked as it always was. Every
+/// fault of the list goes to `problems` (each item that says nothing, and a count the
+/// link does not admit, which counts the items as they are written); there is no list
+/// when the entry is not one.
+fn read_link(
+    link: &EntryName,
+    cardinality: Cardinality,
+    written: Written<'_>,
+    problems: &mut Vec<DocProblem>,
+) -> Option<LinkItems> {
+    let (said, written, blank) = match written {
+        Written::Absent | Written::Nothing => (Vec::new(), 0, false),
+        Written::Value(RawValue::List(texts)) => {
+            let Items { said, blank } = read_items(link, texts);
+            let any_blank = !blank.is_empty();
+            problems.extend(blank);
+            (said, texts.len(), any_blank)
+        }
+        Written::Text(_) => {
+            problems.push(DocProblem::LinkNotList {
+                link: link.clone(),
+                found: RawKind::Text,
+            });
+            return None;
+        }
+        Written::Value(other) => {
+            problems.push(DocProblem::LinkNotList {
+                link: link.clone(),
+                found: other.kind(),
+            });
+            return None;
+        }
+    };
+    let counted = cardinality.admits(written);
+    if !counted {
+        problems.push(DocProblem::LinkCount {
+            link: link.clone(),
+            cardinality,
+            found: written,
+        });
+    }
+    Some(LinkItems {
+        said,
+        whole: counted && !blank,
+    })
 }
 
 /// What the book requires and the entries leave out: a field [`declared_field`]
@@ -1160,10 +1371,8 @@ fn check_required(
     problems: &mut Vec<DocProblem>,
 ) {
     for (field, decl) in book.fields() {
-        if !entries.contains_key(field.as_str())
-            && let Err(problem) = declared_field(field, decl, None)
-        {
-            problems.push(problem);
+        if !entries.contains_key(field.as_str()) {
+            declared_field(field, decl, Written::Absent, problems);
         }
     }
     let cardinalities = book
@@ -1232,8 +1441,14 @@ fn resolve_artifacts(
 /// [`DocProblem::ArtifactNameInvalid`]).
 fn ask_of(book: &BookSchema, entries: &BTreeMap<String, RawValue>, asks: &mut ArtifactAsks) {
     for (name, kind) in book.artifact_links() {
-        if let Some(RawValue::List(texts)) = entries.get(name.as_str()) {
-            for artifact in texts.iter().filter_map(|t| artifact_name(t).ok()) {
+        // An item that says nothing is a fault of the list ([`read_items`]) and asks
+        // nothing; the names of the other items are asked, for the build judges them.
+        if let Written::Value(RawValue::List(texts)) = Written::of(entries.get(name.as_str())) {
+            for artifact in read_items(name, texts)
+                .said
+                .iter()
+                .filter_map(|t| artifact_name(t.as_str()).ok())
+            {
                 asks.ask(kind.space.clone(), artifact, kind.comparison.clone());
             }
         }
@@ -1347,58 +1562,103 @@ fn link_state(index: &KeyIndex, kind: &LinkKind, written: &str) -> LinkState {
     }
 }
 
-/// Whether a field meets its declaration, given what the document wrote: `None` when
-/// it leaves the field out, the raw value when it writes it. The one place that
-/// says what a declared field requires: its type and, for a required field, that it
-/// is there and says something (told at [`FieldPresence::Required`]; a text is
-/// judged blank by [`NonBlank::is_blank`]). The value is `None` for an optional
-/// field left out.
+/// Whether a field meets its declaration, given what the document wrote of it
+/// ([`Written`]): the value it holds, or `None` when it holds none. The one place that
+/// says what a declared field requires and what nothing means for it: its type and
+/// whether it is there and says something (told at [`FieldPresence::Required`]).
+///
+/// - Not written, or written with nothing in it (any type, `source: ""` of an integer
+///   included): an optional field has no value, as if it were left out, and a
+///   required one is [`DocProblem::FieldMissing`] when it is not written and
+///   [`DocProblem::FieldEmpty`] when it is.
+/// - A value is read by the declared type: a text as it was written (white space
+///   around it kept; [`Written::of`] has proved it says something), a `line` that has
+///   a line break is a [`DocProblem::NotOneLine`], a list is read item by item
+///   ([`read_items`]) and every item that says nothing is a problem of its own.
+///
+/// What is wrong goes to `problems`, and there is no value then.
 fn declared_field(
     field: &EntryName,
     decl: &FieldDecl,
-    raw: Option<&RawValue>,
-) -> Result<Option<FieldValue>, DocProblem> {
-    let Some(raw) = raw else {
-        return match decl.presence {
-            FieldPresence::Required => Err(DocProblem::FieldMissing {
-                field: field.clone(),
-            }),
-            FieldPresence::Optional => Ok(None),
-        };
+    written: Written<'_>,
+    problems: &mut Vec<DocProblem>,
+) -> Option<FieldValue> {
+    let mut refuse = |problem: DocProblem| {
+        problems.push(problem);
+        None
     };
     let ty = &decl.ty;
-    let value = match (ty, raw) {
-        (FieldType::Scalar(ScalarType::Text), RawValue::Text(s)) => FieldValue::Text(s.clone()),
-        (FieldType::Scalar(ScalarType::Integer), RawValue::Integer(n)) => FieldValue::Integer(*n),
-        (FieldType::Scalar(ScalarType::Bool), RawValue::Bool(b)) => FieldValue::Bool(*b),
-        (FieldType::Scalar(ScalarType::TextList), RawValue::List(items)) => {
-            FieldValue::TextList(items.clone())
+    let value = match (ty, written) {
+        (_, Written::Absent) => {
+            return match decl.presence {
+                FieldPresence::Required => refuse(DocProblem::FieldMissing {
+                    field: field.clone(),
+                }),
+                FieldPresence::Optional => None,
+            };
         }
-        (FieldType::Enum(_), RawValue::Text(s)) => {
-            FieldValue::read(ty, s).ok_or_else(|| DocProblem::FieldNotInEnum {
+        (_, Written::Nothing) => {
+            return match decl.presence {
+                FieldPresence::Required => refuse(DocProblem::FieldEmpty {
+                    field: field.clone(),
+                }),
+                FieldPresence::Optional => None,
+            };
+        }
+        (FieldType::Scalar(ScalarType::Text), Written::Text(text)) => FieldValue::Text(text),
+        (FieldType::Scalar(ScalarType::Line), Written::Text(text)) => {
+            // Not blank is proved; only a line break is left for `OneLine` to refuse.
+            match OneLine::new(text.into_string()) {
+                Ok(line) => FieldValue::Line(line),
+                Err(_) => {
+                    return refuse(DocProblem::NotOneLine {
+                        field: field.clone(),
+                    });
+                }
+            }
+        }
+        (FieldType::Scalar(ScalarType::Integer), Written::Value(RawValue::Integer(n))) => {
+            FieldValue::Integer(*n)
+        }
+        (FieldType::Scalar(ScalarType::Bool), Written::Value(RawValue::Bool(b))) => {
+            FieldValue::Bool(*b)
+        }
+        (FieldType::Scalar(ScalarType::TextList), Written::Value(RawValue::List(items))) => {
+            match read_items(field, items).whole() {
+                Ok(items) => FieldValue::TextList(items),
+                Err(blank) => {
+                    blank.into_iter().for_each(|problem| {
+                        refuse(problem);
+                    });
+                    return None;
+                }
+            }
+        }
+        (FieldType::Enum(_), Written::Text(word)) => match FieldValue::read(ty, &word) {
+            Some(value) => value,
+            None => {
+                return refuse(DocProblem::FieldNotInEnum {
+                    field: field.clone(),
+                    found: word.into_string(),
+                });
+            }
+        },
+        (_, Written::Text(_)) => {
+            return refuse(DocProblem::FieldMismatch {
                 field: field.clone(),
-                found: s.clone(),
-            })?
+                expected: ty.clone(),
+                found: RawKind::Text,
+            });
         }
-        _ => {
-            return Err(DocProblem::FieldMismatch {
+        (_, Written::Value(raw)) => {
+            return refuse(DocProblem::FieldMismatch {
                 field: field.clone(),
                 expected: ty.clone(),
                 found: raw.kind(),
             });
         }
     };
-    let says_nothing = match &value {
-        FieldValue::Text(s) => NonBlank::is_blank(s),
-        FieldValue::TextList(items) => items.is_empty(),
-        _ => false,
-    };
-    if decl.presence == FieldPresence::Required && says_nothing {
-        return Err(DocProblem::FieldEmpty {
-            field: field.clone(),
-        });
-    }
-    Ok(Some(value))
+    Some(value)
 }
 
 /// The documents of a project, checked: valid ones, invalid ones with their
@@ -1841,6 +2101,8 @@ fn origins_but(
 mod artifact_tests;
 #[cfg(test)]
 mod comparison_tests;
+#[cfg(test)]
+mod empty_tests;
 #[cfg(test)]
 mod new_tests;
 #[cfg(test)]

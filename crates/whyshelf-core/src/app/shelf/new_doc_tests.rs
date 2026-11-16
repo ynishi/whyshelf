@@ -81,7 +81,7 @@ fn items_alone_make_the_list() {
 }
 
 #[test]
-fn an_item_for_a_link_is_a_key_trimmed_and_an_empty_item_is_refused() {
+fn an_item_for_a_link_is_a_key_trimmed_and_an_empty_item_is_an_item_blank() {
     let fake = FakeShelf::new().with_files(vec![fr(1, "a finding", &[])]);
     let mut app = ShelfApp::new(fake);
     block_on(app.new_doc(with_items(
@@ -101,8 +101,78 @@ fn an_item_for_a_link_is_a_key_trimmed_and_an_empty_item_is_refused() {
         &[("grounds", "   ")],
     )))
     .unwrap_err();
-    assert!(matches!(&error, ShelfError::EmptyItem { name } if name == "grounds"));
+    // The app does not judge an item of nothing: the domain tells it as the item of the
+    // document it is, which `check` tells too.
+    let ShelfError::NewDoc(NewDocProblem::Invalid(problems)) = &error else {
+        panic!("{error:?}");
+    };
+    assert_eq!(
+        problems.iter().collect::<Vec<_>>(),
+        [&DocProblem::ItemBlank {
+            entry: crate::domain::shelf::schema::EntryName::new("grounds").unwrap(),
+            at: 1,
+        }]
+    );
     assert_eq!(error.class(), ErrorClass::Request);
+}
+
+#[test]
+fn an_item_of_nothing_for_a_list_field_is_an_item_blank_after_the_items_before_it() {
+    let fake = FakeShelf::new();
+    fake.decls.lock().unwrap().push(measures());
+    let mut app = ShelfApp::new(fake);
+    let error = block_on(app.new_doc(with_items(
+        request("measure", None, &[("tags", "a, b")]),
+        &[("tags", "")],
+    )))
+    .unwrap_err();
+    let ShelfError::NewDoc(NewDocProblem::Invalid(problems)) = &error else {
+        panic!("{error:?}");
+    };
+    assert_eq!(
+        problems.iter().collect::<Vec<_>>(),
+        [&DocProblem::ItemBlank {
+            entry: crate::domain::shelf::schema::EntryName::new("tags").unwrap(),
+            at: 3,
+        }]
+    );
+    assert_eq!(error.class(), ErrorClass::Request);
+    assert_eq!(app.ports().created_count(), 0);
+}
+
+#[test]
+fn a_field_given_with_nothing_is_not_written() {
+    let fake = FakeShelf::new();
+    fake.decls.lock().unwrap().push(measures());
+    let mut app = ShelfApp::new(fake);
+    block_on(app.new_doc(request(
+        "measure",
+        None,
+        &[("note", ""), ("count", "  "), ("tags", "")],
+    )))
+    .unwrap();
+    let readings = app.ports().readings.lock().unwrap().clone();
+    let crate::domain::shelf::build::DocReading::Parsed { entries, .. } = &readings[0] else {
+        panic!("parsed");
+    };
+    for left_out in ["note", "count", "tags"] {
+        assert!(!entries.contains_key(left_out), "{left_out}: {entries:?}");
+    }
+}
+
+#[test]
+fn a_null_entry_is_given_to_the_domain_and_not_written() {
+    let fake = FakeShelf::new();
+    fake.decls.lock().unwrap().push(measures());
+    let mut app = ShelfApp::new(fake);
+    let mut req = request("measure", None, &[]);
+    req.entries.push(("note".to_owned(), EntryInput::Null));
+    block_on(app.new_doc(req)).unwrap();
+    let readings = app.ports().readings.lock().unwrap().clone();
+    let crate::domain::shelf::build::DocReading::Parsed { entries, .. } = &readings[0] else {
+        panic!("parsed");
+    };
+    assert!(!entries.contains_key("note"), "{entries:?}");
 }
 
 #[test]

@@ -9,7 +9,7 @@
 //! A line is a [`NewLineIn`]: the `book`, the `key` (the book's next number when left
 //! out), the `as` name the other lines of the file link to it by (never written to its
 //! file), its `entries` and its `body`. An entry is a text, a truth value, a whole
-//! number, or a list of items; an item of a link to documents is a key, or
+//! number, `null` (no value), or a list of items; an item of a link to documents is a key, or
 //! `{"as": "<name>"}`, the document of the line of that name. The use case reads each
 //! value by the type its book declares ([`whyshelf_core::app::shelf::EntryInput`]),
 //! and the domain judges every line before anything is written.
@@ -99,6 +99,9 @@ impl JsonSchema for EntriesIn {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum EntryIn {
+    /// No value (`null`): an entry left with nothing, as `key:` is in a document. It
+    /// has no meaning of its own here; an entry that says nothing is not written.
+    Null,
     /// A text; for a list field or a link, `a,b` is a list.
     Text(String),
     /// A truth value.
@@ -250,6 +253,7 @@ fn request_of(row: usize, line: NewLineIn) -> Result<NewDocRequest, String> {
 /// The value of an entry as the use case takes it.
 fn input_of(entry: EntryIn) -> EntryInput {
     match entry {
+        EntryIn::Null => EntryInput::Null,
         EntryIn::Text(text) => EntryInput::Text(text),
         EntryIn::Bool(b) => EntryInput::Bool(b),
         EntryIn::Integer(n) => EntryInput::Integer(n),
