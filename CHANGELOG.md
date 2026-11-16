@@ -35,19 +35,37 @@ and this project adheres to
   run (exit 3). Each file is still put on disk on its own (#133). In the
   library, `Shelf::plan_new` plans a run and `ShelfApp::new_docs` writes it;
   `new` of one document and `init` go through the same plan (#125).
+- The field type `line`: a text of one line. A line break in it, the one a YAML
+  block scalar (`|`, `>`) leaves at the end included, is a problem; `|-` and
+  `>-` write none. A `line` hashes as a `text`, so declaring a `text` field
+  `line` changes no approval. The declarations `init` writes declare `title` a
+  `line` (#128).
 
 ### Changed
 
 - `init` resolves a link of its documents to a document it writes later in
   the same run: such a link is no longer listed as unresolved (#125).
-
 - A required field written with nothing in it makes the document invalid: a
   `text` that is empty or white space only, or a `list` with no item, is the
   problem "the required field `<name>` is empty or blank". `new` refuses such a
   document and writes nothing, and `check` lists a file that has one as
-  invalid. An optional field still takes an empty value. A project whose
-  documents write a required field empty sees them invalid after upgrading;
-  `check` names each field to fill (#123).
+  invalid. An optional field written with nothing in it reads as left out
+  (#128). A project whose documents write a required field empty sees them
+  invalid after upgrading; `check` names each field to fill (#123).
+- A value written with nothing in it (`key:` or `null`, a text of white space
+  only, a list with no item, for a field of any type) is no value: an optional
+  field so written is as if it were left out, in `status`, in filters and in
+  the hash; a required one is empty, and an `id` or a `key` so written is
+  empty. A document that writes an optional field `""` or `[]` hashes as one
+  that leaves it out, so its approval is stale once after upgrading (`judge
+  approve --stale`). A null value no longer makes a document invalid, and an
+  optional integer, truth value or enum written `""` is now valid. Every item of
+  a list (a field, a link to documents or to artifacts) that is empty or white
+  space only is a problem, so a document that writes one is invalid. `new`
+  writes no entry that says nothing, and `new --from` takes `null`. `status
+  --where <field>=` with an empty value is a request error (exit 2). `fmt`
+  writes a value written `key:` as `key: null`. In the library, `FieldValue`
+  holds `NonBlank` texts and `RawValue` has `Null` (#128).
 - Problems say a count, a type and a book as the declaration writes them: "the
   link `grounds` has 2 keys, which its count `optional` (none or one) does not
   admit", "the field `n` is a text, not `integer`", and "the book `note`
