@@ -27,6 +27,7 @@
 //!                                                        (DocReading and ArtifactReadings in: valid
 //!                                                         Docs, InvalidDocs, link cycles)
 //!                                                      Shelf::next_key / claim_key ──► NewKey
+//!                                                      Shelf::key_after_taken ──► AfterTaken
 //!                                                      Shelf::check_new ──► NewDoc
 //!                                                        (a document not written yet)
 //!   ledger    ──► schema, artifact, doc, graph, build  Ledger::build ──► Ledger, FrameGraph
@@ -97,6 +98,7 @@
 //! | which keys of a book are taken | [`Shelf::build`], once: every key a file of the book writes in its grammar, valid or not, identity read or not | read by the two entries below only |
 //! | the next key of a book | [`Shelf::next_key`]: the highest number taken plus one (`PREFIX-1` when none; a name tail is no number), the text read by [`KeyPattern::parse`] | a [`NewKey`], or a [`NextKeyProblem`] (a book of slugs has none) |
 //! | a key given for a new document | [`Shelf::claim_key`]: read by [`KeyPattern::parse`], and not taken | a [`NewKey`], or a [`ClaimKeyProblem`] |
+//! | what to do when the file of the key a new document was to take is there at the write, and when to give up | [`Shelf::key_after_taken`]: a key that was asked for is refused as it is; a key that was chosen is followed by the next number, read as [`Shelf::next_key`] reads one, until a fixed number of keys were tried | an [`AfterTaken`]: a [`KeySearch`] at the next key, a refusal, a [`NoFreeKey`], or a [`NextKeyProblem`] |
 //! | whether a new document would be valid | [`Shelf::check_new`], which hands the would-be file `<book dir>/<key>.md` to the same reader and judgement [`Shelf::build`] uses and resolves its links in the same index (no second validator) | a [`NewDoc`] with its unresolved links, or a [`NewDocProblem`] with every [`DocProblem`] |
 //! | the links around a document, up and down | [`trace`](trace::trace) | a [`Trace`] of [`LinkEdge`]s |
 //! | whether a document is linked at all, each way (a link reaches it, it holds one) | [`linkage`](trace::linkage); the rule is on [`Linkage`] | a [`Linkage`] per valid document |
@@ -240,6 +242,10 @@
 //! [`Shelf::claim_key`]: build::Shelf::claim_key
 //! [`Shelf::check_new`]: build::Shelf::check_new
 //! [`NewKey`]: build::NewKey
+//! [`Shelf::key_after_taken`]: build::Shelf::key_after_taken
+//! [`AfterTaken`]: build::AfterTaken
+//! [`KeySearch`]: build::KeySearch
+//! [`NoFreeKey`]: build::NoFreeKey
 //! [`NewDoc`]: build::NewDoc
 //! [`NextKeyProblem`]: build::NextKeyProblem
 //! [`ClaimKeyProblem`]: build::ClaimKeyProblem

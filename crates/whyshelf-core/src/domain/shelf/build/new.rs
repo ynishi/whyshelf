@@ -1,23 +1,30 @@
 //! A document that is not written yet: its key, and whether it would be valid.
 //!
-//! Three questions, each asked of a built [`Shelf`] and answered here only:
+//! Four questions, each asked of a built [`Shelf`] and answered here only:
 //!
 //! ```text
-//!   Shelf::next_key(book)          ──► NewKey   the highest number any file of the book
-//!                                               writes, plus one (a name tail is not a
-//!                                               number); none for a book of slugs
-//!   Shelf::claim_key(book, text)   ──► NewKey   the text read in the book's grammar,
-//!                                               and written by no file of the book
-//!   Shelf::check_new(id, key, ..)  ──► NewDoc   the would-be file read by the build's own
-//!                                               reader (Candidate::read, judge) and its
-//!                                               links resolved in the shelf's index
+//!   Shelf::next_key(book)          ──► NewKey     the highest number any file of the book
+//!                                                 writes, plus one (a name tail is not a
+//!                                                 number); none for a book of slugs
+//!   Shelf::claim_key(book, text)   ──► NewKey     the text read in the book's grammar,
+//!                                                 and written by no file of the book
+//!   Shelf::key_after_taken(search) ──► AfterTaken what to do when the file of the key was
+//!                                                 there at the write: the next number, a
+//!                                                 refusal, or giving up
+//!   Shelf::check_new(id, key, ..)  ──► NewDoc     the would-be file read by the build's own
+//!                                                 reader (Candidate::read, judge) and its
+//!                                                 links resolved in the shelf's index
 //! ```
 //!
 //! A key is taken when any file of the book writes it in the book's grammar, a valid
 //! document or not, its identity readable or not: a key that an invalid file holds is
 //! never handed out again, so fixing that file later cannot make two documents of one
 //! key. A file whose front matter cannot be read at all shows no key, and is not
-//! counted (see the limits in the module page of [`domain::shelf`]).
+//! counted (see the limits in the module page of [`domain::shelf`]). Such a file, or
+//! a file another run wrote after the shelf was read, shows only when the new file is
+//! written and is found to be there already: [`Shelf::key_after_taken`] says what
+//! comes of that for a key that was chosen (the next number) and for a key that was
+//! asked for (nothing: it is refused).
 //!
 //! [`Shelf::check_new`] writes no second set of rules: the entries go through the
 //! same steps a file on disk goes through in [`Shelf::build`], so what it accepts is
@@ -50,11 +57,25 @@ use super::{
 /// A key a new document may take: read in its book's grammar and written by no file
 /// of the book.
 ///
-/// Only [`Shelf::next_key`] and [`Shelf::claim_key`] make one, so
-/// [`Shelf::check_new`] cannot be handed a key that is taken or malformed.
+/// Only [`Shelf::next_key`], [`Shelf::claim_key`] and [`Shelf::key_after_taken`] make
+/// one, so [`Shelf::check_new`] cannot be handed a key that is taken or malformed.
+///
+/// It keeps how it was got (chosen by the shelf as a number, or asked for), which only
+/// [`Shelf::key_after_taken`] reads: a key that was asked for is not chosen again when
+/// its file turns out to be there, and one that was chosen is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewKey {
     key: DocKey,
+    origin: KeyOrigin,
+}
+
+/// How a [`NewKey`] was got. Private: nothing outside this module decides by it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum KeyOrigin {
+    /// Chosen by the shelf as this number of a prefixed book.
+    Next { number: u64 },
+    /// Given by a person.
+    Claimed,
 }
 
 impl NewKey {
@@ -241,6 +262,99 @@ impl NewDoc {
     }
 }
 
+/// How many keys one run tries in all, the first included, when the file of each key
+/// it chose is there at the write. [`Shelf::key_after_taken`] is the only reader that
+/// decides by it; a surface may say it (the help of `new`).
+pub const NEXT_KEY_TRIES: u32 = 64;
+
+/// The key of the number `n` of a prefixed book, read in the book's grammar and taken
+/// by its range: the one place a numbered key is made, for [`Shelf::next_key`] and
+/// [`Shelf::key_after_taken`]. The text goes through the grammar, the one reader of a
+/// key, so a number too long for a key is refused by the rule that refuses it
+/// anywhere.
+fn numbered(schema: &BookSchema, book: &BookName, n: u64) -> Result<NewKey, NextKeyProblem> {
+    let KeyPattern::Prefixed(prefix) = schema.key() else {
+        return Err(NextKeyProblem::SlugBook { book: book.clone() });
+    };
+    let form = schema
+        .key()
+        .parse(&format!("{prefix}-{n}"))
+        .map_err(|problem| NextKeyProblem::Exhausted {
+            book: book.clone(),
+            highest: n.saturating_sub(1),
+            problem,
+        })?;
+    let key = in_range(
+        schema,
+        DocKey {
+            book: book.clone(),
+            form,
+        },
+    )
+    .map_err(NextKeyProblem::OutOfRange)?;
+    Ok(NewKey {
+        key,
+        origin: KeyOrigin::Next { number: n },
+    })
+}
+
+/// The search for a free key of a new document: the key it began with, the one it is
+/// at, and how many keys it has tried.
+///
+/// Begun with [`KeySearch::start`] on the key a run took, and moved on by
+/// [`Shelf::key_after_taken`] each time the file of its key is found to be there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeySearch {
+    first: DocKey,
+    current: NewKey,
+    tries: u32,
+}
+
+impl KeySearch {
+    /// The search at its first key, the one written first (it counts as one try).
+    pub fn start(key: NewKey) -> Self {
+        Self {
+            first: key.key.clone(),
+            current: key,
+            tries: 1,
+        }
+    }
+
+    /// The key to write now.
+    pub fn key(&self) -> &NewKey {
+        &self.current
+    }
+}
+
+/// What to do when the file of the key being written was there
+/// ([`Shelf::key_after_taken`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AfterTaken {
+    /// Write the next key of the search.
+    Next(KeySearch),
+    /// The key was asked for, so it is refused as it is.
+    Asked,
+    /// Every key tried had a file: give up.
+    NoFreeKey(NoFreeKey),
+    /// The key chosen has no next one.
+    NoNextKey(NextKeyProblem),
+}
+
+/// A search that tried every key it could and found a file at each.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error(
+    "the book `{book}` had a file at every key from `{}` to `{}`",
+    .first.form, .last.form
+)]
+pub struct NoFreeKey {
+    /// The book.
+    pub book: BookName,
+    /// The first key tried.
+    pub first: DocKey,
+    /// The last key tried.
+    pub last: DocKey,
+}
+
 impl Shelf {
     /// The next key of a prefixed book: one more than the highest number any file of
     /// the book writes, valid or not, so that a key a file writes is not handed out
@@ -254,9 +368,6 @@ impl Shelf {
             .schema
             .book(book)
             .ok_or_else(|| NextKeyProblem::UnknownBook { book: book.clone() })?;
-        let KeyPattern::Prefixed(prefix) = schema.key() else {
-            return Err(NextKeyProblem::SlugBook { book: book.clone() });
-        };
         let highest = self
             .written_keys
             .keys()
@@ -270,27 +381,55 @@ impl Shelf {
             })
             .max()
             .unwrap_or(0);
-        // The text goes through the book's grammar, the one reader of a key, so a
-        // number too long for a key is refused by the rule that refuses it anywhere
-        // (a key's number has fewer digits than `u64::MAX`, so saturating is safe).
-        let next = highest.saturating_add(1);
-        let form = schema
-            .key()
-            .parse(&format!("{prefix}-{next}"))
-            .map_err(|problem| NextKeyProblem::Exhausted {
-                book: book.clone(),
-                highest,
-                problem,
-            })?;
-        let key = in_range(
-            schema,
-            DocKey {
-                book: book.clone(),
-                form,
-            },
-        )
-        .map_err(NextKeyProblem::OutOfRange)?;
-        Ok(NewKey { key })
+        // A key's number has fewer digits than `u64::MAX`, so saturating is safe.
+        numbered(schema, book, highest.saturating_add(1))
+    }
+
+    /// What comes of a key whose file was there when it was written: a fact learnt
+    /// after the shelf was read (a run beside this one wrote the file, or its front
+    /// matter cannot be read, so the shelf shows no key for it).
+    ///
+    /// - A key that was asked for ([`Shelf::claim_key`]) is not chosen again:
+    ///   [`AfterTaken::Asked`].
+    /// - A key that was chosen ([`Shelf::next_key`]) is followed by the next number,
+    ///   read in the book's grammar and range: [`AfterTaken::Next`], to be written in
+    ///   its turn, or [`AfterTaken::NoNextKey`] when there is none.
+    /// - The search gives up after [`NEXT_KEY_TRIES`] keys in all, the first included:
+    ///   [`AfterTaken::NoFreeKey`]. The limit keeps a run from going on without end;
+    ///   as long as no more runs than that write at one time, each of them finds a
+    ///   key.
+    ///
+    /// The one place this is decided. The shelf is not read again: the next number is
+    /// counted from the key chosen, so a key it makes is free as the shelf knows it,
+    /// as [`Shelf::next_key`]'s is.
+    pub fn key_after_taken(&self, search: KeySearch) -> AfterTaken {
+        let KeySearch {
+            first,
+            current,
+            tries,
+        } = search;
+        let KeyOrigin::Next { number } = current.origin else {
+            return AfterTaken::Asked;
+        };
+        if tries >= NEXT_KEY_TRIES {
+            return AfterTaken::NoFreeKey(NoFreeKey {
+                book: first.book.clone(),
+                first,
+                last: current.key,
+            });
+        }
+        let book = current.key.book;
+        let Some(schema) = self.schema.book(&book) else {
+            return AfterTaken::NoNextKey(NextKeyProblem::UnknownBook { book });
+        };
+        match numbered(schema, &book, number.saturating_add(1)) {
+            Ok(next) => AfterTaken::Next(KeySearch {
+                first,
+                current: next,
+                tries: tries + 1,
+            }),
+            Err(problem) => AfterTaken::NoNextKey(problem),
+        }
     }
 
     /// A key a person gave for a new document: read in the book's grammar, and
@@ -318,7 +457,10 @@ impl Shelf {
             return Err(ClaimKeyProblem::Taken { key });
         }
         let key = in_range(schema, key).map_err(ClaimKeyProblem::OutOfRange)?;
-        Ok(NewKey { key })
+        Ok(NewKey {
+            key,
+            origin: KeyOrigin::Claimed,
+        })
     }
 
     /// The files that write `key` in its book's grammar, valid or not, in the order

@@ -1,14 +1,15 @@
 //! Tests of `new_doc`, over the in-memory fake.
 
 use crate::domain::shelf::build::{
-    ClaimKeyProblem, DocProblem, NewDocProblem, NextKeyProblem, RawValue,
+    ClaimKeyProblem, DocProblem, DocReading, NewDocProblem, NextKeyProblem, RawProblem, RawValue,
+    ReadId,
 };
 use crate::domain::shelf::schema::{
     BookName, BookSchemaDecl, FieldEntryDecl, FieldPresence, FieldTypeDecl, KeyPatternDecl,
     ScopeDecl,
 };
 
-use super::fake_tests::{FakeShelf, block_on, file, fr};
+use super::fake_tests::{FakeShelf, block_on, file, fr, path};
 use super::{ErrorClass, NewDocRequest, ShelfApp, ShelfError};
 
 fn request(book: &str, key: Option<&str>, entries: &[(&str, &str)]) -> NewDocRequest {
@@ -282,6 +283,142 @@ fn a_file_already_at_the_path_is_never_replaced() {
     assert!(matches!(error, ShelfError::FileTaken { .. }));
     assert_eq!(error.class(), ErrorClass::Request);
     assert_eq!(app.ports().created_count(), 0);
+}
+
+/// A fake in which a file is at each of the first `k` numbered paths of `dir` (`FR-1.md`
+/// to `FR-<k>.md`) when the write is made, and not when the shelf is read: the work of
+/// runs beside this one.
+fn with_files_appearing(dir: &str, prefix: &str, k: usize) -> FakeShelf {
+    let fake = FakeShelf::new();
+    for n in 1..=k {
+        fake.appear_before_create
+            .lock()
+            .unwrap()
+            .insert(path(&format!("{dir}/{prefix}-{n}.md")));
+    }
+    fake
+}
+
+#[test]
+fn a_chosen_key_whose_file_appears_before_the_write_is_followed_by_the_next_one() {
+    for k in [1, 3, 10] {
+        let fake = with_files_appearing("findings", "FR", k);
+        let ids_before = *fake.next_id.lock().unwrap();
+        let mut app = ShelfApp::new(fake);
+        let created = block_on(app.new_doc(request("finding", None, &[("title", "t")]))).unwrap();
+        assert_eq!(created.key.to_string(), format!("finding:FR-{}", k + 1));
+        assert_eq!(created.file.as_str(), format!("findings/FR-{}.md", k + 1));
+        assert_eq!(app.ports().created_count(), 1);
+        // One identity, taken once, whatever the number of tries.
+        assert_eq!(*app.ports().next_id.lock().unwrap(), ids_before + 1);
+        // The file holds the key it was written at.
+        let readings = app.ports().readings.lock().unwrap().clone();
+        let DocReading::Parsed { entries, .. } = readings.last().unwrap() else {
+            panic!("parsed");
+        };
+        assert_eq!(entries["key"], RawValue::Text(format!("FR-{}", k + 1)));
+    }
+}
+
+#[test]
+fn a_chosen_key_chosen_again_asks_the_artifact_source_once() {
+    let fake = with_files_appearing("specs", "SP", 2);
+    let mut app = ShelfApp::new(fake);
+    let created = block_on(app.new_doc(request(
+        "spec",
+        None,
+        &[("title", "cache"), ("tests", "tests/a.rs")],
+    )))
+    .unwrap();
+    assert_eq!(created.key.to_string(), "spec:SP-3");
+    assert_eq!(app.ports().artifact_read_count(), 1);
+    assert_eq!(app.ports().asked().len(), 1);
+}
+
+#[test]
+fn a_given_key_whose_file_appears_before_the_write_is_refused_and_not_moved() {
+    let fake = with_files_appearing("findings", "FR", 2);
+    let mut app = ShelfApp::new(fake);
+    let error =
+        block_on(app.new_doc(request("finding", Some("FR-1"), &[("title", "t")]))).unwrap_err();
+    let ShelfError::FileTaken { path } = &error else {
+        panic!("{error:?}");
+    };
+    assert_eq!(path.as_str(), "findings/FR-1.md");
+    assert_eq!(
+        error.to_string(),
+        "findings/FR-1.md is already there; nothing was written"
+    );
+    assert_eq!(error.class(), ErrorClass::Request);
+    assert_eq!(app.ports().created_count(), 0);
+}
+
+#[test]
+fn after_sixty_four_keys_with_a_file_each_nothing_is_written() {
+    let fake = with_files_appearing("findings", "FR", 64);
+    let mut app = ShelfApp::new(fake);
+    let error = block_on(app.new_doc(request("finding", None, &[("title", "t")]))).unwrap_err();
+    let ShelfError::NoFreeKey(problem) = &error else {
+        panic!("{error:?}");
+    };
+    assert_eq!(problem.first.to_string(), "finding:FR-1");
+    assert_eq!(problem.last.to_string(), "finding:FR-64");
+    assert_eq!(
+        error.to_string(),
+        "the book `finding` had a file at every key from `FR-1` to `FR-64`; nothing was written: \
+         other runs may be writing at the same time, or files that are no valid document are in \
+         the way (`check` lists them); run `new` again once they are done or put right"
+    );
+    assert_eq!(error.class(), ErrorClass::Request);
+    assert_eq!(app.ports().created_count(), 0);
+
+    // One file fewer, and the 64th key is written.
+    let fake = with_files_appearing("findings", "FR", 63);
+    let mut app = ShelfApp::new(fake);
+    let created = block_on(app.new_doc(request("finding", None, &[("title", "t")]))).unwrap();
+    assert_eq!(created.key.to_string(), "finding:FR-64");
+}
+
+#[test]
+fn a_key_chosen_again_that_has_no_next_is_the_error_of_the_next_key() {
+    let fake = FakeShelf::new();
+    fake.decls.lock().unwrap().push(BookSchemaDecl {
+        scope: ScopeDecl {
+            include: Some(vec!["M-1.md".to_owned(), "M-2.md".to_owned()]),
+            exclude: None,
+            without_front_matter: None,
+        },
+        ..measures()
+    });
+    for n in 1..=2 {
+        fake.appear_before_create
+            .lock()
+            .unwrap()
+            .insert(path(&format!("measures/M-{n}.md")));
+    }
+    let mut app = ShelfApp::new(fake);
+    let error = block_on(app.new_doc(request("measure", None, &[]))).unwrap_err();
+    assert!(matches!(
+        error,
+        ShelfError::NextKey(NextKeyProblem::OutOfRange(_))
+    ));
+    assert_eq!(error.class(), ErrorClass::Request);
+    assert_eq!(app.ports().created_count(), 0);
+}
+
+#[test]
+fn a_file_whose_front_matter_cannot_be_read_does_not_stop_a_new_document() {
+    // `findings/FR-1.md` shows no key, so the shelf offers FR-1; the write finds the
+    // file there, and the next key is written.
+    let unreadable = DocReading::Unparsed {
+        origin: path("findings/FR-1.md"),
+        id: ReadId::Unreadable,
+        why: RawProblem::NoFrontMatter,
+    };
+    let mut app = ShelfApp::new(FakeShelf::new().with_files(vec![unreadable]));
+    let created = block_on(app.new_doc(request("finding", None, &[("title", "t")]))).unwrap();
+    assert_eq!(created.key.to_string(), "finding:FR-2");
+    assert_eq!(app.ports().created_count(), 1);
 }
 
 /// The book `measure`, with a range that takes only `notes/**` below its directory.

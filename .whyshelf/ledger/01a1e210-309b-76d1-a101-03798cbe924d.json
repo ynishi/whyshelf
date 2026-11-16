@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794794064507,
+  "expires": null,
+  "frame": [],
+  "id": "01a1e210-309b-76d1-a101-03798cbe924d",
+  "kind": "decision",
+  "reason": "Issue #124: a chosen key whose file is there is passed over for the next number; reviewed design, code review and arch rules; tests pass",
+  "revision": "aac329116539b5e78954c56ce0c35ecda13ac70d",
+  "seen": "sha256:d69cc959f21fb0ffab45cde3d68052e7da5221bcae855a66b8412435c0675513",
+  "seen_address": "f07c28c44d48955464e6622791b03fd1de6c1015",
+  "subject": "01a1e20f-80ec-769a-91e1-6b4fb1105fca",
+  "v": 1,
+  "verb": "approve"
+}

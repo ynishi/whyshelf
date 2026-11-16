@@ -75,7 +75,10 @@ use super::schema::{
 
 mod new;
 
-pub use new::{ClaimKeyProblem, NewDoc, NewDocProblem, NewKey, NextKeyProblem, OutOfRange};
+pub use new::{
+    AfterTaken, ClaimKeyProblem, KeySearch, NEXT_KEY_TRIES, NewDoc, NewDocProblem, NewKey,
+    NextKeyProblem, NoFreeKey, OutOfRange,
+};
 
 /// A value of the front matter, as the adapter's YAML parser gave it: not yet
 /// checked against a field's type.

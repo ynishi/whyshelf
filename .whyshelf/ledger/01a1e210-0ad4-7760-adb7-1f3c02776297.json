@@ -1,0 +1,108 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "14df336bff39f27f8802c3b91e0f3d0a1cdff335",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e1da5d25f76f00d0b2d613826076756172b61433df5264dc37e18d8a0cab4230",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a2812da4eeb1808f833892595b6f831ac6ae89ae",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:85e69cf149d0ea5c0bc57be259a895cfc9c8a344909dc490b84b80872d6ec159",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1715be1964a3300e695ce33d7f0688206932e716",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5b2980fd4a9ccfb62affb0f4c42408ef34a24f1e7393ddeb6b63ed1f0c28fb80",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "763e09d6604dc63233d3df2ae19cd3a4506151ad",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a413fddaa39ec5363a787a2425305b35e3fa054f5161378cd3ded4bc3807028c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794794064507,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d1d881bcfe383a435dc95a44292907393ab16dbc",
+      "hash": "sha256:b0d7183d426e1c555cd1199b5ace3d0a55ce10fd6f4a7b4d8cf1fa9ffd2e9c12",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "57c1c9f6af7b2971ec63c79962325cfa5b2dd023",
+      "hash": "sha256:872049458a67a64ce58fe900ee2706a4837fade58056bd57f76627c3d0371539",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "28"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d0dc-701e-8908-afb6fafe946e"
+    }
+  ],
+  "id": "01a1e210-0ad4-7760-adb7-1f3c02776297",
+  "kind": "decision",
+  "reason": "Issue #124: a chosen key whose file is there is passed over for the next number; reviewed design, code review and arch rules; tests pass",
+  "revision": "aac329116539b5e78954c56ce0c35ecda13ac70d",
+  "seen": "sha256:9663feb4fb2ddf1e9a369edf1cc54e8c72aa3c05f3eabb7b6ccb2e5995341c58",
+  "seen_address": "36861b76ab0044dfff0ba3c438ed02a23876f39c",
+  "subject": "01a1c3eb-4d0e-77f5-b895-ad9aa697cad0",
+  "v": 1,
+  "verb": "approve"
+}

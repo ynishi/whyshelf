@@ -61,7 +61,7 @@ use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
 use super::error::{Obstacle, ShelfError};
-use super::new_doc::{Created, NewDocRequest, checked_new, write_new};
+use super::new_doc::{Created, NewDocRequest, Written, checked_new, write_new};
 use super::ports::{
     ArtifactSource, BookSchemaSource, Creation, DeclarationText, DeclarationWrite, DocSource,
     DocWrite, FileWrite, ShelfPort, ShelfWrite, port,
@@ -200,19 +200,20 @@ impl<P: ShelfWrite> ShelfApp<P> {
         }
         let mut docs = Vec::with_capacity(planned.len());
         for new in &planned {
-            match write_new(ports, new).await {
-                Ok(created) => {
+            let cause = match write_new(ports, new).await {
+                Ok(Written::Created(created)) => {
                     written.push(created.file.clone());
                     docs.push(created);
+                    continue;
                 }
-                Err(cause) => {
-                    return Err(ShelfError::PartWay {
-                        written,
-                        failed: new.doc().origin().clone(),
-                        cause: Box::new(cause),
-                    });
-                }
-            }
+                Ok(Written::AlreadyThere(path)) => ShelfError::FileTaken { path },
+                Err(cause) => cause,
+            };
+            return Err(ShelfError::PartWay {
+                written,
+                failed: new.doc().origin().clone(),
+                cause: Box::new(cause),
+            });
         }
         let heads = docs
             .iter()
