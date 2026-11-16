@@ -24,8 +24,22 @@ and this project adheres to
   value no book that declares the field can read, is a request error (exit 2)
   with every problem. In the library, `ShelfApp::status_filtered` beside
   `status`, which is unchanged (#101).
+- `new --from <file>` (`-` for standard input) writes several documents in
+  one run, from JSON lines, one document per line, whose shape `schema` prints
+  under `inputs`. The shelf is read once; each line takes a key as `new` does
+  (`key` claims one, none takes the next free number), may be named with `as`
+  so that other lines link to it by `{"as": "<name>"}`, and every line is
+  judged before anything is written: one refused line makes the run write
+  nothing, and every bad line is named. The answer lists the documents
+  written and the heads of the run. A file that cannot be read is a failed
+  run (exit 3). Each file is still put on disk on its own (#133). In the
+  library, `Shelf::plan_new` plans a run and `ShelfApp::new_docs` writes it;
+  `new` of one document and `init` go through the same plan (#125).
 
 ### Changed
+
+- `init` resolves a link of its documents to a document it writes later in
+  the same run: such a link is no longer listed as unresolved (#125).
 
 - A required field written with nothing in it makes the document invalid: a
   `text` that is empty or white space only, or a `list` with no item, is the
@@ -63,8 +77,8 @@ and this project adheres to
   tree each write a document at a key of their own. After 64 keys each with a
   file it writes nothing and says to run again once the other runs are done or
   the files `check` lists are put right. `new --key` of a key that is there is
-  refused as before. In the library, `Shelf::key_after_taken` decides, with
-  `KeySearch`, `AfterTaken` and `NoFreeKey` (#124).
+  refused as before. In the library, `Shelf::replan_after_taken` decides, with
+  `PlanAfterTaken` and `NoFreeKey` (#124, #125).
 
 ## [0.1.0] - 2026-11-12
 

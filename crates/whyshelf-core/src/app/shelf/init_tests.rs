@@ -4,8 +4,8 @@ use crate::domain::shelf::schema::{BookName, LinkTargetDecl, ShelfDecl};
 
 use super::fake_tests::{FakeShelf, block_on, decls, file, path};
 use super::{
-    DeclarationText, ErrorClass, InitFile, InitRequest, NewDocRequest, Obstacle, ShelfApp,
-    ShelfError, ShelfPort,
+    DeclarationText, EntryInput, ErrorClass, InitFile, InitRequest, NewDocRequest, Obstacle,
+    ShelfApp, ShelfError, ShelfPort,
 };
 
 /// The text the fake reads as the two books of [`decls`].
@@ -13,11 +13,13 @@ const TEXT: &str = "the two books";
 
 fn doc(book: &str, key: &str, entries: &[(&str, &str)]) -> NewDocRequest {
     NewDocRequest {
+        row: 1,
         book: BookName::new(book).unwrap(),
         key: Some(key.to_owned()),
+        name: None,
         entries: entries
             .iter()
-            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .map(|(k, v)| ((*k).to_owned(), EntryInput::Text((*v).to_owned())))
             .collect(),
         items: Vec::new(),
         body: "Body.\n".to_owned(),
@@ -432,5 +434,59 @@ fn a_document_its_book_refuses_is_refused_before_anything_is_written() {
     req.docs[1].entries.retain(|(name, _)| name != "title");
     let error = block_on(app.init(req)).unwrap_err();
     assert!(matches!(error, ShelfError::NewDoc(_)), "{error:?}");
+    assert_nothing_written(&app, None);
+}
+
+#[test]
+fn a_link_to_a_document_made_after_it_is_resolved() {
+    // The spec comes first and grounds on the finding that comes after it: judged on
+    // the documents before it alone, the link was unresolved; judged as one run it is
+    // resolved, and the finding is stood on by the spec, so only the spec is a head.
+    let mut req = request(TEXT);
+    req.docs.reverse();
+    for (at, doc) in req.docs.iter_mut().enumerate() {
+        doc.row = at + 1;
+    }
+    let mut app = ShelfApp::new(fake());
+    let done = block_on(app.init(req)).unwrap();
+    let keys: Vec<String> = done.docs.iter().map(|d| d.key.to_string()).collect();
+    assert_eq!(keys, ["spec:SP-1", "finding:FR-1"]);
+    assert!(
+        done.docs.iter().all(|d| d.unresolved.is_empty()),
+        "{:?}",
+        done.docs
+    );
+    let heads: Vec<String> = done.heads.iter().map(ToString::to_string).collect();
+    assert_eq!(heads, ["spec:SP-1"]);
+    let check = block_on(app.books_check()).unwrap();
+    assert!(check.is_clean(), "{check:?}");
+}
+
+#[test]
+fn the_documents_made_are_heads_when_no_other_stands_on_them() {
+    let mut app = ShelfApp::new(fake());
+    let done = block_on(app.init(request(TEXT))).unwrap();
+    // The spec grounds on the finding: the spec is the one head.
+    let heads: Vec<String> = done.heads.iter().map(ToString::to_string).collect();
+    assert_eq!(heads, ["spec:SP-1"]);
+}
+
+#[test]
+fn several_documents_refused_are_told_together_with_their_rows() {
+    let mut app = ShelfApp::new(fake());
+    let mut req = request(TEXT);
+    req.docs[0].entries.retain(|(name, _)| name != "title");
+    req.docs[1].entries.retain(|(name, _)| name != "title");
+    req.docs[0].row = 1;
+    req.docs[1].row = 2;
+    let error = block_on(app.init(req)).unwrap_err();
+    let ShelfError::Plan(problems) = &error else {
+        panic!("{error:?}");
+    };
+    let rows: Vec<String> = problems
+        .iter()
+        .map(|p| p.to_string()[..5].to_owned())
+        .collect();
+    assert_eq!(rows, ["row 1", "row 2"]);
     assert_nothing_written(&app, None);
 }

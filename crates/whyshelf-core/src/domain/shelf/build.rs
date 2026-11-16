@@ -46,7 +46,11 @@
 //! A document that is not written yet is asked of a built shelf too
 //! ([`Shelf::next_key`], [`Shelf::claim_key`], [`Shelf::check_new`]): the keys it may
 //! take are those no file of its book writes, and it is judged by steps 1, 2, 4 and 6
-//! above, the same code, on the file it would be.
+//! above, the same code, on the file it would be. A run of new documents is planned
+//! all at once by [`Shelf::plan_new`], which decides their keys, the names they link
+//! each other by and their judgement, resolving their links in the shelf's index with
+//! the run added to it, and [`Shelf::replan_after_taken`] says what comes of a key
+//! whose file was there at the write.
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
@@ -74,11 +78,13 @@ use super::schema::{
 };
 
 mod new;
+mod plan;
 
 pub use new::{
-    AfterTaken, ClaimKeyProblem, KeySearch, NEXT_KEY_TRIES, NewDoc, NewDocProblem, NewKey,
-    NextKeyProblem, NoFreeKey, OutOfRange,
+    ClaimKeyProblem, NEXT_KEY_TRIES, NewDoc, NewDocProblem, NewKey, NextKeyProblem, NoFreeKey,
+    OutOfRange,
 };
+pub use plan::{LinkItem, NewPlan, NewRequest, PlanAfterTaken, PlanProblem, PlannedValue, RunName};
 
 /// A value of the front matter, as the adapter's YAML parser gave it: not yet
 /// checked against a field's type.
@@ -1837,6 +1843,8 @@ mod artifact_tests;
 mod comparison_tests;
 #[cfg(test)]
 mod new_tests;
+#[cfg(test)]
+mod plan_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

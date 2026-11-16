@@ -5,8 +5,8 @@
 //! ```text
 //!   declaration text -- BookSchemaSource::declarations_in --> ShelfDecl
 //!   ShelfDecl -------- Schema::declared ----------------------> Schema, or every problem
-//!   each request ----- the steps of `new` on the shelf -------> a NewDoc (key, id, judged)
-//!                      of the documents before it
+//!   all requests ----- the steps of `new`, as one run ---------> a NewPlan (every key, id,
+//!                      on the shelf of the declaration alone      judgement and link)
 //!   in the way? ------ DeclarationWrite::in_the_way,
 //!                      FileWrite::in_the_way of each other file,
 //!                      DocWrite::in_the_way of each file,
@@ -30,9 +30,10 @@
 //! no kind of document, and is given them as a text in the format of the adapter of
 //! the declaration and as the requests `new` takes. Everything is judged before
 //! anything is written: the text is read by the reader every read of the project
-//! uses and checked by [`Schema::declared`], and each document is judged by the
-//! rules `new` judges one by, on a shelf of the declaration that holds the documents
-//! made before it (so a link to one of them resolves). Then everything in the way
+//! uses and checked by [`Schema::declared`], and the documents are planned as one run
+//! by the plan `new` plans a run by ([`Shelf::plan_new`]), on a shelf of the
+//! declaration alone, so that a link to any document of the run resolves, whichever
+//! comes first. Then everything in the way
 //! is looked for, all of it, by one rule for the declaration and the documents:
 //! anything at a path (a file, a directory, a link even to nothing) is in the way,
 //! and so is a parent of it that is there and is no directory (a file, a link to
@@ -48,20 +49,18 @@
 //! fails part way leaves, at worst, the declaration with fewer files, each whole,
 //! and says which were written ([`ShelfError::PartWay`]).
 
-use std::collections::BTreeSet;
-
-use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::ArtifactReadings;
-use crate::domain::shelf::build::{DocReading, NewDoc, Shelf};
+use crate::domain::shelf::build::{NewDoc, Shelf};
 use crate::domain::shelf::doc::DocKey;
-use crate::domain::shelf::order::heads;
 use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
 use super::error::{Obstacle, ShelfError};
-use super::new_doc::{Created, NewDocRequest, Written, checked_new, write_new};
+use super::new_doc::{
+    Created, NewDocRequest, Written, fail_after, plan_of, single_refusal, write_new,
+};
 use super::ports::{
     ArtifactSource, BookSchemaSource, Creation, DeclarationText, DeclarationWrite, DocSource,
     DocWrite, FileWrite, ShelfPort, ShelfWrite, port,
@@ -101,10 +100,10 @@ pub struct Initialized {
     /// The documents, in the order they were written.
     pub docs: Vec<Created>,
     /// Those of `docs` that no other of them stands on through a `Depends` link
-    /// ([`heads`]), in the same order: named to `judge approve --pending`, they take
-    /// every document it made and nothing else.
+    /// ([`NewPlan::heads`]), in the same order: named to `judge approve --pending`,
+    /// they take every document it made and nothing else.
     ///
-    /// [`heads`]: crate::domain::shelf::order::heads
+    /// [`NewPlan::heads`]: crate::domain::shelf::build::NewPlan::heads
     pub heads: Vec<DocKey>,
 }
 
@@ -130,22 +129,14 @@ impl<P: ShelfWrite> ShelfApp<P> {
         let schema = Schema::declared(decl, &artifacts.presets(), &artifacts.spaces())
             .map_err(ShelfError::Schema)?;
 
-        // Each document on the shelf of the ones before it, as `new` would make it
-        // once they were written.
-        let mut readings = Vec::new();
-        let mut planned: Vec<NewDoc> = Vec::new();
-        for doc in request.docs {
-            let shelf = shelf_of(ports, &schema, readings.clone()).await?;
-            let new = checked_new(ports, &shelf, doc).await?;
-            readings.push(DocReading::Parsed {
-                origin: new.doc().origin().clone(),
-                entries: new.entries().clone(),
-                body: new.doc().body().to_owned(),
-            });
-            planned.push(new);
-        }
-        let made: BTreeSet<DocId> = planned.iter().map(|new| new.doc().id()).collect();
-        let heads = heads(&shelf_of(ports, &schema, readings).await?, &made);
+        // The documents as one run, on the shelf of the declaration alone: what `new`
+        // would make of them once they were written, every link among them resolved.
+        let shelf = Shelf::build(&schema, Vec::new(), &ArtifactReadings::new());
+        let plan = plan_of(ports, &shelf, request.docs)
+            .await
+            .map_err(single_refusal)?;
+        let planned: Vec<&NewDoc> = plan.docs().collect();
+        let heads = plan.heads();
 
         let declaration = ports.declaration_writer().file();
         let paths: Vec<&RelPath> = std::iter::once(&declaration)
@@ -173,7 +164,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 });
             }
         }
-        let mut written = NonEmptyVec::new(declaration.clone(), Vec::new());
+        // The declaration is written, so what failed after it says what was written.
+        let mut written = vec![declaration.clone()];
         let mut files = Vec::with_capacity(request.files.len());
         for file in &request.files {
             let made = ports
@@ -192,11 +184,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 },
                 Err(cause) => cause,
             };
-            return Err(ShelfError::PartWay {
-                written,
-                failed: file.path.clone(),
-                cause: Box::new(cause),
-            });
+            return Err(fail_after(written, file.path.clone(), cause));
         }
         let mut docs = Vec::with_capacity(planned.len());
         for new in &planned {
@@ -209,17 +197,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 Ok(Written::AlreadyThere(path)) => ShelfError::FileTaken { path },
                 Err(cause) => cause,
             };
-            return Err(ShelfError::PartWay {
-                written,
-                failed: new.doc().origin().clone(),
-                cause: Box::new(cause),
-            });
+            return Err(fail_after(written, new.doc().origin().clone(), cause));
         }
-        let heads = docs
-            .iter()
-            .filter(|created| heads.contains(&created.id))
-            .map(|created| created.key.clone())
-            .collect();
         Ok(Initialized {
             declaration,
             files,
@@ -259,7 +238,7 @@ async fn in_the_way<P: ShelfWrite>(
     ports: &P,
     schema: &Schema,
     files: &[InitFile],
-    planned: &[NewDoc],
+    planned: &[&NewDoc],
 ) -> Result<Vec<Obstacle>, ShelfError> {
     let mut paths: Vec<RelPath> = Vec::new();
     paths.extend(
@@ -327,24 +306,4 @@ async fn in_the_way<P: ShelfWrite>(
         }
     }
     Ok(obstacles)
-}
-
-/// The shelf of `schema` with these files, their links to artifacts answered by the
-/// adapters, as the load builds one.
-async fn shelf_of<P: ShelfWrite>(
-    ports: &P,
-    schema: &Schema,
-    readings: Vec<DocReading>,
-) -> Result<Shelf, ShelfError> {
-    let asks = Shelf::artifact_asks(schema, &readings);
-    let artifacts = if asks.is_empty() {
-        ArtifactReadings::new()
-    } else {
-        ports
-            .artifacts()
-            .resolve(&asks)
-            .await
-            .map_err(port(ShelfPort::Artifacts))?
-    };
-    Ok(Shelf::build(schema, readings, &artifacts))
 }

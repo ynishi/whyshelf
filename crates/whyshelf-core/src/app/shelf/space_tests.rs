@@ -126,13 +126,16 @@ fn a_text_the_adapter_says_is_no_name_makes_the_document_invalid() {
 fn a_new_document_whose_name_the_adapter_says_is_none_is_refused_and_not_written() {
     let fake = FakeShelf::new().with_files(vec![fr(1, "slow", &[])]);
     let mut app = ShelfApp::new(fake);
+    let text = |value: &str| super::EntryInput::Text(value.to_owned());
     let request = super::NewDocRequest {
+        row: 1,
         book: crate::domain::shelf::schema::BookName::new("spec").unwrap(),
         key: None,
+        name: None,
         entries: vec![
-            ("title".to_owned(), "cache".to_owned()),
-            ("grounds".to_owned(), "FR-1".to_owned()),
-            ("tests".to_owned(), "../outside.rs".to_owned()),
+            ("title".to_owned(), text("cache")),
+            ("grounds".to_owned(), text("FR-1")),
+            ("tests".to_owned(), text("../outside.rs")),
         ],
         items: Vec::new(),
         body: "Body.\n".to_owned(),

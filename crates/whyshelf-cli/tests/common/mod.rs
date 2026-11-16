@@ -75,6 +75,29 @@ impl Project {
             .expect("the binary runs")
     }
 
+    /// Run the binary as [`Project::run`] runs it, with `input` on its standard input.
+    pub(crate) fn run_with_stdin(&self, args: &[&str], input: &str) -> Output {
+        use std::io::Write;
+
+        let mut child = Command::new(env!("CARGO_BIN_EXE_whyshelf"))
+            .arg("--root")
+            .arg(&self.0)
+            .args(args)
+            .env("WHYSHELF_ACTOR", "tester")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the binary starts");
+        child
+            .stdin
+            .take()
+            .expect("a pipe to the standard input")
+            .write_all(input.as_bytes())
+            .expect("the input is written");
+        child.wait_with_output().expect("the run ends")
+    }
+
     /// Start the binary as [`Project::run`] runs it, without waiting: the process
     /// runs beside the ones started after it until `wait_with_output` is called.
     pub(crate) fn spawn(&self, args: &[&str]) -> Child {

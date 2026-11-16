@@ -32,7 +32,9 @@
 //!
 #![doc = concat!("```toml\n", include_str!("init/sample.toml"), "```")]
 
-use whyshelf_core::app::shelf::{DeclarationText, InitFile, InitRequest, NewDocRequest};
+use whyshelf_core::app::shelf::{
+    DeclarationText, EntryInput, InitFile, InitRequest, NewDocRequest,
+};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonEmptyVec;
@@ -239,7 +241,8 @@ impl Template {
             docs: self
                 .docs()
                 .iter()
-                .map(|(book, template, text)| doc_request(book, template, text))
+                .enumerate()
+                .map(|(at, (book, template, text))| doc_request(at + 1, book, template, text))
                 .collect::<Result<_, _>>()?,
         })
     }
@@ -299,9 +302,11 @@ pub enum TemplateError {
     },
 }
 
-/// A template of a document as the request `new` takes: its key, its entries as
-/// text (a list as one item each, commas kept), its body.
+/// A template of a document as the request `new` takes, numbered `row` (from 1, in
+/// the order of the templates): its key, its entries as text (a list as one item
+/// each, commas kept), its body.
 fn doc_request(
+    row: usize,
     book: &str,
     template: &'static str,
     text: &str,
@@ -324,15 +329,17 @@ fn doc_request(
     let mut items = Vec::new();
     for (entry, value) in entries {
         match value {
-            RawValue::Text(text) => texts.push((entry, text)),
-            RawValue::Integer(n) => texts.push((entry, n.to_string())),
-            RawValue::Bool(b) => texts.push((entry, b.to_string())),
+            RawValue::Text(text) => texts.push((entry, EntryInput::Text(text))),
+            RawValue::Integer(n) => texts.push((entry, EntryInput::Text(n.to_string()))),
+            RawValue::Bool(b) => texts.push((entry, EntryInput::Text(b.to_string()))),
             RawValue::List(list) => items.extend(list.into_iter().map(|i| (entry.clone(), i))),
         }
     }
     Ok(NewDocRequest {
+        row,
         book,
         key: Some(key),
+        name: None,
         entries: texts,
         items,
         body,

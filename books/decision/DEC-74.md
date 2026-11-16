@@ -5,7 +5,7 @@ issues: ["#124"]
 rejected: ["A lock over the book's directory from choosing the key to writing it: it keeps out only other runs of whyshelf, not an editor or Git, so the create-only write and a second choice are needed anyway, and a lock left by a run that died stops the next one; numbers in the order runs started are not asked for", "Read the shelf again when the file is there: reading costs time in the number of documents, and many runs at once would read it many times", "Only tell a chosen key that was taken apart from a key asked for that was taken, and let the caller run again: runs started together would still fail"]
 related: ["DEC-28"]
 revisit: "When numbers must follow the order runs started, or several documents must be written as one"
-rustdoc: ["whyshelf_core::domain::shelf::build::Shelf::key_after_taken", "whyshelf_core::domain::shelf::build::NewKey", "whyshelf_core::domain::shelf::build::NoFreeKey", "whyshelf_core::app::shelf::ShelfApp::new_doc"]
+rustdoc: ["whyshelf_core::domain::shelf::build::Shelf::replan_after_taken", "whyshelf_core::domain::shelf::build::NewKey", "whyshelf_core::domain::shelf::build::NoFreeKey", "whyshelf_core::app::shelf::ShelfApp::new_doc"]
 serves: ["REQ-5"]
 title: "A chosen key whose file is there when new writes is passed over for the next number, up to a bound; a key asked for is still refused"
 ---
