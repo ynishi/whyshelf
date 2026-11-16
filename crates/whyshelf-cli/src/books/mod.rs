@@ -21,14 +21,16 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong (or `map` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now; for `judge exempt`, a document whose file is invalid; one no file carries is a reference that names no document, exit 2) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, a filter of `status` that is not a request (a `--book` that is no name or not declared, a `--standing` that is no standing, a `--where` with no `=`, a field no book declares, or a value no book that declares the field reads), `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
-//! | 3 | the run failed (a file could not be read or written; for `init`, part way too, with the files written listed in `problems`; or a template `init` ships cannot be read) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, a filter of `status` that is not a request (a `--book` that is no name or not declared, a `--standing` that is no standing, a `--where` with no `=`, a field no book declares, or a value no book that declares the field reads), `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `new --from`, the same for every line of the file at once (each problem says its line), a line that is no JSON object of the shape of `schema`'s `inputs."new --from"`, a name that stands for no line, or a file with no line to write, with nothing written; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces; for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
+//! | 3 | the run failed (a file could not be read or written, the file of `new --from` among them (missing, unreadable, not UTF-8) with nothing written; for `init`, part way too, with the files written listed in `problems`; or a template `init` ships cannot be read) |
 //!
 //! `init` writes the declaration and the documents of a template of
 //! `whyshelf_infra::shelf::init`, each where nothing is, or nothing at all.
-//! `new` is the one command that writes a new document of a person's. Its values arrive as text
+//! `new` is the one command that writes new documents of a person's. Its values arrive as text
 //! and are given to the use case as text; the use case reads them by the book's
 //! declaration, and the domain judges the document before anything is written.
+//! `new --from` writes a run of them from a file of JSON lines ([`new_lines`]), all
+//! or none, reading the shelf once.
 //! `fmt` is the one command that writes over a document's file, in the form `new`
 //! writes, and only when that changes no reading of it.
 
@@ -37,6 +39,7 @@
 #![allow(clippy::result_large_err)]
 
 pub mod args;
+pub mod new_lines;
 pub mod output;
 pub mod textdiff;
 
@@ -56,9 +59,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
-    ApproveChosenRequest, Choose, ErrorClass, ExemptRequest, JudgeRequest, Judgement, MapReport,
-    MovedRequest, NewDocRequest, PendingScope, SameMeaningAbout, SameMeaningRequest, ShelfApp,
-    ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter, UnlinkedReport, WithdrawRequest,
+    ApproveChosenRequest, Choose, EntryInput, ErrorClass, ExemptRequest, JudgeRequest, Judgement,
+    MapReport, MovedRequest, NewDocRequest, PendingScope, SameMeaningAbout, SameMeaningRequest,
+    ShelfApp, ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter, UnlinkedReport,
+    WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -291,12 +295,42 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
             })
         }
         BooksCommand::New {
+            from: Some(path), ..
+        } => match new_lines::requests_from(&path).await {
+            Ok(requests) if requests.is_empty() => {
+                let message = format!("--from {path}: no line to write");
+                eprintln!("error: {message}");
+                print(&output::usage(message));
+                return ExitCode::from(Exit::Request as u8);
+            }
+            Ok(requests) => ShelfApp::new(project)
+                .new_docs(requests)
+                .await
+                .map(|many| print(&output::new_many(&many))),
+            Err(new_lines::FromRefused::Unreadable(error)) => return failed_run(&error),
+            Err(new_lines::FromRefused::Lines(refused)) => {
+                eprintln!("error: {}", refused.messages.join("; "));
+                for problem in &refused.problems {
+                    eprintln!("  {problem}");
+                }
+                print(&output::lines_refused(refused.messages, refused.problems));
+                return ExitCode::from(Exit::Request as u8);
+            }
+        },
+        BooksCommand::New {
             book,
             title,
             key,
             entries,
             body,
-        } => match new_request(&book, title, key, entries, body) {
+            from: None,
+        } => match new_request(
+            book.as_deref().unwrap_or_default(),
+            title,
+            key,
+            entries,
+            body,
+        ) {
             Ok(request) => ShelfApp::new(project)
                 .new_doc(request)
                 .await
@@ -582,9 +616,9 @@ fn new_request(
     let book = BookName::new(book).map_err(|e| format!("book `{book}`: {e}"))?;
     // The title is an entry like any other: the book's declaration says whether it
     // is there and whether it must be.
-    let mut pairs: Vec<(String, String)> = title
+    let mut pairs: Vec<(String, EntryInput)> = title
         .into_iter()
-        .map(|title| ("title".to_owned(), title))
+        .map(|title| ("title".to_owned(), EntryInput::Text(title)))
         .collect();
     // `name+=text` is one item of a list, exactly as written; `name=text` an entry.
     let mut items = Vec::new();
@@ -595,12 +629,14 @@ fn new_request(
         match name.strip_suffix('+') {
             Some("") => return Err(format!("`{entry}` names no entry before `+=`")),
             Some(name) => items.push((name.to_owned(), value.to_owned())),
-            None => pairs.push((name.to_owned(), value.to_owned())),
+            None => pairs.push((name.to_owned(), EntryInput::Text(value.to_owned()))),
         }
     }
     Ok(NewDocRequest {
+        row: 1,
         book,
         key,
+        name: None,
         entries: pairs,
         items,
         body: body.unwrap_or_default(),
@@ -752,9 +788,9 @@ fn print<T: serde::Serialize>(value: &T) -> Exit {
     }
 }
 
-/// The end of a command when the program cannot make what it runs on (a template
-/// `init` ships that is no request): a failure of this program, told as every
-/// failed run is.
+/// The end of a command when what it runs on cannot be had: a template `init` ships
+/// that is no request, or the file `new --from` is to read and cannot (not there, not
+/// readable, not UTF-8). A failed run, told as every failed run is.
 fn failed_run(error: &dyn std::error::Error) -> ExitCode {
     let mut chain = vec![error.to_string()];
     let mut source = error.source();

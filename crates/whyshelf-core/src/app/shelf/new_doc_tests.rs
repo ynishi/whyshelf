@@ -10,15 +10,17 @@ use crate::domain::shelf::schema::{
 };
 
 use super::fake_tests::{FakeShelf, block_on, file, fr, path};
-use super::{ErrorClass, NewDocRequest, ShelfApp, ShelfError};
+use super::{EntryInput, ErrorClass, NewDocRequest, ShelfApp, ShelfError};
 
 fn request(book: &str, key: Option<&str>, entries: &[(&str, &str)]) -> NewDocRequest {
     NewDocRequest {
+        row: 1,
         book: BookName::new(book).unwrap(),
         key: key.map(str::to_owned),
+        name: None,
         entries: entries
             .iter()
-            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .map(|(k, v)| ((*k).to_owned(), EntryInput::Text((*v).to_owned())))
             .collect(),
         items: Vec::new(),
         body: "Body.\n".to_owned(),
@@ -450,7 +452,8 @@ fn a_new_document_outside_the_range_is_a_request_error_that_writes_nothing() {
         assert!(said.contains("include `notes/**`"), "{said}");
         assert_eq!(error.class(), ErrorClass::Request);
         assert_eq!(app.ports().created_count(), 0);
-        // Refused before an identity was asked for.
-        assert_eq!(*app.ports().next_id.lock().unwrap(), ids_before);
+        // The identity is taken before the plan, because a key is decided in it; a
+        // run that is refused shows none (nothing was written).
+        assert_eq!(*app.ports().next_id.lock().unwrap(), ids_before + 1);
     }
 }

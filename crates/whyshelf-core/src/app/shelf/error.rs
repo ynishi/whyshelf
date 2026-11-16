@@ -13,7 +13,9 @@ use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
-use crate::domain::shelf::build::{ClaimKeyProblem, NewDocProblem, NextKeyProblem, NoFreeKey};
+use crate::domain::shelf::build::{
+    ClaimKeyProblem, NewDocProblem, NextKeyProblem, NoFreeKey, PlanProblem,
+};
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::ExemptRefusal;
 use crate::domain::shelf::filter::FilterProblem;
@@ -168,12 +170,57 @@ pub enum ShelfError {
     /// The new document would be invalid, or cannot be made of what was given.
     #[error("the new document is refused")]
     NewDoc(#[from] NewDocProblem),
+    /// Rows of a run of new documents are refused, or cannot be planned together:
+    /// every one is listed, each with the number of its row. Nothing is written for
+    /// a run that is refused when it is planned.
+    #[error("{}", plan_problems(.0))]
+    Plan(NonEmptyVec<PlanProblem>),
+    /// A row of a run of new documents is refused for a fault of the request that is
+    /// told with no row of its own (an entry given twice, an item for no list, an empty
+    /// item or name): the row it is of, and what is wrong with it.
+    #[error("row {row}: {cause}")]
+    InRow {
+        /// The row.
+        row: usize,
+        /// What is wrong with it.
+        cause: Box<ShelfError>,
+    },
+    /// Two or more rows of a run of new documents are each refused for a fault of the
+    /// request (as [`ShelfError::InRow`] and [`ShelfError::NameOutsideLink`] tell it
+    /// for one row), every one listed, in the order of the rows. A run with a fault of
+    /// the request is not planned, so no other problem of its rows is told with them.
+    #[error("{}", row_faults(.0))]
+    Rows(Box<TwoOrMore<ShelfError>>),
+    /// An item of an entry that is no link to documents names a row of the run (an
+    /// entry of a text list, or a link to artifacts, takes texts only).
+    #[error("row {row}: `{entry}` is no link, so it cannot name a row")]
+    NameOutsideLink {
+        /// The row.
+        row: usize,
+        /// The entry.
+        entry: String,
+    },
+    /// A key of the run was taken while the run wrote, and a row already written links
+    /// to that row by name: its file holds a key that no longer stands for it.
+    /// Nothing more was written.
+    #[error(
+        "the key of row {row} was taken while the run wrote, and row {written_row}, already written, links to it by name"
+    )]
+    Stuck {
+        /// The row whose key was taken.
+        row: usize,
+        /// The row already written that links to it.
+        written_row: usize,
+    },
     /// One entry was given twice for a new document.
     #[error("the entry `{name}` is given twice")]
     EntryTwice {
         /// The entry.
         name: String,
     },
+    /// The name given for a row of a run is empty.
+    #[error("the name of the document is empty")]
+    EmptyName,
     /// An item (`name+=text`) was given for an entry the book does not read as a
     /// list.
     #[error("`{name}` is no list field or link of the book, so it takes no item")]
@@ -287,6 +334,24 @@ fn in_the_way(obstacles: &NonEmptyVec<Obstacle>) -> String {
     clauses.join("; ")
 }
 
+/// Each problem of a run, as the answer says them: `row 2: a; row 3: b`.
+fn plan_problems(problems: &NonEmptyVec<PlanProblem>) -> String {
+    problems
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// Each fault of the rows of a run, as the answer says them: `row 2: a; row 5: b`.
+fn row_faults(faults: &TwoOrMore<ShelfError>) -> String {
+    faults
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 /// `a is`, `a and b are`, `a, b and c are`.
 fn and_list<T: std::fmt::Display>(items: impl Iterator<Item = T>, one: &str, many: &str) -> String {
     let items: Vec<String> = items.map(|i| i.to_string()).collect();
@@ -330,6 +395,11 @@ impl ShelfError {
             | Self::NextKey(_)
             | Self::ClaimKey(_)
             | Self::NewDoc(_)
+            | Self::Plan(_)
+            | Self::Rows(_)
+            | Self::NameOutsideLink { .. }
+            | Self::Stuck { .. }
+            | Self::EmptyName
             | Self::EntryTwice { .. }
             | Self::ItemOfNoList { .. }
             | Self::EmptyItem { .. }
@@ -388,7 +458,7 @@ impl ShelfError {
                 | MovedRefusal::ToUntold { .. },
             ) => ErrorClass::Refused,
             Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,
-            Self::PartWay { cause, .. } => cause.class(),
+            Self::PartWay { cause, .. } | Self::InRow { cause, .. } => cause.class(),
         }
     }
 }

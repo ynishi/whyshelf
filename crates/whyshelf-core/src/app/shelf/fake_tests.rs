@@ -238,6 +238,8 @@ pub(super) struct FakeShelf {
     pub(super) asked: Mutex<Vec<ArtifactAsks>>,
     /// How many document files were created.
     pub(super) created: Mutex<usize>,
+    /// How many times the documents were read (a load reads them once).
+    pub(super) doc_reads: Mutex<usize>,
     /// The spaces the artifact source offers: `file` and `other`.
     pub(super) spaces: Mutex<BTreeSet<Space>>,
     /// The bytes of artifacts of spaces other than `file`.
@@ -336,6 +338,7 @@ impl FakeShelf {
             artifact_reads: Mutex::new(0),
             asked: Mutex::new(Vec::new()),
             created: Mutex::new(0),
+            doc_reads: Mutex::new(0),
             spaces: Mutex::new(BTreeSet::from([file_space(), other_space()])),
             elsewhere: Mutex::new(BTreeMap::new()),
             untellable: Mutex::new(BTreeMap::new()),
@@ -404,6 +407,11 @@ impl FakeShelf {
 
     pub(super) fn created_count(&self) -> usize {
         *lock(&self.created)
+    }
+
+    /// How many times the documents were read.
+    pub(super) fn doc_read_count(&self) -> usize {
+        *lock(&self.doc_reads)
     }
 
     /// Write a file that is no document (or the bytes of a document's file).
@@ -573,6 +581,7 @@ impl DocSource for FakeShelf {
     /// directory is kept, for the tests that hold such a file to be invalid.)
     async fn read_docs(&self, ranges: &[BookRange]) -> Result<Vec<DocReading>, FakeError> {
         self.check()?;
+        *lock(&self.doc_reads) += 1;
         Ok(lock(&self.readings)
             .iter()
             .filter(|reading| listed(ranges, reading))

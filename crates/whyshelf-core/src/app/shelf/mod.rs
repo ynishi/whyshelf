@@ -28,6 +28,7 @@
 //! | [`exempt`](ShelfApp::exempt) | **yes** | [`Exempted`]: the declarations that a document is not expected to be reached by one covering link, each with the document's key |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
+//! | [`new_docs`](ShelfApp::new_docs) | **yes** | [`NewMany`]: the documents of a run written, each as `new_doc` makes one, in the order they were written, and the ones no other stands on |
 //! | [`init`](ShelfApp::init) | **yes** | [`Initialized`]: the file of the declaration it wrote, and the documents it made beside it, each as `new_doc` makes one |
 //! | [`fmt_check`](ShelfApp::fmt_check) | no | [`FmtReport`]: the documents' files not in the one form, those in it, and those `fmt` would leave as they are, each with why |
 //! | [`fmt`](ShelfApp::fmt) | **yes** | [`FmtReport`]: the files written over in the one form, those in it already, and those left as they are, each with why |
@@ -39,7 +40,7 @@
 //! [`approve_chosen`](ShelfApp::approve_chosen), [`approve_stale`](ShelfApp::approve_stale),
 //! [`same_meaning`](ShelfApp::same_meaning),
 //! [`moved`](ShelfApp::moved), [`exempt`](ShelfApp::exempt), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc),
-//! [`init`](ShelfApp::init) and [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
+//! [`new_docs`](ShelfApp::new_docs), [`init`](ShelfApp::init) and [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
 //! program run one at a time, by the type. Two processes can still write at once;
 //! that is safe because a record is a file of its own named by its own identity, and
 //! no write but `fmt`'s replaces a file that is there (see the adapter). Two
@@ -107,6 +108,8 @@ mod moves_tests;
 #[cfg(test)]
 mod new_doc_tests;
 #[cfg(test)]
+mod new_many_tests;
+#[cfg(test)]
 mod preset_tests;
 #[cfg(test)]
 mod run_tests;
@@ -133,7 +136,7 @@ pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
 pub use init::{InitFile, InitRequest, Initialized};
 pub use judge::{JudgeRequest, Judgement};
 pub use moved::MovedRequest;
-pub use new_doc::{Created, NewDocRequest};
+pub use new_doc::{Created, EntryInput, ItemInput, NewDocRequest, NewMany};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
     DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileForm, FileWrite, Form,

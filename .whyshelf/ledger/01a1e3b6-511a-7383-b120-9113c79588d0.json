@@ -1,0 +1,57 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::Shelf::claim_key",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::Shelf::next_key",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794821738143,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3ada2103ac34f8766837d09182d6d666f9928ee9",
+      "hash": "sha256:63eabc9e4f1b267741b887cea57a62e5bd6d474b010591274716f7249686acaa",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    }
+  ],
+  "id": "01a1e3b6-511a-7383-b120-9113c79588d0",
+  "kind": "decision",
+  "reason": "Issue #125: new plans the documents of a run at once from JSON lines; REQ-5 text approved by the user; reviewed design, code review and arch rules; tests pass",
+  "revision": "83e5a5be96192f7fbe71489f436e1cc083ffa24e",
+  "seen": "sha256:872049458a67a64ce58fe900ee2706a4837fade58056bd57f76627c3d0371539",
+  "seen_address": "57c1c9f6af7b2971ec63c79962325cfa5b2dd023",
+  "subject": "01a1c55d-d0dc-701e-8908-afb6fafe946e",
+  "v": 1,
+  "verb": "approve"
+}

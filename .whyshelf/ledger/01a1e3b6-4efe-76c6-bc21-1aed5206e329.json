@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794821738143,
+  "expires": null,
+  "frame": [],
+  "id": "01a1e3b6-4efe-76c6-bc21-1aed5206e329",
+  "kind": "decision",
+  "reason": "Issue #125: new plans the documents of a run at once from JSON lines; REQ-5 text approved by the user; reviewed design, code review and arch rules; tests pass",
+  "revision": "83e5a5be96192f7fbe71489f436e1cc083ffa24e",
+  "seen": "sha256:63eabc9e4f1b267741b887cea57a62e5bd6d474b010591274716f7249686acaa",
+  "seen_address": "3ada2103ac34f8766837d09182d6d666f9928ee9",
+  "subject": "01a1c332-3988-7cda-b185-14a038a1dfdf",
+  "v": 1,
+  "verb": "approve"
+}

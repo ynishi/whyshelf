@@ -195,10 +195,12 @@ pub enum BooksCommand {
     #[command(subcommand)]
     Judge(Verb),
     /// Create one new document, valid for its book, at `<book dir>/<key>.md` (never
-    /// in place of a file that is there).
+    /// in place of a file that is there), or with `--from` every document of a file
+    /// of JSON lines, all or none.
     New {
         /// The book.
-        book: String,
+        #[arg(required_unless_present = "from")]
+        book: Option<String>,
         /// A shorthand for the entry `title=<text>`, for a book that declares a
         /// `title` field; a book declares whether a title is required.
         #[arg(long)]
@@ -213,6 +215,19 @@ pub enum BooksCommand {
         /// The body.
         #[arg(long)]
         body: Option<String>,
+        /// Write the documents of this file, one JSON object per line (`-` is the
+        /// standard input): each line has `book`, `key`, `as`, `entries` and `body`,
+        /// and an item of a link may be `{"as": "<name>"}`, the document of the line
+        /// of that name. The shape of a line is `inputs."new --from"` of `schema`.
+        /// Every line is judged before any file is written, and any line refused
+        /// writes nothing; the shelf is read once. Not given with a book, `--title`,
+        /// `--key`, entries or `--body`.
+        #[arg(
+            long,
+            value_name = "PATH",
+            conflicts_with_all = ["book", "title", "key", "entries", "body"]
+        )]
+        from: Option<String>,
     },
     /// Write every document's file in the one form `new` writes (`id` and `key`
     /// first, every text in double quotes, the whole text normalized as it is read:

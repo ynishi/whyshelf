@@ -11,8 +11,8 @@ use serde_json::Value;
 use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, ChosenApproved, Created, Declared, DeclaredAbout, DiffItem,
     DiffReport, DownstreamEdge, ErrorClass, Exempted, FmtReport, GetReport, Health, Initialized,
-    Judged, JudgedAll, LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, Row,
-    ShelfError, StaleReport, StatsReport, StatusReport, TraceReport, Unknown, UnlinkedEntry,
+    Judged, JudgedAll, LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, NewMany,
+    Row, ShelfError, StaleReport, StatsReport, StatusReport, TraceReport, Unknown, UnlinkedEntry,
     UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::location::RelPath;
@@ -25,6 +25,7 @@ use whyshelf_core::domain::shelf::snapshot::{
 use whyshelf_core::domain::shelf::stats::Origin as ChangedPin;
 use whyshelf_core::domain::shelf::untold::{Held, UntoldCause, Writers, untold_causes};
 
+use super::new_lines::NewLineIn;
 use super::textdiff;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::nonempty::TwoOrMore;
@@ -1336,6 +1337,18 @@ pub struct CreatedOut {
     pub unresolved_links: Vec<UnresolvedOut>,
 }
 
+/// The answer of `new --from`: the documents written, in the order they were
+/// written, and the ones no other of them stands on.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct NewManyOut {
+    /// The documents, each as `new` tells one.
+    pub docs: Vec<CreatedOut>,
+    /// The keys (`book:KEY`) of those of `docs` that no other of them stands on
+    /// through a `depends` link, in the same order: named to `judge approve
+    /// --pending`, they take every document of the run and nothing else.
+    pub heads: Vec<String>,
+}
+
 /// The answer of `init`: what was written, and what to run next.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct InitOut {
@@ -1409,18 +1422,22 @@ pub struct ErrorOut {
     pub candidates: Vec<String>,
     /// Each problem, one per item, when the error has a list of them: the problems
     /// of a declaration that cannot be used, or of a new document that would be
-    /// invalid; for `init`, each thing in the way, or the files written before a
-    /// failure part way and the one that was not.
+    /// invalid; for `new --from`, each row refused (`row <n>: ...`, the line of the
+    /// file) or each line that cannot be read; for `init`, each thing in the way, or
+    /// the files written before a failure part way and the one that was not.
     pub problems: Vec<String>,
 }
 
-/// The JSON Schema of every answer.
+/// The JSON Schema of every answer, and of what a command reads.
 #[derive(Debug, Serialize)]
 pub struct SchemasOut {
     /// The version of the answers these schemas describe.
     pub version: u32,
     /// By command.
     pub outputs: serde_json::Map<String, Value>,
+    /// What a command reads, by command: the shape of one line of the file of
+    /// `new --from`.
+    pub inputs: serde_json::Map<String, Value>,
 }
 
 /// The JSON Schema of every answer, by command.
@@ -1448,12 +1465,16 @@ pub fn schemas() -> SchemasOut {
     put("judge exempt", schema_for!(ExemptedAllOut));
     put("judge withdraw", schema_for!(WithdrawnOut));
     put("new", schema_for!(CreatedOut));
+    put("new --from", schema_for!(NewManyOut));
     put("init", schema_for!(InitOut));
     put("fmt", schema_for!(FmtOut));
     put("error", schema_for!(ErrorOut));
+    let mut inputs = serde_json::Map::new();
+    inputs.insert("new --from".to_owned(), schema_for!(NewLineIn).to_value());
     SchemasOut {
         version: FORMAT_VERSION,
         outputs,
+        inputs,
     }
 }
 
@@ -3641,6 +3662,8 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
             ShelfError::NewDoc(NewDocProblem::Invalid(problems)) => {
                 problems.iter().map(ToString::to_string).collect()
             }
+            ShelfError::Plan(problems) => problems.iter().map(ToString::to_string).collect(),
+            ShelfError::Rows(faults) => faults.iter().map(ToString::to_string).collect(),
             ShelfError::InTheWay { obstacles } => {
                 obstacles.iter().map(ToString::to_string).collect()
             }
@@ -3657,6 +3680,17 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
                 .collect(),
             _ => Vec::new(),
         },
+    }
+}
+
+/// The answer when the file of `new --from` gives no run: what is wrong, and each
+/// line that cannot be read, with its number.
+pub fn lines_refused(messages: Vec<String>, problems: Vec<String>) -> ErrorOut {
+    ErrorOut {
+        error: "request",
+        messages,
+        candidates: Vec::new(),
+        problems,
     }
 }
 
@@ -3731,6 +3765,14 @@ pub fn initialized(done: &Initialized, book: Option<&str>, root: NextRoot<'_>) -
             })
             .collect(),
         next,
+    }
+}
+
+/// The answer of `new --from`.
+pub fn new_many(many: &NewMany) -> NewManyOut {
+    NewManyOut {
+        docs: many.docs.iter().map(created).collect(),
+        heads: many.heads.iter().map(ToString::to_string).collect(),
     }
 }
 

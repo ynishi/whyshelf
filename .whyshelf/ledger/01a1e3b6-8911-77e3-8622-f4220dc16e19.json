@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "72e892f887fd31203cbb73a6bed4e1144f8352c8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b16534badba89b4e347979af8dfbdefddb2421d3d55852276c77281fd75c1043",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "56dd63781c5296c09db232054764295b1d877936",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9d9afb78e611fa784ecd33f54709690b156b3889d15a1407e8a77529ed1c1953",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794821738143,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6435d5a6b20e37fee75a605ed4b3ab33aa3b3095",
+      "hash": "sha256:a166c621a3f56d49226550e2ea032d1f19420c217245e5fe4a269f66fe9c1209",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "74"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e20f-84aa-7350-905c-6c3af70e7219"
+    }
+  ],
+  "id": "01a1e3b6-8911-77e3-8622-f4220dc16e19",
+  "kind": "decision",
+  "reason": "Issue #125: new plans the documents of a run at once from JSON lines; REQ-5 text approved by the user; reviewed design, code review and arch rules; tests pass",
+  "revision": "83e5a5be96192f7fbe71489f436e1cc083ffa24e",
+  "seen": "sha256:9bf9c80301cce82b111e4d744f2c1b9b58d199f55993813d5b6f682f27e1f07a",
+  "seen_address": "d32f5c15ec1a17b2430c87d33f1e3ac11bb7db6d",
+  "subject": "01a1e20f-a71c-759a-bb2c-533dd2e9c8cd",
+  "v": 1,
+  "verb": "approve"
+}

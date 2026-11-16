@@ -11,7 +11,7 @@ use std::fmt;
 use crate::domain::id::DocId;
 
 use super::build::Shelf;
-use super::doc::LinkState;
+use super::doc::{Doc, LinkState};
 use super::freshness::{
     Assessment, Degradation, Freshness, FreshnessLevel, Severity, Standing, StandingKind,
 };
@@ -158,16 +158,21 @@ pub fn pending_of(shelf: &Shelf, assessment: &Assessment, id: DocId) -> Result<(
 /// What the `Depends` links of a document resolve to now; nothing for an identity
 /// with no valid document. A link that cannot be followed leads nowhere.
 fn depends_targets(shelf: &Shelf, id: DocId) -> Vec<DocId> {
-    shelf.doc(id).map_or_else(Vec::new, |doc| {
-        doc.links_of(Propagation::Depends)
-            .into_iter()
-            .flat_map(|(_, states)| states.iter())
-            .filter_map(|state| match state {
-                LinkState::Resolved(target) => Some(target.id()),
-                LinkState::Unresolved(_) => None,
-            })
-            .collect()
-    })
+    shelf.doc(id).map_or_else(Vec::new, depends_of)
+}
+
+/// What the `Depends` links of one document resolve to: the one rule of which
+/// documents a document stands on, for the order of approvals here and for the heads
+/// of a run of new documents (`NewPlan::heads`), which are not in a shelf yet.
+pub(super) fn depends_of(doc: &Doc) -> Vec<DocId> {
+    doc.links_of(Propagation::Depends)
+        .into_iter()
+        .flat_map(|(_, states)| states.iter())
+        .filter_map(|state| match state {
+            LinkState::Resolved(target) => Some(target.id()),
+            LinkState::Unresolved(_) => None,
+        })
+        .collect()
 }
 
 /// The members of `among` that no other member names through a `Depends` link, as

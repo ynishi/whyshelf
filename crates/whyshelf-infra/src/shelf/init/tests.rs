@@ -2,8 +2,8 @@
 //! directory, a project that reads clean.
 
 use whyshelf_core::app::shelf::{
-    ArtifactSource, BooksCheck, Initialized, NewDocRequest, Obstacle, ShelfApp, ShelfError,
-    ShelfRead, UpstreamEnd,
+    ArtifactSource, BooksCheck, EntryInput, Initialized, NewDocRequest, Obstacle, ShelfApp,
+    ShelfError, ShelfRead, UpstreamEnd,
 };
 use whyshelf_core::domain::shelf::lookup::Reference;
 use whyshelf_core::domain::shelf::schema::{BookName, CoverSeverity, Schema};
@@ -394,10 +394,7 @@ async fn the_sample_documents_are_one_chain_with_no_file_named() {
         .collect();
     assert_eq!(keys, ["F-1", "REQ-1", "DEC-1", "V-1"]);
     let v1 = &request.docs[3];
-    assert!(
-        v1.entries
-            .contains(&("method".to_owned(), "review".to_owned()))
-    );
+    assert!(v1.entries.contains(&("method".to_owned(), text("review"))));
     assert!(v1.items.iter().all(|(link, _)| link != "tests"));
     // A list is given an item at a time, as `name+=item`, so its commas are kept.
     assert!(
@@ -439,15 +436,17 @@ async fn qa_first_writes_a_verification_that_checks_no_decision_and_takes_anothe
         .collect();
     assert_eq!(keys, ["F-1", "REQ-1", "V-1"]);
     let v1 = &request.docs[2];
+    assert!(v1.entries.contains(&("method".to_owned(), text("review"))));
+    let given: Vec<&String> = v1
+        .items
+        .iter()
+        .map(|(link, _)| link)
+        .chain(v1.entries.iter().map(|(link, _)| link))
+        .collect();
     assert!(
-        v1.entries
-            .contains(&("method".to_owned(), "review".to_owned()))
-    );
-    assert!(
-        v1.items
+        given
             .iter()
-            .chain(&v1.entries)
-            .all(|(link, _)| link != "checks" && link != "tests")
+            .all(|link| *link != "checks" && *link != "tests")
     );
 
     let dir = tempfile::tempdir().unwrap();
@@ -464,11 +463,13 @@ async fn qa_first_writes_a_verification_that_checks_no_decision_and_takes_anothe
     // as it was.
     let made = app
         .new_doc(NewDocRequest {
+            row: 1,
             book: BookName::new("verification").unwrap(),
             key: None,
+            name: None,
             entries: vec![
-                ("title".to_owned(), "Save twice at once".to_owned()),
-                ("method".to_owned(), "review".to_owned()),
+                ("title".to_owned(), text("Save twice at once")),
+                ("method".to_owned(), text("review")),
             ],
             items: Vec::new(),
             body: String::new(),
@@ -521,10 +522,7 @@ async fn experiment_writes_a_plan_with_its_table_and_takes_a_result_with_no_shee
     assert_eq!(keys, ["F-1", "REQ-1", "DEC-1", "V-1"]);
     // V-1 is a plan with its table, and no log: the run has not happened.
     let v1 = &request.docs[3];
-    assert!(
-        v1.entries
-            .contains(&("method".to_owned(), "plan".to_owned()))
-    );
+    assert!(v1.entries.contains(&("method".to_owned(), text("plan"))));
     assert!(
         v1.items
             .contains(&("sheet".to_owned(), "measurements/save-time.csv".to_owned()))
@@ -556,14 +554,13 @@ async fn experiment_writes_a_plan_with_its_table_and_takes_a_result_with_no_shee
         .await
         .unwrap();
     let result = |items: &[(&str, &str)]| NewDocRequest {
+        row: 1,
         book: BookName::new("verification").unwrap(),
         key: None,
+        name: None,
         entries: vec![
-            (
-                "title".to_owned(),
-                "Result: the four sizes timed".to_owned(),
-            ),
-            ("method".to_owned(), "result".to_owned()),
+            ("title".to_owned(), text("Result: the four sizes timed")),
+            ("method".to_owned(), text("result")),
         ],
         items: items
             .iter()
@@ -730,24 +727,29 @@ async fn a_second_init_finds_every_file_in_the_way() {
 #[test]
 fn a_template_of_a_document_that_cannot_be_read_is_an_error() {
     assert!(matches!(
-        doc_request("finding", "F-1.md", "no front matter"),
+        doc_request(1, "finding", "F-1.md", "no front matter"),
         Err(TemplateError::Unread { .. })
     ));
     assert!(matches!(
-        doc_request("finding", "F-1.md", "---\ntitle: \"t\"\n---\n"),
+        doc_request(1, "finding", "F-1.md", "---\ntitle: \"t\"\n---\n"),
         Err(TemplateError::NoKey { .. })
     ));
     let made = doc_request(
+        7,
         "finding",
         "F-1.md",
         "---\nkey: \"F-1\"\nn: 3\nyes: true\n---\nBody.\n",
     )
     .unwrap();
+    assert_eq!(made.row, 7);
+    assert_eq!(made.name, None);
     assert_eq!(made.key.as_deref(), Some("F-1"));
     assert_eq!(made.body, "Body.\n");
-    assert!(made.entries.contains(&("n".to_owned(), "3".to_owned())));
-    assert!(
-        made.entries
-            .contains(&("yes".to_owned(), "true".to_owned()))
-    );
+    assert!(made.entries.contains(&("n".to_owned(), text("3"))));
+    assert!(made.entries.contains(&("yes".to_owned(), text("true"))));
+}
+
+/// An entry given as a text, as the templates give every scalar.
+fn text(value: &str) -> EntryInput {
+    EntryInput::Text(value.to_owned())
 }
