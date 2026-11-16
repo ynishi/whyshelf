@@ -50,6 +50,7 @@
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use thiserror::Error;
 
@@ -68,8 +69,8 @@ use super::doc::{
 use super::graph::{Cycle, CycleSource, cycles_of};
 use super::schema::{
     ArtifactLinkKind, BookName, BookSchema, Cardinality, EntryName, FieldDecl, FieldPresence,
-    FieldType, ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation, Schema,
-    WithoutFrontMatter,
+    FieldType, ID_ENTRY, KEY_ENTRY, KeyForm, KeyProblem, LinkKind, Membership, Propagation,
+    ScalarType, Schema, WithoutFrontMatter,
 };
 
 mod new;
@@ -101,6 +102,19 @@ pub enum RawKind {
     Bool,
     /// A list of texts.
     List,
+}
+
+impl fmt::Display for RawKind {
+    /// The kind in words, as a problem says what was found: `a text`, `a whole
+    /// number`, `a truth value` or `a list`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Text => "a text",
+            Self::Integer => "a whole number",
+            Self::Bool => "a truth value",
+            Self::List => "a list",
+        })
+    }
 }
 
 impl RawValue {
@@ -421,10 +435,12 @@ pub enum DocProblem {
         others: NonEmptyVec<RelPath>,
     },
     /// An entry the book declares neither as a field nor as a link.
-    #[error("`{name}` is neither a field nor a link of the book")]
+    #[error("the book `{book}` declares no field or link `{name}`: declare it in the book first")]
     UnknownEntry {
         /// The entry.
         name: String,
+        /// The book that declares neither.
+        book: BookName,
     },
     /// A required field is missing. The missing entries of a document are told
     /// with these first, in the order the declaration writes the fields, then with
@@ -443,7 +459,7 @@ pub enum DocProblem {
         field: EntryName,
     },
     /// A field of a kind of value other than its type.
-    #[error("the field `{field}` is {found:?}, not {expected:?}")]
+    #[error("the field `{field}` is {found}, not `{}`", expected.word())]
     FieldMismatch {
         /// The field.
         field: EntryName,
@@ -461,7 +477,7 @@ pub enum DocProblem {
         found: String,
     },
     /// A link that is not a list of texts.
-    #[error("the link `{link}` is {found:?}, not a list of keys")]
+    #[error("the link `{link}` is {found}, not a list of keys")]
     LinkNotList {
         /// The link.
         link: EntryName,
@@ -493,7 +509,12 @@ pub enum DocProblem {
         why: NonBlank,
     },
     /// A link with a number of keys its cardinality does not admit.
-    #[error("the link `{link}` has {found} key(s), which {cardinality:?} does not admit")]
+    #[error(
+        "the link `{link}` has {}, which its count `{}` ({}) does not admit",
+        key_count(*found),
+        cardinality.word(),
+        cardinality.admits_in_words()
+    )]
     LinkCount {
         /// The link.
         link: EntryName,
@@ -502,6 +523,15 @@ pub enum DocProblem {
         /// How many keys were written.
         found: usize,
     },
+}
+
+/// A number of keys, as a problem says it: `1 key`, `2 keys`.
+fn key_count(count: usize) -> String {
+    if count == 1 {
+        "1 key".to_owned()
+    } else {
+        format!("{count} keys")
+    }
 }
 
 /// A file that could not be made a valid document, and why.
@@ -1096,7 +1126,10 @@ fn read_entries(
                 }),
             }
         } else {
-            problems.push(DocProblem::UnknownEntry { name: name.clone() });
+            problems.push(DocProblem::UnknownEntry {
+                name: name.clone(),
+                book: book.name().clone(),
+            });
         }
     }
     Entries {
@@ -1326,10 +1359,12 @@ fn declared_field(
     };
     let ty = &decl.ty;
     let value = match (ty, raw) {
-        (FieldType::Text, RawValue::Text(s)) => FieldValue::Text(s.clone()),
-        (FieldType::Integer, RawValue::Integer(n)) => FieldValue::Integer(*n),
-        (FieldType::Bool, RawValue::Bool(b)) => FieldValue::Bool(*b),
-        (FieldType::TextList, RawValue::List(items)) => FieldValue::TextList(items.clone()),
+        (FieldType::Scalar(ScalarType::Text), RawValue::Text(s)) => FieldValue::Text(s.clone()),
+        (FieldType::Scalar(ScalarType::Integer), RawValue::Integer(n)) => FieldValue::Integer(*n),
+        (FieldType::Scalar(ScalarType::Bool), RawValue::Bool(b)) => FieldValue::Bool(*b),
+        (FieldType::Scalar(ScalarType::TextList), RawValue::List(items)) => {
+            FieldValue::TextList(items.clone())
+        }
         (FieldType::Enum(_), RawValue::Text(s)) => {
             FieldValue::read(ty, s).ok_or_else(|| DocProblem::FieldNotInEnum {
                 field: field.clone(),

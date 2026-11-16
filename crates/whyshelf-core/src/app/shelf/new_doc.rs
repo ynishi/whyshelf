@@ -30,7 +30,7 @@ use crate::domain::location::RelPath;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::{NewDoc, RawValue, Shelf};
 use crate::domain::shelf::doc::{DocKey, FieldValue, UnresolvedLink};
-use crate::domain::shelf::schema::{BookName, BookSchema, EntryName, FieldType};
+use crate::domain::shelf::schema::{BookName, BookSchema, EntryName, FieldType, ScalarType};
 
 use super::ShelfApp;
 use super::error::ShelfError;
@@ -200,7 +200,7 @@ fn is_list(book: &BookSchema, name: &str) -> bool {
         || book.artifact_links().contains_key(name)
         || matches!(
             book.fields().get(name).map(|decl| &decl.ty),
-            Some(FieldType::TextList)
+            Some(FieldType::Scalar(ScalarType::TextList))
         )
 }
 
@@ -213,13 +213,15 @@ fn typed(book: &BookSchema, name: &str, text: &str) -> RawValue {
         return list(text);
     }
     match book.fields().get(name).map(|decl| &decl.ty) {
-        Some(FieldType::TextList) => list(text),
-        Some(ty @ (FieldType::Bool | FieldType::Integer)) => match FieldValue::read(ty, text) {
-            Some(FieldValue::Bool(b)) => RawValue::Bool(b),
-            Some(FieldValue::Integer(n)) => RawValue::Integer(n),
-            _ => as_text(),
-        },
-        Some(FieldType::Text | FieldType::Enum(_)) | None => as_text(),
+        Some(FieldType::Scalar(ScalarType::TextList)) => list(text),
+        Some(ty @ FieldType::Scalar(ScalarType::Bool | ScalarType::Integer)) => {
+            match FieldValue::read(ty, text) {
+                Some(FieldValue::Bool(b)) => RawValue::Bool(b),
+                Some(FieldValue::Integer(n)) => RawValue::Integer(n),
+                _ => as_text(),
+            }
+        }
+        Some(FieldType::Scalar(ScalarType::Text) | FieldType::Enum(_)) | None => as_text(),
     }
 }
 

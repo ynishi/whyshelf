@@ -34,11 +34,12 @@ use crate::domain::nonempty::NonEmptyVec;
 use super::super::artifact::{Comparison, Space};
 use super::{
     BookSchemaDecl, Cardinality, CompareDecl, CoverDecl, LinkEntryDecl, LinkTargetDecl, NamePlace,
-    NameProblem, PresetName, Propagation, SchemaProblem, offered,
+    NameProblem, PresetName, Propagation, SchemaProblem, WordAt, offered, read_word, report,
 };
 
-/// The values a preset gives a link to artifacts, as written: each is given only
-/// when it is written.
+/// The values a preset gives a link to artifacts: each is given only when it is
+/// set. What a preset of the project writes is [`WrittenPresetValues`], read into
+/// these; an adapter's built-in preset is these.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PresetValues {
     /// The space.
@@ -50,6 +51,22 @@ pub struct PresetValues {
     /// What the link means; a preset cannot hold
     /// [`Replaces`](Propagation::Replaces) ([`SchemaProblem::PresetReplaces`]).
     pub means: Option<Propagation>,
+}
+
+/// The values a preset of the project gives a link to artifacts, as written: each is
+/// given only when it is written, and `means` is the word as written, which
+/// [`expand`] reads ([`read_word`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WrittenPresetValues {
+    /// The space.
+    pub space: Option<String>,
+    /// `bytes`, `lines` or `presence`.
+    pub compare: Option<String>,
+    /// The prefixes of the lines `lines` leaves out.
+    pub ignore: Option<Vec<String>>,
+    /// What the link means, as a word of [`Propagation`]; a preset cannot hold
+    /// `replaces` ([`SchemaProblem::PresetReplaces`]).
+    pub means: Option<String>,
 }
 
 impl PresetValues {
@@ -85,7 +102,7 @@ pub struct PresetDecl {
     /// another of the project.
     pub from: Option<String>,
     /// Its own values.
-    pub values: PresetValues,
+    pub values: WrittenPresetValues,
 }
 
 /// The defaults a project declares, as written.
@@ -97,17 +114,20 @@ pub struct DefaultsDecl {
 
 /// A link as written: what [`expand`] reads. Each value the link writes itself wins
 /// over the preset's; `means` may be left to the preset, and `count` is the link's
-/// own.
+/// own. `count` and `means` are words as written, which [`expand`] reads
+/// ([`read_word`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WrittenLinkDecl {
     /// The name of the link.
     pub name: String,
     /// What it points at.
     pub target: LinkTargetDecl,
-    /// How many links a document holds.
-    pub cardinality: Cardinality,
-    /// What the link means for freshness, when written.
-    pub propagation: Option<Propagation>,
+    /// How many links a document holds, as a word of [`Cardinality`], when written;
+    /// [`Cardinality::WHEN_UNWRITTEN`] when not.
+    pub count: Option<String>,
+    /// What the link means for freshness, as a word of [`Propagation`], when
+    /// written.
+    pub means: Option<String>,
     /// The preset it names, for a link to artifacts.
     pub preset: Option<String>,
     /// For a link to artifacts, the space its names are in, when written.
@@ -132,8 +152,8 @@ impl From<LinkEntryDecl> for WrittenLinkDecl {
         Self {
             name: link.name,
             target: link.target,
-            cardinality: link.cardinality,
-            propagation: Some(link.propagation),
+            count: Some(link.cardinality.word().to_owned()),
+            means: Some(link.propagation.word().to_owned()),
             preset: None,
             space: link.space,
             compare,
@@ -309,8 +329,12 @@ impl Expanded {
 ///
 /// Every problem is returned: a preset name written twice or breaking the grammar
 /// of names, a `from`, a link or a default that names a preset that is not there, a
-/// cycle of `from`, a preset that means `replaces`, the values of a preset of the
-/// project, checked on it whether a link uses it or not (a `space` that is none or
+/// cycle of `from`, a count or a meaning written as a word it does not have
+/// ([`SchemaProblem::UnknownWord`], told where the word is written, the preset's
+/// included; the count of a link that writes none is
+/// [`Cardinality::WHEN_UNWRITTEN`]), a preset that means `replaces`, the values of
+/// a preset of the project, checked on it whether a link uses it or not (a `space`
+/// that is none or
 /// that `spaces` does not hold, and a `compare` with its `ignore` that is no
 /// comparison), `preset` on a link into a book, and a link left with no `means`. A
 /// preset with a problem gives no value: the links that use it, and the presets
@@ -395,6 +419,20 @@ fn expand_link(
     default: &TheDefault,
     problems: &mut Vec<SchemaProblem>,
 ) -> Option<(LinkEntryDecl, Option<PresetOrigin>)> {
+    // Both words are read first, so that a word that is refused is told whatever
+    // else is wrong with the link.
+    let at = || WordAt::Link {
+        book: book.to_owned(),
+        link: link.name.clone(),
+    };
+    let count = match link.count.as_deref() {
+        None => Some(Cardinality::WHEN_UNWRITTEN),
+        Some(word) => report(read_word::<Cardinality>(word, at()), problems),
+    };
+    let written_means = match link.means.as_deref() {
+        None => Some(None),
+        Some(word) => report(read_word::<Propagation>(word, at()), problems).map(Some),
+    };
     let (values, origin) = match (&link.target, link.preset.as_deref()) {
         (LinkTargetDecl::Book(_), Some(_)) => {
             problems.push(SchemaProblem::PresetOnBookLink {
@@ -429,11 +467,15 @@ fn expand_link(
         },
         (LinkTargetDecl::Artifact, None) => (PresetValues::default(), None),
     };
+    // A word that was refused is told; the link is left out with no problem more.
+    let (Some(cardinality), Some(written_means)) = (count, written_means) else {
+        return None;
+    };
     let own = PresetValues {
         space: link.space,
         compare: link.compare,
         ignore: link.ignore,
-        means: link.propagation,
+        means: written_means,
     };
     let values = own.over(&values);
     let Some(propagation) = values.means else {
@@ -446,7 +488,7 @@ fn expand_link(
     let expanded = LinkEntryDecl {
         name: link.name,
         target: link.target,
-        cardinality: link.cardinality,
+        cardinality,
         propagation,
         space: values.space,
         // `ignore` without `compare` is a `compare` of no kind, which
@@ -486,8 +528,8 @@ enum TheDefault {
 /// The presets of the project and the built-in ones, each resolved once.
 struct Presets<'a> {
     /// The presets of the project with a sound name, the first of each name, with
-    /// where it is in the declaration.
-    project: BTreeMap<&'a str, (usize, PresetName, &'a PresetDecl)>,
+    /// where it is in the declaration and its own values, read.
+    project: BTreeMap<&'a str, (usize, PresetName, &'a PresetDecl, PresetValues)>,
     /// Names of the project that have a problem of their own (reported).
     broken: BTreeSet<&'a str>,
     builtins: &'a BuiltinPresets,
@@ -527,13 +569,32 @@ impl<'a> Presets<'a> {
                 problems.push(SchemaProblem::DuplicatePreset { name });
                 continue;
             }
-            if decl.values.means == Some(Propagation::Replaces) {
+            let mut means = None;
+            if let Some(word) = decl.values.means.as_deref() {
+                let word_at = WordAt::Preset {
+                    name: decl.name.clone(),
+                };
+                match read_word::<Propagation>(word, word_at) {
+                    Ok(read) => means = Some(read),
+                    Err(problem) => {
+                        problems.push(problem);
+                        presets.broken.insert(&decl.name);
+                    }
+                }
+            }
+            if means == Some(Propagation::Replaces) {
                 problems.push(SchemaProblem::PresetReplaces {
                     preset: decl.name.clone(),
                 });
                 presets.broken.insert(&decl.name);
             }
-            presets.project.insert(&decl.name, (at, name, decl));
+            let own = PresetValues {
+                space: decl.values.space.clone(),
+                compare: decl.values.compare.clone(),
+                ignore: decl.values.ignore.clone(),
+                means,
+            };
+            presets.project.insert(&decl.name, (at, name, decl, own));
         }
         for decl in decls {
             presets.resolve(&decl.name, problems);
@@ -544,7 +605,7 @@ impl<'a> Presets<'a> {
     /// The checked name of a preset that is there.
     fn name(&self, name: &str) -> Option<PresetName> {
         match self.project.get(name) {
-            Some((_, checked, _)) => Some(checked.clone()),
+            Some((_, checked, _, _)) => Some(checked.clone()),
             None => self
                 .builtins
                 .get_key_value(name)
@@ -569,16 +630,17 @@ impl<'a> Presets<'a> {
         if self.broken.contains(name) && !self.project.contains_key(name) {
             return Found::Failed;
         }
-        let Some(&(_, _, decl)) = self.project.get(name) else {
+        let Some((_, _, decl, own)) = self.project.get(name) else {
             return self.builtin(name);
         };
+        let (decl, own) = (*decl, own.clone());
         if let Some(at) = chain.iter().position(|seen| *seen == name) {
             let on_cycle = &chain[at..];
             // Told from the one of the cycle declared first, along `from`.
             let first = on_cycle
                 .iter()
                 .enumerate()
-                .min_by_key(|(_, seen)| self.project.get(**seen).map(|(i, _, _)| *i))
+                .min_by_key(|(_, seen)| self.project.get(**seen).map(|(i, _, _, _)| *i))
                 .map_or(0, |(i, _)| i);
             let cycle: Vec<PresetName> = on_cycle[first..]
                 .iter()
@@ -619,7 +681,7 @@ impl<'a> Presets<'a> {
         }
         let values = match base {
             Found::Values(base) if !self.broken.contains(name) => {
-                let values = decl.values.clone().over(&base);
+                let values = own.over(&base);
                 self.sound(decl, &values, problems).then_some(values)
             }
             _ => None,

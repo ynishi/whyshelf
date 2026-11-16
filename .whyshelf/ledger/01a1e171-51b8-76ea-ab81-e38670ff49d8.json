@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "32edbb758d9ffe6a9d756e53cebf944a0f4ddd80",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5875f926aaaaf51f04b192f22071659d3499df89ed5982a65aa8bb6aaca230b1",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f4f162c706d71f3a378f83d931586f9d72faa8b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a80d0deb30ab139e0eff380315e13f1769e3aaea537d95006e5b5276de508eb",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6e40a23be5c9ea162832006c6e19563c3aa872e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:13932f8b61d6c6ddb40510d64c3473b9bec5227d4033e2bf0f079ee70abbe516",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794783658892,
+  "expires": null,
+  "frame": [
+    {
+      "address": "78d274ba73a348933ca997fdac74b14d99372799",
+      "hash": "sha256:af41c43a0e80b1188cca7939d34ce86874bfb6b296e4304a36bf28c7551d6c70",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a1e171-51b8-76ea-ab81-e38670ff49d8",
+  "kind": "decision",
+  "reason": "Issue #126: words of a declaration read by the domain; reviewed design, code review and arch rules; tests pass",
+  "revision": "287c3bff0d6ac853642fdff9d2700ae2a722f371",
+  "seen": "sha256:f45b99cb2ad0d8e32a212023e18a7053e3ce1d418cde9b46de61272dea4d41d8",
+  "seen_address": "ba3d6a68dc7a5d6e94896d18bf9931e1fbeed05f",
+  "subject": "01a1da61-c7c5-7789-ac4f-8edd5fa71741",
+  "v": 1,
+  "verb": "approve"
+}

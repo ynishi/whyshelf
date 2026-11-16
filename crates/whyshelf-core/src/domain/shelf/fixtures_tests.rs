@@ -83,6 +83,10 @@ pub(super) fn list(items: &[&str]) -> RawValue {
     RawValue::List(items.iter().map(|s| (*s).to_owned()).collect())
 }
 
+fn scalar(word: &str) -> FieldTypeDecl {
+    FieldTypeDecl::Word(word.to_owned())
+}
+
 fn field(name: &str, ty: FieldTypeDecl, presence: FieldPresence) -> FieldEntryDecl {
     FieldEntryDecl {
         name: name.to_owned(),
@@ -128,11 +132,11 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
             },
             description: None,
             fields: vec![
-                field("title", FieldTypeDecl::Text, FieldPresence::Required),
-                field("note", FieldTypeDecl::Text, FieldPresence::Optional),
-                field("count", FieldTypeDecl::Integer, FieldPresence::Optional),
-                field("flag", FieldTypeDecl::Bool, FieldPresence::Optional),
-                field("tags", FieldTypeDecl::TextList, FieldPresence::Optional),
+                field("title", scalar("text"), FieldPresence::Required),
+                field("note", scalar("text"), FieldPresence::Optional),
+                field("count", scalar("integer"), FieldPresence::Optional),
+                field("flag", scalar("bool"), FieldPresence::Optional),
+                field("tags", scalar("list"), FieldPresence::Optional),
                 field(
                     "level",
                     FieldTypeDecl::Enum(vec!["low".to_owned(), "high".to_owned()]),
@@ -153,7 +157,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
                 prefix: "SP".to_owned(),
             },
             description: None,
-            fields: vec![field("title", FieldTypeDecl::Text, FieldPresence::Required)],
+            fields: vec![field("title", scalar("text"), FieldPresence::Required)],
             links: vec![
                 link("grounds", "finding", Propagation::Depends),
                 artifact_link("tests", Propagation::Depends),
@@ -166,7 +170,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
             scope: Default::default(),
             key: KeyPatternDecl::Slug,
             description: None,
-            fields: vec![field("title", FieldTypeDecl::Text, FieldPresence::Required)],
+            fields: vec![field("title", scalar("text"), FieldPresence::Required)],
             links: vec![link("specs", "spec", Propagation::Depends)],
         },
     ]

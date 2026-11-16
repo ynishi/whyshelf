@@ -46,8 +46,8 @@ use whyshelf_core::domain::shelf::ledger::{
 use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::order::{Hold, Rule};
 use whyshelf_core::domain::shelf::schema::{
-    Cardinality, CoverSeverity, EntryName, FieldPresence, FieldType, KeyPattern, PresetOrigin,
-    Propagation, SchemaProblem, WithoutFrontMatter,
+    CoverSeverity, EntryName, FieldPresence, FieldType, KeyPattern, PresetOrigin, SchemaProblem,
+    WithoutFrontMatter,
 };
 use whyshelf_infra::shelf::ledger::to_json;
 
@@ -2070,7 +2070,7 @@ impl Namer<'_> {
         EdgeOut {
             from: self.doc(edge.from),
             link: edge.link.to_string(),
-            means: means(edge.propagation),
+            means: edge.propagation.word(),
             depth: edge.depth,
             to,
             standing,
@@ -2081,7 +2081,7 @@ impl Namer<'_> {
         EdgeOut {
             from: self.doc(edge.holder.id),
             link: edge.link.to_string(),
-            means: means(edge.propagation),
+            means: edge.propagation.word(),
             depth: edge.depth,
             to: LinkTargetOut::Resolved {
                 doc: self.doc(edge.to),
@@ -2541,7 +2541,7 @@ pub fn map(report: &MapReport) -> MapOut {
                     .iter()
                     .map(|(name, decl)| MapFieldOut {
                         name: name.to_string(),
-                        ty: field_type(&decl.ty),
+                        ty: decl.ty.word(),
                         words: match &decl.ty {
                             FieldType::Enum(words) => {
                                 words.iter().map(ToString::to_string).collect()
@@ -2579,8 +2579,8 @@ pub fn map(report: &MapReport) -> MapOut {
                                 .collect(),
                         },
                     },
-                    means: means(link.propagation),
-                    count: count_word(link.cardinality),
+                    means: link.propagation.word(),
+                    count: link.cardinality.word(),
                     cover: cover.is_some(),
                     cover_severity: cover.map(CoverSeverity::word),
                     preset: preset.map(|p| p.name().to_string()),
@@ -3850,35 +3850,6 @@ fn upstream_status(status: &UpstreamStatus) -> &'static str {
         UpstreamStatus::Deprecated {
             successors: Successors::Some(_),
         } => "deprecated; follow its successor",
-    }
-}
-
-fn means(propagation: Propagation) -> &'static str {
-    match propagation {
-        Propagation::Depends => "depends",
-        Propagation::Informs => "informs",
-        Propagation::Replaces => "replaces",
-    }
-}
-
-/// A count as the declaration writes it.
-fn count_word(cardinality: Cardinality) -> &'static str {
-    match cardinality {
-        Cardinality::One => "one",
-        Cardinality::Optional => "optional",
-        Cardinality::Many => "many",
-        Cardinality::AtLeastOne => "at-least-one",
-    }
-}
-
-/// The type of a field as the declaration writes it.
-fn field_type(ty: &FieldType) -> &'static str {
-    match ty {
-        FieldType::Text => "text",
-        FieldType::Integer => "integer",
-        FieldType::Bool => "bool",
-        FieldType::TextList => "list",
-        FieldType::Enum(_) => "enum",
     }
 }
 

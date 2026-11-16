@@ -39,7 +39,7 @@ fn with_default() -> ShelfDecl {
         .filter(|link| link.target == LinkTargetDecl::Artifact)
     {
         link.space = None;
-        link.propagation = None;
+        link.means = None;
     }
     decl.defaults = DefaultsDecl {
         artifact: Some("file".to_owned()),

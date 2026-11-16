@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "14df336bff39f27f8802c3b91e0f3d0a1cdff335",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e1da5d25f76f00d0b2d613826076756172b61433df5264dc37e18d8a0cab4230",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4687ccd9a7999ae2efacfc74f84f9df66f03ade8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f736b2327548f366571bbf32bec0af8b4b126f3808eea4ba728016294ad6fd15",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794783658892,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0d523c0e6b5d7eb05e55bfea2ce892ebc4a70ea1",
+      "hash": "sha256:db53c5c3cfd6a4800cfb2a2b2c50b05e6e86ff1a553329fdcbdd5ee96a09a95b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "24"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4e9-62d4-72e8-bf6a-0b974af9ea91"
+    }
+  ],
+  "id": "01a1e171-4c67-771d-bc4d-e7a25d42847e",
+  "kind": "decision",
+  "reason": "Issue #126: words of a declaration read by the domain; reviewed design, code review and arch rules; tests pass",
+  "revision": "287c3bff0d6ac853642fdff9d2700ae2a722f371",
+  "seen": "sha256:f8593e8c1813914e08c3dafc6c23e280a95b37dd0fec3f2d7c4f548a27c059c3",
+  "seen_address": "2fcfb14e08be5652a8cf9878f6a8aaebab27b0a0",
+  "subject": "01a1c4e9-6379-7470-911e-6db69d926799",
+  "v": 1,
+  "verb": "approve"
+}

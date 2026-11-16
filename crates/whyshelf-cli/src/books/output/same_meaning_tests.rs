@@ -73,7 +73,7 @@ fn schema() -> Schema {
         description: None,
         fields: vec![FieldEntryDecl {
             name: "title".to_owned(),
-            ty: FieldTypeDecl::Text,
+            ty: FieldTypeDecl::Word("text".to_owned()),
             presence: FieldPresence::Required,
         }],
         links,

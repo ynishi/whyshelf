@@ -1,6 +1,7 @@
 //! Tests of the shelf.
 
 use super::*;
+use crate::domain::nonempty::NonEmptySet;
 use crate::domain::shelf::fixtures_tests::{
     decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, shelf_reading,
     spaces, text,
@@ -279,7 +280,8 @@ fn an_entry_the_book_does_not_declare_is_a_problem() {
     assert_eq!(
         problems_of(&s, 1),
         vec![DocProblem::UnknownEntry {
-            name: "surprise".to_owned()
+            name: "surprise".to_owned(),
+            book: BookName::new("finding").unwrap(),
         }]
     );
 }
@@ -396,7 +398,7 @@ fn a_blank_required_field_is_told_before_a_missing_one() {
         0,
         FieldEntryDecl {
             name: "summary".to_owned(),
-            ty: FieldTypeDecl::Text,
+            ty: FieldTypeDecl::Word("text".to_owned()),
             presence: FieldPresence::Required,
         },
     );
@@ -442,7 +444,7 @@ fn a_field_must_have_the_type_the_book_declares() {
     );
     assert!(problems.contains(&DocProblem::FieldMismatch {
         field: EntryName::new("count").unwrap(),
-        expected: FieldType::Integer,
+        expected: FieldType::Scalar(ScalarType::Integer),
         found: RawKind::Text,
     }));
 }
@@ -537,6 +539,133 @@ fn a_link_must_be_a_list_of_keys_within_its_cardinality() {
         }]
     ));
     assert!(s.doc(docid(4)).is_some());
+}
+
+#[test]
+fn the_problems_of_a_count_a_type_and_a_book_are_told_in_the_words_of_the_declaration() {
+    let link = || EntryName::new("grounds").unwrap();
+    let count = |cardinality, found| DocProblem::LinkCount {
+        link: link(),
+        cardinality,
+        found,
+    };
+    assert_eq!(
+        count(Cardinality::Optional, 2).to_string(),
+        "the link `grounds` has 2 keys, which its count `optional` (none or one) does not admit"
+    );
+    assert_eq!(
+        count(Cardinality::One, 0).to_string(),
+        "the link `grounds` has 0 keys, which its count `one` (exactly one) does not admit"
+    );
+    assert_eq!(
+        count(Cardinality::AtLeastOne, 1).to_string(),
+        "the link `grounds` has 1 key, which its count `at-least-one` (one or more) does not admit"
+    );
+    let mismatch = |expected, found| {
+        DocProblem::FieldMismatch {
+            field: EntryName::new("n").unwrap(),
+            expected,
+            found,
+        }
+        .to_string()
+    };
+    assert_eq!(
+        mismatch(FieldType::Scalar(ScalarType::Integer), RawKind::Text),
+        "the field `n` is a text, not `integer`"
+    );
+    assert_eq!(
+        mismatch(FieldType::Scalar(ScalarType::TextList), RawKind::Integer),
+        "the field `n` is a whole number, not `list`"
+    );
+    let words = std::iter::once(FieldWord::new("low").unwrap()).collect();
+    assert_eq!(
+        mismatch(
+            FieldType::Enum(NonEmptySet::from_set(words).unwrap()),
+            RawKind::Bool
+        ),
+        "the field `n` is a truth value, not `enum`"
+    );
+    assert_eq!(
+        DocProblem::LinkNotList {
+            link: link(),
+            found: RawKind::Text
+        }
+        .to_string(),
+        "the link `grounds` is a text, not a list of keys"
+    );
+    assert_eq!(
+        DocProblem::LinkNotList {
+            link: link(),
+            found: RawKind::List
+        }
+        .to_string(),
+        "the link `grounds` is a list, not a list of keys"
+    );
+    assert_eq!(
+        DocProblem::UnknownEntry {
+            name: "source".to_owned(),
+            book: BookName::new("note").unwrap(),
+        }
+        .to_string(),
+        "the book `note` declares no field or link `source`: declare it in the book first"
+    );
+}
+
+#[test]
+fn a_problem_found_in_a_file_is_told_without_the_name_of_a_rust_type() {
+    let mut d = decls();
+    d[1].links[0].cardinality = Cardinality::Optional;
+    let schema = Schema::validate(d, &spaces()).unwrap();
+    let s = Shelf::build(
+        &schema,
+        vec![
+            reading(
+                "specs/a.md",
+                1,
+                "SP-1",
+                &[("title", text("t")), ("grounds", list(&["FR-1", "FR-2"]))],
+            ),
+            reading(
+                "findings/b.md",
+                2,
+                "FR-1",
+                &[
+                    ("title", text("t")),
+                    ("count", text("x")),
+                    ("what", text("y")),
+                ],
+            ),
+        ],
+        &Default::default(),
+    );
+    let said: Vec<String> = [1, 2]
+        .into_iter()
+        .flat_map(|n| problems_of(&s, n))
+        .map(|p| p.to_string())
+        .collect();
+    assert!(
+        said.contains(
+            &"the link `grounds` has 2 keys, which its count `optional` (none or one) does not admit"
+                .to_owned()
+        ),
+        "{said:?}"
+    );
+    assert!(
+        said.contains(&"the field `count` is a text, not `integer`".to_owned()),
+        "{said:?}"
+    );
+    assert!(
+        said.contains(
+            &"the book `finding` declares no field or link `what`: declare it in the book first"
+                .to_owned()
+        ),
+        "{said:?}"
+    );
+    for text in &said {
+        for debug in ["Optional", "Integer", "Text", "AtLeastOne"] {
+            assert!(!text.contains(debug), "{text}");
+        }
+    }
 }
 
 #[test]
