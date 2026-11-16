@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Yutaka Nishimura <ytk.nishimura@gmail.com>"]
@@ -13,8 +13,8 @@ documentation = "https://docs.rs/whyshelf"
 readme = "README.md"
 
 [workspace.dependencies]
-whyshelf-core = { path = "crates/whyshelf-core", version = "0.1.0" }
-whyshelf-infra = { path = "crates/whyshelf-infra", version = "0.1.0" }
+whyshelf-core = { path = "crates/whyshelf-core", version = "0.1.1" }
+whyshelf-infra = { path = "crates/whyshelf-infra", version = "0.1.1" }
 arch-lint = "0.11"
 thiserror = { version = "2.0", default-features = false, features = ["std"] }
 sha2 = { version = "=0.11.1", default-features = false }
