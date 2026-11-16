@@ -33,7 +33,10 @@
 //! go through the same steps a file on disk goes through in [`Shelf::build`], so what
 //! it accepts is exactly what the build will accept when the file is read back. A
 //! link to a key no document has is accepted as it is by the build (an unresolved
-//! link is a state of a valid document), and [`NewDoc::unresolved`] lists it.
+//! link is a state of a valid document), and [`NewDoc::unresolved`] lists it. An
+//! entry the build reads as saying nothing (`source=` for an optional field, a link
+//! given no key) is not written: [`NewDoc::entries`] leaves it out, so that the file
+//! holds what the document comes to.
 //!
 //! [`domain::shelf`]: crate::domain::shelf
 
@@ -54,7 +57,7 @@ use crate::domain::shelf::schema::{
 
 use super::plan::{NewRequest, PlannedValue};
 use super::{
-    Candidate, DocProblem, DocReading, Judged, KeyIndex, RawValue, Shelf, ask_of,
+    Candidate, DocProblem, DocReading, Judged, KeyIndex, RawValue, Shelf, Written, ask_of,
     resolve_artifacts, resolve_links,
 };
 
@@ -247,7 +250,9 @@ impl NewDoc {
         &self.doc
     }
 
-    /// Every entry of the front matter to write, `id` and `key` included.
+    /// Every entry of the front matter to write, `id` and `key` included: the ones the
+    /// request gave, but those the build read as saying nothing (a field written
+    /// empty, a link with no key), which the document is the same without.
     pub fn entries(&self) -> &BTreeMap<String, RawValue> {
         &self.entries
     }
@@ -588,6 +593,10 @@ impl Shelf {
             } => {
                 let links = resolve_links(index, links);
                 let artifact_links = resolve_artifacts(artifacts, artifact_links);
+                // What the build read as nothing the file need not hold: the document
+                // is the same without it, so the file is written without it. Told by
+                // the build's own reader of an entry (`Written::of`), not judged here.
+                entries.retain(|_, raw| Written::of(Some(raw)) != Written::Nothing);
                 Ok(NewDoc {
                     doc: Doc::new(draft, links, artifact_links),
                     entries,

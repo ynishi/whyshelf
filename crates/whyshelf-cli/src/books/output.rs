@@ -440,8 +440,8 @@ pub enum KeyGrammarOut {
 pub struct MapFieldOut {
     /// The name.
     pub name: String,
-    /// The type as the declaration writes it: `text`, `integer`, `bool`, `list` or
-    /// `enum`.
+    /// The type as the declaration writes it: `text`, `line`, `integer`, `bool`,
+    /// `list` or `enum`.
     #[serde(rename = "type")]
     pub ty: &'static str,
     /// The words of an `enum`, sorted, not in the order written: the model keeps
@@ -3897,12 +3897,16 @@ fn upstream_status(status: &UpstreamStatus) -> &'static str {
 
 fn field(value: &FieldValue) -> Value {
     match value {
-        FieldValue::Text(s) => Value::String(s.clone()),
+        FieldValue::Text(s) => Value::String(s.as_str().to_owned()),
+        FieldValue::Line(s) => Value::String(s.as_str().to_owned()),
         FieldValue::Integer(n) => Value::from(*n),
         FieldValue::Bool(b) => Value::Bool(*b),
-        FieldValue::TextList(items) => {
-            Value::Array(items.iter().cloned().map(Value::String).collect())
-        }
+        FieldValue::TextList(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| Value::String(item.as_str().to_owned()))
+                .collect(),
+        ),
         FieldValue::Enum(word) => Value::String(word.as_str().to_owned()),
     }
 }

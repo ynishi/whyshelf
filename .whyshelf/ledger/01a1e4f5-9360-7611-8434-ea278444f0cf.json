@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7a2344e42d27e0a4a5a2f097566b8f3042b5d86b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:88e9aa3646b16d953aca95766b1a0ffd6b8ddc575bd0d10fa8e9f5f70ac7444a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794842658803,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4181d40e89264f003a05072849315f2bbfe3750b",
+      "hash": "sha256:7eadac6a9ad1e3958244c3a3864969fa9b52cd3d3c7b78fb6d8080d20c921193",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "66"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb06-d455-710f-8a4e-5bd7fa7cd3c8"
+    }
+  ],
+  "id": "01a1e4f5-9360-7611-8434-ea278444f0cf",
+  "kind": "decision",
+  "reason": "Issue #128: a written value that says nothing is no value; blank list items are problems; the line type; reviewed design, code review and arch rules; tests pass",
+  "revision": "32b7b248d275c8d7221c292f9ac5fb91fba2fb0a",
+  "seen": "sha256:bec2db8e9dae2fdd83d15b27cc6fef30586b6b18cec5ddeeb614696418512d4f",
+  "seen_address": "e961eec29c1b9474cbbea0c6050e7974c366759a",
+  "subject": "01a1cb06-d737-7530-9290-115fa03aad66",
+  "v": 1,
+  "verb": "approve"
+}

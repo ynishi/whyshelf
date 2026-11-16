@@ -26,14 +26,17 @@ fn problems(answer: &serde_json::Value, file: &str) -> Vec<String> {
 
 #[test]
 fn every_value_a_front_matter_does_not_hold_is_told() {
-    let note = "---\nid: \"01a1c4f0-0000-7000-8000-000000000001\"\nkey: \"N-1\"\ntitle: \"A note\"\nbig: 9223372036854775808\nempty:\ntags:\n  - a: b\n---\nThe body.\n";
+    let note = "---\nid: \"01a1c4f0-0000-7000-8000-000000000001\"\nkey: \"N-1\"\ntitle: \"A note\"\nbig: 9223372036854775808\nratio: 1.5\ntags:\n  - a: b\n---\nThe body.\n";
     let project = Project::with("every-value", BOOKS, note);
     let answer = json(&project.run(&["check"]));
     let told = problems(&answer, "notes/N-1.md");
     assert_eq!(told.len(), 3, "{told:#?}");
     for (key, kind) in [
         ("big", "a whole number above the largest one"),
-        ("empty", "no value"),
+        (
+            "ratio",
+            "a number written with a decimal point or an exponent",
+        ),
         ("tags", "a list with an item that is a mapping"),
     ] {
         assert!(

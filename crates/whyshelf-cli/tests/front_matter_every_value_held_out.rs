@@ -50,7 +50,7 @@ fn a_number_beyond_the_parser_is_told_beside_another_value() {
     let project = Project::with(
         "held-huge",
         BOOKS,
-        &note("huge: 99999999999999999999999\nempty:\n"),
+        &note("huge: 99999999999999999999999\nratio: 1.5\n"),
     );
     let told = problems(&json(&project.run(&["check"])), "notes/N-1.md");
     assert_eq!(told.len(), 2, "{told:#?}");
@@ -60,7 +60,8 @@ fn a_number_beyond_the_parser_is_told_beside_another_value() {
         "{told:#?}"
     );
     assert!(
-        told.iter().any(|p| p.contains("`empty` is no value")),
+        told.iter()
+            .any(|p| p.contains("`ratio` is a number written with a decimal point")),
         "{told:#?}"
     );
     assert!(
@@ -90,11 +91,14 @@ fn one_value_is_told_once_and_a_held_value_not_at_all() {
     let project = Project::with(
         "held-one",
         BOOKS,
-        &note("count: 9223372036854775807\nempty:\n"),
+        &note("count: 9223372036854775807\nratio: 1.5\n"),
     );
     let told = problems(&json(&project.run(&["check"])), "notes/N-1.md");
     assert_eq!(told.len(), 1, "{told:#?}");
-    assert!(told[0].contains("`empty` is no value"), "{told:#?}");
+    assert!(
+        told[0].contains("`ratio` is a number written with a decimal point"),
+        "{told:#?}"
+    );
 }
 
 #[test]
@@ -102,7 +106,7 @@ fn fmt_tells_every_value_of_a_file_it_leaves_alone() {
     let project = Project::with(
         "held-fmt",
         BOOKS,
-        &note("big: 9223372036854775808\nempty:\n"),
+        &note("big: 9223372036854775808\nratio: 1.5\n"),
     );
     let answer = json(&project.run(&["fmt", "--check"]));
     let left = answer["left_alone"].as_array().expect("left_alone");
@@ -114,5 +118,5 @@ fn fmt_tells_every_value_of_a_file_it_leaves_alone() {
         .expect("a detail")
         .to_owned();
     assert!(detail.contains("`big`"), "{detail}");
-    assert!(detail.contains("`empty`"), "{detail}");
+    assert!(detail.contains("`ratio`"), "{detail}");
 }

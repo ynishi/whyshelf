@@ -19,7 +19,7 @@ key = { prefix = "F" }      # F-1, F-2, ...
 description = "what was seen: a fault, a report, a measure"
 [[book.field]]
 name = "title"
-type = "text"
+type = "line"
 required = true
 [[book.field]]
 name = "source"             # where it was seen
@@ -32,7 +32,7 @@ key = { prefix = "REQ" }
 description = "what is needed, and why"
 [[book.field]]
 name = "title"
-type = "text"
+type = "line"
 required = true
 [[book.link]]
 name = "grounds"            # informs: a finding fixed and retired must not break what it grounded
@@ -52,7 +52,7 @@ key = { prefix = "DEC" }
 description = "how it is met, and what was rejected"
 [[book.field]]
 name = "title"
-type = "text"
+type = "line"
 required = true
 [[book.field]]
 name = "rejected"           # the ways not taken
@@ -76,7 +76,7 @@ key = { prefix = "V" }
 description = "how a decision is checked"
 [[book.field]]
 name = "title"
-type = "text"
+type = "line"
 required = true
 [[book.field]]
 name = "method"

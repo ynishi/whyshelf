@@ -47,7 +47,7 @@ use std::collections::btree_map::Entry;
 
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
+use crate::domain::nonempty::{NonBlank, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::{
     LinkItem, NewDoc, NewPlan, NewRequest, PlanAfterTaken, PlanProblem, PlannedValue, RawValue,
@@ -66,6 +66,10 @@ use super::ports::{ArtifactSource, Creation, DocWrite, IdSource, ShelfPort, Shel
 /// [`Text`](Self::Text), one that reads typed values (a JSON line) the others.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryInput {
+    /// No value, as a reader of a document gave it (`key:`, `null`): given as it was
+    /// read, with no meaning of its own, so that the domain decides what it comes to
+    /// (an entry that says nothing, which `new` does not write).
+    Null,
     /// A text, read by the type the book declares for the entry: as typed on a
     /// command line (`a,b` is a list for a list field or a link, `true` a truth
     /// value, `3` a whole number).
@@ -109,7 +113,8 @@ pub struct NewDocRequest {
     /// Items of a list field or a link, `name` and one item each, as typed (commas
     /// included, white space around it left out), in order: each is appended after
     /// the items of the entry of that name, if any. An item for a field that is no
-    /// list, and an item of nothing, are refused.
+    /// list is refused; an item of nothing is given to the domain like any other,
+    /// which refuses it as an item that says nothing.
     pub items: Vec<(String, String)>,
     /// The body.
     pub body: String,
@@ -148,7 +153,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// key, entries a book refuses, a name that stands for no row, and every other
     /// refusal of [`Shelf::plan_new`] is an error that lists every row refused
     /// ([`ShelfError::Plan`]), and nothing is written. A fault of the request itself
-    /// (an entry given twice, an item for no list, an empty item or name, a name given
+    /// (an entry given twice, an item for no list, an empty name, a name given
     /// where no document is linked) is told for every row that has one
     /// ([`ShelfError::Rows`] for two or more, else the row's own error), and the run
     /// is not planned. A file is never replaced.
@@ -421,12 +426,10 @@ fn typed_entries(
         ) {
             return Err(ShelfError::ItemOfNoList { name });
         }
-        // As an item split from `a, b` is: white space around it does not count,
-        // and an item of nothing is no item.
+        // As an item split from `a, b` is: white space around it does not count. An
+        // item of nothing is not judged here: it goes on to the domain, which says
+        // an item that says nothing is a problem of the document.
         let item = item.trim().to_owned();
-        if item.is_empty() {
-            return Err(ShelfError::EmptyItem { name });
-        }
         let first = if kind == EntryKind::DocLink {
             PlannedValue::Link(vec![LinkItem::Key(item.clone())])
         } else {
@@ -467,7 +470,7 @@ enum EntryKind {
     Bool,
     /// A whole number.
     Integer,
-    /// A text or an enum, a name the book does not declare, or a book the shelf does
+    /// A text, a line or an enum, a name the book does not declare, or a book the shelf does
     /// not know (`book` is `None`): all read as a text.
     Text,
 }
@@ -487,7 +490,8 @@ fn entry_kind(book: Option<&BookSchema>, name: &str) -> EntryKind {
         Some(FieldType::Scalar(ScalarType::TextList)) => EntryKind::TextList,
         Some(FieldType::Scalar(ScalarType::Bool)) => EntryKind::Bool,
         Some(FieldType::Scalar(ScalarType::Integer)) => EntryKind::Integer,
-        Some(FieldType::Scalar(ScalarType::Text) | FieldType::Enum(_)) | None => EntryKind::Text,
+        Some(FieldType::Scalar(ScalarType::Text | ScalarType::Line) | FieldType::Enum(_))
+        | None => EntryKind::Text,
     }
 }
 
@@ -496,11 +500,14 @@ fn entry_kind(book: Option<&BookSchema>, name: &str) -> EntryKind {
 /// text): the one reading of an input.
 ///
 /// - [`EntryInput::Text`] is read as a person typed it ([`typed`]).
+/// - [`EntryInput::Null`] is kept as it is ([`RawValue::Null`]): what it says is the
+///   domain's to tell.
 /// - [`EntryInput::Bool`] and [`EntryInput::Integer`] are kept as they are.
 /// - [`EntryInput::Items`] are the items of a link to documents, each a key or the
 ///   name of a row; for any other entry they are a list of texts, and a name among
 ///   them is [`ShelfError::NameOutsideLink`]. A text is trimmed as an item of
-///   `name+=text` is, and one of nothing is [`ShelfError::EmptyItem`].
+///   `name+=text` is; one of nothing goes on to the domain (an item that says
+///   nothing is its problem), and a name of nothing is [`ShelfError::EmptyItem`].
 // The error is read once and ends the use case; it is not a hot path.
 #[allow(clippy::result_large_err)]
 pub(super) fn planned_value(
@@ -510,30 +517,25 @@ pub(super) fn planned_value(
     input: EntryInput,
 ) -> Result<PlannedValue, ShelfError> {
     match input {
+        EntryInput::Null => Ok(PlannedValue::Raw(RawValue::Null)),
         EntryInput::Bool(b) => Ok(PlannedValue::Raw(RawValue::Bool(b))),
         EntryInput::Integer(n) => Ok(PlannedValue::Raw(RawValue::Integer(n))),
         EntryInput::Text(text) => Ok(typed(entry_kind(book, name), &text)),
         EntryInput::Items(items) => {
-            let empty = || ShelfError::EmptyItem {
-                name: name.to_owned(),
-            };
             // As an item of `name+=text` is: white space around a text does not
-            // count, and a text of nothing is no item.
-            let text_of = |text: String| {
-                let text = text.trim();
-                if text.is_empty() {
-                    Err(empty())
-                } else {
-                    Ok(text.to_owned())
-                }
-            };
+            // count.
+            let text_of = |text: String| text.trim().to_owned();
             if entry_kind(book, name) == EntryKind::DocLink {
                 let mut linked = Vec::with_capacity(items.len());
                 for item in items {
                     linked.push(match item {
-                        ItemInput::Text(key) => LinkItem::Key(text_of(key)?),
+                        ItemInput::Text(key) => LinkItem::Key(text_of(key)),
                         ItemInput::Named(named) => {
-                            LinkItem::Named(RunName::new(named).map_err(|_| empty())?)
+                            LinkItem::Named(RunName::new(named).map_err(|_| {
+                                ShelfError::EmptyItem {
+                                    name: name.to_owned(),
+                                }
+                            })?)
                         }
                     });
                 }
@@ -542,7 +544,7 @@ pub(super) fn planned_value(
             let mut texts = Vec::with_capacity(items.len());
             for item in items {
                 match item {
-                    ItemInput::Text(text) => texts.push(text_of(text)?),
+                    ItemInput::Text(text) => texts.push(text_of(text)),
                     ItemInput::Named(_) => {
                         return Err(ShelfError::NameOutsideLink {
                             row,
@@ -560,7 +562,12 @@ pub(super) fn planned_value(
 /// not fit.
 fn typed(kind: EntryKind, text: &str) -> PlannedValue {
     let as_text = || PlannedValue::Raw(RawValue::Text(text.to_owned()));
-    let read = |scalar| match FieldValue::read(&FieldType::Scalar(scalar), text) {
+    // A text of nothing is no truth value or number: it stays a text, and the domain
+    // tells that it says nothing.
+    let read = |scalar| match NonBlank::new(text)
+        .ok()
+        .and_then(|said| FieldValue::read(&FieldType::Scalar(scalar), &said))
+    {
         Some(FieldValue::Bool(b)) => PlannedValue::Raw(RawValue::Bool(b)),
         Some(FieldValue::Integer(n)) => PlannedValue::Raw(RawValue::Integer(n)),
         _ => as_text(),

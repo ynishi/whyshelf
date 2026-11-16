@@ -429,6 +429,14 @@ fn schema_has_the_answer_and_the_shape_of_a_line() {
     assert_eq!(line["additionalProperties"], false);
     // Only the book is needed: a line with no entries has none.
     assert_eq!(line["required"], json!(["book"]));
+    // An entry may be `null`: no value, as `key:` is in a document.
+    let kinds: Vec<&Value> = line["$defs"]["EntryIn"]["anyOf"]
+        .as_array()
+        .expect("the shapes of an entry")
+        .iter()
+        .map(|shape| &shape["type"])
+        .collect();
+    assert!(kinds.contains(&&json!("null")), "{kinds:?}");
     // The answers `new` and `init` give are told as before.
     assert!(answer["outputs"]["new"].is_object());
     assert!(answer["outputs"]["init"].is_object());

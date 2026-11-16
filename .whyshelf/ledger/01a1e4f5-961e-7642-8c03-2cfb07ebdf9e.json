@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "32edbb758d9ffe6a9d756e53cebf944a0f4ddd80",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5875f926aaaaf51f04b192f22071659d3499df89ed5982a65aa8bb6aaca230b1",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f4f162c706d71f3a378f83d931586f9d72faa8b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a80d0deb30ab139e0eff380315e13f1769e3aaea537d95006e5b5276de508eb",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "147a68063a7cfecb72f3e0195957af6062a33e32",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:55d5c1b57b0b907d453465655418a636089696cd6b5647553576233e2d53019c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794842658803,
+  "expires": null,
+  "frame": [
+    {
+      "address": "78d274ba73a348933ca997fdac74b14d99372799",
+      "hash": "sha256:af41c43a0e80b1188cca7939d34ce86874bfb6b296e4304a36bf28c7551d6c70",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a1e4f5-961e-7642-8c03-2cfb07ebdf9e",
+  "kind": "decision",
+  "reason": "Issue #128: a written value that says nothing is no value; blank list items are problems; the line type; reviewed design, code review and arch rules; tests pass",
+  "revision": "32b7b248d275c8d7221c292f9ac5fb91fba2fb0a",
+  "seen": "sha256:f45b99cb2ad0d8e32a212023e18a7053e3ce1d418cde9b46de61272dea4d41d8",
+  "seen_address": "ba3d6a68dc7a5d6e94896d18bf9931e1fbeed05f",
+  "subject": "01a1da61-c7c5-7789-ac4f-8edd5fa71741",
+  "v": 1,
+  "verb": "approve"
+}

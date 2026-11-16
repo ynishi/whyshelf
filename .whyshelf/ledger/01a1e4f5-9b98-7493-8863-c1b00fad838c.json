@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794842658803,
+  "expires": null,
+  "frame": [],
+  "id": "01a1e4f5-9b98-7493-8863-c1b00fad838c",
+  "kind": "decision",
+  "reason": "Issue #128: a written value that says nothing is no value; blank list items are problems; the line type; reviewed design, code review and arch rules; tests pass",
+  "revision": "32b7b248d275c8d7221c292f9ac5fb91fba2fb0a",
+  "seen": "sha256:7d4706c8688f0ec3d9bf5016e30ccb245605c01a1e7e98af990d49ebe774ae5c",
+  "seen_address": "583ad32dad58f2589b1a32488542483f8917392f",
+  "subject": "01a1e4f4-9efa-7631-ad90-d0ecd03af7ef",
+  "v": 1,
+  "verb": "approve"
+}

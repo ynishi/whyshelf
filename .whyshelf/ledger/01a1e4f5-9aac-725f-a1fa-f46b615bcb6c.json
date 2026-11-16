@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b3cc61908f55a21a17d41a936f04176c913f2992",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a0b43f1e5f8162903f9b18e76d84b202f9e7540257c73a365f33ee57ae9ee90e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "db21b3debdd4e2df3df16a6c4a47f7180b83fdf2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:36e188269c4ffb34945bee5df60ecfb316495e5b83f30c8b5cbe4506aed3ebe7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/new_many.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794842658803,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c65e529e016a04b0b291c0a11d55b104fa9510e7",
+      "hash": "sha256:19b1ff25b9f37280e526044a5cbdff402611f42799755b2fba599695b7d1cbf1",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "75"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e3a5-6ee3-7525-839f-9b046ea44760"
+    }
+  ],
+  "id": "01a1e4f5-9aac-725f-a1fa-f46b615bcb6c",
+  "kind": "decision",
+  "reason": "Issue #128: a written value that says nothing is no value; blank list items are problems; the line type; reviewed design, code review and arch rules; tests pass",
+  "revision": "32b7b248d275c8d7221c292f9ac5fb91fba2fb0a",
+  "seen": "sha256:3967a10cffd8c1c68164f7d900e78a835ed1c477648b610a5794d915e6fb8af0",
+  "seen_address": "73faf003c78d9b17d0d5e3f524c926b90da42860",
+  "subject": "01a1e3b3-06f7-72bf-8831-ebc6ff84bf06",
+  "v": 1,
+  "verb": "approve"
+}

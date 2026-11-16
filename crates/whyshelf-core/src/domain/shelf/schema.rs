@@ -612,8 +612,10 @@ pub(super) fn parse_tail(text: &str) -> Result<KeyTail, KeyProblem> {
 /// or a meaning calls `word` and builds no word of its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScalarType {
-    /// Free text.
+    /// Free text, of any number of lines.
     Text,
+    /// A text of one line: no line break, and not blank.
+    Line,
     /// A whole number.
     Integer,
     /// A truth value.
@@ -624,13 +626,20 @@ pub enum ScalarType {
 
 impl ScalarType {
     /// Every scalar type, in the order a problem lists their words.
-    pub const ALL: [Self; 4] = [Self::Text, Self::Integer, Self::Bool, Self::TextList];
+    pub const ALL: [Self; 5] = [
+        Self::Text,
+        Self::Line,
+        Self::Integer,
+        Self::Bool,
+        Self::TextList,
+    ];
 
-    /// The word of the type in a declaration and in the answers: `text`, `integer`,
-    /// `bool` or `list`.
+    /// The word of the type in a declaration and in the answers: `text`, `line`,
+    /// `integer`, `bool` or `list`.
     pub fn word(self) -> &'static str {
         match self {
             Self::Text => "text",
+            Self::Line => "line",
             Self::Integer => "integer",
             Self::Bool => "bool",
             Self::TextList => "list",
@@ -666,11 +675,13 @@ impl FieldType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldPresence {
     /// A document without the field, or whose value says nothing, is invalid. A
-    /// `text` says something when it is not empty or white space only, a `list`
-    /// when it has at least one item; an enum, integer or bool written is a value.
-    /// The required text of a valid document is therefore never blank.
+    /// value says nothing when it is no value (`key:`, `null`), a text that is empty
+    /// or white space only (of any type), or a list with no item; an enum, integer
+    /// or bool written says something. The required text of a valid document is
+    /// therefore never blank.
     Required,
-    /// The field may be left out.
+    /// The field may be left out, and a value that says nothing (as told at
+    /// [`FieldPresence::Required`]) is read as the field left out.
     Optional,
 }
 

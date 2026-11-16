@@ -3,8 +3,7 @@
 
 use super::{UnheldItem, UnheldKind, UnheldValue};
 
-const KINDS: [UnheldKind; 12] = [
-    UnheldKind::Null,
+const KINDS: [UnheldKind; 11] = [
     UnheldKind::Float,
     UnheldKind::TooLarge,
     UnheldKind::TooSmall,
@@ -52,7 +51,6 @@ fn the_usual_causes_say_how_to_write_the_value() {
     assert!(hint(UnheldKind::Item(UnheldItem::Null)).contains("take it out"));
     assert!(hint(UnheldKind::Float).contains("digits only"));
     assert!(hint(UnheldKind::TooLarge).contains("quotes"));
-    assert!(hint(UnheldKind::Null).contains("leave the key out"));
     assert!(hint(UnheldKind::Mapping).contains("flat"));
     assert_eq!(hint(UnheldKind::Tagged), "");
 }

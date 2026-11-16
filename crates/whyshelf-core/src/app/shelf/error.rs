@@ -228,8 +228,11 @@ pub enum ShelfError {
         /// The entry.
         name: String,
     },
-    /// An item (`name+=text`) with nothing in it but white space.
-    #[error("the item given for `{name}` is empty")]
+    /// A name of a row of the run, given as an item of a link, with nothing in it
+    /// but white space. (An item that is a text of nothing is not this: it is a
+    /// [`DocProblem::ItemBlank`](crate::domain::shelf::build::DocProblem::ItemBlank)
+    /// of the document, which the domain tells.)
+    #[error("the name given as an item of `{name}` is empty")]
     EmptyItem {
         /// The entry.
         name: String,

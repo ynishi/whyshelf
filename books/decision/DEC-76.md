@@ -1,0 +1,12 @@
+---
+id: "01a1e4f4-a1a7-70a3-a224-a7b68ad2e076"
+key: "DEC-76"
+issues: ["#128"]
+rejected: ["Check only list items and leave the rest: a null would still make a document invalid where an empty text is a value", "Make every empty or blank value a problem, optional ones included: projects that write an optional field empty would turn invalid, as DEC-72 found", "Write the current behaviour down and change nothing: the forms of nothing would keep disagreeing, and new and check with them", "Let fmt remove the entries that say nothing: fmt writes only a text that reads back as the same entries, and removing one changes them; left to a follow-up", "Trim the white space around a text when it is read: the file stays what is true, as the body does; only a text of white space alone is nothing"]
+related: ["DEC-72", "DEC-73"]
+revisit: "When fmt may remove an entry that says nothing, or a filter must ask for a field that has no value"
+rustdoc: ["whyshelf_core::domain::shelf::doc::FieldValue", "whyshelf_core::domain::nonempty::OneLine", "whyshelf_core::domain::shelf::build::DocProblem", "whyshelf_core::domain::shelf::build::RawValue", "whyshelf_core::domain::shelf::schema::ScalarType"]
+serves: ["REQ-8"]
+title: "A written value that says nothing is no value, whatever its form; a list item that says nothing is a problem; a book can declare a text of one line"
+---
+One rule of the domain reads every written entry once: left out, written with nothing in it (a null, a text of white space only, a list with no item, of any declared type), or a value. An optional field with nothing in it is as if it were left out, for status, filters and the hash; a required one is missing when left out and empty when written with nothing, as DEC-72 decided; an id or a key written with nothing is empty, not missing. new does not write an entry that says nothing. An item of a list (a field or a link) that says nothing is a problem, every one of them, beside the other problems of the list. A value that says something keeps the proof in its type: a text is not blank, a list has an item and none is blank. A field of the type line is one line: a line break, the one a block scalar leaves at the end included, is a problem, and init declares the title so; a line hashes as a text, so making a text a line changes no approval. A filter on an empty value is a request error. The reader of the file says a value is a null and gives it no meaning.

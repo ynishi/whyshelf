@@ -26,7 +26,7 @@ use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::TwoOrMore;
+use crate::domain::nonempty::{NonBlank, NonEmptyVec, OneLine, TwoOrMore};
 
 use super::artifact::{Artifact, ArtifactKey, ArtifactState, Untold};
 use super::schema::{
@@ -53,16 +53,23 @@ impl fmt::Display for DocKey {
 }
 
 /// The value of a field, checked against the type the book declares for it.
+///
+/// A value says something: a document that writes nothing for a field (no entry, a
+/// null, a text that is blank, a list with no item) has no value of it, so a text is
+/// never blank and a list is never empty here, and a reader of a value does not check
+/// that again.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldValue {
-    /// Free text.
-    Text(String),
+    /// Free text, of any number of lines, not blank.
+    Text(NonBlank),
+    /// A text of one line, not blank (a field declared `line`).
+    Line(OneLine),
     /// A whole number.
     Integer(i64),
     /// A truth value.
     Bool(bool),
-    /// A list of texts.
-    TextList(Vec<String>),
+    /// A list of texts, with at least one item, none of them blank.
+    TextList(NonEmptyVec<NonBlank>),
     /// A word of the enum the book declares.
     Enum(FieldWord),
 }
@@ -70,24 +77,27 @@ pub enum FieldValue {
 impl FieldValue {
     /// One text as the value of a field of the type `ty`, or none when it is not
     /// one: a whole number for `Integer`, `true` or `false` for `Bool`, a listed word
-    /// for `Enum`, the text itself for `Text`. A `TextList` takes no single text (its
-    /// items are read one by one), so it is none.
+    /// for `Enum`, the text itself for `Text`, the text itself for `Line` when it has
+    /// no line break ([`OneLine::new`]). A `TextList` takes no single text (its items
+    /// are read one by one), so it is none.
     ///
     /// The one place a text is read as the value of a type: a caller that must tell
     /// a text of a type from one that is not (the typing of what a person gave, the
     /// check of an enum word, the filter of `status`) asks here and decides only
-    /// what a miss means to it.
-    pub fn read(ty: &FieldType, text: &str) -> Option<FieldValue> {
+    /// what a miss means to it. It never judges whether the text says something: the
+    /// text is a [`NonBlank`] already, which whoever has the text made once.
+    pub fn read(ty: &FieldType, text: &NonBlank) -> Option<FieldValue> {
         match ty {
-            FieldType::Scalar(ScalarType::Text) => Some(Self::Text(text.to_owned())),
-            FieldType::Scalar(ScalarType::Integer) => text.parse().ok().map(Self::Integer),
-            FieldType::Scalar(ScalarType::Bool) => match text {
+            FieldType::Scalar(ScalarType::Text) => Some(Self::Text(text.clone())),
+            FieldType::Scalar(ScalarType::Line) => OneLine::new(text.as_str()).ok().map(Self::Line),
+            FieldType::Scalar(ScalarType::Integer) => text.as_str().parse().ok().map(Self::Integer),
+            FieldType::Scalar(ScalarType::Bool) => match text.as_str() {
                 "true" => Some(Self::Bool(true)),
                 "false" => Some(Self::Bool(false)),
                 _ => None,
             },
             FieldType::Scalar(ScalarType::TextList) => None,
-            FieldType::Enum(words) => FieldWord::new(text)
+            FieldType::Enum(words) => FieldWord::new(text.as_str())
                 .ok()
                 .filter(|word| words.contains(word))
                 .map(Self::Enum),
@@ -95,10 +105,13 @@ impl FieldValue {
     }
 
     /// The canonical form of a value, tagged with its type, so that a field that
-    /// changes type changes a hash even when the text stays.
+    /// changes type changes a hash even when the text stays. A `Line` is tagged
+    /// `text`: the declaration became stricter, the content did not, so changing a
+    /// field from `text` to `line` does not change the hash of a document.
     pub(super) fn to_canon(&self) -> Canon {
         let (ty, value) = match self {
             Self::Text(s) => ("text", Canon::str(s.as_str())),
+            Self::Line(s) => ("text", Canon::str(s.as_str())),
             Self::Integer(n) => ("integer", Canon::Int(*n)),
             Self::Bool(b) => ("bool", Canon::Bool(*b)),
             Self::TextList(items) => (
@@ -556,7 +569,7 @@ impl Doc {
 mod tests {
     use std::collections::BTreeSet;
 
-    use crate::domain::nonempty::NonEmptySet;
+    use crate::domain::nonempty::{NonBlank, NonEmptySet, OneLine};
 
     use super::{FieldType, FieldValue, FieldWord, ScalarType};
 
@@ -569,30 +582,53 @@ mod tests {
         FieldType::Enum(NonEmptySet::from_set(words).expect("not empty"))
     }
 
+    fn said(text: &str) -> NonBlank {
+        NonBlank::new(text).expect("a text that says something")
+    }
+
+    fn read(ty: &FieldType, text: &str) -> Option<FieldValue> {
+        FieldValue::read(ty, &said(text))
+    }
+
     #[test]
-    fn text_is_read_as_itself() {
-        for text in ["", "a b", "12", "true"] {
+    fn text_is_read_as_itself_with_its_line_breaks_and_its_spaces() {
+        for text in ["a b", "12", "true", " a\nb ", "a\n"] {
             assert_eq!(
-                FieldValue::read(&FieldType::Scalar(ScalarType::Text), text),
-                Some(FieldValue::Text(text.to_owned())),
+                read(&FieldType::Scalar(ScalarType::Text), text),
+                Some(FieldValue::Text(said(text))),
                 "{text:?}"
             );
         }
     }
 
     #[test]
+    fn a_line_is_read_as_itself_unless_it_has_a_line_break() {
+        let line = FieldType::Scalar(ScalarType::Line);
+        for text in ["a b", " a ", "12"] {
+            assert_eq!(
+                read(&line, text),
+                Some(FieldValue::Line(OneLine::new(text).expect("one line"))),
+                "{text:?}"
+            );
+        }
+        for text in ["a\nb", "a\n", "a\r"] {
+            assert_eq!(read(&line, text), None, "{text:?}");
+        }
+    }
+
+    #[test]
     fn an_integer_is_a_whole_number() {
         assert_eq!(
-            FieldValue::read(&FieldType::Scalar(ScalarType::Integer), "12"),
+            read(&FieldType::Scalar(ScalarType::Integer), "12"),
             Some(FieldValue::Integer(12))
         );
         assert_eq!(
-            FieldValue::read(&FieldType::Scalar(ScalarType::Integer), "-3"),
+            read(&FieldType::Scalar(ScalarType::Integer), "-3"),
             Some(FieldValue::Integer(-3))
         );
-        for text in ["x", "1.5", "", " 1", "#41"] {
+        for text in ["x", "1.5", " 1", "#41"] {
             assert_eq!(
-                FieldValue::read(&FieldType::Scalar(ScalarType::Integer), text),
+                read(&FieldType::Scalar(ScalarType::Integer), text),
                 None,
                 "{text:?}"
             );
@@ -602,16 +638,16 @@ mod tests {
     #[test]
     fn a_bool_is_true_or_false() {
         assert_eq!(
-            FieldValue::read(&FieldType::Scalar(ScalarType::Bool), "true"),
+            read(&FieldType::Scalar(ScalarType::Bool), "true"),
             Some(FieldValue::Bool(true))
         );
         assert_eq!(
-            FieldValue::read(&FieldType::Scalar(ScalarType::Bool), "false"),
+            read(&FieldType::Scalar(ScalarType::Bool), "false"),
             Some(FieldValue::Bool(false))
         );
-        for text in ["yes", "True", "1", ""] {
+        for text in ["yes", "True", "1"] {
             assert_eq!(
-                FieldValue::read(&FieldType::Scalar(ScalarType::Bool), text),
+                read(&FieldType::Scalar(ScalarType::Bool), text),
                 None,
                 "{text:?}"
             );
@@ -620,24 +656,48 @@ mod tests {
 
     #[test]
     fn an_enum_takes_only_its_words() {
-        assert_eq!(
-            FieldValue::read(&colours(), "red"),
-            Some(FieldValue::Enum(word("red")))
-        );
-        for text in ["blue", "Red", "", "not a word"] {
-            assert_eq!(FieldValue::read(&colours(), text), None, "{text:?}");
+        assert_eq!(read(&colours(), "red"), Some(FieldValue::Enum(word("red"))));
+        for text in ["blue", "Red", "not a word"] {
+            assert_eq!(read(&colours(), text), None, "{text:?}");
         }
     }
 
     #[test]
     fn a_text_list_takes_no_single_text() {
-        for text in ["a", "a, b", ""] {
+        for text in ["a", "a, b"] {
             assert_eq!(
-                FieldValue::read(&FieldType::Scalar(ScalarType::TextList), text),
+                read(&FieldType::Scalar(ScalarType::TextList), text),
                 None,
                 "{text:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_canonical_form_of_a_value_is_what_it_was_before_a_value_said_something() {
+        use crate::domain::canon::Canon;
+        use crate::domain::nonempty::NonEmptyVec;
+
+        let tagged =
+            |ty: &str, value: Canon| Canon::map([("type", Canon::str(ty)), ("value", value)]);
+        assert_eq!(
+            FieldValue::Text(said(" a\nb ")).to_canon(),
+            tagged("text", Canon::str(" a\nb "))
+        );
+        assert_eq!(
+            FieldValue::TextList(NonEmptyVec::new(said("a"), vec![said(" b ")])).to_canon(),
+            tagged(
+                "text-list",
+                Canon::list([Canon::str("a"), Canon::str(" b ")])
+            )
+        );
+    }
+
+    #[test]
+    fn a_line_and_a_text_of_the_same_value_have_the_same_canonical_form() {
+        let text = FieldValue::Text(said("same"));
+        let line = FieldValue::Line(OneLine::new("same").expect("one line"));
+        assert_eq!(text.to_canon(), line.to_canon());
     }
 }
 

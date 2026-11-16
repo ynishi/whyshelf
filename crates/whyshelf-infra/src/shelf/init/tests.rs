@@ -749,6 +749,53 @@ fn a_template_of_a_document_that_cannot_be_read_is_an_error() {
     assert!(made.entries.contains(&("yes".to_owned(), text("true"))));
 }
 
+#[test]
+fn a_template_that_writes_no_value_gives_it_as_it_was_read_and_decides_nothing() {
+    let made = doc_request(
+        1,
+        "finding",
+        "F-1.md",
+        "---\nkey: \"F-1\"\nsource:\nother: null\nnone: \"\"\n---\n",
+    )
+    .unwrap();
+    assert!(
+        made.entries
+            .contains(&("source".to_owned(), EntryInput::Null))
+    );
+    assert!(
+        made.entries
+            .contains(&("other".to_owned(), EntryInput::Null))
+    );
+    // A text that is empty is a text, given as it is.
+    assert!(made.entries.contains(&("none".to_owned(), text(""))));
+}
+
+#[test]
+fn the_title_of_every_template_is_a_line() {
+    for (name, text) in [
+        ("minimal", MINIMAL),
+        ("sample", SAMPLE),
+        ("experiment", EXPERIMENT),
+        ("qa-first", QA_FIRST),
+    ] {
+        let schema = declared(text);
+        for book in schema.books().values() {
+            let title = book
+                .fields()
+                .get("title")
+                .unwrap_or_else(|| panic!("{name}: the book `{}` declares a title", book.name()));
+            assert_eq!(
+                title.ty,
+                whyshelf_core::domain::shelf::schema::FieldType::Scalar(
+                    whyshelf_core::domain::shelf::schema::ScalarType::Line
+                ),
+                "{name}: {}",
+                book.name()
+            );
+        }
+    }
+}
+
 /// An entry given as a text, as the templates give every scalar.
 fn text(value: &str) -> EntryInput {
     EntryInput::Text(value.to_owned())

@@ -43,12 +43,15 @@
 //!   document that does not write it do not pass. The value is compared by the type
 //!   the book declares: read as that type by [`FieldValue::read`], and equal to the
 //!   document's value; for a list field, the list holds the text as one item (it is
-//!   not split at commas).
+//!   not split at commas). A field a document writes with nothing in it is a field
+//!   it does not write, so there is no condition for it.
 //! - **What fits the declaration** ([`StatusFilter::new`]): every book asked is
-//!   declared, every field is declared by some book, and the value can be read as the
-//!   type of at least one book that declares the field (any text is an item of a list
-//!   field). A book that declares the field with a type the value cannot be read as
-//!   is not an error: its documents do not pass that condition.
+//!   declared, every field is declared by some book, the value is not empty or
+//!   blank ([`FilterProblem::EmptyValue`]: it asks for no value, and a request that
+//!   asks for none is refused, not answered with nothing), and the value can be read
+//!   as the type of at least one book that declares the field (any text is an item
+//!   of a list field). A book that declares the field with a type the value cannot
+//!   be read as is not an error: its documents do not pass that condition.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -56,7 +59,7 @@ use thiserror::Error;
 
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 
 use super::build::{DocState, Shelf};
 use super::doc::{Doc, FieldValue};
@@ -113,7 +116,7 @@ struct Condition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Wanted {
     /// The field is a list: it holds this text as one item.
-    Item(String),
+    Item(NonBlank),
     /// The field is of another type: it is equal to this value.
     Equal(FieldValue),
 }
@@ -122,7 +125,7 @@ impl Wanted {
     /// Whether a value a document wrote is what is wanted.
     fn is_met_by(&self, value: &FieldValue) -> bool {
         match (self, value) {
-            (Self::Item(item), FieldValue::TextList(items)) => items.contains(item),
+            (Self::Item(item), FieldValue::TextList(items)) => items.iter().any(|i| i == item),
             (Self::Equal(want), value) => want == value,
             (Self::Item(_), _) => false,
         }
@@ -149,6 +152,16 @@ pub enum FilterProblem {
         /// The value, as typed.
         value: String,
     },
+    /// The value is empty or blank. A condition says which value a field holds, and a
+    /// field with no value is a field the document does not write, which this filter
+    /// does not ask for.
+    #[error(
+        "the value of the condition on `{field}` is empty: a condition names the value a field holds"
+    )]
+    EmptyValue {
+        /// The field.
+        field: EntryName,
+    },
 }
 
 impl StatusFilter {
@@ -167,16 +180,20 @@ impl StatusFilter {
         for want in &ask.fields {
             let mut declared = false;
             let mut wanted = BTreeMap::new();
+            // The value is made a text that says something once, here: what is read
+            // from it below (an item, an integer, a word) is never asked of nothing.
+            let value = NonBlank::new(want.value.as_str());
             for book in schema.books().values() {
                 let Some(decl) = book.fields().get(&want.field) else {
                     continue;
                 };
                 declared = true;
+                let Ok(value) = &value else {
+                    continue;
+                };
                 let read = match &decl.ty {
-                    FieldType::Scalar(ScalarType::TextList) => {
-                        Some(Wanted::Item(want.value.clone()))
-                    }
-                    ty => FieldValue::read(ty, &want.value).map(Wanted::Equal),
+                    FieldType::Scalar(ScalarType::TextList) => Some(Wanted::Item(value.clone())),
+                    ty => FieldValue::read(ty, value).map(Wanted::Equal),
                 };
                 if let Some(read) = read {
                     wanted.insert(book.name().clone(), read);
@@ -184,6 +201,10 @@ impl StatusFilter {
             }
             if !declared {
                 problems.push(FilterProblem::UnknownField(want.field.clone()));
+            } else if value.is_err() {
+                problems.push(FilterProblem::EmptyValue {
+                    field: want.field.clone(),
+                });
             } else if wanted.is_empty() {
                 problems.push(FilterProblem::ValueNotOfField {
                     field: want.field.clone(),
@@ -756,6 +777,79 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn an_empty_value_is_a_problem_whatever_the_type_of_the_field() {
+        for field in ["topic", "count", "level", "flag", "title"] {
+            for value in ["", "   ", "\t"] {
+                assert_eq!(
+                    problems(StatusFilterAsk {
+                        fields: vec![field_ask(field, value)],
+                        ..ask()
+                    }),
+                    vec![FilterProblem::EmptyValue {
+                        field: EntryName::new(field).expect("a name")
+                    }],
+                    "{field}={value:?}"
+                );
+            }
+        }
+        assert!(
+            FilterProblem::EmptyValue {
+                field: EntryName::new("topic").expect("a name")
+            }
+            .to_string()
+            .contains("`topic`")
+        );
+    }
+
+    #[test]
+    fn an_empty_value_of_a_field_no_book_declares_is_told_as_no_field() {
+        assert_eq!(
+            problems(StatusFilterAsk {
+                fields: vec![field_ask("nothing", "")],
+                ..ask()
+            }),
+            vec![FilterProblem::UnknownField(
+                EntryName::new("nothing").expect("a name")
+            )]
+        );
+    }
+
+    #[test]
+    fn the_item_of_a_list_asked_is_a_text_that_says_something_and_is_found_as_written() {
+        let shelf = shelf_of(vec![
+            dec(1, &[("topic", list(&["a", " b "]))]),
+            dec(2, &[("topic", list(&["c"]))]),
+        ]);
+        for (value, in_one) in [("a", true), (" b ", true), ("b", false), ("c", false)] {
+            let by_item = filter(StatusFilterAsk {
+                fields: vec![field_ask("topic", value)],
+                ..ask()
+            });
+            assert_eq!(admits(&by_item, &shelf, 1, FRESH), in_one, "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_field_written_with_nothing_is_no_value_so_no_condition_holds_for_it() {
+        let shelf = shelf_of(vec![
+            dec(1, &[("topic", list(&[])), ("count", text(""))]),
+            dec(2, &[("topic", RawValue::Null)]),
+        ]);
+        for n in [1, 2] {
+            let by_topic = filter(StatusFilterAsk {
+                fields: vec![field_ask("topic", "a")],
+                ..ask()
+            });
+            let by_count = filter(StatusFilterAsk {
+                fields: vec![field_ask("count", "0")],
+                ..ask()
+            });
+            assert!(!admits(&by_topic, &shelf, n, FRESH));
+            assert!(!admits(&by_count, &shelf, n, FRESH));
+        }
     }
 
     #[test]

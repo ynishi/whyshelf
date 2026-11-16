@@ -82,7 +82,9 @@ fn a_text_the_adapter_says_is_no_name_makes_the_document_invalid() {
 #[test]
 fn a_text_that_is_no_name_makes_the_document_invalid() {
     let too_long = "a".repeat(crate::domain::shelf::artifact::NAME_MAX + 1);
-    let s = shelf(vec![sp_testing(2, &[], &["", &too_long, "a\tb"])]);
+    // An item that says nothing is not a name that is no name: it is an
+    // `ItemBlank`, told by the one reader of items, before any item is read as a name.
+    let s = shelf(vec![sp_testing(2, &[], &[&too_long, "a\tb"])]);
     let DocState::Invalid(files) = s.state_of(docid(2)) else {
         panic!("a text that is no name makes the document invalid");
     };
@@ -99,7 +101,6 @@ fn a_text_that_is_no_name_makes_the_document_invalid() {
     assert_eq!(
         whys,
         [
-            ArtifactNameProblem::Empty,
             ArtifactNameProblem::TooLong {
                 bytes: crate::domain::shelf::artifact::NAME_MAX + 1
             },

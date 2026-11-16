@@ -271,9 +271,50 @@ impl NonBlank {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The text, owned.
+    pub fn into_string(self) -> String {
+        self.0
+    }
 }
 
 impl fmt::Display for NonBlank {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// A text of one line: not empty or only white space (as [`NonBlank`]), and with no
+/// line break (`\n` or `\r`).
+///
+/// What a field declared `line` holds. The text is kept as given, so a value that
+/// begins or ends with spaces keeps them; only a line break, which a `|` block of
+/// YAML leaves at its end, is refused.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OneLine(String);
+
+impl OneLine {
+    /// A text, refused when it is empty or only white space
+    /// ([`ValueError::BlankText`]) or has a line break ([`ValueError::LineBreak`]).
+    /// The one place a text is read as one line.
+    pub fn new(text: impl Into<String>) -> Result<Self, ValueError> {
+        let text = text.into();
+        if NonBlank::is_blank(&text) {
+            Err(ValueError::BlankText)
+        } else if text.contains(['\n', '\r']) {
+            Err(ValueError::LineBreak)
+        } else {
+            Ok(Self(text))
+        }
+    }
+
+    /// The text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for OneLine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
@@ -369,5 +410,16 @@ mod tests {
         assert_eq!(NonBlank::new(""), Err(ValueError::BlankText));
         assert_eq!(NonBlank::new(" \n\t"), Err(ValueError::BlankText));
         assert_eq!(NonBlank::new(" a ").unwrap().as_str(), " a ");
+    }
+
+    #[test]
+    fn one_line_refuses_blank_and_line_breaks_and_keeps_the_text_as_given() {
+        assert_eq!(OneLine::new(""), Err(ValueError::BlankText));
+        assert_eq!(OneLine::new("  "), Err(ValueError::BlankText));
+        assert_eq!(OneLine::new("\n"), Err(ValueError::BlankText));
+        for text in ["a\nb", "a\n", "a\r\nb", "a\rb"] {
+            assert_eq!(OneLine::new(text), Err(ValueError::LineBreak), "{text:?}");
+        }
+        assert_eq!(OneLine::new(" a b ").unwrap().as_str(), " a b ");
     }
 }

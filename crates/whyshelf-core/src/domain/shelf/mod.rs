@@ -91,7 +91,13 @@
 //! | a file that cannot be read | the adapter's parser makes a [`DocReading::Unparsed`] and [`Shelf::build`] turns it into a [`DocProblem::Unreadable`] | a [`RawProblem`] |
 //! | a file read as a mapping that holds values of kinds a front matter does not hold | the adapter's parser makes a [`DocReading::Unheld`] and [`Shelf::build`] turns each value into a [`DocProblem::Unheld`] | an [`UnheldValue`] per value |
 //! | the entries of a front matter | [`Shelf::build`] | [`FieldValue`]s and the keys written in each [`Link`], or [`DocProblem`]s |
-//! | one text as the value of a field of a type | [`FieldValue::read`](doc::FieldValue::read) | the [`FieldValue`](doc::FieldValue), or none when it is no value of the type |
+//! | whether a written value says something (no value, a text empty or blank, a list with no item: nothing, for a field of any type, a link, the `id` and the `key`) | `Written::of` in `build.rs` (private), once per entry at the head of the read of the entries | `Written`: not written, written with nothing, a text that says something (as the [`NonBlank`](crate::domain::nonempty::NonBlank) that proves it), or another value |
+//! | what nothing means | the field: `declared_field` (an optional field has no value, as if left out; a required one is a [`DocProblem::FieldMissing`] or a [`DocProblem::FieldEmpty`]); a link: no key, counted as it was; the `id` and the `key`: a [`DocProblem::IdEmpty`] or [`DocProblem::KeyEmpty`], the file's identity left unreadable | the [`FieldValue`] or none; a problem |
+//! | whether an item of a list says something | `read_items` in `build.rs` (private), for a list field, a link into a book and a link to artifacts (before a text is read as a name) | the items that say something as [`NonBlank`](crate::domain::nonempty::NonBlank)s, and a [`DocProblem::ItemBlank`] with its place for every one that does not |
+//! | whether a text is one line | [`OneLine::new`](crate::domain::nonempty::OneLine::new), for a field declared `line` | a [`OneLine`](crate::domain::nonempty::OneLine), or a [`DocProblem::NotOneLine`] |
+//! | the entries a new document writes | [`Shelf::check_new`] leaves out those the build read as saying nothing (the build's own `Written::of`) | [`NewDoc::entries`] |
+//! | whether the value of a condition of `status` says something | [`StatusFilter::new`](filter::StatusFilter::new), which makes it a [`NonBlank`](crate::domain::nonempty::NonBlank) once | a [`FilterProblem::EmptyValue`](filter::FilterProblem::EmptyValue), or the text |
+//! | one text as the value of a field of a type | [`FieldValue::read`](doc::FieldValue::read), of a text that says something already (it never judges that), a `line` through [`OneLine::new`](crate::domain::nonempty::OneLine::new) | the [`FieldValue`](doc::FieldValue), or none when it is no value of the type |
 //! | the form and validity of a document | [`Shelf::build`], which makes each valid [`Doc`] once, whole, with every link its book declares | a valid [`Doc`] or an [`InvalidDoc`] |
 //! | a link | [`Shelf::build`], once: the written key read in the target book's grammar and looked up in the index `Shelf::find_key` reads | a [`LinkState`]: a [`ResolvedLink`] with the target's id, key and hash, or an [`UnresolvedLink`] with the target book and the key it read as |
 //! | what an identity is now | [`Shelf::state_of`], and [`DocState::valid_or_failure`] / [`DocState::presence`] into an owned form | a [`DocState`], a [`DocFailure`] (the one "not valid", carried by refusals and causes; its [`FailureTag`] kept by a retirement), a [`DocPresence`] |
@@ -262,6 +268,13 @@
 //! [`DocReading::Unheld`]: build::DocReading::Unheld
 //! [`DocProblem::Unreadable`]: build::DocProblem::Unreadable
 //! [`DocProblem::Unheld`]: build::DocProblem::Unheld
+//! [`DocProblem::FieldMissing`]: build::DocProblem::FieldMissing
+//! [`DocProblem::FieldEmpty`]: build::DocProblem::FieldEmpty
+//! [`DocProblem::IdEmpty`]: build::DocProblem::IdEmpty
+//! [`DocProblem::KeyEmpty`]: build::DocProblem::KeyEmpty
+//! [`DocProblem::ItemBlank`]: build::DocProblem::ItemBlank
+//! [`DocProblem::NotOneLine`]: build::DocProblem::NotOneLine
+//! [`NewDoc::entries`]: build::NewDoc::entries
 //! [`UnheldValue`]: build::UnheldValue
 //! [`DocProblem`]: build::DocProblem
 //! [`RawProblem`]: build::RawProblem

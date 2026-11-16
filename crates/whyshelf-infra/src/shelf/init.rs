@@ -329,6 +329,8 @@ fn doc_request(
     let mut items = Vec::new();
     for (entry, value) in entries {
         match value {
+            // Not decided here what no value comes to: it is given as it was read.
+            RawValue::Null => texts.push((entry, EntryInput::Null)),
             RawValue::Text(text) => texts.push((entry, EntryInput::Text(text))),
             RawValue::Integer(n) => texts.push((entry, EntryInput::Text(n.to_string()))),
             RawValue::Bool(b) => texts.push((entry, EntryInput::Text(b.to_string()))),

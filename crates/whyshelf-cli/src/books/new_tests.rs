@@ -141,13 +141,27 @@ fn the_values_of_a_line_are_given_as_typed_and_a_name_twice_is_kept_twice() {
 }
 
 #[test]
+fn a_null_entry_of_a_line_is_an_entry_with_no_value() {
+    use whyshelf_core::app::shelf::EntryInput;
+    let text = "{\"book\":\"n\",\"entries\":{\"source\":null,\"t\":\"a\"}}";
+    let requests = new_lines::requests_of(text).unwrap();
+    assert_eq!(
+        requests[0].entries,
+        vec![
+            ("source".to_owned(), EntryInput::Null),
+            ("t".to_owned(), EntryInput::Text("a".to_owned())),
+        ]
+    );
+}
+
+#[test]
 fn a_line_has_no_field_the_shape_does_not_name() {
     for text in [
         "{\"book\":\"n\",\"entries\":{},\"colour\":1}",
         "{\"book\":\"n\",\"entries\":{\"l\":[{\"as\":\"x\",\"more\":1}]}}",
         "{\"book\":\"n\",\"entries\":[]}",
         "{\"book\":\"n\",\"entries\":{\"x\":1.5}}",
-        "{\"book\":\"n\",\"entries\":{\"x\":null}}",
+        "{\"book\":\"n\",\"entries\":{\"x\":{}}}",
     ] {
         assert!(new_lines::requests_of(text).is_err(), "{text}");
     }

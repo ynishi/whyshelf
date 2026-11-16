@@ -12,7 +12,7 @@
 //!
 //! [[book.field]]
 //! name = "severity"
-//! type = { enum = ["low", "high"] } # or "text", "integer", "bool", "list"
+//! type = { enum = ["low", "high"] } # or "text", "line", "integer", "bool", "list"
 //! required = true                  # default false; a blank text or an empty list counts as none
 //!
 //! [[book]]

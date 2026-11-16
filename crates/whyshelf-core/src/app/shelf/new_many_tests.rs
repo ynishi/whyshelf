@@ -1,6 +1,6 @@
 //! Tests of `new_docs`, a run of new documents, over the in-memory fake.
 
-use crate::domain::shelf::build::{DocReading, PlanProblem, RawValue};
+use crate::domain::shelf::build::{DocProblem, DocReading, NewDocProblem, PlanProblem, RawValue};
 use crate::domain::shelf::schema::{
     BookName, BookSchemaDecl, FieldEntryDecl, FieldPresence, FieldTypeDecl, KeyPatternDecl,
 };
@@ -66,11 +66,31 @@ fn spec(n: usize, key: Option<&str>, name: Option<&str>, grounds: &[&str]) -> Ne
 }
 
 #[test]
-fn a_typed_item_is_trimmed_and_an_empty_one_is_refused() {
+fn a_typed_item_is_trimmed_and_an_empty_one_is_an_item_blank_of_its_row() {
     let mut app = ShelfApp::new(FakeShelf::new().with_files(vec![fr(1, "slow", &[])]));
     let many = block_on(app.new_docs(vec![spec(1, None, None, &[" FR-1 "])])).unwrap();
     assert!(many.docs[0].unresolved.is_empty(), "{:?}", many.docs);
     let error = block_on(app.new_docs(vec![spec(2, None, None, &["FR-1", "  "])])).unwrap_err();
+    let ShelfError::Plan(problems) = &error else {
+        panic!("{error:?}");
+    };
+    let PlanProblem::Doc { row: 2, problem } = problems.first() else {
+        panic!("{error:?}");
+    };
+    assert!(
+        matches!(
+            problem,
+            NewDocProblem::Invalid(found)
+                if matches!(found.first(), DocProblem::ItemBlank { at: 2, .. })
+        ),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_name_of_nothing_among_the_items_is_an_empty_item_of_its_row() {
+    let mut app = ShelfApp::new(FakeShelf::new().with_files(vec![fr(1, "slow", &[])]));
+    let error = block_on(app.new_docs(vec![spec(2, None, None, &["@"])])).unwrap_err();
     let ShelfError::InRow { row: 2, cause } = &error else {
         panic!("{error:?}");
     };
