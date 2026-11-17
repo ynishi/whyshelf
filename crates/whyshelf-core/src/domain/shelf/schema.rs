@@ -2350,6 +2350,16 @@ impl Schema {
             .map_or(Membership::Outside, Membership::In)
     }
 
+    /// The book a file belongs to, or none when it is under no book's directory: the
+    /// answer the shelf reads every file by, for a use case that asks what book a file
+    /// it read is of.
+    pub fn book_of(&self, path: &RelPath) -> Option<&BookSchema> {
+        match self.membership(path) {
+            Membership::In(book) => Some(book),
+            Membership::Outside => None,
+        }
+    }
+
     /// The directory and range of every book, in the order of the declaration: what
     /// a listing of the documents is given.
     pub fn ranges(&self) -> Vec<BookRange> {

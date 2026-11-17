@@ -68,7 +68,7 @@ use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::id::EntityId;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
-use whyshelf_core::domain::shelf::filter::{FieldAsk, StatusFilterAsk};
+use whyshelf_core::domain::shelf::filter::{FieldAsk, FieldWant, StatusFilterAsk};
 use whyshelf_core::domain::shelf::freshness::StandingKind;
 use whyshelf_core::domain::shelf::ledger::JudgementId;
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
@@ -193,7 +193,8 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
             books,
             standings,
             wheres,
-        } => match status_ask(&books, &standings, &wheres) {
+            withouts,
+        } => match status_ask(&books, &standings, &wheres, &withouts) {
             Ok(ask) => ShelfApp::new(project)
                 .status_filtered(&ask)
                 .await
@@ -667,14 +668,15 @@ fn unlinked_filter(
 
 /// What a `status` command asks, or why its arguments are not a request: the books
 /// as names, the standings by the words [`output::standing`] prints, and each
-/// `--where` split at its first `=` into a field and a value. Whether the filter
-/// fits the declaration is the model's to say
+/// `--where` split at its first `=` into a field and a value, and each `--without` a
+/// field. Whether the filter fits the declaration is the model's to say
 /// ([`StatusFilter::new`](whyshelf_core::domain::shelf::filter::StatusFilter::new));
 /// here only the shape of each argument is read.
 fn status_ask(
     books: &[String],
     standings: &[String],
     wheres: &[String],
+    withouts: &[String],
 ) -> Result<StatusFilterAsk, String> {
     let books = books
         .iter()
@@ -698,7 +700,7 @@ fn status_ask(
                 })
         })
         .collect::<Result<_, _>>()?;
-    let fields = wheres
+    let mut fields = wheres
         .iter()
         .map(|given| {
             let (field, value) = given
@@ -708,10 +710,18 @@ fn status_ask(
                 .map_err(|e| format!("--where `{given}`: the field `{field}`: {e}"))?;
             Ok(FieldAsk {
                 field,
-                value: value.to_owned(),
+                value: FieldWant::Value(value.to_owned()),
             })
         })
-        .collect::<Result<_, String>>()?;
+        .collect::<Result<Vec<_>, String>>()?;
+    for given in withouts {
+        let field =
+            EntryName::new(given).map_err(|e| format!("--without `{given}`: not a field: {e}"))?;
+        fields.push(FieldAsk {
+            field,
+            value: FieldWant::NoValue,
+        });
+    }
     Ok(StatusFilterAsk {
         books,
         standings,

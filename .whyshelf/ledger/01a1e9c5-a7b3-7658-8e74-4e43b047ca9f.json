@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1794923402458,
+  "expires": null,
+  "frame": [],
+  "id": "01a1e9c5-a7b3-7658-8e74-4e43b047ca9f",
+  "kind": "decision",
+  "reason": "Issue #136: fmt leaves out the entries that say nothing and that the build reads as not written, by the rule new writes with; status --without; this repository's titles are lines. Reviewed design (independent review, arch rules), code review, and a blind review of the branch with every finding fixed; tests pass",
+  "revision": "4c7f0b93a4aa44c207a2cfbcf03fa9743799c607",
+  "seen": "sha256:7b1fed99970b98ee1274da06844d0f270f7d2afa14afd91e8f5d03b6dddb886e",
+  "seen_address": "72cb2d057bac2879f9ad1846d566d389fbbcbc2b",
+  "subject": "01a1e9bf-6819-768d-a267-a7543e1c21d6",
+  "v": 1,
+  "verb": "approve"
+}

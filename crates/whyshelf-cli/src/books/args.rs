@@ -111,7 +111,9 @@ pub enum BooksCommand {
     /// document unless filtered. A document must pass every kind of filter given, and
     /// any one of the values of a kind repeated. `health` is of the whole project,
     /// not of the documents listed. A book or a field that is not declared, a value
-    /// no book reads as the field's type, or a word that is no standing is a request
+    /// no book reads as the field's type, a value left empty (`--where field=`), a
+    /// field asked with a value and with no value, no value asked of a field every
+    /// book that declares it requires, or a word that is no standing is a request
     /// error (exit 2).
     Status {
         /// Only the documents of this book; repeat it for any of several books.
@@ -128,6 +130,14 @@ pub enum BooksCommand {
         /// document must hold.
         #[arg(long = "where", value_name = "FIELD=VALUE")]
         wheres: Vec<String>,
+        /// Only the documents of a book that declares the field, which hold no
+        /// value for it: they do not write it, or write it with nothing in it. Repeat
+        /// it for each field a document must hold none of; it is one more condition
+        /// beside the others, as `--where` is. A field no book declares, one that
+        /// is also asked with `--where`, and one that every book that declares it
+        /// requires are request errors (exit 2).
+        #[arg(long = "without", value_name = "FIELD")]
+        withouts: Vec<String>,
     },
     /// One document in full, with where its approval stops holding.
     Get {

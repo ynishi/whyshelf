@@ -8,7 +8,11 @@
 //! - a title of the project `init` makes is a `line`, so a line break in it makes the
 //!   document invalid, and `new` refuses it;
 //! - `status --where field=` (no value) is a request that cannot be answered: exit 2;
-//! - `fmt` writes a no value as `null`, and the approval of the document still holds.
+//! - `fmt` leaves out an optional field and a link that counts none with no value, and
+//!   the approval of the document still holds; it keeps a required field, a link that
+//!   counts one or more and an entry the book does not declare as they are written
+//!   (a `key:` or `title:` with nothing comes back as `null`), so that `check` says
+//!   what it said (#136).
 
 mod common;
 
@@ -251,7 +255,7 @@ fn status_where_with_no_value_is_a_request_that_cannot_be_answered() {
 }
 
 #[test]
-fn fmt_writes_a_no_value_as_null_and_the_approval_still_holds() {
+fn fmt_leaves_out_a_field_with_no_value_and_the_approval_still_holds() {
     let project = project("empty-fmt", &[(1, "source:\n")]);
     assert_eq!(
         project.run(&["judge", "approve", "N-1"]).status.code(),
@@ -264,11 +268,94 @@ fn fmt_writes_a_no_value_as_null_and_the_approval_still_holds() {
         serde_json::json!(["notes/N-1.md"])
     );
     let written = fs::read_to_string(project.0.join("notes/N-1.md")).unwrap();
-    assert!(written.contains("\nsource: null\n"), "{written}");
+    assert!(!written.contains("source"), "{written}");
     // The same document: its hash did not change, so the approval holds.
     let stale = project.run(&["stale", "--exit-code"]);
     assert_eq!(stale.status.code(), Some(0), "{}", json(&stale));
     assert_eq!(json(&stale)["stale"], serde_json::json!([]));
+}
+
+/// The declaration of the notes with a link into notes that counts any number (`on`)
+/// and one that counts one or more (`needs`).
+fn declaration_with_links() -> String {
+    format!(
+        "{DECLARATION}[[book.link]]\nname = \"on\"\ntarget = \"note\"\nmeans = \"depends\"\n\
+         [[book.link]]\nname = \"needs\"\ntarget = \"note\"\nmeans = \"depends\"\n\
+         count = \"at-least-one\"\n"
+    )
+}
+
+#[test]
+fn fmt_leaves_out_what_the_build_reads_as_not_written_and_check_lists_the_file_until_then() {
+    let project = Project::with("empty-fmt-out", &declaration_with_links(), "");
+    let text = note_titled(
+        1,
+        "Note 1",
+        "source:\ntags: []\ncount: \"\"\non: []\nneeds: [\"N-9\"]\n",
+    );
+    fs::write(project.0.join("notes/N-1.md"), text).unwrap();
+    let get = || json(&project.run(&["get", "N-1"]));
+    let before = get();
+
+    // `fmt --check` lists the file as not in the form, and writes nothing.
+    let files = project.files();
+    let check = project.run(&["fmt", "--check"]);
+    assert_eq!(check.status.code(), Some(1));
+    assert_eq!(
+        json(&check)["not_in_form"],
+        serde_json::json!(["notes/N-1.md"])
+    );
+    assert_eq!(project.files(), files);
+
+    let output = project.run(&["fmt"]);
+    assert_eq!(output.status.code(), Some(0), "{}", json(&output));
+    assert_eq!(
+        json(&output)["rewritten"],
+        serde_json::json!(["notes/N-1.md"])
+    );
+    assert_eq!(
+        fs::read_to_string(project.0.join("notes/N-1.md")).unwrap(),
+        "---\nid: \"01a1c4f0-0000-7000-8000-000000000101\"\nkey: \"N-1\"\n\
+         needs: [\"N-9\"]\ntitle: \"Note 1\"\n---\nThe body.\n"
+    );
+
+    // The same document: its fields and hash are those it had, and it is in the form.
+    let after = get();
+    assert_eq!(after["content"]["fields"], before["content"]["fields"]);
+    assert_eq!(
+        after["row"]["presence"]["hash"],
+        before["row"]["presence"]["hash"]
+    );
+    assert_eq!(project.run(&["fmt", "--check"]).status.code(), Some(0));
+}
+
+#[test]
+fn fmt_keeps_an_entry_with_no_value_that_the_build_tells_a_problem_for() {
+    // A required field, an entry the book does not declare, and a link whose count
+    // asks for one or more: each stays, written as no value, so `check` says the same.
+    let project = Project::with("empty-fmt-kept", &declaration_with_links(), "");
+    fs::write(
+        project.0.join("notes/N-1.md"),
+        "---\nid: \"01a1c4f0-0000-7000-8000-000000000101\"\nkey: \"N-1\"\ntitle:\nextra:\nneeds: []\n---\nThe body.\n",
+    )
+    .unwrap();
+    let before = problems(&json(&project.run(&["check"])), "notes/N-1.md");
+    assert_eq!(before.len(), 3, "{before:?}");
+
+    let output = project.run(&["fmt"]);
+    assert_eq!(output.status.code(), Some(0), "{}", json(&output));
+    assert_eq!(
+        json(&output)["rewritten"],
+        serde_json::json!(["notes/N-1.md"])
+    );
+    assert_eq!(
+        fs::read_to_string(project.0.join("notes/N-1.md")).unwrap(),
+        "---\nid: \"01a1c4f0-0000-7000-8000-000000000101\"\nkey: \"N-1\"\n\
+         extra: null\nneeds: []\ntitle: null\n---\nThe body.\n"
+    );
+    let after = problems(&json(&project.run(&["check"])), "notes/N-1.md");
+    assert_eq!(after, before);
+    assert_eq!(project.run(&["fmt", "--check"]).status.code(), Some(0));
 }
 
 #[test]

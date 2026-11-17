@@ -35,6 +35,7 @@ use whyshelf_core::domain::shelf::doc::{
     Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy, normalize,
 };
 use whyshelf_core::domain::shelf::exemption::{CoverMiss, Unneeded};
+use whyshelf_core::domain::shelf::filter::FieldWant;
 use whyshelf_core::domain::shelf::freshness::{
     Cause, Freshness, FreshnessLevel, Notice, Origin, RootCause, Severity, Standing, StandingKind,
     Successors, UpstreamStatus,
@@ -567,9 +568,13 @@ pub struct FiltersOut {
     /// The standings asked, by word and in a fixed order; a document at any of them
     /// passes.
     pub standings: Vec<String>,
-    /// The field conditions, in the order given; a document holds every one.
+    /// The field conditions on a value, in the order given; a document holds every
+    /// one.
     #[serde(rename = "where")]
     pub where_: Vec<WhereOut>,
+    /// The fields asked to hold no value (`--without`), in the order given; a
+    /// document holds none of them.
+    pub without: Vec<String>,
 }
 
 /// One `--where <field>=<value>` condition as given.
@@ -2635,10 +2640,20 @@ pub fn status(report: &StatusReport) -> StatusOut {
                 .filters
                 .fields
                 .iter()
-                .map(|ask| WhereOut {
-                    field: ask.field.to_string(),
-                    value: ask.value.clone(),
+                .filter_map(|ask| match &ask.value {
+                    FieldWant::Value(value) => Some(WhereOut {
+                        field: ask.field.to_string(),
+                        value: value.clone(),
+                    }),
+                    FieldWant::NoValue => None,
                 })
+                .collect(),
+            without: report
+                .filters
+                .fields
+                .iter()
+                .filter(|ask| ask.value == FieldWant::NoValue)
+                .map(|ask| ask.field.to_string())
                 .collect(),
         },
         health: namer.health(&report.health),

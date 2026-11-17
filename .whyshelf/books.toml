@@ -12,7 +12,7 @@ key = { prefix = "F" }
 description = "what was seen: a root cause, evidence"
 [[book.field]]
 name = "title"
-type = "text"
+type = "line"
 required = true
 [[book.field]]
 name = "source"
@@ -25,7 +25,7 @@ key = { prefix = "REQ" }
 description = "what is needed, and why"
 [[book.field]]
 name = "title"
-type = "text"
+type = "line"
 required = true
 [[book.field]]
 name = "issues"             # the issues of the repository it answers, as `#<number>`
@@ -48,7 +48,7 @@ key = { prefix = "DEC" }
 description = "how it is met, and what was rejected"
 [[book.field]]
 name = "title"
-type = "text"
+type = "line"
 required = true
 [[book.field]]
 name = "rejected"
@@ -86,7 +86,7 @@ key = { prefix = "V" }
 description = "how a decision is checked"
 [[book.field]]
 name = "title"
-type = "text"
+type = "line"
 required = true
 [[book.field]]
 name = "method"

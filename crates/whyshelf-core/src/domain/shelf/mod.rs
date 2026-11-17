@@ -95,14 +95,14 @@
 //! | what nothing means | the field: `declared_field` (an optional field has no value, as if left out; a required one is a [`DocProblem::FieldMissing`] or a [`DocProblem::FieldEmpty`]); a link: no key, counted as it was; the `id` and the `key`: a [`DocProblem::IdEmpty`] or [`DocProblem::KeyEmpty`], the file's identity left unreadable | the [`FieldValue`] or none; a problem |
 //! | whether an item of a list says something | `read_items` in `build.rs` (private), for a list field, a link into a book and a link to artifacts (before a text is read as a name) | the items that say something as [`NonBlank`](crate::domain::nonempty::NonBlank)s, and a [`DocProblem::ItemBlank`] with its place for every one that does not |
 //! | whether a text is one line | [`OneLine::new`](crate::domain::nonempty::OneLine::new), for a field declared `line` | a [`OneLine`](crate::domain::nonempty::OneLine), or a [`DocProblem::NotOneLine`] |
-//! | the entries a new document writes | [`Shelf::check_new`] leaves out those the build read as saying nothing (the build's own `Written::of`) | [`NewDoc::entries`] |
+//! | the entries a file of a book is written with, for a new document and for `fmt` | [`Shelf::form_entries`] leaves out those the build reads as not written and tells no problem for (an entry that says nothing, by the build's own `Written::of`, of an optional field or of a link whose count admits none); [`Shelf::check_new`] asks it | a [`FormEntries`](build::FormEntries), which [`NewDoc::entries`] holds |
 //! | whether the value of a condition of `status` says something | [`StatusFilter::new`](filter::StatusFilter::new), which makes it a [`NonBlank`](crate::domain::nonempty::NonBlank) once | a [`FilterProblem::EmptyValue`](filter::FilterProblem::EmptyValue), or the text |
 //! | one text as the value of a field of a type | [`FieldValue::read`](doc::FieldValue::read), of a text that says something already (it never judges that), a `line` through [`OneLine::new`](crate::domain::nonempty::OneLine::new) | the [`FieldValue`](doc::FieldValue), or none when it is no value of the type |
 //! | the form and validity of a document | [`Shelf::build`], which makes each valid [`Doc`] once, whole, with every link its book declares | a valid [`Doc`] or an [`InvalidDoc`] |
 //! | a link | [`Shelf::build`], once: the written key read in the target book's grammar and looked up in the index `Shelf::find_key` reads | a [`LinkState`]: a [`ResolvedLink`] with the target's id, key and hash, or an [`UnresolvedLink`] with the target book and the key it read as |
 //! | what an identity is now | [`Shelf::state_of`], and [`DocState::valid_or_failure`] / [`DocState::presence`] into an owned form | a [`DocState`], a [`DocFailure`] (the one "not valid", carried by refusals and causes; its [`FailureTag`] kept by a retirement), a [`DocPresence`] |
 //! | how many files each book holds | [`Shelf::tally_by_book`] (through `Schema::membership`) | a [`BookTally`] per book |
-//! | whether a filter of `status` fits the declaration, and which documents it admits | [`StatusFilter::new`](filter::StatusFilter::new) against the [`Schema`], then [`StatusFilter::admits`](filter::StatusFilter::admits) per document, read from the [`Shelf`](build::Shelf) | a [`StatusFilter`](filter::StatusFilter), or every [`FilterProblem`](filter::FilterProblem); whether one document passes |
+//! | whether a filter of `status` fits the declaration, and which documents it admits | [`StatusFilter::new`](filter::StatusFilter::new) against the [`Schema`], then [`StatusFilter::admits`](filter::StatusFilter::admits) per document, read from the [`Shelf`](build::Shelf) | a [`StatusFilter`](filter::StatusFilter), or every [`FilterProblem`](filter::FilterProblem) (a field asked with a value and with no value, and no value asked of a field every declaring book requires, among them); whether one document passes, a condition of no value ([`FieldWant::NoValue`](filter::FieldWant::NoValue)) held where a value is |
 //! | which keys of a book are taken | [`Shelf::build`], once: every key a file of the book writes in its grammar, valid or not, identity read or not | read by the two entries below only |
 //! | the next key of a book | [`Shelf::next_key`]: the highest number taken plus one (`PREFIX-1` when none; a name tail is no number), the text read by [`KeyPattern::parse`] | a [`NewKey`], or a [`NextKeyProblem`] (a book of slugs has none) |
 //! | a key given for a new document | [`Shelf::claim_key`]: read by [`KeyPattern::parse`], and not taken | a [`NewKey`], or a [`ClaimKeyProblem`] |
@@ -250,6 +250,7 @@
 //! [`Shelf::next_key`]: build::Shelf::next_key
 //! [`Shelf::claim_key`]: build::Shelf::claim_key
 //! [`Shelf::check_new`]: build::Shelf::check_new
+//! [`Shelf::form_entries`]: build::Shelf::form_entries
 //! [`NewKey`]: build::NewKey
 //! [`Shelf::plan_new`]: build::Shelf::plan_new
 //! [`Shelf::replan_after_taken`]: build::Shelf::replan_after_taken

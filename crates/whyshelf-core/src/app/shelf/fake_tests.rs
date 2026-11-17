@@ -16,19 +16,19 @@ use uuid::Uuid;
 use crate::domain::actor::Actor;
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
-use crate::domain::shelf::build::{DocReading, RawValue};
+use crate::domain::shelf::build::{DocReading, FormEntries, RawValue, Shelf};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record};
 use crate::domain::shelf::schema::{
     BookRange, BookSchemaDecl, BuiltinPresets, Cardinality, FieldEntryDecl, FieldPresence,
     FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, PresetName, PresetValues,
-    Propagation, ShelfDecl,
+    Propagation, Schema, ShelfDecl,
 };
 
 use super::ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileForm, FileWrite, Form,
-    IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Replacement, RevisionSource,
-    ShelfRead, ShelfWrite, UnreadableRecord,
+    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileRead, FileWrite,
+    IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Rendered, Replaceable,
+    Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
 };
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{
@@ -252,9 +252,16 @@ pub(super) struct FakeShelf {
     /// Contents one adapter keeps at an address, whatever another keeps there: read
     /// back before `committed`.
     pub(super) kept_by: Mutex<BTreeMap<(ContentOf, ContentAddress), Vec<u8>>>,
-    /// How each document's file stands to the form, by path: in it when not named
-    /// (and, for a file that cannot be read, unwritable).
-    pub(super) forms: Mutex<BTreeMap<RelPath, Form>>,
+    /// The line of a comment in the front matter of a file, by path.
+    pub(super) comments: Mutex<BTreeMap<RelPath, u32>>,
+    /// Whether a file may be replaced, by path: it may when not named.
+    pub(super) replaceable: Mutex<BTreeMap<RelPath, Replaceable>>,
+    /// The files whose text in the form the fake reads as something else than the
+    /// entries it was made from.
+    pub(super) reads_otherwise: Mutex<BTreeSet<RelPath>>,
+    /// What each text the fake rendered reads as, by text: what a replaced file reads
+    /// as from then on.
+    pub(super) rendered: Mutex<BTreeMap<Vec<u8>, DocReading>>,
     /// How many document files were replaced.
     pub(super) replaced: Mutex<usize>,
     /// The files someone edits after the reading and before the replacement.
@@ -344,7 +351,10 @@ impl FakeShelf {
             untellable: Mutex::new(BTreeMap::new()),
             not_names: Mutex::new(BTreeMap::new()),
             kept_by: Mutex::new(BTreeMap::new()),
-            forms: Mutex::new(BTreeMap::new()),
+            comments: Mutex::new(BTreeMap::new()),
+            replaceable: Mutex::new(BTreeMap::new()),
+            reads_otherwise: Mutex::new(BTreeSet::new()),
+            rendered: Mutex::new(BTreeMap::new()),
             replaced: Mutex::new(0),
             edited_before_replace: Mutex::new(BTreeSet::new()),
             move_answers: Mutex::new(BTreeMap::new()),
@@ -376,9 +386,58 @@ impl FakeShelf {
         lock(&self.suggest_asked).clone()
     }
 
-    /// From now on the file at `at` stands to the form as `form` says.
-    pub(super) fn set_form(&self, at: &str, form: Form) {
-        lock(&self.forms).insert(path(at), form);
+    /// From now on the front matter of the file at `at` holds a comment, first on
+    /// this line.
+    pub(super) fn set_comment(&self, at: &str, line: u32) {
+        lock(&self.comments).insert(path(at), line);
+    }
+
+    /// From now on the file at `at` is `replaceable`.
+    pub(super) fn set_replaceable(&self, at: &str, replaceable: Replaceable) {
+        lock(&self.replaceable).insert(path(at), replaceable);
+    }
+
+    /// From now on the text in the form of the file at `at` reads as something else
+    /// than the entries it was made from.
+    pub(super) fn set_reads_otherwise(&self, at: &str) {
+        lock(&self.reads_otherwise).insert(path(at));
+    }
+
+    /// Make the bytes of the file at `at` the text of every entry its reading holds, as
+    /// the fake renders entries: what a file was in the form before the form left out
+    /// an entry that says nothing.
+    pub(super) fn put_with_every_entry(&self, at: &str) {
+        let at = path(at);
+        let readings = lock(&self.readings);
+        let Some(DocReading::Parsed { entries, body, .. }) = readings
+            .iter()
+            .find(|reading| matches!(reading, DocReading::Parsed { origin, .. } if *origin == at))
+        else {
+            panic!("no parsed file at {at}");
+        };
+        lock(&self.files).insert(at, text_of(entries, body));
+    }
+
+    /// Make the bytes of the file at `at` the text in the form of its reading now, as
+    /// the fake renders it from the entries the form holds: the file is in the form.
+    pub(super) fn put_in_form(&self, at: &str) {
+        let at = path(at);
+        let schema = Schema::validate(lock(&self.decls).clone(), &lock(&self.spaces).clone())
+            .expect("the fake's books are declared whole");
+        let readings = lock(&self.readings);
+        let Some(DocReading::Parsed { entries, body, .. }) = readings
+            .iter()
+            .find(|reading| matches!(reading, DocReading::Parsed { origin, .. } if *origin == at))
+        else {
+            panic!("no parsed file at {at}");
+        };
+        let book = schema
+            .book_of(&at)
+            .expect("a file of a book")
+            .name()
+            .clone();
+        let form = Shelf::form_entries(&schema, &book, entries);
+        lock(&self.files).insert(at, fake_text(&form, body));
     }
 
     pub(super) fn replaced_count(&self) -> usize {
@@ -609,41 +668,71 @@ impl DocSource for FakeShelf {
             .collect())
     }
 
-    /// Each reading, with the bytes of its file in `files` (none: empty) and the form
-    /// [`FakeShelf::set_form`] gave it.
-    async fn forms(&self, ranges: &[BookRange]) -> Result<Vec<FileForm>, FakeError> {
+    /// Each reading, with the bytes of its file in `files` (none: empty) and the line
+    /// of the comment [`FakeShelf::set_comment`] gave it, if a parsed file.
+    async fn forms(&self, ranges: &[BookRange]) -> Result<Vec<FileRead>, FakeError> {
         self.check()?;
         let files = lock(&self.files);
-        let forms = lock(&self.forms);
+        let comments = lock(&self.comments);
         Ok(lock(&self.readings)
             .iter()
             .filter(|reading| listed(ranges, reading))
             .map(|reading| {
-                let (origin, unparsed) = match reading {
-                    DocReading::Parsed { origin, .. } => (origin, false),
-                    DocReading::Unparsed { origin, .. } | DocReading::Unheld { origin, .. } => {
-                        (origin, true)
-                    }
-                };
-                let form = match forms.get(origin) {
-                    Some(form) => form.clone(),
-                    None if unparsed => Form::Unwritable,
-                    None => Form::InForm,
-                };
-                FileForm {
+                let (DocReading::Parsed { origin, .. }
+                | DocReading::Unparsed { origin, .. }
+                | DocReading::Unheld { origin, .. }) = reading;
+                let parsed = matches!(reading, DocReading::Parsed { .. });
+                FileRead {
                     reading: reading.clone(),
                     read: files.get(origin).cloned().unwrap_or_default(),
-                    form,
+                    comment: comments.get(origin).copied().filter(|_| parsed),
                 }
             })
             .collect())
     }
+
+    /// A text of the entries and the body that is no YAML ([`fake_text`]), and the
+    /// reading the entries and the body are, unless the file was set to read
+    /// otherwise: then one entry more.
+    fn render(&self, origin: &RelPath, entries: &FormEntries, body: &str) -> Rendered {
+        let text = fake_text(entries, body);
+        let mut read_entries = entries.as_map().clone();
+        if lock(&self.reads_otherwise).contains(origin) {
+            read_entries.insert("read-otherwise".to_owned(), RawValue::Null);
+        }
+        let reads_as = DocReading::Parsed {
+            origin: origin.clone(),
+            entries: read_entries,
+            body: body.to_owned(),
+        };
+        lock(&self.rendered).insert(text.clone(), reads_as.clone());
+        Rendered { text, reads_as }
+    }
+
+    async fn replaceable(&self, file: &RelPath) -> Result<Replaceable, FakeError> {
+        self.check()?;
+        Ok(lock(&self.replaceable)
+            .get(file)
+            .copied()
+            .unwrap_or(Replaceable::Yes))
+    }
+}
+
+/// The text the fake gives the entries and the body in the form: their debug form,
+/// which no one reads.
+fn fake_text(entries: &FormEntries, body: &str) -> Vec<u8> {
+    text_of(entries.as_map(), body)
+}
+
+/// The text the fake gives any entries and body, the entries a form leaves out too.
+fn text_of(entries: &BTreeMap<String, RawValue>, body: &str) -> Vec<u8> {
+    format!("{entries:?}\n{body}").into_bytes()
 }
 
 impl DocReplace for FakeShelf {
     type Error = FakeError;
 
-    /// Keeps `text` as the file's bytes, and the reading the form gave for it as the
+    /// Keeps `text` as the file's bytes, and what the fake rendered it as as the
     /// file's reading from then on, so a file written that reads otherwise changes.
     async fn replace_read(
         &self,
@@ -659,11 +748,8 @@ impl DocReplace for FakeShelf {
         if files.get(at).map_or(&[][..], Vec::as_slice) != read {
             return Ok(Replacement::Changed);
         }
-        let mut forms = lock(&self.forms);
-        let Some(Form::Other { reads_as, .. }) = forms.get(at).cloned() else {
-            return Err(FakeError(
-                "a file in the form, or with no text in it, was replaced",
-            ));
+        let Some(reads_as) = lock(&self.rendered).get(text).cloned() else {
+            return Err(FakeError("a text that was never rendered was written"));
         };
         let mut readings = lock(&self.readings);
         for reading in readings.iter_mut() {
@@ -675,7 +761,6 @@ impl DocReplace for FakeShelf {
             }
         }
         files.insert(at.clone(), text.to_vec());
-        forms.insert(at.clone(), Form::InForm);
         *lock(&self.replaced) += 1;
         Ok(Replacement::Replaced)
     }
@@ -769,7 +854,7 @@ impl DocWrite for FakeShelf {
     async fn create(
         &self,
         at: &RelPath,
-        entries: &BTreeMap<String, RawValue>,
+        entries: &FormEntries,
         body: &str,
     ) -> Result<Creation, FakeError> {
         self.check()?;
@@ -795,7 +880,7 @@ impl DocWrite for FakeShelf {
         }
         readings.push(DocReading::Parsed {
             origin: at.clone(),
-            entries: entries.clone(),
+            entries: entries.as_map().clone(),
             body: body.to_owned(),
         });
         *lock(&self.created) += 1;

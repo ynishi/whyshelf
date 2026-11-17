@@ -1,0 +1,96 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::fmt",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::DocReplace",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::docs::comment_line",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1794923402458,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3ada2103ac34f8766837d09182d6d666f9928ee9",
+      "hash": "sha256:63eabc9e4f1b267741b887cea57a62e5bd6d474b010591274716f7249686acaa",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    },
+    {
+      "address": "d72217a8d711e49c1a484ba402222d00ad80d81f",
+      "hash": "sha256:a1dcd5c46145cc74010c34f544e8f6418476c764f5d01e1864c5f1b90083b824",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "19"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c7ac-ef6b-72b1-aca0-3902188dfed0"
+    }
+  ],
+  "id": "01a1e9c5-99ba-7502-b47f-8cf300560168",
+  "kind": "decision",
+  "reason": "Issue #136: fmt leaves out the entries that say nothing and that the build reads as not written, by the rule new writes with; status --without; this repository's titles are lines. Reviewed design (independent review, arch rules), code review, and a blind review of the branch with every finding fixed; tests pass",
+  "revision": "4c7f0b93a4aa44c207a2cfbcf03fa9743799c607",
+  "seen": "sha256:230036cb91838bdcdc128786493d6f82c68f25e14ebaa1a4d49e43ed98f966cd",
+  "seen_address": "11054d9ca8cb666aeabc0fb75aad8963b7456366",
+  "subject": "01a1c7ac-f6cd-72dd-9c19-683d45100164",
+  "v": 1,
+  "verb": "approve"
+}

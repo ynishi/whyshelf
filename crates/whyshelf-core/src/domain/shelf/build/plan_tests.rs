@@ -234,8 +234,11 @@ fn a_name_stands_for_the_key_of_its_row_and_the_link_is_resolved_whichever_comes
     assert_eq!(states(doc_of(&planned, "FR-1"), "base"), ["FR-2"]);
     assert_eq!(states(doc_of(&planned, "FR-3"), "base"), ["FR-2", "?FR-77"]);
     // The file holds the key, not the name.
-    assert_eq!(doc_of(&planned, "FR-1").entries()["base"], list(&["FR-2"]));
-    assert!(!doc_of(&planned, "FR-1").entries().contains_key("as"));
+    assert_eq!(
+        doc_of(&planned, "FR-1").entries().as_map()["base"],
+        list(&["FR-2"])
+    );
+    assert!(doc_of(&planned, "FR-1").entries().get("as").is_none());
     // Only what no document answers to is unresolved.
     assert_eq!(doc_of(&planned, "FR-1").unresolved().len(), 0);
     assert_eq!(doc_of(&planned, "FR-3").unresolved().len(), 1);
@@ -468,7 +471,10 @@ fn only_the_row_taken_is_given_another_key_and_the_rows_that_name_it_follow() {
     // The number after the highest the run holds; the others keep theirs.
     assert_eq!(keys(&after), ["FR-1", "FR-4", "FR-3"]);
     assert_eq!(states(doc_of(&after, "FR-3"), "base"), ["FR-4"]);
-    assert_eq!(doc_of(&after, "FR-3").entries()["base"], list(&["FR-4"]));
+    assert_eq!(
+        doc_of(&after, "FR-3").entries().as_map()["base"],
+        list(&["FR-4"])
+    );
     // The file of FR-3 is the one that was planned, not one that is now taken.
     assert_eq!(
         doc_of(&after, "FR-4").doc().origin().as_str(),

@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1c6bf61355f6410be8d8c022e60840bd43e43c2a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b1213bf6ba99ee17bc9a22094e93d1b0eac3748e86a4d29f2943b433ae89dc3d",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9ad41da91cb4ef610f4d6793d8c6a7f952dfab61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8dccbac46743e1060cf28dd958c54434de7b2d2c56a1a8ea1edaf98d73db7023",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "130bc3c50dceaeada23d17068fd1eeb69dabc330",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:08033275c358672e1519983f87e7c6b9f21cecbf0f457b026ad9cef985e3a959",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794923402458,
+  "expires": null,
+  "frame": [
+    {
+      "address": "78d274ba73a348933ca997fdac74b14d99372799",
+      "hash": "sha256:af41c43a0e80b1188cca7939d34ce86874bfb6b296e4304a36bf28c7551d6c70",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a1e9c5-a02f-7282-99bb-c1110683f219",
+  "kind": "decision",
+  "reason": "Issue #136: fmt leaves out the entries that say nothing and that the build reads as not written, by the rule new writes with; status --without; this repository's titles are lines. Reviewed design (independent review, arch rules), code review, and a blind review of the branch with every finding fixed; tests pass",
+  "revision": "4c7f0b93a4aa44c207a2cfbcf03fa9743799c607",
+  "seen": "sha256:f45b99cb2ad0d8e32a212023e18a7053e3ce1d418cde9b46de61272dea4d41d8",
+  "seen_address": "ba3d6a68dc7a5d6e94896d18bf9931e1fbeed05f",
+  "subject": "01a1da61-c7c5-7789-ac4f-8edd5fa71741",
+  "v": 1,
+  "verb": "approve"
+}

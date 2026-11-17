@@ -1,0 +1,108 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "5fef180cd655f6a761536a767b1a1f1adb6006a9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:da488918796bea3d480b6388aaa124aeca0228dc9a015652bb6e44136528037e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7d8b65a4dc7868d6aed2f5cf95b87a9d2ca12bb7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c588f5b35398ba49efbe72e22486114b76a783552c1f641ac163623084ec159",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3a5865bb0282c4185acb9242c703db72f02218d2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6b4d61fd833ddd9bad566927a87f980056db8ac79e6d817b360a85c10e51d34f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c66c41ec51d9e892c091c187a83d1145a2c66e4b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:224b2bf1e79ebded43ae39bcd530caa58591eaa7191d753db00881af39ab30d4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1794923402458,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d1d881bcfe383a435dc95a44292907393ab16dbc",
+      "hash": "sha256:b0d7183d426e1c555cd1199b5ace3d0a55ce10fd6f4a7b4d8cf1fa9ffd2e9c12",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "57c1c9f6af7b2971ec63c79962325cfa5b2dd023",
+      "hash": "sha256:872049458a67a64ce58fe900ee2706a4837fade58056bd57f76627c3d0371539",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "28"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d0dc-701e-8908-afb6fafe946e"
+    }
+  ],
+  "id": "01a1e9c5-9544-7703-8f34-fc71113c97bc",
+  "kind": "decision",
+  "reason": "Issue #136: fmt leaves out the entries that say nothing and that the build reads as not written, by the rule new writes with; status --without; this repository's titles are lines. Reviewed design (independent review, arch rules), code review, and a blind review of the branch with every finding fixed; tests pass",
+  "revision": "4c7f0b93a4aa44c207a2cfbcf03fa9743799c607",
+  "seen": "sha256:9663feb4fb2ddf1e9a369edf1cc54e8c72aa3c05f3eabb7b6ccb2e5995341c58",
+  "seen_address": "36861b76ab0044dfff0ba3c438ed02a23876f39c",
+  "subject": "01a1c3eb-4d0e-77f5-b895-ad9aa697cad0",
+  "v": 1,
+  "verb": "approve"
+}

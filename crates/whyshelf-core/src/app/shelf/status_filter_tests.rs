@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 
 use crate::domain::id::DocId;
 use crate::domain::shelf::build::{DocReading, RawProblem, ReadId};
-use crate::domain::shelf::filter::{FieldAsk, FilterProblem, StatusFilterAsk};
+use crate::domain::shelf::filter::{FieldAsk, FieldWant, FilterProblem, StatusFilterAsk};
 use crate::domain::shelf::freshness::{FreshnessLevel, StandingKind};
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::{
@@ -75,7 +75,7 @@ fn ask_books(names: &[&str]) -> StatusFilterAsk {
 fn where_topic(value: &str) -> FieldAsk {
     FieldAsk {
         field: EntryName::new("topic").unwrap(),
-        value: value.to_owned(),
+        value: FieldWant::Value(value.to_owned()),
     }
 }
 
@@ -125,6 +125,22 @@ fn the_rows_are_those_that_pass_and_the_filter_comes_back_as_given() {
 }
 
 #[test]
+fn a_condition_of_no_value_keeps_the_documents_of_a_declaring_book_with_none() {
+    let app = app();
+    let ask = StatusFilterAsk {
+        fields: vec![FieldAsk {
+            field: EntryName::new("topic").unwrap(),
+            value: FieldWant::NoValue,
+        }],
+        ..StatusFilterAsk::default()
+    };
+    let report = block_on(app.status_filtered(&ask)).unwrap();
+    // Only a finding can lack a `topic` (the specs do not declare it).
+    assert_eq!(ids(&report), set(&[3]));
+    assert_eq!(report.filters, ask);
+}
+
+#[test]
 fn the_kinds_of_filter_combine() {
     let ask = StatusFilterAsk {
         books: ask_books(&["finding", "spec"]).books,
@@ -167,11 +183,11 @@ fn a_filter_that_does_not_fit_the_declaration_is_every_problem_and_a_request_err
             where_topic("fine"),
             FieldAsk {
                 field: EntryName::new("title").unwrap(),
-                value: "fine".to_owned(),
+                value: FieldWant::Value("fine".to_owned()),
             },
             FieldAsk {
                 field: EntryName::new("absent").unwrap(),
-                value: "x".to_owned(),
+                value: FieldWant::Value("x".to_owned()),
             },
         ],
         ..StatusFilterAsk::default()
@@ -205,7 +221,7 @@ fn a_value_no_book_reads_is_a_problem() {
     let ask = StatusFilterAsk {
         fields: vec![FieldAsk {
             field: EntryName::new("count").unwrap(),
-            value: "many".to_owned(),
+            value: FieldWant::Value("many".to_owned()),
         }],
         ..StatusFilterAsk::default()
     };

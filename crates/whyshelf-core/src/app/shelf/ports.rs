@@ -13,12 +13,13 @@
 //! the cause kept; and what crosses the boundary is a value of the domain or of this
 //! layer, never a file, a JSON text or a TOML table, with one exception: a text or
 //! bytes in an adapter's own format that the core carries from one port to another
-//! and never reads ([`DeclarationText`], the `read` and `text` of a [`FileForm`]).
+//! and never reads ([`DeclarationText`], the `read` of a [`FileRead`] and the `text` of
+//! a [`Rendered`]).
 //!
 //! | port | gives the use cases |
 //! |---|---|
 //! | [`BookSchemaSource`] | the declaration of the project, as an adapter read it: the books, the presets and the defaults; and the declaration a text of its format holds, read by the same reader |
-//! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books, the bytes and the [`ContentAddress`] of a document's file now, and how each file stands to the one form documents are written in ([`FileForm`]) |
+//! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books, the bytes and the [`ContentAddress`] of a document's file now, each file with its bytes and the line of a comment in it ([`FileRead`]), the text of the one form documents are written in from entries ([`Rendered`]), and whether a file may be replaced ([`Replaceable`]) |
 //! | [`LedgerRead`] | the records of the ledger, and the files of it that could not be read as one |
 //! | [`LedgerAppend`] | one record added, never in place of another |
 //! | [`Clock`] | now, as a [`JudgedAt`] |
@@ -59,7 +60,9 @@ use crate::domain::location::RelPath;
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactKey, ArtifactReadings, ContentAddress, Revision, Space,
 };
-use crate::domain::shelf::build::{DocReading, RawValue};
+#[cfg(doc)]
+use crate::domain::shelf::build::Shelf;
+use crate::domain::shelf::build::{DocReading, FormEntries};
 #[cfg(doc)]
 use crate::domain::shelf::ledger::GoneNames;
 use crate::domain::shelf::ledger::{
@@ -205,56 +208,69 @@ pub trait DocSource: Send + Sync {
     ) -> impl Future<Output = Result<BTreeMap<RelPath, ContentAddress>, Self::Error>> + Send;
 
     /// For every Markdown file the ranges take, as
-    /// [`read_docs`](Self::read_docs) finds them: its reading, its bytes, and how it
-    /// stands to the one form the adapter writes a document in (the form
-    /// [`DocWrite::create`] writes). Reading creates nothing.
+    /// [`read_docs`](Self::read_docs) finds them: its reading, its bytes, and the line
+    /// of the first comment in its front matter. Reading creates nothing, and no
+    /// judgement of the form is made: which entries the form holds is the use case's
+    /// ([`Shelf::form_entries`]), and whether to write is `fmt`'s.
     fn forms(
         &self,
         ranges: &[BookRange],
-    ) -> impl Future<Output = Result<Vec<FileForm>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<Vec<FileRead>, Self::Error>> + Send;
+
+    /// The text of a document in the one form its adapter writes (the form
+    /// [`DocWrite::create`] writes) from these entries and this body, and what that
+    /// text reads as when it is read as the file `origin`. Nothing is read or written:
+    /// the form is of the adapter's format only, and the entries are given as they are.
+    fn render(&self, origin: &RelPath, entries: &FormEntries, body: &str) -> Rendered;
+
+    /// Whether the file at `file` (relative to the project root) may be replaced by a
+    /// file written in its place: [`Replaceable::Yes`], or why it may not. Asked only
+    /// of a file that is not in the form and holds no comment, before `fmt` holds its
+    /// text against the entries of the form.
+    fn replaceable(
+        &self,
+        file: &RelPath,
+    ) -> impl Future<Output = Result<Replaceable, Self::Error>> + Send;
 }
 
-/// A document's file beside the one form its adapter writes ([`DocSource::forms`]).
+/// A document's file as an adapter read it for `fmt` ([`DocSource::forms`]).
 ///
 /// The bytes are the adapter's text, carried by the use case and never read by it:
 /// [`DocReplace::replace_read`] is given them back, so that it replaces only the file
 /// as it was read, and with the text that was checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FileForm {
+pub struct FileRead {
     /// The file's reading now, as [`DocSource::read_docs`] gives it.
     pub reading: DocReading,
     /// The file's bytes now.
     pub read: Vec<u8>,
-    /// How the file stands to the form.
-    pub form: Form,
+    /// The line of the file (counted from 1) the first comment of its front matter is
+    /// on, when it holds one: a place the form has none for. None for a file whose
+    /// front matter cannot be read.
+    pub comment: Option<u32>,
 }
 
-/// How a file stands to the one form its adapter writes.
+/// The text of a document in the form, and what it reads as ([`DocSource::render`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Form {
-    /// Its bytes are already the form's.
-    InForm,
-    /// No text in the form can be made from it: its front matter cannot be read.
-    Unwritable,
-    /// Its front matter holds a comment, which the form has no place for; `line` is
-    /// the line of the file the first one is on.
-    Comment {
-        /// The line, counted from 1.
-        line: u32,
-    },
-    /// It is not in the form, and the user cannot write it.
+pub struct Rendered {
+    /// The text in the form.
+    pub text: Vec<u8>,
+    /// The reading of that text, read as the adapter reads a file: what `fmt` holds
+    /// against the entries the text was made from.
+    pub reads_as: DocReading,
+}
+
+/// Whether a file may be replaced by one written in its place
+/// ([`DocSource::replaceable`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Replaceable {
+    /// It may.
+    Yes,
+    /// The user cannot write it.
     ReadOnly,
-    /// It is not in the form, and it has more than one link (a hard link), which a
-    /// file written in its place would not keep.
+    /// It has more than one link (a hard link), which a file written in its place
+    /// would not keep.
     Linked,
-    /// It is not in the form: the text the form gives it, and what that text reads
-    /// as. The use case writes the text only when that reading is the file's own.
-    Other {
-        /// The text in the form.
-        text: Vec<u8>,
-        /// The reading of that text.
-        reads_as: DocReading,
-    },
 }
 
 /// Why a file of the ledger is not a record.
@@ -381,7 +397,9 @@ pub trait DocWrite: Send + Sync {
 
     /// Write the file at `path` (relative to the project root) with this front matter
     /// and body. The entries are values; their text (YAML) is the adapter's, and must
-    /// read back through [`DocSource`] into the same entries.
+    /// read back through [`DocSource`] into the same entries. They are
+    /// [`FormEntries`], so that what is written is what [`Shelf::form_entries`]
+    /// decided, as `fmt` writes it.
     ///
     /// Create-only: a file already at the path is never replaced, and is
     /// [`Creation::AlreadyThere`], not an error. Missing directories are made. Writing
@@ -391,7 +409,7 @@ pub trait DocWrite: Send + Sync {
     fn create(
         &self,
         path: &RelPath,
-        entries: &BTreeMap<String, RawValue>,
+        entries: &FormEntries,
         body: &str,
     ) -> impl Future<Output = Result<Creation, Self::Error>> + Send;
 }
@@ -465,7 +483,7 @@ pub trait DocReplace: Send + Sync {
     type Error: Error + Send + Sync + 'static;
 
     /// Replace the file at `path` (relative to the project root), which a reading
-    /// just read as `read`, by `text`, the text [`DocSource::forms`] gave for it in
+    /// just read as `read`, by `text`, the text [`DocSource::render`] gave for it in
     /// the form.
     ///
     /// The file is compared with `read` just before it is replaced: one that changed
