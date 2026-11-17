@@ -40,9 +40,28 @@ and this project adheres to
   `>-` write none. A `line` hashes as a `text`, so declaring a `text` field
   `line` changes no approval. The declarations `init` writes declare `title` a
   `line` (#128).
+- `status --without <field>`, repeatable: only the valid documents of a book
+  that declares the field and holds no value for it (left out, or written with
+  nothing in it). The answer's `filters` has `without` beside `where`. A field
+  asked both with `--where` and `--without`, and `--without` of a field that
+  every book declaring it requires (of the books asked with `--book`, when any
+  are and one of them declares it), are request errors (exit 2), as no document could pass. In the library,
+  a `FieldAsk` holds a `FieldWant` (`Value` or `NoValue`), and `FilterProblem`
+  has `Contradicts` and `AlwaysWritten` (#136).
 
 ### Changed
 
+- `fmt` writes the form `new` writes: an entry with nothing in it that the
+  build reads as not written (an optional field, or a link whose count admits
+  none) is left out, and the file reads as the same document, so no approval
+  changes; `fmt --check` lists a file that holds one. A required field, a link
+  whose count does not admit none, an `id`, a `key` or an undeclared entry
+  written with nothing is kept as it is written (`key:` is written back as
+  `key: null`). In the library,
+  `Shelf::form_entries` gives the entries of the form as `FormEntries`, which
+  `DocWrite::create` takes; `DocSource::forms` returns each file's reading,
+  bytes and first comment (`FileRead`), and `DocSource` has `render` and
+  `replaceable`; `Form` and `FileForm` are gone (#136).
 - `init` resolves a link of its documents to a document it writes later in
   the same run: such a link is no longer listed as unresolved (#125).
 - A required field written with nothing in it makes the document invalid: a
@@ -63,8 +82,8 @@ and this project adheres to
   a list (a field, a link to documents or to artifacts) that is empty or white
   space only is a problem, so a document that writes one is invalid. `new`
   writes no entry that says nothing, and `new --from` takes `null`. `status
-  --where <field>=` with an empty value is a request error (exit 2). `fmt`
-  writes a value written `key:` as `key: null`. In the library, `FieldValue`
+  --where <field>=` with an empty value is a request error (exit 2). In the
+  library, `FieldValue`
   holds `NonBlank` texts and `RawValue` has `Null` (#128).
 - Problems say a count, a type and a book as the declaration writes them: "the
   link `grounds` has 2 keys, which its count `optional` (none or one) does not
