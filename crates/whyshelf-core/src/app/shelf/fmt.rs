@@ -4,26 +4,41 @@
 //!
 //! ```text
 //!   BookSchemaSource -> the dirs of the books
-//!   DocSource::forms -> per file: its reading, its bytes, how it stands to the form
+//!   DocSource::forms -> per file: its reading, its bytes, the line of a comment
 //!        |
-//!        v  plan (here, per file)
-//!   in the form ............................................ counted, not written
-//!   unparsed, unheld, a comment, a text in the form that reads otherwise,
-//!   read-only, or a hard link -----------------------------> left alone
-//!   a text in the form that reads as the file does -------> DocReplace::replace_read
+//!        v  plan (here, per file), in this order
+//!   unparsed, unheld ......................................... left alone
+//!   Shelf::form_entries -> the entries the form holds        (the same as `new`'s)
+//!   DocSource::render   -> the text in the form, and what it reads as
+//!   the bytes are the text ................................. counted, not written
+//!   a comment in the front matter ............................ left alone
+//!   DocSource::replaceable: read-only, or a hard link ........ left alone
+//!   the text reads as the entries the form holds ......... DocReplace::replace_read
+//!   the text reads as anything else .......................... left alone
 //! ```
+//!
+//! The promise: `fmt` writes a file only when the text in the form reads back as the
+//! file does without the entries that say nothing and that the build reads as not
+//! written (an optional field written empty, a link whose count admits none written
+//! with no key). Which entries those are is decided by the entry point `new`
+//! asks too ([`Shelf::form_entries`]), so what `new` writes is in the form, and `fmt`
+//! rewrites a file that holds such an entry without it. An entry that says nothing
+//! and that the build tells a problem for (a required field, a link whose count asks
+//! for a key, an undeclared entry, the `id` and the `key`) stays in the form, so the
+//! rewrite does not change what `check` says.
 //!
 //! The form is the adapter's (its text is never read here): the whole text after
 //! the normalization rule, [`normalize`](crate::domain::shelf::doc::normalize), so a
 //! body's line endings and trailing white space are normalized too, as every reading
-//! already normalizes them. What is decided here is
-//! whether a file may be written in it: only when the text in the form reads back as
-//! exactly the reading of the file now, the same entries and the same body. A
-//! document's hash is taken over its book, fields and body as read, so such a
-//! rewrite changes no hash and no approval. The check is made on every file, on
-//! every run; a file that fails it is left as it is and listed with why, and the
-//! others are still written. A file left alone is not in the form either: the answer
-//! lists it apart from the files `fmt` would write, and `fmt --check` fails on both.
+//! already normalizes them. What is decided here is whether a file may be written in
+//! it: only when the text in the form reads back as exactly the entries the form
+//! holds and the body of the file now. A document's hash is taken over its book,
+//! fields and body as read, which an entry the build reads as not written is not
+//! part of, so such a rewrite changes no hash and no approval. The check is made on
+//! every file, on every run; a file that fails it is left as it is and listed with
+//! why, and the others are still written. A file left alone is not in the form
+//! either: the answer lists it apart from the files `fmt` would write, and
+//! `fmt --check` fails on both.
 //!
 //! The files are written one at a time, each replaced whole. A port that fails part
 //! way leaves the first of them written, each a sound file of its own in the form,
@@ -38,7 +53,8 @@ use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::schema_of;
 use super::ports::{
-    DocReplace, DocSource, FileForm, Form, Replacement, ShelfPort, ShelfRead, ShelfWrite, port,
+    DocReplace, DocSource, FileRead, Replaceable, Replacement, ShelfPort, ShelfRead, ShelfWrite,
+    port,
 };
 
 /// The answer of [`fmt`](ShelfApp::fmt) and [`fmt_check`](ShelfApp::fmt_check), the
@@ -87,7 +103,7 @@ pub enum LeftAloneWhy {
         /// The line of the file, counted from 1.
         line: u32,
     },
-    /// Its text in the form would not read back as the file reads now.
+    /// Its text in the form would not read back as the entries the form holds.
     ReadsOtherwise,
     /// The user cannot write the file.
     ReadOnly,
@@ -109,60 +125,96 @@ enum Plan {
     LeaveAlone(LeftAlone),
 }
 
-/// The one rule of which file is written: the plan for one file.
-fn plan(schema: &Schema, form: FileForm) -> Plan {
-    let FileForm {
+/// A file left as it is, and why.
+fn leave(file: &RelPath, why: LeftAloneWhy) -> Plan {
+    Plan::LeaveAlone(LeftAlone {
+        file: file.clone(),
+        why,
+    })
+}
+
+/// The one rule of which file is written: the plan for one file, decided in this
+/// order (the module page).
+async fn plan<D: DocSource>(
+    schema: &Schema,
+    docs: &D,
+    found: FileRead,
+) -> Result<Plan, ShelfError> {
+    let FileRead {
         reading,
         read,
-        form,
-    } = form;
-    let file = match &reading {
-        DocReading::Parsed { origin, .. } => origin.clone(),
+        comment,
+    } = found;
+    let (origin, entries, body) = match reading {
+        DocReading::Parsed {
+            origin,
+            entries,
+            body,
+        } => (origin, entries, body),
         DocReading::Unparsed { origin, why, .. } => {
-            return Plan::LeaveAlone(LeftAlone {
-                file: origin.clone(),
-                why: LeftAloneWhy::Unparsed(Shelf::told(schema, origin, why.clone())),
-            });
+            let why = LeftAloneWhy::Unparsed(Shelf::told(schema, &origin, why));
+            return Ok(leave(&origin, why));
         }
         DocReading::Unheld { origin, values, .. } => {
-            return Plan::LeaveAlone(LeftAlone {
-                file: origin.clone(),
-                why: LeftAloneWhy::Unheld(values.clone()),
-            });
+            return Ok(leave(&origin, LeftAloneWhy::Unheld(values)));
         }
     };
-    let leave = |why| {
-        Plan::LeaveAlone(LeftAlone {
-            file: file.clone(),
-            why,
-        })
+    // A file the books do not take is not read for `fmt`; were one handed over, it is
+    // not written.
+    let Some(book) = schema.book_of(&origin) else {
+        return Ok(leave(&origin, LeftAloneWhy::ReadsOtherwise));
     };
-    match form {
-        Form::InForm => Plan::InForm(file),
-        Form::Comment { line } => leave(LeftAloneWhy::Comment { line }),
-        Form::Unwritable => leave(LeftAloneWhy::ReadsOtherwise),
-        Form::ReadOnly => leave(LeftAloneWhy::ReadOnly),
-        Form::Linked => leave(LeftAloneWhy::Linked),
-        Form::Other { text, reads_as } if reads_as == reading => Plan::Rewrite { file, read, text },
-        Form::Other { .. } => leave(LeftAloneWhy::ReadsOtherwise),
+    let form = Shelf::form_entries(schema, book.name(), &entries);
+    let rendered = docs.render(&origin, &form, &body);
+    if rendered.text == read {
+        return Ok(Plan::InForm(origin));
+    }
+    if let Some(line) = comment {
+        return Ok(leave(&origin, LeftAloneWhy::Comment { line }));
+    }
+    match docs
+        .replaceable(&origin)
+        .await
+        .map_err(port(ShelfPort::Docs))?
+    {
+        Replaceable::Yes => {}
+        Replaceable::ReadOnly => return Ok(leave(&origin, LeftAloneWhy::ReadOnly)),
+        Replaceable::Linked => return Ok(leave(&origin, LeftAloneWhy::Linked)),
+    }
+    let wanted = DocReading::Parsed {
+        origin: origin.clone(),
+        entries: form.as_map().clone(),
+        body,
+    };
+    if rendered.reads_as == wanted {
+        Ok(Plan::Rewrite {
+            file: origin,
+            read,
+            text: rendered.text,
+        })
+    } else {
+        Ok(leave(&origin, LeftAloneWhy::ReadsOtherwise))
     }
 }
 
 /// The plan of every file of the books.
 async fn plans<P: ShelfRead>(ports: &P) -> Result<Vec<Plan>, ShelfError> {
     let schema = schema_of(ports).await?.map_err(ShelfError::Schema)?;
-    let forms = ports
+    let found = ports
         .docs()
         .forms(&schema.ranges())
         .await
         .map_err(port(ShelfPort::Docs))?;
-    // A file its book skips (no front matter at all) is no document: `fmt` has
-    // nothing to say about it, as `check` has not.
-    Ok(forms
-        .into_iter()
-        .filter(|found| Shelf::skip_of(&schema, &found.reading).is_none())
-        .map(|found| plan(&schema, found))
-        .collect())
+    let mut plans = Vec::with_capacity(found.len());
+    for file in found {
+        // A file its book skips (no front matter at all) is no document: `fmt` has
+        // nothing to say about it, as `check` has not.
+        if Shelf::skip_of(&schema, &file.reading).is_some() {
+            continue;
+        }
+        plans.push(plan(&schema, ports.docs(), file).await?);
+    }
+    Ok(plans)
 }
 
 impl<P: ShelfRead> ShelfApp<P> {
@@ -183,7 +235,8 @@ impl<P: ShelfRead> ShelfApp<P> {
 
 impl<P: ShelfWrite> ShelfApp<P> {
     /// Write every document's file that is not in the one form in it, when the text
-    /// in the form reads back as the file reads now (the module page); every other
+    /// in the form reads back as the entries the form holds and the body of the file
+    /// now (the module page); every other
     /// file is left as it is, and listed with why. A file in the form is not written.
     pub async fn fmt(&mut self) -> Result<FmtReport, ShelfError> {
         let mut report = FmtReport::default();

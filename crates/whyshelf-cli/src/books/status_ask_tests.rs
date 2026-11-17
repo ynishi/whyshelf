@@ -15,7 +15,10 @@ fn strings(items: &[&str]) -> Vec<String> {
 
 #[test]
 fn nothing_given_asks_nothing() {
-    assert_eq!(status_ask(&[], &[], &[]), Ok(StatusFilterAsk::default()));
+    assert_eq!(
+        status_ask(&[], &[], &[], &[]),
+        Ok(StatusFilterAsk::default())
+    );
 }
 
 #[test]
@@ -24,6 +27,7 @@ fn books_standings_and_conditions_are_read_as_given() {
         &strings(&["spec", "finding", "spec"]),
         &strings(&["stale", "pending"]),
         &strings(&["issues=#41", "title=a=b", "note="]),
+        &[],
     )
     .unwrap();
     let books: Vec<&str> = ask.books.iter().map(BookName::as_str).collect();
@@ -38,7 +42,10 @@ fn books_standings_and_conditions_are_read_as_given() {
     let fields: Vec<(&str, &str)> = ask
         .fields
         .iter()
-        .map(|f| (f.field.as_str(), f.value.as_str()))
+        .map(|f| match &f.value {
+            FieldWant::Value(value) => (f.field.as_str(), value.as_str()),
+            FieldWant::NoValue => panic!("no `--without` was given"),
+        })
         .collect();
     // In the order given; the value is what follows the first `=`.
     assert_eq!(
@@ -49,29 +56,32 @@ fn books_standings_and_conditions_are_read_as_given() {
 
 #[test]
 fn a_book_that_is_no_name_is_told() {
-    let error = status_ask(&strings(&["Not A Book"]), &[], &[]).unwrap_err();
+    let error = status_ask(&strings(&["Not A Book"]), &[], &[], &[]).unwrap_err();
     assert!(error.starts_with("--book `Not A Book`: "), "{error}");
 }
 
 #[test]
 fn a_word_that_is_no_standing_is_told_with_the_words_there_are() {
-    let error = status_ask(&[], &strings(&["soon"]), &[]).unwrap_err();
+    let error = status_ask(&[], &strings(&["soon"]), &[], &[]).unwrap_err();
     assert!(error.starts_with("--standing `soon`: "), "{error}");
     for word in StandingKind::ALL.map(output::standing) {
         assert!(error.contains(word), "{word}: {error}");
     }
     // A word is exact: no case, no part.
     for word in ["Fresh", "fre", ""] {
-        assert!(status_ask(&[], &strings(&[word]), &[]).is_err(), "{word:?}");
+        assert!(
+            status_ask(&[], &strings(&[word]), &[], &[]).is_err(),
+            "{word:?}"
+        );
     }
 }
 
 #[test]
 fn a_condition_with_no_equals_or_a_field_that_is_no_name_is_told() {
-    let error = status_ask(&[], &[], &strings(&["issues"])).unwrap_err();
+    let error = status_ask(&[], &[], &strings(&["issues"]), &[]).unwrap_err();
     assert!(error.starts_with("--where `issues`: "), "{error}");
     for given in ["Issues=1", "=1", "id=1", "two words=1"] {
-        let error = status_ask(&[], &[], &strings(&[given])).unwrap_err();
+        let error = status_ask(&[], &[], &strings(&[given]), &[]).unwrap_err();
         assert!(
             error.starts_with(&format!("--where `{given}`: ")),
             "{error}"
@@ -81,7 +91,13 @@ fn a_condition_with_no_equals_or_a_field_that_is_no_name_is_told() {
 
 #[test]
 fn the_first_error_is_the_one_told() {
-    let error = status_ask(&strings(&["Bad"]), &strings(&["soon"]), &strings(&["x"])).unwrap_err();
+    let error = status_ask(
+        &strings(&["Bad"]),
+        &strings(&["soon"]),
+        &strings(&["x"]),
+        &strings(&["Bad Field"]),
+    )
+    .unwrap_err();
     assert!(error.starts_with("--book "), "{error}");
 }
 
@@ -100,12 +116,17 @@ fn the_arguments_of_status_are_repeatable() {
         "x=1",
         "--where",
         "y=2",
+        "--without",
+        "z",
+        "--without",
+        "w",
     ])
     .unwrap();
     let BooksCommand::Status {
         books,
         standings,
         wheres,
+        withouts,
     } = cli.command
     else {
         panic!("not a status command");
@@ -113,6 +134,45 @@ fn the_arguments_of_status_are_repeatable() {
     assert_eq!(books, strings(&["a", "b"]));
     assert_eq!(standings, strings(&["stale"]));
     assert_eq!(wheres, strings(&["x=1", "y=2"]));
+    assert_eq!(withouts, strings(&["z", "w"]));
+}
+
+#[test]
+fn each_without_is_a_condition_of_no_value_after_the_wheres() {
+    let ask = status_ask(
+        &[],
+        &[],
+        &strings(&["issues=#41", "note="]),
+        &strings(&["source", "tags"]),
+    )
+    .unwrap();
+    let fields: Vec<(&str, FieldWant)> = ask
+        .fields
+        .iter()
+        .map(|f| (f.field.as_str(), f.value.clone()))
+        .collect();
+    // `--where note=` stays a condition on the value `` (the filter refuses it);
+    // `--without` is the way to ask for no value.
+    assert_eq!(
+        fields,
+        vec![
+            ("issues", FieldWant::Value("#41".to_owned())),
+            ("note", FieldWant::Value(String::new())),
+            ("source", FieldWant::NoValue),
+            ("tags", FieldWant::NoValue),
+        ]
+    );
+}
+
+#[test]
+fn a_without_that_is_no_field_name_is_told() {
+    for given in ["Source", "", "two words", "id"] {
+        let error = status_ask(&[], &[], &[], &strings(&[given])).unwrap_err();
+        assert!(
+            error.starts_with(&format!("--without `{given}`: ")),
+            "{error}"
+        );
+    }
 }
 
 #[test]
@@ -127,7 +187,7 @@ fn every_standing_has_one_word_that_reads_back_as_it() {
     for kind in StandingKind::ALL {
         // What an answer prints is what `--standing` reads back.
         let word = output::standing(kind);
-        let ask = status_ask(&[], &strings(&[word]), &[]).unwrap();
+        let ask = status_ask(&[], &strings(&[word]), &[], &[]).unwrap();
         assert_eq!(ask.standings, BTreeSet::from([kind]), "{word}");
     }
 }

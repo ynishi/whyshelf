@@ -34,9 +34,10 @@
 //! it accepts is exactly what the build will accept when the file is read back. A
 //! link to a key no document has is accepted as it is by the build (an unresolved
 //! link is a state of a valid document), and [`NewDoc::unresolved`] lists it. An
-//! entry the build reads as saying nothing (`source=` for an optional field, a link
-//! given no key) is not written: [`NewDoc::entries`] leaves it out, so that the file
-//! holds what the document comes to.
+//! entry the build reads as not written (`source=` for an optional field, a link
+//! given no key) is not written: [`NewDoc::entries`], made by
+//! [`Shelf::form_entries`], leaves it out, so that the file holds what the document
+//! comes to. `fmt` asks the same entry point, so the two write one form.
 //!
 //! [`domain::shelf`]: crate::domain::shelf
 
@@ -57,7 +58,7 @@ use crate::domain::shelf::schema::{
 
 use super::plan::{NewRequest, PlannedValue};
 use super::{
-    Candidate, DocProblem, DocReading, Judged, KeyIndex, RawValue, Shelf, Written, ask_of,
+    Candidate, DocProblem, DocReading, FormEntries, Judged, KeyIndex, RawValue, Shelf, ask_of,
     resolve_artifacts, resolve_links,
 };
 
@@ -240,7 +241,7 @@ pub enum NewDocProblem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewDoc {
     doc: Doc,
-    entries: BTreeMap<String, RawValue>,
+    entries: FormEntries,
 }
 
 impl NewDoc {
@@ -251,9 +252,10 @@ impl NewDoc {
     }
 
     /// Every entry of the front matter to write, `id` and `key` included: the ones the
-    /// request gave, but those the build read as saying nothing (a field written
-    /// empty, a link with no key), which the document is the same without.
-    pub fn entries(&self) -> &BTreeMap<String, RawValue> {
+    /// request gave, but those the build read as not written and the file need not
+    /// hold (a field written empty, a link with no key), which [`Shelf::form_entries`]
+    /// leaves out and the document is the same without.
+    pub fn entries(&self) -> &FormEntries {
         &self.entries
     }
 
@@ -593,13 +595,9 @@ impl Shelf {
             } => {
                 let links = resolve_links(index, links);
                 let artifact_links = resolve_artifacts(artifacts, artifact_links);
-                // What the build read as nothing the file need not hold: the document
-                // is the same without it, so the file is written without it. Told by
-                // the build's own reader of an entry (`Written::of`), not judged here.
-                entries.retain(|_, raw| Written::of(Some(raw)) != Written::Nothing);
                 Ok(NewDoc {
                     doc: Doc::new(draft, links, artifact_links),
-                    entries,
+                    entries: Self::form_entries(&self.schema, &key.key.book, &entries),
                 })
             }
             Judged::Invalid { file, .. } => Err(NewDocProblem::Invalid(file.problems)),

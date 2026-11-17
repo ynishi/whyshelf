@@ -1,5 +1,6 @@
 //! `status` with filters, on the binary and a small project of files: the three
-//! filters narrow the answer and combine, the answer carries them as given, `health`
+//! filters and `--without` (a field that holds no value) narrow the answer and
+//! combine, the answer carries them as given, `health`
 //! stays of the whole project, and a filter that is no request is answered with exit
 //! 2 and every problem.
 //!
@@ -118,7 +119,7 @@ fn no_filter_is_every_document_and_the_filters_are_empty() {
     );
     assert_eq!(
         answer["filters"],
-        value!({"books": [], "standings": [], "where": []})
+        value!({"books": [], "standings": [], "where": [], "without": []})
     );
     // The same as naming every book: the rows are what `status` always answered.
     let both = answered(&project, &["--book", "decision", "--book", "note"]);
@@ -137,6 +138,7 @@ fn a_book_and_a_field_answer_the_decisions_that_name_the_issue() {
             "books": ["decision"],
             "standings": [],
             "where": [{"field": "issues", "value": "#41"}],
+            "without": [],
         })
     );
     // The book alone, and the field alone (only a decision declares it).
@@ -254,8 +256,117 @@ fn the_answer_carries_the_filters_as_given_with_the_standings_in_a_fixed_order()
                 // The value is what follows the first `=`, as typed.
                 {"field": "issues", "value": "#41=x"},
             ],
+            "without": [],
         })
     );
+}
+
+#[test]
+fn without_answers_the_documents_that_hold_no_value_and_the_filters_say_it() {
+    let project = project("status-without");
+    // A field written with nothing in it holds no value either.
+    fs::write(
+        project.0.join("decisions/DEC-4.md"),
+        decision(4, &["#43"], "size: \"\"\nlevel:\n"),
+    )
+    .unwrap();
+    let by = |args: &[&str]| keys(&answered(&project, args));
+    assert_eq!(
+        by(&["--without", "level"]),
+        vec!["decision:DEC-3", "decision:DEC-4"]
+    );
+    assert_eq!(
+        by(&["--without", "size"]),
+        vec!["decision:DEC-2", "decision:DEC-3", "decision:DEC-4"]
+    );
+    // Each is a condition of its own, and every one has to hold, beside the others.
+    assert_eq!(
+        by(&["--without", "size", "--without", "level"]),
+        vec!["decision:DEC-3", "decision:DEC-4"]
+    );
+    assert_eq!(
+        by(&["--without", "size", "--where", "issues=#41"]),
+        vec!["decision:DEC-2"]
+    );
+    assert_eq!(
+        by(&["--without", "level", "--where", "issues=#42"]),
+        vec!["decision:DEC-3"]
+    );
+    // A book that does not declare the field passes nothing.
+    assert_eq!(
+        by(&["--book", "note", "--without", "level"]),
+        Vec::<String>::new()
+    );
+    // The answer carries them as given, apart from the values.
+    let answer = answered(&project, &["--without", "size", "--without", "level"]);
+    assert_eq!(
+        answer["filters"],
+        value!({
+            "books": [],
+            "standings": [],
+            "where": [],
+            "without": ["size", "level"],
+        })
+    );
+}
+
+#[test]
+fn a_where_with_no_value_stays_a_request_error_and_without_is_the_way_to_ask() {
+    let project = project("status-where-empty");
+    let (code, answer) = status(&project, &["--where", "level="]);
+    assert_eq!(code, Some(2), "{answer}");
+    assert_eq!(answer["error"], "request");
+    assert_eq!(
+        answer["problems"],
+        value!([
+            "the value of the condition on `level` is empty: a condition names the value a field holds"
+        ])
+    );
+    assert_eq!(
+        keys(&answered(&project, &["--without", "level"])),
+        vec!["decision:DEC-3"]
+    );
+}
+
+#[test]
+fn a_question_no_document_could_pass_is_exit_2_and_changes_nothing() {
+    let project = project("status-without-refused");
+    let before = project.files();
+    let (code, answer) = status(&project, &["--where", "level=high", "--without", "level"]);
+    assert_eq!(code, Some(2), "{answer}");
+    assert_eq!(answer["error"], "request");
+    assert_eq!(
+        answer["problems"],
+        value!([
+            "the field `level` is asked for with a value and with no value: no document holds both"
+        ])
+    );
+    // `title` is required in both books that declare it.
+    let (code, answer) = status(&project, &["--without", "title"]);
+    assert_eq!(code, Some(2), "{answer}");
+    assert_eq!(
+        answer["problems"],
+        value!([
+            "the field `title` is required in every book that declares it: no document is without a value"
+        ])
+    );
+    let (code, answer) = status(&project, &["--without", "nothing"]);
+    assert_eq!(code, Some(2), "{answer}");
+    assert_eq!(
+        answer["problems"],
+        value!(["no book declares a field `nothing`"])
+    );
+    // Not the name of a field: told as arguments that are no filter are.
+    let (code, answer) = status(&project, &["--without", "Level"]);
+    assert_eq!(code, Some(2), "{answer}");
+    assert!(
+        answer["messages"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("--without `Level`"),
+        "{answer}"
+    );
+    assert_eq!(project.files(), before);
 }
 
 #[test]

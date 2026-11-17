@@ -115,8 +115,8 @@ fn a_valid_new_document_is_made_as_the_build_makes_it_with_its_unresolved_links(
         .unwrap();
     assert_eq!(new.doc().origin().as_str(), "findings/FR-2.md");
     assert_eq!(new.doc().key().to_string(), "finding:FR-2");
-    assert_eq!(new.entries()["key"], text("FR-2"));
-    assert_eq!(new.entries()["id"], text(&docid(5).to_string()));
+    assert_eq!(new.entries().as_map()["key"], text("FR-2"));
+    assert_eq!(new.entries().as_map()["id"], text(&docid(5).to_string()));
     let unresolved: Vec<_> = new
         .unresolved()
         .into_iter()
@@ -129,7 +129,7 @@ fn a_valid_new_document_is_made_as_the_build_makes_it_with_its_unresolved_links(
         fr(1, &[]),
         DocReading::Parsed {
             origin: new.doc().origin().clone(),
-            entries: new.entries().clone(),
+            entries: new.entries().as_map().clone(),
             body: "body\n".to_owned(),
         },
     ]);
@@ -161,7 +161,11 @@ fn an_entry_the_build_reads_as_saying_nothing_is_not_written() {
             &ArtifactReadings::new(),
         )
         .unwrap();
-    let written: Vec<&str> = new.entries().keys().map(String::as_str).collect();
+    let written: Vec<&str> = new
+        .entries()
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect();
     assert_eq!(written, ["id", "key", "title"]);
     assert!(new.doc().fields().get("note").is_none());
 
@@ -170,7 +174,7 @@ fn an_entry_the_build_reads_as_saying_nothing_is_not_written() {
         fr(1, &[]),
         DocReading::Parsed {
             origin: new.doc().origin().clone(),
-            entries: new.entries().clone(),
+            entries: new.entries().as_map().clone(),
             body: String::new(),
         },
     ]);
@@ -196,9 +200,13 @@ fn an_entry_that_says_something_is_written_beside_the_ones_that_say_nothing() {
             &ArtifactReadings::new(),
         )
         .unwrap();
-    let written: Vec<&str> = new.entries().keys().map(String::as_str).collect();
+    let written: Vec<&str> = new
+        .entries()
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect();
     assert_eq!(written, ["base", "id", "key", "note", "tags", "title"]);
-    assert_eq!(new.entries()["note"], text(" a "));
+    assert_eq!(new.entries().as_map()["note"], text(" a "));
 }
 
 #[test]

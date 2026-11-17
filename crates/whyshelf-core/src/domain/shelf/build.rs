@@ -358,6 +358,42 @@ pub enum DocReading {
     },
 }
 
+/// The entries a file of a book is written with: the entries of a document, less those
+/// the build reads as not written and the file need not hold.
+///
+/// It can be made by [`Shelf::form_entries`] only, so that what `new` writes and what
+/// `fmt` writes are told by one rule: the writers of a front matter take this type,
+/// not a map of raw values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormEntries(BTreeMap<String, RawValue>);
+
+impl FormEntries {
+    /// Every entry to write, `id` and `key` included, by name.
+    pub fn as_map(&self) -> &BTreeMap<String, RawValue> {
+        &self.0
+    }
+
+    /// The entry written under `name`, if any.
+    pub fn get(&self, name: &str) -> Option<&RawValue> {
+        self.0.get(name)
+    }
+
+    /// Every entry to write, in the order of their names.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &RawValue)> {
+        self.0.iter()
+    }
+
+    /// How many entries there are.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Whether there is no entry.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 /// Why a file in the range of a book is not one of its documents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkipWhy {
@@ -1221,6 +1257,22 @@ impl<'b> Declared<'b> {
     }
 }
 
+/// Whether a file of `book` need not hold the entry `name`: it says nothing, and the
+/// build reads it as not written without a problem. The rule of [`Shelf::form_entries`],
+/// beside the readers of an entry it follows ([`declared_field`], [`read_link`],
+/// [`check_required`]).
+fn need_not_hold(book: &BookSchema, name: &str, raw: &RawValue) -> bool {
+    if Written::of(Some(raw)) != Written::Nothing || name == ID_ENTRY || name == KEY_ENTRY {
+        return false;
+    }
+    match Declared::of(book, name) {
+        None => false,
+        Some(Declared::Field(_, decl)) => decl.presence == FieldPresence::Optional,
+        Some(Declared::Link(_, kind)) => kind.cardinality.admits(0),
+        Some(Declared::Artifacts(_, kind)) => kind.cardinality.admits(0),
+    }
+}
+
 /// The fields of a file, the keys written in each link and the names written in each
 /// link to artifacts, from every entry but `id` and `key`; what is wrong with an entry
 /// goes to `problems`, a name its adapter answered is none included.
@@ -1707,6 +1759,35 @@ impl Shelf {
         asks
     }
 
+    /// The entries a file of `book` is written with, from the entries of a document:
+    /// those the build reads as not written and the file need not hold are left out.
+    ///
+    /// The one place that is decided, for `new` and for `fmt` alike. An entry that says
+    /// nothing (the build's own `Written::of`) is left out only when the build reads it as one that
+    /// is not written and tells no problem for it: a field the book declares optional,
+    /// or a link (into a book or to artifacts) whose count admits none. It is kept for
+    /// a required field, a link whose count does not admit none, the `id` and the `key`,
+    /// and an entry the book does not declare, because leaving it out would change
+    /// which problems the build tells, or their order. Every entry that says something
+    /// is kept. A book the schema does not declare leaves nothing out.
+    ///
+    /// The build of the result is the build of `entries`: the same document, the same
+    /// problems in the same order.
+    pub fn form_entries(
+        schema: &Schema,
+        book: &BookName,
+        entries: &BTreeMap<String, RawValue>,
+    ) -> FormEntries {
+        let book = schema.book(book);
+        FormEntries(
+            entries
+                .iter()
+                .filter(|(name, raw)| !book.is_some_and(|book| need_not_hold(book, name, raw)))
+                .map(|(name, raw)| (name.clone(), raw.clone()))
+                .collect(),
+        )
+    }
+
     /// A shelf from the schema, what an adapter read of the documents, and what the
     /// adapters answered for the names [`Shelf::artifact_asks`] asked.
     ///
@@ -2103,6 +2184,8 @@ mod artifact_tests;
 mod comparison_tests;
 #[cfg(test)]
 mod empty_tests;
+#[cfg(test)]
+mod form_tests;
 #[cfg(test)]
 mod new_tests;
 #[cfg(test)]

@@ -1,7 +1,7 @@
 ---
 id: "01a1c7ac-ef6b-72b1-aca0-3902188dfed0"
 key: "REQ-19"
-grounds: ["F-22"]
+grounds: ["F-22", "F-48"]
 issues: ["#44"]
 title: "Every document can be put in the one form without changing what it says"
 ---

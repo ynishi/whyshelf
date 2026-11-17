@@ -1,14 +1,17 @@
 //! Tests of `fmt` and `fmt --check`, over the in-memory fake.
 
+use std::collections::BTreeMap;
+
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::shelf::build::{DocReading, RawProblem, ReadId};
+use crate::domain::shelf::build::{DocReading, RawProblem, RawValue, ReadId};
 use crate::domain::shelf::doc::DocHash;
 use crate::domain::shelf::freshness::{Freshness, Standing};
 use crate::domain::shelf::lookup::Reference;
+use crate::domain::shelf::schema::{Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl};
 
 use super::fake_tests::{FakeShelf, block_on, docid, fr, path, sp};
-use super::ports::Form;
+use super::ports::Replaceable;
 use super::{FmtReport, JudgeRequest, Judgement, LeftAlone, LeftAloneWhy, ShelfApp};
 
 fn approve(reference: &str) -> JudgeRequest {
@@ -20,14 +23,6 @@ fn approve(reference: &str) -> JudgeRequest {
         },
         reference: reference.parse::<Reference>().unwrap(),
         actor: None,
-    }
-}
-
-/// A text in the form that reads as `reading`.
-fn other(reading: &DocReading) -> Form {
-    Form::Other {
-        text: b"in the form".to_vec(),
-        reads_as: reading.clone(),
     }
 }
 
@@ -51,16 +46,15 @@ fn world() -> ShelfApp<FakeShelf> {
     ]);
     for (at, bytes) in [
         ("findings/fr-1.md", "id: unquoted"),
-        ("specs/sp-2.md", "in the form"),
         ("specs/sp-3.md", "a # comment"),
         ("specs/sp-4.md", "reads otherwise"),
         ("specs/broken.md", "---"),
     ] {
         fake.put_file(at, bytes.as_bytes());
     }
-    fake.set_form("findings/fr-1.md", other(&fr1));
-    fake.set_form("specs/sp-3.md", Form::Comment { line: 4 });
-    fake.set_form("specs/sp-4.md", other(&sp(4, "another title", &["FR-1"])));
+    fake.put_in_form("specs/sp-2.md");
+    fake.set_comment("specs/sp-3.md", 4);
+    fake.set_reads_otherwise("specs/sp-4.md");
     let mut app = ShelfApp::new(fake);
     block_on(app.judge(approve("FR-1"))).unwrap();
     block_on(app.judge(approve("SP-2"))).unwrap();
@@ -107,6 +101,7 @@ fn hashes_and_standings(app: &ShelfApp<FakeShelf>) -> Vec<(DocId, Option<DocHash
 #[test]
 fn fmt_rewrites_a_file_not_in_the_form_and_leaves_the_rest() {
     let mut app = world();
+    let before = app.ports().files.lock().unwrap().clone();
     let report = block_on(app.fmt()).unwrap();
     assert_eq!(
         report,
@@ -119,8 +114,11 @@ fn fmt_rewrites_a_file_not_in_the_form_and_leaves_the_rest() {
     );
     assert_eq!(app.ports().replaced_count(), 1);
     let files = app.ports().files.lock().unwrap().clone();
-    assert_eq!(files[&path("findings/fr-1.md")], b"in the form");
-    assert_eq!(files[&path("specs/sp-2.md")], b"in the form");
+    assert_ne!(files[&path("findings/fr-1.md")], b"id: unquoted");
+    assert_eq!(
+        files[&path("specs/sp-2.md")],
+        before[&path("specs/sp-2.md")]
+    );
     assert_eq!(files[&path("specs/sp-3.md")], b"a # comment");
     assert_eq!(files[&path("specs/sp-4.md")], b"reads otherwise");
     assert_eq!(files[&path("specs/broken.md")], b"---");
@@ -191,8 +189,8 @@ fn a_file_edited_between_the_reading_and_the_write_is_left_alone() {
 #[test]
 fn a_read_only_file_and_a_hard_link_are_left_alone() {
     let fake = FakeShelf::new().with_files(vec![fr(1, "one", &[]), fr(2, "two", &[])]);
-    fake.set_form("findings/fr-1.md", Form::ReadOnly);
-    fake.set_form("findings/fr-2.md", Form::Linked);
+    fake.set_replaceable("findings/fr-1.md", Replaceable::ReadOnly);
+    fake.set_replaceable("findings/fr-2.md", Replaceable::Linked);
     let mut app = ShelfApp::new(fake);
     let check = block_on(app.fmt_check()).unwrap();
     assert!(!check.all_in_form());
@@ -216,7 +214,9 @@ fn a_read_only_file_and_a_hard_link_are_left_alone() {
 
 #[test]
 fn every_file_is_in_the_form_only_when_none_is_to_write_or_left_alone() {
-    let app = ShelfApp::new(FakeShelf::new().with_files(vec![fr(1, "one", &[])]));
+    let fake = FakeShelf::new().with_files(vec![fr(1, "one", &["FR-2"])]);
+    fake.put_in_form("findings/fr-1.md");
+    let app = ShelfApp::new(fake);
     assert!(block_on(app.fmt_check()).unwrap().all_in_form());
     let report = block_on(world().fmt_check()).unwrap();
     assert!(!report.all_in_form());
@@ -229,4 +229,147 @@ fn a_port_that_fails_is_an_error_of_the_run() {
     let mut app = ShelfApp::new(fake);
     let error = block_on(app.fmt()).unwrap_err();
     assert_eq!(error.class(), super::ErrorClass::Failed);
+}
+
+// ---- entries that say nothing (#136) ---------------------------------------------
+
+/// A world whose findings have an optional `source` and a `base` link of this count,
+/// with one finding that holds `entry` besides a title and a link to FR-2, written
+/// with every entry (as a file was in the form before the form left out one that says
+/// nothing).
+fn world_with(base: Cardinality, entry: (&str, RawValue)) -> ShelfApp<FakeShelf> {
+    let mut finding = fr(1, "one", &["FR-2"]);
+    if let DocReading::Parsed { entries, .. } = &mut finding {
+        entries.insert(entry.0.to_owned(), entry.1);
+    }
+    let fake = FakeShelf::new().with_files(vec![finding]);
+    {
+        let mut decls = fake.decls.lock().unwrap();
+        decls[0].fields.push(FieldEntryDecl {
+            name: "source".to_owned(),
+            ty: FieldTypeDecl::Word("text".to_owned()),
+            presence: FieldPresence::Optional,
+        });
+        decls[0].links[0].cardinality = base;
+    }
+    fake.put_with_every_entry("findings/fr-1.md");
+    ShelfApp::new(fake)
+}
+
+fn entries_of_the_first_file(app: &ShelfApp<FakeShelf>) -> BTreeMap<String, RawValue> {
+    match &app.ports().readings.lock().unwrap()[0] {
+        DocReading::Parsed { entries, .. } => entries.clone(),
+        other => panic!("not parsed: {other:?}"),
+    }
+}
+
+fn text(value: &str) -> RawValue {
+    RawValue::Text(value.to_owned())
+}
+
+/// Every way an entry can say nothing.
+fn nothings() -> Vec<RawValue> {
+    vec![
+        text(""),
+        text("  "),
+        RawValue::Null,
+        RawValue::List(Vec::new()),
+    ]
+}
+
+#[test]
+fn a_file_with_an_optional_field_written_empty_is_rewritten_without_it_and_reads_the_same() {
+    for nothing in nothings() {
+        let mut app = world_with(Cardinality::Many, ("source", nothing.clone()));
+        assert!(entries_of_the_first_file(&app).contains_key("source"));
+        let before = hashes_and_standings(&app);
+
+        let check = block_on(app.fmt_check()).unwrap();
+        assert_eq!(
+            check.not_in_form,
+            paths(&["findings/fr-1.md"]),
+            "{nothing:?}"
+        );
+        assert!(!check.all_in_form(), "{nothing:?}");
+
+        let report = block_on(app.fmt()).unwrap();
+        assert_eq!(
+            report.rewritten,
+            paths(&["findings/fr-1.md"]),
+            "{nothing:?}"
+        );
+        let written = entries_of_the_first_file(&app);
+        assert!(!written.contains_key("source"), "{nothing:?}");
+        assert!(written.contains_key("title"), "{nothing:?}");
+        assert_eq!(written["base"], RawValue::List(vec!["FR-2".to_owned()]));
+        assert_eq!(hashes_and_standings(&app), before, "{nothing:?}");
+
+        // Written once: the next run finds it in the form.
+        let again = block_on(app.fmt()).unwrap();
+        assert!(again.rewritten.is_empty(), "{nothing:?}");
+        assert_eq!(again.in_form, paths(&["findings/fr-1.md"]), "{nothing:?}");
+    }
+}
+
+#[test]
+fn a_link_written_empty_that_admits_none_is_rewritten_without_it() {
+    for count in [Cardinality::Many, Cardinality::Optional] {
+        for nothing in nothings() {
+            let mut app = world_with(count, ("base", nothing.clone()));
+            let report = block_on(app.fmt()).unwrap();
+            assert_eq!(report.rewritten, paths(&["findings/fr-1.md"]), "{count:?}");
+            assert!(
+                !entries_of_the_first_file(&app).contains_key("base"),
+                "{count:?}: {nothing:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_entry_that_says_nothing_and_that_the_build_tells_is_kept() {
+    // A required field, an entry the book does not declare, and a link whose count
+    // does not admit none: each stays, so the file is in the form as it is.
+    let cases = [
+        (Cardinality::Many, "title", text("")),
+        (Cardinality::Many, "undeclared", text("")),
+        (Cardinality::Many, "undeclared", RawValue::Null),
+        (Cardinality::AtLeastOne, "base", RawValue::List(Vec::new())),
+        (Cardinality::One, "base", RawValue::Null),
+    ];
+    for (count, name, nothing) in cases {
+        let mut app = world_with(count, (name, nothing.clone()));
+        let check = block_on(app.fmt_check()).unwrap();
+        assert_eq!(
+            check.in_form,
+            paths(&["findings/fr-1.md"]),
+            "{name}: {nothing:?}"
+        );
+        assert!(check.all_in_form(), "{name}: {nothing:?}");
+        let report = block_on(app.fmt()).unwrap();
+        assert!(report.rewritten.is_empty(), "{name}: {nothing:?}");
+        assert_eq!(entries_of_the_first_file(&app)[name], nothing, "{name}");
+        assert_eq!(app.ports().replaced_count(), 0);
+    }
+}
+
+#[test]
+fn a_file_that_also_has_a_comment_or_cannot_be_written_is_still_left_alone() {
+    let mut app = world_with(Cardinality::Many, ("source", text("")));
+    app.ports().set_comment("findings/fr-1.md", 3);
+    let report = block_on(app.fmt()).unwrap();
+    assert_eq!(
+        report.left_alone,
+        vec![LeftAlone {
+            file: path("findings/fr-1.md"),
+            why: LeftAloneWhy::Comment { line: 3 },
+        }]
+    );
+
+    let mut app = world_with(Cardinality::Many, ("source", text("")));
+    app.ports()
+        .set_replaceable("findings/fr-1.md", Replaceable::ReadOnly);
+    let report = block_on(app.fmt()).unwrap();
+    assert_eq!(report.left_alone[0].why, LeftAloneWhy::ReadOnly);
+    assert!(entries_of_the_first_file(&app).contains_key("source"));
 }

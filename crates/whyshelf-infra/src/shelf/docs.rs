@@ -33,18 +33,17 @@
 //! # Writing a document in the form
 //!
 //! The text [`render`] makes is the one form of a document, so what `new` writes is
-//! in it. [`form`] sets a file beside it ([`DocSource::forms`]): [`render`] of the
-//! entries and the body it reads, the whole text after the normalization rule
-//! ([`normalize`]). So the form also normalizes a body: its line endings become
-//! `\n`, white space at the end of its lines and blank lines at its end go, and it
-//! ends with one newline. [`read`] normalizes the whole text first, so this changes
-//! nothing it reads. A file whose text is that already is in the form; a file whose
-//! front matter cannot be read, or holds a value it does not hold, has no text in
-//! it; a file whose front matter holds a
-//! comment is told so ([`comment_line`]), because the form has no place for one;
-//! every other file is given its text in the form, with what that text reads as, for
-//! the use case to hold against the file's own reading, unless the user cannot
-//! write it or it has more than one link ([`Form::ReadOnly`], [`Form::Linked`]).
+//! in it. The adapter judges nothing of the form: [`DocSource::forms`] gives each file
+//! as it was read, with its bytes and the line of the first comment in its front
+//! matter ([`comment_line`]; the form has no place for one), and
+//! [`DocSource::render`] gives the text of entries and a body the use case chose in
+//! the form, the whole text after the normalization rule ([`normalize`]), with what
+//! that text reads as when it is read as the file. So the form also normalizes a
+//! body: its line endings become `\n`, white space at the end of its lines and blank
+//! lines at its end go, and it ends with one newline. [`read`] normalizes the whole
+//! text first, so this changes nothing it reads. Whether a file may be written over
+//! is [`DocSource::replaceable`]: not when the user cannot write it or it has more
+//! than one link ([`Replaceable::ReadOnly`], [`Replaceable::Linked`]).
 //!
 //! [`MarkdownDocs`] is also the [`DocReplace`] that writes that text over the file:
 //! when the file still holds the bytes that were read, just before, and whole (a
@@ -75,7 +74,7 @@ use serde::de::{
 };
 use tokio::io::AsyncWriteExt;
 use whyshelf_core::app::shelf::{
-    Creation, DocReplace, DocSource, DocWrite, FileForm, Form, Replacement,
+    Creation, DocReplace, DocSource, DocWrite, FileRead, Rendered, Replaceable, Replacement,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::id::DocId;
@@ -83,7 +82,7 @@ use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonEmptyVec;
 use whyshelf_core::domain::shelf::artifact::ContentAddress;
 use whyshelf_core::domain::shelf::build::{
-    DocReading, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind, UnheldValue,
+    DocReading, FormEntries, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind, UnheldValue,
 };
 use whyshelf_core::domain::shelf::doc::normalize;
 use whyshelf_core::domain::shelf::schema::BookRange;
@@ -169,19 +168,25 @@ impl DocSource for MarkdownDocs {
             .collect())
     }
 
-    async fn forms(&self, ranges: &[BookRange]) -> Result<Vec<FileForm>, DocsError> {
-        let mut forms = Vec::new();
-        for (origin, bytes) in self.files_of(ranges).await? {
-            let file = self.root.join(origin.as_str());
-            let mut found = form(origin, bytes);
-            if matches!(found.form, Form::Other { .. })
-                && let Some(kept) = kept_from_replacing(&file).await?
-            {
-                found.form = kept;
-            }
-            forms.push(found);
+    async fn forms(&self, ranges: &[BookRange]) -> Result<Vec<FileRead>, DocsError> {
+        Ok(self
+            .files_of(ranges)
+            .await?
+            .into_iter()
+            .map(|(origin, bytes)| file_read(origin, bytes))
+            .collect())
+    }
+
+    fn render(&self, origin: &RelPath, entries: &FormEntries, body: &str) -> Rendered {
+        let text = render(entries.as_map(), body);
+        Rendered {
+            reads_as: read(origin.clone(), &text),
+            text: text.into_bytes(),
         }
-        Ok(forms)
+    }
+
+    async fn replaceable(&self, file: &RelPath) -> Result<Replaceable, DocsError> {
+        replaceable(&self.root.join(file.as_str())).await
     }
 
     async fn current(&self, file: &RelPath) -> Result<Option<Vec<u8>>, DocsError> {
@@ -251,35 +256,35 @@ fn not_text(origin: RelPath) -> DocReading {
     }
 }
 
-/// Why a file that is not in the form must still not be written over, if it must
-/// not, from the file's metadata:
+/// Whether a file may be written over, from the file's metadata:
 ///
-/// - [`Form::Linked`]: it has more than one link (a hard link). The rename that
+/// - [`Replaceable::Linked`]: it has more than one link (a hard link). The rename that
 ///   replaces it would give this path a new file and leave the other links on the
 ///   old one, so the two would part; and the new file would be the writer's, with
 ///   none of the old one's owner or extended attributes. (Only on Unix, where the
 ///   number of links is told.)
-/// - [`Form::ReadOnly`]: the user cannot write it. It is opened for writing, which
-///   changes nothing in it (no byte, no time); a refusal (no permission, or a file
-///   system mounted read-only) is the answer.
-async fn kept_from_replacing(file: &Path) -> Result<Option<Form>, DocsError> {
+/// - [`Replaceable::ReadOnly`]: the user cannot write it. It is opened for writing,
+///   which changes nothing in it (no byte, no time); a refusal (no permission, or a
+///   file system mounted read-only) is the answer.
+/// - [`Replaceable::Yes`] otherwise.
+async fn replaceable(file: &Path) -> Result<Replaceable, DocsError> {
     let failed = |source| DocsError::Io {
         path: file.to_path_buf(),
         source,
     };
     let meta = tokio::fs::metadata(file).await.map_err(failed)?;
     if links(&meta) > 1 {
-        return Ok(Some(Form::Linked));
+        return Ok(Replaceable::Linked);
     }
     match tokio::fs::OpenOptions::new().write(true).open(file).await {
-        Ok(_) => Ok(None),
+        Ok(_) => Ok(Replaceable::Yes),
         Err(error)
             if matches!(
                 error.kind(),
                 io::ErrorKind::PermissionDenied | io::ErrorKind::ReadOnlyFilesystem
             ) =>
         {
-            Ok(Some(Form::ReadOnly))
+            Ok(Replaceable::ReadOnly)
         }
         Err(source) => Err(failed(source)),
     }
@@ -459,37 +464,26 @@ fn split_closing(rest: &str) -> Option<(&str, &str)> {
     None
 }
 
-/// A file beside the one form ([`render`]): its reading, its bytes, and how it
-/// stands to the form (the module page, "Writing a document in the form").
-pub fn form(origin: RelPath, bytes: Vec<u8>) -> FileForm {
+/// A file as `fmt` is given it: its reading, its bytes, and the line of the first
+/// comment of its front matter when it is read as a mapping and holds one (the module
+/// page, "Writing a document in the form"). Nothing of the form is judged here.
+pub fn file_read(origin: RelPath, bytes: Vec<u8>) -> FileRead {
     let Ok(text) = std::str::from_utf8(&bytes) else {
-        return FileForm {
+        return FileRead {
             reading: not_text(origin),
             read: bytes,
-            form: Form::Unwritable,
+            comment: None,
         };
     };
-    let reading = read(origin.clone(), text);
-    let form = match &reading {
-        DocReading::Parsed { entries, body, .. } => {
-            let formed = render(entries, body);
-            if formed == text {
-                Form::InForm
-            } else if let Some(line) = comment_in(text) {
-                Form::Comment { line }
-            } else {
-                Form::Other {
-                    reads_as: read(origin, &formed),
-                    text: formed.into_bytes(),
-                }
-            }
-        }
-        DocReading::Unparsed { .. } | DocReading::Unheld { .. } => Form::Unwritable,
+    let reading = read(origin, text);
+    let comment = match &reading {
+        DocReading::Parsed { .. } => comment_in(text),
+        DocReading::Unparsed { .. } | DocReading::Unheld { .. } => None,
     };
-    FileForm {
+    FileRead {
         reading,
         read: bytes,
-        form,
+        comment,
     }
 }
 
@@ -944,11 +938,11 @@ impl DocWrite for MarkdownDocs {
     async fn create(
         &self,
         path: &RelPath,
-        entries: &BTreeMap<String, RawValue>,
+        entries: &FormEntries,
         body: &str,
     ) -> Result<Creation, DocsError> {
         let file = self.root.join(path.as_str());
-        create::create_new(&file, render(entries, body).as_bytes())
+        create::create_new(&file, render(entries.as_map(), body).as_bytes())
             .await
             .map_err(|failed| DocsError::Write {
                 step: failed.step,
@@ -970,7 +964,8 @@ fn write_step(step: String) -> impl FnOnce(io::Error) -> DocsError {
 /// The comparison and the rename are two steps: an edit saved to the file in the
 /// short time between them is overwritten, and a file removed in it is written
 /// again. A read-only file and one with more than one link are never given here:
-/// [`DocSource::forms`] leaves them alone ([`Form::ReadOnly`], [`Form::Linked`]).
+/// [`DocSource::replaceable`] says so ([`Replaceable::ReadOnly`],
+/// [`Replaceable::Linked`]) and `fmt` leaves them alone.
 impl DocReplace for MarkdownDocs {
     type Error = DocsError;
 
@@ -1481,20 +1476,15 @@ mod tests {
                     format!("---\n{yaml}---\n{body}").replace('\n', "\r\n"),
                     format!("--- \n{yaml}---\t\n{body}"),
                 ] {
-                    let FileForm {
-                        reading, form: got, ..
-                    } = form(origin(), text.clone().into_bytes());
+                    let FileRead { reading, .. } = file_read(origin(), text.clone().into_bytes());
                     assert!(
                         matches!(reading, DocReading::Parsed { .. }),
                         "parsed: {text:?}"
                     );
-                    let Form::Other {
+                    let Rendered {
                         text: formed,
                         reads_as,
-                    } = got
-                    else {
-                        panic!("not in the form: {text:?}: {got:?}");
-                    };
+                    } = rendered_of(&reading);
                     assert_eq!(reads_as, reading, "{text:?}");
                     let formed = String::from_utf8(formed).unwrap();
                     // The whole text is normalized, the body with it.
@@ -1504,13 +1494,50 @@ mod tests {
                     assert!(formed.starts_with(&format!("---\nid: \"{ID}\"\nkey: \"S-1\"\n")));
                     // And the text in the form is in the form.
                     assert_eq!(
-                        form(origin(), formed.clone().into_bytes()).form,
-                        Form::InForm,
+                        rendered_of(&read(origin(), &formed)).text,
+                        formed.clone().into_bytes(),
                         "{formed:?}"
                     );
                 }
             }
         }
+    }
+
+    /// Every entry of a reading as the entries of a form: a book that declares nothing
+    /// leaves nothing out, so these are the entries as they are.
+    fn all_of(entries: &BTreeMap<String, RawValue>) -> FormEntries {
+        use whyshelf_core::domain::shelf::build::Shelf;
+        use whyshelf_core::domain::shelf::schema::{
+            BookName, BookSchemaDecl, KeyPatternDecl, Schema,
+        };
+        let decls = vec![BookSchemaDecl {
+            name: "spec".to_owned(),
+            dir: "docs".to_owned(),
+            scope: Default::default(),
+            key: KeyPatternDecl::Prefixed {
+                prefix: "S".to_owned(),
+            },
+            description: None,
+            fields: Vec::new(),
+            links: Vec::new(),
+        }];
+        let schema = Schema::validate(decls, &BTreeSet::new()).expect("a sound declaration");
+        let form = Shelf::form_entries(&schema, &BookName::new("spec").unwrap(), entries);
+        assert_eq!(form.as_map(), entries, "a book that declares nothing");
+        form
+    }
+
+    /// The text in the form of a parsed reading, as the adapter renders it.
+    fn rendered_of(reading: &DocReading) -> Rendered {
+        let DocReading::Parsed {
+            origin,
+            entries,
+            body,
+        } = reading
+        else {
+            panic!("not parsed: {reading:?}");
+        };
+        MarkdownDocs::new(PathBuf::new()).render(origin, &all_of(entries), body)
     }
 
     #[test]
@@ -1520,19 +1547,17 @@ mod tests {
             in_form.replace('\n', "\r\n"),
             format!("---\nid: \"{ID}\"\nkey: \"S-1\"\n---\nBody.  \n\t\nMore.\t\n\n\n"),
         ] {
-            let got = form(origin(), text.clone().into_bytes());
-            let Form::Other {
+            let got = file_read(origin(), text.clone().into_bytes());
+            let Rendered {
                 text: formed,
                 reads_as,
-            } = got.form
-            else {
-                panic!("not in the form: {text:?}");
-            };
+            } = rendered_of(&got.reading);
+            assert_ne!(formed, got.read, "{text:?}");
             assert_eq!(reads_as, got.reading, "{text:?}");
             assert_eq!(String::from_utf8(formed.clone()).unwrap(), in_form);
             let before = hash_of(got.reading);
             assert_eq!(hash_of(read(origin(), &in_form)), before, "{text:?}");
-            assert_eq!(form(origin(), formed).form, Form::InForm);
+            assert_eq!(rendered_of(&reads_as).text, formed);
         }
     }
 
@@ -1577,16 +1602,18 @@ mod tests {
             "\n\n\n",
         ] {
             let text = render(&entries, body);
+            let read_back = file_read(origin(), text.clone().into_bytes());
             assert_eq!(
-                form(origin(), text.clone().into_bytes()).form,
-                Form::InForm,
+                rendered_of(&read_back.reading).text,
+                text.clone().into_bytes(),
                 "{body:?}: {text:?}"
             );
+            assert_eq!(read_back.comment, None, "{body:?}: {text:?}");
         }
     }
 
     #[test]
-    fn a_file_that_cannot_be_read_has_no_text_in_the_form() {
+    fn a_file_that_cannot_be_read_has_no_comment_to_tell() {
         for bytes in [
             b"no front matter\n".to_vec(),
             format!("---\nid: {ID}\n").into_bytes(),
@@ -1595,9 +1622,9 @@ mod tests {
                 b'-', b'-', b'-', b'\n', 0xff, b'\n', b'-', b'-', b'-', b'\n',
             ],
         ] {
-            let got = form(origin(), bytes.clone());
+            let got = file_read(origin(), bytes.clone());
             assert!(matches!(got.reading, DocReading::Unparsed { .. }));
-            assert_eq!(got.form, Form::Unwritable);
+            assert_eq!(got.comment, None);
             assert_eq!(got.read, bytes);
         }
     }
@@ -1654,10 +1681,7 @@ mod tests {
     #[test]
     fn a_file_with_a_comment_is_told_with_its_line() {
         let text = format!("---\nid: {ID}\nkey: S-1 # the key\n---\nBody.\n");
-        assert_eq!(
-            form(origin(), text.into_bytes()).form,
-            Form::Comment { line: 3 }
-        );
+        assert_eq!(file_read(origin(), text.into_bytes()).comment, Some(3));
     }
 
     #[tokio::test]
@@ -1698,7 +1722,7 @@ mod tests {
         assert!(docs.current(&gone).await.unwrap().is_none());
 
         assert_eq!(
-            docs.create(&at, &BTreeMap::new(), "Other.\n")
+            docs.create(&at, &all_of(&BTreeMap::new()), "Other.\n")
                 .await
                 .unwrap(),
             Creation::AlreadyThere
@@ -1739,12 +1763,18 @@ mod tests {
             .forms(&[BookRange::of_dir(BookDir::new("docs").unwrap())])
             .await
             .unwrap();
-        let got: Vec<&Form> = forms.iter().map(|f| &f.form).collect();
-        assert!(matches!(got[0], Form::Other { .. }), "{got:?}");
-        if !writable_anyway {
-            assert_eq!(*got[1], Form::ReadOnly);
+        let mut got = Vec::new();
+        for form in &forms {
+            let DocReading::Parsed { origin, .. } = &form.reading else {
+                panic!("not parsed: {form:?}");
+            };
+            got.push(docs.replaceable(origin).await.unwrap());
         }
-        assert_eq!(*got[2], Form::Linked);
+        assert_eq!(got[0], Replaceable::Yes, "{got:?}");
+        if !writable_anyway {
+            assert_eq!(got[1], Replaceable::ReadOnly);
+        }
+        assert_eq!(got[2], Replaceable::Linked);
         // Telling changed nothing.
         for n in 1..=3 {
             assert_eq!(
@@ -1765,7 +1795,10 @@ mod tests {
             .await
             .unwrap();
         let at: RelPath = "books/a.md".parse().unwrap();
-        let error = docs.create(&at, &BTreeMap::new(), "").await.unwrap_err();
+        let error = docs
+            .create(&at, &all_of(&BTreeMap::new()), "")
+            .await
+            .unwrap_err();
         let message = error.to_string();
         assert!(
             message.starts_with("cannot create the directory ") && message.ends_with("books"),
@@ -1783,7 +1816,9 @@ mod tests {
         entries.insert("key".to_owned(), RawValue::Text("cache/timeout".to_owned()));
         entries.insert("title".to_owned(), RawValue::Text("T".to_owned()));
         assert_eq!(
-            docs.create(&at, &entries, "Body.\n").await.unwrap(),
+            docs.create(&at, &all_of(&entries), "Body.\n")
+                .await
+                .unwrap(),
             Creation::Created
         );
         let file = root.path().join(at.as_str());
@@ -1795,7 +1830,7 @@ mod tests {
 
         let other = BTreeMap::new();
         assert_eq!(
-            docs.create(&at, &other, "Other.\n").await.unwrap(),
+            docs.create(&at, &all_of(&other), "Other.\n").await.unwrap(),
             Creation::AlreadyThere
         );
         assert_eq!(tokio::fs::read_to_string(&file).await.unwrap(), written);
