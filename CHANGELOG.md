@@ -32,9 +32,9 @@ and this project adheres to
   judged before anything is written: one refused line makes the run write
   nothing, and every bad line is named. The answer lists the documents
   written and the heads of the run. A file that cannot be read is a failed
-  run (exit 3). Each file is still put on disk on its own (#133). In the
-  library, `Shelf::plan_new` plans a run and `ShelfApp::new_docs` writes it;
-  `new` of one document and `init` go through the same plan (#125).
+  run (exit 3). In the library, `Shelf::plan_new` plans a run and
+  `ShelfApp::new_docs` writes it; `new` of one document and `init` go through
+  the same plan (#125).
 - The field type `line`: a text of one line. A line break in it, the one a YAML
   block scalar (`|`, `>`) leaves at the end included, is a problem; `|-` and
   `>-` write none. A `line` hashes as a `text`, so declaring a `text` field
@@ -51,6 +51,20 @@ and this project adheres to
 
 ### Changed
 
+- A run of `new` (one document or `--from`) or of `init` puts its files on
+  disk once, at its end, not one file at a time: each file is written whole,
+  then every file and directory the run wrote is synced and, on macOS, the
+  drive is asked once to flush its cache (one `F_FULLFSYNC` a device, which a
+  file system that cannot do it leaves at `fsync`). With release builds on
+  macOS, 100 rows of `new --from` in a project with no document take 0.08 s
+  where they took 0.6 s; one row takes the same. A run that stops part way
+  still puts on disk the files it wrote before it lists them. When the files
+  cannot be put on disk, the answer says so: after the cause when the run
+  stopped part way (and the run is a failure, exit 3, whatever stopped it), or
+  as "written whole and left in place, but could not be put on disk" when every
+  file was written. In the library, the new port `FileSync` (which `Project`
+  implements), `ShelfError::NotDurable`, `PersistProblem`, and
+  `ShelfError::PartWay::not_durable` (#133).
 - A word of `key` the declaration does not have (`key = "uuid"`) is a problem
   of the declaration, told with the others (`check` exits 1, and a command that
   needs a sound declaration exits 2): "book `note`: `key` is "uuid", and it
