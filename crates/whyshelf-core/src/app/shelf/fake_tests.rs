@@ -26,11 +26,11 @@ use crate::domain::shelf::schema::{
 
 use super::ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileRead, FileWrite,
-    IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Rendered, Replaceable,
-    Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
+    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileRead, FileSync,
+    FileWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Rendered,
+    Replaceable, Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
 };
-use crate::domain::nonempty::NonBlank;
+use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings,
     Comparison, ContentAddress, Revision, Space,
@@ -282,6 +282,10 @@ pub(super) struct FakeShelf {
     /// The paths where a file comes to be after any look at them and before the
     /// document's file is created.
     pub(super) appear_before_create: Mutex<BTreeSet<RelPath>>,
+    /// The files of each call to put files on disk, in order.
+    pub(super) persisted: Mutex<Vec<Vec<RelPath>>>,
+    /// Why putting files on disk fails, when it does (none: it does not).
+    pub(super) persist_failing: Mutex<Option<&'static str>>,
 }
 
 /// The space of the files.
@@ -363,7 +367,19 @@ impl FakeShelf {
             declaration_file: Mutex::new(None),
             creates_before_failing: Mutex::new(None),
             appear_before_create: Mutex::new(BTreeSet::new()),
+            persisted: Mutex::new(Vec::new()),
+            persist_failing: Mutex::new(None),
         }
+    }
+
+    /// From now on putting files on disk fails, for this reason.
+    pub(super) fn fail_persist(&self, why: &'static str) {
+        *lock(&self.persist_failing) = Some(why);
+    }
+
+    /// The files of each call to put files on disk, in order.
+    pub(super) fn persist_calls(&self) -> Vec<Vec<RelPath>> {
+        lock(&self.persisted).clone()
     }
 
     /// From now on the fake reads `text` as a declaration of `decl`.
@@ -888,6 +904,33 @@ impl DocWrite for FakeShelf {
     }
 }
 
+impl FileSync for FakeShelf {
+    type Error = FakeError;
+
+    /// Counts the call with its files, which must each be one the fake holds (a
+    /// document's, another file, or the declaration): what a run wrote, as the
+    /// writers made it. Fails when a test said so, after counting.
+    async fn persist(&self, files: &NonEmptyVec<RelPath>) -> Result<(), FakeError> {
+        self.check()?;
+        lock(&self.persisted).push(files.iter().cloned().collect());
+        for at in files.iter() {
+            let a_document = lock(&self.readings).iter().any(|r| match r {
+                DocReading::Parsed { origin, .. }
+                | DocReading::Unparsed { origin, .. }
+                | DocReading::Unheld { origin, .. } => origin == at,
+            });
+            let the_declaration = *at == self.file() && lock(&self.declaration_file).is_some();
+            if !(a_document || the_declaration || lock(&self.files).contains_key(at)) {
+                return Err(FakeError("put a file on disk that was never written"));
+            }
+        }
+        match *lock(&self.persist_failing) {
+            Some(why) => Err(FakeError(why)),
+            None => Ok(()),
+        }
+    }
+}
+
 impl ActorSource for FakeShelf {
     type Error = FakeError;
 
@@ -1072,8 +1115,13 @@ impl ShelfWrite for FakeShelf {
     type DocReplacer = Self;
     type DeclarationWriter = Self;
     type FileWriter = Self;
+    type FileSyncer = Self;
 
     fn declaration_writer(&self) -> &Self {
+        self
+    }
+
+    fn file_syncer(&self) -> &Self {
         self
     }
 

@@ -294,10 +294,12 @@ fn a_ring_of_names_goes_on_when_the_first_written_is_taken_and_stops_when_the_se
         written,
         failed,
         cause,
+        not_durable,
     } = &error
     else {
         panic!("{error:?}");
     };
+    assert!(not_durable.is_none());
     assert_eq!(written.clone().into_vec(), [path("findings/FR-1.md")]);
     assert_eq!(*failed, path("findings/FR-2.md"));
     assert!(matches!(
@@ -333,10 +335,12 @@ fn a_key_asked_for_that_is_taken_after_two_were_written_is_part_way() {
         written,
         failed,
         cause,
+        not_durable,
     } = &error
     else {
         panic!("{error:?}");
     };
+    assert!(not_durable.is_none());
     assert_eq!(
         written.clone().into_vec(),
         [path("findings/FR-1.md"), path("findings/FR-2.md")]
@@ -347,6 +351,10 @@ fn a_key_asked_for_that_is_taken_after_two_were_written_is_part_way() {
     assert_eq!(
         error.to_string(),
         "findings/FR-1.md and findings/FR-2.md were written, then findings/FR-9.md was not"
+    );
+    assert_eq!(
+        app.ports().persist_calls(),
+        [vec![path("findings/FR-1.md"), path("findings/FR-2.md")]]
     );
 }
 
@@ -395,21 +403,28 @@ fn a_write_that_fails_after_the_first_is_part_way_with_what_was_written() {
         written,
         failed,
         cause,
+        not_durable,
     } = &error
     else {
         panic!("{error:?}");
     };
+    assert!(not_durable.is_none());
     assert_eq!(written.clone().into_vec(), [path("findings/FR-1.md")]);
     assert_eq!(*failed, path("findings/FR-2.md"));
     assert!(matches!(**cause, ShelfError::Port { .. }));
     assert_eq!(error.class(), ErrorClass::Failed);
+    assert_eq!(
+        app.ports().persist_calls(),
+        [vec![path("findings/FR-1.md")]]
+    );
 
-    // A write that fails before any is the failure itself.
+    // A write that fails before any is the failure itself, and puts nothing on disk.
     let fake = FakeShelf::new();
     *fake.creates_before_failing.lock().unwrap() = Some(0);
     let mut app = ShelfApp::new(fake);
     let error = block_on(app.new_docs(vec![finding(1, None, None, &[])])).unwrap_err();
     assert!(matches!(error, ShelfError::Port { .. }), "{error:?}");
+    assert!(app.ports().persist_calls().is_empty());
 }
 
 /// A book with a list field `tags` and a link-free shape.

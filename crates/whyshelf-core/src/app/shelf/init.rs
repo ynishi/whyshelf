@@ -12,9 +12,11 @@
 //!                      DocWrite::in_the_way of each file,
 //!                      DocWrite::dir_in_the_way of each book,
 //!                      Shelf::files_writing each key ---------> refused, nothing written
-//!   text ------------- DeclarationWrite::create (create-only) -> the declaration
-//!   each InitFile ---- FileWrite::create (create-only) --------> the file, as it is
-//!   each NewDoc ------ DocWrite::create (create-only) ---------> <book dir>/<key>.md
+//!   all of them, as one run (RunWrites::run):
+//!   text ------------- RunWrites::declaration (create-only) ---> the declaration
+//!   each InitFile ---- RunWrites::file (create-only) -----------> the file, as it is
+//!   each NewDoc ------ RunWrites::doc (create-only) ------------> <book dir>/<key>.md
+//!   the end of the run - FileSync::persist, once -----------------> every file on disk
 //! ```
 //!
 //! The other files ([`InitFile`]) are what a template's documents may link to as
@@ -45,9 +47,13 @@
 //! document would take is. Any of it is a refusal that names each.
 //!
 //! The declaration is written first, then the other files, then the documents, in
-//! the order given, and a write that fails removes the file it made: a run that
-//! fails part way leaves, at worst, the declaration with fewer files, each whole,
-//! and says which were written ([`ShelfError::PartWay`]).
+//! the order given, all inside one [`RunWrites::run`], and a write that fails removes
+//! the file it made: a run that fails part way leaves, at worst, the declaration with
+//! fewer files, each whole, and says which were written ([`ShelfError::PartWay`]).
+//! The files written are put on disk together, once, when the run ends (a run that
+//! stops part way puts those it wrote on disk before it says so): an answer of
+//! success has every file on disk, and one whose files cannot be put on disk is
+//! [`ShelfError::NotDurable`].
 
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
@@ -58,13 +64,12 @@ use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
 use super::error::{Obstacle, ShelfError};
-use super::new_doc::{
-    Created, NewDocRequest, Written, fail_after, plan_of, single_refusal, write_new,
-};
+use super::new_doc::{Created, NewDocRequest, plan_of, single_refusal};
 use super::ports::{
-    ArtifactSource, BookSchemaSource, Creation, DeclarationText, DeclarationWrite, DocSource,
-    DocWrite, FileWrite, ShelfPort, ShelfWrite, port,
+    ArtifactSource, BookSchemaSource, DeclarationText, DeclarationWrite, DocSource, DocWrite,
+    FileWrite, ShelfPort, ShelfWrite, port,
 };
+use super::run_writes::{RunWrites, Stop, Wrote};
 
 /// A request to start a project.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,54 +156,18 @@ impl<P: ShelfWrite> ShelfApp<P> {
             return Err(ShelfError::InTheWay { obstacles });
         }
 
-        match ports
-            .declaration_writer()
-            .create(&request.declaration)
-            .await
-            .map_err(port(ShelfPort::DeclarationWrite))?
-        {
-            Creation::Created => {}
-            Creation::AlreadyThere => {
-                return Err(ShelfError::InTheWay {
-                    obstacles: NonEmptyVec::new(Obstacle::There(declaration), Vec::new()),
-                });
-            }
-        }
-        // The declaration is written, so what failed after it says what was written.
-        let mut written = vec![declaration.clone()];
-        let mut files = Vec::with_capacity(request.files.len());
-        for file in &request.files {
-            let made = ports
-                .file_writer()
-                .create(&file.path, &file.bytes)
-                .await
-                .map_err(port(ShelfPort::FileWrite));
-            let cause = match made {
-                Ok(Creation::Created) => {
-                    written.push(file.path.clone());
-                    files.push(file.path.clone());
-                    continue;
-                }
-                Ok(Creation::AlreadyThere) => ShelfError::FileTaken {
-                    path: file.path.clone(),
-                },
-                Err(cause) => cause,
-            };
-            return Err(fail_after(written, file.path.clone(), cause));
-        }
-        let mut docs = Vec::with_capacity(planned.len());
-        for new in &planned {
-            let cause = match write_new(ports, new).await {
-                Ok(Written::Created(created)) => {
-                    written.push(created.file.clone());
-                    docs.push(created);
-                    continue;
-                }
-                Ok(Written::AlreadyThere(path)) => ShelfError::FileTaken { path },
-                Err(cause) => cause,
-            };
-            return Err(fail_after(written, new.doc().origin().clone(), cause));
-        }
+        // Every write is made inside one run, which keeps what was written and puts it
+        // on disk together at the end, so what failed after the declaration says what
+        // was written.
+        let (files, docs) = RunWrites::run(ports, |writes| {
+            Box::pin(write_all(
+                writes,
+                &request.declaration,
+                &request.files,
+                &planned,
+            ))
+        })
+        .await?;
         Ok(Initialized {
             declaration,
             files,
@@ -206,6 +175,53 @@ impl<P: ShelfWrite> ShelfApp<P> {
             heads,
         })
     }
+}
+
+/// The writes of `init`, in order, inside the run `writes` is of: the declaration
+/// (its text; the run knows its file), then the other files, then the documents. The
+/// files and the documents it made, in order. Anything found at a path where a file
+/// was to be made stops the run ([`Stop`]), as every other thing that does.
+// The error is read once and ends the use case; it is not a hot path.
+#[allow(clippy::result_large_err)]
+async fn write_all<P: ShelfWrite>(
+    writes: &mut RunWrites<'_, P>,
+    text: &DeclarationText,
+    other_files: &[InitFile],
+    planned: &[&NewDoc],
+) -> Result<(Vec<RelPath>, Vec<Created>), Stop> {
+    if let Wrote::AlreadyThere(at) = writes.declaration(text).await? {
+        return Err(Stop {
+            failed: at.clone(),
+            cause: ShelfError::InTheWay {
+                obstacles: NonEmptyVec::new(Obstacle::There(at), Vec::new()),
+            },
+        });
+    }
+    let mut files = Vec::with_capacity(other_files.len());
+    for file in other_files {
+        match writes.file(&file.path, &file.bytes).await? {
+            Wrote::Created(()) => files.push(file.path.clone()),
+            Wrote::AlreadyThere(path) => {
+                return Err(Stop {
+                    failed: file.path.clone(),
+                    cause: ShelfError::FileTaken { path },
+                });
+            }
+        }
+    }
+    let mut docs = Vec::with_capacity(planned.len());
+    for new in planned {
+        match writes.doc(new).await? {
+            Wrote::Created(created) => docs.push(created),
+            Wrote::AlreadyThere(path) => {
+                return Err(Stop {
+                    failed: new.doc().origin().clone(),
+                    cause: ShelfError::FileTaken { path },
+                });
+            }
+        }
+    }
+    Ok((files, docs))
 }
 
 /// The first path of `paths`, in order, that is an earlier one or lies under an

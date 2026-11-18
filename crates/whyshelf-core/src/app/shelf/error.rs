@@ -275,11 +275,19 @@ pub enum ShelfError {
         /// The earlier.
         with: RelPath,
     },
-    /// `init` wrote some files and then failed to write one: those it wrote stay
-    /// (the declaration first, then documents, each whole), and the rest were not
-    /// written. The class is the cause's: a port that failed, or a file that came
-    /// to be at a path between the check and the write.
-    #[error("{} written, then {failed} was not", and_list(.written.iter(), "was", "were"))]
+    /// A run of writes (`new`, `init`) wrote some files and then failed to write one:
+    /// those it wrote stay, each whole, in the order they were written (for `init`:
+    /// the declaration, its other files, then the documents), and
+    /// the rest were not written. The files written were put on disk before this was
+    /// answered; when that failed too, `not_durable` says why, and they may not
+    /// survive a power loss. The class is the cause's (a port that failed, or a file
+    /// that came to be at a path between the check and the write), except that when
+    /// `not_durable` is there the run failed, whatever stopped it.
+    #[error(
+        "{} written, then {failed} was not{}",
+        and_list(.written.iter(), "was", "were"),
+        not_durable_note(.not_durable)
+    )]
     PartWay {
         /// The files written, in order.
         written: NonEmptyVec<RelPath>,
@@ -288,7 +296,68 @@ pub enum ShelfError {
         /// Why.
         #[source]
         cause: Box<ShelfError>,
+        /// Why putting the files written on disk failed, when it did.
+        not_durable: Option<PersistProblem>,
     },
+    /// A run of writes wrote every file, and then putting them on disk failed. The
+    /// files are there, each whole, and are not removed; a power loss may lose them.
+    #[error(
+        "{} written whole and left in place, but could not be put on disk: a power loss may lose what was written",
+        and_list(.files.iter(), "was", "were")
+    )]
+    NotDurable {
+        /// The files written, in order.
+        files: NonEmptyVec<RelPath>,
+        /// Why they could not be put on disk.
+        #[source]
+        cause: PersistProblem,
+    },
+}
+
+/// Why the files a run wrote could not be put on disk ([`FileSync::persist`]
+/// failed): the adapter's own error is kept as the source, as
+/// [`ShelfError::Port`] keeps one.
+///
+/// [`FileSync::persist`]: super::ports::FileSync::persist
+#[derive(Debug, Error)]
+#[error("the {} port failed", ShelfPort::FileSync)]
+pub struct PersistProblem {
+    /// The adapter's error.
+    #[source]
+    source: Box<dyn std::error::Error + Send + Sync>,
+}
+
+impl PersistProblem {
+    /// The problem a failure of the port is.
+    pub(super) fn of(source: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self {
+            source: Box::new(source),
+        }
+    }
+
+    /// The adapter's error with the reasons under it, as one line (`a: b: c`).
+    pub fn reason(&self) -> String {
+        let mut text = self.source.to_string();
+        let mut source = self.source.source();
+        while let Some(cause) = source {
+            text.push_str(": ");
+            text.push_str(&cause.to_string());
+            source = cause.source();
+        }
+        text
+    }
+}
+
+/// What a message adds when putting the files written on disk failed too, or
+/// nothing.
+fn not_durable_note(problem: &Option<PersistProblem>) -> String {
+    match problem {
+        Some(problem) => format!(
+            "; putting what was written on disk failed too: {}",
+            problem.reason()
+        ),
+        None => String::new(),
+    }
 }
 
 /// One thing in the way of `init` ([`ShelfError::InTheWay`]).
@@ -454,7 +523,13 @@ impl ShelfError {
                 | MovedRefusal::ToAbsent { .. }
                 | MovedRefusal::ToUntold { .. },
             ) => ErrorClass::Refused,
-            Self::Port { .. } | Self::Value(_) => ErrorClass::Failed,
+            Self::Port { .. } | Self::Value(_) | Self::NotDurable { .. } => ErrorClass::Failed,
+            // What was written could not be put on disk: the run failed, whatever stopped
+            // it, so a caller does not take it for a request to mend and run again.
+            Self::PartWay {
+                not_durable: Some(_),
+                ..
+            } => ErrorClass::Failed,
             Self::PartWay { cause, .. } | Self::InRow { cause, .. } => cause.class(),
         }
     }

@@ -32,6 +32,7 @@
 //! | the templates `init` writes (a declaration, and documents beside it) | none: data for [`InitRequest`] | [`init`] |
 //! | a file `init` writes beside the documents (a table a template's document names) | [`FileWrite`] | [`artifact::file`] |
 //! | the Markdown files of the books | [`DocSource`], [`DocWrite`], [`DocReplace`] | [`docs`] |
+//! | the files `new` and `init` wrote, put on disk together at the end of the run | [`FileSync`] | [`Project`], which holds the root |
 //! | `.whyshelf/ledger/<id>.json` | [`LedgerRead`], [`LedgerAppend`] | [`ledger`] |
 //! | what links to artifacts name, by space | [`ArtifactSource`] | [`artifact`] |
 //! | where a pinned artifact that is gone may have moved, by space | [`MoveSource`] | [`artifact`] (for `file`: the same content, Git's renames) |
@@ -53,10 +54,12 @@
 //! [`Project`] bundles them for a project root, as one value the command line hands
 //! to [`ShelfApp`](whyshelf_core::app::shelf::ShelfApp).
 //!
-//! Only `judge`, `new`, `init` and `fmt` write. `judge` and `new` each write one new
-//! file: `judge` a record, `new` a document (create-only, never in place of a file
-//! that is there). `init` writes the declaration, the other files of its template
-//! and documents beside it, each create-only. `fmt` writes over documents' files that are there, each in the one form,
+//! Only `judge`, `new`, `init` and `fmt` write. `judge` writes one new file, a record;
+//! `new` writes a document or, for a run of rows, many (create-only, never in place of
+//! a file that is there). `init` writes the declaration, the other files of its
+//! template and documents beside it, each create-only. The files of `new` and `init`
+//! are written whole and are put on disk together when the run ends ([`FileSync`]),
+//! not one at a time. `fmt` writes over documents' files that are there, each in the one form,
 //! after comparing it with what was read, and whole ([`DocReplace`]); an edit
 //! saved between the comparison and the write is overwritten. Reading never
 //! creates a directory or a file.
@@ -65,6 +68,7 @@
 //! [`DeclarationWrite`]: whyshelf_core::app::shelf::DeclarationWrite
 //! [`InitRequest`]: whyshelf_core::app::shelf::InitRequest
 //! [`FileWrite`]: whyshelf_core::app::shelf::FileWrite
+//! [`FileSync`]: whyshelf_core::app::shelf::FileSync
 //! [`DocSource`]: whyshelf_core::app::shelf::DocSource
 //! [`DocWrite`]: whyshelf_core::app::shelf::DocWrite
 //! [`DocReplace`]: whyshelf_core::app::shelf::DocReplace
@@ -83,10 +87,15 @@ pub mod init;
 pub mod ledger;
 pub mod system;
 
+#[cfg(test)]
+mod project_tests;
+
 use std::path::{Path, PathBuf};
 
-use whyshelf_core::app::shelf::{ContentOf, ContentStore, ShelfRead, ShelfWrite};
-use whyshelf_core::domain::location::PathLiteral;
+pub use create::PersistFailed;
+use whyshelf_core::app::shelf::{ContentOf, ContentStore, FileSync, ShelfRead, ShelfWrite};
+use whyshelf_core::domain::location::{PathLiteral, RelPath};
+use whyshelf_core::domain::nonempty::NonEmptyVec;
 use whyshelf_core::domain::shelf::artifact::ContentAddress;
 
 use artifact::ArtifactSpaces;
@@ -110,6 +119,9 @@ pub const BOOKS_FILE: PathLiteral = PathLiteral::new(".whyshelf/books.toml");
 /// Every adapter of a shelf, for one project root.
 #[derive(Debug, Clone)]
 pub struct Project {
+    /// The project root: the one the writers write under, and the one the paths of
+    /// [`FileSync::persist`] are from.
+    root: PathBuf,
     books: BooksToml,
     docs: MarkdownDocs,
     ledger: JsonLedger,
@@ -147,7 +159,8 @@ impl Project {
             ),
             files: FileSpace::new(root.clone()),
             git: Git::new(root.clone()),
-            actor: ProjectActor::new(root, actor),
+            actor: ProjectActor::new(root.clone(), actor),
+            root,
         }
     }
 
@@ -225,6 +238,20 @@ impl ShelfRead for Project {
     }
 }
 
+/// The files a run wrote, put on disk: each, and the directories above it up to the
+/// root, by the rules of the platform (on Apple systems one full flush of the drive
+/// for the whole run, not one for each file). The paths are from the root of the
+/// project, the one the three writers ([`BooksToml`], [`MarkdownDocs`],
+/// [`FileSpace`]) write under, so the root is held here once.
+impl FileSync for Project {
+    type Error = PersistFailed;
+
+    async fn persist(&self, files: &NonEmptyVec<RelPath>) -> Result<(), PersistFailed> {
+        let files: Vec<RelPath> = files.iter().cloned().collect();
+        create::persist(&self.root, &files).await
+    }
+}
+
 impl ShelfWrite for Project {
     type Append = JsonLedger;
     type Ids = UuidV7Ids;
@@ -234,6 +261,11 @@ impl ShelfWrite for Project {
     type DocReplacer = MarkdownDocs;
     type DeclarationWriter = BooksToml;
     type FileWriter = FileSpace;
+    type FileSyncer = Self;
+
+    fn file_syncer(&self) -> &Self {
+        self
+    }
 
     fn declaration_writer(&self) -> &BooksToml {
         &self.books

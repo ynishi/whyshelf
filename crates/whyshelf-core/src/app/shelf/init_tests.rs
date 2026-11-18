@@ -203,6 +203,7 @@ fn another_file_that_appears_before_its_write_stops_the_run_before_the_documents
         written,
         failed,
         cause,
+        not_durable,
     } = &error
     else {
         panic!("{error:?}");
@@ -210,7 +211,13 @@ fn another_file_that_appears_before_its_write_stops_the_run_before_the_documents
     assert_eq!(written.clone().into_vec(), [path(".whyshelf/books.toml")]);
     assert_eq!(*failed, path("data/table.csv"));
     assert!(matches!(**cause, ShelfError::FileTaken { .. }));
+    assert!(not_durable.is_none());
     assert_eq!(app.ports().created_count(), 0);
+    // What was written is on disk before the run says it stopped.
+    assert_eq!(
+        app.ports().persist_calls(),
+        [vec![path(".whyshelf/books.toml")]]
+    );
 }
 
 /// What is in the way, from a refusal of `init`.
@@ -349,10 +356,12 @@ fn a_write_that_fails_part_way_says_what_was_written_and_what_was_not() {
         written,
         failed,
         cause,
+        not_durable,
     } = &error
     else {
         panic!("{error:?}");
     };
+    assert!(not_durable.is_none());
     assert_eq!(
         written.clone().into_vec(),
         [path(".whyshelf/books.toml"), path("findings/FR-1.md")]
@@ -372,6 +381,10 @@ fn a_write_that_fails_part_way_says_what_was_written_and_what_was_not() {
     );
     assert_eq!(app.ports().declaration_file().as_deref(), Some(TEXT));
     assert_eq!(app.ports().created_count(), 1);
+    assert_eq!(
+        app.ports().persist_calls(),
+        [vec![path(".whyshelf/books.toml"), path("findings/FR-1.md")]]
+    );
 }
 
 #[test]
@@ -388,6 +401,10 @@ fn a_file_that_appears_before_its_write_is_a_request_error_part_way() {
     };
     assert_eq!(written.clone().into_vec(), [path(".whyshelf/books.toml")]);
     assert!(matches!(**cause, ShelfError::FileTaken { .. }));
+    assert_eq!(
+        app.ports().persist_calls(),
+        [vec![path(".whyshelf/books.toml")]]
+    );
     assert_eq!(error.class(), ErrorClass::Request);
     assert_eq!(
         error.to_string(),

@@ -27,6 +27,7 @@
 //! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there; and what is in the way of one at a path |
 //! | [`DeclarationWrite`] | the file of the declaration, from a text in its format, never in place of a file that is there; and what is in the way of it |
 //! | [`FileWrite`] | a new file of the project that is neither a document nor the declaration (one a template starts a project with, such as a table its documents name), from its bytes, never in place of a file that is there; and what is in the way of one at a path |
+//! | [`FileSync`] | the files [`DocWrite`], [`DeclarationWrite`] and [`FileWrite`] made, put on disk together, once for a run, so that they survive a power loss |
 //! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten) |
 //! | [`ActorSource`] | who is acting |
 //! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
@@ -43,7 +44,7 @@
 //!        |      what `check`, `status`, `get`, `trace`, `stale`, `get --approved`,
 //!        |      `diff`, `moves` and `fmt --check` are generic over
 //!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite  DocReplace
-//!               DeclarationWrite  FileWrite
+//!               DeclarationWrite  FileWrite  FileSync
 //!               what `judge`, `new_doc`, `init` and `fmt` are generic over
 //! ```
 
@@ -57,6 +58,7 @@ use thiserror::Error;
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
+use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactKey, ArtifactReadings, ContentAddress, Revision, Space,
 };
@@ -105,6 +107,8 @@ pub enum ShelfPort {
     DeclarationWrite,
     /// [`FileWrite`].
     FileWrite,
+    /// [`FileSync`].
+    FileSync,
 }
 
 impl fmt::Display for ShelfPort {
@@ -125,6 +129,7 @@ impl fmt::Display for ShelfPort {
             Self::Moves => "move suggestions",
             Self::DeclarationWrite => "declaration write",
             Self::FileWrite => "file write",
+            Self::FileSync => "file sync",
         })
     }
 }
@@ -403,9 +408,11 @@ pub trait DocWrite: Send + Sync {
     ///
     /// Create-only: a file already at the path is never replaced, and is
     /// [`Creation::AlreadyThere`], not an error. Missing directories are made. Writing
-    /// over a file is another port, [`DocReplace`], which only `fmt` calls. A write
-    /// that fails after the file was made removes that file (and no other), so a
-    /// failure leaves no part of a document behind.
+    /// over a file is another port, [`DocReplace`], which only `fmt` calls. The file
+    /// is written whole, and is not put on disk: that is [`FileSync::persist`], at
+    /// the end of the run. A write that fails after the file was made removes that
+    /// file (and no other), so a failure leaves no part of a document behind. Only a
+    /// run of writes calls this, so that every file it made is put on disk.
     fn create(
         &self,
         path: &RelPath,
@@ -431,7 +438,9 @@ pub trait DeclarationWrite: Send + Sync {
     ///
     /// Create-only, as [`DocWrite::create`]: something already at the file is never
     /// replaced, and is [`Creation::AlreadyThere`], not an error. A write that fails
-    /// after the file was made removes that file, as `DocWrite::create` does.
+    /// after the file was made removes that file, as `DocWrite::create` does. The
+    /// file is written whole, and is put on disk by [`FileSync::persist`] at the end
+    /// of the run.
     fn create(
         &self,
         text: &DeclarationText,
@@ -458,12 +467,33 @@ pub trait FileWrite: Send + Sync {
     ///
     /// Create-only, as [`DocWrite::create`]: something already at the path is never
     /// replaced, and is [`Creation::AlreadyThere`], not an error. A write that fails
-    /// after the file was made removes that file, as `DocWrite::create` does.
+    /// after the file was made removes that file, as `DocWrite::create` does. The
+    /// file is written whole, and is put on disk by [`FileSync::persist`] at the end
+    /// of the run.
     fn create(
         &self,
         path: &RelPath,
         bytes: &[u8],
     ) -> impl Future<Output = Result<Creation, Self::Error>> + Send;
+}
+
+/// Putting the files a run wrote on disk, together, so that they survive a power
+/// loss: the one place where that is done, and how (which calls the platform has,
+/// what is done for each file and directory, what a drive that cannot flush its
+/// cache is left at) is the adapter's.
+pub trait FileSync: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// Put `files` on disk: each a path from the same project root as the paths
+    /// [`DocWrite`], [`DeclarationWrite`] and [`FileWrite`] write at, of a file one
+    /// of them made whole. When this is `Ok`, every one of them is on disk; when it
+    /// is an error, some may be and some not, and none is removed (each is whole
+    /// as it was written).
+    fn persist(
+        &self,
+        files: &NonEmptyVec<RelPath>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 /// What [`DocReplace::replace_read`] did.
@@ -678,6 +708,8 @@ pub trait ShelfWrite: ShelfRead {
     type DeclarationWriter: DeclarationWrite;
     /// The other files a project is started with.
     type FileWriter: FileWrite;
+    /// The files a run wrote, put on disk.
+    type FileSyncer: FileSync;
 
     /// The ledger, to write.
     fn append(&self) -> &Self::Append;
@@ -689,6 +721,8 @@ pub trait ShelfWrite: ShelfRead {
     fn declaration_writer(&self) -> &Self::DeclarationWriter;
     /// The writer of the other files a project is started with.
     fn file_writer(&self) -> &Self::FileWriter;
+    /// The putting of the files a run wrote on disk.
+    fn file_syncer(&self) -> &Self::FileSyncer;
     /// The source of identities.
     fn ids(&self) -> &Self::Ids;
     /// The acting person.

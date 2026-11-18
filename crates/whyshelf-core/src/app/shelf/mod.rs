@@ -75,6 +75,7 @@ mod new_doc;
 pub mod ports;
 mod read;
 mod report;
+mod run_writes;
 mod same_meaning;
 mod unlinked;
 mod withdraw;
@@ -114,6 +115,8 @@ mod preset_tests;
 #[cfg(test)]
 mod run_tests;
 #[cfg(test)]
+mod run_writes_tests;
+#[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]
 mod space_tests;
@@ -130,7 +133,7 @@ pub use approve_chosen::{
     ApproveChosenRequest, ApproveStaleRequest, Choose, ChosenApproved, ChosenJudged, ChosenLeftOut,
     PendingScope,
 };
-pub use error::{ErrorClass, Obstacle, ShelfError};
+pub use error::{ErrorClass, Obstacle, PersistProblem, ShelfError};
 pub use exempt::{ExemptRequest, Exempted};
 pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
 pub use init::{InitFile, InitRequest, Initialized};
@@ -139,9 +142,10 @@ pub use moved::MovedRequest;
 pub use new_doc::{Created, EntryInput, ItemInput, NewDocRequest, NewMany};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileRead, FileWrite,
-    IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Rendered, Replaceable,
-    Replacement, RevisionSource, ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord, UnreadableWhy,
+    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileRead, FileSync,
+    FileWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Rendered,
+    Replaceable, Replacement, RevisionSource, ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord,
+    UnreadableWhy,
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
