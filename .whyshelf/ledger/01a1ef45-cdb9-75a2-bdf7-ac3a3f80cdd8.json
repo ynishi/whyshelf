@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795015684493,
+  "expires": null,
+  "frame": [],
+  "id": "01a1ef45-cdb9-75a2-bdf7-ac3a3f80cdd8",
+  "kind": "decision",
+  "reason": "Issue #130: no message prints a value as debug output; names are joined by one function and a failed document, a link that cannot be followed and a cycle are said once in the domain, by key; the words of a key and of without_front_matter are read with the other words of a declaration. Reviewed design (independent review, four rounds, and arch rules), code review, and a blind review of the branch with every must-fix finding fixed; tests pass",
+  "revision": "107460fb4e2ce0dfcf8300147557c8387ee280e1",
+  "seen": "sha256:e2b60614340ef11e0e487112fdb72b1fe0efa4135e8e8e7cfefacc82c9fac4ab",
+  "seen_address": "db1f358cf473f1046a6b19f64f2bf13c134eb4e2",
+  "subject": "01a1ef3c-2024-7698-8875-31b9a841c575",
+  "v": 1,
+  "verb": "approve"
+}

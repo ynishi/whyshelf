@@ -168,7 +168,7 @@ pub(super) fn decls() -> Vec<BookSchemaDecl> {
             name: "design".to_owned(),
             dir: "designs".to_owned(),
             scope: Default::default(),
-            key: KeyPatternDecl::Slug,
+            key: KeyPatternDecl::slug(),
             description: None,
             fields: vec![field("title", scalar("text"), FieldPresence::Required)],
             links: vec![link("specs", "spec", Propagation::Depends)],

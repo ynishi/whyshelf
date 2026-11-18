@@ -59,6 +59,7 @@ use thiserror::Error;
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::words::{Join, Mark, listed};
 
 use super::super::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReadings, ArtifactState,
@@ -311,7 +312,7 @@ pub enum MovedRefusal {
     },
     /// Pins are read as the old name in more than one space, so which artifact is
     /// meant cannot be told.
-    #[error("pins are read as `{name}` in more than one space: {spaces:?}")]
+    #[error("pins are read as `{name}` in more than one space: {}", listed(.spaces.iter(), Mark::Backtick, Join::And))]
     InSpaces {
         /// The old name.
         name: ArtifactName,

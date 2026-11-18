@@ -426,7 +426,7 @@ fn every_why_of_an_unneeded_exemption_is_told_on_the_binary() {
     assert_eq!(
         warning,
         format!(
-            "warning: {id} exempts {n1} from `note.see` and is not needed: the document is not valid now: its files are invalid; withdraw it with `judge withdraw {id}`\n"
+            "warning: {id} exempts {n1} from `note.see` and is not needed: the document is invalid; withdraw it with `judge withdraw {id}`\n"
         )
     );
 
@@ -446,7 +446,7 @@ fn every_why_of_an_unneeded_exemption_is_told_on_the_binary() {
         unneeded["detail"]
             .as_str()
             .unwrap()
-            .ends_with("the document is not valid now: no file in the books' ranges carries it"),
+            .ends_with("no file in the books' ranges carries the document"),
         "{unneeded}"
     );
 

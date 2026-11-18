@@ -68,7 +68,16 @@
 //! [`Propagation`](whyshelf_core::domain::shelf::schema::Propagation), on a link and
 //! on a preset alike. A word that is none of them is a problem of the declaration
 //! ([`SchemaProblem::UnknownWord`](whyshelf_core::domain::shelf::schema::SchemaProblem::UnknownWord)),
-//! not of the TOML. The built-in presets are the
+//! not of the TOML.
+//!
+//! The words of the entries of a book are kept as written too: a `key` written as a
+//! text and a `without_front_matter`. The domain reads them, and a word that is none
+//! of them is a problem of the declaration
+//! ([`SchemaProblem::UnknownBookWord`](whyshelf_core::domain::shelf::schema::SchemaProblem::UnknownBookWord)).
+//! A `key` that is neither a text nor a table (`key = 3`), and a table that holds an
+//! entry other than `prefix`, are failures to read the TOML.
+//!
+//! The built-in presets are the
 //! adapters' (`file`, on the page of [`artifact`](super::artifact)); how a preset of
 //! the project of the same name stands to one is stated on
 //! [`expand`](whyshelf_core::domain::shelf::schema::expand).
@@ -303,19 +312,14 @@ struct BookDto {
 #[serde(untagged)]
 enum KeyDto {
     Prefixed(PrefixDto),
-    Word(KeyWord),
+    /// A text, kept as written: the domain reads it.
+    Word(String),
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PrefixDto {
     prefix: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum KeyWord {
-    Slug,
 }
 
 #[derive(Debug, Deserialize)]
@@ -391,7 +395,7 @@ impl BookDto {
             },
             key: match self.key {
                 KeyDto::Prefixed(PrefixDto { prefix }) => KeyPatternDecl::Prefixed { prefix },
-                KeyDto::Word(KeyWord::Slug) => KeyPatternDecl::Slug,
+                KeyDto::Word(word) => KeyPatternDecl::Word(word),
             },
             description: self.description,
             fields: self
@@ -491,7 +495,7 @@ means = "informs"
             FieldTypeDecl::Enum(vec!["low".to_owned(), "high".to_owned()])
         );
         assert_eq!(decls.books[0].fields[0].presence, FieldPresence::Required);
-        assert_eq!(decls.books[1].key, KeyPatternDecl::Slug);
+        assert_eq!(decls.books[1].key, KeyPatternDecl::slug());
         // The words are kept as written; a link that writes no count has none.
         assert_eq!(
             decls.books[1].links[0].count.as_deref(),
@@ -612,7 +616,22 @@ means = "informs"
     #[test]
     fn a_key_the_shape_does_not_know_is_refused() {
         assert!(parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\ncolour='red'\n").is_err());
-        assert!(parse("[[book]]\nname='a'\ndir='a'\nkey='uuid'\n").is_err());
+        // Neither a text nor a table: no shape of a key.
+        assert!(parse("[[book]]\nname='a'\ndir='a'\nkey=3\n").is_err());
+        assert!(parse("[[book]]\nname='a'\ndir='a'\nkey=[]\n").is_err());
+        // A table with a key it does not know.
+        assert!(parse("[[book]]\nname='a'\ndir='a'\nkey={prefix='F',colour='red'}\n").is_err());
+    }
+
+    #[test]
+    fn a_word_of_a_key_is_kept_as_written_for_the_domain_to_read() {
+        let decls = parse("[[book]]\nname='a'\ndir='a'\nkey='uuid'\n").unwrap();
+        assert_eq!(decls.books[0].key, KeyPatternDecl::Word("uuid".to_owned()));
+        let problems = validate(decls).unwrap_err();
+        assert!(matches!(
+            problems.first(),
+            SchemaProblem::UnknownBookWord { book, word, .. } if book == "a" && word == "uuid"
+        ));
     }
 
     /// A book `a` whose link `tests` to artifacts has these extra lines.

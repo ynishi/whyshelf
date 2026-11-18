@@ -314,6 +314,16 @@ fn a_declaration_that_cannot_be_used_is_its_problems_and_no_drawing() {
 }
 
 #[test]
+fn the_kind_of_a_slug_key_in_the_answer_is_the_word_of_the_declaration() {
+    // The answer's `kind` is the word a declaration writes, so the two cannot part.
+    let kind = serde_json::to_value(KeyGrammarOut::Slug).unwrap()["kind"].clone();
+    assert_eq!(
+        kind,
+        whyshelf_core::domain::shelf::schema::KeyWord::Slug.word()
+    );
+}
+
+#[test]
 fn a_problem_of_the_declaration_says_its_reason() {
     let books = "[[preset]]\nname='odd'\ncompare='words'\n\
          [[book]]\nname='a'\ndir='a'\nkey='slug'\n\

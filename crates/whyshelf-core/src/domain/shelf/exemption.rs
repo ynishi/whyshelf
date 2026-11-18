@@ -30,10 +30,11 @@ use thiserror::Error;
 
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::words::{Join, Mark, listed};
 
 use super::build::{FailureTag, Shelf};
 use super::cover::{Decided, Reached, counts, covering_reach};
-use super::doc::DocKey;
+use super::doc::{DocKey, DocLabel};
 use super::ledger::{Exempt, ExemptOf, JudgementId, Ledger};
 use super::schema::{BookName, CoverSeverity, EntryName, Schema};
 
@@ -164,7 +165,7 @@ pub(super) fn by_subject(ledger: &Ledger) -> BTreeMap<&ExemptOf, Vec<&Exempt>> {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ExemptRefusal {
     /// The document is not a valid document now, so its book cannot be told.
-    #[error("{id} is not a valid document now: {tag}")]
+    #[error("{}", tag.said_of(id))]
     DocNotValid {
         /// The document.
         id: DocId,
@@ -185,7 +186,7 @@ pub enum ExemptRefusal {
     },
     /// The document is denied, deprecated or retired: no covering link expects to
     /// reach it, so there is nothing to exempt it from.
-    #[error("{} is decided against: no covering link expects to reach it", label(*id, key.as_ref()))]
+    #[error("{} is decided against: no covering link expects to reach it", DocLabel::new(*id, key.clone()))]
     DecidedAgainst {
         /// The document.
         id: DocId,
@@ -194,7 +195,7 @@ pub enum ExemptRefusal {
         key: Option<DocKey>,
     },
     /// The link reaches the document now: the exemption would be unneeded at once.
-    #[error("{book}.{link} reaches it now, from {}", keys(by))]
+    #[error("{book}.{link} reaches it now, from {}", listed(.by.iter(), Mark::Plain, Join::Comma))]
     Reached {
         /// The book.
         book: BookName,
@@ -224,19 +225,6 @@ pub enum ExemptRefusal {
         /// The link.
         link: EntryName,
     },
-}
-
-/// A document as a message names it: by its key, else by its identity.
-fn label(id: DocId, key: Option<&DocKey>) -> String {
-    key.map_or_else(|| id.to_string(), ToString::to_string)
-}
-
-/// Keys, joined for a sentence.
-fn keys(keys: &[DocKey]) -> String {
-    keys.iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 /// What an exemption of the document `id` from the link `link` of the book `book`

@@ -768,3 +768,18 @@ fn what_is_no_decision_or_declaration_cannot_be_withdrawn() {
         Err(WithdrawRefusal::Unknown { id: jid(2001) })
     );
 }
+
+#[test]
+fn a_name_linked_in_two_spaces_names_the_spaces_in_words() {
+    let refused = SameMeaningRefusal::ArtifactInSpaces {
+        name: crate::domain::shelf::artifact::ArtifactName::new("a.rs").unwrap(),
+        spaces: vec![
+            crate::domain::shelf::artifact::Space::new("file").unwrap(),
+            crate::domain::shelf::artifact::Space::new("rust-item").unwrap(),
+        ],
+    };
+    assert_eq!(
+        refused.to_string(),
+        "documents link `a.rs` in more than one space: `file` and `rust-item`"
+    );
+}

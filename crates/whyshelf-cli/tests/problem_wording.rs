@@ -90,3 +90,58 @@ fn a_word_of_a_count_the_declaration_does_not_have_is_a_problem_of_the_declarati
         ])
     );
 }
+
+/// What `check` answers (exit 1) for this declaration: its problems of the declaration.
+fn schema_problems_of(name: &str, books: &str) -> serde_json::Value {
+    let project = Project::with(name, books, NOTE);
+    let output = project.run(&["check"]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let answer = json(&output);
+    assert_eq!(answer["clean"], false, "{answer}");
+    answer["schema_problems"].clone()
+}
+
+#[test]
+fn a_word_of_a_key_the_declaration_does_not_have_is_a_problem_of_the_declaration() {
+    let books = "[[book]]\nname = \"note\"\ndir = \"notes\"\nkey = \"uuid\"\n";
+    assert_eq!(
+        schema_problems_of("unknown-key-word", books),
+        serde_json::json!([
+            "book `note`: `key` is \"uuid\", and it takes \"slug\" or a table { prefix = \"...\" }"
+        ])
+    );
+}
+
+#[test]
+fn a_word_of_without_front_matter_the_declaration_does_not_have_is_a_problem_of_the_declaration() {
+    let books = BOOKS.replace(
+        "key = { prefix = \"N\" }\n",
+        "key = { prefix = \"N\" }\nwithout_front_matter = \"maybe\"\n",
+    );
+    assert_eq!(
+        schema_problems_of("unknown-front-matter-word", &books),
+        serde_json::json!([
+            "book `note`: `without_front_matter` is \"maybe\", and it takes \"invalid\" or \"skip\""
+        ])
+    );
+}
+
+#[test]
+fn a_key_that_is_neither_a_word_nor_a_table_still_fails_the_read_of_the_declaration() {
+    for (name, key) in [("key-number", "3"), ("key-list", "[]")] {
+        let books = format!("[[book]]\nname = \"note\"\ndir = \"notes\"\nkey = {key}\n");
+        let project = Project::with(name, &books, NOTE);
+        let output = project.run(&["check"]);
+        assert_eq!(
+            output.status.code(),
+            Some(3),
+            "key = {key}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

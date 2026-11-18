@@ -27,6 +27,7 @@ use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec, OneLine, TwoOrMore};
+use crate::domain::words::{Join, Mark, listed};
 
 use super::artifact::{Artifact, ArtifactKey, ArtifactState, Untold};
 use super::schema::{
@@ -49,6 +50,44 @@ pub struct DocKey {
 impl fmt::Display for DocKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.book, self.form)
+    }
+}
+
+/// A document as a message names it: by its key, else by its identity.
+///
+/// A document may have no key a message can know (one that is invalid has none, and
+/// one that is gone has none to read), so a message that names a document that may
+/// be either of these says it through this value, and so says it one way. A name that
+/// is always a key (the document a link resolved to) is a [`DocKey`], not this.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocLabel {
+    id: DocId,
+    key: Option<DocKey>,
+}
+
+impl DocLabel {
+    /// The document `id`, with its key when it has one.
+    pub fn new(id: DocId, key: Option<DocKey>) -> Self {
+        Self { id, key }
+    }
+
+    /// The identity of the document.
+    pub fn id(&self) -> DocId {
+        self.id
+    }
+
+    /// The key of the document, when it has one.
+    pub fn key(&self) -> Option<&DocKey> {
+        self.key.as_ref()
+    }
+}
+
+impl fmt::Display for DocLabel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.key {
+            Some(key) => fmt::Display::fmt(key, f),
+            None => fmt::Display::fmt(&self.id, f),
+        }
     }
 }
 
@@ -192,6 +231,49 @@ impl UnresolvedLink {
     /// Why it could not be followed.
     pub fn why(&self) -> &UnresolvedWhy {
         &self.why
+    }
+}
+
+/// What a link that could not be followed comes to, as a sentence, which is the one
+/// way it is told (by the refusal of a frame as by `check` and `stale`):
+///
+/// | why | the sentence |
+/// |---|---|
+/// | [`UnresolvedWhy::Malformed`] | `` `W` cannot be followed: not a key: <problem> `` |
+/// | [`UnresolvedWhy::Missing`] | `` `W` cannot be followed: no document has this key `` |
+/// | [`UnresolvedWhy::Ambiguous`] | `` `W` cannot be followed: it names 2 documents with the key `K`: <id> and <id> `` |
+/// | [`UnresolvedWhy::TargetInvalid`] | `` `W` cannot be followed: the document it names is invalid (K) `` |
+///
+/// The documents that share a key are told apart by their identities, since their
+/// key is the same. The one that is invalid is told by the key the link read as, or
+/// by its identity when the link read as no key.
+impl fmt::Display for UnresolvedLink {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "`{}` cannot be followed: ", self.written)?;
+        match &self.why {
+            UnresolvedWhy::Malformed(problem) => write!(f, "not a key: {problem}"),
+            UnresolvedWhy::Missing => f.write_str("no document has this key"),
+            UnresolvedWhy::Ambiguous(ids) => write!(
+                f,
+                "it names {} documents with the key `{}`: {}",
+                ids.len(),
+                self.said_key(),
+                listed(ids.iter(), Mark::Plain, Join::And)
+            ),
+            UnresolvedWhy::TargetInvalid(id) => {
+                let label = DocLabel::new(*id, self.key.clone());
+                write!(f, "the document it names is invalid ({label})")
+            }
+        }
+    }
+}
+
+impl UnresolvedLink {
+    /// The key the text reads as, or the text as written when it reads as none.
+    fn said_key(&self) -> String {
+        self.key
+            .as_ref()
+            .map_or_else(|| self.written.clone(), ToString::to_string)
     }
 }
 
@@ -698,6 +780,108 @@ mod tests {
         let text = FieldValue::Text(said("same"));
         let line = FieldValue::Line(OneLine::new("same").expect("one line"));
         assert_eq!(text.to_canon(), line.to_canon());
+    }
+}
+
+#[cfg(test)]
+mod wording_tests {
+    use crate::domain::nonempty::TwoOrMore;
+    use crate::domain::shelf::fixtures_tests::docid;
+    use crate::domain::shelf::schema::{KeyPattern, KeyPrefix, KeyProblem};
+
+    use super::{BookName, DocKey, DocLabel, UnresolvedLink, UnresolvedWhy};
+
+    fn key(book: &str, text: &str) -> DocKey {
+        let pattern = KeyPattern::Prefixed(KeyPrefix::new("SP").expect("a prefix"));
+        DocKey {
+            book: BookName::new(book).expect("a book"),
+            form: pattern.parse(text).expect("a key"),
+        }
+    }
+
+    fn link(why: UnresolvedWhy, key: Option<&DocKey>) -> UnresolvedLink {
+        UnresolvedLink::new(
+            "SP-1".to_owned(),
+            BookName::new("spec").expect("a book"),
+            key.map(|k| k.form.clone()),
+            why,
+        )
+    }
+
+    #[test]
+    fn a_label_is_the_key_of_the_document_or_else_its_identity() {
+        let sp1 = key("spec", "SP-1");
+        assert_eq!(
+            DocLabel::new(docid(1), Some(sp1.clone())).to_string(),
+            "spec:SP-1"
+        );
+        assert_eq!(
+            DocLabel::new(docid(1), None).to_string(),
+            docid(1).to_string()
+        );
+        let label = DocLabel::new(docid(2), Some(sp1.clone()));
+        assert_eq!(label.id(), docid(2));
+        assert_eq!(label.key(), Some(&sp1));
+    }
+
+    #[test]
+    fn a_link_that_is_no_key_there_says_what_is_wrong_with_the_text() {
+        let problem = KeyProblem::NoSeparator;
+        let said = link(UnresolvedWhy::Malformed(problem.clone()), None);
+        assert_eq!(
+            said.to_string(),
+            format!("`SP-1` cannot be followed: not a key: {problem}")
+        );
+    }
+
+    #[test]
+    fn a_link_to_a_key_no_document_has_says_so() {
+        let sp1 = key("spec", "SP-1");
+        assert_eq!(
+            link(UnresolvedWhy::Missing, Some(&sp1)).to_string(),
+            "`SP-1` cannot be followed: no document has this key"
+        );
+    }
+
+    #[test]
+    fn a_link_to_a_key_of_several_documents_tells_them_apart_by_identity() {
+        let sp1 = key("spec", "SP-1");
+        let two = TwoOrMore::new(docid(1), docid(2), vec![]);
+        assert_eq!(
+            link(UnresolvedWhy::Ambiguous(two), Some(&sp1)).to_string(),
+            format!(
+                "`SP-1` cannot be followed: it names 2 documents with the key `spec:SP-1`: {} and {}",
+                docid(1),
+                docid(2)
+            )
+        );
+        let three = TwoOrMore::new(docid(1), docid(2), vec![docid(3)]);
+        assert_eq!(
+            link(UnresolvedWhy::Ambiguous(three), Some(&sp1)).to_string(),
+            format!(
+                "`SP-1` cannot be followed: it names 3 documents with the key `spec:SP-1`: {}, {} and {}",
+                docid(1),
+                docid(2),
+                docid(3)
+            )
+        );
+    }
+
+    #[test]
+    fn a_link_to_an_invalid_document_names_it_by_the_key_the_link_read_as() {
+        let sp1 = key("spec", "SP-1");
+        assert_eq!(
+            link(UnresolvedWhy::TargetInvalid(docid(1)), Some(&sp1)).to_string(),
+            "`SP-1` cannot be followed: the document it names is invalid (spec:SP-1)"
+        );
+        // A link that read as no key names it by its identity.
+        assert_eq!(
+            link(UnresolvedWhy::TargetInvalid(docid(1)), None).to_string(),
+            format!(
+                "`SP-1` cannot be followed: the document it names is invalid ({})",
+                docid(1)
+            )
+        );
     }
 }
 

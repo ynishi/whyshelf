@@ -58,9 +58,9 @@ use super::artifact::{
     ArtifactReadings, ArtifactState, Comparison, ComparisonProblem, ContentAddress, OpaqueProblem,
     Revision, Space, SpaceProblem, Untold,
 };
-use super::build::{DocFailure, DocState, FailureTag, Shelf};
+use super::build::{Detail, DocFailure, DocState, FailureTag, Shelf};
 use super::doc::{DocHash, DocKey, LinkState, UnresolvedLink};
-use super::graph::{Cycle, CycleSource, components, cycles_of};
+use super::graph::{Cycle, CycleSource, LabelledCycle, components, cycles_of};
 use super::schema::{
     ArtifactPropagation, BookName, EntryName, KeyForm, KeyPrefix, KeyProblem, KeyTail, NameProblem,
     Propagation, Slug, parse_tail,
@@ -508,11 +508,11 @@ pub struct RetireFrame {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum FrameRefusal {
     /// The document is not valid, so there is nothing sound to judge.
-    #[error("the document is not valid: {0:?}")]
+    #[error("{}", .0.said_of(&"the document", Detail::Full))]
     NotValid(DocFailure),
     /// A `Depends` link of the document cannot be followed, so an approval would
     /// stand on nothing.
-    #[error("the link `{link}` cannot be followed: {unresolved:?}")]
+    #[error("the link `{link}`: {unresolved}")]
     UnresolvedDepends {
         /// The link.
         link: EntryName,
@@ -520,18 +520,20 @@ pub enum FrameRefusal {
         unresolved: UnresolvedLink,
     },
     /// The document is in a cycle: of `Depends` links, or of the frames of
-    /// approvals, which this approval would close. Which one the cycle's id says.
-    #[error("the document is in a cycle: {0:?}")]
-    InCycle(Cycle),
+    /// approvals, which this approval would close. Which one the cycle says.
+    #[error("the document is in {0}")]
+    InCycle(LabelledCycle),
     /// A `Depends` link names a document people decided does not stand. An approval
     /// pinned to it would not hold from the start; a deprecated one is to be
     /// replaced, so pin its successor.
-    #[error("the link `{link}` names {target}, which is {status}: an approval cannot stand on it")]
+    #[error("the link `{link}` names {key}, which is {status}: an approval cannot stand on it")]
     UpstreamNotStanding {
         /// The link.
         link: EntryName,
         /// The document it names.
         target: DocId,
+        /// Its key, by which the message names it.
+        key: DocKey,
         /// What was decided about it.
         status: NotStanding,
     },
@@ -2381,6 +2383,7 @@ pub fn frame_approve(
                         return Err(FrameRefusal::UpstreamNotStanding {
                             link: link.clone(),
                             target,
+                            key: upstream.key().clone(),
                             status,
                         });
                     }
@@ -2436,12 +2439,17 @@ pub fn frame_approve(
         }
     }
 
+    let in_cycle = |cycle: Cycle| {
+        FrameRefusal::InCycle(LabelledCycle::new(cycle, |member| {
+            shelf.doc(member).map(|doc| doc.key().clone())
+        }))
+    };
     if let Some(cycle) = shelf.cycles().iter().find(|c| c.contains(id)) {
-        return Err(FrameRefusal::InCycle(cycle.clone()));
+        return Err(in_cycle(cycle.clone()));
     }
     let targets: BTreeSet<DocId> = pins.iter().map(FramePin::target).collect();
     if let Some(cycle) = ledger.frame_graph().would_cycle(id, &targets) {
-        return Err(FrameRefusal::InCycle(cycle));
+        return Err(in_cycle(cycle));
     }
     Ok(ApproveFrame {
         subject: id,

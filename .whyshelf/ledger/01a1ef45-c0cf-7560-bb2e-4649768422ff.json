@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "73a9d17f88d89581aeae04ec2a7bb742d4defd49",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0eea9d909870e3718c8261b47f606bd18d5c5c78ebef31aa1961ac279cbe435b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "919c31eb1187b91b75ae1e4ccf2100231ae81e65",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b58e056af676259b4f949e60fe2b44e2b1b5264f4735ff0c90bbe8aebba44ffd",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b1c7978d476a7e612ffc24bb7f70020d619f2942",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1a565e11e35d4e7d635374f3e7fc2e09096d715533169d264504cf7df06fa847",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "53ffa65ebac6b2cee3fbb7d07963cff6b56e52ed",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21a776b44f7bb8fa5789232e17476e3c3c32f3cf9a849421468956d684dff309",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9b11195c42bff6d7b0dca5f22d38ff48f586dcb0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c8b3b31d1671dddb9be9dd62cf7e09cf81e5d6eb50bbec397fd351d099388f0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e57b5e11874e98111c28f69d608b65f0926c3e9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e48efc4bbc64dc6ee82663010e78cfb3ed6131d0c0aa389fe9fba20e4cd1ce15",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795015684493,
+  "expires": null,
+  "frame": [
+    {
+      "address": "664094d029e2ad23492557d6f13a5beda90f6102",
+      "hash": "sha256:223a47623c4502e4ada4888804b2cb40b6ce17173efb9e1e9e0b980ee401fc1c",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "50"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c690-6834-77b2-8c4a-bd554e7eb233"
+    }
+  ],
+  "id": "01a1ef45-c0cf-7560-bb2e-4649768422ff",
+  "kind": "decision",
+  "reason": "Issue #130: no message prints a value as debug output; names are joined by one function and a failed document, a link that cannot be followed and a cycle are said once in the domain, by key; the words of a key and of without_front_matter are read with the other words of a declaration. Reviewed design (independent review, four rounds, and arch rules), code review, and a blind review of the branch with every must-fix finding fixed; tests pass",
+  "revision": "107460fb4e2ce0dfcf8300147557c8387ee280e1",
+  "seen": "sha256:0ac782ead7a06f751294db5fc30120fb164c098342a8b681988f77207b1e795e",
+  "seen_address": "9f23ec79bd87f7942d4d20af44038fb38849dbef",
+  "subject": "01a1c690-6934-715f-b849-9529ca617d8a",
+  "v": 1,
+  "verb": "approve"
+}

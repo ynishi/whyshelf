@@ -218,9 +218,9 @@
 //! where `<why>` is one of `` `<book>.<link>` reaches it now, from <key>, <key> ``,
 //! `` no link `<book>.<link>` into a book is declared now ``, `` `<book>.<link>` is
 //! declared with no cover now ``, `` `<book>.<link>` points into `<book>` now, and
-//! the document is of `<book>` ``, `the document is not valid now: its files are
-//! invalid` (or `no file in the books' ranges carries it`, for a document whose file
-//! is gone or that a book's range leaves out, or `whether a file carries it cannot be
+//! the document is of `<book>` ``, `the document is invalid` (or `no file in the
+//! books' ranges carries the document`, for a document whose file is gone or that a
+//! book's range leaves out, or `whether a file carries the document cannot be
 //! told`), and `the document is decided against, and no covering link expects to
 //! reach it`. It does not fail `check`. `judge withdraw <record id>` takes an
 //! exemption back. Two exemptions that stand of one document from one link (branches
@@ -309,7 +309,8 @@
 //! `fmt` does not touch it, a link to a key only it writes is a link to no
 //! document, and the key it writes is not taken. A document that was approved and
 //! that the range comes to leave out is gone, as if its file were deleted: `stale`
-//! lists its approval as broken, because no file carries the document. `new`
+//! lists its approval as broken, because no file in the books' ranges carries the
+//! document. `new`
 //! refuses a document whose file, `<dir>/<key>.md`, the range leaves out, for a
 //! `--key` and for the next key alike (exit 2, naming the book, the path and the
 //! patterns, before anything is written).

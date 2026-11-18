@@ -1,0 +1,123 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::DocFailure",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::doc::DocLabel",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::doc::UnresolvedLink",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::graph::LabelledCycle",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::BookEntry",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::KeyWord",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::SchemaProblem",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::words::listed",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795015684493,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ab85b089a7eee8217b43991d7d9059a38237b614",
+      "hash": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    }
+  ],
+  "id": "01a1ef45-ceb9-7477-b50a-5c3d0714653b",
+  "kind": "decision",
+  "reason": "Issue #130: no message prints a value as debug output; names are joined by one function and a failed document, a link that cannot be followed and a cycle are said once in the domain, by key; the words of a key and of without_front_matter are read with the other words of a declaration. Reviewed design (independent review, four rounds, and arch rules), code review, and a blind review of the branch with every must-fix finding fixed; tests pass",
+  "revision": "107460fb4e2ce0dfcf8300147557c8387ee280e1",
+  "seen": "sha256:568c40ebf6d6a4d198cd9622eaaac1422096bf62230da29974285c2ff8fa4896",
+  "seen_address": "d8ff891800660292fb2e6637e991214e6f2190ad",
+  "subject": "01a1ef3c-6465-7073-b56b-81f10c2dfc24",
+  "v": 1,
+  "verb": "approve"
+}
