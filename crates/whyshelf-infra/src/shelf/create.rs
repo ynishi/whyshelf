@@ -1,20 +1,55 @@
 //! A new file, written whole or not at all: the one way the adapters create a file
-//! where nothing is (the declaration, a new document).
+//! where nothing is (the declaration, a new document, another file a project
+//! starts with), and the one way they put such files on disk.
 //!
 //! The file is opened `create_new`, so nothing that is there is ever replaced,
-//! with its directories made first. If writing its bytes, or putting them on disk,
-//! fails after the file was made, the file this call made is removed, and only that
-//! one: a failure leaves nothing half-written behind. "Only that one" is checked:
-//! on Unix the file at the path is removed only when it is still the one the call
-//! opened (the same device and inode); one put in its place in between is left, and
-//! the error says so. Elsewhere the platform gives no such identity through the
-//! standard library, so the file at the path is removed as it is.
+//! with its directories made first. If writing its bytes fails after the file was
+//! made, the file this call made is removed, and only that one: a failure leaves
+//! nothing half-written behind. "Only that one" is checked: on Unix the file at the
+//! path is removed only when it is still the one the call opened (the same device
+//! and inode); one put in its place in between is left, and the error says so.
+//! Elsewhere the platform gives no such identity through the standard library, so
+//! the file at the path is removed as it is. [`create_new`] hands the bytes to the
+//! operating system and does not put them on disk: that is [`persist`], which the
+//! caller calls once for every file a run made, so a run pays for it once and not
+//! once for each file. Until then a power loss can leave a file empty or partly
+//! written, as it could between the write and a sync of one file; a file that is
+//! there and cannot be read as a document is taken as a name in use by the next
+//! run, which moves on to another key.
+//!
+//! [`persist`] puts files on disk by what each platform can say it does:
+//!
+//! - On Unix each file is opened again, read only, and `fsync`ed, one at a time (no
+//!   descriptor is held until the end, which would run into the limit of open
+//!   files), and so is every directory from each file's parent up to the root, each
+//!   once: the entries `create_dir_all` made are covered, which Linux needs.
+//! - On Apple systems the `fsync` is the system's own (`rustix::fs::fsync`), which
+//!   hands the data to the drive; the standard library's `sync_all` there is a full
+//!   flush of the drive's cache and costs milliseconds a file. The full flush
+//!   (`F_FULLFSYNC`) is asked once for each device the files are on, after all of
+//!   them were `fsync`ed, which it covers: usually once for the run. A device that
+//!   cannot give a full flush (a network share, `exFAT`: `ENOTSUP`, `EINVAL` or
+//!   `ENOTTY`) is left at `fsync`, the strongest form it has.
+//! - On other Unix systems `fsync` is the standard library's `sync_all`. On
+//!   Linux with `ext4` or `xfs` a sync of a file flushes the drive's cache each time,
+//!   so doing it for each file in a row costs about what it did before this module
+//!   put files on disk together; the gain is on Apple systems.
+//! - On Windows each file is opened again for writing (neither truncated nor
+//!   appended to) and `sync_all`ed. A directory is not synced: its entries are
+//!   not covered there.
+//!
+//! The limits: on Linux (before 4.16, or on any kernel when the file left memory
+//! between its write and the end of the run) and on NFS, a failed write-back can be
+//! missed by an `fsync` made through a descriptor opened after it, so a file can be
+//! reported as on disk when it is not.
 //!
 //! [`in_the_way`] tells, before anything is written, what `create_new` would find
 //! in its way: something at the path, or a parent that is no directory, or a
 //! parent that is a link leading out of the root (followed, as the space `file`
 //! reads, only while its canonical path stays inside the canonical root).
 
+#[cfg(unix)]
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::Path;
 
@@ -125,18 +160,204 @@ async fn walk(root: &Path, segments: &[&str]) -> io::Result<Walk> {
 }
 
 /// Write `bytes` to a new file at `file`, or find something there and write
-/// nothing.
+/// nothing. The bytes are handed to the operating system, whole, and are not put on
+/// disk: [`persist`] does that, for every file of a run at once.
 pub(crate) async fn create_new(file: &Path, bytes: &[u8]) -> Result<Creation, CreateFailed> {
     create_with(file, async |out: &mut File| {
-        match out.write_all(bytes).await {
-            Ok(()) => out
-                .sync_all()
-                .await
-                .map_err(|e| (format!("write {} to disk", file.display()), e)),
-            Err(e) => Err((format!("write {}", file.display()), e)),
-        }
+        // `flush` waits for the writes the file still has in flight, so that when
+        // this returns every byte is with the operating system (and a failure of a
+        // write is told here), before `persist` opens the file again.
+        let written = async {
+            out.write_all(bytes).await?;
+            out.flush().await
+        };
+        written
+            .await
+            .map_err(|e| (format!("write {}", file.display()), e))
     })
     .await
+}
+
+/// The step of putting files on disk that failed, with its path, and the operating
+/// system's error.
+#[derive(Debug, thiserror::Error)]
+#[error("cannot {step}")]
+pub struct PersistFailed {
+    /// The step (`open <path> to put it on disk`, `put <path> on disk`).
+    pub step: String,
+    /// The operating system's error.
+    #[source]
+    pub source: io::Error,
+}
+
+/// What a failed step of putting files on disk is told as.
+fn failed(step: String) -> impl FnOnce(io::Error) -> PersistFailed {
+    move |source| PersistFailed { step, source }
+}
+
+/// Put the files `files` (relative to `root`), each written whole before, on disk,
+/// so that they survive a power loss, by the rules of the module page. The first
+/// step that fails ends it: the files may then be on disk or not.
+///
+/// A file or a directory is opened by the runtime's own calls and put on disk on a
+/// thread of the pool for blocking work, so the executor is never stalled by a sync.
+#[cfg(unix)]
+pub(crate) async fn persist(root: &Path, files: &[RelPath]) -> Result<(), PersistFailed> {
+    persist_with(root, files, platform_full_flush()).await
+}
+
+/// Put the files `files` (relative to `root`), each written whole before, on disk,
+/// by the rules of the module page: each opened again for writing, neither
+/// truncated nor appended to, and synced; no directory is.
+#[cfg(not(unix))]
+pub(crate) async fn persist(root: &Path, files: &[RelPath]) -> Result<(), PersistFailed> {
+    for file in files {
+        let path = root.join(file.as_str());
+        let shown = path.display();
+        let open = tokio::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .await
+            .map_err(failed(format!("open {shown} to put it on disk")))?;
+        open.sync_all()
+            .await
+            .map_err(failed(format!("put {shown} on disk")))?;
+    }
+    Ok(())
+}
+
+/// Run a step that blocks on a thread of the pool for blocking work.
+#[cfg(unix)]
+async fn blocking<T: Send + 'static>(
+    step: impl FnOnce() -> io::Result<T> + Send + 'static,
+) -> io::Result<T> {
+    match tokio::task::spawn_blocking(step).await {
+        Ok(done) => done,
+        Err(joined) => Err(io::Error::other(joined)),
+    }
+}
+
+/// The path a relative `path` stands for under `root`; the root itself for none.
+#[cfg(unix)]
+fn under(root: &Path, path: &str) -> std::path::PathBuf {
+    if path.is_empty() {
+        root.to_path_buf()
+    } else {
+        root.join(path)
+    }
+}
+
+/// A full flush of the device a file is on, as the platform has one.
+#[cfg(unix)]
+type FullFlush = std::sync::Arc<dyn Fn(&std::fs::File) -> rustix::io::Result<()> + Send + Sync>;
+
+/// The full flush the platform has, if it has one.
+#[cfg(all(unix, target_vendor = "apple"))]
+fn platform_full_flush() -> Option<FullFlush> {
+    Some(std::sync::Arc::new(|file: &std::fs::File| {
+        rustix::fs::fcntl_fullfsync(file)
+    }))
+}
+
+#[cfg(all(unix, not(target_vendor = "apple")))]
+fn platform_full_flush() -> Option<FullFlush> {
+    None
+}
+
+/// `fsync` of an open file or directory: the system's own on Apple systems, where
+/// the standard library's `sync_all` is a full flush; `sync_all` elsewhere.
+#[cfg(all(unix, target_vendor = "apple"))]
+fn fsync(file: &std::fs::File) -> io::Result<()> {
+    rustix::fs::fsync(file).map_err(io::Error::from)
+}
+
+#[cfg(all(unix, not(target_vendor = "apple")))]
+fn fsync(file: &std::fs::File) -> io::Result<()> {
+    file.sync_all()
+}
+
+/// Whether a device that answered a full flush with `errno` cannot give one at all
+/// (a file system with no such request), so that what `fsync` did is the most there
+/// is. Any other answer is a failure.
+#[cfg(unix)]
+fn cannot_flush_fully(errno: rustix::io::Errno) -> bool {
+    use rustix::io::Errno;
+    errno == Errno::NOTSUP || errno == Errno::INVAL || errno == Errno::NOTTY
+}
+
+/// [`persist`] on Unix, with the full flush given (none where the platform has
+/// none), so that how a device that cannot flush fully is left can be tried.
+#[cfg(unix)]
+async fn persist_with(
+    root: &Path,
+    files: &[RelPath],
+    full_flush: Option<FullFlush>,
+) -> Result<(), PersistFailed> {
+    use std::os::unix::fs::MetadataExt;
+
+    let mut dirs: BTreeSet<String> = BTreeSet::new();
+    // One open file for each device the files are on: what the full flush is asked of.
+    let mut devices: BTreeMap<u64, std::fs::File> = BTreeMap::new();
+    for file in files {
+        let path = under(root, file.as_str());
+        let shown = path.display();
+        let open = File::open(&path)
+            .await
+            .map_err(failed(format!("open {shown} to put it on disk")))?;
+        // Written in full, as `create_with` writes it, for the lint of blocking
+        // calls, which goes by the method's name.
+        let device = File::metadata(&open)
+            .await
+            .map_err(failed(format!("look at {shown} to put it on disk")))?
+            .dev();
+        let open = open.into_std().await;
+        // The file is given back, so one per device can be kept; every other is
+        // closed here, none is held until the end.
+        let open = blocking(move || fsync(&open).map(|()| open))
+            .await
+            .map_err(failed(format!("put {shown} on disk")))?;
+        devices.entry(device).or_insert(open);
+        let segments: Vec<&str> = file.as_str().split('/').collect();
+        for end in 0..segments.len() {
+            dirs.insert(segments[..end].join("/"));
+        }
+    }
+    for dir in &dirs {
+        let path = under(root, dir);
+        let shown = path.display();
+        let open = File::open(&path)
+            .await
+            .map_err(failed(format!(
+                "open the directory {shown} to put it on disk"
+            )))?
+            .into_std()
+            .await;
+        blocking(move || fsync(&open))
+            .await
+            .map_err(failed(format!("put the directory {shown} on disk")))?;
+    }
+    if let Some(flush) = full_flush {
+        for open in devices.into_values() {
+            let flush = std::sync::Arc::clone(&flush);
+            match blocking(move || Ok(flush(&open))).await {
+                Ok(Ok(())) => {}
+                Ok(Err(errno)) if cannot_flush_fully(errno) => {}
+                Ok(Err(errno)) => {
+                    return Err(PersistFailed {
+                        step: "flush the drive's cache after putting the files on disk".to_owned(),
+                        source: io::Error::from(errno),
+                    });
+                }
+                Err(source) => {
+                    return Err(PersistFailed {
+                        step: "flush the drive's cache after putting the files on disk".to_owned(),
+                        source,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// [`create_new`], with what is written into the file made given as a step.
@@ -345,6 +566,88 @@ mod tests {
         assert_eq!(failed.source.to_string(), "the disk is full");
         assert!(tokio::fs::symlink_metadata(&file).await.is_err());
         assert_eq!(tokio::fs::read(&beside).await.unwrap(), b"kept");
+    }
+
+    #[tokio::test]
+    async fn files_made_in_nested_directories_are_put_on_disk_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let nested = root.join("a/b/c.md");
+        let top = root.join("d.md");
+        assert_eq!(
+            create_new(&nested, b"nested").await.unwrap(),
+            Creation::Created
+        );
+        assert_eq!(create_new(&top, b"top").await.unwrap(), Creation::Created);
+        persist(root, &[rel("a/b/c.md"), rel("d.md")])
+            .await
+            .unwrap();
+        assert_eq!(tokio::fs::read(&nested).await.unwrap(), b"nested");
+        assert_eq!(tokio::fs::read(&top).await.unwrap(), b"top");
+        // Putting files on disk changes none of them, and may be asked again.
+        persist(root, &[rel("a/b/c.md")]).await.unwrap();
+        assert_eq!(tokio::fs::read(&nested).await.unwrap(), b"nested");
+    }
+
+    #[tokio::test]
+    async fn a_file_that_is_not_there_cannot_be_put_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        tokio::fs::write(root.join("here.md"), b"x").await.unwrap();
+        let failed = persist(root, &[rel("here.md"), rel("gone/nowhere.md")])
+            .await
+            .unwrap_err();
+        assert!(failed.step.starts_with("open "), "{}", failed.step);
+        assert!(failed.step.contains("nowhere.md"), "{}", failed.step);
+        assert_eq!(failed.source.kind(), io::ErrorKind::NotFound);
+    }
+
+    /// A full flush that answers `errno` every time, and counts how often it was
+    /// asked.
+    #[cfg(unix)]
+    fn flush_answering(
+        errno: rustix::io::Errno,
+    ) -> (FullFlush, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let asked = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&asked);
+        let flush: FullFlush = Arc::new(move |_: &std::fs::File| {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Err(errno)
+        });
+        (flush, asked)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_device_that_cannot_flush_fully_is_left_at_fsync_and_any_other_failure_is_told() {
+        use rustix::io::Errno;
+        use std::sync::atomic::Ordering;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        tokio::fs::create_dir_all(root.join("a")).await.unwrap();
+        tokio::fs::write(root.join("a/one.md"), b"1").await.unwrap();
+        tokio::fs::write(root.join("two.md"), b"2").await.unwrap();
+        let files = [rel("a/one.md"), rel("two.md")];
+
+        for unsupported in [Errno::NOTSUP, Errno::INVAL, Errno::NOTTY] {
+            let (flush, asked) = flush_answering(unsupported);
+            persist_with(root, &files, Some(flush)).await.unwrap();
+            // Both files are on one device: one full flush, however many files.
+            assert_eq!(asked.load(Ordering::SeqCst), 1, "{unsupported:?}");
+        }
+
+        let (broken, asked) = flush_answering(Errno::IO);
+        let failed = persist_with(root, &files, Some(broken)).await.unwrap_err();
+        assert!(failed.step.starts_with("flush "), "{}", failed.step);
+        assert_eq!(asked.load(Ordering::SeqCst), 1);
+
+        // Without a full flush (a platform that has none) there is nothing to fall
+        // back from.
+        persist_with(root, &files, None).await.unwrap();
     }
 
     #[cfg(unix)]

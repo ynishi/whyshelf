@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f74137146aa1c105c37085e264319ec3939c4a14",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:24b7535b248796c066db0cd622adb087ccfc531b7ed98e18466baef314f93a9b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "be3d352adf52b3cded5e66edb0610c7620602452",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f8a7785019521f69c719ed8fec9d01c4c785baafb4ddb383dc8192d65979a048",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "977663ab715d247d6505a99d90415097155d4be3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:df80aa0bc1c79a4e8c6207d00bcc864215a5871d5903462e45b0bec6a0f68776",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795023385175,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c634e82e5a2b52fe232d878103c8fcdd5c408c4d",
+      "hash": "sha256:6cadfdc0cff2847fe48ebe362769681584fe3ccab541e762c9debf027fbb6b17",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "75"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e3a5-6ee3-7525-839f-9b046ea44760"
+    }
+  ],
+  "id": "01a1efbb-3813-77e6-9533-74b56f1f693d",
+  "kind": "decision",
+  "reason": "Issue #133: a run of new or init writes its files whole and puts them all on disk once at its end, through one entry every way out of the run passes; on macOS one full flush per device after fsync of each file and directory. Reviewed design (independent review, four rounds, and arch rules), code review, and a blind review of the branch with every must-fix finding fixed; tests pass; measured on macOS, 100 rows of new --from in about 0.08 s where it took about 0.6 s",
+  "revision": "b90b00dda6670975a29060aec4801ea5c4e1ee3d",
+  "seen": "sha256:23a7d1cd9da9857bd26abdc0570b657f64c0e01e7071638e143b422982078dda",
+  "seen_address": "348042c1df02ee936d7d2f9265598c92894fd8d0",
+  "subject": "01a1e3b3-030c-712d-9a54-69a61e8b7cf4",
+  "v": 1,
+  "verb": "approve"
+}

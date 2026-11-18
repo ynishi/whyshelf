@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795023385175,
+  "expires": null,
+  "frame": [],
+  "id": "01a1efbb-3ccb-72c3-ad03-57596d897c5a",
+  "kind": "decision",
+  "reason": "Issue #133: a run of new or init writes its files whole and puts them all on disk once at its end, through one entry every way out of the run passes; on macOS one full flush per device after fsync of each file and directory. Reviewed design (independent review, four rounds, and arch rules), code review, and a blind review of the branch with every must-fix finding fixed; tests pass; measured on macOS, 100 rows of new --from in about 0.08 s where it took about 0.6 s",
+  "revision": "b90b00dda6670975a29060aec4801ea5c4e1ee3d",
+  "seen": "sha256:49cda335c13faa4f970cbc35225be1fc00de74413cff648f4ba9a37dbbd515b6",
+  "seen_address": "76e8193943f2abaa6802fd771765a205a34ab490",
+  "subject": "01a1efb4-4d1c-714f-bfb4-86da4f4fac78",
+  "v": 1,
+  "verb": "approve"
+}

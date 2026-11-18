@@ -3634,11 +3634,26 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
                 written,
                 failed,
                 cause,
+                not_durable,
             } => written
                 .iter()
                 .map(|path| format!("{path} was written"))
                 .chain(std::iter::once(format!(
                     "{failed} was not written: {cause}"
+                )))
+                .chain(not_durable.iter().map(|problem| {
+                    format!(
+                        "putting what was written on disk failed too: {}",
+                        problem.reason()
+                    )
+                }))
+                .collect(),
+            ShelfError::NotDurable { files, cause } => files
+                .iter()
+                .map(|path| format!("{path} was written whole, and could not be put on disk"))
+                .chain(std::iter::once(format!(
+                    "putting what was written on disk failed: {}",
+                    cause.reason()
                 )))
                 .collect(),
             _ => Vec::new(),

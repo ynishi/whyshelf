@@ -1,0 +1,68 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::FileSync",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfError",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::Project",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795023385175,
+  "expires": null,
+  "frame": [
+    {
+      "address": "76e8193943f2abaa6802fd771765a205a34ab490",
+      "hash": "sha256:49cda335c13faa4f970cbc35225be1fc00de74413cff648f4ba9a37dbbd515b6",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "32"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1efb4-4d1c-714f-bfb4-86da4f4fac78"
+    }
+  ],
+  "id": "01a1efbb-3df5-774d-afb0-cfb38ffcde3a",
+  "kind": "decision",
+  "reason": "Issue #133: a run of new or init writes its files whole and puts them all on disk once at its end, through one entry every way out of the run passes; on macOS one full flush per device after fsync of each file and directory. Reviewed design (independent review, four rounds, and arch rules), code review, and a blind review of the branch with every must-fix finding fixed; tests pass; measured on macOS, 100 rows of new --from in about 0.08 s where it took about 0.6 s",
+  "revision": "b90b00dda6670975a29060aec4801ea5c4e1ee3d",
+  "seen": "sha256:17c19b03e1169cc1c823545de8078bd69720ac3e0191752f308c1b7cb0816d13",
+  "seen_address": "fbcc6e0d325c707cb322ece5f42b03ce74b33d55",
+  "subject": "01a1efb4-5387-738e-92c2-897542094cc7",
+  "v": 1,
+  "verb": "approve"
+}

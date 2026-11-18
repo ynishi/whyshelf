@@ -1008,7 +1008,11 @@
 //!   declaration with fewer files, each whole, and its error lists in
 //!   `problems` each file written (`<path> was written`) and the one that was not,
 //!   with why; it exits 3 when a write failed, and 2 when a file came to be at a
-//!   path after it was looked at. `new` removes a file it made and could not write
+//!   path after it was looked at, but 3 whatever stopped it when the files written
+//!   could not be put on disk either (a further line in `problems` says why). The
+//!   files a run of `init` or `new` writes are put on disk together when it ends;
+//!   when that fails, they are left whole and each is listed, and it exits 3. `new`
+//!   removes a file it made and could not write
 //!   too. The answer is `{"declaration": <file>, "files": [<file>], "documents":
 //!   [{"key", "path"}], "next": [...]}`, `files` the other files written (none but
 //!   for `experiment`), `next` the commands to run after it, as they are typed, each
@@ -1084,7 +1088,7 @@
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now; for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands) |
 //! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
-//! | 3 | the run failed: a file could not be read or written (for `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
+//! | 3 | the run failed: a file could not be read, written or put on disk (for `new` and `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
 //!
 //! `status` answers `{"docs", "filters", "health"}`: the documents that pass the
 //! filters (all of them when none is given), the filters as given (`books` by

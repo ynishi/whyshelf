@@ -11,11 +11,12 @@
 //!            --- Shelf::new_artifact_asks ----------------> ArtifactSource::resolve, once
 //!   all rows --- Shelf::plan_new -------------------------> a NewPlan: every key, name and
 //!                                                            judgement, or every PlanProblem
-//!   NewPlan ---- DocWrite::create (create-only), in order -> <book dir>/<key>.md, each
-//!      |
-//!      '-- a file was there (a run beside this one, or a file whose front matter
-//!          cannot be read): Shelf::replan_after_taken -> the same place written again
-//!          with another key, or a refusal, or giving up
+//!   NewPlan ---- RunWrites::doc (DocWrite::create, create-only), in order
+//!      |                                                   -> <book dir>/<key>.md, each
+//!      |-- a file was there (a run beside this one, or a file whose front matter
+//!      |   cannot be read): Shelf::replan_after_taken -> the same place written again
+//!      |   with another key, or a refusal, or giving up
+//!      '-- the end of the run (RunWrites::run) -> FileSync::persist, once, every file
 //! ```
 //!
 //! Nothing here decides a key, the validity of a document, what a name stands for, or
@@ -38,9 +39,13 @@
 //! already made: nothing is read or asked again, and an identity that no file holds
 //! is used once.
 //!
-//! A write that fails after a file of the run was written stops the run and says
-//! what was written ([`ShelfError::PartWay`], made by [`fail_after`]): the files
-//! written stay, each whole.
+//! Every write of the run is made inside [`RunWrites::run`], which keeps the files
+//! written and puts them on disk together, once, when the run ends: an answer of
+//! success has every file on disk. A write that fails after a file of the run was
+//! written stops the run, and the answer says what was written
+//! ([`ShelfError::PartWay`]; the files written stay, each whole, and were put on disk
+//! before it was given). Every way the run stops is a [`Stop`](super::run_writes::Stop).
+//! When only the putting on disk fails, the answer is [`ShelfError::NotDurable`].
 
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -50,8 +55,8 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::{
-    LinkItem, NewDoc, NewPlan, NewRequest, PlanAfterTaken, PlanProblem, PlannedValue, RawValue,
-    RunName, Shelf,
+    LinkItem, NewPlan, NewRequest, PlanAfterTaken, PlanProblem, PlannedValue, RawValue, RunName,
+    Shelf,
 };
 use crate::domain::shelf::doc::{DocKey, FieldValue, UnresolvedLink};
 use crate::domain::shelf::schema::{BookName, BookSchema, EntryName, FieldType, ScalarType};
@@ -59,7 +64,8 @@ use crate::domain::shelf::schema::{BookName, BookSchema, EntryName, FieldType, S
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::load;
-use super::ports::{ArtifactSource, Creation, DocWrite, IdSource, ShelfPort, ShelfWrite, port};
+use super::ports::{ArtifactSource, IdSource, ShelfPort, ShelfWrite, port};
+use super::run_writes::{RunWrites, Stop, Wrote};
 
 /// What a request gives for one entry of a new document, before the book's
 /// declaration says what it is: a surface that reads text (the command line) gives a
@@ -168,42 +174,11 @@ impl<P: ShelfWrite> ShelfApp<P> {
     pub async fn new_docs(&mut self, requests: Vec<NewDocRequest>) -> Result<NewMany, ShelfError> {
         let loaded = load(&self.ports).await?;
         let shelf = &loaded.shelf;
-        let mut plan = plan_of(&self.ports, shelf, requests).await?;
-        let mut docs: Vec<Created> = Vec::with_capacity(plan.len());
-        let mut at = 0;
-        while let Some(new) = plan.doc_at(at) {
-            let origin = new.doc().origin().clone();
-            let taken = match write_new(&self.ports, new).await {
-                Ok(Written::Created(created)) => {
-                    docs.push(created);
-                    at += 1;
-                    continue;
-                }
-                Ok(Written::AlreadyThere(path)) => path,
-                Err(cause) => return Err(fail_after(files_of(&docs), origin, cause)),
-            };
-            let cause = match shelf.replan_after_taken(plan, at) {
-                PlanAfterTaken::Replanned(next) => {
-                    plan = next;
-                    continue;
-                }
-                PlanAfterTaken::Asked => ShelfError::FileTaken {
-                    path: taken.clone(),
-                },
-                PlanAfterTaken::Stuck { row, written_row } => {
-                    ShelfError::Stuck { row, written_row }
-                }
-                PlanAfterTaken::Refused { row, problem } => ShelfError::Plan(NonEmptyVec::new(
-                    PlanProblem::Doc { row, problem },
-                    Vec::new(),
-                )),
-                PlanAfterTaken::NoFreeKey(problem) => ShelfError::NoFreeKey(problem),
-                PlanAfterTaken::NoNextKey(problem) => ShelfError::NextKey(problem),
-            };
-            return Err(fail_after(files_of(&docs), taken, cause));
-        }
-        let heads = plan.heads();
-        Ok(NewMany { docs, heads })
+        let plan = plan_of(&self.ports, shelf, requests).await?;
+        RunWrites::run(&self.ports, |writes| {
+            Box::pin(write_plan(writes, shelf, plan))
+        })
+        .await
     }
 
     /// Write one new document, valid for its book, at `<book dir>/<key>.md`: the run
@@ -226,6 +201,52 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .next()
             .ok_or(ShelfError::NothingRequested)
     }
+}
+
+/// The writes of a plan, in order, inside the run `writes` is of: a document whose
+/// path has a file is planned again by [`Shelf::replan_after_taken`], and what it
+/// cannot mend stops the run ([`Stop`]), as every other thing that does.
+// The error is read once and ends the use case; it is not a hot path.
+#[allow(clippy::result_large_err)]
+async fn write_plan<P: ShelfWrite>(
+    writes: &mut RunWrites<'_, P>,
+    shelf: &Shelf,
+    mut plan: NewPlan,
+) -> Result<NewMany, Stop> {
+    let mut docs: Vec<Created> = Vec::with_capacity(plan.len());
+    let mut at = 0;
+    while let Some(new) = plan.doc_at(at) {
+        let taken = match writes.doc(new).await? {
+            Wrote::Created(created) => {
+                docs.push(created);
+                at += 1;
+                continue;
+            }
+            Wrote::AlreadyThere(path) => path,
+        };
+        let cause = match shelf.replan_after_taken(plan, at) {
+            PlanAfterTaken::Replanned(next) => {
+                plan = next;
+                continue;
+            }
+            PlanAfterTaken::Asked => ShelfError::FileTaken {
+                path: taken.clone(),
+            },
+            PlanAfterTaken::Stuck { row, written_row } => ShelfError::Stuck { row, written_row },
+            PlanAfterTaken::Refused { row, problem } => ShelfError::Plan(NonEmptyVec::new(
+                PlanProblem::Doc { row, problem },
+                Vec::new(),
+            )),
+            PlanAfterTaken::NoFreeKey(problem) => ShelfError::NoFreeKey(problem),
+            PlanAfterTaken::NoNextKey(problem) => ShelfError::NextKey(problem),
+        };
+        return Err(Stop {
+            failed: taken,
+            cause,
+        });
+    }
+    let heads = plan.heads();
+    Ok(NewMany { docs, heads })
 }
 
 /// The plan of a run of requests on `shelf`: the entries of each row read by its
@@ -342,62 +363,6 @@ fn request_of(shelf: &Shelf, request: NewDocRequest) -> Result<NewRequest, Shelf
         entries,
         body: request.body,
     })
-}
-
-/// What the write of a judged document came to.
-pub(super) enum Written {
-    /// The file was made.
-    Created(Created),
-    /// A file was already at the path, and nothing was written.
-    AlreadyThere(RelPath),
-}
-
-/// Write a judged document's file, create-only: a file already at its path is
-/// [`Written::AlreadyThere`], and nothing is written. The one place a [`Created`]
-/// is made.
-pub(super) async fn write_new<P: ShelfWrite>(
-    ports: &P,
-    new: &NewDoc,
-) -> Result<Written, ShelfError> {
-    let doc = new.doc();
-    let written = ports
-        .doc_writer()
-        .create(doc.origin(), new.entries(), doc.body())
-        .await
-        .map_err(port(ShelfPort::DocWrite))?;
-    Ok(match written {
-        Creation::Created => Written::Created(Created {
-            id: doc.id(),
-            key: doc.key().clone(),
-            file: doc.origin().clone(),
-            unresolved: new
-                .unresolved()
-                .into_iter()
-                .map(|(link, u)| (link.clone(), u.clone()))
-                .collect(),
-        }),
-        Creation::AlreadyThere => Written::AlreadyThere(doc.origin().clone()),
-    })
-}
-
-/// The files of the documents written so far, in the order they were written.
-fn files_of(docs: &[Created]) -> Vec<RelPath> {
-    docs.iter().map(|created| created.file.clone()).collect()
-}
-
-/// The error of a run that stopped at `failed`: what was written is told when any
-/// was ([`ShelfError::PartWay`], whose class is the cause's), the cause as it is when
-/// nothing was. The one place a failure after writes is told, for `new_docs` and
-/// `init`.
-pub(super) fn fail_after(written: Vec<RelPath>, failed: RelPath, cause: ShelfError) -> ShelfError {
-    match NonEmptyVec::from_vec(written) {
-        Ok(written) => ShelfError::PartWay {
-            written,
-            failed,
-            cause: Box::new(cause),
-        },
-        Err(_) => cause,
-    }
 }
 
 /// The entries as values, by what the book declares for each name (the translation

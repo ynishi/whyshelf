@@ -1,0 +1,12 @@
+---
+id: "01a1efb4-5387-738e-92c2-897542094cc7"
+key: "DEC-79"
+issues: ["#133"]
+rejected: ["Drop the sync of each file and sync nothing: a run that answers it wrote its files could lose them in a power loss", "Sync the files of a run at once from many tasks: the drive is still flushed once a file, and may do them one after another", "Have each caller put the files on disk before it answers: a caller that forgets, or returns early, leaves what it wrote off the disk", "Let each adapter put its own files on disk: the path of a file would be resolved against more than one root", "Put the ledger and fmt on the same path in this change: they have the same cause, and are left for their own issue"]
+related: ["DEC-75", "DEC-28"]
+revisit: "When the ledger or fmt are made to write their files the same way, or a platform gives a cheaper flush that is still durable"
+rustdoc: ["whyshelf_core::app::shelf::FileSync", "whyshelf_core::app::shelf::ShelfError", "whyshelf_infra::shelf::Project"]
+serves: ["REQ-32"]
+title: "A run of new or init writes its files whole and puts them all on disk once at its end, through one entry that every way out of the run passes"
+---
+Writing a file and making it durable are two steps. A file is written whole or not at all, and a write that fails removes the file it made; the write itself syncs nothing. Every write of a run of new or init goes through RunWrites::run, whose only ways out are to finish, which puts every file the run wrote on disk once, or to fail, which puts on disk the files written so far and then answers which were written and which was not (PartWay). A failure to put them on disk is told too: with the cause when the run stopped part way, which makes the run failed whatever stopped it, or as NotDurable when every file was written; the files are kept and named, whole but not known to survive a power loss. The files are put on disk through one port, FileSync, which the project implements with the one root its writers use. On macOS each file and each directory from its parent up to the root is synced with fsync, then the drive is asked once per device to flush its cache (F_FULLFSYNC), which is a barrier for what was synced before; a file system that cannot flush fully is left at fsync. Elsewhere on unix each file and directory is synced, and on Windows each file. Measured on macOS with release builds, new --from in a project with no document took about 0.08 s for 100 rows where it took about 0.6 s (0.55 s in the issue), and the same as before for one row.
