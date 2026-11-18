@@ -8,7 +8,8 @@
 //!                                                     or an ExemptRefusal
 //!   + time, actor, new id, reason
 //!                     ---- Exempt::new -------------> a Record
-//!   record            ---- LedgerAppend::append ----> the ledger (create-only)
+//!   record            ---- RunWrites::record -------> the ledger (create-only), every
+//!                                                     record put on disk once, at the end
 //! ```
 //!
 //! The application decides nothing: what an exemption may be made of is
@@ -28,8 +29,9 @@ use crate::domain::shelf::schema::{BookName, EntryName};
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
-use super::ports::{ActorSource, IdSource, LedgerAppend, ShelfPort, ShelfWrite, port};
+use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
+use super::run_writes::RunWrites;
 
 /// A request to exempt a document from one covering link.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,13 +103,19 @@ impl<P: ShelfWrite> ShelfApp<P> {
             loaded.ledger = Ledger::build(loaded.records.clone());
             exempted.push(one);
         }
-        for one in &exempted {
-            self.ports
-                .append()
-                .append(&Record::Exempt(one.record.clone()))
-                .await
-                .map_err(port(ShelfPort::LedgerAppend))?;
-        }
+        let records = exempted
+            .iter()
+            .map(|one| Record::Exempt(one.record.clone()))
+            .collect::<Vec<_>>();
+        RunWrites::run(&self.ports, |writes| {
+            Box::pin(async move {
+                for record in &records {
+                    writes.record(record).await?;
+                }
+                Ok(())
+            })
+        })
+        .await?;
         Ok(exempted)
     }
 

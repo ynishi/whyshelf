@@ -16,7 +16,8 @@
 //!             ---- Decision::approve / deny /
 //!                  deprecate / retire,
 //!                  Revocation::new ---------------> a Record, or a DecisionProblem
-//!   record    ---- LedgerAppend::append ----------> the ledger (create-only)
+//!   record    ---- RunWrites::record --------------> the ledger (create-only), every
+//!                                                   record put on disk once, at the end
 //! ```
 //!
 //! An approval is given, between the frame and the record, the address of each thing
@@ -66,11 +67,10 @@ use crate::domain::shelf::lookup::Reference;
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
-use super::ports::{
-    ActorSource, DocSource, IdSource, LedgerAppend, RevisionSource, ShelfPort, ShelfWrite, port,
-};
+use super::ports::{ActorSource, DocSource, IdSource, RevisionSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
 use super::report::{Judged, JudgedAll, LeftOut, LeftOutWhy};
+use super::run_writes::RunWrites;
 
 /// Take a judgement decided into the reading, so the next of the run is decided on
 /// the ledger as it left it.
@@ -160,8 +160,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// approves a finding and then the spec that stands on it frames the spec on
     /// that approval. Every judgement is decided before anything is written: when one
     /// is refused, the error names it and nothing is written. (A port that fails
-    /// half-way through the writes can still leave the first of them written; each is
-    /// a record of its own, so what is there is sound.)
+    /// half-way through the writes can still leave the first of them written, each
+    /// whole and put on disk; the answer then says which were written
+    /// ([`ShelfError::PartWay`]), and each is a record of its own, so what is there
+    /// is sound.)
     ///
     /// An approval that would only repeat the one that stands about its document
     /// ([`repeated`]: the new one would pin exactly what that one pins and lapse
@@ -190,19 +192,26 @@ impl<P: ShelfWrite> ShelfApp<P> {
         Ok(JudgedAll { judged, left_out })
     }
 
-    /// Append the records of a run, every one decided, in order.
+    /// Append the records of a run, every one decided, in order, and put them on disk
+    /// once, at the end ([`RunWrites::run`]). The one write of [`judge_all`](Self::judge_all)
+    /// and of `approve_chosen`.
     pub(super) async fn write<'a>(
         &mut self,
         judged: impl IntoIterator<Item = &'a Judged>,
     ) -> Result<(), ShelfError> {
-        for one in judged {
-            self.ports
-                .append()
-                .append(&one.record)
-                .await
-                .map_err(port(ShelfPort::LedgerAppend))?;
-        }
-        Ok(())
+        let records = judged
+            .into_iter()
+            .map(|one| &one.record)
+            .collect::<Vec<_>>();
+        RunWrites::run(&self.ports, |writes| {
+            Box::pin(async move {
+                for record in records {
+                    writes.record(record).await?;
+                }
+                Ok(())
+            })
+        })
+        .await
     }
 
     /// One judgement, decided on what is loaded; nothing is written.

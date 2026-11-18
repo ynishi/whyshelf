@@ -48,6 +48,34 @@
 //! identifier in two forms do not meet. Any other text is not a name of the space,
 //! and the adapter says so with why.
 //!
+//! # Prefixes of the names
+//!
+//! `judge moved --prefix` moves every name under a prefix at once, and this adapter
+//! says which names are under it and what each becomes
+//! ([`ArtifactSource::renamed`](whyshelf_core::app::shelf::ArtifactSource::renamed)).
+//! A prefix is of one of two forms, and a text is of one only:
+//!
+//! - the parts of the path of a file, when the text has no `::` (`src/a.rs` is the
+//!   parts `src` and `a.rs`, `src/a` the parts `src` and `a`; one `/` at its end is
+//!   dropped, so `src/a/` is `src/a`): a name is under it when the parts of its file's
+//!   path start with the prefix's, so `src/a` holds `src/a/x.rs::t` and not
+//!   `src/a.rs::t`, and `src/a.rs` holds each test of that file;
+//! - a file and the first segments of a path in it, `<file>.rs::<segment>(::<segment>)*`
+//!   (a module, with its tests and its modules): a name is under it when it is in that
+//!   file and the segments of its path in it start with the prefix's. A segment is the
+//!   same one however it is written (`r#foo` and `foo`).
+//!
+//! The same name under `to` is built of the parts as they were written: the parts of
+//! `to` as the person typed them, then the rest of the name's as the name has them
+//! (`src/a/x.rs::r#type` under `src/b` is `src/b/x.rs::r#type`: a spelling is kept,
+//! not rewritten as `src/b/x.rs::type`, which is no name). Where a part ends is what
+//! the grammar of a name found in reading it, and the name built is read back by it. A
+//! `to` of the other form than `from`, one that cannot be read, or a name built that is
+//! none (a file that does not end in `.rs`) or that reads as other parts than were
+//! joined, makes each name under `from` unbuildable, with why. A `from` of neither form
+//! (a module path with no file, say) is no prefix of the space's names. The adapter
+//! looks for no text in a name.
+//!
 //! # Finding the test
 //!
 //! The file is read as the space `file` reads one ([`file`](mod@file)): its
@@ -168,12 +196,14 @@ use std::path::PathBuf;
 use proc_macro2::{Delimiter, Group, Ident, Spacing, TokenStream, TokenTree};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, Space, SpaceAsks, SpaceReadings,
+    ArtifactName, ArtifactReading, Comparison, PrefixMove, Space, SpaceAsks, SpacePrefixes,
+    SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
+use super::Spelled;
 use super::file::{self, Bounded};
 
 /// The name of the space this adapter resolves names in.
@@ -534,6 +564,12 @@ struct Wanted {
 impl TestName {
     /// The one reader of the grammar of the names (on the page of the module).
     fn parse(text: &str) -> Result<Self, NotAName> {
+        Self::parse_spelled(text).map(|(name, _)| name)
+    }
+
+    /// The name read, and its segments (the modules, then the function) as the text
+    /// wrote each: `r#type` stays so, though it reads as the segment `type`.
+    fn parse_spelled(text: &str) -> Result<(Self, Vec<Spelled<Segment>>), NotAName> {
         let Some((file, rest)) = text.split_once("::") else {
             return Err(NotAName::NoFunction);
         };
@@ -544,18 +580,22 @@ impl TestName {
             path: file.to_owned(),
             why: e.to_string(),
         })?;
-        let mut segments = rest
+        let written = rest
             .split("::")
-            .map(Segment::new)
+            .map(|part| Segment::new(part).map(|segment| Spelled::new(segment, part)))
             .collect::<Result<Vec<_>, _>>()?;
+        let mut segments: Vec<Segment> = written.iter().map(|s| s.value.clone()).collect();
         let Some(function) = segments.pop() else {
             return Err(NotAName::NoFunction);
         };
-        Ok(Self {
-            file: path,
-            modules: segments,
-            function,
-        })
+        Ok((
+            Self {
+                file: path,
+                modules: segments,
+                function,
+            },
+            written,
+        ))
     }
 
     fn wanted(&self) -> Wanted {
@@ -564,6 +604,136 @@ impl TestName {
             function: self.function.clone(),
         }
     }
+}
+
+/// A prefix of the names of the space, read: of one of two forms, and a text is of one
+/// only.
+#[derive(Debug, Clone)]
+enum TestPrefix {
+    /// The parts of the path of a file: a text with no `::` (so `src/a.rs` is this,
+    /// the parts `src` and `a.rs`, and a prefix of the names of a file only as far as
+    /// its path goes).
+    FileParts(file::FilePrefix),
+    /// A file and the first segments of the path in it: `<file>.rs::<segment>` and
+    /// more segments after it, each `::` before, each segment as written.
+    Items {
+        file: RelPath,
+        segments: NonEmptyVec<Spelled<Segment>>,
+    },
+}
+
+impl TestPrefix {
+    /// The one reader of the prefixes: a text with a `::` is read as a name is
+    /// ([`TestName::parse_spelled`]), its segments all of the prefix's; one without, as
+    /// a path ([`file::FilePrefix::parse`], which drops one `/` at its end).
+    fn parse(text: &str) -> Result<Self, NotAName> {
+        if !text.contains("::") {
+            let path = file::FilePrefix::parse(text).map_err(|e: ValueError| NotAName::NoPath {
+                path: text.to_owned(),
+                why: e.to_string(),
+            })?;
+            return Ok(Self::FileParts(path));
+        }
+        let (TestName { file, .. }, segments) = TestName::parse_spelled(text)?;
+        Ok(Self::Items {
+            file,
+            segments: NonEmptyVec::from_vec(segments).map_err(|_| NotAName::NoFunction)?,
+        })
+    }
+
+    /// The name of the same test under `to`, when the test (its `file` and its
+    /// `items`, the modules and then the function, as written) is under this prefix: of
+    /// the two forms, the form of this prefix only. None when it is not under it. The
+    /// name is built of the parts of `to` as it writes them, then the rest of the
+    /// test's as it writes them.
+    fn rename(
+        &self,
+        file: &RelPath,
+        items: &[Spelled<Segment>],
+        to: &Result<Self, NotAName>,
+    ) -> Option<super::Rename> {
+        use super::Rename;
+        match self {
+            Self::FileParts(from) => {
+                let parts = file::parts_of(file);
+                let rest = from.rest(&parts)?;
+                Some(match to {
+                    Err(why) => Rename::NoPrefix(why.to_string()),
+                    Ok(Self::Items { .. }) => Rename::OtherForm,
+                    Ok(Self::FileParts(to)) => {
+                        let joined: Vec<file::Part> =
+                            to.parts().iter().chain(rest).cloned().collect();
+                        match file::path_from(&joined) {
+                            Ok(path) => built(path.as_str(), items.iter()),
+                            Err(e) => Rename::NoPrefix(e.to_string()),
+                        }
+                    }
+                })
+            }
+            Self::Items {
+                file: from_file,
+                segments: from,
+            } => {
+                if file != from_file {
+                    return None;
+                }
+                let rest = super::after(items, from.iter())?;
+                Some(match to {
+                    Err(why) => Rename::NoPrefix(why.to_string()),
+                    Ok(Self::FileParts(_)) => Rename::OtherForm,
+                    Ok(Self::Items { file, segments }) => {
+                        built(file.as_str(), segments.iter().chain(rest))
+                    }
+                })
+            }
+        }
+    }
+}
+
+/// The name of the file and the segments, each as written, joined with `::`, and the
+/// parts it is to be read back as.
+fn built<'a>(file: &str, items: impl Iterator<Item = &'a Spelled<Segment>>) -> super::Rename {
+    let mut text = file.to_owned();
+    let mut parts = vec![file.to_owned()];
+    for item in items {
+        text.push_str("::");
+        text.push_str(&item.text);
+        parts.push(item.text.clone());
+    }
+    super::Rename::Built { text, parts }
+}
+
+/// What this adapter says of a move of a prefix, for the `names` of its space asked
+/// about. A prefix is the path of a file, in parts (`src/a.rs` is that and nothing
+/// more), or a file and the first segments of a path in it (`src/a.rs::m`); a name is
+/// under one when its file's parts, or its file and the first segments of its path in
+/// it, are the prefix's (a segment is the same one however it is written, `r#type` and
+/// `type`), the same name under `to` being built of `to`'s parts and the rest of the
+/// name's, each as it was written. A `from` that cannot be read as either is no prefix
+/// of the space's names; a `to` that cannot, or that is of the other form, makes each
+/// name under `from` unbuildable, and so does a name built that is no name of the
+/// space (a file that does not end in `.rs`). A text that is no name is not under any
+/// prefix. Nothing is looked for in the text of a name.
+pub(super) fn renamed(
+    names: &BTreeSet<ArtifactName>,
+    of: &PrefixMove,
+) -> Result<(SpacePrefixes, SpaceRenamed), ValueError> {
+    super::renamed_tests(
+        names,
+        of,
+        "a path of a file, or a file and a path in it",
+        TestPrefix::parse,
+        |from, name, to| {
+            let (test, items) = TestName::parse_spelled(name).ok()?;
+            from.rename(&test.file, &items, to)
+        },
+        |text| {
+            let (test, items) = TestName::parse_spelled(text)?;
+            Ok(std::iter::once(test.file.as_str().to_owned())
+                .chain(items.into_iter().map(|item| item.text))
+                .collect())
+        },
+    )
 }
 
 /// What a name comes to in a file.

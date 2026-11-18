@@ -14,14 +14,17 @@
 //!   (space, ContentAddress) ──► the adapter of the space ──► content, or not readable
 //! ```
 //!
-//! | space | adapter | its names | the presets it offers | suggested moves ([`MoveSource`]) |
-//! |---|---|---|---|---|
-//! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"`; `code`: `space = "file"`, `compare = "presence"`, `means = "depends"` | the same content, then Git's renames ([`file`](mod@file#suggesting-moves)) |
-//! | `rust-item` | [`rust_item::RustItemSpace`] | Rust paths (`crate::module::Item`, `Type::member`), looked up in the docs `cargo doc` wrote | `rustdoc`: `space = "rust-item"`, `compare = "presence"`, `means = "depends"` | cannot suggest |
-//! | `rust-test` | [`rust_test::RustTestSpace`] | test functions by their file and path in it (`<file>.rs::<module>::<function>`), parsed from the source | `test`: `space = "rust-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest |
-//! | `js-test` | [`js_test::JsTestSpace`] | JavaScript and TypeScript tests by their file and titles (`<file>.ts::<describe>::<test>`), lexed from the source | `js-test`: `space = "js-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest |
+//! | space | adapter | its names | the presets it offers | suggested moves ([`MoveSource`]) | a prefix of its names ([`ArtifactSource::renamed`]) |
+//! |---|---|---|---|---|---|
+//! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"`; `code`: `space = "file"`, `compare = "presence"`, `means = "depends"` | the same content, then Git's renames ([`file`](mod@file#suggesting-moves)) | the parts of a path ([`file`](mod@file#prefixes-of-the-names)) |
+//! | `rust-item` | [`rust_item::RustItemSpace`] | Rust paths (`crate::module::Item`, `Type::member`), looked up in the docs `cargo doc` wrote | `rustdoc`: `space = "rust-item"`, `compare = "presence"`, `means = "depends"` | cannot suggest | the segments of a Rust path ([`rust_item`](mod@rust_item#prefixes-of-the-names)) |
+//! | `rust-test` | [`rust_test::RustTestSpace`] | test functions by their file and path in it (`<file>.rs::<module>::<function>`), parsed from the source | `test`: `space = "rust-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest | the parts of a file's path, or a file and the first segments of a path in it ([`rust_test`](mod@rust_test#prefixes-of-the-names)) |
+//! | `js-test` | [`js_test::JsTestSpace`] | JavaScript and TypeScript tests by their file and titles (`<file>.ts::<describe>::<test>`), lexed from the source | `js-test`: `space = "js-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest | the parts of a file's path, or a file and the first titles of a path in it, titles with their escapes ([`js_test`](mod@js_test#prefixes-of-the-names)) |
 //!
 //! The same adapters answer [`MoveSource`]: a space with no adapter cannot suggest.
+//! Each also answers [`ArtifactSource::renamed`] with its own grammar of names (the
+//! domain knows no boundary of a name, and builds none): a space with no adapter takes
+//! no prefix.
 //!
 //! Each adapter offers its presets of links to artifacts for its own space, as
 //! values ([`ArtifactSource::presets`]); the domain knows none. A project may write
@@ -43,8 +46,9 @@ use whyshelf_core::app::shelf::{ArtifactSource, MoveSource};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactAsks, ArtifactKey, ArtifactReading, ArtifactReadings, ContentAddress, Space, SpaceAsks,
-    SpaceReadings,
+    ArtifactAsks, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings, ContentAddress,
+    PrefixAnswers, PrefixAsks, PrefixMove, Renamed, Space, SpaceAsks, SpacePrefixes, SpaceReadings,
+    SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::ledger::{GoneName, SpaceSuggestions};
 use whyshelf_core::domain::shelf::schema::BuiltinPresets;
@@ -94,6 +98,21 @@ impl Adapter {
             Self::RustItem(items) => Ok(items.current(key.name()).await?),
             Self::RustTest(tests) => Ok(tests.current(key.name()).await?),
             Self::JsTest(tests) => Ok(tests.current(key.name()).await?),
+        }
+    }
+
+    /// What it says of a move of a prefix, for the `names` of its space asked about:
+    /// each adapter reads the prefix and the names by its own grammar of names.
+    fn renamed(
+        &self,
+        names: &BTreeSet<ArtifactName>,
+        of: &PrefixMove,
+    ) -> Result<(SpacePrefixes, SpaceRenamed), ValueError> {
+        match self {
+            Self::File(_) => file::renamed(names, of),
+            Self::RustItem(_) => rust_item::renamed(names, of),
+            Self::RustTest(_) => rust_test::renamed(names, of),
+            Self::JsTest(_) => js_test::renamed(names, of),
         }
     }
 
@@ -239,12 +258,162 @@ impl ArtifactSource for ArtifactSpaces {
         Ok(readings)
     }
 
+    /// The answer of each space's adapter; a space with none takes no prefix. An adapter
+    /// that could not write a reason (a bug: no reason is blank) is the error
+    /// [`SpacesError::Reason`], not a space that takes no prefix.
+    fn renamed(&self, asks: &PrefixAsks, of: &PrefixMove) -> Result<PrefixAnswers, SpacesError> {
+        let mut answers = PrefixAnswers::new(of.clone());
+        for (space, names) in asks.spaces() {
+            match self.adapters.get(space) {
+                Some(adapter) => {
+                    let (prefixes, renamed) =
+                        adapter.renamed(names, of).map_err(SpacesError::Reason)?;
+                    answers.answer(space.clone(), prefixes, renamed);
+                }
+                None => answers.answer(
+                    space.clone(),
+                    SpacePrefixes::NoPrefixes,
+                    SpaceRenamed::new(),
+                ),
+            }
+        }
+        Ok(answers)
+    }
+
     async fn current(&self, artifact: &ArtifactKey) -> Result<Option<Vec<u8>>, SpacesError> {
         match self.adapters.get(artifact.space()) {
             Some(adapter) => adapter.current(artifact).await,
             None => Ok(None),
         }
     }
+}
+
+/// The name an adapter built under the new prefix, as the text of a name of its
+/// space: [`Renamed::Under`] when it is one (the checks every name has: not empty, at
+/// most [`NAME_MAX`](whyshelf_core::domain::shelf::artifact::NAME_MAX) bytes, no
+/// control character), else [`Renamed::Unbuildable`] with why.
+fn built(text: &str) -> Result<Renamed, ValueError> {
+    Ok(match ArtifactName::new(text) {
+        Ok(name) => Renamed::Under(name),
+        Err(problem) => Renamed::Unbuildable(NonBlank::new(format!(
+            "the name built under the new prefix is no name: {problem}"
+        ))?),
+    })
+}
+
+/// A name under the prefix of which the adapter can build no name under the new one,
+/// with why.
+fn unbuildable(why: String) -> Result<Renamed, ValueError> {
+    Ok(Renamed::Unbuildable(NonBlank::new(why)?))
+}
+
+/// One part of a name of a space of tests (a segment, a title) as it was written, with
+/// the value the grammar of the space reads it as. A prefix is compared on the values
+/// (`r#type` and `type` are the one segment) and a name is built of the texts, so that
+/// a part keeps the spelling it was written in: the one a person typed in `to`, and the
+/// one a name already has after `from`. The boundaries are the ones the adapter's own
+/// parse found; no text is searched for one.
+#[derive(Debug, Clone)]
+struct Spelled<V> {
+    value: V,
+    text: String,
+}
+
+impl<V> Spelled<V> {
+    /// The part `text` writes, which reads as `value`.
+    fn new(value: V, text: &str) -> Self {
+        Self {
+            value,
+            text: text.to_owned(),
+        }
+    }
+}
+
+/// The parts of `items` after `prefix`, when `items` start with all of the prefix's
+/// parts, compared on the values (not on how each is written).
+fn after<'a, 'p, V: PartialEq + 'p>(
+    items: &'a [Spelled<V>],
+    prefix: impl IntoIterator<Item = &'p Spelled<V>>,
+) -> Option<&'a [Spelled<V>]> {
+    let mut taken = 0;
+    for part in prefix {
+        if items.get(taken)?.value != part.value {
+            return None;
+        }
+        taken += 1;
+    }
+    Some(&items[taken..])
+}
+
+/// What a name of a space of tests under a prefix comes to under the other: the same
+/// test there, a `to` that is no prefix of the space (why), or one of the other form
+/// than `from`.
+enum Rename {
+    /// The text of the name, built of the parts as written, and the parts it is to be
+    /// read back as (the file's path, then each segment or title as written): a name
+    /// that reads as other parts is none of the test.
+    Built {
+        text: String,
+        parts: Vec<String>,
+    },
+    NoPrefix(String),
+    OtherForm,
+}
+
+/// What an adapter of a space of tests (`rust-test`, `js-test`) says of a move of a
+/// prefix, for the `names` of its space asked about: the one shape both answer in,
+/// each by its own grammar. `parse_prefix` reads a prefix of the space (one that
+/// cannot be read as `from` is no prefix of the space's names), `rename` says what one
+/// name comes to under `to` (none when it is not under `from`, or is no name), and
+/// `read_back` reads a name built back by the grammar of the space, into the parts it
+/// reads as (one it refuses, or that reads as other parts than were joined, is
+/// unbuildable). `forms` names the two forms of a prefix, for a `to` of the other one.
+fn renamed_tests<P, E: std::fmt::Display>(
+    names: &BTreeSet<ArtifactName>,
+    of: &PrefixMove,
+    forms: &str,
+    parse_prefix: impl Fn(&str) -> Result<P, E>,
+    rename: impl Fn(&P, &str, &Result<P, E>) -> Option<Rename>,
+    read_back: impl Fn(&str) -> Result<Vec<String>, E>,
+) -> Result<(SpacePrefixes, SpaceRenamed), ValueError> {
+    let from = match parse_prefix(of.from().as_str()) {
+        Ok(from) => from,
+        Err(why) => {
+            let why = NonBlank::new(format!(
+                "`{}` is no prefix of a test name: {why}",
+                of.from()
+            ))?;
+            return Ok((SpacePrefixes::NotUnder(why), SpaceRenamed::new()));
+        }
+    };
+    let to = parse_prefix(of.to().as_str());
+    let mut answers = SpaceRenamed::new();
+    for name in names {
+        let answer = match rename(&from, name.as_str(), &to) {
+            None => Renamed::Outside,
+            Some(Rename::OtherForm) => unbuildable(format!(
+                "the new prefix `{}` is of another form than `{}` ({forms})",
+                of.to(),
+                of.from()
+            ))?,
+            Some(Rename::NoPrefix(why)) => {
+                unbuildable(format!("`{}` is no prefix of a test name: {why}", of.to()))?
+            }
+            Some(Rename::Built { text, parts }) => match read_back(&text) {
+                Ok(read) if read == parts => built(&text)?,
+                Ok(_) => unbuildable(
+                    "the name built under the new prefix reads as other parts than the ones \
+                     joined (the new prefix does not end where a part of a name ends)"
+                        .to_owned(),
+                )?,
+                Err(why) => unbuildable(format!(
+                    "the name built under the new prefix is no test name: {why}"
+                ))?,
+            },
+        };
+        answers.insert(name.clone(), answer);
+    }
+    Ok((SpacePrefixes::Answered, answers))
 }
 
 /// Suggested moves, by the adapter of each space: a space with no adapter, or whose
@@ -263,6 +432,9 @@ impl MoveSource for ArtifactSpaces {
         }
     }
 }
+
+#[cfg(test)]
+mod prefix_tests;
 
 #[cfg(test)]
 mod tests {

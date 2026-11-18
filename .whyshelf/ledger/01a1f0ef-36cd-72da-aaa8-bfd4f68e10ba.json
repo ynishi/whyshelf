@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "4edc231ebeedb025fe83b142aa3c4233f9b5b505",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fbd42d3a2fb648ccf1c4156b2357620fd96679c2304d46cad20abb8a04223af2",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fake_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f74137146aa1c105c37085e264319ec3939c4a14",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:24b7535b248796c066db0cd622adb087ccfc531b7ed98e18466baef314f93a9b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "be3d352adf52b3cded5e66edb0610c7620602452",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f8a7785019521f69c719ed8fec9d01c4c785baafb4ddb383dc8192d65979a048",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f854e29897e2bd03e6b2bf02ab791c8ecc0eebcc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c0890c2552029fe12c3d96c4245e04b95046a0a23044b1642dff0883034e322a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "33e1345cbbee2c79b7a200b2276fb573f40d67c3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f53974e2397de15393d41c7a2eb8e71623f2a2fe1d8e2bf59d6c658325ba8dc1",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "036708993a3e85068b7187760490f6a52ab1ea30",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:06cb32454ed829f3c56bf37708caad510c681649ae68261c96bc8c5130069658",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/project_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795043558606,
+  "expires": null,
+  "frame": [
+    {
+      "address": "fbcc6e0d325c707cb322ece5f42b03ce74b33d55",
+      "hash": "sha256:17c19b03e1169cc1c823545de8078bd69720ac3e0191752f308c1b7cb0816d13",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "79"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1efb4-5387-738e-92c2-897542094cc7"
+    }
+  ],
+  "id": "01a1f0ef-36cd-72da-aaa8-bfd4f68e10ba",
+  "kind": "decision",
+  "reason": "Read again after the blind review of issue 103 (code review of the branch from the issue alone, then its fixes: titles and raw segments keep their spelling under a new prefix, a trailing slash of a directory prefix is as none, an adapter that cannot answer is an error); each test the document names exists and checks what it says",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:5544baa07a9f7f2953520593cd33e8b1632c3424209f0064c6baebb94a6a91e3",
+  "seen_address": "0e398238de67adf6cab8b255ea7f6cd3b041c445",
+  "subject": "01a1efb4-acca-7266-a1c9-eaf0a9ce7b94",
+  "v": 1,
+  "verb": "approve"
+}

@@ -11,9 +11,9 @@ use serde_json::Value;
 use whyshelf_core::app::shelf::{
     ApprovedReport, BooksCheck, ChosenApproved, Created, Declared, DeclaredAbout, DiffItem,
     DiffReport, DownstreamEdge, ErrorClass, Exempted, FmtReport, GetReport, Health, Initialized,
-    Judged, JudgedAll, LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovesReport, Names, NewMany,
-    Row, ShelfError, StaleReport, StatsReport, StatusReport, TraceReport, Unknown, UnlinkedEntry,
-    UnlinkedReport, UpstreamEdge, UpstreamEnd,
+    Judged, JudgedAll, LeftAloneWhy, LeftOut, LeftOutWhy, MapReport, MovedPrefix, MovesReport,
+    Names, NewMany, Row, ShelfError, StaleReport, StatsReport, StatusReport, TraceReport, Unknown,
+    UnlinkedEntry, UnlinkedReport, UpstreamEdge, UpstreamEnd,
 };
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::build::NewDocProblem;
@@ -40,8 +40,8 @@ use whyshelf_core::domain::shelf::freshness::{
 };
 use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::ledger::{
-    ArtifactPin, DeclaredStatus, FoundBy, FramePin, JudgementId, MoveNote, Moved, ReadPin, Record,
-    Similarity,
+    ArtifactPin, DeclaredStatus, FoundBy, FramePin, JudgementId, MoveNote, Moved, PrefixRefusal,
+    ReadPin, Record, Similarity,
 };
 use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::order::{Hold, Rule};
@@ -1244,6 +1244,18 @@ pub struct MovedAllOut {
     pub moved: Vec<MovedOut>,
 }
 
+/// The answer of `judge moved --prefix`: every declaration of a move written, one for
+/// each name under the prefix.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct MovedPrefixOut {
+    /// The declarations, as `judge moved` answers them, in the order of the spaces
+    /// and then of the names.
+    pub moved: Vec<MovedOut>,
+    /// The spaces names are pinned in whose adapter takes no prefix: names of them may
+    /// be under the prefix, and none was moved.
+    pub not_asked: Vec<String>,
+}
+
 /// One declaration that an artifact moved.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct MovedOut {
@@ -1430,6 +1442,21 @@ pub struct ErrorOut {
     /// file) or each line that cannot be read; for `init`, each thing in the way, or
     /// the files written before a failure part way and the one that was not.
     pub problems: Vec<String>,
+    /// For `judge moved --prefix`, each name under the prefix that cannot be moved,
+    /// with why (every one is listed, and none is moved); empty for any other error.
+    pub refused: Vec<RefusedNameOut>,
+}
+
+/// A name under the prefix of `judge moved --prefix` that cannot be moved.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct RefusedNameOut {
+    /// The old name.
+    pub name: String,
+    /// The space the refusal is about, when it is of one (none when it is of the name
+    /// as such: pins read as it in two spaces, or no move).
+    pub space: Option<String>,
+    /// Why, in words.
+    pub why: String,
 }
 
 /// The JSON Schema of every answer, and of what a command reads.
@@ -1466,6 +1493,7 @@ pub fn schemas() -> SchemasOut {
     put("judge approve --pending", schema_for!(ChosenApprovedOut));
     put("judge same", schema_for!(DeclaredAllOut));
     put("judge moved", schema_for!(MovedAllOut));
+    put("judge moved --prefix", schema_for!(MovedPrefixOut));
     put("judge exempt", schema_for!(ExemptedAllOut));
     put("judge withdraw", schema_for!(WithdrawnOut));
     put("new", schema_for!(CreatedOut));
@@ -3496,15 +3524,26 @@ pub fn same_meaning(all: &[Declared]) -> DeclaredAllOut {
 /// The answer of `judge moved`.
 pub fn moved(all: &[Moved]) -> MovedAllOut {
     MovedAllOut {
-        moved: all
-            .iter()
-            .map(|one| MovedOut {
-                space: one.of().space().to_string(),
-                from: one.of().from_name().to_string(),
-                to: one.of().to_name().to_string(),
-                record: to_json(&Record::Moved(one.clone()).to_canon()),
-            })
-            .collect(),
+        moved: all.iter().map(moved_out).collect(),
+    }
+}
+
+/// One declaration of a move, as `judge moved` and `judge moved --prefix` answer it.
+fn moved_out(one: &Moved) -> MovedOut {
+    MovedOut {
+        space: one.of().space().to_string(),
+        from: one.of().from_name().to_string(),
+        to: one.of().to_name().to_string(),
+        record: to_json(&Record::Moved(one.clone()).to_canon()),
+    }
+}
+
+/// The answer of `judge moved --prefix`: the answer of `judge moved`, and the spaces
+/// whose adapter takes no prefix.
+pub fn moved_prefix(done: &MovedPrefix) -> MovedPrefixOut {
+    MovedPrefixOut {
+        moved: done.moved.iter().map(moved_out).collect(),
+        not_asked: done.not_asked.iter().map(ToString::to_string).collect(),
     }
 }
 
@@ -3658,6 +3697,17 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
                 .collect(),
             _ => Vec::new(),
         },
+        refused: match error {
+            ShelfError::MovedPrefixRefused(PrefixRefusal::Names(names)) => names
+                .iter()
+                .map(|named| RefusedNameOut {
+                    name: named.name.to_string(),
+                    space: named.space().map(ToString::to_string),
+                    why: named.why.to_string(),
+                })
+                .collect(),
+            _ => Vec::new(),
+        },
     }
 }
 
@@ -3669,6 +3719,7 @@ pub fn lines_refused(messages: Vec<String>, problems: Vec<String>) -> ErrorOut {
         messages,
         candidates: Vec::new(),
         problems,
+        refused: Vec::new(),
     }
 }
 
@@ -3679,6 +3730,7 @@ pub fn usage(message: String) -> ErrorOut {
         messages: vec![message],
         candidates: Vec::new(),
         problems: Vec::new(),
+        refused: Vec::new(),
     }
 }
 
@@ -3690,6 +3742,7 @@ pub fn failure(messages: Vec<String>) -> ErrorOut {
         messages,
         candidates: Vec::new(),
         problems: Vec::new(),
+        refused: Vec::new(),
     }
 }
 

@@ -716,6 +716,27 @@
 //! back. `stale` lists `moves` and `judge moved` for a file that is gone, with the
 //! old name filled in: see [What settles an origin](#what-settles-an-origin).
 //!
+//! A directory moved or a module renamed moves every name under it, and
+//! `judge moved --prefix <old> <new> --reason <text>` declares them at once: the two
+//! are prefixes (a directory, `src/a`; a Rust module, `app::m`; a test's file and a
+//! module in it, `src/a.rs::m`; a script's file and a title, `tests/cart.test.ts::Cart`),
+//! and each name an approval that stands pins, in any space, that is under `<old>` is
+//! declared moved to the same name under `<new>`, one declaration for each, so that
+//! `judge withdraw` takes one back. Which names are under a prefix, and what each is
+//! under the new one, is each space's own grammar of names (a part of a path is never
+//! cut, a Rust path breaks at `::`, a title of a test is read as in a name, and one `/`
+//! at the end of a directory is as none): the adapter of the space says, and a prefix
+//! that is no prefix of a space's names (a directory, for `rust-item`) has none in it.
+//! A new name keeps the spelling of what follows the prefix in the old name, and is
+//! `<new>` as it is typed. Every old and new name is then held to
+//! the rule above in one reading, and the answer is all or none: a name under the
+//! prefix that cannot be moved (something still at the old name, nothing at the new
+//! one, a new name its space cannot write) is listed, each with why, in `refused`, and
+//! nothing is written; so is a prefix nothing under which is pinned. The answer is
+//! `{"moved": [...], "not_asked": [...]}`: `moved` as for `judge moved`, and
+//! `not_asked` the spaces whose adapter takes no prefix, whose names may be under it
+//! and were not moved.
+//!
 //! `moves` finds the names to declare, and declares nothing. It lists every name a
 //! `judge moved` could be declared of now (a name some pin of something there, of an
 //! approval that stands, is read as through the moves declared) that has nothing
@@ -851,9 +872,11 @@
 //!   judge same <ref>... [--artifact <name>]... [--from <hash>] --reason <text>
 //!                             the edits named keep the meaning: the approvals that pinned the
 //!                             hashes before them hold again, each with a notice
-//!   judge moved <old> <new> --reason <text>
+//!   judge moved [--prefix] <old> <new> --reason <text>
 //!                             the artifact at the old name is now at the new one: a pin of the
-//!                             old name made before is read as a pin of the new one
+//!                             old name made before is read as a pin of the new one (with
+//!                             --prefix, every name under the old prefix, in any space, is
+//!                             now at the same name under the new one)
 //!   judge exempt <ref>... --from <book>.<link> --reason <text>
 //!                             the documents are not expected to be reached by that covering
 //!                             link: no `not_covered` for it, and `check` lists them apart
@@ -1086,8 +1109,8 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now; for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces, for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands) |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read, written or put on disk (for `new` and `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
 //!
 //! `status` answers `{"docs", "filters", "health"}`: the documents that pass the

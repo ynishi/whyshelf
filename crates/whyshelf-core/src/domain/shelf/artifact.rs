@@ -20,6 +20,8 @@
 //! | [`Artifact`] | a space, a name, and whether the thing is there now with which [`ArtifactHash`], absent, or unknown | the build of a shelf, from an [`ArtifactReading`] |
 //! | [`ArtifactHash`] | the hash of the content as its link's [`Comparison`] counts it: the only thing freshness compares (A3, A4) | [`Comparison::fingerprint`], over the bytes the adapter read |
 //! | [`Comparison`] | what counts: that the thing is there, every byte, or the lines with their white space collapsed, without blank lines and without the lines a prefix marks | a book's declaration of the link; kept in each pin |
+//! | [`NamePrefix`], [`PrefixMove`] | a prefix of names as a person writes it, opaque like a name, and the move of every name under one prefix to the same name under another | the command line |
+//! | [`Renamed`], [`SpacePrefixes`], [`PrefixAnswers`] | what a space's adapter says of a prefix move: per name, the same name under the new prefix, outside, or unbuildable (why); per space, whether the prefix is one of its names | the adapter, by its own grammar of names |
 //! | [`ContentAddress`] | where the content can be read back later; opaque, only compared | an adapter, after its own check ([`ContentAddress::from_validated`], A7) |
 //! | [`Revision`] | one point of the project's history, kept as a hint; opaque | the same ([`Revision::from_validated`]) |
 //!
@@ -834,6 +836,183 @@ impl Artifact {
     /// What it comes to now.
     pub fn state(&self) -> &ArtifactState {
         &self.state
+    }
+}
+
+/// A prefix of names, as a person writes it: not empty, no control character, at
+/// most [`NAME_MAX`] bytes (what every [`ArtifactName`] has).
+///
+/// Opaque like a name, and it need not name anything: a directory, a module. Whether
+/// it is a prefix of the names of a space, and which names are under it, is the
+/// answer of the space's adapter ([`Renamed`], [`SpacePrefixes`]).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct NamePrefix(String);
+
+impl NamePrefix {
+    /// A prefix, as above.
+    pub fn new(text: &str) -> Result<Self, ArtifactNameProblem> {
+        ArtifactName::new(text).map(|name| Self(name.0))
+    }
+
+    /// The prefix as written.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for NamePrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::str::FromStr for NamePrefix {
+    type Err = ArtifactNameProblem;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::new(text)
+    }
+}
+
+/// A move of every name under one prefix to the same name under another.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrefixMove {
+    from: NamePrefix,
+    to: NamePrefix,
+}
+
+impl PrefixMove {
+    /// A move from `from` to `to`. Refuses a move to the same prefix: the one place
+    /// that rule is held.
+    pub fn new(from: NamePrefix, to: NamePrefix) -> Result<Self, PrefixMoveProblem> {
+        if from == to {
+            return Err(PrefixMoveProblem::Same { prefix: from });
+        }
+        Ok(Self { from, to })
+    }
+
+    /// The prefix the names are under now.
+    pub fn from(&self) -> &NamePrefix {
+        &self.from
+    }
+
+    /// The prefix they are moved under.
+    pub fn to(&self) -> &NamePrefix {
+        &self.to
+    }
+}
+
+/// Why a move of a prefix cannot be made as given.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum PrefixMoveProblem {
+    /// The two prefixes are one: a move to where it is.
+    #[error("`{prefix}` is moved to itself")]
+    Same {
+        /// The prefix.
+        prefix: NamePrefix,
+    },
+}
+
+/// What a space's adapter says of one name under a [`PrefixMove`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Renamed {
+    /// The name is under `from` at a boundary of the space's names; this is the same
+    /// name under `to`, built by the adapter's own grammar.
+    Under(ArtifactName),
+    /// The name is not under `from`.
+    Outside,
+    /// The name is under `from`, but no name of the space is the same name under
+    /// `to` (a form `to` is not written in, too long, a part the grammar refuses),
+    /// with why.
+    Unbuildable(NonBlank),
+}
+
+/// What a space's adapter says of a [`PrefixMove`] as a whole, for the space.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpacePrefixes {
+    /// The adapter read `from` as a prefix of its names, and answered each name
+    /// ([`Renamed`]); a `to` it cannot read in the same form makes each name under
+    /// `from` [`Renamed::Unbuildable`], with why, and the request is not refused for
+    /// it.
+    Answered,
+    /// `from` is no prefix of the space's names (a directory for `rust-item`, a
+    /// module path for `file`), with why: no name of the space is under it. The why
+    /// is kept for a refusal that nothing is under the prefix, and for that only.
+    NotUnder(NonBlank),
+    /// No adapter of the space takes prefixes: whether names of it are under `from`
+    /// cannot be told.
+    NoPrefixes,
+}
+
+/// The names each space's adapter is asked about for a [`PrefixMove`]: every name a
+/// move may be declared of, by its space.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PrefixAsks(BTreeMap<Space, BTreeSet<ArtifactName>>);
+
+impl PrefixAsks {
+    /// Nothing asked.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Ask about `name` in `space`.
+    pub fn ask(&mut self, space: Space, name: ArtifactName) {
+        self.0.entry(space).or_default().insert(name);
+    }
+
+    /// The names asked of each space, in the order of the spaces.
+    pub fn spaces(&self) -> impl Iterator<Item = (&Space, &BTreeSet<ArtifactName>)> {
+        self.0.iter()
+    }
+
+    /// Whether nothing is asked.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+/// What an adapter answered for each name of one space it was asked about for a
+/// [`PrefixMove`].
+pub type SpaceRenamed = BTreeMap<ArtifactName, Renamed>;
+
+/// What the adapters answered for a [`PrefixMove`]: per space asked, whether `from`
+/// is a prefix of it ([`SpacePrefixes`]) and, per name asked, its [`Renamed`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrefixAnswers {
+    of: PrefixMove,
+    spaces: BTreeMap<Space, (SpacePrefixes, SpaceRenamed)>,
+}
+
+impl PrefixAnswers {
+    /// No answer yet, for this move.
+    pub fn new(of: PrefixMove) -> Self {
+        Self {
+            of,
+            spaces: BTreeMap::new(),
+        }
+    }
+
+    /// The move the answers are for.
+    pub fn of(&self) -> &PrefixMove {
+        &self.of
+    }
+
+    /// The answer of one space: whether `from` is a prefix of it and, when it is,
+    /// what each name asked comes to. Replaces an answer of the space made before.
+    pub fn answer(&mut self, space: Space, prefixes: SpacePrefixes, renamed: SpaceRenamed) {
+        self.spaces.insert(space, (prefixes, renamed));
+    }
+
+    /// What the space's adapter said of `from`, if the space was answered.
+    pub fn prefixes_of(&self, space: &Space) -> Option<&SpacePrefixes> {
+        self.spaces.get(space).map(|(prefixes, _)| prefixes)
+    }
+
+    /// What the adapter said of one name, if it did.
+    pub fn renamed(&self, space: &Space, name: &ArtifactName) -> Option<&Renamed> {
+        self.spaces
+            .get(space)
+            .and_then(|(_, renamed)| renamed.get(name))
     }
 }
 

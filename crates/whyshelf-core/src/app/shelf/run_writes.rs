@@ -3,8 +3,9 @@
 //!
 //! ```text
 //!   RunWrites::run(ports, |w| ...)
-//!      |  w.declaration(text) / w.file(path, bytes) / w.doc(new)
+//!      |  w.declaration(text) / w.file(path, bytes) / w.doc(new) / w.record(record)
 //!      |        DeclarationWrite::create / FileWrite::create / DocWrite::create
+//!      |        / LedgerAppend::append
 //!      |        (create-only; a path that was made is kept, in order, inside `w`)
 //!      |
 //!      +-- the closure gave Ok(t) -----> FileSync::persist(every path kept) -> Ok(t)
@@ -14,13 +15,17 @@
 //!                                        (the cause as it is when nothing was written)
 //! ```
 //!
-//! What a run promises, which `new` and `init` take over:
+//! What a run promises, which `new`, `init` and every use case that writes records to
+//! the ledger (judge, approve, exempt, moved, same meaning, withdraw) take over:
 //!
 //! - Each file is written whole, or removed (the adapters' promise: a write that
 //!   fails after its file was made removes it). That is a promise about the
 //!   process failing: a power loss before the file is on disk can leave one empty or
 //!   partly written, and the next run takes a file whose front matter cannot be read
-//!   as a name in use and moves on to another key.
+//!   as a name in use and moves on to another key. A record of the ledger is such a
+//!   file, the one at `<whyshelf dir>/ledger/<id>.json`: it is created and never
+//!   replaced, and one that cannot be read is told by every read of the ledger, not
+//!   dropped.
 //! - A run that answers success has every file it wrote on disk, so that it survives a
 //!   power loss. That is done once for the run, at its end, and not once for each
 //!   file.
@@ -34,12 +39,16 @@
 //! - which files the run wrote, in what order, and when they are put on disk: only
 //!   [`RunWrites::run`] (its `finish` and `fail` are private), from the files the
 //!   methods here made. A use case holds no list of what it wrote.
+//! - which file a ledger record is written at: the adapter's, which says so when it
+//!   writes the record ([`LedgerAppend::append`]) and before ([`LedgerAppend::path_of`],
+//!   for the file a failed write was at). A use case never makes the path of a record.
 //! - that a run stops: only a [`Stop`] returned by the closure. Every error the use
 //!   case makes itself (a file found where one was to be made, what
 //!   [`Shelf::replan_after_taken`] refuses) is returned as a [`Stop`] too.
 //!
 //! The one way left to write a file without the run knowing is to call a create
-//! method of [`DocWrite`], [`DeclarationWrite`] or [`FileWrite`] outside this module:
+//! method of [`DocWrite`], [`DeclarationWrite`] or [`FileWrite`], or
+//! [`LedgerAppend::append`], outside this module:
 //! a trait's method cannot be hidden, so the calls are made here and nowhere else, and
 //! the tests and the review look for one elsewhere.
 //!
@@ -60,12 +69,13 @@ use std::pin::Pin;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::build::NewDoc;
+use crate::domain::shelf::ledger::Record;
 
 use super::error::{PersistProblem, ShelfError};
 use super::new_doc::Created;
 use super::ports::{
-    Creation, DeclarationText, DeclarationWrite, DocWrite, FileSync, FileWrite, ShelfPort,
-    ShelfWrite, port,
+    Creation, DeclarationText, DeclarationWrite, DocWrite, FileSync, FileWrite, LedgerAppend,
+    ShelfPort, ShelfWrite, port,
 };
 
 /// What stops a run: the file it was at, and why. Returned by the closure of
@@ -194,6 +204,24 @@ impl<'p, P: ShelfWrite> RunWrites<'p, P> {
             Err(source) => Err(Stop {
                 failed: path.clone(),
                 cause: port(ShelfPort::FileWrite)(source),
+            }),
+        }
+    }
+
+    /// Write a record of the ledger, create-only, at the path the ledger gives: a
+    /// record already there is the ledger's error, not a [`Wrote::AlreadyThere`], and
+    /// stops the run like any other failure of the write, at the file it was for
+    /// ([`LedgerAppend::path_of`]).
+    pub(super) async fn record(&mut self, record: &Record) -> Result<(), Stop> {
+        let ledger = self.ports.append();
+        match ledger.append(record).await {
+            Ok(file) => {
+                self.written.push(file);
+                Ok(())
+            }
+            Err(source) => Err(Stop {
+                failed: ledger.path_of(record),
+                cause: port(ShelfPort::LedgerAppend)(source),
             }),
         }
     }

@@ -48,6 +48,34 @@
 //! so a test whose title holds one (a tab, a line break) cannot be named. Any other
 //! text is not a name of the space, and the adapter says so with why.
 //!
+//! # Prefixes of the names
+//!
+//! `judge moved --prefix` moves every name under a prefix at once, and this adapter
+//! says which names are under it and what each becomes
+//! ([`ArtifactSource::renamed`](whyshelf_core::app::shelf::ArtifactSource::renamed)).
+//! A prefix is of one of two forms, and a text is of one only:
+//!
+//! - the parts of the path of a file, when the text has no `::` that no `\` escapes
+//!   (`tests/cart.test.ts` is the parts `tests` and `cart.test.ts`; one `/` at its end
+//!   is dropped, so `tests/` is `tests`): a name is under it when the parts of its
+//!   file's path start with the prefix's;
+//! - a file and the first titles of a path in it, `<file>.ts::<title>(::<title>)*`,
+//!   each title with its escapes read as in a name (`\:` for `:`, `\\` for `\`): a
+//!   name is under it when it is in that file and the titles of its path in it start
+//!   with the prefix's. A `/` in a title is a character of it, and no boundary.
+//!
+//! The same name under `to` is built of the parts as they were written: the parts of
+//! `to` as the person typed them, then the rest of the name's as the name has them,
+//! each title with the escapes it was written with (`Cart: adds` stays so under a new
+//! file, and `a\:\:b` stays so; a title is not written out again, so no escape is
+//! added or taken away). Where a part ends is what the grammar of a name found in
+//! reading it, and the name built is read back by it. A `to` of the other form than
+//! `from`, one that cannot be read, or a name built that is none (a file that is no
+//! script, a name too long) or that reads as other parts than were joined (a title of
+//! `to` that ends in a `:` no `\` escapes, before the `::` that follows it), makes
+//! each name under `from` unbuildable, with why. A `from` of neither form is no prefix
+//! of the space's names. The adapter looks for no text in a name.
+//!
 //! # Reading the file
 //!
 //! The file is read as the space `file` reads one ([`file`](mod@file)): its path is
@@ -294,12 +322,14 @@ use std::path::PathBuf;
 
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, Space, SpaceAsks, SpaceReadings,
+    ArtifactName, ArtifactReading, Comparison, PrefixMove, Space, SpaceAsks, SpacePrefixes,
+    SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
+use super::Spelled;
 use super::file::{self, Bounded};
 
 /// The name of the space this adapter resolves names in.
@@ -701,6 +731,12 @@ type Asked<'a> = (&'a ArtifactName, &'a BTreeSet<Comparison>, TestName);
 impl TestName {
     /// The one reader of the grammar of the names (on the page of the module).
     fn parse(text: &str) -> Result<Self, NotAName> {
+        Self::parse_spelled(text).map(|(name, _)| name)
+    }
+
+    /// The name read, and its titles (the `describe`s, then the test) as the text wrote
+    /// each, escapes and all: `Cart\:\:x` stays so, though it reads as `Cart::x`.
+    fn parse_spelled(text: &str) -> Result<(Self, Vec<Spelled<String>>), NotAName> {
         let parts = split_titles(text);
         let Some((file, titles)) = parts.split_first() else {
             return Err(NotAName::NoTitle);
@@ -715,17 +751,21 @@ impl TestName {
             path: (*file).to_owned(),
             why: e.to_string(),
         })?;
-        let mut describes = titles
+        let written = titles
             .iter()
-            .map(|t| decode_title(t))
+            .map(|t| decode_title(t).map(|title| Spelled::new(title, t)))
             .collect::<Result<Vec<_>, _>>()?;
+        let mut describes: Vec<String> = written.iter().map(|t| t.value.clone()).collect();
         let Some(test) = describes.pop() else {
             return Err(NotAName::NoTitle);
         };
-        Ok(Self {
-            file: path,
-            wanted: Wanted { describes, test },
-        })
+        Ok((
+            Self {
+                file: path,
+                wanted: Wanted { describes, test },
+            },
+            written,
+        ))
     }
 }
 
@@ -772,6 +812,140 @@ fn decode_title(raw: &str) -> Result<String, NotAName> {
         }
     }
     Ok(out)
+}
+
+/// A prefix of the names of the space, read: of one of two forms, and a text is of one
+/// only.
+#[derive(Debug, Clone)]
+enum JsPrefix {
+    /// The parts of the path of a file: a text with no `::` that no `\` escapes (so
+    /// `tests/cart.test.ts` is this, the parts `tests` and `cart.test.ts`, and a
+    /// prefix of the names of a file only as far as its path goes).
+    FileParts(file::FilePrefix),
+    /// A file and the first titles of the path in it: `<file>.ts::<title>` and more
+    /// titles after it, each `::` before, each title with its escapes read and as
+    /// written.
+    Titles {
+        file: RelPath,
+        titles: NonEmptyVec<Spelled<String>>,
+    },
+}
+
+impl JsPrefix {
+    /// The one reader of the prefixes: a text with a `::` that no `\` escapes is read
+    /// as a name is ([`TestName::parse_spelled`]), its titles all of the prefix's; one
+    /// without, as a path ([`file::FilePrefix::parse`], which drops one `/` at its
+    /// end).
+    fn parse(text: &str) -> Result<Self, NotAName> {
+        if split_titles(text).len() == 1 {
+            let path = file::FilePrefix::parse(text).map_err(|e: ValueError| NotAName::NoPath {
+                path: text.to_owned(),
+                why: e.to_string(),
+            })?;
+            return Ok(Self::FileParts(path));
+        }
+        let (TestName { file, .. }, titles) = TestName::parse_spelled(text)?;
+        Ok(Self::Titles {
+            file,
+            titles: NonEmptyVec::from_vec(titles).map_err(|_| NotAName::NoTitle)?,
+        })
+    }
+
+    /// The name of the same test under `to`, when the test (its `file` and its
+    /// `titles`, the `describe`s and then the test, as written) is under this prefix:
+    /// of the two forms, the form of this prefix only. None when it is not under it. The
+    /// name is built of the parts of `to` as it writes them, then the rest of the
+    /// test's as it writes them: a title keeps the escapes it was typed with.
+    fn rename(
+        &self,
+        file: &RelPath,
+        titles: &[Spelled<String>],
+        to: &Result<Self, NotAName>,
+    ) -> Option<super::Rename> {
+        use super::Rename;
+        match self {
+            Self::FileParts(from) => {
+                let parts = file::parts_of(file);
+                let rest = from.rest(&parts)?;
+                Some(match to {
+                    Err(why) => Rename::NoPrefix(why.to_string()),
+                    Ok(Self::Titles { .. }) => Rename::OtherForm,
+                    Ok(Self::FileParts(to)) => {
+                        let joined: Vec<file::Part> =
+                            to.parts().iter().chain(rest).cloned().collect();
+                        match file::path_from(&joined) {
+                            Ok(path) => built(path.as_str(), titles.iter()),
+                            Err(e) => Rename::NoPrefix(e.to_string()),
+                        }
+                    }
+                })
+            }
+            Self::Titles {
+                file: from_file,
+                titles: from,
+            } => {
+                if file != from_file {
+                    return None;
+                }
+                let rest = super::after(titles, from.iter())?;
+                Some(match to {
+                    Err(why) => Rename::NoPrefix(why.to_string()),
+                    Ok(Self::FileParts(_)) => Rename::OtherForm,
+                    Ok(Self::Titles { file, titles }) => {
+                        built(file.as_str(), titles.iter().chain(rest))
+                    }
+                })
+            }
+        }
+    }
+}
+
+/// The name of the file and the titles, each as written, joined with `::`, and the
+/// parts it is to be read back as.
+fn built<'a>(file: &str, titles: impl Iterator<Item = &'a Spelled<String>>) -> super::Rename {
+    let mut text = file.to_owned();
+    let mut parts = vec![file.to_owned()];
+    for title in titles {
+        text.push_str("::");
+        text.push_str(&title.text);
+        parts.push(title.text.clone());
+    }
+    super::Rename::Built { text, parts }
+}
+
+/// What this adapter says of a move of a prefix, for the `names` of its space asked
+/// about. A prefix is the path of a file, in parts (`tests/cart.test.ts` is that and
+/// nothing more), or a file and the first titles of a path in it
+/// (`tests/cart.test.ts::Cart`, with `\:` and `\\` read as in a name); a name is under
+/// one when its file's parts, or its file and the first titles of its path in it, are
+/// the prefix's (titles are compared as read, escapes undone), the same name under `to`
+/// being built of `to`'s parts and the rest of the name's, each as it was written, an
+/// escape included. A `from` that cannot be read as either is no prefix of the space's
+/// names; a `to` that cannot, or that is of the other form, makes each name under
+/// `from` unbuildable, and so does a name built that is read back as other parts than
+/// were joined, or is no name (a title with a control character, a file that does not
+/// end in an extension of a script). A text that is no name is not under any prefix.
+/// Nothing is looked for in the text of a name.
+pub(super) fn renamed(
+    names: &BTreeSet<ArtifactName>,
+    of: &PrefixMove,
+) -> Result<(SpacePrefixes, SpaceRenamed), ValueError> {
+    super::renamed_tests(
+        names,
+        of,
+        "a path of a file, or a file and titles in it",
+        JsPrefix::parse,
+        |from, name, to| {
+            let (test, titles) = TestName::parse_spelled(name).ok()?;
+            from.rename(&test.file, &titles, to)
+        },
+        |text| {
+            let (test, titles) = TestName::parse_spelled(text)?;
+            Ok(std::iter::once(test.file.as_str().to_owned())
+                .chain(titles.into_iter().map(|title| title.text))
+                .collect())
+        },
+    )
 }
 
 /// What a name comes to in a file.

@@ -7,7 +7,8 @@
 //!                                                     SameMeaningRefusal
 //!   + time, actor, new id, reason
 //!                     ---- SameMeaning::new --------> a Record
-//!   record            ---- LedgerAppend::append ----> the ledger (create-only)
+//!   record            ---- RunWrites::record -------> the ledger (create-only), every
+//!                                                     record put on disk once, at the end
 //! ```
 //!
 //! The application chooses none of the hashes: [`frame_same_meaning`] does. As for
@@ -28,8 +29,9 @@ use crate::domain::shelf::lookup::Reference;
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
-use super::ports::{ActorSource, IdSource, LedgerAppend, ShelfPort, ShelfWrite, port};
+use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
+use super::run_writes::RunWrites;
 
 /// What a declaration is to be about, as the person names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,13 +105,15 @@ impl<P: ShelfWrite> ShelfApp<P> {
             loaded.ledger = Ledger::build(loaded.records.clone());
             declared.push(one);
         }
-        for one in &declared {
-            self.ports
-                .append()
-                .append(&one.record)
-                .await
-                .map_err(port(ShelfPort::LedgerAppend))?;
-        }
+        RunWrites::run(&self.ports, |writes| {
+            Box::pin(async {
+                for one in &declared {
+                    writes.record(&one.record).await?;
+                }
+                Ok(())
+            })
+        })
+        .await?;
         Ok(declared)
     }
 

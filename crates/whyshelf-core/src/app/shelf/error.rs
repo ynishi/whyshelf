@@ -20,8 +20,8 @@ use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::ExemptRefusal;
 use crate::domain::shelf::filter::FilterProblem;
 use crate::domain::shelf::ledger::{
-    DecisionProblem, FrameRefusal, MovedRefusal, SameMeaningProblem, SameMeaningRefusal,
-    WithdrawRefusal,
+    DecisionProblem, FrameRefusal, MovedRefusal, NamedWhy, PrefixRefusal, SameMeaningProblem,
+    SameMeaningRefusal, WithdrawRefusal,
 };
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::NotPending;
@@ -113,6 +113,11 @@ pub enum ShelfError {
     /// the new one, or either cannot be told now.
     #[error("the declaration of a move is refused")]
     MovedRefused(#[from] MovedRefusal),
+    /// The move of a prefix cannot be declared: no name an approval pins is under it
+    /// in any space, or a name under it cannot be moved (every one is listed, and
+    /// none is moved).
+    #[error("the declaration of the move of a prefix is refused")]
+    MovedPrefixRefused(#[from] PrefixRefusal),
     /// The exemption cannot be made: the document is not valid, the link is no
     /// covering link into its book, it reaches the document now, the document is
     /// decided against, or an exemption that stands already exempts it.
@@ -485,11 +490,6 @@ impl ShelfError {
                 | SameMeaningRefusal::PinnedUnderOtherComparison { .. }
                 | SameMeaningRefusal::NothingToDeclare,
             )
-            | Self::MovedRefused(
-                MovedRefusal::NotAMove(_)
-                | MovedRefusal::NotKnown { .. }
-                | MovedRefusal::InSpaces { .. },
-            )
             | Self::Withdraw(
                 WithdrawRefusal::Unknown { .. } | WithdrawRefusal::AlreadyWithdrawn { .. },
             )
@@ -514,15 +514,9 @@ impl ShelfError {
                 | SameMeaningRefusal::ArtifactUnknown { .. },
             )
             | Self::SameMeaning(_)
-            | Self::ExemptRefused(ExemptRefusal::DocNotValid { .. })
-            // As a judgement the model refuses: a copy, a name with nothing behind it,
-            // or one that cannot be told now.
-            | Self::MovedRefused(
-                MovedRefusal::FromPresent { .. }
-                | MovedRefusal::FromUntold { .. }
-                | MovedRefusal::ToAbsent { .. }
-                | MovedRefusal::ToUntold { .. },
-            ) => ErrorClass::Refused,
+            | Self::ExemptRefused(ExemptRefusal::DocNotValid { .. }) => ErrorClass::Refused,
+            Self::MovedRefused(refusal) => moved_class(refusal),
+            Self::MovedPrefixRefused(refusal) => prefix_class(refusal),
             Self::Port { .. } | Self::Value(_) | Self::NotDurable { .. } => ErrorClass::Failed,
             // What was written could not be put on disk: the run failed, whatever stopped
             // it, so a caller does not take it for a request to mend and run again.
@@ -531,6 +525,57 @@ impl ShelfError {
                 ..
             } => ErrorClass::Failed,
             Self::PartWay { cause, .. } | Self::InRow { cause, .. } => cause.class(),
+        }
+    }
+}
+
+/// The class of the refusal of a move: the one place it is given, for a move of one
+/// name and for each name of a move of a prefix ([`named_class`]).
+///
+/// As a reference that names nothing: two names that are one, an old name no pin is
+/// read as now, and one pins read as in two spaces ([`ErrorClass::Request`]). As a
+/// judgement the model refuses: a copy, a name with nothing behind it, or one that
+/// cannot be told now ([`ErrorClass::Refused`]).
+fn moved_class(refusal: &MovedRefusal) -> ErrorClass {
+    match refusal {
+        MovedRefusal::NotAMove(_)
+        | MovedRefusal::NotKnown { .. }
+        | MovedRefusal::InSpaces { .. } => ErrorClass::Request,
+        MovedRefusal::FromPresent { .. }
+        | MovedRefusal::FromUntold { .. }
+        | MovedRefusal::ToAbsent { .. }
+        | MovedRefusal::ToUntold { .. } => ErrorClass::Refused,
+    }
+}
+
+/// The class of one name of a move of a prefix that cannot be moved: the class of
+/// the rule's refusal, a request for a name no space has a name of the same form
+/// under the new prefix ([`NamedWhy::Unbuildable`], the new prefix is to mend), and
+/// a refusal for a name its adapter gave no answer for (it cannot be told now, as for
+/// [`MovedRefusal::FromUntold`]).
+fn named_class(why: &NamedWhy) -> ErrorClass {
+    match why {
+        NamedWhy::Move(refusal) => moved_class(refusal),
+        NamedWhy::Unbuildable { .. } => ErrorClass::Request,
+        NamedWhy::NoAnswer { .. } => ErrorClass::Refused,
+    }
+}
+
+/// The class of the refusal of a move of a prefix: nothing under it is a request (the
+/// prefix is wrong); names that cannot be moved are refused when any one of them is
+/// ([`named_class`]), else a request.
+fn prefix_class(refusal: &PrefixRefusal) -> ErrorClass {
+    match refusal {
+        PrefixRefusal::NothingUnder { .. } => ErrorClass::Request,
+        PrefixRefusal::Names(names) => {
+            if names
+                .iter()
+                .any(|named| named_class(&named.why) == ErrorClass::Refused)
+            {
+                ErrorClass::Refused
+            } else {
+                ErrorClass::Request
+            }
         }
     }
 }

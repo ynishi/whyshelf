@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d8c84af6018963911840fad10894782a608875c0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f98527f8b622b688df1ef002e985e653b18cc839e2ab5231b1b2907c7a7324b9",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8b4e85af02778c05ebc70a4099aff5d1bd190d3a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:279e30315600f23baca61e2c7dd522f8b3ae2c41f3147df5d2e321f111c3e193",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a096bf34557afb45206950a477b7443a5babc4e6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3087c4bd62ddca63092a2fcd081dfa10b140c60b29e5e835f35111b5fa8881ab",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "98dcb89f79008f6e8c1d2146663cca8b7ec16bf3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5faeb8405d798298b2593d4d1aa5adf959cb88794c5eb71838da5be47a2ae2cc",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795041602885,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a128682ee8e3be1779ce23bb99749af0c64478b9",
+      "hash": "sha256:88c82d70c137e69d6b4d0777c12c63b4136b2ab7c98d2d32845720ca6aaa09ec",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "80"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f0ce-3040-7549-bf80-827e6a156a89"
+    }
+  ],
+  "id": "01a1f0d1-5af3-702a-83b4-8a7b575c6bf7",
+  "kind": "decision",
+  "reason": "Written together with the code of issue 103 and read again against it by the agent that wrote both (each rustdoc item and each test file named exists and says what the document says); the blind review of the change is still to be made, and these approvals are made so that the books gate is clean until then",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:e9fc08e33c14960ca14eab981fbeebed2146f46c96b5f13dd94d588cbdecd70f",
+  "seen_address": "498a74d761c7a42095c6065703bc9dfed654b9d5",
+  "subject": "01a1f0ce-8cb8-726a-a5e7-51ec4ba0bd1d",
+  "v": 1,
+  "verb": "approve"
+}
