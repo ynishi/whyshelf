@@ -36,7 +36,7 @@
 //! link is its header alone.
 
 use whyshelf_core::domain::shelf::map::{LinkMap, MapTarget, ShelfMap};
-use whyshelf_core::domain::shelf::schema::{Cardinality, CoverSeverity, KeyPattern};
+use whyshelf_core::domain::shelf::schema::{Cardinality, CoverSeverity, KeyPattern, KeyWord};
 
 /// Between two columns.
 const GAP: &str = "  ";
@@ -47,9 +47,10 @@ pub(super) fn draw(map: &ShelfMap) -> String {
         .books
         .iter()
         .map(|book| {
+            // A prefixed key is drawn as its prefix, the other grammar as its word.
             let key = match &book.key {
                 KeyPattern::Prefixed(prefix) => format!("{prefix}-"),
-                KeyPattern::Slug => "slug".to_owned(),
+                KeyPattern::Slug => KeyWord::Slug.word().to_owned(),
             };
             (
                 book.name.to_string(),

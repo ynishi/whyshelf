@@ -17,9 +17,13 @@
 //! [`Shelf::build`]: super::build::Shelf::build
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use crate::domain::id::DocId;
 use crate::domain::nonempty::TwoOrMore;
+use crate::domain::words::{Join, Mark, listed};
+
+use super::doc::{DocKey, DocLabel};
 
 /// Which graph a cycle was found in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,6 +33,17 @@ pub enum CycleSource {
     /// The frames of the approvals in the ledger (the `FrameGraph` of the ledger
     /// module).
     Frames,
+}
+
+/// What the graph is called in a sentence: `` `Depends` links `` or `approvals'
+/// frames`. The one place a source is worded.
+impl fmt::Display for CycleSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Links => "`Depends` links",
+            Self::Frames => "approvals' frames",
+        })
+    }
 }
 
 /// The identity of a cycle: where it was found and the smallest identifier in it.
@@ -76,6 +91,57 @@ impl Cycle {
             CycleMembers::SelfLoop(m) => vec![*m],
             CycleMembers::Ring(ms) => ms.iter().copied().collect(),
         }
+    }
+}
+
+/// A cycle with the keys of its members, which is how a refusal says it: the
+/// documents by their keys, and the graph it was found in.
+///
+/// Its fields are private and [`LabelledCycle::new`] is the one place it is made,
+/// so the keys it keeps are those of its own members, whatever its maker knows of
+/// other documents. The one sentence of a cycle is its [`Display`](fmt::Display):
+/// ``a cycle of `Depends` links: finding:FR-1 and finding:FR-2``.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LabelledCycle {
+    cycle: Cycle,
+    keys: BTreeMap<DocId, DocKey>,
+}
+
+impl LabelledCycle {
+    /// The cycle, with the key `key_of` finds for each member that has one.
+    pub fn new(cycle: Cycle, key_of: impl Fn(DocId) -> Option<DocKey>) -> Self {
+        let keys = cycle
+            .ids()
+            .into_iter()
+            .filter_map(|id| key_of(id).map(|key| (id, key)))
+            .collect();
+        Self { cycle, keys }
+    }
+
+    /// The graph the cycle was found in.
+    pub fn source(&self) -> CycleSource {
+        self.cycle.id().source
+    }
+
+    /// The members, smallest identity first, each named by its key, or by its
+    /// identity when it has none.
+    pub fn members(&self) -> Vec<DocLabel> {
+        self.cycle
+            .ids()
+            .into_iter()
+            .map(|id| DocLabel::new(id, self.keys.get(&id).cloned()))
+            .collect()
+    }
+}
+
+impl fmt::Display for LabelledCycle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "a cycle of {}: {}",
+            self.source(),
+            listed(self.members(), Mark::Plain, Join::And)
+        )
     }
 }
 
@@ -196,6 +262,7 @@ pub(super) fn cycles_of(
 mod tests {
     use super::*;
     use crate::domain::shelf::fixtures_tests::docid;
+    use crate::domain::shelf::schema::{BookName, KeyPattern, KeyPrefix};
 
     fn edges(pairs: &[(u128, &[u128])]) -> BTreeMap<DocId, BTreeSet<DocId>> {
         pairs
@@ -242,6 +309,83 @@ mod tests {
         // Two cycles of different graphs on one document are two ids.
         let links = cycles_of(CycleSource::Links, &graph);
         assert_ne!(links[0].id(), cycles[0].id());
+    }
+
+    fn key(text: &str) -> DocKey {
+        let pattern = KeyPattern::Prefixed(KeyPrefix::new("FR").expect("a prefix"));
+        DocKey {
+            book: BookName::new("finding").expect("a book"),
+            form: pattern.parse(text).expect("a key"),
+        }
+    }
+
+    /// The cycle of 1, 2 and 3 as found in `source`, with keys for the ones in `keyed`.
+    fn labelled(source: CycleSource, keyed: &[(u128, &str)]) -> LabelledCycle {
+        let graph = edges(&[(1, &[2]), (2, &[3]), (3, &[1])]);
+        let cycle = cycles_of(source, &graph).remove(0);
+        let keys: BTreeMap<DocId, DocKey> = keyed
+            .iter()
+            .map(|(n, text)| (docid(*n), key(text)))
+            .collect();
+        LabelledCycle::new(cycle, |id| keys.get(&id).cloned())
+    }
+
+    #[test]
+    fn a_labelled_cycle_names_its_members_in_the_order_of_identity() {
+        let cycle = labelled(
+            CycleSource::Links,
+            &[(3, "FR-30"), (1, "FR-10"), (2, "FR-20")],
+        );
+        let ids: Vec<DocId> = cycle.members().iter().map(DocLabel::id).collect();
+        assert_eq!(ids, vec![docid(1), docid(2), docid(3)]);
+        let names: Vec<String> = cycle.members().iter().map(ToString::to_string).collect();
+        assert_eq!(names, ["finding:FR-10", "finding:FR-20", "finding:FR-30"]);
+    }
+
+    #[test]
+    fn a_member_with_no_key_is_named_by_its_identity() {
+        let cycle = labelled(CycleSource::Links, &[(1, "FR-10"), (3, "FR-30")]);
+        let names: Vec<String> = cycle.members().iter().map(ToString::to_string).collect();
+        assert_eq!(
+            names,
+            [
+                "finding:FR-10".to_owned(),
+                docid(2).to_string(),
+                "finding:FR-30".to_owned()
+            ]
+        );
+    }
+
+    #[test]
+    fn a_labelled_cycle_keeps_the_keys_of_its_own_members_only() {
+        // The maker knows a key for a document that is no member: it is not kept.
+        let cycle = labelled(CycleSource::Frames, &[(1, "FR-10"), (9, "FR-90")]);
+        assert_eq!(cycle.keys.len(), 1);
+        assert_eq!(cycle.source(), CycleSource::Frames);
+    }
+
+    #[test]
+    fn a_labelled_cycle_says_where_it_was_found_and_who_is_in_it() {
+        let keyed = [(1, "FR-10"), (2, "FR-20"), (3, "FR-30")];
+        assert_eq!(
+            labelled(CycleSource::Links, &keyed).to_string(),
+            "a cycle of `Depends` links: finding:FR-10, finding:FR-20 and finding:FR-30"
+        );
+        assert_eq!(
+            labelled(CycleSource::Frames, &keyed).to_string(),
+            "a cycle of approvals' frames: finding:FR-10, finding:FR-20 and finding:FR-30"
+        );
+    }
+
+    #[test]
+    fn a_cycle_of_one_document_is_said_with_that_document() {
+        let graph = edges(&[(4, &[4])]);
+        let cycle = cycles_of(CycleSource::Links, &graph).remove(0);
+        let labelled = LabelledCycle::new(cycle, |_| Some(key("FR-4")));
+        assert_eq!(
+            labelled.to_string(),
+            "a cycle of `Depends` links: finding:FR-4"
+        );
     }
 
     #[test]

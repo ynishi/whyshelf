@@ -19,6 +19,7 @@
 //! | [`location`] | a path relative to the project root |
 //! | [`actor`] | who decides |
 //! | [`nonempty`] | collections and texts that cannot be empty |
+//! | [`words`] | names put in a row, for a sentence |
 //! | [`error`] | why a value is refused by its rule |
 //!
 //! ```text
@@ -35,3 +36,4 @@ pub mod id;
 pub mod location;
 pub mod nonempty;
 pub mod shelf;
+pub mod words;

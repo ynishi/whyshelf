@@ -62,6 +62,7 @@ use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonBlank, NonEmptyVec, OneLine, TwoOrMore};
+use crate::domain::words::{Join, Mark, listed};
 
 use super::artifact::{
     Artifact, ArtifactAsks, ArtifactKey, ArtifactName, ArtifactNameProblem, ArtifactReadings, Space,
@@ -223,11 +224,7 @@ impl UnheldValue {
 
     /// Every one of `values`, each in its own words, one after the other.
     pub fn told_all(values: &NonEmptyVec<Self>) -> String {
-        values
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("; ")
+        listed(values.iter(), Mark::Plain, Join::Semicolon)
     }
 }
 
@@ -699,18 +696,40 @@ pub enum FailureTag {
     Unknown,
 }
 
-/// What the tag says of the document, as a clause: `its files are invalid`, `no file
-/// in the books' ranges carries it` (a file a book's range leaves out, or none at
-/// all: the shelf reads no file outside the ranges, so it cannot tell the two
-/// apart), `whether a file carries it cannot be told`.
+impl FailureTag {
+    /// What the tag says of `subject`, as a clause: `{subject} is invalid`, `no file
+    /// in the books' ranges carries {subject}` (a file a book's range leaves out, or
+    /// none at all: the shelf reads no file outside the ranges, so it cannot tell the
+    /// two apart), `whether a file carries {subject} cannot be told`.
+    ///
+    /// The one place the three are worded: the clause of a document that is not
+    /// valid, however it is named (`it`, `the document`, a key).
+    pub fn said_of(self, subject: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Invalid => format!("{subject} is invalid"),
+            Self::Gone => format!("no file in the books' ranges carries {subject}"),
+            Self::Unknown => format!("whether a file carries {subject} cannot be told"),
+        }
+    }
+}
+
+/// What the tag says of a document that is not named: [`FailureTag::said_of`] `it`.
 impl std::fmt::Display for FailureTag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Invalid => "its files are invalid",
-            Self::Gone => "no file in the books' ranges carries it",
-            Self::Unknown => "whether a file carries it cannot be told",
-        })
+        f.write_str(&self.said_of(&"it"))
     }
+}
+
+/// How much of a [`DocFailure`] a sentence about it tells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Detail {
+    /// All of it: the problems of an invalid document, and the files that could not be
+    /// read.
+    Full,
+    /// Without the problems of an invalid document, for a sentence about a document
+    /// that is not the subject of the answer (an upstream): the files that could not
+    /// be read are still told, since they are the whole of what is known.
+    Short,
 }
 
 impl DocFailure {
@@ -720,6 +739,39 @@ impl DocFailure {
             Self::Invalid(_) => FailureTag::Invalid,
             Self::Gone => FailureTag::Gone,
             Self::Unknown(_) => FailureTag::Unknown,
+        }
+    }
+
+    /// What it says of `subject`: the clause of [`FailureTag::said_of`], and what the
+    /// failure carries as `detail` allows.
+    ///
+    /// | failure | [`Detail::Full`] | [`Detail::Short`] |
+    /// |---|---|---|
+    /// | [`DocFailure::Invalid`] | `s is invalid: p1; p2` | `s is invalid` |
+    /// | [`DocFailure::Gone`] | `no file in the books' ranges carries s` | the same |
+    /// | [`DocFailure::Unknown`] | `whether a file carries s cannot be told; unreadable: a; b` | the same |
+    ///
+    /// The one sentence of why a document is not valid: a refusal and an answer of
+    /// A refused approval and the notices of `stale` and `status` say it through this,
+    /// so they say it alike.
+    pub fn said_of(&self, subject: &dyn std::fmt::Display, detail: Detail) -> String {
+        let clause = self.tag().said_of(subject);
+        match (self, detail) {
+            (Self::Invalid(problems), Detail::Full) => {
+                format!(
+                    "{clause}: {}",
+                    listed(problems.iter(), Mark::Plain, Join::Semicolon)
+                )
+            }
+            (Self::Unknown(unreadable), Detail::Full | Detail::Short) => {
+                format!(
+                    "{clause}; unreadable: {}",
+                    listed(unreadable.iter(), Mark::Plain, Join::Semicolon)
+                )
+            }
+            (Self::Invalid(_), Detail::Short) | (Self::Gone, Detail::Full | Detail::Short) => {
+                clause
+            }
         }
     }
 }
@@ -2190,6 +2242,8 @@ mod form_tests;
 mod new_tests;
 #[cfg(test)]
 mod plan_tests;
+#[cfg(test)]
+mod said_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

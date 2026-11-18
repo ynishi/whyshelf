@@ -738,3 +738,18 @@ fn suggestions_keep_every_gone_name_and_put_candidates_in_one_order() {
     assert_eq!(out.absent.len(), 2);
     assert!(Similarity::new(101).is_none());
 }
+
+#[test]
+fn a_name_read_in_two_spaces_names_the_spaces_in_words() {
+    let refused = MovedRefusal::InSpaces {
+        name: crate::domain::shelf::artifact::ArtifactName::new("a.rs").unwrap(),
+        spaces: vec![
+            file_space(),
+            crate::domain::shelf::artifact::Space::new("rust-item").unwrap(),
+        ],
+    };
+    assert_eq!(
+        refused.to_string(),
+        "pins are read as `a.rs` in more than one space: `file` and `rust-item`"
+    );
+}

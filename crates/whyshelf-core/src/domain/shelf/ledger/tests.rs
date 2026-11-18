@@ -156,18 +156,32 @@ fn an_approval_is_refused_on_an_upstream_that_does_not_stand() {
     ];
     for (expected, judge) in cases {
         let (shelf, ledger) = upstream_judged(judge);
-        match frame_approve(&shelf, &ledger, docid(2)) {
-            Err(FrameRefusal::UpstreamNotStanding {
+        let refusal = frame_approve(&shelf, &ledger, docid(2)).expect_err("a refusal");
+        match &refusal {
+            FrameRefusal::UpstreamNotStanding {
                 link,
                 target,
+                key,
                 status,
-            }) => {
+            } => {
                 assert_eq!(link.as_str(), "base");
-                assert_eq!(target, docid(1));
-                assert_eq!(status, expected);
+                assert_eq!(*target, docid(1));
+                assert_eq!(key.to_string(), "finding:FR-1");
+                assert_eq!(*status, expected);
             }
             other => panic!("{expected:?}: expected a refusal, got {other:?}"),
         }
+        let said = match expected {
+            NotStanding::Denied => "denied",
+            NotStanding::Deprecated => "deprecated",
+            NotStanding::Retired => "retired",
+        };
+        assert_eq!(
+            refusal.to_string(),
+            format!(
+                "the link `base` names finding:FR-1, which is {said}: an approval cannot stand on it"
+            )
+        );
     }
 }
 
@@ -186,9 +200,23 @@ fn an_approval_is_refused_on_an_upstream_that_is_not_valid() {
     ]);
     match frame_approve(&shelf, &ledger(vec![]), docid(2)) {
         // The build leaves such a link unresolved, so the refusal is this one.
-        Err(FrameRefusal::UnresolvedDepends { unresolved, .. }) => {
+        Err(refused @ FrameRefusal::UnresolvedDepends { .. }) => {
+            let FrameRefusal::UnresolvedDepends { link, unresolved } = &refused else {
+                unreachable!()
+            };
             assert!(
                 matches!(unresolved.why(), UnresolvedWhy::TargetInvalid(id) if *id == docid(1))
+            );
+            // The link and why it cannot be followed, in words.
+            assert_eq!(
+                refused.to_string(),
+                format!("the link `{link}`: {unresolved}")
+            );
+            assert!(
+                refused
+                    .to_string()
+                    .contains("cannot be followed: the document it names is invalid"),
+                "{refused}"
             );
         }
         other => panic!("expected an unresolved link, got {other:?}"),

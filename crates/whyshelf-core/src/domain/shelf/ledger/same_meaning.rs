@@ -35,6 +35,7 @@ use crate::domain::actor::Actor;
 use crate::domain::hash::ContentHash;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec};
+use crate::domain::words::{Join, Mark, listed};
 
 use super::super::artifact::{
     Artifact, ArtifactHash, ArtifactKey, ArtifactName, ArtifactState, Comparison, Space, Untold,
@@ -157,7 +158,7 @@ pub enum SameMeaningTarget {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SameMeaningRefusal {
     /// The document is not a valid document now, so it has no hash to declare.
-    #[error("{id} is not a valid document now ({tag:?})")]
+    #[error("{}", tag.said_of(id))]
     DocNotValid {
         /// The document.
         id: DocId,
@@ -172,7 +173,7 @@ pub enum SameMeaningRefusal {
     },
     /// Documents link the name in more than one space, so which artifact is meant
     /// cannot be told.
-    #[error("documents link `{name}` in more than one space: {spaces:?}")]
+    #[error("documents link `{name}` in more than one space: {}", listed(.spaces.iter(), Mark::Backtick, Join::And))]
     ArtifactInSpaces {
         /// The name.
         name: ArtifactName,

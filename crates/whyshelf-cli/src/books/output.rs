@@ -30,10 +30,8 @@ use super::textdiff;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::nonempty::TwoOrMore;
 use whyshelf_core::domain::shelf::artifact::{Artifact, ArtifactKey, ArtifactState, Comparison};
-use whyshelf_core::domain::shelf::build::{DocFailure, DocPresence, UnheldValue};
-use whyshelf_core::domain::shelf::doc::{
-    Doc, FieldValue, LinkState, UnresolvedLink, UnresolvedWhy, normalize,
-};
+use whyshelf_core::domain::shelf::build::{Detail, DocPresence, FailureTag, UnheldValue};
+use whyshelf_core::domain::shelf::doc::{Doc, DocLabel, FieldValue, LinkState, normalize};
 use whyshelf_core::domain::shelf::exemption::{CoverMiss, Unneeded};
 use whyshelf_core::domain::shelf::filter::FieldWant;
 use whyshelf_core::domain::shelf::freshness::{
@@ -42,8 +40,8 @@ use whyshelf_core::domain::shelf::freshness::{
 };
 use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::ledger::{
-    ArtifactPin, DeclaredStatus, FoundBy, FramePin, FrameRefusal, JudgementId, MoveNote, Moved,
-    ReadPin, Record, Similarity,
+    ArtifactPin, DeclaredStatus, FoundBy, FramePin, JudgementId, MoveNote, Moved, ReadPin, Record,
+    Similarity,
 };
 use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::order::{Hold, Rule};
@@ -51,6 +49,7 @@ use whyshelf_core::domain::shelf::schema::{
     CoverSeverity, EntryName, FieldPresence, FieldType, KeyPattern, PresetOrigin, SchemaProblem,
     WithoutFrontMatter,
 };
+use whyshelf_core::domain::words::{Join, Mark, listed};
 use whyshelf_infra::shelf::ledger::to_json;
 
 /// A document named in an answer: its identity, and its key when it is valid.
@@ -1604,45 +1603,23 @@ impl Namer<'_> {
                 None,
                 format!("the document changed since it was approved ({approved} -> {now})"),
             ),
-            Cause::SelfNotValid(DocFailure::Invalid(problems)) => out(
-                "self_invalid",
+            Cause::SelfNotValid(failure) => out(
+                match failure.tag() {
+                    FailureTag::Invalid => "self_invalid",
+                    FailureTag::Gone => "self_gone",
+                    FailureTag::Unknown => "self_unknown",
+                },
                 None,
-                format!("the document is invalid: {}", join(problems.iter())),
+                failure.said_of(&"the document", Detail::Full),
             ),
-            Cause::SelfNotValid(DocFailure::Gone) => {
-                out("self_gone", None, "no file carries the document".to_owned())
-            }
-            Cause::SelfNotValid(DocFailure::Unknown(unreadable)) => out(
-                "self_unknown",
-                None,
-                format!(
-                    "no readable file carries the document; unreadable: {}",
-                    join(unreadable.iter())
-                ),
-            ),
-            Cause::UpstreamNotValid {
-                pin,
-                failure: DocFailure::Gone,
-            } => out("upstream_gone", Some(pin), format!("{} is gone", pin.key())),
-            Cause::UpstreamNotValid {
-                pin,
-                failure: DocFailure::Invalid(_),
-            } => out(
-                "upstream_invalid",
+            Cause::UpstreamNotValid { pin, failure } => out(
+                match failure.tag() {
+                    FailureTag::Invalid => "upstream_invalid",
+                    FailureTag::Gone => "upstream_gone",
+                    FailureTag::Unknown => "upstream_unknown",
+                },
                 Some(pin),
-                format!("{} is invalid", pin.key()),
-            ),
-            Cause::UpstreamNotValid {
-                pin,
-                failure: DocFailure::Unknown(unreadable),
-            } => out(
-                "upstream_unknown",
-                Some(pin),
-                format!(
-                    "{} is in no readable file; unreadable: {}",
-                    pin.key(),
-                    join(unreadable.iter())
-                ),
+                failure.said_of(pin.key(), Detail::Short),
             ),
             Cause::UpstreamChanged { pin, now } => out(
                 "upstream_changed",
@@ -1759,15 +1736,18 @@ impl Namer<'_> {
                 detail: format!(
                     "the link `{link}` to artifacts changed since the approval: {} added ({}), {} removed ({})",
                     added.len(),
-                    join(added.iter()),
+                    listed(added.iter(), Mark::Plain, Join::Semicolon),
                     removed.len(),
-                    join(removed.iter())
+                    listed(removed.iter(), Mark::Plain, Join::Semicolon)
                 ),
             },
-            Cause::InCycle { .. } => out(
+            Cause::InCycle { cycle } => out(
                 "in_cycle",
                 None,
-                "the document is in a cycle (see health.cycles)".to_owned(),
+                format!(
+                    "the document is in a cycle of {} (see health.cycles)",
+                    cycle.source
+                ),
             ),
             Cause::Expired { since } => out(
                 "expired",
@@ -1807,7 +1787,7 @@ impl Namer<'_> {
                 declared: Vec::new(),
                 book: None,
                 why: None,
-                detail: self.unresolved(unresolved),
+                detail: unresolved.to_string(),
             },
             Notice::UpstreamExpired { pin, since } => NoticeOut {
                 kind: "upstream_expired",
@@ -1985,26 +1965,8 @@ impl Namer<'_> {
         }
     }
 
-    fn unresolved(&self, link: &UnresolvedLink) -> String {
-        let why = match link.why() {
-            UnresolvedWhy::Malformed(problem) => format!("not a key: {problem}"),
-            UnresolvedWhy::Missing => "no document has this key".to_owned(),
-            UnresolvedWhy::Ambiguous(ids) => format!(
-                "it names {} documents: {}",
-                ids.len(),
-                join(ids.iter().map(|id| self.label(*id)))
-            ),
-            UnresolvedWhy::TargetInvalid(id) => {
-                format!("the document it names is invalid ({})", self.label(*id))
-            }
-        };
-        format!("`{}` cannot be followed: {why}", link.written())
-    }
-
     fn label(&self, id: DocId) -> String {
-        self.0
-            .key_of(id)
-            .map_or_else(|| id.to_string(), ToString::to_string)
+        DocLabel::new(id, self.0.key_of(id).cloned()).to_string()
     }
 
     fn root(&self, root: &RootCause) -> RootOut {
@@ -2054,7 +2016,7 @@ impl Namer<'_> {
             },
             LinkState::Unresolved(u) => LinkTargetOut::Unresolved {
                 written: u.written().to_owned(),
-                why: self.unresolved(u),
+                why: u.to_string(),
             },
         }
     }
@@ -3397,17 +3359,6 @@ fn left_out_detail(namer: &Namer<'_>, left: &LeftOut) -> String {
             "its approval is broken ({})",
             left_out_kinds(namer, left).join(", ")
         ),
-        LeftOutWhy::Refused(FrameRefusal::UpstreamNotStanding {
-            link,
-            target,
-            status,
-        }) => format!(
-            "the link `{link}` names {}, which is {status}: an approval cannot stand on it",
-            namer
-                .0
-                .key_of(*target)
-                .map_or_else(|| target.to_string(), ToString::to_string)
-        ),
         LeftOutWhy::Refused(refusal) => refusal.to_string(),
         LeftOutWhy::Repeats { approval } => format!(
             "an approval now would pin what its approval {approval} pins and lapse when it lapses: it would only repeat it"
@@ -3604,10 +3555,11 @@ impl Namer<'_> {
         let because = match why {
             Unneeded::Reached { by } => format!(
                 "`{book}.{link}` reaches it now, from {}",
-                by.iter()
-                    .map(|id| self.label(*id))
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                listed(
+                    by.iter().map(|id| self.label(*id)),
+                    Mark::Plain,
+                    Join::Comma
+                )
             ),
             Unneeded::Cover(CoverMiss::NotDeclared) => {
                 format!("no link `{book}.{link}` into a book is declared now")
@@ -3618,7 +3570,7 @@ impl Namer<'_> {
             Unneeded::Cover(CoverMiss::OtherBook { target, doc_book }) => format!(
                 "`{book}.{link}` points into `{target}` now, and the document is of `{doc_book}`"
             ),
-            Unneeded::NotValid(tag) => format!("the document is not valid now: {tag}"),
+            Unneeded::NotValid(tag) => tag.said_of(&"the document"),
             Unneeded::DecidedAgainst => {
                 "the document is decided against, and no covering link expects to reach it"
                     .to_owned()
@@ -3640,11 +3592,7 @@ impl Namer<'_> {
         format!(
             "{} exemptions exempt {doc} from `{book}.{link}` ({}): one is enough, withdraw the others",
             exemptions.len(),
-            exemptions
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
+            listed(exemptions.iter(), Mark::Plain, Join::Comma)
         )
     }
 }
@@ -3793,8 +3741,6 @@ pub fn new_many(many: &NewMany) -> NewManyOut {
 
 /// The answer of `new`.
 pub fn created(created: &Created) -> CreatedOut {
-    let names = Names::default();
-    let namer = Namer(&names);
     CreatedOut {
         doc: DocRef {
             id: created.id.to_string(),
@@ -3807,7 +3753,7 @@ pub fn created(created: &Created) -> CreatedOut {
             .map(|(link, unresolved)| UnresolvedOut {
                 link: link.to_string(),
                 written: unresolved.written().to_owned(),
-                why: namer.unresolved(unresolved),
+                why: unresolved.to_string(),
             })
             .collect(),
     }
@@ -3957,10 +3903,6 @@ fn comparison(comparison: &Comparison) -> String {
             ignored.join(" ")
         )
     }
-}
-
-fn join<T: std::fmt::Display>(items: impl Iterator<Item = T>) -> String {
-    items.map(|i| i.to_string()).collect::<Vec<_>>().join("; ")
 }
 
 mod diagram;

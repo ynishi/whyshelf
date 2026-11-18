@@ -51,6 +51,38 @@ and this project adheres to
 
 ### Changed
 
+- A word of `key` the declaration does not have (`key = "uuid"`) is a problem
+  of the declaration, told with the others (`check` exits 1, and a command that
+  needs a sound declaration exits 2): "book `note`: `key` is "uuid", and it
+  takes "slug" or a table { prefix = "..." }"; it used to fail the read of the
+  declaration (exit 3). A `key` that is neither a word nor a table still does.
+  A word of `without_front_matter` it does not have is told as before, word
+  for word. `map` draws the word of a key from the domain. In the library,
+  `KeyPatternDecl` keeps a key as written (`Word`, made by
+  `KeyPatternDecl::slug()`), the words of an entry of a book are read by
+  `read_book_word` (`BookWord`, `BookEntry`, `KeyWord`,
+  `WithoutFrontMatter::ALL`), `SchemaProblem::BadWithoutFrontMatter` is
+  `UnknownBookWord { book, entry, word }`, and `DeclWord`'s `all` and `word`
+  are on its supertrait `Words` (#130).
+- A failed document is said one way wherever it is told: "no file in the
+  books' ranges carries the document" (for `stale`, `self_gone`; was "no file
+  carries the document"), "whether a file carries the document cannot be told;
+  unreadable: ..." (`self_unknown`), "no file in the books' ranges carries
+  `<key>`" (`upstream_gone`; was "`<key>` is gone"), and "whether a file
+  carries `<key>` cannot be told; unreadable: ..." (`upstream_unknown`). A
+  refused exemption or declaration of a document that is not valid says that
+  clause of it ("`<id>` is invalid"), not "is not a valid document now". An
+  unneeded exemption of one says "the document is invalid". `in_cycle` says
+  which cycle: "the document is in a cycle of `Depends` links (see
+  health.cycles)", or "of approvals' frames". A link that names two documents
+  says "it names 2 documents with the key `K`: `<id>` and `<id>`". In the
+  library, `FailureTag` and `DocFailure` have `said_of` (with `Detail`) and the
+  Display of `FailureTag` is its clause of "it" ("it is invalid", was "its
+  files are invalid"), `DocLabel` names a document by its key,
+  `UnresolvedLink` and `LabelledCycle` have a Display, `FrameRefusal::InCycle`
+  holds a `LabelledCycle`, `FrameRefusal::UpstreamNotStanding` has the `key` of
+  its target, and `words::listed` joins names for the messages (#130).
+
 - `fmt` writes the form `new` writes: an entry with nothing in it that the
   build reads as not written (an optional field, or a link whose count admits
   none) is left out, and the file reads as the same document, so no approval
@@ -104,6 +136,13 @@ and this project adheres to
   answers still list every name (#99).
 
 ### Fixed
+
+- No problem or refusal prints a value as Rust debug output: books clashing on
+  a key prefix ("the books `a` and `b` use the key prefix `X`"), a refused
+  approval of a document that is not valid, of a link that cannot be followed
+  and of a cycle (which names its members by key), and a name read or linked in
+  more than one space ("`file` and `rust-item`"). A refused approval on a
+  document that does not stand names it by its key (#130).
 
 - The page of `whyshelf_core::domain::shelf` and the doc of `Slug` no longer
   describe the earlier model, removed in #9, as present; the doc of `Slug`

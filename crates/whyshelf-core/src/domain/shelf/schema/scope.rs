@@ -68,8 +68,9 @@ use globset::{Glob, GlobBuilder, GlobMatcher};
 use thiserror::Error;
 
 use crate::domain::location::RelPath;
+use crate::domain::words::{Join, Mark, listed};
 
-use super::BookDir;
+use super::{BookDir, BookEntry, BookWord, Words, read_book_word, report};
 
 /// What a file in a book's range with no front matter at all is.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -83,6 +84,9 @@ pub enum WithoutFrontMatter {
 }
 
 impl WithoutFrontMatter {
+    /// Every value, in the order a problem lists their words.
+    pub const ALL: [Self; 2] = [Self::Invalid, Self::Skip];
+
     /// The word of the declaration.
     pub fn word(self) -> &'static str {
         match self {
@@ -90,14 +94,20 @@ impl WithoutFrontMatter {
             Self::Skip => "skip",
         }
     }
+}
 
-    fn read(word: &str) -> Option<Self> {
-        match word {
-            "invalid" => Some(Self::Invalid),
-            "skip" => Some(Self::Skip),
-            _ => None,
-        }
+impl Words for WithoutFrontMatter {
+    fn all() -> &'static [Self] {
+        &Self::ALL
     }
+
+    fn word(self) -> &'static str {
+        WithoutFrontMatter::word(self)
+    }
+}
+
+impl BookWord for WithoutFrontMatter {
+    const ENTRY: BookEntry = BookEntry::WithoutFrontMatter;
 }
 
 impl fmt::Display for WithoutFrontMatter {
@@ -382,13 +392,7 @@ impl fmt::Display for BookScope {
     /// The patterns, as a refusal names them: ``include `a`, `b`; exclude `c` ``,
     /// an `include` not written told as every `.md` file.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let quoted = |patterns: &[Pattern]| {
-            patterns
-                .iter()
-                .map(|p| format!("`{p}`"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
+        let quoted = |patterns: &[Pattern]| listed(patterns, Mark::Backtick, Join::Comma);
         match &self.include {
             Some(patterns) => write!(f, "include {}", quoted(patterns))?,
             None => f.write_str("include every `.md` file (not written)")?,
@@ -507,15 +511,10 @@ pub(super) fn read_scope(
         .exclude
         .as_ref()
         .map(|texts| read_patterns(book, ScopeList::Exclude, texts, problems));
-    let without_front_matter = decl.without_front_matter.as_deref().map(|word| {
-        WithoutFrontMatter::read(word).unwrap_or_else(|| {
-            problems.push(super::SchemaProblem::BadWithoutFrontMatter {
-                book: book.to_owned(),
-                word: word.to_owned(),
-            });
-            WithoutFrontMatter::default()
-        })
-    });
+    let without_front_matter = decl
+        .without_front_matter
+        .as_deref()
+        .and_then(|word| report(read_book_word(word, book), problems));
     if problems.len() != first_problem {
         return None;
     }

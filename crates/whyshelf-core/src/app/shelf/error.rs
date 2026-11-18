@@ -26,6 +26,7 @@ use crate::domain::shelf::ledger::{
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::NotPending;
 use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
+use crate::domain::words::{Join, Mark, listed};
 
 use super::ports::ShelfPort;
 
@@ -339,30 +340,23 @@ fn in_the_way(obstacles: &NonEmptyVec<Obstacle>) -> String {
 
 /// Each problem of a run, as the answer says them: `row 2: a; row 3: b`.
 fn plan_problems(problems: &NonEmptyVec<PlanProblem>) -> String {
-    problems
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join("; ")
+    listed(problems.iter(), Mark::Plain, Join::Semicolon)
 }
 
 /// Each fault of the rows of a run, as the answer says them: `row 2: a; row 5: b`.
 fn row_faults(faults: &TwoOrMore<ShelfError>) -> String {
-    faults
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join("; ")
+    listed(faults.iter(), Mark::Plain, Join::Semicolon)
 }
 
 /// `a is`, `a and b are`, `a, b and c are`.
 fn and_list<T: std::fmt::Display>(items: impl Iterator<Item = T>, one: &str, many: &str) -> String {
-    let items: Vec<String> = items.map(|i| i.to_string()).collect();
-    match items.as_slice() {
-        [] => String::new(),
-        [only] => format!("{only} {one}"),
-        [rest @ .., last] => format!("{} and {last} {many}", rest.join(", ")),
-    }
+    let items: Vec<T> = items.collect();
+    let verb = match items.len() {
+        0 => return String::new(),
+        1 => one,
+        _ => many,
+    };
+    format!("{} {verb}", listed(items, Mark::Plain, Join::And))
 }
 
 /// What kind of trouble an error is, for a surface to decide how to end.

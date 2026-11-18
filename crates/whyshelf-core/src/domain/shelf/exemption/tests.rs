@@ -187,20 +187,11 @@ fn an_exemption_of_a_document_that_is_not_valid_is_refused_with_why_in_words() {
         );
     }
     let refused = frame(&shelf, &ledger(vec![]), 2, "spec", "grounds").unwrap_err();
-    assert_eq!(
-        chain(&refused),
-        [format!(
-            "{} is not a valid document now: its files are invalid",
-            docid(2)
-        )]
-    );
+    assert_eq!(chain(&refused), [format!("{} is invalid", docid(2))]);
     let refused = frame(&shelf, &ledger(vec![]), 9, "spec", "grounds").unwrap_err();
     assert_eq!(
         chain(&refused),
-        [format!(
-            "{} is not a valid document now: no file in the books' ranges carries it",
-            docid(9)
-        )]
+        [format!("no file in the books' ranges carries {}", docid(9))]
     );
 }
 

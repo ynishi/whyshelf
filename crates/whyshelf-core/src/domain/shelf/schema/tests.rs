@@ -258,9 +258,14 @@ fn books_cannot_share_a_key_prefix() {
         book("four", "d", "OK"),
     ]);
     match problems.as_slice() {
-        [SchemaProblem::PrefixClash { prefix, books }] => {
+        [problem @ SchemaProblem::PrefixClash { prefix, books }] => {
             assert_eq!(prefix.as_str(), "SP");
             assert_eq!(books.len(), 3);
+            // The books are named in words, by name, not as debug output.
+            assert_eq!(
+                problem.to_string(),
+                "the books `one`, `three` and `two` use the key prefix `SP`"
+            );
         }
         other => panic!("{other:?}"),
     }
@@ -269,9 +274,9 @@ fn books_cannot_share_a_key_prefix() {
 #[test]
 fn slug_books_do_not_clash_on_a_prefix() {
     let mut a = book("one", "a", "AA");
-    a.key = KeyPatternDecl::Slug;
+    a.key = KeyPatternDecl::slug();
     let mut b = book("two", "b", "BB");
-    b.key = KeyPatternDecl::Slug;
+    b.key = KeyPatternDecl::slug();
     assert!(validate(vec![a, b]).is_ok());
 }
 

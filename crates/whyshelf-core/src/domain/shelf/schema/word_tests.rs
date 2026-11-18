@@ -4,7 +4,7 @@
 use super::*;
 use crate::domain::shelf::fixtures_tests::spaces;
 
-fn word_of<T: DeclWord>(values: &[T]) -> Vec<&'static str> {
+fn word_of<T: Words>(values: &[T]) -> Vec<&'static str> {
     values.iter().map(|value| value.word()).collect()
 }
 
@@ -24,6 +24,109 @@ fn every_value_of_a_type_reads_back_from_its_word_and_no_other_text_does() {
         assert_eq!(ScalarType::from_word(unknown), None, "{unknown:?}");
         assert_eq!(Propagation::from_word(unknown), None, "{unknown:?}");
     }
+}
+
+#[test]
+fn the_words_of_the_entries_of_a_book_read_back_by_the_same_search() {
+    for value in WithoutFrontMatter::ALL {
+        assert_eq!(read_book_word(value.word(), "b"), Ok(value));
+    }
+    for value in KeyWord::ALL {
+        assert_eq!(read_book_word(value.word(), "b"), Ok(value));
+    }
+    assert_eq!(word_of(&WithoutFrontMatter::ALL), ["invalid", "skip"]);
+    assert_eq!(word_of(&KeyWord::ALL), ["slug"]);
+}
+
+#[test]
+fn a_word_an_entry_of_a_book_does_not_take_is_refused_naming_the_book_and_the_entry() {
+    for unknown in ["", "maybe", "Skip", " skip", "slug "] {
+        assert_eq!(
+            read_book_word::<WithoutFrontMatter>(unknown, "spec"),
+            Err(SchemaProblem::UnknownBookWord {
+                book: "spec".to_owned(),
+                entry: BookEntry::WithoutFrontMatter,
+                word: unknown.to_owned(),
+            }),
+            "{unknown:?}"
+        );
+    }
+    assert_eq!(
+        read_book_word::<KeyWord>("uuid", "spec"),
+        Err(SchemaProblem::UnknownBookWord {
+            book: "spec".to_owned(),
+            entry: BookEntry::Key,
+            word: "uuid".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn a_refused_word_of_an_entry_of_a_book_says_what_the_entry_takes() {
+    assert_eq!(
+        read_book_word::<WithoutFrontMatter>("maybe", "spec")
+            .expect_err("a refusal")
+            .to_string(),
+        "book `spec`: `without_front_matter` is \"maybe\", and it takes \"invalid\" or \"skip\""
+    );
+    assert_eq!(
+        read_book_word::<KeyWord>("uuid", "spec")
+            .expect_err("a refusal")
+            .to_string(),
+        "book `spec`: `key` is \"uuid\", and it takes \"slug\" or a table { prefix = \"...\" }"
+    );
+}
+
+#[test]
+fn an_entry_names_itself_and_what_it_takes_from_the_words_of_its_type() {
+    assert_eq!(BookEntry::WithoutFrontMatter.name(), "without_front_matter");
+    assert_eq!(BookEntry::Key.name(), "key");
+    assert_eq!(BookEntry::Key.to_string(), "key");
+    assert_eq!(
+        BookEntry::WithoutFrontMatter.accepted(),
+        "\"invalid\" or \"skip\""
+    );
+    assert_eq!(
+        BookEntry::Key.accepted(),
+        "\"slug\" or a table { prefix = \"...\" }"
+    );
+    assert_eq!(WithoutFrontMatter::ENTRY, BookEntry::WithoutFrontMatter);
+    assert_eq!(KeyWord::ENTRY, BookEntry::Key);
+}
+
+#[test]
+fn a_key_is_written_as_a_word_and_a_pattern_has_the_word_it_was_read_from() {
+    let slug = KeyPatternDecl::slug();
+    assert_eq!(slug, KeyPatternDecl::Word(KeyWord::Slug.word().to_owned()));
+    let mut problems = Vec::new();
+    let read = read_key_pattern("b", &slug, &mut problems);
+    assert_eq!(read, Some(KeyPattern::Slug));
+    assert!(problems.is_empty(), "{problems:?}");
+    assert_eq!(KeyPattern::Slug.word(), Some("slug"));
+    let prefixed = read_key_pattern(
+        "b",
+        &KeyPatternDecl::Prefixed {
+            prefix: "N".to_owned(),
+        },
+        &mut problems,
+    )
+    .expect("a prefixed key");
+    assert_eq!(prefixed.word(), None);
+}
+
+#[test]
+fn a_word_of_a_key_that_is_none_is_a_problem_and_leaves_the_pattern_out() {
+    let mut problems = Vec::new();
+    let read = read_key_pattern("b", &KeyPatternDecl::Word("uuid".to_owned()), &mut problems);
+    assert_eq!(read, None);
+    assert_eq!(
+        problems,
+        [SchemaProblem::UnknownBookWord {
+            book: "b".to_owned(),
+            entry: BookEntry::Key,
+            word: "uuid".to_owned(),
+        }]
+    );
 }
 
 #[test]
@@ -87,7 +190,7 @@ fn a_count_that_is_not_written_is_many() {
         name: "b".to_owned(),
         dir: "b".to_owned(),
         scope: Default::default(),
-        key: KeyPatternDecl::Slug,
+        key: KeyPatternDecl::slug(),
         description: None,
         fields: Vec::new(),
         links: vec![link],
@@ -120,7 +223,7 @@ fn a_link_put_back_into_words_expands_to_the_same_link() {
                 name: "b".to_owned(),
                 dir: "b".to_owned(),
                 scope: Default::default(),
-                key: KeyPatternDecl::Slug,
+                key: KeyPatternDecl::slug(),
                 description: None,
                 fields: Vec::new(),
                 links: vec![written],
@@ -178,7 +281,7 @@ fn note(ty: &str, count: Option<&str>, means: &str) -> WrittenBookDecl {
         name: "note".to_owned(),
         dir: "notes".to_owned(),
         scope: Default::default(),
-        key: KeyPatternDecl::Slug,
+        key: KeyPatternDecl::slug(),
         description: None,
         fields: vec![FieldEntryDecl {
             name: "n".to_owned(),

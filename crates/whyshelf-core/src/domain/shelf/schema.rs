@@ -25,6 +25,7 @@ use crate::domain::error::ValueError;
 use crate::domain::id::ShortId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonEmptySet, NonEmptyVec, TwoOrMore};
+use crate::domain::words::{Join, Mark, listed};
 
 use super::artifact::{Comparison, ComparisonProblem, Space, SpaceProblem};
 
@@ -548,6 +549,15 @@ pub enum KeyPattern {
 }
 
 impl KeyPattern {
+    /// The word a declaration has for this grammar ([`KeyWord`]), when it has one: a
+    /// prefixed key is written as a table, which is no word.
+    pub fn word(&self) -> Option<&'static str> {
+        match self {
+            Self::Slug => Some(KeyWord::Slug.word()),
+            Self::Prefixed(_) => None,
+        }
+    }
+
     /// The key a text spells, in this book's grammar.
     ///
     /// The one entry of the key grammar: the shelf reads the `key:` of a document and
@@ -804,9 +814,9 @@ impl WordOf {
     /// "optional"`, each in quotes, in the order of the type's `ALL`.
     fn accepted(self) -> String {
         match self {
-            Self::Count => quoted_words::<Cardinality>(),
-            Self::Type => quoted_words::<ScalarType>(),
-            Self::Means => quoted_words::<Propagation>(),
+            Self::Count => quoted::<Cardinality>(Join::Comma),
+            Self::Type => quoted::<ScalarType>(Join::Comma),
+            Self::Means => quoted::<Propagation>(Join::Comma),
         }
     }
 }
@@ -845,13 +855,11 @@ pub enum WordAt {
     },
 }
 
-/// A type that a declaration writes as one word: [`ScalarType`], [`Cardinality`] and
-/// [`Propagation`]. [`read_word`] reads such a word, and a problem lists the words
-/// of the type from its `ALL`.
-pub trait DeclWord: Copy + 'static {
-    /// What the word of this type says in a problem.
-    const OF: WordOf;
-
+/// A type that a declaration writes as one word: the values it has (`all`) and the
+/// word of each (`word`). `find_word` is the one search of them by a word, for both
+/// kinds of word there are: [`DeclWord`] (a count, a type, a meaning), and
+/// [`BookWord`] (what a book's entry says).
+pub trait Words: Copy + 'static {
     /// Every value of the type: the `ALL` of the type.
     fn all() -> &'static [Self];
 
@@ -859,9 +867,24 @@ pub trait DeclWord: Copy + 'static {
     fn word(self) -> &'static str;
 }
 
-impl DeclWord for ScalarType {
-    const OF: WordOf = WordOf::Type;
+/// A type that a declaration writes as one word in a link or a field: [`ScalarType`],
+/// [`Cardinality`] and [`Propagation`]. [`read_word`] reads such a word, and a problem
+/// lists the words of the type from its `ALL`.
+pub trait DeclWord: Words {
+    /// What the word of this type says in a problem.
+    const OF: WordOf;
+}
 
+/// A type that a declaration writes as one word in an entry of a book: what a file
+/// with no front matter is ([`WithoutFrontMatter`]) and the grammar of the keys
+/// ([`KeyWord`]). [`read_book_word`] reads such a word, and a problem lists the words
+/// the entry takes ([`BookEntry::accepted`]).
+pub trait BookWord: Words {
+    /// The entry of the book that writes the word.
+    const ENTRY: BookEntry;
+}
+
+impl Words for ScalarType {
     fn all() -> &'static [Self] {
         &ScalarType::ALL
     }
@@ -871,9 +894,11 @@ impl DeclWord for ScalarType {
     }
 }
 
-impl DeclWord for Cardinality {
-    const OF: WordOf = WordOf::Count;
+impl DeclWord for ScalarType {
+    const OF: WordOf = WordOf::Type;
+}
 
+impl Words for Cardinality {
     fn all() -> &'static [Self] {
         &Cardinality::ALL
     }
@@ -883,9 +908,11 @@ impl DeclWord for Cardinality {
     }
 }
 
-impl DeclWord for Propagation {
-    const OF: WordOf = WordOf::Means;
+impl DeclWord for Cardinality {
+    const OF: WordOf = WordOf::Count;
+}
 
+impl Words for Propagation {
     fn all() -> &'static [Self] {
         &Propagation::ALL
     }
@@ -895,23 +922,101 @@ impl DeclWord for Propagation {
     }
 }
 
-/// The value of a type whose word is `word`: the one search of `ALL` by `word` that
-/// every `from_word` is.
-fn find_word<T: DeclWord>(word: &str) -> Option<T> {
+impl DeclWord for Propagation {
+    const OF: WordOf = WordOf::Means;
+}
+
+/// The one word a declaration has for the grammar of keys that takes no argument: a
+/// path of lowercase words. The other grammar is a table (`{ prefix = "..." }`), which
+/// is no word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyWord {
+    /// A path of lowercase words: [`KeyPattern::Slug`].
+    Slug,
+}
+
+impl KeyWord {
+    /// Every word, in the order a problem lists them.
+    pub const ALL: [Self; 1] = [Self::Slug];
+
+    /// The word of the grammar in a declaration and in the answers: `slug`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Slug => "slug",
+        }
+    }
+}
+
+impl Words for KeyWord {
+    fn all() -> &'static [Self] {
+        &Self::ALL
+    }
+
+    fn word(self) -> &'static str {
+        KeyWord::word(self)
+    }
+}
+
+impl BookWord for KeyWord {
+    const ENTRY: BookEntry = BookEntry::Key;
+}
+
+/// An entry of a book that is written as a word: where a word was refused, for a
+/// problem to say so.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BookEntry {
+    /// `without_front_matter`: what a file in the range with no front matter is
+    /// ([`WithoutFrontMatter`]).
+    WithoutFrontMatter,
+    /// `key`: the grammar of the keys ([`KeyWord`], or a table).
+    Key,
+}
+
+impl BookEntry {
+    /// The name of the entry in a declaration: `without_front_matter` or `key`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::WithoutFrontMatter => "without_front_matter",
+            Self::Key => "key",
+        }
+    }
+
+    /// What the entry takes, as a problem says it: `"invalid" or "skip"`, or `"slug" or
+    /// a table { prefix = "..." }`. The words are those of the type, so a word added
+    /// there is said here.
+    pub fn accepted(self) -> String {
+        match self {
+            Self::WithoutFrontMatter => quoted::<WithoutFrontMatter>(Join::Or),
+            // The table is one more of the things the entry takes, so a second word
+            // is joined with the others and `or` is said once.
+            Self::Key => listed(
+                KeyWord::ALL
+                    .iter()
+                    .map(|word| format!("\"{}\"", word.word()))
+                    .chain(["a table { prefix = \"...\" }".to_owned()]),
+                Mark::Plain,
+                Join::Or,
+            ),
+        }
+    }
+}
+
+impl fmt::Display for BookEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// The value of a type whose word is `word`: the one search of `all` by `word` that
+/// every `from_word` and every read of a word is.
+fn find_word<T: Words>(word: &str) -> Option<T> {
     T::all().iter().copied().find(|value| value.word() == word)
 }
 
-/// The words of a type, each in quotes, separated by commas.
-fn quoted_words<T: DeclWord>() -> String {
-    quoted(T::all().iter().map(|value| value.word()))
-}
-
-/// These words, each in quotes, separated by commas.
-fn quoted<'w>(words: impl Iterator<Item = &'w str>) -> String {
-    words
-        .map(|word| format!("\"{word}\""))
-        .collect::<Vec<_>>()
-        .join(", ")
+/// The words of a type, each in quotes, joined as `join` says: `"a", "b"` or
+/// `"a" or "b"`.
+fn quoted<T: Words>(join: Join) -> String {
+    listed(T::all().iter().map(|value| value.word()), Mark::Quote, join)
 }
 
 /// The value a word of a declaration names, or why the word is refused.
@@ -927,6 +1032,23 @@ pub fn read_word<T: DeclWord>(word: &str, at: WordAt) -> Result<T, SchemaProblem
         at,
         word: word.to_owned(),
         of: T::OF,
+    })
+}
+
+/// The value a word of an entry of a book names, or why the word is refused.
+///
+/// The reader of the words of the entries of a book (what a file with no front matter
+/// is, the grammar of the keys), beside [`read_word`] and by the same search: whatever
+/// puts one in a declaration as written keeps the word as written, and whatever uses
+/// it as a value reads it here, and so refuses a word the entry does not take the
+/// same way, naming the book and the entry and saying what the entry takes.
+// The problem is the answer, read once per run; it is not a hot path.
+#[allow(clippy::result_large_err)]
+pub fn read_book_word<T: BookWord>(word: &str, book: &str) -> Result<T, SchemaProblem> {
+    find_word(word).ok_or_else(|| SchemaProblem::UnknownBookWord {
+        book: book.to_owned(),
+        entry: T::ENTRY,
+        word: word.to_owned(),
     })
 }
 
@@ -1208,8 +1330,16 @@ pub enum KeyPatternDecl {
         /// The prefix as written.
         prefix: String,
     },
-    /// A path of lowercase words.
-    Slug,
+    /// A word, as written: [`Schema::validate`] reads it ([`read_book_word`]) and
+    /// refuses one that is no grammar ([`SchemaProblem::UnknownBookWord`]).
+    Word(String),
+}
+
+impl KeyPatternDecl {
+    /// The grammar of a path of lowercase words, written as its word ([`KeyWord`]).
+    pub fn slug() -> Self {
+        Self::Word(KeyWord::Slug.word().to_owned())
+    }
 }
 
 /// The type of a field as declared.
@@ -1414,7 +1544,7 @@ pub enum SchemaProblem {
         target: BookName,
     },
     /// Books that use one prefix for their keys.
-    #[error("the books {books:?} use the key prefix `{prefix}`")]
+    #[error("the books {} use the key prefix `{prefix}`", listed(.books.iter(), Mark::Backtick, Join::And))]
     PrefixClash {
         /// The prefix.
         prefix: KeyPrefix,
@@ -1448,13 +1578,18 @@ pub enum SchemaProblem {
         /// The book, as written.
         book: String,
     },
-    /// A `without_front_matter` that is neither `"invalid"` nor `"skip"`.
+    /// An entry of a book written as a word the entry does not take: a
+    /// `without_front_matter` that is neither `"invalid"` nor `"skip"`, a `key` that
+    /// is neither `"slug"` nor a table ([`read_book_word`]).
     #[error(
-        "book `{book}`: `without_front_matter` is \"{word}\", and it takes \"invalid\" or \"skip\""
+        "book `{book}`: `{entry}` is \"{word}\", and it takes {}",
+        .entry.accepted()
     )]
-    BadWithoutFrontMatter {
+    UnknownBookWord {
         /// The book, as written.
         book: String,
+        /// The entry the word was written in.
+        entry: BookEntry,
         /// The word, as written.
         word: String,
     },
@@ -1878,7 +2013,11 @@ fn read_key_pattern(
     problems: &mut Vec<SchemaProblem>,
 ) -> Option<KeyPattern> {
     match decl {
-        KeyPatternDecl::Slug => Some(KeyPattern::Slug),
+        KeyPatternDecl::Word(word) => {
+            report(read_book_word(word, book), problems).map(|word| match word {
+                KeyWord::Slug => KeyPattern::Slug,
+            })
+        }
         KeyPatternDecl::Prefixed { prefix } => match KeyPrefix::new(prefix) {
             Ok(prefix) => Some(KeyPattern::Prefixed(prefix)),
             Err(why) => {
@@ -2166,11 +2305,10 @@ fn read_space(
 
 /// The spaces offered, as a problem says them: `` `a`, `b` ``, or `none`.
 fn offered(spaces: &BTreeSet<Space>) -> String {
-    let offered: Vec<String> = spaces.iter().map(|s| format!("`{s}`")).collect();
-    if offered.is_empty() {
+    if spaces.is_empty() {
         "none".to_owned()
     } else {
-        offered.join(", ")
+        listed(spaces, Mark::Backtick, Join::Comma)
     }
 }
 

@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b3cc61908f55a21a17d41a936f04176c913f2992",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a0b43f1e5f8162903f9b18e76d84b202f9e7540257c73a365f33ee57ae9ee90e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "047a84c59850289def31415c4b6d7f32de10f8a6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1e391761250d007bcf349fe3a181ecb6e28fc58d621404c99fb6c3851cb6af34",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/exempt.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "009123d3f89db5740567cf427c2734e59773ffc8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d483923d995be48d6644e18b1cb573c68035b555f29b655a46525711c62acf31",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/problem_wording.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795015684493,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d8ff891800660292fb2e6637e991214e6f2190ad",
+      "hash": "sha256:568c40ebf6d6a4d198cd9622eaaac1422096bf62230da29974285c2ff8fa4896",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "78"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ef3c-6465-7073-b56b-81f10c2dfc24"
+    }
+  ],
+  "id": "01a1ef45-d0c7-74f6-8844-96287d0a7ea0",
+  "kind": "decision",
+  "reason": "Issue #130: no message prints a value as debug output; names are joined by one function and a failed document, a link that cannot be followed and a cycle are said once in the domain, by key; the words of a key and of without_front_matter are read with the other words of a declaration. Reviewed design (independent review, four rounds, and arch rules), code review, and a blind review of the branch with every must-fix finding fixed; tests pass",
+  "revision": "107460fb4e2ce0dfcf8300147557c8387ee280e1",
+  "seen": "sha256:0f62e0d255786928711ef21df6cd2ae8498e3f006efadba2fd09a7e38dc7f447",
+  "seen_address": "1550d5b62cd0f913d21db8c8eb9cc2105854e340",
+  "subject": "01a1ef3c-9c33-72b2-8f83-0bd85d27a41c",
+  "v": 1,
+  "verb": "approve"
+}

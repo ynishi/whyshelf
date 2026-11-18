@@ -316,7 +316,7 @@ fn a_range_that_does_not_take_the_key_paths_is_sound() {
 #[test]
 fn a_book_of_slugs_is_not_held_to_one_key_path() {
     let slug = BookSchemaDecl {
-        key: KeyPatternDecl::Slug,
+        key: KeyPatternDecl::slug(),
         ..book_with(
             "note",
             "notes",
@@ -338,11 +338,15 @@ fn an_empty_include_and_an_unknown_word_are_refused() {
     assert!(
         matches!(
             found.as_slice(),
-            [SchemaProblem::BadWithoutFrontMatter { word, .. }] if word == "ignore"
+            [SchemaProblem::UnknownBookWord { book, entry: BookEntry::WithoutFrontMatter, word }]
+                if book == "spec" && word == "ignore"
         ),
         "{found:?}"
     );
-    assert!(found[0].to_string().contains("\"invalid\" or \"skip\""));
+    assert_eq!(
+        found[0].to_string(),
+        "book `spec`: `without_front_matter` is \"ignore\", and it takes \"invalid\" or \"skip\""
+    );
 }
 
 #[test]
@@ -470,7 +474,7 @@ fn a_book_that_skips_does_not_make_another_book_skip() {
 fn a_new_document_outside_the_range_is_refused_naming_the_book_and_the_path() {
     let schema = Schema::validate(
         vec![BookSchemaDecl {
-            key: KeyPatternDecl::Slug,
+            key: KeyPatternDecl::slug(),
             ..book_with(
                 "spec",
                 "docs/spec",
