@@ -39,6 +39,22 @@
 //! a non-ASCII letter's case, or that the system stores in another form (macOS keeps
 //! some non-ASCII names decomposed), is left to the system.
 //!
+//! # Prefixes of the names
+//!
+//! `judge moved --prefix` moves every name under a prefix at once, and this adapter
+//! says which names are under it and what each becomes
+//! ([`ArtifactSource::renamed`](whyshelf_core::app::shelf::ArtifactSource::renamed)).
+//! A prefix is a path under the root, read as a name's path is, into its parts (what
+//! lies between two `/`); one `/` at its end is dropped, as a shell's completion of a
+//! directory writes it (`src/a/` is `src/a`, `src/a//` is no path). A name is under
+//! it when its parts start with all of the prefix's, so a part is never cut (`src/a`
+//! is no prefix of `src/ab.rs`, and is one of `src/a` itself and of `src/a/x.rs`); the
+//! same name under `to` is the parts of `to` as written and the rest of the name's. A
+//! `from` that is no path (`src//a`, `../a`) is no prefix of the space's names, and a
+//! `to` that is none (or a name built that is too long) makes each name under `from`
+//! unbuildable, with why. The adapter looks for no text in a name: it compares the
+//! parts it read.
+//!
 //! # Suggesting moves
 //!
 //! For a file an approval pinned that is gone (`moves`), the adapter looks two
@@ -100,8 +116,8 @@ use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactHash, ArtifactName, ArtifactReading, Comparison, ContentAddress, Revision, Space,
-    SpaceAsks, SpaceReadings,
+    ArtifactHash, ArtifactName, ArtifactReading, Comparison, ContentAddress, NamePrefix,
+    PrefixMove, Renamed, Revision, Space, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::ledger::{
     FoundBy, GoneName, MoveCandidate, MoveNote, NameSuggestions, PATH_ONLY_SPACE, PinnedThere,
@@ -302,6 +318,106 @@ impl Tally {
 /// The path a name of the space is: the one reader of the grammar of the names.
 fn path_of(name: &ArtifactName) -> Result<RelPath, ValueError> {
     name.as_str().parse::<RelPath>()
+}
+
+/// One part of a path: what lies between two `/` of it. Not empty, not `.` or `..`
+/// ([`RelPath`] reads a path into them), so a prefix ends only between two.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Part(String);
+
+impl Part {
+    /// The part as written.
+    pub(super) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// The parts of a path, in order: the one reader of where a part ends, for the names
+/// of this space and for every adapter whose names start with the path of a file.
+pub(super) fn parts_of(path: &RelPath) -> Vec<Part> {
+    path.as_str()
+        .split('/')
+        .map(|part| Part(part.to_owned()))
+        .collect()
+}
+
+/// The path of these parts, in the form the names of the space write it, or why they
+/// are none (no part, or a part [`RelPath`] refuses).
+pub(super) fn path_from(parts: &[Part]) -> Result<RelPath, ValueError> {
+    parts
+        .iter()
+        .map(Part::as_str)
+        .collect::<Vec<_>>()
+        .join("/")
+        .parse()
+}
+
+/// A prefix of the names of the space, read: the parts of a path under the root, as
+/// a name's path is read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct FilePrefix(Vec<Part>);
+
+impl FilePrefix {
+    /// The prefix a text writes: a path under the root, read as a name's is, after one
+    /// `/` at its end is dropped (a directory as a shell completes it: `src/a/` is
+    /// `src/a`). The rule of a name's path is not changed: a name never ends in `/`.
+    pub(super) fn parse(text: &str) -> Result<Self, ValueError> {
+        let path: RelPath = text.strip_suffix('/').unwrap_or(text).parse()?;
+        Ok(Self(parts_of(&path)))
+    }
+
+    /// The parts of a path after this prefix, when the parts of the path start with
+    /// all of its parts: a part is never cut (`src/a` is no prefix of `src/ab.rs`).
+    pub(super) fn rest<'a>(&self, path: &'a [Part]) -> Option<&'a [Part]> {
+        path.strip_prefix(self.0.as_slice())
+    }
+
+    /// Its parts.
+    pub(super) fn parts(&self) -> &[Part] {
+        &self.0
+    }
+}
+
+/// What this adapter says of a move of a prefix, for the `names` of its space asked
+/// about: `from` is read as a path under the root (else it is no prefix of the
+/// space's names), each name is read as a path, and one whose parts start with the
+/// parts of `from` is the same path with those parts replaced by the parts of `to`
+/// (a `to` that is no path makes each such name unbuildable). A name that is no path
+/// is not under it. Nothing is looked for in the text of a name.
+pub(super) fn renamed(
+    names: &BTreeSet<ArtifactName>,
+    of: &PrefixMove,
+) -> Result<(SpacePrefixes, SpaceRenamed), ValueError> {
+    let no_path = |prefix: &NamePrefix, why: ValueError| {
+        format!("`{prefix}` is no path under the root of the project: {why}")
+    };
+    let from = match FilePrefix::parse(of.from().as_str()) {
+        Ok(from) => from,
+        Err(why) => {
+            let why = NonBlank::new(no_path(of.from(), why))?;
+            return Ok((SpacePrefixes::NotUnder(why), SpaceRenamed::new()));
+        }
+    };
+    let to = FilePrefix::parse(of.to().as_str());
+    let mut answers = SpaceRenamed::new();
+    for name in names {
+        let answer = match path_of(name).ok().map(|path| parts_of(&path)) {
+            None => Renamed::Outside,
+            Some(parts) => match (from.rest(&parts), &to) {
+                (None, _) => Renamed::Outside,
+                (Some(_), Err(why)) => super::unbuildable(no_path(of.to(), why.clone()))?,
+                (Some(rest), Ok(to)) => {
+                    let joined: Vec<Part> = to.parts().iter().chain(rest).cloned().collect();
+                    match path_from(&joined) {
+                        Ok(path) => super::built(path.as_str())?,
+                        Err(why) => super::unbuildable(no_path(of.to(), why))?,
+                    }
+                }
+            },
+        };
+        answers.insert(name.clone(), answer);
+    }
+    Ok((SpacePrefixes::Answered, answers))
 }
 
 impl FileSpace {
@@ -1502,7 +1618,7 @@ mod tests {
         use whyshelf_core::domain::shelf::ledger::{Ledger, PinnedNames};
         let ledger = super::super::super::ledger::JsonLedger::new(
             root.join(".whyshelf/ledger"),
-            ".whyshelf",
+            ".whyshelf/ledger".parse().unwrap(),
         );
         let pinned = PinnedNames::of(&Ledger::build(ledger.read().await.unwrap().records));
         let source = FileSpace::new(root.to_path_buf());

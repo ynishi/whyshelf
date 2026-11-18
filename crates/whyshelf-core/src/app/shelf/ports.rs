@@ -21,16 +21,16 @@
 //! | [`BookSchemaSource`] | the declaration of the project, as an adapter read it: the books, the presets and the defaults; and the declaration a text of its format holds, read by the same reader |
 //! | [`DocSource`] | one [`DocReading`] per Markdown file under the directories of the books, the bytes and the [`ContentAddress`] of a document's file now, each file with its bytes and the line of a comment in it ([`FileRead`]), the text of the one form documents are written in from entries ([`Rendered`]), and whether a file may be replaced ([`Replaceable`]) |
 //! | [`LedgerRead`] | the records of the ledger, and the files of it that could not be read as one |
-//! | [`LedgerAppend`] | one record added, never in place of another |
+//! | [`LedgerAppend`] | one record added as a file of its own, never in place of another, with the file's path |
 //! | [`Clock`] | now, as a [`JudgedAt`] |
 //! | [`IdSource`] | the identity of a new record, and of a new document |
 //! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there; and what is in the way of one at a path |
 //! | [`DeclarationWrite`] | the file of the declaration, from a text in its format, never in place of a file that is there; and what is in the way of it |
 //! | [`FileWrite`] | a new file of the project that is neither a document nor the declaration (one a template starts a project with, such as a table its documents name), from its bytes, never in place of a file that is there; and what is in the way of one at a path |
-//! | [`FileSync`] | the files [`DocWrite`], [`DeclarationWrite`] and [`FileWrite`] made, put on disk together, once for a run, so that they survive a power loss |
+//! | [`FileSync`] | the files [`DocWrite`], [`DeclarationWrite`], [`FileWrite`] and [`LedgerAppend`] made, put on disk together, once for a run, so that they survive a power loss |
 //! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten) |
 //! | [`ActorSource`] | who is acting |
-//! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); and the bytes of an artifact now |
+//! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); for a move of a prefix, which names are under it and what each is under the new one, by the space's own grammar of names; and the bytes of an artifact now |
 //! | [`ContentStore`] | content read back by its [`ContentAddress`], by the adapter of the document or the space it is of, or "not readable" |
 //! | [`RevisionSource`] | the point of the project's history now, if there is one |
 //! | [`MoveSource`] | for the names of a space with nothing behind them now, the names each may have moved to, each with how it was found, or that the space cannot suggest |
@@ -60,7 +60,8 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::{
-    ArtifactAsks, ArtifactKey, ArtifactReadings, ContentAddress, Revision, Space,
+    ArtifactAsks, ArtifactKey, ArtifactReadings, ContentAddress, PrefixAnswers, PrefixAsks,
+    PrefixMove, Revision, Space,
 };
 #[cfg(doc)]
 use crate::domain::shelf::build::Shelf;
@@ -338,9 +339,22 @@ pub trait LedgerAppend: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// Add a record. Create-only: a record is never put in the place of one that is
-    /// already there, so an adapter that finds its place taken fails.
-    fn append(&self, record: &Record) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    /// The file `record` is written at (relative to the project root): what
+    /// [`append`](Self::append) gives for it, told before it is called, so that a
+    /// write that fails can name the file it was at.
+    fn path_of(&self, record: &Record) -> RelPath;
+
+    /// Add a record, as a file of its own, and give the file's path (relative to
+    /// the project root, from the same root as the paths [`DocWrite`],
+    /// [`DeclarationWrite`] and [`FileWrite`] write at).
+    ///
+    /// Create-only: a record is never put in the place of one that is already
+    /// there, so an adapter that finds its place taken fails. The file is written
+    /// whole, and is not put on disk: that is [`FileSync::persist`], at the end of
+    /// the run. A write that fails after the file was made removes that file (and no
+    /// other), so a failure leaves no part of a record behind. Only a run of writes
+    /// calls this, so that every file it made is put on disk.
+    fn append(&self, record: &Record) -> impl Future<Output = Result<RelPath, Self::Error>> + Send;
 }
 
 /// The time. The domain never reads a clock.
@@ -487,7 +501,9 @@ pub trait FileSync: Send + Sync {
 
     /// Put `files` on disk: each a path from the same project root as the paths
     /// [`DocWrite`], [`DeclarationWrite`] and [`FileWrite`] write at, of a file one
-    /// of them made whole. When this is `Ok`, every one of them is on disk; when it
+    /// of them made whole, or the file of a ledger record ([`LedgerAppend::append`]
+    /// gives its path from the same root). When this is `Ok`, every one of them is on
+    /// disk; when it
     /// is an error, some may be and some not, and none is removed (each is whole
     /// as it was written).
     fn persist(
@@ -579,6 +595,27 @@ pub trait ArtifactSource: Send + Sync {
         &self,
         asks: &ArtifactAsks,
     ) -> impl Future<Output = Result<ArtifactReadings, Self::Error>> + Send;
+
+    /// What each space's adapter says of a move of a prefix (`of`): for each space in
+    /// `asks`, whether `from` is a prefix of its names ([`SpacePrefixes`]) and, for
+    /// each name asked, whether it is under `from` and what the same name is under
+    /// `to` ([`Renamed`]); a space no adapter takes prefixes for is
+    /// [`SpacePrefixes::NoPrefixes`](crate::domain::shelf::artifact::SpacePrefixes::NoPrefixes).
+    ///
+    /// The domain knows no boundary of a name: only the adapter of a space reads
+    /// its own grammar (a path's parts, a Rust path's segments, a test's titles), so
+    /// it decides where a prefix ends in a name, and it builds the new name, which is
+    /// a name of its space. An adapter does it on the values it read the names and
+    /// the prefixes into, never by looking for a text in a name. It does no I/O
+    /// (it reads nothing of what is there; that is [`resolve`](Self::resolve)'s, asked
+    /// once for the names it builds), so it is a plain function like
+    /// [`presets`](Self::presets). An error is for an adapter that could not make
+    /// its answer (a reason it could not write); it is not told as a space that takes
+    /// no prefix.
+    ///
+    /// [`SpacePrefixes`]: crate::domain::shelf::artifact::SpacePrefixes
+    /// [`Renamed`]: crate::domain::shelf::artifact::Renamed
+    fn renamed(&self, asks: &PrefixAsks, of: &PrefixMove) -> Result<PrefixAnswers, Self::Error>;
 
     /// The bytes of the artifact as they are now, or none when nothing is there or
     /// they cannot be read now: what `diff` sets beside the content that was

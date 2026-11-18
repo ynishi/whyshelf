@@ -34,10 +34,12 @@
 //! declaration is withdrawn by a [`Revocation`](super::Revocation), as a decision is.
 //!
 //! The names a move may be declared of are one rule, [`PinnedNames::of`]: the names
-//! pins of something there, of approvals that stand, are read as now. `moved_space`
-//! reads the space of an old name from it, and `moves` (which writes nothing) asks
-//! the same way which of them have nothing behind them now, and what each space's
-//! adapter suggests they moved to:
+//! pins of something there, of approvals that stand, are read as now.
+//! [`PinnedNames::space_of`] reads the space of an old name from it (and
+//! `moved_space`, [`PinnedNames::gone`] and [`plan_prefix_moves`] ask it, so the
+//! rule of "which spaces a name is known in" is held once), and `moves` (which writes
+//! nothing) asks the same way which of them have nothing behind them now, and what
+//! each space's adapter suggests they moved to:
 //!
 //! ```text
 //!   PinnedNames::of(ledger) --asks--> ArtifactSource::resolve (one reading)
@@ -47,6 +49,25 @@
 //!                  +--> each space's adapter, once ---> SpaceSuggestions
 //!                  +--suggest--> MoveSuggestions (every gone name, its candidates in
 //!                                one order; the spaces that cannot suggest)
+//! ```
+//!
+//! A person who moved a directory or renamed a module declares it once, for every name
+//! under a prefix ([`PrefixMove`](super::super::artifact::PrefixMove)). The domain
+//! knows no boundary of a name and builds no new one: each space's adapter says which
+//! names are under the prefix and what each is under the new one
+//! ([`Renamed`]); the domain decides which of them move, and holds every move
+//! against what is there, collecting the refusals of both steps:
+//!
+//! ```text
+//!   PinnedNames::prefix_asks --> ArtifactSource::renamed (per space, its own grammar)
+//!        |                                | PrefixAnswers (Renamed per name, SpacePrefixes per space)
+//!        +--plan_prefix_moves-------------+--> PrefixPlan (moves, refused, not_asked)
+//!                                  |            or PrefixRefusal::NothingUnder
+//!                                  +--ArtifactSource::resolve (one reading, every old
+//!                                  |  and new name)
+//!                                  +--frame_prefix_moves (frame_moved for each) -->
+//!                                       every move, or PrefixRefusal::Names (every name
+//!                                       that cannot be moved)
 //! ```
 //!
 //! [`Ledger::moved_to`]: super::Ledger::moved_to
@@ -63,7 +84,8 @@ use crate::domain::words::{Join, Mark, listed};
 
 use super::super::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReadings, ArtifactState,
-    Comparison, ContentAddress, Revision, Space, Untold,
+    Comparison, ContentAddress, NamePrefix, PrefixAnswers, PrefixAsks, Renamed, Revision, Space,
+    SpacePrefixes, Untold,
 };
 use super::{ArtifactPin, DecisionVerb, JudgedAt, JudgementId, Ledger, PinnedArtifact};
 
@@ -360,21 +382,7 @@ pub enum MovedRefusal {
 /// [`MovedRefusal::NotKnown`]: nothing pinned it, and no approval would read the move.
 /// Refused too: pins read as `from` in more than one space.
 pub fn moved_space(ledger: &Ledger, from: &ArtifactName) -> Result<Space, MovedRefusal> {
-    let spaces: BTreeSet<Space> = PinnedNames::of(ledger)
-        .0
-        .into_keys()
-        .filter(|artifact| artifact.name() == from)
-        .map(|artifact| artifact.space().clone())
-        .collect();
-    let mut spaces = spaces.into_iter();
-    match (spaces.next(), spaces.next()) {
-        (None, _) => Err(MovedRefusal::NotKnown { name: from.clone() }),
-        (Some(space), None) => Ok(space),
-        (Some(first), Some(second)) => Err(MovedRefusal::InSpaces {
-            name: from.clone(),
-            spaces: [first, second].into_iter().chain(spaces).collect(),
-        }),
-    }
+    PinnedNames::of(ledger).space_of(from)
 }
 
 /// Whether the move `of` stands, given what the space's adapter answered for both
@@ -542,6 +550,41 @@ impl PinnedNames {
         self.0.iter()
     }
 
+    /// The spaces a pin is read as each name in, by name: the one rule of "which
+    /// spaces a name is known in", which [`PinnedNames::space_of`],
+    /// [`PinnedNames::gone`] and [`plan_prefix_moves`] all ask. Made once for a
+    /// question about many names, so that none of them scans every name again.
+    fn spaces_by_name(&self) -> BTreeMap<&ArtifactName, BTreeSet<&Space>> {
+        let mut spaces: BTreeMap<&ArtifactName, BTreeSet<&Space>> = BTreeMap::new();
+        for artifact in self.0.keys() {
+            spaces
+                .entry(artifact.name())
+                .or_default()
+                .insert(artifact.space());
+        }
+        spaces
+    }
+
+    /// The space a move of `name` is declared in: the one space in which a pin is
+    /// read as `name` now ([`moved_space`] is this over the names of a ledger). None
+    /// is [`MovedRefusal::NotKnown`], and more than one [`MovedRefusal::InSpaces`]
+    /// (which artifact is meant cannot be told).
+    pub fn space_of(&self, name: &ArtifactName) -> Result<Space, MovedRefusal> {
+        space_among(name, self.spaces_by_name().get(name))
+    }
+
+    /// What each space's adapter is asked about a
+    /// [`PrefixMove`](super::super::artifact::PrefixMove): every name, by its
+    /// space, and the adapter keeps only those under the prefix
+    /// ([`Renamed::Outside`] for the others).
+    pub fn prefix_asks(&self) -> PrefixAsks {
+        let mut asks = PrefixAsks::new();
+        for artifact in self.0.keys() {
+            asks.ask(artifact.space().clone(), artifact.name().clone());
+        }
+        asks
+    }
+
     /// Of these names, those the adapter answered (in `readings`, asked with
     /// [`PinnedNames::asks`]) have nothing behind them now, as [`frame_moved`] reads
     /// an old name, by space and name. A name that cannot be told now is not among
@@ -549,14 +592,8 @@ impl PinnedNames {
     /// those spaces ([`GoneName::in_spaces`]): [`moved_space`] refuses a move of it,
     /// so no adapter is asked about it.
     pub fn gone(self, readings: &ArtifactReadings) -> GoneNames {
-        let mut spaces_of: BTreeMap<&ArtifactName, BTreeSet<&Space>> = BTreeMap::new();
-        for artifact in self.0.keys() {
-            spaces_of
-                .entry(artifact.name())
-                .or_default()
-                .insert(artifact.space());
-        }
-        let in_spaces: BTreeMap<ArtifactName, BTreeSet<Space>> = spaces_of
+        let in_spaces: BTreeMap<ArtifactName, BTreeSet<Space>> = self
+            .spaces_by_name()
             .into_iter()
             .filter(|(_, spaces)| spaces.len() > 1)
             .map(|(name, spaces)| (name.clone(), spaces.into_iter().cloned().collect()))
@@ -576,6 +613,297 @@ impl PinnedNames {
         }
         GoneNames(gone)
     }
+}
+
+/// The one space of `name` among the spaces a pin is read as it in
+/// ([`PinnedNames::spaces_by_name`]): none is [`MovedRefusal::NotKnown`], more than
+/// one [`MovedRefusal::InSpaces`].
+fn space_among(
+    name: &ArtifactName,
+    spaces: Option<&BTreeSet<&Space>>,
+) -> Result<Space, MovedRefusal> {
+    let mut spaces = spaces.into_iter().flatten().map(|space| (*space).clone());
+    match (spaces.next(), spaces.next()) {
+        (None, _) => Err(MovedRefusal::NotKnown { name: name.clone() }),
+        (Some(space), None) => Ok(space),
+        (Some(first), Some(second)) => Err(MovedRefusal::InSpaces {
+            name: name.clone(),
+            spaces: [first, second].into_iter().chain(spaces).collect(),
+        }),
+    }
+}
+
+/// Why nothing of a space is under a prefix, for one space.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NothingWhy {
+    /// The adapter read the prefix as one of its names, and no name pinned is under
+    /// it.
+    NoneUnder,
+    /// The prefix is no prefix of the space's names, with why.
+    NotUnder(NonBlank),
+    /// No adapter of the space takes prefixes, so it cannot be told.
+    NoPrefixes,
+}
+
+/// A name under a prefix that cannot be moved, with why.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("`{name}`: {why}")]
+pub struct NamedRefusal {
+    /// The old name.
+    pub name: ArtifactName,
+    /// Why.
+    pub why: NamedWhy,
+}
+
+impl NamedRefusal {
+    /// The space the refusal is about, when it is of one: the adapter's, or the one
+    /// an artifact of the rule's refusal is in. None when it is of the name as such
+    /// (`NotAMove`, `NotKnown`, pins in more than one space).
+    pub fn space(&self) -> Option<&Space> {
+        match &self.why {
+            NamedWhy::Unbuildable { space, .. } | NamedWhy::NoAnswer { space } => Some(space),
+            NamedWhy::Move(
+                MovedRefusal::FromPresent { artifact }
+                | MovedRefusal::FromUntold { artifact, .. }
+                | MovedRefusal::ToAbsent { artifact }
+                | MovedRefusal::ToUntold { artifact, .. },
+            ) => Some(artifact.space()),
+            NamedWhy::Move(
+                MovedRefusal::NotAMove(_)
+                | MovedRefusal::NotKnown { .. }
+                | MovedRefusal::InSpaces { .. },
+            ) => None,
+        }
+    }
+}
+
+/// Why one name under a prefix cannot be moved.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum NamedWhy {
+    /// The rule of a move refused it ([`MovedRefusal`]).
+    #[error("{0}")]
+    Move(MovedRefusal),
+    /// The adapter could build no name under the new prefix.
+    #[error("no name of `{space}` is the same name under the new prefix: {why}")]
+    Unbuildable {
+        /// The space.
+        space: Space,
+        /// What the adapter said.
+        why: NonBlank,
+    },
+    /// The adapter of the space gave no answer for the name, so whether it is under
+    /// the prefix cannot be told (nothing is read as outside that the adapter did not
+    /// say is).
+    #[error(
+        "the adapter of `{space}` gave no answer for it, so whether it is under the prefix cannot be told"
+    )]
+    NoAnswer {
+        /// The space.
+        space: Space,
+    },
+}
+
+/// Why a move of a prefix is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum PrefixRefusal {
+    /// No name pinned is under the prefix in any space, with why for each space.
+    #[error(
+        "no name of an approval that stands is under `{prefix}`{}",
+        nothing_under(.spaces)
+    )]
+    NothingUnder {
+        /// The prefix.
+        prefix: NamePrefix,
+        /// Each space a name is pinned in, with why nothing of it is under.
+        spaces: Vec<(Space, NothingWhy)>,
+    },
+    /// Names under the prefix that cannot be moved: every one is listed, and none is
+    /// moved.
+    #[error("{} name(s) under the prefix cannot be moved: {}", .0.len(), listed(.0.iter(), Mark::Plain, Join::Semicolon))]
+    Names(NonEmptyVec<NamedRefusal>),
+}
+
+/// The spaces of a [`PrefixRefusal::NothingUnder`], in words (a leading `: `, or
+/// nothing when no name is pinned at all).
+fn nothing_under(spaces: &[(Space, NothingWhy)]) -> String {
+    if spaces.is_empty() {
+        return String::new();
+    }
+    let each: Vec<String> = spaces
+        .iter()
+        .map(|(space, why)| match why {
+            NothingWhy::NoneUnder => format!("`{space}`: none of its names is"),
+            NothingWhy::NotUnder(why) => format!("`{space}`: {why}"),
+            NothingWhy::NoPrefixes => {
+                format!("`{space}`: it takes no prefix, so it cannot be told")
+            }
+        })
+        .collect();
+    format!(": {}", each.join("; "))
+}
+
+/// The names a move of a prefix moves, and what it leaves, as [`plan_prefix_moves`]
+/// decided from the adapters' answers: the moves still to be held against what is
+/// there ([`frame_prefix_moves`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrefixPlan {
+    /// The prefix the names are under now.
+    pub prefix: NamePrefix,
+    /// The moves, one per name, in the order of the spaces and then of the names.
+    pub moves: Vec<MovedOf>,
+    /// The names that cannot be moved, each with why.
+    pub refused: Vec<NamedRefusal>,
+    /// The spaces whose adapter takes no prefix: names of them may be under it, and
+    /// are not moved. Told with the answer, never silently.
+    pub not_asked: Vec<Space>,
+}
+
+/// Which names a [`PrefixMove`](super::super::artifact::PrefixMove) moves, from what each space's adapter answered
+/// (`answers`, asked with [`PinnedNames::prefix_asks`]): each name under the prefix
+/// ([`Renamed::Under`]) is a move to the name the adapter built, in the one space the
+/// name is known in ([`PinnedNames::space_of`]; pins in two spaces refuse it).
+///
+/// Refused as a whole ([`PrefixRefusal::NothingUnder`]): nothing is under the prefix
+/// in any space, neither a name to move nor one that cannot be moved. A space whose
+/// adapter says the prefix is none of its names ([`SpacePrefixes::NotUnder`]) has no
+/// name under it and is not in the answer; one with no adapter that takes a prefix
+/// ([`SpacePrefixes::NoPrefixes`], or no answer) cannot be told, and is in
+/// [`PrefixPlan::not_asked`]. A name the adapter was asked about and gave no answer
+/// for cannot be moved, with that as why. Overlaps of the moves (`a` to `a/b` moves
+/// a name onto the old name of another) are not refused here: held against what is
+/// there at once, [`frame_prefix_moves`] refuses one of them.
+// The refusal is the answer, read once per run; it is not a hot path.
+#[allow(clippy::result_large_err)]
+pub fn plan_prefix_moves(
+    pinned: &PinnedNames,
+    answers: &PrefixAnswers,
+) -> Result<PrefixPlan, PrefixRefusal> {
+    let spaces_by_name = pinned.spaces_by_name();
+    let spaces: BTreeSet<&Space> = pinned.0.keys().map(ArtifactKey::space).collect();
+    let mut moves = Vec::new();
+    let mut refused: Vec<NamedRefusal> = Vec::new();
+    let mut not_asked = Vec::new();
+    let mut nothing = Vec::new();
+    let refuse = |refused: &mut Vec<NamedRefusal>, name: &ArtifactName, why: NamedWhy| {
+        let one = NamedRefusal {
+            name: name.clone(),
+            why,
+        };
+        if !refused.contains(&one) {
+            refused.push(one);
+        }
+    };
+    for space in spaces {
+        match answers.prefixes_of(space) {
+            Some(SpacePrefixes::Answered) => {
+                let mut under = false;
+                for artifact in pinned.0.keys().filter(|a| a.space() == space) {
+                    let name = artifact.name();
+                    match answers.renamed(space, name) {
+                        Some(Renamed::Outside) => {}
+                        Some(Renamed::Under(new)) => {
+                            under = true;
+                            match space_among(name, spaces_by_name.get(name)) {
+                                Ok(of) => match MovedOf::new(of, name.clone(), new.clone()) {
+                                    Ok(one) => moves.push(one),
+                                    Err(problem) => refuse(
+                                        &mut refused,
+                                        name,
+                                        NamedWhy::Move(MovedRefusal::from(problem)),
+                                    ),
+                                },
+                                Err(why) => refuse(&mut refused, name, NamedWhy::Move(why)),
+                            }
+                        }
+                        Some(Renamed::Unbuildable(why)) => {
+                            under = true;
+                            refuse(
+                                &mut refused,
+                                name,
+                                NamedWhy::Unbuildable {
+                                    space: space.clone(),
+                                    why: why.clone(),
+                                },
+                            );
+                        }
+                        None => {
+                            under = true;
+                            refuse(
+                                &mut refused,
+                                name,
+                                NamedWhy::NoAnswer {
+                                    space: space.clone(),
+                                },
+                            );
+                        }
+                    }
+                }
+                if !under {
+                    nothing.push((space.clone(), NothingWhy::NoneUnder));
+                }
+            }
+            Some(SpacePrefixes::NotUnder(why)) => {
+                nothing.push((space.clone(), NothingWhy::NotUnder(why.clone())));
+            }
+            Some(SpacePrefixes::NoPrefixes) | None => {
+                not_asked.push(space.clone());
+                nothing.push((space.clone(), NothingWhy::NoPrefixes));
+            }
+        }
+    }
+    let prefix = answers.of().from().clone();
+    if moves.is_empty() && refused.is_empty() {
+        return Err(PrefixRefusal::NothingUnder {
+            prefix,
+            spaces: nothing,
+        });
+    }
+    Ok(PrefixPlan {
+        prefix,
+        moves,
+        refused,
+        not_asked,
+    })
+}
+
+/// Whether the moves of a [`PrefixPlan`] stand, given what the adapters answered for
+/// both names of each (`readings`): each is held against [`frame_moved`], and the
+/// refusals of both steps (the plan's, and each move's own) are one answer
+/// ([`PrefixRefusal::Names`]), so a person mends every name at once.
+///
+/// Two moves that overlap (a name that is the old name of one and the new name of
+/// another) are held against one reading, where one of them has something at its old
+/// name or nothing at its new one: [`frame_moved`] refuses it.
+// The refusal is the answer, read once per run; it is not a hot path.
+#[allow(clippy::result_large_err)]
+pub fn frame_prefix_moves(
+    plan: PrefixPlan,
+    readings: &ArtifactReadings,
+) -> Result<NonEmptyVec<MovedOf>, PrefixRefusal> {
+    let PrefixPlan {
+        prefix,
+        moves,
+        mut refused,
+        not_asked: _,
+    } = plan;
+    let mut framed = Vec::with_capacity(moves.len());
+    for of in moves {
+        let name = of.from_name().clone();
+        match frame_moved(of, readings) {
+            Ok(of) => framed.push(of),
+            Err(why) => refused.push(NamedRefusal {
+                name,
+                why: NamedWhy::Move(why),
+            }),
+        }
+    }
+    if let Ok(refused) = NonEmptyVec::from_vec(refused) {
+        return Err(PrefixRefusal::Names(refused));
+    }
+    NonEmptyVec::from_vec(framed).map_err(|_| PrefixRefusal::NothingUnder {
+        prefix,
+        spaces: Vec::new(),
+    })
 }
 
 /// A name a move may be declared of, with nothing behind it now, and what pinned it.

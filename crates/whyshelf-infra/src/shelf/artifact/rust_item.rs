@@ -33,6 +33,20 @@
 //! text is not a name of the space, and the adapter says so with why. A crate's own
 //! name is a path too: its index.
 //!
+//! # Prefixes of the names
+//!
+//! `judge moved --prefix` moves every name under a prefix at once, and this adapter
+//! says which names are under it and what each becomes
+//! ([`ArtifactSource::renamed`](whyshelf_core::app::shelf::ArtifactSource::renamed)).
+//! A prefix is a Rust path of one segment or more, read by the rules of a name's path
+//! (so `crate::m`, a raw identifier or a directory is none). A name is under it when
+//! its segments start with all of the prefix's: `app::m` is a prefix of `app::m`,
+//! `app::m::f` and `app::m::Type::member`, and of no `app::mx::f`; the same name under
+//! `to` is the segments of `to` and the rest of the name's. A `from` that is no Rust
+//! path is no prefix of the space's names, and a `to` that is none makes each name
+//! under `from` unbuildable, with why. Nothing is read of the docs: the answer is of
+//! the names alone, and `resolve` tells whether each new name is there.
+//!
 //! # Where the docs are
 //!
 //! The build directory is the first of these that can be told, and the docs are in
@@ -111,7 +125,8 @@ use tokio::io::AsyncReadExt;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Space, SpaceAsks, SpaceReadings,
+    ArtifactName, ArtifactReading, PrefixMove, Renamed, Space, SpaceAsks, SpacePrefixes,
+    SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
@@ -362,6 +377,66 @@ impl RustPath {
             rest: segments[1..].iter().map(|s| (*s).to_owned()).collect(),
         })
     }
+}
+
+impl RustPath {
+    /// The segments, the crate first: what a prefix is compared on.
+    fn segments(&self) -> Vec<&str> {
+        std::iter::once(self.krate.as_str())
+            .chain(self.rest.iter().map(String::as_str))
+            .collect()
+    }
+}
+
+/// What this adapter says of a move of a prefix, for the `names` of its space asked
+/// about: a prefix is a Rust path ([`RustPath::parse`]) of one segment or more, and a
+/// name is under it when its segments start with all of the prefix's, the same name
+/// under `to` being `to`'s segments and the rest of the name's. `from` that is no Rust
+/// path (a directory, say) is no prefix of the space's names; a `to` that is none
+/// makes each name under `from` unbuildable. A name that is no Rust path is not under
+/// it. Nothing is looked for in the text of a name.
+pub(super) fn renamed(
+    names: &BTreeSet<ArtifactName>,
+    of: &PrefixMove,
+) -> Result<(SpacePrefixes, SpaceRenamed), ValueError> {
+    let from = match RustPath::parse(of.from().as_str()) {
+        Ok(from) => from,
+        Err(why) => {
+            let why = NonBlank::new(format!(
+                "`{}` is no prefix of a Rust path: {why}",
+                of.from()
+            ))?;
+            return Ok((SpacePrefixes::NotUnder(why), SpaceRenamed::new()));
+        }
+    };
+    let to = RustPath::parse(of.to().as_str());
+    let from = from.segments();
+    let mut answers = SpaceRenamed::new();
+    for name in names {
+        let answer = match RustPath::parse(name.as_str()) {
+            Err(_) => Renamed::Outside,
+            Ok(path) => {
+                let segments = path.segments();
+                match (segments.strip_prefix(from.as_slice()), &to) {
+                    (None, _) => Renamed::Outside,
+                    (Some(_), Err(why)) => super::unbuildable(format!(
+                        "`{}` is no prefix of a Rust path: {why}",
+                        of.to()
+                    ))?,
+                    (Some(rest), Ok(to)) => {
+                        let joined: Vec<&str> = to
+                            .segments()
+                            .into_iter()
+                            .chain(rest.iter().copied())
+                            .collect();
+                        super::built(&joined.join("::"))?
+                    }
+                }
+            }
+        };
+        answers.insert(name.clone(), answer);
+    }
+    Ok((SpacePrefixes::Answered, answers))
 }
 
 /// Why a segment of a path is no identifier, if it is none.

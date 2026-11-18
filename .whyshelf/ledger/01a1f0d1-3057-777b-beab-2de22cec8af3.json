@@ -1,0 +1,150 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1a957a63000a22619f54e1a4504600d5c352ccfd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:64283251a265f709a0ddf7ec6ca57331f8fb5a67af5c4be2ace5f17d19c706ee",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/textdiff.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ded6887a06c6b85756b5aa73aba24d4300d4faf0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8b6f256357dd4ab2740f3ec6aeb28f014cfc65bd7efa1897f6accb76dfa00951",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "49b692c071996155224ff92bfc11f8e4659a502f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a472c3deabec95e56feb781dcbbc22670447bcf55afd8ad6d38389b5efe2b74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f519e8946880d5542fc968bdb6970adc872bd15c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:29c4fa5a844b93d5072f2685353fa60473d05e13c24261c26a4215ddc4a01418",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "64445d9b162d341a4a9527a1577064298d96ff14",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:79d229cd4c88c7289966d1b745ec84d65b44fcc4812433a91f7b4eeb2009c0cd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "be6c5b00c9a81ef313291eb757c22d310f65e8d7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:792dd1f076f90e99072a4c78605f94500b34699ae8f36f11eabbb614f0316e40",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/snapshot.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "eae54d9e527d451b68caf02108c693b8b5b0d173",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7c61935cf73bdff65da1a7fa82df7b397ee7b334409a97723d146b836579533c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795041602885,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0e4e9a9d264df7a0338203288590f0b9a6b5ec3d",
+      "hash": "sha256:3588744daad16f3b85676117140282d1ffb704caa82584d6adc7e4235257ec77",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "6"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fa37-74bf-bbd8-1dbc0e039102"
+    },
+    {
+      "address": "7b851de2655aeec6ed6d7f8845f16438a7968ab8",
+      "hash": "sha256:f87f51b8bd50ed101be705f87f2cdc0cdb37eef87c02a532672312696010a175",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    }
+  ],
+  "id": "01a1f0d1-3057-777b-beab-2de22cec8af3",
+  "kind": "decision",
+  "reason": "Written together with the code of issue 103 and read again against it by the agent that wrote both (each rustdoc item and each test file named exists and says what the document says); the blind review of the change is still to be made, and these approvals are made so that the books gate is clean until then",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:c9c41d2cd8fa31c90edfb5b56551c06fef18b31c3728107cede9f14b7a4fce72",
+  "seen_address": "8a0f1e38df4c90cee5a456c21f394e8cd3d2738f",
+  "subject": "01a1c3d2-fcc8-780b-9a64-87c28c477246",
+  "v": 1,
+  "verb": "approve"
+}

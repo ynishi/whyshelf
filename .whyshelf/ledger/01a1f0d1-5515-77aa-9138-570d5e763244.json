@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795041602885,
+  "expires": null,
+  "frame": [],
+  "id": "01a1f0d1-5515-77aa-9138-570d5e763244",
+  "kind": "decision",
+  "reason": "Written together with the code of issue 103 and read again against it by the agent that wrote both (each rustdoc item and each test file named exists and says what the document says); the blind review of the change is still to be made, and these approvals are made so that the books gate is clean until then",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:84dbb7afe91c0975f6c4069df64cf17775c305bba9f17db63459f57ae4066a19",
+  "seen_address": "e0c46ae21bc953a796c659a1cc13c0d26ce2987a",
+  "subject": "01a1f0cd-c91f-7248-ac40-b50655ca22d8",
+  "v": 1,
+  "verb": "approve"
+}

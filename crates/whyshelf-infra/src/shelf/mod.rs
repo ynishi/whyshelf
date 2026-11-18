@@ -116,6 +116,10 @@ pub const WHYSHELF_DIR: &str = ".whyshelf";
 /// literal held to the rules of a relative path when this crate builds.
 pub const BOOKS_FILE: PathLiteral = PathLiteral::new(".whyshelf/books.toml");
 
+/// The directory of the ledger, relative to the project root: the one the paths of
+/// its records are from.
+const LEDGER_DIR: PathLiteral = PathLiteral::new(".whyshelf/ledger");
+
 /// Every adapter of a shelf, for one project root.
 #[derive(Debug, Clone)]
 pub struct Project {
@@ -148,7 +152,10 @@ impl Project {
         Self {
             books: BooksToml::new(&root, BOOKS_FILE.into()),
             docs: MarkdownDocs::new(root.clone()),
-            ledger: JsonLedger::new(root.join(WHYSHELF_DIR).join("ledger"), WHYSHELF_DIR),
+            ledger: {
+                let rel: RelPath = LEDGER_DIR.into();
+                JsonLedger::new(root.join(rel.as_str()), rel)
+            },
             clock: SystemClock,
             ids: UuidV7Ids,
             artifacts: ArtifactSpaces::of_project(

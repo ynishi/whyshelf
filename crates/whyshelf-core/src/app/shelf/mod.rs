@@ -25,6 +25,7 @@
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
 //! | [`moves`](ShelfApp::moves) | no | [`MovesReport`]: the names approvals that stand pinned something at that have nothing behind them now, each with the documents that pin it and the names its space's adapter suggests it moved to (by the same content, or by a rename in the space's history), and the spaces that cannot suggest |
 //! | [`moved`](ShelfApp::moved) | **yes** | [`Moved`](crate::domain::shelf::ledger::Moved): the declarations that an artifact moved from one name to another, after the space's adapter said the old name has nothing and the new one has something |
+//! | [`moved_prefix`](ShelfApp::moved_prefix) | **yes** | [`MovedPrefix`]: the declarations that every name approvals pin under one prefix moved to the same name under another (one declaration per name, in one run), the names each space's adapter built, and the spaces whose adapter takes no prefix |
 //! | [`exempt`](ShelfApp::exempt) | **yes** | [`Exempted`]: the declarations that a document is not expected to be reached by one covering link, each with the document's key |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
@@ -39,7 +40,7 @@
 //! way to write. [`judge`](ShelfApp::judge),
 //! [`approve_chosen`](ShelfApp::approve_chosen), [`approve_stale`](ShelfApp::approve_stale),
 //! [`same_meaning`](ShelfApp::same_meaning),
-//! [`moved`](ShelfApp::moved), [`exempt`](ShelfApp::exempt), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc),
+//! [`moved`](ShelfApp::moved), [`moved_prefix`](ShelfApp::moved_prefix), [`exempt`](ShelfApp::exempt), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc),
 //! [`new_docs`](ShelfApp::new_docs), [`init`](ShelfApp::init) and [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
 //! program run one at a time, by the type. Two processes can still write at once;
 //! that is safe because a record is a file of its own named by its own identity, and
@@ -103,6 +104,10 @@ mod fmt_tests;
 #[cfg(test)]
 mod init_tests;
 #[cfg(test)]
+mod ledger_run_tests;
+#[cfg(test)]
+mod moved_prefix_tests;
+#[cfg(test)]
 mod moved_tests;
 #[cfg(test)]
 mod moves_tests;
@@ -138,7 +143,7 @@ pub use exempt::{ExemptRequest, Exempted};
 pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
 pub use init::{InitFile, InitRequest, Initialized};
 pub use judge::{JudgeRequest, Judgement};
-pub use moved::MovedRequest;
+pub use moved::{MovedPrefix, MovedRequest, PrefixMovedRequest};
 pub use new_doc::{Created, EntryInput, ItemInput, NewDocRequest, NewMany};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,

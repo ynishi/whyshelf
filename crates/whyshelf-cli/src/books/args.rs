@@ -368,16 +368,24 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
     /// before the declaration, is read as a pin of the new one, with the hash it
     /// pinned (a pin of the old name as absent is read as written). The old
     /// name has nothing behind it now and the new one has something, as the space's
-    /// adapter says.
+    /// adapter says. With `--prefix`, the two are prefixes, and every name an approval
+    /// pins under the first (in any space) is declared moved to the same name under
+    /// the second, one declaration for each, in one run: all or none.
     Moved {
+        /// Move every name under a prefix: OLD and NEW are prefixes (a directory, a
+        /// module, a file and a path in it), and each space's adapter says which of the
+        /// names pinned are under OLD and what each is under NEW.
+        #[arg(long)]
+        prefix: bool,
         /// The old name (for the space `file`, its path under the root): the name a
         /// pin of something there, of an approval that stands, is read as now, in the
-        /// one space it is in.
+        /// one space it is in. With `--prefix`, the prefix the names are under now.
         #[arg(value_name = "OLD")]
-        from: ArtifactName,
-        /// The new name, in the same space.
+        from: String,
+        /// The new name, in the same space. With `--prefix`, the prefix they are
+        /// moved under.
         #[arg(value_name = "NEW")]
-        to: ArtifactName,
+        to: String,
         /// Why it is the same thing.
         #[arg(long, required = true)]
         reason: String,

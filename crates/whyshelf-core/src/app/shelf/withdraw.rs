@@ -18,7 +18,8 @@ use crate::domain::shelf::ledger::{JudgementId, Record, Revocation};
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::load;
-use super::ports::{ActorSource, IdSource, LedgerAppend, ShelfPort, ShelfWrite, port};
+use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
+use super::run_writes::RunWrites;
 
 /// A request to withdraw records by their identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,11 +67,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
             loaded.now,
             request.reason,
         ));
-        self.ports
-            .append()
-            .append(&record)
-            .await
-            .map_err(port(ShelfPort::LedgerAppend))?;
+        RunWrites::run(&self.ports, |writes| {
+            Box::pin(async { writes.record(&record).await })
+        })
+        .await?;
         Ok(record)
     }
 }

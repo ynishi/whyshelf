@@ -63,7 +63,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
   Each link says how to compare (`bytes`, `lines` or `presence`). *Presets* (`file`, `rustdoc`, `test`) are short names for the usual settings.
 - **Declarations.** A person may declare:
   - that an edit keeps the meaning (`judge same`);
-  - that an artifact moved (`judge moved`; `whyshelf moves` suggests where);
+  - that an artifact moved (`judge moved`; `whyshelf moves` suggests where), or that every name under a prefix did, as when a directory or a module is renamed (`judge moved --prefix <old> <new>`);
   - that a document is not expected to be reached by a cover (`judge exempt`).
 
   Each is a ledger record with a reason, and `judge withdraw` takes it back.
@@ -85,7 +85,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
 |---|---|
 | `init`, `new <book>` | start a project; make one document |
 | `judge approve`, `deny`, `deprecate`, `retire`, `revoke` | decide about documents |
-| `judge same`, `moved`, `exempt`, `withdraw` | declare, and take back |
+| `judge same`, `moved` (`--prefix` for a renamed directory or module), `exempt`, `withdraw` | declare, and take back |
 | `fmt [--check]` | put every document in the one form |
 
 Every command prints one JSON document on stdout (`--help` and `--version` aside); warnings and errors also go to stderr.

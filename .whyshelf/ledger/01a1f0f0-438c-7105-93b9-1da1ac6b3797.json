@@ -1,0 +1,101 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ArtifactSource",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::moved_prefix",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::artifact::Renamed",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::PinnedNames",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::frame_prefix_moves",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::plan_prefix_moves",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795043636011,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e0c46ae21bc953a796c659a1cc13c0d26ce2987a",
+      "hash": "sha256:84dbb7afe91c0975f6c4069df64cf17775c305bba9f17db63459f57ae4066a19",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1f0cd-c91f-7248-ac40-b50655ca22d8"
+    }
+  ],
+  "id": "01a1f0f0-438c-7105-93b9-1da1ac6b3797",
+  "kind": "decision",
+  "reason": "Read again after the blind review of issue 103 (code review of the branch from the issue alone, and its fixes); what the document says holds of the code and the tests as they are now",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:88c82d70c137e69d6b4d0777c12c63b4136b2ab7c98d2d32845720ca6aaa09ec",
+  "seen_address": "a128682ee8e3be1779ce23bb99749af0c64478b9",
+  "subject": "01a1f0ce-3040-7549-bf80-827e6a156a89",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795043636011,
+  "expires": null,
+  "frame": [],
+  "id": "01a1f0f0-4121-731f-9f8e-6d06f4d6398a",
+  "kind": "decision",
+  "reason": "Read again after the blind review of issue 103 (code review of the branch from the issue alone, and its fixes); what the document says holds of the code and the tests as they are now",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:84dbb7afe91c0975f6c4069df64cf17775c305bba9f17db63459f57ae4066a19",
+  "seen_address": "e0c46ae21bc953a796c659a1cc13c0d26ce2987a",
+  "subject": "01a1f0cd-c91f-7248-ac40-b50655ca22d8",
+  "v": 1,
+  "verb": "approve"
+}

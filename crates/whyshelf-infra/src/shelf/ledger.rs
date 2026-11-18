@@ -4,7 +4,9 @@
 //! that each judge add two files and merge without a conflict. A record is never
 //! changed: a write creates a new file and fails when the name is taken, and a
 //! decision or a declaration is withdrawn by a revocation, which is a record of its
-//! own.
+//! own. A record is written as any new file of the project is (`create_new`): whole,
+//! or removed when its write fails; it is put on disk by the run that wrote it, with
+//! the other files of the run, and not one by one.
 //!
 //! JSON is the wire form and nothing more. A record is written from its canonical
 //! form ([`Record::to_canon`]) and read back into one ([`Record::from_canon`]); the
@@ -21,14 +23,15 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use tokio::io::AsyncWriteExt;
 use whyshelf_core::app::shelf::{
-    LedgerAppend, LedgerContents, LedgerRead, UnreadableRecord, UnreadableWhy,
+    Creation, LedgerAppend, LedgerContents, LedgerRead, UnreadableRecord, UnreadableWhy,
 };
 use whyshelf_core::domain::canon::Canon;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::ledger::Record;
+
+use super::create;
 
 /// Why the ledger could not be read or written.
 #[derive(Debug, thiserror::Error)]
@@ -38,6 +41,17 @@ pub enum LedgerError {
     Io {
         /// The path.
         path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: io::Error,
+    },
+    /// A step of writing a record's file failed: what it was, with the path and what
+    /// became of the file it made (removed, as a write that fails leaves no part of a
+    /// record).
+    #[error("cannot {step}")]
+    Write {
+        /// The step, with its path.
+        step: String,
         /// The operating system's error.
         #[source]
         source: io::Error,
@@ -80,19 +94,21 @@ pub enum NotCanon {
 #[derive(Debug, Clone)]
 pub struct JsonLedger {
     dir: PathBuf,
-    /// The directory as the project names it (`.whyshelf/ledger`), as text: the
-    /// path of every file that is no record is made from it, and it is checked as a
-    /// [`RelPath`] when the ledger is read, so a bad one is an error of the read.
-    rel: String,
+    /// The directory as the project names it (`.whyshelf/ledger`): the path of
+    /// every file of the ledger, a record or not, is made from it.
+    rel: RelPath,
 }
 
 impl JsonLedger {
-    /// The ledger in `dir`, which the project names `<whyshelf_dir>/ledger`.
-    pub fn new(dir: PathBuf, whyshelf_dir: &str) -> Self {
-        Self {
-            dir,
-            rel: format!("{whyshelf_dir}/ledger"),
-        }
+    /// The ledger in `dir`, which the project names `rel` (`<whyshelf_dir>/ledger`),
+    /// from the same root as the paths [`LedgerAppend::append`] gives.
+    pub fn new(dir: PathBuf, rel: RelPath) -> Self {
+        Self { dir, rel }
+    }
+
+    /// The path of the file of `record`: `<rel>/<id>.json`.
+    fn file_of(&self, record: &Record) -> Result<RelPath, ValueError> {
+        format!("{}/{}.json", self.rel, record.id()).parse()
     }
 
     /// The directory.
@@ -126,10 +142,7 @@ impl LedgerRead for JsonLedger {
                 });
             }
         };
-        let rel: RelPath = self.rel.parse().map_err(|e| LedgerError::Name {
-            path: self.dir.clone(),
-            source: Some(e),
-        })?;
+        let rel = &self.rel;
         let mut files = Vec::new();
         while let Some(entry) = entries.next_entry().await.map_err(self.io(&self.dir))? {
             let path = entry.path();
@@ -165,30 +178,35 @@ impl LedgerRead for JsonLedger {
 impl LedgerAppend for JsonLedger {
     type Error = LedgerError;
 
-    async fn append(&self, record: &Record) -> Result<(), LedgerError> {
-        tokio::fs::create_dir_all(&self.dir)
-            .await
-            .map_err(self.io(&self.dir))?;
+    /// `<rel>/<id>.json`. The identity of a record is hexadecimal digits and `-`, so
+    /// a [`RelPath`] always takes it; were it ever not, the answer is the directory,
+    /// which still says where the file would have been.
+    fn path_of(&self, record: &Record) -> RelPath {
+        self.file_of(record).unwrap_or_else(|_| self.rel.clone())
+    }
+
+    /// The record is written to a new file by `create_new` (with the
+    /// directory made first): whole, or removed, and not put on disk, which is
+    /// [`FileSync::persist`]'s, for every record of a run at once.
+    ///
+    /// [`FileSync::persist`]: whyshelf_core::app::shelf::FileSync::persist
+    async fn append(&self, record: &Record) -> Result<RelPath, LedgerError> {
+        let file = self.file_of(record).map_err(|e| LedgerError::Name {
+            path: self.dir.clone(),
+            source: Some(e),
+        })?;
         let path = self.dir.join(format!("{}.json", record.id()));
         let mut text = serde_json::to_string_pretty(&to_json(&record.to_canon()))
             .map_err(LedgerError::Json)?;
         text.push('\n');
-        let mut file = match tokio::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .await
-        {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                return Err(LedgerError::Taken { path });
-            }
-            Err(source) => return Err(LedgerError::Io { path, source }),
-        };
-        file.write_all(text.as_bytes())
-            .await
-            .map_err(self.io(&path))?;
-        file.sync_all().await.map_err(self.io(&path))
+        match create::create_new(&path, text.as_bytes()).await {
+            Ok(Creation::Created) => Ok(file),
+            Ok(Creation::AlreadyThere) => Err(LedgerError::Taken { path }),
+            Err(failed) => Err(LedgerError::Write {
+                step: failed.step,
+                source: failed.source,
+            }),
+        }
     }
 }
 
@@ -264,15 +282,28 @@ mod tests {
         ))
     }
 
+    /// The ledger of a project at `root`, as the project names it.
+    fn ledger_in(root: &Path) -> JsonLedger {
+        ledger_at(root.join(".whyshelf/ledger"))
+    }
+
+    /// The ledger in `dir`, which the project names `.whyshelf/ledger`.
+    fn ledger_at(dir: PathBuf) -> JsonLedger {
+        JsonLedger::new(dir, ".whyshelf/ledger".parse().unwrap())
+    }
+
     #[tokio::test]
     async fn a_record_is_written_once_and_read_back_the_same() {
         let root = tempfile::tempdir().unwrap();
-        let ledger = JsonLedger::new(root.path().join(".whyshelf/ledger"), ".whyshelf");
+        let ledger = ledger_in(root.path());
         assert!(ledger.read().await.unwrap().records.is_empty());
         assert!(!ledger.dir().exists(), "a read creates nothing");
 
         let record = revocation();
-        ledger.append(&record).await.unwrap();
+        let file = ledger.append(&record).await.unwrap();
+        assert_eq!(file, ledger.path_of(&record));
+        assert_eq!(file.as_str(), format!(".whyshelf/ledger/{}.json", jid(2)));
+        assert!(root.path().join(file.as_str()).is_file());
         assert!(matches!(
             ledger.append(&record).await,
             Err(LedgerError::Taken { .. })
@@ -280,6 +311,62 @@ mod tests {
         let read = ledger.read().await.unwrap();
         assert_eq!(read.records, vec![record]);
         assert!(read.unreadable.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_record_that_is_taken_is_left_as_it_was() {
+        let root = tempfile::tempdir().unwrap();
+        let ledger = ledger_in(root.path());
+        let record = revocation();
+        let file = root.path().join(ledger.path_of(&record).as_str());
+        tokio::fs::create_dir_all(file.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::write(&file, b"theirs").await.unwrap();
+        let Err(LedgerError::Taken { path }) = ledger.append(&record).await else {
+            panic!("the record is taken");
+        };
+        assert_eq!(path, file);
+        assert_eq!(tokio::fs::read(&file).await.unwrap(), b"theirs");
+    }
+
+    /// A record whose write fails is the error of the write and leaves no file of it,
+    /// and the files beside it stay. (That a write that fails after its file was made
+    /// removes that file is the test of `create.rs`, which `append` writes through.)
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_record_whose_write_fails_leaves_no_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let ledger = ledger_in(root.path());
+        let record = revocation();
+        ledger.append(&revocation_of(5, 1)).await.unwrap();
+        // A directory that takes no new entry.
+        let mut closed = tokio::fs::metadata(ledger.dir())
+            .await
+            .unwrap()
+            .permissions();
+        let open = closed.mode();
+        closed.set_mode(0o500);
+        tokio::fs::set_permissions(ledger.dir(), closed)
+            .await
+            .unwrap();
+        let result = ledger.append(&record).await;
+        let mut reopened = tokio::fs::metadata(ledger.dir())
+            .await
+            .unwrap()
+            .permissions();
+        reopened.set_mode(open);
+        tokio::fs::set_permissions(ledger.dir(), reopened)
+            .await
+            .unwrap();
+        // A user who may write anywhere (root) is not stopped by the mode.
+        if result.is_ok() {
+            return;
+        }
+        assert!(matches!(result, Err(LedgerError::Write { .. })));
+        assert_eq!(names(ledger.dir()).await, [format!("{}.json", jid(5))]);
     }
 
     #[test]
@@ -354,7 +441,7 @@ mod tests {
             .await
             .unwrap();
         tokio::fs::write(dir.join("y.json"), "{}").await.unwrap();
-        let read = JsonLedger::new(dir, ".whyshelf").read().await.unwrap();
+        let read = ledger_at(dir).read().await.unwrap();
         assert!(read.records.is_empty());
         assert_eq!(read.unreadable.len(), 2);
         assert_eq!(read.unreadable[0].file.as_str(), ".whyshelf/ledger/x.json");
@@ -422,7 +509,7 @@ mod tests {
         tokio::fs::create_dir_all(&dir).await.unwrap();
         tokio::fs::write(dir.join("a.json"), "{").await.unwrap();
         tokio::fs::write(dir.join("notes.txt"), "{").await.unwrap();
-        let read = JsonLedger::new(dir, ".whyshelf").read().await.unwrap();
+        let read = ledger_at(dir).read().await.unwrap();
         assert_eq!(read.unreadable.len(), 1);
         assert!(matches!(
             read.unreadable[0].why,
@@ -443,7 +530,7 @@ mod tests {
         tokio::fs::create_dir_all(&dir).await.unwrap();
         let name = OsStr::from_bytes(b"\xff\xfe.json");
         tokio::fs::write(dir.join(name), "{}").await.unwrap();
-        let result = JsonLedger::new(dir, ".whyshelf").read().await;
+        let result = ledger_at(dir).read().await;
         assert!(matches!(result, Err(LedgerError::Name { .. })));
     }
 
@@ -473,8 +560,8 @@ mod tests {
         // Two worktrees, each with its own ledger directory. Each writes a record of
         // its own, and both write one record that is the same.
         let root = tempfile::tempdir().unwrap();
-        let one = JsonLedger::new(root.path().join("one/.whyshelf/ledger"), ".whyshelf");
-        let other = JsonLedger::new(root.path().join("other/.whyshelf/ledger"), ".whyshelf");
+        let one = ledger_in(&root.path().join("one"));
+        let other = ledger_in(&root.path().join("other"));
         let (own, theirs, same) = (
             revocation_of(2, 1),
             revocation_of(3, 1),
@@ -504,7 +591,7 @@ mod tests {
         );
 
         // The merge is the union of the files.
-        let merged = JsonLedger::new(root.path().join("merged/.whyshelf/ledger"), ".whyshelf");
+        let merged = ledger_in(&root.path().join("merged"));
         tokio::fs::create_dir_all(merged.dir()).await.unwrap();
         for ledger in [&one, &other] {
             for name in names(ledger.dir()).await {

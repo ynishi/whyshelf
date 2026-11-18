@@ -2585,8 +2585,9 @@ pub use exempt::{Exempt, ExemptOf};
 use moved::moved_way;
 pub use moved::{
     FoundBy, GoneName, GoneNames, MoveCandidate, MoveNote, MoveSuggestion, MoveSuggestions, Moved,
-    MovedOf, MovedProblem, MovedRefusal, MovedTo, NameSuggestions, NoteKind, PinnedNames,
-    PinnedThere, ReadPin, Similarity, SpaceSuggestions, frame_moved, moved_space,
+    MovedOf, MovedProblem, MovedRefusal, MovedTo, NameSuggestions, NamedRefusal, NamedWhy,
+    NoteKind, NothingWhy, PinnedNames, PinnedThere, PrefixPlan, PrefixRefusal, ReadPin, Similarity,
+    SpaceSuggestions, frame_moved, frame_prefix_moves, moved_space, plan_prefix_moves,
 };
 use same_meaning::declared_way;
 pub use same_meaning::{
@@ -2604,6 +2605,8 @@ mod exempt_tests;
 mod frame_tests;
 #[cfg(test)]
 mod merge_tests;
+#[cfg(test)]
+mod moved_prefix_tests;
 #[cfg(test)]
 mod moved_tests;
 #[cfg(test)]

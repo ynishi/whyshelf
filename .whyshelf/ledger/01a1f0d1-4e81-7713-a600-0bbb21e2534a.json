@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "037f4d42cb8f79b4b92a01957ad2ac108137ccdc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ec4b4ff9e17abc1932d3237d7f7b462be0745688392f72bfc3fcf51945c7e186",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fake_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f74137146aa1c105c37085e264319ec3939c4a14",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:24b7535b248796c066db0cd622adb087ccfc531b7ed98e18466baef314f93a9b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "be3d352adf52b3cded5e66edb0610c7620602452",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f8a7785019521f69c719ed8fec9d01c4c785baafb4ddb383dc8192d65979a048",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f854e29897e2bd03e6b2bf02ab791c8ecc0eebcc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c0890c2552029fe12c3d96c4245e04b95046a0a23044b1642dff0883034e322a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "33e1345cbbee2c79b7a200b2276fb573f40d67c3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f53974e2397de15393d41c7a2eb8e71623f2a2fe1d8e2bf59d6c658325ba8dc1",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "036708993a3e85068b7187760490f6a52ab1ea30",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:06cb32454ed829f3c56bf37708caad510c681649ae68261c96bc8c5130069658",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/project_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795041602885,
+  "expires": null,
+  "frame": [
+    {
+      "address": "fbcc6e0d325c707cb322ece5f42b03ce74b33d55",
+      "hash": "sha256:17c19b03e1169cc1c823545de8078bd69720ac3e0191752f308c1b7cb0816d13",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "79"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1efb4-5387-738e-92c2-897542094cc7"
+    }
+  ],
+  "id": "01a1f0d1-4e81-7713-a600-0bbb21e2534a",
+  "kind": "decision",
+  "reason": "Written together with the code of issue 103 and read again against it by the agent that wrote both (each rustdoc item and each test file named exists and says what the document says); the blind review of the change is still to be made, and these approvals are made so that the books gate is clean until then",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:5544baa07a9f7f2953520593cd33e8b1632c3424209f0064c6baebb94a6a91e3",
+  "seen_address": "0e398238de67adf6cab8b255ea7f6cd3b041c445",
+  "subject": "01a1efb4-acca-7266-a1c9-eaf0a9ce7b94",
+  "v": 1,
+  "verb": "approve"
+}

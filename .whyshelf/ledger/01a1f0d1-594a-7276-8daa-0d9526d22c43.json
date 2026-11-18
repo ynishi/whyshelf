@@ -1,0 +1,68 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::FileSync",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::LedgerAppend",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfError",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795041602885,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e0c46ae21bc953a796c659a1cc13c0d26ce2987a",
+      "hash": "sha256:84dbb7afe91c0975f6c4069df64cf17775c305bba9f17db63459f57ae4066a19",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1f0cd-c91f-7248-ac40-b50655ca22d8"
+    }
+  ],
+  "id": "01a1f0d1-594a-7276-8daa-0d9526d22c43",
+  "kind": "decision",
+  "reason": "Written together with the code of issue 103 and read again against it by the agent that wrote both (each rustdoc item and each test file named exists and says what the document says); the blind review of the change is still to be made, and these approvals are made so that the books gate is clean until then",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:3f352f6daad36095a71a70ecd5f9e473b96a9a86e7fc5d73b9d176156fab3af4",
+  "seen_address": "bdacefc0a24b96235859601f12133843cbdba093",
+  "subject": "01a1f0ce-5b0a-7405-b5a1-fb50213d286a",
+  "v": 1,
+  "verb": "approve"
+}

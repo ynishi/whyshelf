@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "afdcf0eb00a6fcc51475c404b589b8d6695efa23",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8d91effdd4fcb90588e6e0d9def622d73408eb2013cc1a2f9a48439bdd393ece",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795041602885,
+  "expires": null,
+  "frame": [
+    {
+      "address": "43f06e1c521039f504c59418b68322685a80e246",
+      "hash": "sha256:f2016633a50701c0c919bad83e485e59222aeda46c56917a8123b5e4ae6c7c59",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "68"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb78-d2d4-770d-9d90-5aa3f5577115"
+    }
+  ],
+  "id": "01a1f0d1-48bc-70e0-af06-c074a9a60a63",
+  "kind": "decision",
+  "reason": "Written together with the code of issue 103 and read again against it by the agent that wrote both (each rustdoc item and each test file named exists and says what the document says); the blind review of the change is still to be made, and these approvals are made so that the books gate is clean until then",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:ddf122e726d92fe58de416e537b617b6f6d31883a058b5710c98fdb240d68f19",
+  "seen_address": "8df2ae5c242e9267fc5912e849d1ee7252842fce",
+  "subject": "01a1cb78-d506-7713-a7ec-8a792c57d276",
+  "v": 1,
+  "verb": "approve"
+}

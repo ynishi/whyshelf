@@ -33,7 +33,8 @@ use super::ports::{
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings,
-    Comparison, ContentAddress, Revision, Space,
+    Comparison, ContentAddress, PrefixAnswers, PrefixAsks, PrefixMove, Renamed, Revision, Space,
+    SpacePrefixes,
 };
 use crate::domain::shelf::ledger::{GoneName, SpaceSuggestions};
 use std::collections::{BTreeMap, BTreeSet};
@@ -279,6 +280,8 @@ pub(super) struct FakeShelf {
     /// How many documents' files are created before the next one fails (none:
     /// none fails).
     pub(super) creates_before_failing: Mutex<Option<usize>>,
+    /// How many records are appended before the next one fails (none: none fails).
+    pub(super) appends_before_failing: Mutex<Option<usize>>,
     /// The paths where a file comes to be after any look at them and before the
     /// document's file is created.
     pub(super) appear_before_create: Mutex<BTreeSet<RelPath>>,
@@ -286,6 +289,9 @@ pub(super) struct FakeShelf {
     pub(super) persisted: Mutex<Vec<Vec<RelPath>>>,
     /// Why putting files on disk fails, when it does (none: it does not).
     pub(super) persist_failing: Mutex<Option<&'static str>>,
+    /// Where a prefix ends in a name of each space that takes prefixes; a space with
+    /// none set takes none.
+    pub(super) boundaries: Mutex<BTreeMap<Space, Vec<&'static str>>>,
 }
 
 /// The space of the files.
@@ -366,10 +372,18 @@ impl FakeShelf {
             declaration_texts: Mutex::new(BTreeMap::new()),
             declaration_file: Mutex::new(None),
             creates_before_failing: Mutex::new(None),
+            appends_before_failing: Mutex::new(None),
             appear_before_create: Mutex::new(BTreeSet::new()),
             persisted: Mutex::new(Vec::new()),
             persist_failing: Mutex::new(None),
+            boundaries: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// From now on the space takes prefixes, ending where one of `edges` follows in
+    /// a name (`/` for paths, `::` for modules).
+    pub(super) fn set_boundaries(&self, space: &Space, edges: &[&'static str]) {
+        lock(&self.boundaries).insert(space.clone(), edges.to_vec());
     }
 
     /// From now on putting files on disk fails, for this reason.
@@ -797,11 +811,25 @@ impl LedgerRead for FakeShelf {
 impl LedgerAppend for FakeShelf {
     type Error = FakeError;
 
-    async fn append(&self, record: &Record) -> Result<(), FakeError> {
+    fn path_of(&self, record: &Record) -> RelPath {
+        path(&format!(".whyshelf/ledger/{}.json", record.id()))
+    }
+
+    /// Keeps the record, and gives the path of its file. Fails, writing nothing, when
+    /// a test said so ([`FakeShelf::appends_before_failing`]).
+    async fn append(&self, record: &Record) -> Result<RelPath, FakeError> {
         self.check()?;
+        {
+            let mut left = lock(&self.appends_before_failing);
+            match *left {
+                Some(0) => return Err(FakeError("the disk is full")),
+                Some(n) => *left = Some(n - 1),
+                None => {}
+            }
+        }
         *lock(&self.appends) += 1;
         lock(&self.records).push(record.clone());
-        Ok(())
+        Ok(self.path_of(record))
     }
 }
 
@@ -908,8 +936,9 @@ impl FileSync for FakeShelf {
     type Error = FakeError;
 
     /// Counts the call with its files, which must each be one the fake holds (a
-    /// document's, another file, or the declaration): what a run wrote, as the
-    /// writers made it. Fails when a test said so, after counting.
+    /// document's, another file, the declaration, or the file of a record it
+    /// appended): what a run wrote, as the writers made it. Fails when a test said
+    /// so, after counting.
     async fn persist(&self, files: &NonEmptyVec<RelPath>) -> Result<(), FakeError> {
         self.check()?;
         lock(&self.persisted).push(files.iter().cloned().collect());
@@ -920,7 +949,8 @@ impl FileSync for FakeShelf {
                 | DocReading::Unheld { origin, .. } => origin == at,
             });
             let the_declaration = *at == self.file() && lock(&self.declaration_file).is_some();
-            if !(a_document || the_declaration || lock(&self.files).contains_key(at)) {
+            let a_record = lock(&self.records).iter().any(|r| self.path_of(r) == *at);
+            if !(a_document || the_declaration || a_record || lock(&self.files).contains_key(at)) {
                 return Err(FakeError("put a file on disk that was never written"));
             }
         }
@@ -1009,6 +1039,43 @@ impl ArtifactSource for FakeShelf {
                 (space.clone(), name.clone(), reading)
             })
             .collect())
+    }
+
+    /// A name is under a prefix when the prefix is all of it or is followed by one of
+    /// the boundaries set for its space ([`FakeShelf::set_boundaries`]); a space with
+    /// none set takes no prefix. The fake looks for a text because its names have no
+    /// grammar; an adapter never does.
+    fn renamed(&self, asks: &PrefixAsks, of: &PrefixMove) -> Result<PrefixAnswers, FakeError> {
+        self.check()?;
+        let boundaries = lock(&self.boundaries);
+        let mut answers = PrefixAnswers::new(of.clone());
+        for (space, names) in asks.spaces() {
+            let Some(edges) = boundaries.get(space) else {
+                answers.answer(space.clone(), SpacePrefixes::NoPrefixes, BTreeMap::new());
+                continue;
+            };
+            let renamed = names
+                .iter()
+                .map(|name| {
+                    let under = name
+                        .as_str()
+                        .strip_prefix(of.from().as_str())
+                        .filter(|rest| {
+                            rest.is_empty() || edges.iter().any(|e| rest.starts_with(e))
+                        });
+                    let answer = match under {
+                        None => Renamed::Outside,
+                        Some(rest) => match ArtifactName::new(&format!("{}{rest}", of.to())) {
+                            Ok(new) => Renamed::Under(new),
+                            Err(problem) => Renamed::Unbuildable(reason(&problem.to_string())),
+                        },
+                    };
+                    (name.clone(), answer)
+                })
+                .collect();
+            answers.answer(space.clone(), SpacePrefixes::Answered, renamed);
+        }
+        Ok(answers)
     }
 
     async fn current(&self, artifact: &ArtifactKey) -> Result<Option<Vec<u8>>, FakeError> {

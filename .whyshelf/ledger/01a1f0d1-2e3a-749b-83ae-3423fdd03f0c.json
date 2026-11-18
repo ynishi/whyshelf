@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "815e2dcbb23129a478a14e6ce0da9e25b9f48a27",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:60faf5bf1f5b4005b732d30dfa882b15104dc27293ac0282fd1e87f854c18d1d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/merge_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "bf562fdf4fa74b33aaf29ca5fedce8b19d85ff27",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:26d5f76675935418702f6c7e19d661c577ea5806f2997f26115848bdcb47155e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795041602885,
+  "expires": null,
+  "frame": [
+    {
+      "address": "94cca80b8f3d3641d2919034ae935d7ef1ca846d",
+      "hash": "sha256:eee898b1ea79b00ed9be51fbef4d0e0f32cb1f8bde2177db71374eb0a5bf484a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3ad8-7753-b9e1-a7cd0b06ed77"
+    }
+  ],
+  "id": "01a1f0d1-2e3a-749b-83ae-3423fdd03f0c",
+  "kind": "decision",
+  "reason": "Written together with the code of issue 103 and read again against it by the agent that wrote both (each rustdoc item and each test file named exists and says what the document says); the blind review of the change is still to be made, and these approvals are made so that the books gate is clean until then",
+  "revision": "04b0b9815820a96e1c8e0255848544296daee3a6",
+  "seen": "sha256:9b53677b0838c08e1f6c37c9796cdb2fa12d95f1a85654fc07749310bcdb06e5",
+  "seen_address": "5c358e75bb47b2e8f80e4bac19340ab1b8f70eab",
+  "subject": "01a1c332-3e2b-7840-9c1e-c6aebdf917a0",
+  "v": 1,
+  "verb": "approve"
+}

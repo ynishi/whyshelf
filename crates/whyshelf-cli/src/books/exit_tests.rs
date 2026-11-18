@@ -5,8 +5,12 @@ use serde_json::{Value, json};
 use whyshelf_core::app::shelf::ports::ShelfPort;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::nonempty::TwoOrMore;
+use whyshelf_core::domain::shelf::artifact::{ArtifactKey, Space};
 use whyshelf_core::domain::shelf::build::DocFailure;
-use whyshelf_core::domain::shelf::ledger::{DecisionProblem, FrameRefusal};
+use whyshelf_core::domain::shelf::ledger::PrefixRefusal;
+use whyshelf_core::domain::shelf::ledger::{
+    DecisionProblem, FrameRefusal, MovedRefusal, NamedRefusal, NamedWhy,
+};
 use whyshelf_core::domain::shelf::lookup::Reference;
 
 use super::*;
@@ -87,10 +91,85 @@ fn the_error_json_names_the_class_and_keeps_the_messages() {
                 "messages": ["outer", "inner"],
                 "candidates": [],
                 "problems": [],
+                "refused": [],
             }),
             "{error:?}"
         );
     }
+}
+
+/// A move of a prefix refused for these names: each is of a space, or of none.
+fn prefix_refused(names: Vec<NamedRefusal>) -> ShelfError {
+    ShelfError::MovedPrefixRefused(PrefixRefusal::Names(
+        NonEmptyVec::from_vec(names).expect("a name"),
+    ))
+}
+
+fn named(name: &str, why: NamedWhy) -> NamedRefusal {
+    NamedRefusal {
+        name: ArtifactName::new(name).expect("a name"),
+        why,
+    }
+}
+
+fn file() -> Space {
+    Space::new("file").expect("a space")
+}
+
+#[test]
+fn a_move_of_a_prefix_ends_by_the_names_it_could_not_move() {
+    let still_there = NamedWhy::Move(MovedRefusal::FromPresent {
+        artifact: ArtifactKey::new(file(), ArtifactName::new("src/a/x.rs").expect("a name")),
+    });
+    let unbuildable = NamedWhy::Unbuildable {
+        space: file(),
+        why: NonBlank::new("too long").expect("a reason"),
+    };
+    let in_two = NamedWhy::Move(MovedRefusal::InSpaces {
+        name: ArtifactName::new("dup").expect("a name"),
+        spaces: vec![file(), Space::new("other").expect("a space")],
+    });
+    // Any name a rule refused is a refusal (exit 1); only names no one can build, or
+    // that are the request's own fault, are a request (exit 2).
+    let some = prefix_refused(vec![
+        named("src/a/x.rs", still_there),
+        named("src/a/y.rs", unbuildable.clone()),
+    ]);
+    assert_eq!(some.class(), ErrorClass::Refused);
+    assert_eq!(exit_of(some.class()) as u8, 1);
+    let all = prefix_refused(vec![named("src/a/y.rs", unbuildable), named("dup", in_two)]);
+    assert_eq!(all.class(), ErrorClass::Request);
+    assert_eq!(exit_of(all.class()) as u8, 2);
+    let nothing = ShelfError::MovedPrefixRefused(PrefixRefusal::NothingUnder {
+        prefix: NamePrefix::new("lib").expect("a prefix"),
+        spaces: Vec::new(),
+    });
+    assert_eq!(nothing.class(), ErrorClass::Request);
+
+    // Every name is listed, with its space when it is of one.
+    let value = json_of(
+        &some,
+        &["the declaration of the move of a prefix is refused"],
+    );
+    assert_eq!(
+        value["refused"],
+        json!([
+            {
+                "name": "src/a/x.rs",
+                "space": "file",
+                "why": "`src/a/x.rs` in `file` is still there: a copy is no move",
+            },
+            {
+                "name": "src/a/y.rs",
+                "space": "file",
+                "why": "no name of `file` is the same name under the new prefix: too long",
+            },
+        ])
+    );
+    let value = json_of(&all, &[]);
+    assert_eq!(value["refused"][1]["space"], Value::Null);
+    assert_eq!(value["error"], "request");
+    assert_eq!(json_of(&nothing, &[])["refused"], json!([]));
 }
 
 #[test]
