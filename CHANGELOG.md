@@ -10,6 +10,25 @@ and this project adheres to
 
 ### Added
 
+- `judge moved --prefix <old> <new> --reason <text>` declares, in one run, that
+  every name under a prefix moved to the same name under another, as when a
+  directory or a Rust module is renamed. Every name an approval that stands
+  pins, in any space, that is under `<old>` is declared moved, one declaration
+  each, so that `judge withdraw` takes one back. Where a prefix ends in a name,
+  and what the name is under `<new>`, is each space's own grammar, said by its
+  adapter: a part of a path is never cut, a Rust path breaks at `::`, the
+  titles of a test are read as in a name and keep the spelling they have, and
+  one `/` at the end of a directory is as none. A space whose names the prefix
+  is not a prefix of has none under it. Every old and new name is held to the
+  rule of `judge moved` in one reading, and the run is all or none: each name
+  that cannot be moved is listed with why in `refused` (exit 1 when one is
+  still at its old name or nothing is at its new one, exit 2 when each is a
+  wrong request, such as a new name its space cannot write), and a prefix
+  nothing pinned is under is a request error (exit 2).
+  In the library, `ShelfApp::moved_prefix`, the port method
+  `ArtifactSource::renamed`, and the domain's `plan_prefix_moves` and
+  `frame_prefix_moves` (#103).
+
 - Each origin of `stale` carries `next`: the commands that can settle it, as
   they are typed and in the order a person would try them (read the diff,
   declare the edit the same, look for moves and declare one, approve a pending
@@ -51,6 +70,13 @@ and this project adheres to
 
 ### Changed
 
+- The records a `judge` run writes (`judge`, `judge approve --stale` and
+  `--pending`, `judge same`, `judge moved`, `judge exempt`, `judge withdraw`)
+  are put on disk once, at the end of the run, as the files of `new` and
+  `init` are: each record is written whole or removed, not synced one at a
+  time. A run that stops part way puts on disk the records it wrote before it
+  lists them. In the library, `LedgerAppend::append` returns the path of the
+  record it wrote and no longer syncs it (#103).
 - A run of `new` (one document or `--from`) or of `init` puts its files on
   disk once, at its end, not one file at a time: each file is written whole,
   then every file and directory the run wrote is synced and, on macOS, the
