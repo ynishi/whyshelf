@@ -10,6 +10,37 @@ and this project adheres to
 
 ### Added
 
+- The preset `rustdoc-promise` (`space = "rust-item"`, `compare = "lines"`,
+  `means = "depends"`) pins what a Rust item promises: its declaration and its
+  docs, read from the page `cargo doc` wrote for it. An edit of a function's
+  body, of an inherent method or of an impl leaves an approval that names the
+  type fresh; an edit of the declaration or of the docs, docs written for an
+  item that had none, or docs taken away, makes it stale (`artifact_changed`).
+  The declaration of a type as rustdoc writes it lists its public fields, its
+  variants and, for a trait, its items' signatures, and that of a constant holds
+  its value, so a change of those is a change of the item's promise; a member
+  named on its own is its own promise. For a variant its fields count too, and
+  for a module, a crate, a primitive type or a keyword only its docs. The text
+  compared is each line of the declaration after `decl ` and each line of the
+  docs after `doc `, with the line breaks rustdoc wrote; whether white space and
+  blank lines count is the link's `compare` (`lines` collapses white space and
+  leaves out blank lines, `bytes` does neither). An item whose page cannot be
+  read as that (no declaration where its kind has one, a layout not read, an
+  item whose own page is too large) is there for `presence` and cannot be told
+  for any other comparison, with why; a member is found by reading its type's
+  page, so a too-large page of the type makes its members cannot-tell for
+  presence too. `rustdoc` is unchanged (`presence`); a link that changes from
+  one preset to the other is a change of comparison
+  (`artifact_comparison_changed`). In the library, `RustItemSpace::resolve`
+  gives the reading of the text of the promise (`ArtifactReading::of_bytes`)
+  instead of presence only, and `RustItemSpace::current` returns that text (none
+  when the item is absent or cannot be told), so the library's `diff` report
+  item carries it for a link of any comparison, `rustdoc` included; the `diff`
+  command shows none, since no text is kept at approval. rustdoc's HTML is no
+  contract: a toolchain that writes a declaration another way can make an
+  approval stale; the end-to-end tests run
+  `cargo doc` and watch the layout of the pinned toolchain (#104).
+
 - Retiring a field, a link or a link to artifacts from a book. `status --with
   <field>`, repeatable, lists the valid documents of a book that declares the
   field and holds a value for it, whichever (one more condition beside
