@@ -365,24 +365,43 @@
 //! the cargo settings at the root, else the one beside the root's `Cargo.toml`).
 //! Finding them runs no program. A path is there or absent only when the docs of
 //! its crate are built and are rustdoc's; before that, or when the build directory
-//! cannot be told, it cannot be told. Only that an item is there is known of it, so
-//! a link to items compares `presence` (the preset `rustdoc`, below; another
-//! comparison cannot be told): an edit of an item changes nothing, and an item
-//! renamed, moved or removed is gone. The docs are read as they are, so docs left
+//! cannot be told, it cannot be told. A link to items compares what it says:
+//! `presence` (the preset `rustdoc`, below) stands on an item being there, so an
+//! edit of an item changes nothing and an item renamed, moved or removed is gone;
+//! `lines` or `bytes` (the preset `rustdoc-promise` is `lines`) stand on what the
+//! item promises, its declaration and its docs as its page says them (for a
+//! variant, its fields too; for a module, a crate, a primitive type or a keyword,
+//! its docs only): an edit of a function's body, of an inherent method or of an
+//! impl changes nothing of a type, while its declaration as rustdoc writes it lists
+//! its public fields, its variants and, for a trait, its items' signatures (a
+//! constant's declaration holds its value), so those are part of its promise, and a
+//! member named on its own is its own promise; an edit of the declaration or of the
+//! docs, docs written or taken away, makes the approval stale (`artifact_changed`).
+//! An item whose page cannot be read as that cannot be told for such a comparison,
+//! with why, and is still there for `presence`; so is an item whose own page is too
+//! large (a member is found by reading its type's page, so a too-large page of the
+//! type makes its members cannot-tell for presence too). The docs are read as they are, so docs left
 //! by an earlier build, of an item or a crate since gone, read as there: build them
 //! afresh before you check or approve (`cargo doc --no-deps`; in this repository
 //! `just rust-doc`, which removes the old ones first). A name reached only through
 //! a glob re-export of a public module, a member reached only through a type alias,
 //! and an item hidden from the docs (`#[doc(hidden)]`) read as absent; a member a
 //! type has through `Deref` or a blanket impl reads as there; a raw identifier
-//! (`r#type`) is no name. The rules and the limits are on the page of
-//! `whyshelf_infra::shelf::artifact::rust_item`. A link to items:
+//! (`r#type`) is no name. rustdoc's HTML is no contract: after the toolchain is
+//! raised, a declaration written another way can make an approval stale. The rules
+//! and the limits are on the page of `whyshelf_infra::shelf::artifact::rust_item`.
+//! A link to items, and one to what they promise:
 //!
 //! ```text
 //!   [[book.link]]
 //!   name = "rustdoc"
 //!   target = "artifact"
 //!   preset = "rustdoc"       # space = "rust-item", compare = "presence", means = "depends"
+//!
+//!   [[book.link]]
+//!   name = "promised"
+//!   target = "artifact"
+//!   preset = "rustdoc-promise"   # space = "rust-item", compare = "lines", means = "depends"
 //! ```
 //!
 //! The space `rust-test` holds the test functions of the project's Rust source,
@@ -606,7 +625,8 @@
 //! `space = "file"`, `compare = "bytes"`, `means = "depends"`, and `code`:
 //! `space = "file"`, `compare = "presence"`, `means = "depends"`; the adapter of Rust
 //! items offers `rustdoc`: `space = "rust-item"`, `compare = "presence"`,
-//! `means = "depends"`; the adapter of Rust tests offers `test`:
+//! `means = "depends"`, and `rustdoc-promise`: `space = "rust-item"`,
+//! `compare = "lines"`, `means = "depends"`; the adapter of Rust tests offers `test`:
 //! `space = "rust-test"`, `compare = "bytes"`, `means = "depends"`; the adapter of
 //! JavaScript and TypeScript tests offers `js-test`: `space = "js-test"`,
 //! `compare = "bytes"`, `means = "depends"`; the page of

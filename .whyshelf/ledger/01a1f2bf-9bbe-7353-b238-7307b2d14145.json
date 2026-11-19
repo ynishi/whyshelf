@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9e487ef31061452a9cfec86ab5821b61d097e868",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add768ddd5406e06645e18dda7518815a659d1f748b4a8cb827a8c355216144d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "39b7452351f45763a1a02f4e90685c59c31c4089",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d13d4ea9aeb4876e8328dacfd9597847408d8d18c084b4f468493c1730e8e6e2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795074004800,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bccd4cfbd9e43686410f91eac539bb5e15e68a45",
+      "hash": "sha256:acec6b3176e3573a973d990d130f9afa3478d287b218feef3116b5a3d7943008",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "54"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c811-cfe5-739d-9535-559effdfed85"
+    }
+  ],
+  "id": "01a1f2bf-9bbe-7353-b238-7307b2d14145",
+  "kind": "decision",
+  "reason": "After the blind review of issue 104 (review of the branch from the issue alone, and its fixes: a type's declaration lists its public fields, variants and trait items and a const's value, so those are part of its promise; lines collapses white space; the diff command shows no promise text; only an item's own page too large is there for presence) and the rule check of the code (Place and MemberKind are sum types): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "1ed9d77f5ea7c6dd77fb26078de3c9e5514747c3",
+  "seen": "sha256:426582dded219eeec70552cddd5aa9dbe77b44776663255bfb72f5b8c0c29b4e",
+  "seen_address": "b55cc1c8233445cc7540df398f2a31518fc11023",
+  "subject": "01a1c811-d70c-739c-8751-d1f0cc5e7347",
+  "v": 1,
+  "verb": "approve"
+}

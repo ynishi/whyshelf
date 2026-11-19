@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795074004800,
+  "expires": null,
+  "frame": [],
+  "id": "01a1f2bf-a1fd-768d-ad9a-1af46bc1812b",
+  "kind": "decision",
+  "reason": "After the blind review of issue 104 (review of the branch from the issue alone, and its fixes: a type's declaration lists its public fields, variants and trait items and a const's value, so those are part of its promise; lines collapses white space; the diff command shows no promise text; only an item's own page too large is there for presence) and the rule check of the code (Place and MemberKind are sum types): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "1ed9d77f5ea7c6dd77fb26078de3c9e5514747c3",
+  "seen": "sha256:48b3da65cd451390df517273bb04a2f94efc0de7a737b017c96f767388cea42d",
+  "seen_address": "089ece40b09afeafcc4ca4a01a56d66d14272cf1",
+  "subject": "01a1f2a3-70f9-7184-8e59-6b24e25f79b6",
+  "v": 1,
+  "verb": "approve"
+}

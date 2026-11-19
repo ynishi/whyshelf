@@ -3,9 +3,9 @@
 //!
 //! | what | what it does | with |
 //! |---|---|---|
-//! | [`RustItemSpace::resolve`] | finds the build directory of the project, and looks up each path in the HTML rustdoc wrote under it | `tokio::fs`, `toml` |
-//! | [`RustItemSpace::current`] | nothing: an item has no content this adapter reads | none |
-//! | [`presets`] | the preset `rustdoc`: the space, `compare = "presence"`, `means = "depends"` | values |
+//! | [`RustItemSpace::resolve`] | finds the build directory of the project, looks up each path in the HTML rustdoc wrote under it, and reads what the item promises from its page | `tokio::fs`, `toml` |
+//! | [`RustItemSpace::current`] | the text of what an item promises now | the same |
+//! | [`presets`] | the presets `rustdoc` (the space, `compare = "presence"`, `means = "depends"`) and `rustdoc-promise` (the space, `compare = "lines"`, `means = "depends"`) | values |
 //!
 //! ```text
 //!   name ──a Rust path?── no ──► not a name (why)
@@ -15,8 +15,11 @@
 //!     ├─ none of them ──► cannot tell, each name
 //!     └─ its doc directory, then the directory of the crate in it
 //!          ├─ no index.html, or one rustdoc did not write ──► cannot tell
-//!          └─ the path, segment by segment, in the HTML ──► there (presence only)
-//!                                                         | absent | cannot tell (why)
+//!          └─ the path, segment by segment, in the HTML ──► absent | cannot tell (why)
+//!               │ there                                      (a place: page, kind, member)
+//!               └─ the promise of the place, read from its page
+//!                    ├─ a promise ──► its text, hashed by each comparison asked
+//!                    └─ not readable ──► there, for presence only (why)
 //! ```
 //!
 //! Resolving runs no program: it reads the environment it is given, the files of
@@ -97,6 +100,35 @@
 //! outside the docs once symbolic links are resolved). A link is followed with `/`
 //! and `\` both read as separators.
 //!
+//! # What an item promises
+//!
+//! What an item promises is its declaration and its docs, as its page says them:
+//!
+//! | of | the declaration | the docs |
+//! |---|---|---|
+//! | an item (a struct, an enum, a trait, a function, a macro, ...) | the `item-decl` of its page | its top doc |
+//! | a member (a method, a field, a variant, ...) | its code header | the docblock right after it (a method's, inside its toggle) |
+//! | a variant | its code header | the docblock, then the fields the page lists under it |
+//! | a module, a crate, a primitive type, a keyword | none: they have none | their top doc |
+//!
+//! The body of a function, the list of the impls of a type, the other members of its
+//! page, the line `Source` and the sidebar are not in it. An edit of a function's
+//! body, of an inherent method or of an impl changes nothing of the type. The
+//! declaration of a type as rustdoc writes it lists its public fields (a struct), its
+//! variants (an enum) and, for a trait, the signatures of its items (`fn resolve(&self)
+//! -> u32;`, `type Item;`), so those are part of the type's promise: a public field,
+//! a variant or a trait item added, dropped or retyped makes an approval that names
+//! the type stale. The declaration of a constant holds its value (`pub const MAX:
+//! u32 = 1;`, an associated constant's too), so a changed value does the same. A
+//! member named on its own is its own promise. An item with no docs promises that,
+//! and is told so: writing docs for it, or taking them away, is a change of its
+//! promise. The text is the declaration and the docs, each line after `decl ` or
+//! `doc ` (an empty line, empty), with the line breaks rustdoc wrote and no white
+//! space collapsed by this adapter; whether white space and blank lines count is the
+//! link's `compare` (`lines` collapses white space and leaves out blank lines,
+//! `bytes` does neither). The rules of the text are on the page of the module that
+//! reads a page (`promise`, private).
+//!
 //! # Known limits
 //!
 //! - A name reached only through a glob re-export of a public module
@@ -107,15 +139,53 @@
 //! - A member that a type has through `Deref`, or through a blanket impl, reads as
 //!   there: rustdoc writes it on the type's page.
 //! - A raw identifier (`r#type`) is not a name.
+//! - rustdoc's HTML is no contract: the layout read is the one of today. After the
+//!   toolchain is raised, a declaration written another way (or a layout this adapter
+//!   no longer reads) can make an approval stale, or an item unreadable, with no
+//!   change of the code; this repository's end-to-end tests run `cargo doc` and watch
+//!   the layout of the pinned toolchain.
+//! - Members of one name (`method.from` and `method.from-1`) are told by the first the
+//!   page has: the promise is that one's. Members of one name and two kinds (a field
+//!   and a method `len`) are told by the order of [`MEMBER_KINDS`], not of the page:
+//!   the promise is the method's.
+//! - The docs of a method of a trait impl or of a blanket impl are the trait's (the
+//!   text of the standard library, with its "Read more", included) and can change
+//!   with the toolchain.
+//! - What `span.item-info` says (deprecated, a feature a thing needs) is not in the
+//!   promise.
+//! - The impls of a type (the traits it implements, the methods it gains or loses)
+//!   are not in the promise of the type: name a member to pin it. Its public fields,
+//!   its variants and (a trait) its items' signatures are, for they are in its
+//!   declaration.
+//! - The value of a constant is in its declaration (`pub const MAX: u32 = 1;`, an
+//!   associated constant's too), so a changed value is a change of its promise.
+//! - A re-export is the promise of the item it leads to. A name through a glob
+//!   re-export, a type alias or `#[doc(hidden)]` is as above. An item a macro makes
+//!   is as rustdoc drew it.
 //!
 //! # What a reading has
 //!
-//! An item that is there has the hash of [`Comparison::Presence`] only
-//! ([`ArtifactReading::there`]): its docs and its code are not compared, so a link
-//! that compares anything else cannot be told, with that reason. There is no
-//! address, and nothing is read back.
+//! An item that is there and whose promise is read has the hashes of that promise's
+//! text under each comparison asked ([`ArtifactReading::of_bytes`]): the preset
+//! `rustdoc` (`presence`) tells only that it is there, and its page is not read when
+//! presence is all that is asked; an edit of its docs or declaration is a change for
+//! `lines` and `bytes`, and an edit of a body is not. One whose page cannot be read, or
+//! has no declaration where its kind has one, or is laid out another way, has the hash
+//! of [`Comparison::Presence`] only ([`ArtifactReading::there`]), and says why for any
+//! other comparison: it is told as cannot tell, not as changed. There is no address,
+//! and nothing is read back; but [`RustItemSpace::current`] returns the text of the
+//! promise now, whatever the link compares, so the library's diff report item of an
+//! approval of a link of any comparison, `presence` of the preset `rustdoc` included,
+//! carries the text of what the item promises now (`current`). The `diff` command
+//! shows none: it shows the current text only when the approved text can be read
+//! back, and no text is kept at approval (see DEC-83's revisit). An approval's
+//! freshness is still the comparison's, not the text's: an edit of the docs leaves a
+//! `presence` approval fresh.
 //!
 //! [`Comparison::Presence`]: whyshelf_core::domain::shelf::artifact::Comparison::Presence
+//! [`ArtifactReading::of_bytes`]: whyshelf_core::domain::shelf::artifact::ArtifactReading::of_bytes
+
+mod promise;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
@@ -125,16 +195,22 @@ use tokio::io::AsyncReadExt;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, PrefixMove, Renamed, Space, SpaceAsks, SpacePrefixes,
-    SpaceReadings, SpaceRenamed,
+    ArtifactName, ArtifactReading, Comparison, PrefixMove, Renamed, Space, SpaceAsks,
+    SpacePrefixes, SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
+
+use promise::{Promise, Unreadable, promise_of};
 
 /// The name of the space this adapter resolves names in.
 pub const RUST_ITEM_SPACE: &str = "rust-item";
 
-/// The name of the preset this adapter offers.
+/// The name of the preset of a link that stands on an item being there.
 pub const RUSTDOC_PRESET: &str = "rustdoc";
+
+/// The name of the preset of a link that stands on what an item promises (its
+/// declaration and its docs).
+pub const RUSTDOC_PROMISE_PRESET: &str = "rustdoc-promise";
 
 /// The name of the build directory cargo uses beside a `Cargo.toml` when nothing
 /// names another.
@@ -147,9 +223,11 @@ pub const GENERATOR_MARK: &str = "<meta name=\"generator\" content=\"rustdoc\">"
 /// The most bytes of a page this adapter reads; a larger one cannot be told.
 pub const MAX_PAGE_BYTES: u64 = 32 * 1024 * 1024;
 
-/// What a reading says of any comparison but presence.
-const PRESENCE_ONLY: &str =
-    "the space `rust-item` compares only presence: the docs and the code of an item are not read";
+/// The kind of the place of a module, and of a crate (its index).
+const MODULE_KIND: &str = "module";
+
+/// What a reading asked of presence only says of any other comparison.
+const PRESENCE_ONLY: &str = "only presence was asked of the item, so what it promises was not read";
 
 /// The kinds of item rustdoc writes a page `<kind>.<Name>.html` for.
 pub const ITEM_KINDS: &[&str] = &[
@@ -182,33 +260,92 @@ const TYPE_KINDS: &[&str] = &[
 ];
 
 /// The kinds of member rustdoc writes an anchor `id="<kind>.<name>"` for in the page
-/// of a type.
-pub const MEMBER_KINDS: &[&str] = &[
-    "method",
-    "tymethod",
-    "variant",
-    "structfield",
-    "associatedconstant",
-    "associatedtype",
-];
+/// of a type, closed: the one table of them and of their anchor words is
+/// [`MemberKind::TABLE`], in the order a name is looked up in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MemberKind {
+    /// A method with a body, of an impl.
+    Method,
+    /// A method of a trait, with no body.
+    TyMethod,
+    /// A variant of an enum.
+    Variant,
+    /// A field of a struct or a union.
+    StructField,
+    /// An associated constant.
+    AssociatedConstant,
+    /// An associated type.
+    AssociatedType,
+}
 
-/// The presets this adapter offers when it resolves the names of `space`: one,
-/// [`RUSTDOC_PRESET`], for a link to the items whose docs state a rule, that stands
-/// on their being there (`space` that space, `compare = "presence"`,
-/// `means = "depends"`): an edit of an item changes nothing, and an item that goes
-/// away breaks the approvals that stand on it.
-pub fn presets(space: &Space) -> BuiltinPresets {
-    let values = PresetValues {
-        space: Some(space.as_str().to_owned()),
-        compare: Some("presence".to_owned()),
-        ignore: None,
-        means: Some(Propagation::Depends),
-    };
-    match PresetName::new(RUSTDOC_PRESET) {
-        Ok(name) => BuiltinPresets::from([(name, values)]),
-        // Not a name: no preset. The test of this module holds it to be one.
-        Err(_) => BuiltinPresets::new(),
+impl MemberKind {
+    /// Every kind with the word of its anchor (`method` in `id="method.new"`), the
+    /// one table of them: a name is looked up in this order.
+    const TABLE: [(Self, &'static str); 6] = [
+        (Self::Method, "method"),
+        (Self::TyMethod, "tymethod"),
+        (Self::Variant, "variant"),
+        (Self::StructField, "structfield"),
+        (Self::AssociatedConstant, "associatedconstant"),
+        (Self::AssociatedType, "associatedtype"),
+    ];
+
+    /// The word of the anchor of this kind.
+    fn word(self) -> &'static str {
+        Self::TABLE
+            .iter()
+            .find(|(kind, _)| *kind == self)
+            .map_or("", |(_, word)| word)
     }
+
+    /// The kinds in the order a name is looked up in.
+    fn all() -> impl Iterator<Item = Self> {
+        Self::TABLE.iter().map(|(kind, _)| *kind)
+    }
+
+    /// The anchor words of [`Self::TABLE`], in its order.
+    const fn words() -> [&'static str; 6] {
+        let mut words = [""; 6];
+        let mut at = 0;
+        while at < words.len() {
+            words[at] = Self::TABLE[at].1;
+            at += 1;
+        }
+        words
+    }
+}
+
+/// The words of the anchors of the kinds of member rustdoc writes, made from the one
+/// table of the kinds of member: the lookup of a member reads the kinds in this order.
+pub const MEMBER_KINDS: &[&str] = &MemberKind::words();
+
+/// The presets this adapter offers when it resolves the names of `space`, both
+/// `means = "depends"`:
+///
+/// - [`RUSTDOC_PRESET`], for a link to the items whose docs state a rule, that stands
+///   on their being there (`compare = "presence"`): an edit of an item changes
+///   nothing, and an item that goes away breaks the approvals that stand on it;
+/// - [`RUSTDOC_PROMISE_PRESET`], for a link that stands on what an item promises
+///   (`compare = "lines"`): a change of its declaration or its docs makes the
+///   approvals that stand on it stale, and an edit of a body does not.
+pub fn presets(space: &Space) -> BuiltinPresets {
+    let preset = |name: &str, compare: &str| {
+        let values = PresetValues {
+            space: Some(space.as_str().to_owned()),
+            compare: Some(compare.to_owned()),
+            ignore: None,
+            means: Some(Propagation::Depends),
+        };
+        // Not a name: no preset. The test of this module holds both to be names.
+        PresetName::new(name).ok().map(|name| (name, values))
+    };
+    [
+        preset(RUSTDOC_PRESET, "presence"),
+        preset(RUSTDOC_PROMISE_PRESET, "lines"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// Why the items could not be resolved.
@@ -241,14 +378,16 @@ impl RustItemSpace {
         }
     }
 
-    /// For each name: not a name (no Rust path), there, absent, or cannot tell
-    /// (with why). Every name asked about has an answer.
+    /// For each name: not a name (no Rust path), there (with the hash of what it
+    /// promises under each comparison asked, or under presence only, with why, when
+    /// its page cannot be read), absent, or cannot tell (with why). Every name asked
+    /// about has an answer.
     pub async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, RustItemError> {
         let mut readings = SpaceReadings::new();
         let mut paths = Vec::new();
-        for name in asks.keys() {
+        for (name, comparisons) in asks {
             match RustPath::parse(name.as_str()) {
-                Ok(path) => paths.push((name, path)),
+                Ok(path) => paths.push((name, comparisons, path)),
                 Err(why) => {
                     readings.insert(name.clone(), ArtifactReading::not_a_name(reason(why)?));
                 }
@@ -261,7 +400,7 @@ impl RustItemSpace {
             Ok(docs) => docs,
             Err(why) => {
                 let why = reason(why)?;
-                for (name, _) in paths {
+                for (name, _, _) in paths {
                     readings.insert(name.clone(), ArtifactReading::cannot_tell(why.clone()));
                 }
                 return Ok(readings);
@@ -269,9 +408,17 @@ impl RustItemSpace {
         };
         let presence_only = reason(PRESENCE_ONLY.to_owned())?;
         let mut lookup = Lookup::new(docs, self.max_page).await;
-        for (name, path) in paths {
+        for (name, comparisons, path) in paths {
             let reading = match lookup.find(&path).await {
-                Found::There => ArtifactReading::there(presence_only.clone()),
+                // Only presence asked (the preset `rustdoc`): its page is not read.
+                Found::There(_) if comparisons.iter().all(|c| *c == Comparison::Presence) => {
+                    ArtifactReading::there(presence_only.clone())
+                }
+                Found::There(place) => {
+                    let promise = lookup.promise(&place).await;
+                    reading_of(promise, comparisons)?
+                }
+                Found::Unread(why) => ArtifactReading::there(reason(why)?),
                 Found::Absent => ArtifactReading::absent(),
                 Found::CannotTell(why) => ArtifactReading::cannot_tell(reason(why)?),
             };
@@ -280,10 +427,25 @@ impl RustItemSpace {
         Ok(readings)
     }
 
-    /// The bytes of an item now: none, since an item has no content this adapter
-    /// reads.
-    pub async fn current(&self, _name: &ArtifactName) -> Result<Option<Vec<u8>>, RustItemError> {
-        Ok(None)
+    /// The text of what an item promises now (what a link that compares its text
+    /// compares), or none when the name is none, or the item is not there, or its
+    /// promise cannot be told.
+    pub async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustItemError> {
+        let Ok(path) = RustPath::parse(name.as_str()) else {
+            return Ok(None);
+        };
+        let Ok(docs) = self.docs().await else {
+            return Ok(None);
+        };
+        let mut lookup = Lookup::new(docs, self.max_page).await;
+        Ok(match lookup.find(&path).await {
+            Found::There(place) => lookup
+                .promise(&place)
+                .await
+                .ok()
+                .map(|promise| promise.text().into_bytes()),
+            Found::Unread(_) | Found::Absent | Found::CannotTell(_) => None,
+        })
     }
 
     /// The directory rustdoc writes the docs of the project in (the rule on the
@@ -347,6 +509,24 @@ fn is_missing(error: &std::io::Error) -> bool {
 /// The domain's reason of a text this adapter wrote.
 fn reason(why: String) -> Result<NonBlank, RustItemError> {
     NonBlank::new(why).map_err(RustItemError::Reason)
+}
+
+/// The reading of an item that is there: the one place it is made. The text of its
+/// promise is hashed as each comparison asked counts it; a promise that cannot be
+/// read is there for presence only, and any other comparison cannot be told, for
+/// that reason.
+fn reading_of(
+    promise: Result<Promise, Unreadable>,
+    comparisons: &BTreeSet<Comparison>,
+) -> Result<ArtifactReading, RustItemError> {
+    match promise {
+        Ok(promise) => Ok(ArtifactReading::of_bytes(
+            promise.text().as_bytes(),
+            comparisons,
+            None,
+        )),
+        Err(unreadable) => Ok(ArtifactReading::there(reason(unreadable.to_string())?)),
+    }
 }
 
 /// A name of the space, read: the crate and the segments after it.
@@ -468,9 +648,61 @@ fn segment_problem(segment: &str) -> Option<String> {
 /// What a path comes to in the docs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Found {
-    There,
+    /// It is there, at this place.
+    There(Place),
+    /// It is there, and there is no page to read what it promises from, and why (a
+    /// re-export into docs that are not here).
+    Unread(String),
     Absent,
     CannotTell(String),
+}
+
+/// Where in the docs the thing a path names is told of: the one place
+/// `Lookup::find` hands over, for what its promise is read from. Only a member has
+/// an anchor, so it is the one variant that has it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Place {
+    /// A module, or a crate: the index of its directory ([`MODULE_KIND`]).
+    Module {
+        /// The `index.html` of the module.
+        page: PathBuf,
+    },
+    /// An item: its page.
+    Item {
+        page: PathBuf,
+        /// The kind of the page: a kind of [`ITEM_KINDS`].
+        kind: String,
+    },
+    /// A member of a type: the page of the type, the kind of the member and the
+    /// `id` of its element on the page (`method.new`).
+    Member {
+        page: PathBuf,
+        kind: MemberKind,
+        anchor: String,
+    },
+}
+
+impl Place {
+    /// The page the promise is read from.
+    fn page(&self) -> &Path {
+        match self {
+            Self::Module { page } | Self::Item { page, .. } | Self::Member { page, .. } => page,
+        }
+    }
+}
+
+impl From<At> for Found {
+    /// What a walk that ends at `at` comes to: the one place a [`Place`] is built.
+    fn from(at: At) -> Self {
+        match at {
+            At::Module(dir) => Self::There(Place::Module {
+                page: dir.join("index.html"),
+            }),
+            At::Item { page, kind } => Self::There(Place::Item { page, kind }),
+            At::Member { page, kind, anchor } => Self::There(Place::Member { page, kind, anchor }),
+            At::Unfollowed(why) => Self::Unread(why),
+        }
+    }
 }
 
 /// Where a walk along a path is.
@@ -480,8 +712,13 @@ enum At {
     Module(PathBuf),
     /// The page of an item.
     Item { page: PathBuf, kind: String },
-    /// A member of a type: nothing is under it.
-    Member,
+    /// A member of a type, found by its anchor on the page of the type: nothing is
+    /// under it.
+    Member {
+        page: PathBuf,
+        kind: MemberKind,
+        anchor: String,
+    },
     /// A re-export whose link cannot be followed, and why: what is under it cannot
     /// be told.
     Unfollowed(String),
@@ -568,7 +805,13 @@ impl Lookup {
                 Err(why) => return Found::CannotTell(why),
             };
         }
-        Found::There
+        Found::from(at)
+    }
+
+    /// What the thing at `place` promises, read from its page, or why it cannot be.
+    async fn promise(&mut self, place: &Place) -> Result<Promise, Unreadable> {
+        let html = self.page(place.page()).await.map_err(Unreadable::Page)?;
+        promise_of(&html, place)
     }
 
     /// The place `segment` names under `at`: none when it names nothing there.
@@ -580,12 +823,15 @@ impl Lookup {
                     return Ok(None);
                 }
                 let html = self.page(&page).await?;
-                let named = MEMBER_KINDS
-                    .iter()
-                    .any(|member| html.contains(&format!("id=\"{member}.{segment}\"")));
-                Ok(named.then_some(At::Member))
+                let named = MemberKind::all()
+                    .find(|member| html.contains(&format!("id=\"{}.{segment}\"", member.word())));
+                Ok(named.map(|member| At::Member {
+                    page,
+                    kind: member,
+                    anchor: format!("{}.{segment}", member.word()),
+                }))
             }
-            At::Member => Ok(None),
+            At::Member { .. } => Ok(None),
             At::Unfollowed(why) => Err(why),
         }
     }
@@ -757,6 +1003,15 @@ fn within(docs: &Path, dir: &Path, link: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    //! The pages of these tests are written by hand, in the layout rustdoc 1.95
+    //! writes (its classes and the order of its elements), with words of this
+    //! repository only: no page rustdoc wrote, and no text of the standard library,
+    //! is copied into one. Most of them are only as much of a page as finding a name
+    //! needs (so what they promise cannot be read, and each says so); the pages of
+    //! the tests of `promise` and of what an item promises below are laid out whole.
+    //! The end-to-end tests of the command line run `cargo doc` on a crate and watch
+    //! the layout of the real thing.
+
     use whyshelf_core::domain::shelf::artifact::{ArtifactState, Comparison, Untold};
 
     use super::*;
@@ -772,13 +1027,41 @@ mod tests {
             .collect()
     }
 
+    /// The names asked under presence and under the comparisons of a text.
+    fn asks_text(names: &[&str]) -> SpaceAsks {
+        let comparisons = BTreeSet::from([Comparison::Presence, Comparison::Bytes, lines()]);
+        names.iter().map(|t| (n(t), comparisons.clone())).collect()
+    }
+
     /// The items whose docs are under `target`, given as `CARGO_TARGET_DIR`.
     fn at_target(target: &Path) -> RustItemSpace {
         RustItemSpace::new(PathBuf::from("/nowhere"), Some(target.to_path_buf()))
     }
 
-    fn there() -> ArtifactReading {
-        ArtifactReading::there(NonBlank::new(PRESENCE_ONLY).unwrap())
+    /// Whether the reading tells the thing is there under presence, with the one
+    /// hash presence has.
+    fn is_there(reading: &ArtifactReading) -> bool {
+        reading.state(&Comparison::Presence)
+            == ArtifactState::Present(Comparison::Presence.fingerprint(&[]))
+    }
+
+    /// Why the reading cannot tell the thing under `comparison`, when it cannot.
+    fn untold_why(reading: &ArtifactReading, comparison: &Comparison) -> Option<String> {
+        match reading.state(comparison) {
+            ArtifactState::Unknown(Untold::Said(why)) => Some(why.as_str().to_owned()),
+            _ => None,
+        }
+    }
+
+    fn lines() -> Comparison {
+        Comparison::Lines {
+            ignore: BTreeSet::new(),
+        }
+    }
+
+    /// The hash of `text` under `comparison`.
+    fn hash_of(text: &[u8], comparison: &Comparison) -> ArtifactState {
+        ArtifactState::Present(comparison.fingerprint(text))
     }
 
     async fn write(dir: &Path, at: &str, text: &str) {
@@ -915,24 +1198,30 @@ mod tests {
     }
 
     #[test]
-    fn the_adapter_offers_the_preset_rustdoc_for_its_space() {
+    fn the_adapter_offers_the_presets_rustdoc_and_rustdoc_promise_for_its_space() {
         let space = Space::new(RUST_ITEM_SPACE).unwrap();
+        let values = |compare: &str| PresetValues {
+            space: Some("rust-item".to_owned()),
+            compare: Some(compare.to_owned()),
+            ignore: None,
+            means: Some(Propagation::Depends),
+        };
         assert_eq!(
             presets(&space),
-            BuiltinPresets::from([(
-                PresetName::new(RUSTDOC_PRESET).unwrap(),
-                PresetValues {
-                    space: Some("rust-item".to_owned()),
-                    compare: Some("presence".to_owned()),
-                    ignore: None,
-                    means: Some(Propagation::Depends),
-                }
-            )])
+            BuiltinPresets::from([
+                (PresetName::new(RUSTDOC_PRESET).unwrap(), values("presence")),
+                (
+                    PresetName::new(RUSTDOC_PROMISE_PRESET).unwrap(),
+                    values("lines")
+                ),
+            ])
         );
+        assert_eq!(RUSTDOC_PRESET, "rustdoc");
+        assert_eq!(RUSTDOC_PROMISE_PRESET, "rustdoc-promise");
     }
 
     #[tokio::test]
-    async fn a_path_found_in_the_docs_is_there_with_the_presence_hash_only() {
+    async fn a_path_found_in_the_docs_is_there_and_tells_presence_whatever_its_page_is() {
         let target = demo().await;
         let source = at_target(target.path());
         let present = [
@@ -973,14 +1262,29 @@ mod tests {
         ];
         let found = source.resolve(&asks(&present)).await.unwrap();
         for name in present {
-            assert_eq!(found[&n(name)], there(), "{name}");
+            assert!(is_there(&found[&n(name)]), "{name}");
         }
-        // Any comparison but presence cannot be told, and says why.
-        let why = match found[&n("demo::Shelf")].state(&Comparison::Bytes) {
-            ArtifactState::Unknown(Untold::Said(why)) => why.as_str().to_owned(),
-            other => panic!("{other:?}"),
-        };
-        assert!(why.contains("compares only presence"), "{why}");
+        // Asked of presence only, no page is read for what the item promises.
+        let why = untold_why(&found[&n("demo::Shelf")], &Comparison::Bytes).unwrap();
+        assert!(why.contains("only presence was asked"), "{why}");
+        // The pages of this tree are not laid out as rustdoc's (no main content, no
+        // declaration): what the items promise cannot be read, so any comparison but
+        // presence cannot be told, and says why.
+        let found = source.resolve(&asks_text(&present)).await.unwrap();
+        for name in present {
+            assert!(is_there(&found[&n(name)]), "{name}");
+        }
+        for name in ["demo::Shelf", "demo::Shelf::build", "demo::inner"] {
+            let why = untold_why(&found[&n(name)], &Comparison::Bytes).unwrap();
+            assert!(
+                why.contains("not laid out as this adapter reads"),
+                "{name}: {why}"
+            );
+            assert!(untold_why(&found[&n(name)], &lines()).is_some(), "{name}");
+        }
+        // A re-export into docs that are not here has no page to read.
+        let why = untold_why(&found[&n("demo::ext")], &Comparison::Bytes).unwrap();
+        assert!(why.contains("from docs that are not here"), "{why}");
     }
 
     #[tokio::test]
@@ -1086,12 +1390,16 @@ mod tests {
         )
         .await;
         let found = source
-            .resolve(&asks(&["tiny::Big", "tiny::Big::x", "demo::Shelf"]))
+            .resolve(&asks_text(&["tiny::Big", "tiny::Big::x", "demo::Shelf"]))
             .await
             .unwrap();
         // The page is listed, so the item is there: only what the page would tell
-        // cannot be told, and neither can anything of a crate whose index is large.
-        assert_eq!(found[&n("tiny::Big")], there());
+        // cannot be told (its promise too), and neither can anything of a crate whose
+        // index is large.
+        assert!(is_there(&found[&n("tiny::Big")]));
+        let why = untold_why(&found[&n("tiny::Big")], &Comparison::Bytes).unwrap();
+        assert!(why.contains("larger than 200 bytes"), "{why}");
+        assert_eq!(source.current(&n("tiny::Big")).await.unwrap(), None);
         for name in ["tiny::Big::x", "demo::Shelf"] {
             let why = unknown_why(&found[&n(name)]).unwrap();
             assert!(why.contains("larger than 200 bytes"), "{name}: {why}");
@@ -1117,7 +1425,9 @@ mod tests {
             .resolve(&asks(&["demo::Esc", "demo::Esc::new"]))
             .await
             .unwrap();
-        assert_eq!(found[&n("demo::Esc")], there());
+        assert!(is_there(&found[&n("demo::Esc")]));
+        let why = untold_why(&found[&n("demo::Esc")], &Comparison::Bytes).unwrap();
+        assert!(why.contains("from docs that are not here"), "{why}");
         let why = unknown_why(&found[&n("demo::Esc::new")]).unwrap();
         assert!(why.contains("from docs that are not here"), "{why}");
     }
@@ -1159,7 +1469,11 @@ mod tests {
                     "{wrong}: {why:?}"
                 );
             }
-            assert_eq!(source.current(&n("demo::Shelf")).await.unwrap(), None);
+            // A text that is no name has no promise now; so has no build directory,
+            // and so has a page that is not laid out as rustdoc's.
+            for name in ["demo::Vec<T>", "demo::Shelf"] {
+                assert_eq!(source.current(&n(name)).await.unwrap(), None, "{name}");
+            }
         }
     }
 
@@ -1273,6 +1587,352 @@ mod tests {
         ] {
             assert_eq!(within(docs, &dir, outside), None, "{outside}");
         }
+    }
+
+    /// A page laid out whole, as rustdoc lays out that of an item: a sidebar with a
+    /// heading, then the main content.
+    fn whole(main: &str) -> String {
+        format!(
+            "<!DOCTYPE html><html><head>{GENERATOR_MARK}</head><body><nav class=\"sidebar\"><h2 class=\"location\">Sidebar</h2></nav><main><section id=\"main-content\" class=\"content\"><div class=\"main-heading\"><h1>Item</h1><span class=\"sub-heading\"><a class=\"src\" href=\"s.html#1\">Source</a> </span></div>{main}</section></main></body></html>"
+        )
+    }
+
+    /// The top doc of an item, in one paragraph.
+    fn top_doc(text: &str) -> String {
+        format!(
+            "<details class=\"toggle top-doc\" open><summary class=\"hideme\"><span>Expand description</span></summary><div class=\"docblock\"><p>{text}</p>\n</div></details>"
+        )
+    }
+
+    /// A method as the page of its type lays it out: in a toggle when it has docs
+    /// (`<p>` after `docs`, with the lines `Source` going to `at`).
+    fn method(name: &str, signature: &str, docs: Option<&str>, at: u32) -> String {
+        let section = format!(
+            "<section id=\"method.{name}\" class=\"method\"><a class=\"src rightside\" href=\"s.html#{at}\">Source</a><h4 class=\"code-header\">{signature}</h4></section>"
+        );
+        match docs {
+            Some(docs) => format!(
+                "<details class=\"toggle method-toggle\" open><summary>{section}</summary><div class=\"docblock\"><p>{docs}</p>\n</div></details>"
+            ),
+            None => section,
+        }
+    }
+
+    const SHELF_DECL: &str = "<pre class=\"rust item-decl\"><code>pub struct Shelf { <span class=\"comment\">/* private fields */</span> }</code></pre>";
+
+    /// The page of the struct `Shelf`: its docs (none: no top doc), the methods
+    /// of its impl, and what comes after them.
+    fn shelf_page(docs: Option<&str>, methods: &str, tail: &str) -> String {
+        let docs = docs.map(top_doc).unwrap_or_default();
+        whole(&format!(
+            "{SHELF_DECL}{docs}<h2 id=\"implementations\" class=\"section-header\">Implementations<a href=\"#implementations\" class=\"anchor\">§</a></h2><div id=\"implementations-list\"><details class=\"toggle implementors-toggle\" open><summary><section id=\"impl-Shelf\" class=\"impl\"><h3 class=\"code-header\">impl Shelf</h3></section></summary><div class=\"impl-items\">{methods}</div></details></div>{tail}"
+        ))
+    }
+
+    /// The methods of `Shelf`: `put` has docs, `bare` has none and is the last.
+    fn shelf_methods(put_signature: &str, put_docs: &str, at: u32) -> String {
+        format!(
+            "{}{}",
+            method("put", put_signature, Some(put_docs), at),
+            method(
+                "bare",
+                "pub fn <a href=\"#method.bare\">bare</a>(&amp;self)",
+                None,
+                at + 9
+            )
+        )
+    }
+
+    const PUT: &str = "pub fn <a href=\"#method.put\" class=\"fn\">put</a>(&amp;mut self)";
+
+    /// A trait impl after the methods, as rustdoc writes it.
+    const TRAIT_IMPL: &str = "<h2 id=\"trait-implementations\" class=\"section-header\">Trait Implementations</h2><div id=\"trait-implementations-list\"><details class=\"toggle implementors-toggle\" open><summary><section id=\"impl-Clone-for-Shelf\" class=\"impl\"><h3 class=\"code-header\">impl Clone for Shelf</h3></section></summary><div class='docblock'>Not a member's.</div></details></div>";
+
+    /// The docs of the crate `demo`, with the module `inner` (no docs), the function
+    /// `free` (no docs) and the struct `Shelf` as this page has it.
+    async fn promising(shelf: &str) -> tempfile::TempDir {
+        let target = tempfile::tempdir().unwrap();
+        let d = target.path();
+        let index = whole(&format!(
+            "{}<h2 id=\"modules\" class=\"section-header\">Modules</h2>",
+            top_doc("The demo crate.")
+        ));
+        write(d, "doc/demo/index.html", &index).await;
+        write(d, "doc/demo/struct.Shelf.html", shelf).await;
+        write(
+            d,
+            "doc/demo/fn.free.html",
+            &whole("<pre class=\"rust item-decl\"><code>pub fn free()</code></pre>"),
+        )
+        .await;
+        write(
+            d,
+            "doc/demo/inner/index.html",
+            &whole("<h2 id=\"structs\" class=\"section-header\">Structs</h2>"),
+        )
+        .await;
+        target
+    }
+
+    const PROMISED: [&str; 6] = [
+        "demo",
+        "demo::Shelf",
+        "demo::Shelf::put",
+        "demo::Shelf::bare",
+        "demo::free",
+        "demo::inner",
+    ];
+
+    /// The readings of the names in `PROMISED`, each asked under all three
+    /// comparisons.
+    async fn promised(target: &Path) -> SpaceReadings {
+        let comparisons = BTreeSet::from([Comparison::Presence, Comparison::Bytes, lines()]);
+        let asks: SpaceAsks = PROMISED
+            .iter()
+            .map(|name| (n(name), comparisons.clone()))
+            .collect();
+        at_target(target).resolve(&asks).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn an_item_is_there_with_the_hash_of_what_it_promises() {
+        let shelf = shelf_page(
+            Some("A shelf of books."),
+            &shelf_methods(PUT, "Puts a book.", 20),
+            "",
+        );
+        let target = promising(&shelf).await;
+        let found = promised(target.path()).await;
+        let texts = [
+            ("demo", "doc The demo crate.\n"),
+            (
+                "demo::Shelf",
+                "decl pub struct Shelf { /* private fields */ }\ndoc A shelf of books.\n",
+            ),
+            (
+                "demo::Shelf::put",
+                "decl pub fn put(&mut self)\ndoc Puts a book.\n",
+            ),
+            ("demo::Shelf::bare", "decl pub fn bare(&self)\n"),
+            ("demo::free", "decl pub fn free()\n"),
+            // A module with no docs promises that.
+            ("demo::inner", ""),
+        ];
+        let source = at_target(target.path());
+        for (name, text) in texts {
+            let reading = &found[&n(name)];
+            assert!(is_there(reading), "{name}");
+            for comparison in [Comparison::Bytes, lines()] {
+                assert_eq!(
+                    reading.state(&comparison),
+                    hash_of(text.as_bytes(), &comparison),
+                    "{name}"
+                );
+            }
+            // What `current` returns, for a link of any comparison.
+            assert_eq!(
+                source.current(&n(name)).await.unwrap(),
+                Some(text.as_bytes().to_vec()),
+                "{name}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_edit_of_a_body_changes_no_hash_and_one_of_docs_or_a_declaration_does() {
+        let hashes = |found: &SpaceReadings, comparison: &Comparison| -> Vec<ArtifactState> {
+            PROMISED
+                .iter()
+                .map(|name| found[&n(name)].state(comparison))
+                .collect()
+        };
+        let base_page = shelf_page(
+            Some("A shelf of books."),
+            &shelf_methods(PUT, "Puts a book.", 20),
+            "",
+        );
+        let target = promising(&base_page).await;
+        let base = promised(target.path()).await;
+        let page_at = "doc/demo/struct.Shelf.html";
+
+        // A body that grew: every line `Source` goes to moves, nothing else does.
+        let grown = shelf_page(
+            Some("A shelf of books."),
+            &shelf_methods(PUT, "Puts a book.", 40),
+            "",
+        );
+        write(target.path(), page_at, &grown).await;
+        let after = promised(target.path()).await;
+        for comparison in [Comparison::Bytes, lines()] {
+            assert_eq!(hashes(&base, &comparison), hashes(&after, &comparison));
+        }
+
+        // An impl added after the last method leaves the text of every method, and
+        // of the type, as it was.
+        let with_impl = shelf_page(
+            Some("A shelf of books."),
+            &shelf_methods(PUT, "Puts a book.", 20),
+            TRAIT_IMPL,
+        );
+        write(target.path(), page_at, &with_impl).await;
+        let after = promised(target.path()).await;
+        for comparison in [Comparison::Bytes, lines()] {
+            assert_eq!(hashes(&base, &comparison), hashes(&after, &comparison));
+        }
+
+        // Each of these changes the promise of what it names, for both comparisons,
+        // and of nothing else.
+        let changed = [
+            (
+                "the docs of the type",
+                shelf_page(
+                    Some("A shelf of old books."),
+                    &shelf_methods(PUT, "Puts a book.", 20),
+                    "",
+                ),
+                "demo::Shelf",
+            ),
+            (
+                "no docs of the type",
+                shelf_page(None, &shelf_methods(PUT, "Puts a book.", 20), ""),
+                "demo::Shelf",
+            ),
+            (
+                "the docs of a method",
+                shelf_page(
+                    Some("A shelf of books."),
+                    &shelf_methods(PUT, "Puts a book away.", 20),
+                    "",
+                ),
+                "demo::Shelf::put",
+            ),
+            (
+                "the signature of a method",
+                shelf_page(
+                    Some("A shelf of books."),
+                    &shelf_methods(
+                        "pub fn <a href=\"#method.put\" class=\"fn\">put</a>(&amp;mut self, n: u8)",
+                        "Puts a book.",
+                        20,
+                    ),
+                    "",
+                ),
+                "demo::Shelf::put",
+            ),
+            (
+                "docs given to a method that had none",
+                shelf_page(
+                    Some("A shelf of books."),
+                    &format!(
+                        "{}{}",
+                        method("put", PUT, Some("Puts a book."), 20),
+                        method(
+                            "bare",
+                            "pub fn <a href=\"#method.bare\">bare</a>(&amp;self)",
+                            Some("Now said."),
+                            29
+                        )
+                    ),
+                    "",
+                ),
+                "demo::Shelf::bare",
+            ),
+            (
+                "the declaration of the type",
+                shelf_page(
+                    Some("A shelf of books."),
+                    &shelf_methods(PUT, "Puts a book.", 20),
+                    "",
+                )
+                .replace("pub struct Shelf", "pub struct Shelf2"),
+                "demo::Shelf",
+            ),
+        ];
+        for (what, html, name) in changed {
+            write(target.path(), page_at, &html).await;
+            let after = promised(target.path()).await;
+            for comparison in [Comparison::Bytes, lines()] {
+                for other in PROMISED {
+                    let (was, is) = (
+                        base[&n(other)].state(&comparison),
+                        after[&n(other)].state(&comparison),
+                    );
+                    assert_eq!(was != is, other == name, "{what}: {other}");
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_blank_line_added_to_the_docs_is_a_change_for_bytes_and_none_for_lines() {
+        let one = shelf_page(
+            Some("A shelf of books.</p>\n<p>It has a root."),
+            &shelf_methods(PUT, "Puts a book.", 20),
+            "",
+        );
+        let two = one.replace("</p>\n<p>It", "</p>\n\n<p>It");
+        assert_ne!(one, two);
+        let target = promising(&one).await;
+        let before = promised(target.path()).await;
+        write(target.path(), "doc/demo/struct.Shelf.html", &two).await;
+        let after = promised(target.path()).await;
+        let shelf = n("demo::Shelf");
+        assert_eq!(
+            before[&shelf].state(&lines()),
+            after[&shelf].state(&lines())
+        );
+        assert_ne!(
+            before[&shelf].state(&Comparison::Bytes),
+            after[&shelf].state(&Comparison::Bytes)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_kind_with_a_declaration_and_a_page_without_one_is_there_and_cannot_be_told() {
+        // No `item-decl` in the page of a struct and of a method.
+        let shelf = whole(&format!(
+            "{}{}",
+            top_doc("A shelf of books."),
+            "<section id=\"method.put\" class=\"method\"></section>"
+        ));
+        let target = promising(&shelf).await;
+        let found = promised(target.path()).await;
+        for name in ["demo::Shelf", "demo::Shelf::put"] {
+            let reading = &found[&n(name)];
+            assert!(is_there(reading), "{name}");
+            for comparison in [Comparison::Bytes, lines()] {
+                let why = untold_why(reading, &comparison).unwrap();
+                assert!(why.contains("has no declaration"), "{name}: {why}");
+            }
+        }
+        // The kinds with none read the same way as before.
+        for name in ["demo", "demo::inner"] {
+            assert!(matches!(
+                found[&n(name)].state(&lines()),
+                ArtifactState::Present(_)
+            ));
+        }
+        let source = at_target(target.path());
+        assert_eq!(source.current(&n("demo::Shelf")).await.unwrap(), None);
+        assert_eq!(source.current(&n("demo::Shelf::put")).await.unwrap(), None);
+        // A module with no docs has the empty text.
+        assert_eq!(
+            source.current(&n("demo::inner")).await.unwrap(),
+            Some(Vec::new())
+        );
+    }
+
+    #[tokio::test]
+    async fn what_is_absent_or_cannot_be_told_has_no_text_now() {
+        let target = promising(&shelf_page(None, "", "")).await;
+        let source = at_target(target.path());
+        for name in ["demo::Missing", "demo::Shelf::missing", "other::Item"] {
+            assert_eq!(source.current(&n(name)).await.unwrap(), None, "{name}");
+        }
+        assert_eq!(
+            source.current(&n("demo::Shelf")).await.unwrap(),
+            Some(b"decl pub struct Shelf { /* private fields */ }\n".to_vec())
+        );
     }
 
     /// The `rustdoc` paths the decisions of this repository list, each with the key
