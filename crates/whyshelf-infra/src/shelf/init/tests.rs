@@ -13,7 +13,7 @@ use super::super::books::parse;
 use super::*;
 
 fn project(dir: &tempfile::TempDir) -> Project {
-    Project::new(dir.path(), Some("tester".to_owned()), None)
+    Project::new(dir.path(), Some("tester".to_owned()), None).unwrap()
 }
 
 /// The template read and checked as the declaration of a project is.
@@ -620,7 +620,7 @@ async fn refused_through_a_link_out(template: Template, link: &str) {
         .await
         .unwrap();
     tokio::fs::symlink("../out", root.join(link)).await.unwrap();
-    let mut app = ShelfApp::new(Project::new(&root, Some("tester".to_owned()), None));
+    let mut app = ShelfApp::new(Project::new(&root, Some("tester".to_owned()), None).unwrap());
     let error = app.init(template.request().unwrap()).await.unwrap_err();
     let ShelfError::InTheWay { obstacles } = &error else {
         panic!("{template:?}: {error:?}");

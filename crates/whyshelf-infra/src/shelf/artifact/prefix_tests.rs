@@ -1,21 +1,24 @@
 //! Tests of what each adapter says of a move of a prefix
+//! ([`NamePrefixes`](whyshelf_core::app::shelf::NamePrefixes)), asked of the adapter
+//! alone through the dispatch of the core, by the port the use cases ask
 //! ([`ArtifactSource::renamed`]): that a prefix ends only at a boundary of the space's
 //! own grammar of names, that the new name is built by it, and that a prefix or a name
 //! the grammar cannot read is told as the domain wants it (not under, outside,
-//! unbuildable), never by looking for a text in a name.
+//! unbuildable), never by looking for a text in a name. What the dispatch answers for
+//! a space with no adapter is the core's test.
 
-use std::path::Path;
+use std::path::PathBuf;
 
-use whyshelf_core::app::shelf::ArtifactSource;
+use whyshelf_core::app::shelf::{ArtifactSource, Spaces};
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, NamePrefix, PrefixAnswers, PrefixAsks, PrefixMove, Renamed, Space, SpacePrefixes,
 };
 
-use super::ArtifactSpaces;
 use super::file::FileSpace;
 use super::js_test::JsTestSpace;
 use super::rust_item::RustItemSpace;
 use super::rust_test::RustTestSpace;
+use super::{Adapter, Registry};
 
 fn space(text: &str) -> Space {
     Space::new(text).unwrap()
@@ -25,27 +28,27 @@ fn name(text: &str) -> ArtifactName {
     ArtifactName::new(text).unwrap()
 }
 
-fn source() -> ArtifactSpaces {
-    let root = Path::new(".");
-    ArtifactSpaces::of_project(
-        FileSpace::new(root.to_path_buf()),
-        RustItemSpace::new(root.to_path_buf(), None),
-        RustTestSpace::new(root.to_path_buf()),
-        JsTestSpace::new(root.to_path_buf()),
-    )
-}
-
 fn moving(from: &str, to: &str) -> PrefixMove {
     PrefixMove::new(NamePrefix::new(from).unwrap(), NamePrefix::new(to).unwrap()).unwrap()
 }
 
-/// The answers for these names of `in_space`, for the move `from` to `to`.
+/// The answers for these names of `in_space`, for the move `from` to `to`, of the
+/// adapter of that space alone, asked through the dispatch as a project asks it.
 fn ask(in_space: &str, names: &[&str], from: &str, to: &str) -> PrefixAnswers {
+    let root = PathBuf::from(".");
+    let adapter = match in_space {
+        "file" => Adapter::File(FileSpace::new(root)),
+        "rust-item" => Adapter::RustItem(RustItemSpace::new(root, None)),
+        "rust-test" => Adapter::RustTest(RustTestSpace::new(root)),
+        "js-test" => Adapter::JsTest(JsTestSpace::new(root)),
+        other => panic!("no adapter of the space {other} here"),
+    };
+    let spaces = Spaces::new(Registry::of_one(adapter)).unwrap();
     let mut asks = PrefixAsks::new();
     for text in names {
         asks.ask(space(in_space), name(text));
     }
-    source().renamed(&asks, &moving(from, to)).unwrap()
+    spaces.renamed(&asks, &moving(from, to)).unwrap()
 }
 
 /// What the space's adapter says of each name, in the order given.
@@ -657,31 +660,4 @@ fn a_js_prefix_of_another_form_or_none_is_told_as_the_domain_wants() {
         renamed(&answers, "js-test", &names)[0],
         Renamed::Unbuildable(_)
     ));
-}
-
-// The dispatch.
-
-#[test]
-fn a_space_with_no_adapter_takes_no_prefix_and_every_space_asked_is_answered() {
-    let mut asks = PrefixAsks::new();
-    asks.ask(space("file"), name("src/a/x.rs"));
-    asks.ask(space("other"), name("src/a/x.rs"));
-    asks.ask(space("rust-test"), name("src/a/x.rs::t"));
-    let answers = source().renamed(&asks, &moving("src/a", "src/b")).unwrap();
-    assert_eq!(answers.of(), &moving("src/a", "src/b"));
-    assert_eq!(
-        answers.prefixes_of(&space("other")),
-        Some(&SpacePrefixes::NoPrefixes)
-    );
-    assert_eq!(answers.renamed(&space("other"), &name("src/a/x.rs")), None);
-    assert_eq!(
-        answers.renamed(&space("file"), &name("src/a/x.rs")),
-        Some(&under("src/b/x.rs"))
-    );
-    assert_eq!(
-        answers.renamed(&space("rust-test"), &name("src/a/x.rs::t")),
-        Some(&under("src/b/x.rs::t"))
-    );
-    // A space not asked has no answer.
-    assert_eq!(answers.prefixes_of(&space("js-test")), None);
 }

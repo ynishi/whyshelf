@@ -4,7 +4,7 @@ key: "DEC-60"
 issues: ["#69"]
 rejected: ["Declare the moves Git finds: a declaration is a person's, with a reason (REQ-9)", "Answer suggestions through the artifact port: that port gives every name one of four answers on every reading, and a search may have none", "Run git diff: the plumbing diff-index never writes back a refreshed index"]
 related: ["DEC-59", "DEC-29"]
-rustdoc: ["whyshelf_core::domain::shelf::ledger::PinnedNames", "whyshelf_core::domain::shelf::ledger::GoneNames", "whyshelf_core::app::shelf::ports::MoveSource", "whyshelf_core::app::shelf::ShelfApp::moves"]
+rustdoc: ["whyshelf_core::domain::shelf::ledger::PinnedNames", "whyshelf_core::domain::shelf::ledger::GoneNames", "whyshelf_core::app::shelf::ports::MoveSource", "whyshelf_core::app::shelf::SpaceSuggest", "whyshelf_core::app::shelf::CannotSuggest", "whyshelf_core::app::shelf::ShelfApp::moves"]
 serves: ["REQ-23", "REQ-10", "REQ-5"]
 title: "whyshelf moves lists the pinned names that are gone and the moves each space can suggest, and declares none"
 ---

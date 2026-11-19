@@ -86,7 +86,7 @@
 //!
 //! `judge moved --prefix` moves every name under a prefix at once, and this adapter
 //! says which names are under it and what each becomes
-//! ([`ArtifactSource::renamed`](whyshelf_core::app::shelf::ArtifactSource::renamed)).
+//! ([`NamePrefixes`]).
 //! A prefix is a path under the root, read as a name's path is, into its parts (what
 //! lies between two `/`); one `/` at its end is dropped, as a shell's completion of a
 //! directory writes it (`src/a/` is `src/a`, `src/a//` is no path). A name is under
@@ -156,13 +156,15 @@ use std::io;
 use std::path::PathBuf;
 
 use tokio::io::AsyncReadExt;
-use whyshelf_core::app::shelf::{Creation, FileWrite};
+use whyshelf_core::app::shelf::{
+    Answers, Creation, FileWrite, NamePrefixes, SpaceAdapter, SpaceReadBack, SpaceSuggest,
+};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactHash, ArtifactName, ArtifactReading, Comparison, ContentAddress, NamePrefix,
-    PrefixMove, Renamed, Revision, Space, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
+    PrefixMove, Renamed, Revision, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::ledger::{
     FoundBy, GoneName, MoveCandidate, MoveNote, NameSuggestions, PATH_ONLY_SPACE, PinnedThere,
@@ -189,8 +191,8 @@ pub const FILE_PRESET: &str = "file";
 /// The name of the preset of a link to files that stands on their being there.
 pub const CODE_PRESET: &str = "code";
 
-/// The presets this adapter offers when it resolves the names of `space`, each
-/// `space` that space and `means = "depends"`:
+/// The presets this adapter offers, each `space` [`FILE_SPACE`] and
+/// `means = "depends"`:
 ///
 /// | preset | `compare` | an edit of a file | a file removed or renamed |
 /// |---|---|---|---|
@@ -203,9 +205,9 @@ pub const CODE_PRESET: &str = "code";
 /// moved` follows a move; `moves` can suggest one only from Git's renames (a
 /// rename staged in the index, or committed), since a presence pin has no content
 /// to search for (its note `no_content`).
-pub fn presets(space: &Space) -> BuiltinPresets {
+pub fn presets() -> BuiltinPresets {
     let values = |compare: &str| PresetValues {
-        space: Some(space.as_str().to_owned()),
+        space: Some(FILE_SPACE.to_owned()),
         compare: Some(compare.to_owned()),
         ignore: None,
         means: Some(Propagation::Depends),
@@ -267,6 +269,56 @@ impl FileWrite for FileSpace {
                 step: failed.step,
                 source: failed.source,
             })
+    }
+}
+
+/// The space [`FILE_SPACE`]: it answers a move of a prefix, suggests where a file
+/// moved, and reads content back by the name of its blob.
+impl SpaceAdapter for FileSpace {
+    type Error = ArtifactError;
+    type Prefixes = Answers;
+    type Suggest = Answers;
+    type ReadBack = Answers;
+
+    fn space(&self) -> &str {
+        FILE_SPACE
+    }
+
+    fn presets(&self) -> BuiltinPresets {
+        presets()
+    }
+
+    async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, ArtifactError> {
+        FileSpace::resolve(self, asks).await
+    }
+
+    async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, ArtifactError> {
+        FileSpace::current(self, name).await
+    }
+}
+
+impl NamePrefixes for FileSpace {
+    fn renamed(
+        &self,
+        names: &BTreeSet<ArtifactName>,
+        of: &PrefixMove,
+    ) -> Result<(SpacePrefixes, SpaceRenamed), ArtifactError> {
+        renamed(names, of).map_err(ArtifactError::Reason)
+    }
+}
+
+impl SpaceSuggest for FileSpace {
+    async fn suggest(
+        &self,
+        gone: &[GoneName],
+    ) -> Result<BTreeMap<ArtifactName, NameSuggestions>, ArtifactError> {
+        FileSpace::suggest(self, gone).await
+    }
+}
+
+impl SpaceReadBack for FileSpace {
+    async fn read_back(&self, address: &ContentAddress) -> Result<Option<Vec<u8>>, ArtifactError> {
+        FileSpace::read_back(self, address).await
     }
 }
 
@@ -1136,7 +1188,9 @@ mod tests {
 
     use tokio::process::Command;
     use whyshelf_core::app::shelf::RevisionSource;
-    use whyshelf_core::domain::shelf::artifact::{ArtifactState, Comparison, LinePrefix, Untold};
+    use whyshelf_core::domain::shelf::artifact::{
+        ArtifactState, Comparison, LinePrefix, Space, Untold,
+    };
     use whyshelf_core::domain::shelf::ledger::NoteKind;
 
     use super::super::conformance;
@@ -1319,8 +1373,7 @@ mod tests {
 
     #[test]
     fn the_adapter_offers_the_presets_file_and_code_for_its_space() {
-        let space = Space::new(FILE_SPACE).unwrap();
-        let offered = presets(&space);
+        let offered = presets();
         let values = |compare: &str| PresetValues {
             space: Some("file".to_owned()),
             compare: Some(compare.to_owned()),
@@ -1345,7 +1398,7 @@ mod tests {
              [[book.link]]\nname='code'\ntarget='artifact'\npreset='code'\n",
         )
         .unwrap();
-        let schema = Schema::declared(decls, &presets(&space), &BTreeSet::from([space])).unwrap();
+        let schema = Schema::declared(decls, &presets(), &BTreeSet::from([space])).unwrap();
         let book = schema.book("a").unwrap();
         let kind = book.artifact_links().get("code").unwrap();
         assert_eq!(kind.space.as_str(), "file");
@@ -1367,11 +1420,10 @@ mod tests {
         write(root, ".whyshelf/books.toml", &books).await;
         write(root, "notes/N-1.md", NOTE).await;
         write(root, "src/a.rs", CODE).await;
-        let mut app = whyshelf_core::app::shelf::ShelfApp::new(super::super::super::Project::new(
-            root.to_path_buf(),
-            Some("t".to_owned()),
-            None,
-        ));
+        let mut app = whyshelf_core::app::shelf::ShelfApp::new(
+            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None)
+                .unwrap(),
+        );
         app.judge_all(vec![JudgeRequest {
             judgement: Judgement::Approve {
                 until: None,
@@ -1742,11 +1794,10 @@ mod tests {
             isolated_git(root, &["add", "."]).await;
             isolated_git(root, &["commit", "-q", "-m", "start"]).await;
         }
-        let mut app = ShelfApp::new(super::super::super::Project::new(
-            root.to_path_buf(),
-            Some("t".to_owned()),
-            None,
-        ));
+        let mut app = ShelfApp::new(
+            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None)
+                .unwrap(),
+        );
         app.judge_all(vec![JudgeRequest {
             judgement: Judgement::Approve {
                 until: None,
@@ -1765,11 +1816,10 @@ mod tests {
     /// found, and the kinds of its notes.
     async fn suggested(root: &std::path::Path) -> (Vec<(String, FoundBy)>, Vec<NoteKind>) {
         use whyshelf_core::app::shelf::ShelfApp;
-        let app = ShelfApp::new(super::super::super::Project::new(
-            root.to_path_buf(),
-            Some("t".to_owned()),
-            None,
-        ));
+        let app = ShelfApp::new(
+            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None)
+                .unwrap(),
+        );
         let report = app.moves().await.unwrap();
         let absent = &report.suggestions.absent;
         assert_eq!(absent.len(), 1, "{absent:?}");
@@ -2026,11 +2076,10 @@ mod tests {
             run(dir.path(), &["hash-object", "--no-filters", "src/a.rs"]).await
         );
         // `get --approved` reads it back: the content Git stores.
-        let app = ShelfApp::new(super::super::super::Project::new(
-            dir.path().to_path_buf(),
-            Some("t".to_owned()),
-            None,
-        ));
+        let app = ShelfApp::new(
+            super::super::super::Project::new(dir.path().to_path_buf(), Some("t".to_owned()), None)
+                .unwrap(),
+        );
         let approved = app.show_approved(&"N-1".parse().unwrap()).await.unwrap();
         let item = approved
             .items

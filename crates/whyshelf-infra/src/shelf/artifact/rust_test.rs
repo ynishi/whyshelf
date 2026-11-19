@@ -66,7 +66,7 @@
 //!
 //! `judge moved --prefix` moves every name under a prefix at once, and this adapter
 //! says which names are under it and what each becomes
-//! ([`ArtifactSource::renamed`](whyshelf_core::app::shelf::ArtifactSource::renamed)).
+//! ([`NamePrefixes`]).
 //! A prefix is of one of two forms, and a text is of one only:
 //!
 //! - the parts of the path of a file, when the text has no `::` (`src/a.rs` is the
@@ -209,19 +209,20 @@
 //!   macro on another item (a `struct`, an `impl`) makes it.
 //! - A text is the tokens as `proc-macro2` prints them; an update of it that prints
 //!   them otherwise would make every approval of a test stale once.
-//! - Moves are not suggested ([`MoveSource`](whyshelf_core::app::shelf::MoveSource)).
+//! - Moves are not suggested: the adapter names [`CannotSuggest`].
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::PathBuf;
 
 use proc_macro2::{Delimiter, Group, Ident, Spacing, TokenStream, TokenTree};
+use whyshelf_core::app::shelf::{Answers, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, PrefixMove, Space, SpaceAsks, SpacePrefixes,
-    SpaceReadings, SpaceRenamed,
+    ArtifactName, ArtifactReading, Comparison, PrefixMove, SpaceAsks, SpacePrefixes, SpaceReadings,
+    SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
@@ -302,14 +303,14 @@ const KEYWORDS: &[&str] = &[
     "override", "priv", "typeof", "unsized", "virtual", "yield", "try", "_",
 ];
 
-/// The presets this adapter offers when it resolves the names of `space`: one,
-/// [`TEST_PRESET`], for a link to the tests that show a document holds, that stands
-/// on each token of them (`space` that space, `compare = "bytes"`,
-/// `means = "depends"`): an edit of a test makes the approvals that name it stale,
-/// one of another test in the file does not, and a test that goes away breaks them.
-pub fn presets(space: &Space) -> BuiltinPresets {
+/// The presets this adapter offers: one, [`TEST_PRESET`], for a link to the tests
+/// that show a document holds, that stands on each token of them
+/// (`space` [`RUST_TEST_SPACE`], `compare = "bytes"`, `means = "depends"`): an edit
+/// of a test makes the approvals that name it stale, one of another test in the file
+/// does not, and a test that goes away breaks them.
+pub fn presets() -> BuiltinPresets {
     let values = PresetValues {
-        space: Some(space.as_str().to_owned()),
+        space: Some(RUST_TEST_SPACE.to_owned()),
         compare: Some("bytes".to_owned()),
         ignore: None,
         means: Some(Propagation::Depends),
@@ -328,6 +329,41 @@ pub enum RustTestError {
     /// reason is never blank).
     #[error("the domain refused a reason of the adapter")]
     Reason(#[source] ValueError),
+}
+
+/// The space [`RUST_TEST_SPACE`]: it answers a move of a prefix, cannot suggest where
+/// a test moved, and keeps nothing by address.
+impl SpaceAdapter for RustTestSpace {
+    type Error = RustTestError;
+    type Prefixes = Answers;
+    type Suggest = CannotSuggest;
+    type ReadBack = NoReadBack;
+
+    fn space(&self) -> &str {
+        RUST_TEST_SPACE
+    }
+
+    fn presets(&self) -> BuiltinPresets {
+        presets()
+    }
+
+    async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, RustTestError> {
+        RustTestSpace::resolve(self, asks).await
+    }
+
+    async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustTestError> {
+        RustTestSpace::current(self, name).await
+    }
+}
+
+impl NamePrefixes for RustTestSpace {
+    fn renamed(
+        &self,
+        names: &BTreeSet<ArtifactName>,
+        of: &PrefixMove,
+    ) -> Result<(SpacePrefixes, SpaceRenamed), RustTestError> {
+        renamed(names, of).map_err(RustTestError::Reason)
+    }
 }
 
 /// Why a text is no name of the space.
@@ -1588,9 +1624,8 @@ mod tests {
 
     #[test]
     fn the_adapter_offers_the_preset_test_for_its_space() {
-        let space = Space::new(RUST_TEST_SPACE).unwrap();
         assert_eq!(
-            presets(&space),
+            presets(),
             BuiltinPresets::from([(
                 PresetName::new(TEST_PRESET).unwrap(),
                 PresetValues {

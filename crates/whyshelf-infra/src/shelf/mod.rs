@@ -93,16 +93,18 @@ mod project_tests;
 use std::path::{Path, PathBuf};
 
 pub use create::PersistFailed;
-use whyshelf_core::app::shelf::{ContentOf, ContentStore, FileSync, ShelfRead, ShelfWrite};
+use whyshelf_core::app::shelf::{
+    ContentOf, ContentStore, DispatchError, FileSync, ShelfRead, ShelfWrite, Spaces,
+};
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
 use whyshelf_core::domain::nonempty::NonEmptyVec;
 use whyshelf_core::domain::shelf::artifact::ContentAddress;
 
-use artifact::ArtifactSpaces;
 use artifact::file::FileSpace;
 use artifact::js_test::JsTestSpace;
 use artifact::rust_item::RustItemSpace;
 use artifact::rust_test::RustTestSpace;
+use artifact::{ArtifactSpaces, Registry};
 use books::BooksToml;
 use docs::MarkdownDocs;
 use git::Git;
@@ -143,13 +145,18 @@ impl Project {
     /// Git setting `user.name` of the project is asked. `cargo_target_dir` is the
     /// build directory the environment names (`CARGO_TARGET_DIR`, read by the
     /// caller), where the space `rust-item` looks for the docs first.
+    ///
+    /// An error when the adapters of the spaces cannot be dispatched to
+    /// ([`Spaces::new`]): one names as its space a text that is no space, two name one
+    /// space, two offer a built-in preset of one name, or one offers a built-in preset
+    /// for another space than its own.
     pub fn new(
         root: impl Into<PathBuf>,
         actor: Option<String>,
         cargo_target_dir: Option<PathBuf>,
-    ) -> Self {
+    ) -> Result<Self, DispatchError> {
         let root: PathBuf = root.into();
-        Self {
+        Ok(Self {
             books: BooksToml::new(&root, BOOKS_FILE.into()),
             docs: MarkdownDocs::new(root.clone()),
             ledger: {
@@ -158,17 +165,17 @@ impl Project {
             },
             clock: SystemClock,
             ids: UuidV7Ids,
-            artifacts: ArtifactSpaces::of_project(
+            artifacts: Spaces::new(Registry::of_project(
                 FileSpace::new(root.clone()),
                 RustItemSpace::new(root.clone(), cargo_target_dir),
                 RustTestSpace::new(root.clone()),
                 JsTestSpace::new(root.clone()),
-            ),
+            ))?,
             files: FileSpace::new(root.clone()),
             git: Git::new(root.clone()),
             actor: ProjectActor::new(root.clone(), actor),
             root,
-        }
+        })
     }
 
     /// The file of the declaration of the books.

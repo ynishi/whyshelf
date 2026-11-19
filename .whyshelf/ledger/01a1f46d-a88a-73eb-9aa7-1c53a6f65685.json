@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9b3669f9aa7d260ba7e2a789840078b64e3ba91f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:70c1215ca1fc81ac0b6ad638c49bcd5b17f736fd1830488285b8d984eb57242f",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795102184981,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4181d40e89264f003a05072849315f2bbfe3750b",
+      "hash": "sha256:7eadac6a9ad1e3958244c3a3864969fa9b52cd3d3c7b78fb6d8080d20c921193",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "66"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb06-d455-710f-8a4e-5bd7fa7cd3c8"
+    }
+  ],
+  "id": "01a1f46d-a88a-73eb-9aa7-1c53a6f65685",
+  "kind": "decision",
+  "reason": "After the blind review of issue 146, stage 2 (review of the branch from the issue alone, then of its fixes: the contract of an adapter as a trait in the core, its optional asks declared by type, the dispatch in the core over a registry that holds no rule, two adapters naming one space or one built-in preset refused, the conformance and prefix tests asking through the dispatch, and a test that the new architecture rules catch what they are written for): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "b93c75306dfa5927cf05c5c110d05383a47e2c86",
+  "seen": "sha256:bec2db8e9dae2fdd83d15b27cc6fef30586b6b18cec5ddeeb614696418512d4f",
+  "seen_address": "e961eec29c1b9474cbbea0c6050e7974c366759a",
+  "subject": "01a1cb06-d737-7530-9290-115fa03aad66",
+  "v": 1,
+  "verb": "approve"
+}

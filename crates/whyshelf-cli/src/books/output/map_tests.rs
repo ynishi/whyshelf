@@ -71,7 +71,7 @@ key = "slug"
 /// The declaration, expanded with the presets of the file adapter and checked.
 fn schema_of(books: &str) -> Schema {
     let space = Space::new("file").unwrap();
-    let builtins = whyshelf_infra::shelf::artifact::file::presets(&space);
+    let builtins = whyshelf_infra::shelf::artifact::file::presets();
     Schema::declared(parse(books).unwrap(), &builtins, &BTreeSet::from([space])).unwrap()
 }
 
@@ -330,7 +330,7 @@ fn a_problem_of_the_declaration_says_its_reason() {
          [[book.link]]\nname='tests'\ntarget='artifact'\nspace='file'\nmeans='depends'\n\
          compare='bytes'\nignore=['//']\n";
     let space = Space::new("file").unwrap();
-    let builtins = whyshelf_infra::shelf::artifact::file::presets(&space);
+    let builtins = whyshelf_infra::shelf::artifact::file::presets();
     let problems =
         Schema::declared(parse(books).unwrap(), &builtins, &BTreeSet::from([space])).unwrap_err();
     let answer = map(&MapReport::SchemaInvalid(problems));

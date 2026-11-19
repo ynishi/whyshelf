@@ -143,11 +143,14 @@ pub fn refuse_arguments(error: &clap::Error) -> ExitCode {
 /// `next` commands of `init` and of `stale` carry it as it was typed.
 pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
     let typed_root = root.clone();
-    let project = Project::new(
+    let project = match Project::new(
         root.unwrap_or_else(|| PathBuf::from(".")),
         std::env::var(ACTOR_VAR).ok(),
         std::env::var_os(CARGO_TARGET_DIR_VAR).map(PathBuf::from),
-    );
+    ) {
+        Ok(project) => project,
+        Err(error) => return failed_run(&error),
+    };
     let result = match command {
         BooksCommand::Init { template, sample } => {
             let template = if sample {
@@ -855,9 +858,12 @@ fn print<T: serde::Serialize>(value: &T) -> Exit {
     }
 }
 
-/// The end of a command when what it runs on cannot be had: a template `init` ships
-/// that is no request, or the file `new --from` is to read and cannot (not there, not
-/// readable, not UTF-8). A failed run, told as every failed run is.
+/// The end of a command when what it runs on cannot be had: adapters of the spaces
+/// that cannot be dispatched to (one that names no space, two of one space, two
+/// built-in presets of one name, or a built-in preset for another space than its
+/// adapter's own), a template `init` ships that is no request, or the file `new --from` is to
+/// read and cannot (not there, not readable, not UTF-8). A failed run, told as every
+/// failed run is.
 fn failed_run(error: &dyn std::error::Error) -> ExitCode {
     let mut chain = vec![error.to_string()];
     let mut source = error.source();

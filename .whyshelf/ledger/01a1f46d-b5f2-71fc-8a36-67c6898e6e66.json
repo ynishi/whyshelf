@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "fc261c7d195a8d27199e6f9aedd5fd99d48cbf52",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0a80087dd2971fed67792fbc1db0bb1b1312c1b42e8b73a5b8773f10f1116875",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/conformance.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "63beabfeb71a050cae06fd849dc141280470a7f7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d7202aa7ad7097a618240b2e3a5e1754ec01136b457f60f3b633d3bc15b69b4d",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e4f20642b1a147330b17d9f27627d107d243bbf",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:00475e56d49e4927b45974c8e4e3d5ddd28ca56a99c17e6634bc7d5fb4de04de",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0ed9c52123e3a88a4813459eacf7049dc7191bf7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1e2163930d648e13a990442fa3704af04b96fd20277684c5eefa9aede7f6e69a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "73d73c2e95e59b3555479e6091ad61f5531ed83f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f1ec8ef534db365719fa83b7663467c0847b20a8c091e92216a35c5d4e78db16",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795102184981,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b8ee6c91291521c55ad129031795ceac56a7d48c",
+      "hash": "sha256:f3e17abfbf66608a843f1928f60c0a677f8453de749b93640af478cc8605d5c2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "84"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-16db-7158-a8f3-5fb875ef9cb6"
+    },
+    {
+      "address": "8b30c059c954ca4982b781be4527b247e4cc8510",
+      "hash": "sha256:969bb9324d7a31ca9dff838217cea880755d22fffc21e5c71aac4b22e02f1edf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "85"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-569c-711e-af85-e6456a1155fc"
+    }
+  ],
+  "id": "01a1f46d-b5f2-71fc-8a36-67c6898e6e66",
+  "kind": "decision",
+  "reason": "After the blind review of issue 146, stage 2 (review of the branch from the issue alone, then of its fixes: the contract of an adapter as a trait in the core, its optional asks declared by type, the dispatch in the core over a registry that holds no rule, two adapters naming one space or one built-in preset refused, the conformance and prefix tests asking through the dispatch, and a test that the new architecture rules catch what they are written for): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "b93c75306dfa5927cf05c5c110d05383a47e2c86",
+  "seen": "sha256:f32f6154acbd5a846cb7dcabd0d3f10b00f8ddde4afe52f8822cc1457be31bcc",
+  "seen_address": "37618529e3fd999fb33c27b209372c5385212543",
+  "subject": "01a1f3d1-807b-7752-9685-97d1055a7641",
+  "v": 1,
+  "verb": "approve"
+}

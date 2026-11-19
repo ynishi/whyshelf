@@ -73,6 +73,43 @@ deny = [
 ]
 message = "app reaches the outside world through its ports; implement them in whyshelf-infra. Wire formats (serde) belong there too."
 
+# The ports the use cases see of the artifacts are answered by the dispatch of the core
+# (`Spaces`), and by nothing in whyshelf-infra: an adapter implements `SpaceAdapter`. The
+# rule sees a `use` and a path written in full (`impl whyshelf_core::app::shelf::ArtifactSource
+# for ..`), test code included; a file of tests only (`tests.rs`, `*_tests.rs`) is left out,
+# as it may ask through the ports, and so is a line marked with a reason.
+[[scopes]]
+name = "infra-not-tests"
+paths = ["crates/whyshelf-infra/src/**"]
+exclude = ["crates/whyshelf-infra/src/**/tests.rs", "crates/whyshelf-infra/src/**/*_tests.rs"]
+
+# The registry of the adapters holds a list and two matches, and no rule: an answer of
+# its own (for a space with no adapter, or an ask not answered) is the core's.
+[[scopes]]
+name = "registry"
+paths = ["crates/whyshelf-infra/src/shelf/artifact/registry.rs"]
+
+[[restrict-use]]
+name = "ports-by-the-dispatch"
+scope = "infra-not-tests"
+deny = [
+    "whyshelf_core::app::shelf::ArtifactSource", "whyshelf_core::app::shelf::ArtifactSource::**",
+    "whyshelf_core::app::shelf::MoveSource", "whyshelf_core::app::shelf::MoveSource::**",
+    "whyshelf_core::app::shelf::ports::ArtifactSource", "whyshelf_core::app::shelf::ports::ArtifactSource::**",
+    "whyshelf_core::app::shelf::ports::MoveSource", "whyshelf_core::app::shelf::ports::MoveSource::**",
+]
+message = "the dispatch of the core (Spaces) answers ArtifactSource and MoveSource: an adapter implements SpaceAdapter and the small traits of the asks it answers."
+
+[[restrict-use]]
+name = "registry-holds-no-rule"
+scope = "registry"
+deny = [
+    "whyshelf_core::domain::shelf::artifact::SpacePrefixes", "whyshelf_core::domain::shelf::artifact::SpacePrefixes::**",
+    "whyshelf_core::domain::shelf::ledger::SpaceSuggestions", "whyshelf_core::domain::shelf::ledger::SpaceSuggestions::**",
+    "whyshelf_core::domain::shelf::artifact::ArtifactReading", "whyshelf_core::domain::shelf::artifact::ArtifactReading::**",
+]
+message = "the registry hands an ask to an adapter and answers none itself: the answers for a space with no adapter and for an ask not answered are the dispatch's, in the core."
+
 [[restrict-use]]
 name = "async-infra"
 scope = "infra"

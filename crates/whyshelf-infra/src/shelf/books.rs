@@ -579,7 +579,7 @@ means = "informs"
     fn validate(
         decls: ShelfDecl,
     ) -> Result<Schema, whyshelf_core::domain::nonempty::NonEmptyVec<SchemaProblem>> {
-        let builtins = crate::shelf::artifact::file::presets(&Space::new("file").unwrap());
+        let builtins = crate::shelf::artifact::file::presets();
         Schema::declared(decls, &builtins, &spaces())
     }
 

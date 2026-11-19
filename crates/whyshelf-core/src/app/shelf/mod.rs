@@ -62,8 +62,10 @@
 //! and the files of the ledger that are no record. None is a failure of the use case,
 //! and none is left out.
 
+mod adapter;
 mod approve_chosen;
 mod approved;
+mod dispatch;
 mod error;
 mod exempt;
 mod fmt;
@@ -134,10 +136,15 @@ mod tests;
 #[cfg(test)]
 mod unlinked_tests;
 
+pub use adapter::{
+    Answers, AsyncVisit, CannotSuggest, NamePrefixes, NoPrefixes, NoReadBack, PrefixesWay,
+    ReadBackWay, SpaceAdapter, SpaceReadBack, SpaceSuggest, SuggestWay, Visit,
+};
 pub use approve_chosen::{
     ApproveChosenRequest, ApproveStaleRequest, Choose, ChosenApproved, ChosenJudged, ChosenLeftOut,
     PendingScope,
 };
+pub use dispatch::{DispatchError, SpaceRegistry, Spaces};
 pub use error::{ErrorClass, Obstacle, PersistProblem, ShelfError};
 pub use exempt::{ExemptRequest, Exempted};
 pub use fmt::{Dropped, FmtReport, LeftAlone, LeftAloneWhy};
