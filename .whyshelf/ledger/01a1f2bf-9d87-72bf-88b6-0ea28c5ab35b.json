@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f955d14b256d3034d0fabd83064837f80864e21d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0bb505eadb2c33b4e4b17d41ca3b599fcf17d52a070375ab95f24145f62e33fb",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795074004800,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bccd4cfbd9e43686410f91eac539bb5e15e68a45",
+      "hash": "sha256:acec6b3176e3573a973d990d130f9afa3478d287b218feef3116b5a3d7943008",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "54"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c811-cfe5-739d-9535-559effdfed85"
+    }
+  ],
+  "id": "01a1f2bf-9d87-72bf-88b6-0ea28c5ab35b",
+  "kind": "decision",
+  "reason": "After the blind review of issue 104 (review of the branch from the issue alone, and its fixes: a type's declaration lists its public fields, variants and trait items and a const's value, so those are part of its promise; lines collapses white space; the diff command shows no promise text; only an item's own page too large is there for presence) and the rule check of the code (Place and MemberKind are sum types): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "1ed9d77f5ea7c6dd77fb26078de3c9e5514747c3",
+  "seen": "sha256:539e1fdd15fa96db2070406f94d826b8df4363ef7fb2dc6bfb6d4efebc99b227",
+  "seen_address": "f32bd4acd2f3b5b03d2b357764e68ed8e197bf6b",
+  "subject": "01a1c811-de0a-70c2-aff0-e988ee3e70e0",
+  "v": 1,
+  "verb": "approve"
+}

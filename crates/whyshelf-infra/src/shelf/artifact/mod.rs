@@ -17,7 +17,7 @@
 //! | space | adapter | its names | the presets it offers | suggested moves ([`MoveSource`]) | a prefix of its names ([`ArtifactSource::renamed`]) |
 //! |---|---|---|---|---|---|
 //! | `file` | [`file::FileSpace`] | paths under the root of the project | `file`: `space = "file"`, `compare = "bytes"`, `means = "depends"`; `code`: `space = "file"`, `compare = "presence"`, `means = "depends"` | the same content, then Git's renames ([`file`](mod@file#suggesting-moves)) | the parts of a path ([`file`](mod@file#prefixes-of-the-names)) |
-//! | `rust-item` | [`rust_item::RustItemSpace`] | Rust paths (`crate::module::Item`, `Type::member`), looked up in the docs `cargo doc` wrote | `rustdoc`: `space = "rust-item"`, `compare = "presence"`, `means = "depends"` | cannot suggest | the segments of a Rust path ([`rust_item`](mod@rust_item#prefixes-of-the-names)) |
+//! | `rust-item` | [`rust_item::RustItemSpace`] | Rust paths (`crate::module::Item`, `Type::member`), looked up in the docs `cargo doc` wrote | `rustdoc`: `space = "rust-item"`, `compare = "presence"`, `means = "depends"`; `rustdoc-promise`: `space = "rust-item"`, `compare = "lines"`, `means = "depends"` (the declaration and the docs of an item) | cannot suggest | the segments of a Rust path ([`rust_item`](mod@rust_item#prefixes-of-the-names)) |
 //! | `rust-test` | [`rust_test::RustTestSpace`] | test functions by their file and path in it (`<file>.rs::<module>::<function>`), parsed from the source | `test`: `space = "rust-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest | the parts of a file's path, or a file and the first segments of a path in it ([`rust_test`](mod@rust_test#prefixes-of-the-names)) |
 //! | `js-test` | [`js_test::JsTestSpace`] | JavaScript and TypeScript tests by their file and titles (`<file>.ts::<describe>::<test>`), lexed from the source | `js-test`: `space = "js-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest | the parts of a file's path, or a file and the first titles of a path in it, titles with their escapes ([`js_test`](mod@js_test#prefixes-of-the-names)) |
 //!
@@ -480,7 +480,7 @@ mod tests {
         presets.extend(rust_test::presets(&space("rust-test")));
         presets.extend(js_test::presets(&space("js-test")));
         assert_eq!(source.presets(), presets);
-        assert_eq!(presets.len(), 5);
+        assert_eq!(presets.len(), 6);
 
         let mut asks = ArtifactAsks::new();
         asks.ask(space("file"), name("a.rs"), Comparison::Bytes);

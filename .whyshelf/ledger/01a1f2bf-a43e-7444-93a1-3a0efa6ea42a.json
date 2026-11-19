@@ -1,0 +1,129 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::artifact::ArtifactReading::of_bytes",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::artifact::ArtifactReading::there",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item::RUSTDOC_PROMISE_PRESET",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item::RustItemSpace::current",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item::RustItemSpace::resolve",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item::presets",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795074004800,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9db87ce77a0bfbccccf40dded4dcc5788569d9c0",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    },
+    {
+      "address": "089ece40b09afeafcc4ca4a01a56d66d14272cf1",
+      "hash": "sha256:48b3da65cd451390df517273bb04a2f94efc0de7a737b017c96f767388cea42d",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "35"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1f2a3-70f9-7184-8e59-6b24e25f79b6"
+    }
+  ],
+  "id": "01a1f2bf-a43e-7444-93a1-3a0efa6ea42a",
+  "kind": "decision",
+  "reason": "After the blind review of issue 104 (review of the branch from the issue alone, and its fixes: a type's declaration lists its public fields, variants and trait items and a const's value, so those are part of its promise; lines collapses white space; the diff command shows no promise text; only an item's own page too large is there for presence) and the rule check of the code (Place and MemberKind are sum types): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "1ed9d77f5ea7c6dd77fb26078de3c9e5514747c3",
+  "seen": "sha256:bb4c185cc7a9f4359f2fbf4aef4552b18dd870935791be542f85f25ba525b3e9",
+  "seen_address": "6fe10e2167766012ce32da4666a6f4c8125f788a",
+  "subject": "01a1f2a3-70f9-7184-8e59-6b255b74caf0",
+  "v": 1,
+  "verb": "approve"
+}

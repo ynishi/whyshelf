@@ -1,0 +1,85 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::artifact::ArtifactReading::there",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795074004800,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a174d7bb687f87965de365b49240d343368349b2",
+      "hash": "sha256:e5215bb3745ef02a80711bbdbaaa3998a3bfdacd680180831d4add57c39fff78",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-36e2-72bb-8529-f374820e1565"
+    },
+    {
+      "address": "9db87ce77a0bfbccccf40dded4dcc5788569d9c0",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    }
+  ],
+  "id": "01a1f2bf-9a2d-760d-9dd9-2624d58c9378",
+  "kind": "decision",
+  "reason": "After the blind review of issue 104 (review of the branch from the issue alone, and its fixes: a type's declaration lists its public fields, variants and trait items and a const's value, so those are part of its promise; lines collapses white space; the diff command shows no promise text; only an item's own page too large is there for presence) and the rule check of the code (Place and MemberKind are sum types): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "1ed9d77f5ea7c6dd77fb26078de3c9e5514747c3",
+  "seen": "sha256:acec6b3176e3573a973d990d130f9afa3478d287b218feef3116b5a3d7943008",
+  "seen_address": "bccd4cfbd9e43686410f91eac539bb5e15e68a45",
+  "subject": "01a1c811-cfe5-739d-9535-559effdfed85",
+  "v": 1,
+  "verb": "approve"
+}

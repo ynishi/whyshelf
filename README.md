@@ -60,7 +60,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
   - `rust-item`, a public Rust path, read from the docs `cargo doc` builds. Build them afresh before you check or approve: before they are built a name cannot be told, and docs left from an earlier build are read as they are;
   - `rust-test`, a test function, `<file>.rs::[<module>::…]<fn>`, read by a shallow scan of the file that runs no program.
 
-  Each link says how to compare (`bytes`, `lines` or `presence`). *Presets* (`file`, `rustdoc`, `test`) are short names for the usual settings.
+  Each link says how to compare (`bytes`, `lines` or `presence`). *Presets* (`file`, `rustdoc`, `rustdoc-promise`, `test`) are short names for the usual settings.
 - **Declarations.** A person may declare:
   - that an edit keeps the meaning (`judge same`);
   - that an artifact moved (`judge moved`; `whyshelf moves` suggests where), or that every name under a prefix did, as when a directory or a module is renamed (`judge moved --prefix <old> <new>`);
