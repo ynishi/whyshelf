@@ -24,7 +24,8 @@ Each step is a section below.
 
 ## Issues
 
-Assign at least one label when you open an issue.
+Assign at least one label when you open an issue. Start it from what it should
+make possible, written apart from the means its text proposes (DEC-87).
 
 | Label         | The change                                           |
 | ------------- | ---------------------------------------------------- |
@@ -85,13 +86,17 @@ Refs #<issue>
 ## Review
 
 Review every change locally before it goes up, by a person or by an AI agent
-other than the one that wrote it (REQ-13). Ask four questions of every diff:
+other than the one that wrote it (REQ-13). Ask five questions of every diff:
 
 1. Does it do what its issue asked?
 2. May everything in it be published?
    ([PUBLIC_DEVELOPMENT.md](PUBLIC_DEVELOPMENT.md#agent-publication-check))
 3. Are the comments beside the code still true?
 4. Is every sentence of the books it touches true of the code (DEC-25)?
+5. If it brings a new kind of fact, which one place of DEC-87 is it in, were the
+   requirements and decisions of that place, with their rejected forms and
+   revisit, read before the design, and changed first where it contradicts
+   one, and does it keep no program's verdict on a content?
 
 Review blind: give the reviewer the issue and the branch, not a summary of the
 change, which keeps the review inside the summary. The reviewer starts from

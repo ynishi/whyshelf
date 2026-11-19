@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795108913387,
+  "expires": null,
+  "frame": [
+    {
+      "address": "894e8771cc8babb388bf27412bdc468d4c0e3546",
+      "hash": "sha256:8104f7f907972dd68886b61c3018fc6998e2fab96d182ca75adcf9d6817b3462",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "87"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f4bf-5189-737a-a97c-8476d0a93246"
+    }
+  ],
+  "id": "01a1f4d4-47f3-73b6-af07-bc26f9556a34",
+  "kind": "decision",
+  "reason": "After the blind review of issue 149 (review of the branch from the issue alone, then of its fixes, in two rounds: what whyshelf keeps and the five places of a new kind of fact, each cited to the decisions it keeps; a revocation matched by the ids it withdraws; the reading through moves derived on every read; the content of built docs pinned under rustdoc-promise; the question of the review written once in CONTRIBUTING.md; and the rejected reason of DEC-69 pointed at the contract of DEC-84): each document reads true of the code and of the other books",
+  "revision": "8da07371437eed3f7613a486fa770058683db70d",
+  "seen": "sha256:85cdfe9cce37b05215d43816227d750ea70e71053de061bda46e085d375c355e",
+  "seen_address": "89a79208b6840963bdf4e6a2e2b447ba6e11ed68",
+  "subject": "01a1f4c1-6506-7136-8b23-45b071dd81c5",
+  "v": 1,
+  "verb": "approve"
+}

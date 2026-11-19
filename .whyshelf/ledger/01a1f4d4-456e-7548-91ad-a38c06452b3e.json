@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795108913387,
+  "expires": null,
+  "frame": [],
+  "id": "01a1f4d4-456e-7548-91ad-a38c06452b3e",
+  "kind": "decision",
+  "reason": "After the blind review of issue 149 (review of the branch from the issue alone, then of its fixes, in two rounds: what whyshelf keeps and the five places of a new kind of fact, each cited to the decisions it keeps; a revocation matched by the ids it withdraws; the reading through moves derived on every read; the content of built docs pinned under rustdoc-promise; the question of the review written once in CONTRIBUTING.md; and the rejected reason of DEC-69 pointed at the contract of DEC-84): each document reads true of the code and of the other books",
+  "revision": "8da07371437eed3f7613a486fa770058683db70d",
+  "seen": "sha256:2ad5cbf2e19b5dc84e8100799d1827ee8ba6db40706ee3334db6f9616acb3b7b",
+  "seen_address": "fee3d97e364d3d87ab474dc44871f50801f47a58",
+  "subject": "01a1f4be-78c3-70dc-94b9-7cccc62b8a1a",
+  "v": 1,
+  "verb": "approve"
+}
