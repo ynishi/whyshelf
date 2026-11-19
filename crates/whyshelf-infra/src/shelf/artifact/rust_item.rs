@@ -36,6 +36,26 @@
 //! text is not a name of the space, and the adapter says so with why. A crate's own
 //! name is a path too: its index.
 //!
+//! # Positions
+//!
+//! A name holds no position in a page or in the source: it names an item whole.
+//!
+//! # Equal names
+//!
+//! Segments are compared as written, case included. A name through a re-export and
+//! the name of the item it leads to name one item, and have its promise (below). A
+//! crate is written as rustdoc writes it (`whyshelf_core`), and a raw identifier is
+//! no name, so no other spelling of a segment names the same item. No name is
+//! rewritten into another.
+//!
+//! # One thing for a name
+//!
+//! A segment before the last is a module first, then an item whose members the last
+//! segment names; an item is looked up in the order of [`ITEM_KINDS`]. Members of one
+//! name on a page (`method.from` and `method.from-1`) are told by the first the page
+//! has, and members of one name and two kinds by the order of [`MEMBER_KINDS`] (Known
+//! limits, below).
+//!
 //! # Prefixes of the names
 //!
 //! `judge moved --prefix` moves every name under a prefix at once, and this adapter
@@ -63,7 +83,9 @@
 //!
 //! A relative directory is taken from the root of the project. When none can be
 //! told (no variable, no setting, no `Cargo.toml` at the root), or the settings
-//! cannot be read, no name can be told. Cargo settings in the directories above the
+//! cannot be read, are larger than [`MAX_SETTINGS_BYTES`], or are reached through a
+//! symbolic link that leaves the root, no name can be told.
+//! Cargo settings in the directories above the
 //! root or in cargo's home, and docs built for another target triple (`--target`),
 //! are not read.
 //!
@@ -81,7 +103,10 @@
 //! names cannot be told. Each name of a directory is compared as written, case
 //! included, from the listing of its directory, so a file system that does not tell
 //! case apart answers as one that does. A page larger than [`MAX_PAGE_BYTES`] is
-//! not read, and what it would tell cannot be told.
+//! not read, and what it would tell cannot be told. Neither is a page, or the
+//! directory of a module, that leads outside both the root of the project and the
+//! build directory once symbolic links are resolved: the build directory may be
+//! outside the root, and is read where it is.
 //!
 //! | a segment | is found as |
 //! |---|---|
@@ -182,6 +207,27 @@
 //! freshness is still the comparison's, not the text's: an edit of the docs leaves a
 //! `presence` approval fresh.
 //!
+//! # The answers
+//!
+//! | answer | when |
+//! |---|---|
+//! | there | every segment is found; with the hashes of its promise, or, when its page cannot be read as a promise (or only presence is asked), for presence only, with why |
+//! | absent | the docs of its crate are there and rustdoc's, and a segment is not found |
+//! | cannot tell | where the docs are cannot be told; the docs of its crate are not built or not rustdoc's; a directory or a page on the way cannot be read, is too large, or leads outside the root and the build directory; or it goes on through a re-export whose link leads nowhere readable |
+//! | not a name | the text is no Rust path of the grammar above |
+//!
+//! # What is compared
+//!
+//! The content of a name is the text of what its item promises (above), read from a
+//! page of at most [`MAX_PAGE_BYTES`]; the cargo settings are read up to
+//! [`MAX_SETTINGS_BYTES`]. What of the text counts is the link's comparison.
+//!
+//! # Where it reads
+//!
+//! The cargo settings at the root of the project, and the docs in the build
+//! directory it declares there or the caller gives (where the docs are, above),
+//! which may be outside the root; nothing outside the root and that directory.
+//!
 //! [`Comparison::Presence`]: whyshelf_core::domain::shelf::artifact::Comparison::Presence
 //! [`ArtifactReading::of_bytes`]: whyshelf_core::domain::shelf::artifact::ArtifactReading::of_bytes
 
@@ -193,6 +239,7 @@ use std::sync::Arc;
 
 use tokio::io::AsyncReadExt;
 use whyshelf_core::domain::error::ValueError;
+use whyshelf_core::domain::location::{PathLiteral, RelPath};
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, Comparison, PrefixMove, Renamed, Space, SpaceAsks,
@@ -200,6 +247,7 @@ use whyshelf_core::domain::shelf::artifact::{
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
+use super::file::{self, Bounded};
 use promise::{Promise, Unreadable, promise_of};
 
 /// The name of the space this adapter resolves names in.
@@ -222,6 +270,11 @@ pub const GENERATOR_MARK: &str = "<meta name=\"generator\" content=\"rustdoc\">"
 
 /// The most bytes of a page this adapter reads; a larger one cannot be told.
 pub const MAX_PAGE_BYTES: u64 = 32 * 1024 * 1024;
+
+/// The most bytes of a file of cargo settings this adapter reads; with a larger one,
+/// where the docs are cannot be told. Settings are far smaller, and a file this small
+/// is read and parsed where it is asked for.
+pub const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
 
 /// The kind of the place of a module, and of a crate (its index).
 const MODULE_KIND: &str = "module";
@@ -407,7 +460,7 @@ impl RustItemSpace {
             }
         };
         let presence_only = reason(PRESENCE_ONLY.to_owned())?;
-        let mut lookup = Lookup::new(docs, self.max_page).await;
+        let mut lookup = Lookup::new(&self.root, docs, self.max_page).await;
         for (name, comparisons, path) in paths {
             let reading = match lookup.find(&path).await {
                 // Only presence asked (the preset `rustdoc`): its page is not read.
@@ -416,7 +469,7 @@ impl RustItemSpace {
                 }
                 Found::There(place) => {
                     let promise = lookup.promise(&place).await;
-                    reading_of(promise, comparisons)?
+                    reading_of(promise, comparisons).await?
                 }
                 Found::Unread(why) => ArtifactReading::there(reason(why)?),
                 Found::Absent => ArtifactReading::absent(),
@@ -437,7 +490,7 @@ impl RustItemSpace {
         let Ok(docs) = self.docs().await else {
             return Ok(None);
         };
-        let mut lookup = Lookup::new(docs, self.max_page).await;
+        let mut lookup = Lookup::new(&self.root, docs, self.max_page).await;
         Ok(match lookup.find(&path).await {
             Found::There(place) => lookup
                 .promise(&place)
@@ -473,11 +526,30 @@ impl RustItemSpace {
     /// names it; why, when a file there cannot be read as settings.
     async fn configured_target_dir(&self) -> Result<Option<PathBuf>, String> {
         // Cargo uses the legacy name when both are there (with a warning).
-        for name in ["config", "config.toml"] {
-            let file = self.root.join(".cargo").join(name);
-            let text = match tokio::fs::read(&file).await {
-                Ok(bytes) => bytes,
-                Err(e) if is_missing(&e) => continue,
+        // Read by the rules of the space `file`: nothing through a link that leaves the
+        // root, and within a bound of bytes.
+        const SETTINGS: [PathLiteral; 2] = [
+            PathLiteral::new(".cargo/config"),
+            PathLiteral::new(".cargo/config.toml"),
+        ];
+        for at in SETTINGS {
+            let at = RelPath::from(at);
+            let file = self.root.join(at.as_str());
+            let text = match file::read_within(&self.root, &at, MAX_SETTINGS_BYTES).await {
+                Ok(Bounded::Bytes(bytes)) => bytes,
+                Ok(Bounded::NoFile) => continue,
+                Ok(Bounded::Outside) => {
+                    return Err(format!(
+                        "{} leads outside the root of the project, or is broken: nothing is read through it",
+                        file.display()
+                    ));
+                }
+                Ok(Bounded::TooLarge) => {
+                    return Err(format!(
+                        "{} is larger than {MAX_SETTINGS_BYTES} bytes, and is not read",
+                        file.display()
+                    ));
+                }
                 Err(e) => return Err(format!("{} cannot be read: {e}", file.display())),
             };
             let text = String::from_utf8(text)
@@ -498,33 +570,34 @@ impl RustItemSpace {
     }
 }
 
-/// Whether a read failed because nothing is at the path.
-fn is_missing(error: &std::io::Error) -> bool {
-    matches!(
-        error.kind(),
-        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
-    )
-}
-
 /// The domain's reason of a text this adapter wrote.
 fn reason(why: String) -> Result<NonBlank, RustItemError> {
     NonBlank::new(why).map_err(RustItemError::Reason)
 }
 
 /// The reading of an item that is there: the one place it is made. The text of its
-/// promise is hashed as each comparison asked counts it; a promise that cannot be
-/// read is there for presence only, and any other comparison cannot be told, for
-/// that reason.
-fn reading_of(
+/// promise is hashed as each comparison asked counts it, on a blocking thread (a
+/// text may be as large as its page); a promise that cannot be read is there for
+/// presence only, and any other comparison cannot be told, for that reason.
+async fn reading_of(
     promise: Result<Promise, Unreadable>,
     comparisons: &BTreeSet<Comparison>,
 ) -> Result<ArtifactReading, RustItemError> {
     match promise {
-        Ok(promise) => Ok(ArtifactReading::of_bytes(
-            promise.text().as_bytes(),
-            comparisons,
-            None,
-        )),
+        Ok(promise) => {
+            let text = promise.text();
+            let asked = comparisons.clone();
+            match super::on_blocking(text.len(), move || {
+                ArtifactReading::of_bytes(text.as_bytes(), &asked, None)
+            })
+            .await
+            {
+                Ok(reading) => Ok(reading),
+                Err(why) => Ok(ArtifactReading::there(reason(format!(
+                    "the hash of what the item promises stopped: {why}"
+                ))?)),
+            }
+        }
         Err(unreadable) => Ok(ArtifactReading::there(reason(unreadable.to_string())?)),
     }
 }
@@ -730,20 +803,47 @@ struct Lookup {
     docs: PathBuf,
     /// The docs with every symbolic link resolved, when they can be.
     real_docs: Option<PathBuf>,
+    /// The root of the project and the build directory (the parent of the docs),
+    /// each with every symbolic link resolved, when it can be: no page and no
+    /// directory of a module is read outside both.
+    real_places: Vec<PathBuf>,
     max_page: u64,
     listings: BTreeMap<PathBuf, Option<BTreeSet<String>>>,
     pages: BTreeMap<PathBuf, Result<Arc<str>, String>>,
 }
 
 impl Lookup {
-    async fn new(docs: PathBuf, max_page: u64) -> Self {
+    async fn new(root: &Path, docs: PathBuf, max_page: u64) -> Self {
+        let mut real_places = Vec::new();
+        for place in std::iter::once(root).chain(docs.parent()) {
+            if let Ok(real) = tokio::fs::canonicalize(place).await {
+                real_places.push(real);
+            }
+        }
         Self {
             real_docs: tokio::fs::canonicalize(&docs).await.ok(),
+            real_places,
             docs,
             max_page,
             listings: BTreeMap::new(),
             pages: BTreeMap::new(),
         }
+    }
+
+    /// Why nothing is read at `path`, when it leads outside the root of the project
+    /// and the build directory once symbolic links are resolved, or is a link that
+    /// cannot be resolved.
+    async fn outside(&self, path: &Path) -> Option<String> {
+        let inside = match tokio::fs::canonicalize(path).await {
+            Ok(real) => self.real_places.iter().any(|place| real.starts_with(place)),
+            Err(_) => false,
+        };
+        (!inside).then(|| {
+            format!(
+                "{} leads outside the root of the project and the build directory once symbolic links are resolved, or cannot be resolved: nothing is read through it",
+                path.display()
+            )
+        })
     }
 
     /// The names of the entries of a directory, or none when it cannot be listed.
@@ -761,10 +861,14 @@ impl Lookup {
         self.listing(dir).await.map(|names| names.contains(name))
     }
 
-    /// The text of a page, or why it cannot be read.
+    /// The text of a page, or why it cannot be read (one outside the root and the
+    /// build directory is not).
     async fn page(&mut self, page: &Path) -> Result<Arc<str>, String> {
         if !self.pages.contains_key(page) {
-            let text = read(page, self.max_page).await.map(Arc::from);
+            let text = match self.outside(page).await {
+                Some(why) => Err(why),
+                None => read(page, self.max_page).await.map(Arc::from),
+            };
             self.pages.insert(page.to_path_buf(), text);
         }
         self.pages
@@ -776,7 +880,13 @@ impl Lookup {
     async fn find(&mut self, path: &RustPath) -> Found {
         let crate_dir = self.docs.join(&path.krate);
         let built = match self.has(&self.docs.clone(), &path.krate).await {
-            Some(true) => self.has(&crate_dir, "index.html").await == Some(true),
+            Some(true) => {
+                // Before it is listed: nothing outside is read.
+                if let Some(why) = self.outside(&crate_dir).await {
+                    return Found::CannotTell(why);
+                }
+                self.has(&crate_dir, "index.html").await == Some(true)
+            }
             Some(false) | None => false,
         };
         if !built {
@@ -787,15 +897,19 @@ impl Lookup {
             ));
         }
         let index = crate_dir.join("index.html");
-        match self.page(&index).await {
-            Ok(html) if html.contains(GENERATOR_MARK) => {}
-            Ok(_) => {
+        let html = match self.page(&index).await {
+            Ok(html) => html,
+            Err(why) => return Found::CannotTell(why),
+        };
+        match super::on_blocking(html.len(), move || html.contains(GENERATOR_MARK)).await {
+            Ok(true) => {}
+            Ok(false) => {
                 return Found::CannotTell(format!(
                     "{} is not rustdoc's: it has no {GENERATOR_MARK}",
                     index.display()
                 ));
             }
-            Err(why) => return Found::CannotTell(why),
+            Err(why) => return Found::CannotTell(stopped(&index, &why)),
         }
         let mut at = At::Module(crate_dir);
         for segment in &path.rest {
@@ -808,10 +922,14 @@ impl Lookup {
         Found::from(at)
     }
 
-    /// What the thing at `place` promises, read from its page, or why it cannot be.
+    /// What the thing at `place` promises, read from its page (parsed on a blocking
+    /// thread, as a page may be as large as its bound), or why it cannot be.
     async fn promise(&mut self, place: &Place) -> Result<Promise, Unreadable> {
         let html = self.page(place.page()).await.map_err(Unreadable::Page)?;
-        promise_of(&html, place)
+        let at = place.clone();
+        super::on_blocking(html.len(), move || promise_of(&html, &at))
+            .await
+            .map_err(|why| Unreadable::Page(stopped(place.page(), &why)))?
     }
 
     /// The place `segment` names under `at`: none when it names nothing there.
@@ -823,8 +941,13 @@ impl Lookup {
                     return Ok(None);
                 }
                 let html = self.page(&page).await?;
-                let named = MemberKind::all()
-                    .find(|member| html.contains(&format!("id=\"{}.{segment}\"", member.word())));
+                let wanted = segment.to_owned();
+                let named = super::on_blocking(html.len(), move || {
+                    MemberKind::all()
+                        .find(|member| html.contains(&format!("id=\"{}.{wanted}\"", member.word())))
+                })
+                .await
+                .map_err(|why| stopped(&page, &why))?;
                 Ok(named.map(|member| At::Member {
                     page,
                     kind: member,
@@ -843,6 +966,10 @@ impl Lookup {
         };
         if names.contains(segment) {
             let module = dir.join(segment);
+            // Before it is listed: nothing outside is read.
+            if let Some(why) = self.outside(&module).await {
+                return Err(why);
+            }
             if self.has(&module, "index.html").await == Some(true) {
                 return Ok(Some(At::Module(module)));
             }
@@ -851,16 +978,25 @@ impl Lookup {
             .iter()
             .find(|kind| names.contains(&format!("{kind}.{segment}.html")))
         {
+            let page = dir.join(format!("{kind}.{segment}.html"));
+            if let Some(why) = self.outside(&page).await {
+                return Err(why);
+            }
             return Ok(Some(At::Item {
-                page: dir.join(format!("{kind}.{segment}.html")),
+                page,
                 kind: (*kind).to_owned(),
             }));
         }
         if !names.contains("index.html") {
             return Ok(None);
         }
-        let html = self.page(&dir.join("index.html")).await?;
-        let Some(link) = reexport_link(&html, segment) else {
+        let index = dir.join("index.html");
+        let html = self.page(&index).await?;
+        let wanted = segment.to_owned();
+        let Some(link) = super::on_blocking(html.len(), move || reexport_link(&html, &wanted))
+            .await
+            .map_err(|why| stopped(&index, &why))?
+        else {
             return Ok(None);
         };
         Ok(Some(self.follow(dir, link.as_deref(), segment).await))
@@ -932,6 +1068,12 @@ async fn list(dir: &Path) -> Option<BTreeSet<String>> {
     }
 }
 
+/// Why a page cannot be told, when the blocking thread it was read on stopped (a bug
+/// if it ever happens, or a runtime shutting down).
+fn stopped(page: &Path, why: &str) -> String {
+    format!("the reading of {} stopped: {why}", page.display())
+}
+
 /// The text of a page of at most `max` bytes, or why it cannot be read.
 async fn read(page: &Path, max: u64) -> Result<String, String> {
     let cannot = |e: std::io::Error| format!("{} cannot be read: {e}", page.display());
@@ -947,7 +1089,13 @@ async fn read(page: &Path, max: u64) -> Result<String, String> {
             page.display()
         ));
     }
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    // A page may be as large as the bound: a large one is decoded on a blocking
+    // thread.
+    super::on_blocking(bytes.len(), move || {
+        String::from_utf8_lossy(&bytes).into_owned()
+    })
+    .await
+    .map_err(|why| stopped(page, &why))
 }
 
 /// The re-export of `name` in the HTML of a module's index: none when there is
@@ -1012,8 +1160,9 @@ mod tests {
     //! The end-to-end tests of the command line run `cargo doc` on a crate and watch
     //! the layout of the real thing.
 
-    use whyshelf_core::domain::shelf::artifact::{ArtifactState, Comparison, Untold};
+    use whyshelf_core::domain::shelf::artifact::{ArtifactState, Comparison, NamePrefix, Untold};
 
+    use super::super::conformance;
     use super::*;
 
     fn n(text: &str) -> ArtifactName {
@@ -1933,6 +2082,170 @@ mod tests {
             source.current(&n("demo::Shelf")).await.unwrap(),
             Some(b"decl pub struct Shelf { /* private fields */ }\n".to_vec())
         );
+    }
+
+    /// The bound of a page of the conformance test.
+    const MAX_TEST_PAGE: u64 = 8192;
+
+    /// A project at `root` with the docs of the crate `demo` beside its `Cargo.toml`:
+    /// a re-export of `inner::Thing`, and two methods `put` on `Shelf` (`method.put`
+    /// and `method.put-1`).
+    async fn conformance_docs(root: &Path) {
+        write(root, "Cargo.toml", "[workspace]\n").await;
+        let d = root.join(TARGET_DIR_NAME);
+        let index = whole(&format!(
+            "{}<h2 id=\"reexports\" class=\"section-header\">Re-exports</h2><dl><dt id=\"reexport.Thing\"><code>pub use inner::<a class=\"struct\" href=\"inner/struct.Thing.html\" title=\"x\">Thing</a>;</code></dt></dl>",
+            top_doc("The demo crate.")
+        ));
+        write(&d, "doc/demo/index.html", &index).await;
+        let methods = format!(
+            "{}{}",
+            shelf_methods(PUT, "Puts a book.", 20),
+            method(
+                "put-1",
+                "pub fn <a href=\"#method.put-1\">put</a>(&amp;self, n: u8)",
+                Some("Puts many."),
+                40
+            )
+        );
+        write(
+            &d,
+            "doc/demo/struct.Shelf.html",
+            &shelf_page(Some("A shelf of books."), &methods, ""),
+        )
+        .await;
+        write(
+            &d,
+            "doc/demo/fn.free.html",
+            &whole("<pre class=\"rust item-decl\"><code>pub fn free()</code></pre>"),
+        )
+        .await;
+        write(
+            &d,
+            "doc/demo/inner/index.html",
+            &whole("<h2 id=\"structs\" class=\"section-header\">Structs</h2>"),
+        )
+        .await;
+        write(
+            &d,
+            "doc/demo/inner/struct.Thing.html",
+            &whole(&format!(
+                "<pre class=\"rust item-decl\"><code>pub struct Thing;</code></pre>{}",
+                top_doc("A thing.")
+            )),
+        )
+        .await;
+    }
+
+    /// The hook of the conformance test: the docs above, a page past the bound, one
+    /// that cannot be read, one linked from outside the root and the build directory,
+    /// and a root whose cargo settings are past their bound.
+    struct Items;
+
+    impl conformance::Hook for Items {
+        fn space(&self) -> &'static str {
+            RUST_ITEM_SPACE
+        }
+
+        fn source(&self) -> &'static str {
+            include_str!("rust_item.rs")
+        }
+
+        fn bounds(&self) -> Vec<&'static str> {
+            vec!["a page", "the cargo settings"]
+        }
+
+        /// DEC-54: an item whose page cannot be read is there for presence.
+        fn unread(&self) -> conformance::Unread {
+            conformance::Unread::ThereForPresence
+        }
+
+        fn walks_nesting(&self) -> bool {
+            false
+        }
+
+        fn adapter_at(&self, dir: &Path) -> super::super::Adapter {
+            super::super::Adapter::RustItem(RustItemSpace {
+                max_page: MAX_TEST_PAGE,
+                ..RustItemSpace::new(dir.to_path_buf(), None)
+            })
+        }
+
+        async fn tree(&self, dir: &Path) -> conformance::Tree {
+            let root = dir.join("root");
+            conformance_docs(&root).await;
+            let d = root.join(TARGET_DIR_NAME);
+            let over = usize::try_from(MAX_TEST_PAGE).unwrap() + 1;
+            write(&d, "doc/demo/struct.Big.html", &whole(&"x".repeat(over))).await;
+            let locked = "<pre class=\"rust item-decl\"><code>pub struct Locked;</code></pre>";
+            write(&d, "doc/demo/struct.Locked.html", &whole(locked)).await;
+            // The docs are there: only the settings, past their bound, keep them from
+            // being found.
+            let settings = dir.join("settings");
+            conformance_docs(&settings).await;
+            let past = usize::try_from(MAX_SETTINGS_BYTES).unwrap() + 1;
+            write(&settings, ".cargo/config.toml", &"#".repeat(past)).await;
+
+            let mut tree = conformance::Tree::of(self.adapter_at(&root));
+            tree.present = vec![
+                n("demo"),
+                n("demo::Shelf"),
+                n("demo::Shelf::bare"),
+                n("demo::free"),
+                n("demo::inner"),
+            ];
+            tree.absent = vec![n("demo::Missing"), n("demo::Shelf::missing")];
+            tree.not_names = vec![n("demo::r#type"), n("demo::"), n("crate::demo")];
+            tree.over_bytes = vec![
+                conformance::OverBytes::Name {
+                    bound: "a page",
+                    name: n("demo::Big"),
+                },
+                conformance::OverBytes::Root {
+                    bound: "the cargo settings",
+                    adapter: self.adapter_at(&settings),
+                    names: vec![n("demo"), n("demo::Shelf")],
+                },
+            ];
+            tree.two_things = Some(n("demo::Shelf::put"));
+            tree.spellings = Some((n("demo::Thing"), n("demo::inner::Thing")));
+            tree.prefix = Some((
+                PrefixMove::new(
+                    NamePrefix::new("demo::inner").unwrap(),
+                    NamePrefix::new("demo::outer").unwrap(),
+                )
+                .unwrap(),
+                n("demo::inner::Thing"),
+                n("demo::outer::Thing"),
+            ));
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let decl = "<pre class=\"rust item-decl\"><code>pub struct Esc;</code></pre>";
+                write(dir, "outside/struct.Esc.html", &whole(decl)).await;
+                tokio::fs::symlink(
+                    dir.join("outside/struct.Esc.html"),
+                    d.join("doc/demo/struct.Esc.html"),
+                )
+                .await
+                .unwrap();
+                tree.outside = Some(n("demo::Esc"));
+                let page = d.join("doc/demo/struct.Locked.html");
+                tokio::fs::set_permissions(&page, std::fs::Permissions::from_mode(0o000))
+                    .await
+                    .unwrap();
+                // Run as a user every file opens to (root), it is no name to test.
+                if tokio::fs::File::open(&page).await.is_err() {
+                    tree.unreadable = Some(n("demo::Locked"));
+                }
+            }
+            tree
+        }
+    }
+
+    #[tokio::test]
+    async fn the_adapter_keeps_the_contract_of_an_adapter() {
+        conformance::check(&Items).await;
     }
 
     /// The `rustdoc` paths the decisions of this repository list, each with the key
