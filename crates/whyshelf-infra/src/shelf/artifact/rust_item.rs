@@ -60,7 +60,7 @@
 //!
 //! `judge moved --prefix` moves every name under a prefix at once, and this adapter
 //! says which names are under it and what each becomes
-//! ([`ArtifactSource::renamed`](whyshelf_core::app::shelf::ArtifactSource::renamed)).
+//! ([`NamePrefixes`]).
 //! A prefix is a Rust path of one segment or more, read by the rules of a name's path
 //! (so `crate::m`, a raw identifier or a directory is none). A name is under it when
 //! its segments start with all of the prefix's: `app::m` is a prefix of `app::m`,
@@ -238,12 +238,13 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::io::AsyncReadExt;
+use whyshelf_core::app::shelf::{Answers, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, PrefixMove, Renamed, Space, SpaceAsks,
-    SpacePrefixes, SpaceReadings, SpaceRenamed,
+    ArtifactName, ArtifactReading, Comparison, PrefixMove, Renamed, SpaceAsks, SpacePrefixes,
+    SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
@@ -372,7 +373,7 @@ impl MemberKind {
 /// table of the kinds of member: the lookup of a member reads the kinds in this order.
 pub const MEMBER_KINDS: &[&str] = &MemberKind::words();
 
-/// The presets this adapter offers when it resolves the names of `space`, both
+/// The presets this adapter offers, both `space` [`RUST_ITEM_SPACE`] and
 /// `means = "depends"`:
 ///
 /// - [`RUSTDOC_PRESET`], for a link to the items whose docs state a rule, that stands
@@ -381,10 +382,10 @@ pub const MEMBER_KINDS: &[&str] = &MemberKind::words();
 /// - [`RUSTDOC_PROMISE_PRESET`], for a link that stands on what an item promises
 ///   (`compare = "lines"`): a change of its declaration or its docs makes the
 ///   approvals that stand on it stale, and an edit of a body does not.
-pub fn presets(space: &Space) -> BuiltinPresets {
+pub fn presets() -> BuiltinPresets {
     let preset = |name: &str, compare: &str| {
         let values = PresetValues {
-            space: Some(space.as_str().to_owned()),
+            space: Some(RUST_ITEM_SPACE.to_owned()),
             compare: Some(compare.to_owned()),
             ignore: None,
             means: Some(Propagation::Depends),
@@ -408,6 +409,41 @@ pub enum RustItemError {
     /// reason is never blank).
     #[error("the domain refused a reason of the adapter")]
     Reason(#[source] ValueError),
+}
+
+/// The space [`RUST_ITEM_SPACE`]: it answers a move of a prefix, cannot suggest where
+/// an item moved, and keeps nothing by address.
+impl SpaceAdapter for RustItemSpace {
+    type Error = RustItemError;
+    type Prefixes = Answers;
+    type Suggest = CannotSuggest;
+    type ReadBack = NoReadBack;
+
+    fn space(&self) -> &str {
+        RUST_ITEM_SPACE
+    }
+
+    fn presets(&self) -> BuiltinPresets {
+        presets()
+    }
+
+    async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, RustItemError> {
+        RustItemSpace::resolve(self, asks).await
+    }
+
+    async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustItemError> {
+        RustItemSpace::current(self, name).await
+    }
+}
+
+impl NamePrefixes for RustItemSpace {
+    fn renamed(
+        &self,
+        names: &BTreeSet<ArtifactName>,
+        of: &PrefixMove,
+    ) -> Result<(SpacePrefixes, SpaceRenamed), RustItemError> {
+        renamed(names, of).map_err(RustItemError::Reason)
+    }
 }
 
 /// The items of the Rust crates of a project, as their built docs know them.
@@ -1348,7 +1384,6 @@ mod tests {
 
     #[test]
     fn the_adapter_offers_the_presets_rustdoc_and_rustdoc_promise_for_its_space() {
-        let space = Space::new(RUST_ITEM_SPACE).unwrap();
         let values = |compare: &str| PresetValues {
             space: Some("rust-item".to_owned()),
             compare: Some(compare.to_owned()),
@@ -1356,7 +1391,7 @@ mod tests {
             means: Some(Propagation::Depends),
         };
         assert_eq!(
-            presets(&space),
+            presets(),
             BuiltinPresets::from([
                 (PresetName::new(RUSTDOC_PRESET).unwrap(), values("presence")),
                 (

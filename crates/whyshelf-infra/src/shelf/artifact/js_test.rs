@@ -68,7 +68,7 @@
 //!
 //! `judge moved --prefix` moves every name under a prefix at once, and this adapter
 //! says which names are under it and what each becomes
-//! ([`ArtifactSource::renamed`](whyshelf_core::app::shelf::ArtifactSource::renamed)).
+//! ([`NamePrefixes`]).
 //! A prefix is of one of two forms, and a text is of one only:
 //!
 //! - the parts of the path of a file, when the text has no `::` that no `\` escapes
@@ -338,18 +338,19 @@
 //!   found where one is on the way cannot be told.
 //! - The file is read whether or not the runner runs it: a test in a file no
 //!   configuration includes, or under a condition never met, reads as there.
-//! - Moves are not suggested ([`MoveSource`](whyshelf_core::app::shelf::MoveSource)).
+//! - Moves are not suggested: the adapter names [`CannotSuggest`].
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::path::PathBuf;
 
+use whyshelf_core::app::shelf::{Answers, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, PrefixMove, Space, SpaceAsks, SpacePrefixes,
-    SpaceReadings, SpaceRenamed,
+    ArtifactName, ArtifactReading, Comparison, PrefixMove, SpaceAsks, SpacePrefixes, SpaceReadings,
+    SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
@@ -526,14 +527,14 @@ const KEYWORDS: &[&str] = &[
     "yield",
 ];
 
-/// The presets this adapter offers when it resolves the names of `space`: one,
-/// [`JS_TEST_PRESET`], for a link to the tests that show a document holds, that
-/// stands on each token of them (`space` that space, `compare = "bytes"`,
-/// `means = "depends"`): an edit of a test makes the approvals that name it stale,
-/// one of another test in the file does not, and a test that goes away breaks them.
-pub fn presets(space: &Space) -> BuiltinPresets {
+/// The presets this adapter offers: one, [`JS_TEST_PRESET`], for a link to the tests
+/// that show a document holds, that stands on each token of them
+/// (`space` [`JS_TEST_SPACE`], `compare = "bytes"`, `means = "depends"`): an edit of
+/// a test makes the approvals that name it stale, one of another test in the file
+/// does not, and a test that goes away breaks them.
+pub fn presets() -> BuiltinPresets {
     let values = PresetValues {
-        space: Some(space.as_str().to_owned()),
+        space: Some(JS_TEST_SPACE.to_owned()),
         compare: Some("bytes".to_owned()),
         ignore: None,
         means: Some(Propagation::Depends),
@@ -552,6 +553,41 @@ pub enum JsTestError {
     /// reason is never blank).
     #[error("the domain refused a reason of the adapter")]
     Reason(#[source] ValueError),
+}
+
+/// The space [`JS_TEST_SPACE`]: it answers a move of a prefix, cannot suggest where
+/// a test moved, and keeps nothing by address.
+impl SpaceAdapter for JsTestSpace {
+    type Error = JsTestError;
+    type Prefixes = Answers;
+    type Suggest = CannotSuggest;
+    type ReadBack = NoReadBack;
+
+    fn space(&self) -> &str {
+        JS_TEST_SPACE
+    }
+
+    fn presets(&self) -> BuiltinPresets {
+        presets()
+    }
+
+    async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, JsTestError> {
+        JsTestSpace::resolve(self, asks).await
+    }
+
+    async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, JsTestError> {
+        JsTestSpace::current(self, name).await
+    }
+}
+
+impl NamePrefixes for JsTestSpace {
+    fn renamed(
+        &self,
+        names: &BTreeSet<ArtifactName>,
+        of: &PrefixMove,
+    ) -> Result<(SpacePrefixes, SpaceRenamed), JsTestError> {
+        renamed(names, of).map_err(JsTestError::Reason)
+    }
 }
 
 /// Why a text is no name of the space.
@@ -3183,9 +3219,8 @@ test('a \\ b', () => {});
 
     #[test]
     fn the_adapter_offers_the_preset_js_test_for_its_space() {
-        let space = Space::new(JS_TEST_SPACE).unwrap();
         assert_eq!(
-            presets(&space),
+            presets(),
             BuiltinPresets::from([(
                 PresetName::new(JS_TEST_PRESET).unwrap(),
                 PresetValues {

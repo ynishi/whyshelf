@@ -8,7 +8,8 @@
 //! things, two names of one thing, one whose address its store does not hold, and a
 //! move of a prefix. The test checks:
 //!
-//! - the presets: each for the space of the adapter, the same each time;
+//! - the space the adapter names, and its presets: each for that space, the same each
+//!   time;
 //! - that every name asked has an answer and none is an error of the reading, a name
 //!   that cannot be read asked with the others;
 //! - the answer of each name: there under every comparison, absent, no name (with the
@@ -38,15 +39,17 @@
 //! passed: what the hook can make differs from one machine to another, so a fixed list
 //! of it would pass or fail with the machine.
 //!
-//! The adapter is asked through [`Adapter`] in one place (`ask`), so that the asks
-//! are made one way for every adapter.
+//! The adapter is asked in one place (`ask`), the way a project asks it: through the
+//! dispatch of the core over a registry of that adapter alone, by the ports the use
+//! cases ask. So the asks are made one way for every adapter, and the move of a prefix
+//! and reading back are answered the way the adapter's type declares.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactKey, ArtifactName, ArtifactReading, ArtifactState, Comparison, ContentAddress,
-    PrefixMove, Renamed, Space, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed, Untold,
+    ArtifactName, ArtifactReading, ArtifactState, Comparison, ContentAddress, PrefixMove, Renamed,
+    Space, SpacePrefixes, SpaceReadings, SpaceRenamed, Untold,
 };
 use whyshelf_core::domain::shelf::schema::BuiltinPresets;
 
@@ -249,29 +252,58 @@ fn every() -> BTreeSet<Comparison> {
     ])
 }
 
-/// The one place the conformance test asks an adapter.
+/// The one place the conformance test asks an adapter: through the dispatch of the
+/// core ([`Spaces`](whyshelf_core::app::shelf::Spaces)) over a registry of that
+/// adapter alone, by the ports the use cases ask ([`ArtifactSource`], and the
+/// reading back [`ContentStore`](whyshelf_core::app::shelf::ContentStore) is answered
+/// by), as a project asks it.
 mod ask {
+    // arch-lint: allow(ports-by-the-dispatch) reason="the test asks the dispatch through the port it answers, and implements none"
+    use whyshelf_core::app::shelf::{ArtifactSource, Spaces};
+    use whyshelf_core::domain::shelf::artifact::{ArtifactAsks, ArtifactKey, PrefixAsks};
+
+    use super::super::Registry;
     use super::*;
 
-    pub(super) fn presets(adapter: &Adapter, space: &Space) -> BuiltinPresets {
-        adapter.presets(space)
+    /// The dispatch over `adapter` alone, and the one space it names.
+    fn dispatch(adapter: &Adapter) -> (Spaces<Registry>, Space) {
+        let spaces = match Spaces::new(Registry::of_one(adapter.clone())) {
+            Ok(spaces) => spaces,
+            Err(e) => panic!("the adapter cannot be dispatched to: {e}"),
+        };
+        let named: Vec<Space> = spaces.spaces().into_iter().collect();
+        match named.as_slice() {
+            [space] => (spaces, space.clone()),
+            other => panic!("the adapter names one space, not {other:?}"),
+        }
+    }
+
+    /// The space the adapter names, and the presets it offers.
+    pub(super) fn named(adapter: &Adapter) -> (String, BuiltinPresets) {
+        let (spaces, space) = dispatch(adapter);
+        (space.as_str().to_owned(), spaces.presets())
     }
 
     pub(super) async fn resolve(adapter: &Adapter, names: &[ArtifactName]) -> SpaceReadings {
-        let asks: SpaceAsks = names.iter().map(|name| (name.clone(), every())).collect();
-        match adapter.resolve(&asks).await {
-            Ok(readings) => readings,
+        let (spaces, space) = dispatch(adapter);
+        let mut asks = ArtifactAsks::new();
+        for name in names {
+            for comparison in every() {
+                asks.ask(space.clone(), name.clone(), comparison);
+            }
+        }
+        match spaces.resolve(&asks).await {
+            Ok(readings) => readings
+                .iter()
+                .map(|(_, name, reading)| (name.clone(), reading.clone()))
+                .collect(),
             Err(e) => panic!("the reading of {names:?} is an error: {e:?}"),
         }
     }
 
-    pub(super) async fn current(
-        adapter: &Adapter,
-        space: &Space,
-        name: &ArtifactName,
-    ) -> Option<Vec<u8>> {
-        let key = ArtifactKey::new(space.clone(), name.clone());
-        match adapter.current(&key).await {
+    pub(super) async fn current(adapter: &Adapter, name: &ArtifactName) -> Option<Vec<u8>> {
+        let (spaces, space) = dispatch(adapter);
+        match spaces.current(&ArtifactKey::new(space, name.clone())).await {
             Ok(bytes) => bytes,
             Err(e) => panic!("the current bytes of {name} are an error: {e:?}"),
         }
@@ -282,14 +314,28 @@ mod ask {
         name: &ArtifactName,
         of: &PrefixMove,
     ) -> (SpacePrefixes, SpaceRenamed) {
-        match adapter.renamed(&BTreeSet::from([name.clone()]), of) {
-            Ok(answer) => answer,
+        let (spaces, space) = dispatch(adapter);
+        let mut asks = PrefixAsks::new();
+        asks.ask(space.clone(), name.clone());
+        let answers = match spaces.renamed(&asks, of) {
+            Ok(answers) => answers,
             Err(e) => panic!("the move of a prefix of {name} is an error: {e:?}"),
-        }
+        };
+        let prefixes = match answers.prefixes_of(&space) {
+            Some(prefixes) => prefixes.clone(),
+            None => panic!("the space asked has no answer"),
+        };
+        let renamed = answers
+            .renamed(&space, name)
+            .map(|answer| (name.clone(), answer.clone()))
+            .into_iter()
+            .collect();
+        (prefixes, renamed)
     }
 
     pub(super) async fn read_back(adapter: &Adapter, address: &ContentAddress) -> Option<Vec<u8>> {
-        match adapter.read_back(address).await {
+        let (spaces, space) = dispatch(adapter);
+        match spaces.read_back(&space, address).await {
             Ok(bytes) => bytes,
             Err(e) => panic!("reading {address} back is an error: {e:?}"),
         }
@@ -357,7 +403,8 @@ pub(super) async fn check(hook: &impl Hook) {
     let names = tree.names();
 
     // Its space and its presets: each preset for its own space, the same each time.
-    let presets = ask::presets(adapter, &space);
+    let (named, presets) = ask::named(adapter);
+    assert_eq!(named, space.as_str(), "{space}: its space");
     assert!(!presets.is_empty(), "{space}: no preset");
     for (name, values) in &presets {
         assert_eq!(
@@ -366,7 +413,7 @@ pub(super) async fn check(hook: &impl Hook) {
             "{space}: the preset {name} is for another space"
         );
     }
-    assert_eq!(presets, ask::presets(adapter, &space), "{space}: presets");
+    assert_eq!(presets, ask::named(adapter).1, "{space}: presets");
 
     // Every name is answered, a name that cannot be read beside the others, with no
     // error of the whole reading.
@@ -426,7 +473,7 @@ pub(super) async fn check(hook: &impl Hook) {
     // The current bytes are the bytes the reading hashed, and none for a name with
     // no content.
     for name in tree.there() {
-        let bytes = ask::current(adapter, &space, &name).await;
+        let bytes = ask::current(adapter, &name).await;
         let Some(bytes) = bytes else {
             panic!("{space}: {name} is there and has no current bytes");
         };
@@ -444,7 +491,7 @@ pub(super) async fn check(hook: &impl Hook) {
         .chain(tree.untold());
     for name in no_content {
         assert_eq!(
-            ask::current(adapter, &space, &name).await,
+            ask::current(adapter, &name).await,
             None,
             "{space}: {name} has no current bytes"
         );

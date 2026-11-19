@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2e8ae01fff885b856d85e263d367e6061cdde083",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c179349b0ecf6e76e497108d64ba172b1ebc806be5d84b04853db8ed457f02a4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b477824f027d5c12b6d4982450f3458f282c7f61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ade3237bc3b00612988868b792584abd00c515c38fb9b3a4ddbec379098a296",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3764c0a751259bfdac4965d258d19245fe99b827",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:711bb8e0bed17e9f993d934c2381692e34cd93e568a31ae6dbe6aa16c1dac087",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795102184981,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7bbfeb560c708d2332037c3c673f81031f030e54",
+      "hash": "sha256:014c638e8680d3ed28b9be79f3adecede14178e1e68714b68e212c55cece2dfc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "11"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-11d9-7657-8910-6240e23765d9"
+    }
+  ],
+  "id": "01a1f46d-98b4-76cb-8b0b-5e6efc619c9d",
+  "kind": "decision",
+  "reason": "After the blind review of issue 146, stage 2 (review of the branch from the issue alone, then of its fixes: the contract of an adapter as a trait in the core, its optional asks declared by type, the dispatch in the core over a registry that holds no rule, two adapters naming one space or one built-in preset refused, the conformance and prefix tests asking through the dispatch, and a test that the new architecture rules catch what they are written for): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "b93c75306dfa5927cf05c5c110d05383a47e2c86",
+  "seen": "sha256:552c5cbdeffde9917d43abfaa8b60fbe297380ecbed886e4b97da0a06c2ebc07",
+  "seen_address": "79a591912f2c1ec455a73bc27f8af837e8982558",
+  "subject": "01a1c4ba-15af-74cf-8ea9-0f39eda83aa0",
+  "v": 1,
+  "verb": "approve"
+}

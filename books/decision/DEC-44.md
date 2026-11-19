@@ -4,7 +4,7 @@ key: "DEC-44"
 issues: ["#38"]
 rejected: ["Keep files as the one kind of artifact and add a resolver for other names beside it: two mechanisms, with files special", "Let a link with no space mean a file in the core: files would be special again"]
 related: ["DEC-6"]
-rustdoc: ["whyshelf_core::domain::shelf::artifact::Space", "whyshelf_core::domain::shelf::artifact::ArtifactName", "whyshelf_core::domain::shelf::artifact::ArtifactKey", "whyshelf_core::domain::shelf::schema::ArtifactLinkKind", "whyshelf_core::app::shelf::ports::ArtifactSource", "whyshelf_infra::shelf::artifact", "whyshelf"]
+rustdoc: ["whyshelf_core::domain::shelf::artifact::Space", "whyshelf_core::domain::shelf::artifact::ArtifactName", "whyshelf_core::domain::shelf::artifact::ArtifactKey", "whyshelf_core::domain::shelf::schema::ArtifactLinkKind", "whyshelf_core::app::shelf::ports::ArtifactSource::spaces", "whyshelf_core::app::shelf::SpaceAdapter", "whyshelf_core::app::shelf::Spaces", "whyshelf_infra::shelf::artifact", "whyshelf"]
 serves: ["REQ-1", "REQ-10"]
 title: "Everything outside the documents is an artifact named in a space, and a link names its space"
 ---

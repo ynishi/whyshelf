@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d97e1c397c2961cb0698a4e52db8f6dd6464b427",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:951b3ab9179010202da20de2d007cae6c3c0253aa926b50a91285d588099f8c0",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "840dac5e37b9365b07a99492079fe9a6fabb977e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:eeb200b63d59384d0970849898757696bd7c14f346257bf9caba8cbb36ff1443",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795102184981,
+  "expires": null,
+  "frame": [
+    {
+      "address": "5edc41db98e0c4cc578c9cedb438a41761e27bf3",
+      "hash": "sha256:14ebd03b9f4e41442f3d8fbd85ec8cdfe2ecd72fb50895c5b6a1cc84e84a4dab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "22"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-155d-70fa-a267-9044c79b42b7"
+    }
+  ],
+  "id": "01a1f46d-99d5-743f-bd7a-93df2ca74cea",
+  "kind": "decision",
+  "reason": "After the blind review of issue 146, stage 2 (review of the branch from the issue alone, then of its fixes: the contract of an adapter as a trait in the core, its optional asks declared by type, the dispatch in the core over a registry that holds no rule, two adapters naming one space or one built-in preset refused, the conformance and prefix tests asking through the dispatch, and a test that the new architecture rules catch what they are written for): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "b93c75306dfa5927cf05c5c110d05383a47e2c86",
+  "seen": "sha256:e3de39ac2dc540f4da63078dfa3a57861de5e48834610e26af035950f33815b7",
+  "seen_address": "f3284e3edb747920e4fc1085b4cb45d959af678e",
+  "subject": "01a1c4ba-1c7a-7445-809d-046cf7ef0267",
+  "v": 1,
+  "verb": "approve"
+}

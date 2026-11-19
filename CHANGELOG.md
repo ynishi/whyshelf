@@ -125,6 +125,19 @@ and this project adheres to
 
 ### Changed
 
+- Two adapters that name one space, two built-in presets of one name, a preset
+  an adapter offers for another space, or a name of a space that is no space,
+  are an error when the project is opened: the command reads nothing and exits
+  with 3 (DEC-86). Before, the later one silently won. In the library, the
+  contract of a space's adapter is one trait in the core, `SpaceAdapter` (its
+  space and built-in presets, reading names, the current bytes of a name), with
+  the optional asks declared by type (`NamePrefixes`, `SpaceSuggest`,
+  `SpaceReadBack`, answered with `Answers` or not with `NoPrefixes`,
+  `CannotSuggest`, `NoReadBack`); the dispatch `Spaces` in the core answers
+  `ArtifactSource` and `MoveSource` and reads back for `ContentStore`, and holds
+  the answers for a space with no adapter. `ArtifactSpaces` is now
+  `Spaces<Registry>`, `Project::new` returns a `Result` with `DispatchError`,
+  and the adapters' `presets` take no space (#146).
 - One name of the space `file` that cannot be read is told as cannot tell, with
   why, and every other name asked with it is answered; before, it failed the
   whole reading (exit 3). An approval that pinned such a file stays fresh, with
