@@ -1,0 +1,96 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::fmt",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::DocReplace",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::docs::comment_line",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795063422265,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3ada2103ac34f8766837d09182d6d666f9928ee9",
+      "hash": "sha256:63eabc9e4f1b267741b887cea57a62e5bd6d474b010591274716f7249686acaa",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-3988-7cda-b185-14a038a1dfdf"
+    },
+    {
+      "address": "2b83699e1032bf92eb3e5127edeca704fa2dc107",
+      "hash": "sha256:0432e8dd81588eaffc6b5a31e3cf6dfd61911132e6941281b5e44f601704409e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "19"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c7ac-ef6b-72b1-aca0-3902188dfed0"
+    }
+  ],
+  "id": "01a1f21e-1d9d-7550-bd2d-06d93c59273a",
+  "kind": "decision",
+  "reason": "After the blind review of issue 143 (review of the branch from the issue alone, and its fixes: DEC-82 says the dry run serves once the declaration is edited, the manual and the changelog say approvals are broken until the entry is dropped and stale after, a declaration not taken out is noticed only where every book declares the name, DEC-77's met revisit taken out): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "70de5382e75a62708f235a0b84c44e23d0472084",
+  "seen": "sha256:9afad7f4e49382e60101c43961b7eff455aa4f212f347d9f4481ec51bf8ca281",
+  "seen_address": "4bf1e23b6aa06e20c49a1e5ee6aac8efeb1744b3",
+  "subject": "01a1c7ac-f6cd-72dd-9c19-683d45100164",
+  "v": 1,
+  "verb": "approve"
+}

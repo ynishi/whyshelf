@@ -69,6 +69,7 @@ use whyshelf_core::domain::hash::ContentHash;
 use whyshelf_core::domain::id::EntityId;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::shelf::artifact::{ArtifactName, NamePrefix, PrefixMove};
+use whyshelf_core::domain::shelf::build::DropAsk;
 use whyshelf_core::domain::shelf::filter::{FieldAsk, FieldWant, StatusFilterAsk};
 use whyshelf_core::domain::shelf::freshness::StandingKind;
 use whyshelf_core::domain::shelf::ledger::JudgementId;
@@ -195,7 +196,8 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
             standings,
             wheres,
             withouts,
-        } => match status_ask(&books, &standings, &wheres, &withouts) {
+            withs,
+        } => match status_ask(&books, &standings, &wheres, &withouts, &withs) {
             Ok(ask) => ShelfApp::new(project)
                 .status_filtered(&ask)
                 .await
@@ -278,12 +280,20 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
             .diff(&reference)
             .await
             .map(|r| print(&output::diff(&r))),
-        BooksCommand::Fmt { check } => {
+        BooksCommand::Fmt { check, drops } => {
+            let ask = match drop_ask(&drops) {
+                Ok(ask) => ask,
+                Err(message) => {
+                    eprintln!("error: {message}");
+                    print(&output::usage(message));
+                    return ExitCode::from(Exit::Request as u8);
+                }
+            };
             let mut app = ShelfApp::new(project);
             let report = if check {
-                app.fmt_check().await
+                app.fmt_check(&ask).await
             } else {
-                app.fmt().await
+                app.fmt(&ask).await
             };
             report.map(|r| {
                 let exit = print(&output::fmt(&r, check));
@@ -689,8 +699,8 @@ fn unlinked_filter(
 
 /// What a `status` command asks, or why its arguments are not a request: the books
 /// as names, the standings by the words [`output::standing`] prints, and each
-/// `--where` split at its first `=` into a field and a value, and each `--without` a
-/// field. Whether the filter fits the declaration is the model's to say
+/// `--where` split at its first `=` into a field and a value, and each `--without`
+/// and `--with` a field. Whether the filter fits the declaration is the model's to say
 /// ([`StatusFilter::new`](whyshelf_core::domain::shelf::filter::StatusFilter::new));
 /// here only the shape of each argument is read.
 fn status_ask(
@@ -698,6 +708,7 @@ fn status_ask(
     standings: &[String],
     wheres: &[String],
     withouts: &[String],
+    withs: &[String],
 ) -> Result<StatusFilterAsk, String> {
     let books = books
         .iter()
@@ -743,11 +754,36 @@ fn status_ask(
             value: FieldWant::NoValue,
         });
     }
+    for given in withs {
+        let field =
+            EntryName::new(given).map_err(|e| format!("--with `{given}`: not a field: {e}"))?;
+        fields.push(FieldAsk {
+            field,
+            value: FieldWant::AnyValue,
+        });
+    }
     Ok(StatusFilterAsk {
         books,
         standings,
         fields,
     })
+}
+
+/// What an `fmt` command is asked to drop, or why its arguments are not a request: each
+/// `--drop` a name that says something. Whether the names fit the declaration is the
+/// model's to say
+/// ([`DropNames::new`](whyshelf_core::domain::shelf::build::DropNames::new)); here only
+/// the shape of each argument is read.
+fn drop_ask(drops: &[String]) -> Result<DropAsk, String> {
+    let names = drops
+        .iter()
+        .map(|given| {
+            NonBlank::new(given.as_str()).map_err(|_| {
+                format!("--drop `{given}`: expected the name of an entry, not an empty one")
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(DropAsk { names })
 }
 
 /// The exit of `unlinked` once its answer is printed: 1 for a declaration that

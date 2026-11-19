@@ -31,8 +31,8 @@
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
 //! | [`new_docs`](ShelfApp::new_docs) | **yes** | [`NewMany`]: the documents of a run written, each as `new_doc` makes one, in the order they were written, and the ones no other stands on |
 //! | [`init`](ShelfApp::init) | **yes** | [`Initialized`]: the file of the declaration it wrote, and the documents it made beside it, each as `new_doc` makes one |
-//! | [`fmt_check`](ShelfApp::fmt_check) | no | [`FmtReport`]: the documents' files not in the one form, those in it, and those `fmt` would leave as they are, each with why |
-//! | [`fmt`](ShelfApp::fmt) | **yes** | [`FmtReport`]: the files written over in the one form, those in it already, and those left as they are, each with why |
+//! | [`fmt_check`](ShelfApp::fmt_check) | no | [`FmtReport`]: the documents' files not in the one form, those in it, and those `fmt` would leave as they are, each with why, and the names it would drop from each file it would write (those asked in a [`DropAsk`](crate::domain::shelf::build::DropAsk)); names that do not fit the declaration are [`ShelfError::Drop`] |
+//! | [`fmt`](ShelfApp::fmt) | **yes** | [`FmtReport`]: the files written over in the one form, those in it already, and those left as they are, each with why, and the names dropped from each file written; names that do not fit the declaration are [`ShelfError::Drop`], and nothing is written |
 //!
 //! # Reading and writing
 //!
@@ -140,7 +140,7 @@ pub use approve_chosen::{
 };
 pub use error::{ErrorClass, Obstacle, PersistProblem, ShelfError};
 pub use exempt::{ExemptRequest, Exempted};
-pub use fmt::{FmtReport, LeftAlone, LeftAloneWhy};
+pub use fmt::{Dropped, FmtReport, LeftAlone, LeftAloneWhy};
 pub use init::{InitFile, InitRequest, Initialized};
 pub use judge::{JudgeRequest, Judgement};
 pub use moved::{MovedPrefix, MovedRequest, PrefixMovedRequest};

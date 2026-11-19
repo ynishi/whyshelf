@@ -574,6 +574,9 @@ pub struct FiltersOut {
     /// The fields asked to hold no value (`--without`), in the order given; a
     /// document holds none of them.
     pub without: Vec<String>,
+    /// The fields asked to hold a value, whichever (`--with`), in the order given; a
+    /// document holds every one.
+    pub with: Vec<String>,
 }
 
 /// One `--where <field>=<value>` condition as given.
@@ -1407,6 +1410,21 @@ pub struct FmtOut {
     /// and are listed apart from `not_in_form`; `--check` exits 1 when either list
     /// has any file, and `fmt` without it exits 0, with a warning for each.
     pub left_alone: Vec<LeftAloneOut>,
+    /// The names `--drop` takes out, per file: for each file in `rewritten` (or, for
+    /// `--check`, in `not_in_form`) that loses an entry of a name it was asked to
+    /// drop, the names it loses. Empty without `--drop`, and for a file that holds
+    /// none of the names.
+    pub dropped: Vec<DroppedOut>,
+}
+
+/// The names `fmt --drop` takes out of one file.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct DroppedOut {
+    /// The file.
+    pub file: String,
+    /// The names of the entries taken out of it (or, for `--check`, to be taken out),
+    /// each once, in the order of the names.
+    pub names: Vec<String>,
 }
 
 /// A file `fmt` leaves as it is.
@@ -2635,7 +2653,7 @@ pub fn status(report: &StatusReport) -> StatusOut {
                         field: ask.field.to_string(),
                         value: value.clone(),
                     }),
-                    FieldWant::NoValue => None,
+                    FieldWant::NoValue | FieldWant::AnyValue => None,
                 })
                 .collect(),
             without: report
@@ -2643,6 +2661,13 @@ pub fn status(report: &StatusReport) -> StatusOut {
                 .fields
                 .iter()
                 .filter(|ask| ask.value == FieldWant::NoValue)
+                .map(|ask| ask.field.to_string())
+                .collect(),
+            with: report
+                .filters
+                .fields
+                .iter()
+                .filter(|ask| ask.value == FieldWant::AnyValue)
                 .map(|ask| ask.field.to_string())
                 .collect(),
         },
@@ -3209,6 +3234,14 @@ pub fn fmt(report: &FmtReport, check: bool) -> FmtOut {
                 detail: left_alone_detail(&left.why),
             })
             .collect(),
+        dropped: report
+            .dropped
+            .iter()
+            .map(|dropped| DroppedOut {
+                file: dropped.file.to_string(),
+                names: dropped.names.iter().map(ToString::to_string).collect(),
+            })
+            .collect(),
     }
 }
 
@@ -3661,6 +3694,7 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
         problems: match error {
             ShelfError::Schema(problems) => problems.iter().map(schema_problem).collect(),
             ShelfError::Filter(problems) => problems.iter().map(ToString::to_string).collect(),
+            ShelfError::Drop(problems) => problems.iter().map(ToString::to_string).collect(),
             ShelfError::NewDoc(NewDocProblem::Invalid(problems)) => {
                 problems.iter().map(ToString::to_string).collect()
             }

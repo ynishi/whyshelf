@@ -1,0 +1,147 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d12deed0a82a6f2098f2fb840c6c172ef2f572e6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d02ddda7397623c002e26a8f88aefd3a99768dd8163ba680cd444b7d570d7f76",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "92d1179c5683d5648cd341d4f372235207dd3032",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:dd38af2ec8074111614feab78284745a6a524f3823fd885ddc8ae6685cfcafa5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fake_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1427652a674877fe88fc975187c5d527a52946b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c911d8dfe1fa5c4b7890bed9a317db190059bd0dc11fab08dc697a57a8af3bf0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9ad41da91cb4ef610f4d6793d8c6a7f952dfab61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8dccbac46743e1060cf28dd958c54434de7b2d2c56a1a8ea1edaf98d73db7023",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "42bcc13db9bb898b3d51a929249630db004caae0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9a5025bdb5d7da520e19e638bc0aea0126116391753cc6df9fef2446b25558c2",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/form_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3a5865bb0282c4185acb9242c703db72f02218d2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6b4d61fd833ddd9bad566927a87f980056db8ac79e6d817b360a85c10e51d34f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2dc41634876f78cdfaa1ef2c5b1ecaaef1c2d7e3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a8d491f423136ddf396cfdc5a95b7a8e91df74efdc772104e9cd1222b03ef750",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a223b53a305d2ba82b80518450bc8769c9255864",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d654c1aa4f9562ae579c794929b16f6d05bae3df4a35a4c3df88c79300b6721c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795063422265,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8a417f9aeb881a0f28fe99b100dcfbe46f345e4b",
+      "hash": "sha256:afeb8ba63fbd85982166f075a580c4164d76f1f8a11b963b469acd3cda4dc1f6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "77"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e9bf-f4ea-76e3-8c9e-25d40627ad8e"
+    }
+  ],
+  "id": "01a1f21e-25d6-734f-bf58-b5f29fd0f4d6",
+  "kind": "decision",
+  "reason": "After the blind review of issue 143 (review of the branch from the issue alone, and its fixes: DEC-82 says the dry run serves once the declaration is edited, the manual and the changelog say approvals are broken until the entry is dropped and stale after, a declaration not taken out is noticed only where every book declares the name, DEC-77's met revisit taken out): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "70de5382e75a62708f235a0b84c44e23d0472084",
+  "seen": "sha256:f84b2e3e20be0ebce45fb1f9558bfd627e4ae09818c2f458bd90298b2f8ae591",
+  "seen_address": "b403ce8804aa9a11dc09128a77e856d05149e119",
+  "subject": "01a1e9c0-1b5b-7355-b26b-1882069dfcd9",
+  "v": 1,
+  "verb": "approve"
+}

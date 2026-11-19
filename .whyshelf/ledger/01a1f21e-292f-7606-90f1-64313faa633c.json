@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d12deed0a82a6f2098f2fb840c6c172ef2f572e6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d02ddda7397623c002e26a8f88aefd3a99768dd8163ba680cd444b7d570d7f76",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1427652a674877fe88fc975187c5d527a52946b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c911d8dfe1fa5c4b7890bed9a317db190059bd0dc11fab08dc697a57a8af3bf0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "42bcc13db9bb898b3d51a929249630db004caae0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9a5025bdb5d7da520e19e638bc0aea0126116391753cc6df9fef2446b25558c2",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/form_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2dc41634876f78cdfaa1ef2c5b1ecaaef1c2d7e3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a8d491f423136ddf396cfdc5a95b7a8e91df74efdc772104e9cd1222b03ef750",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795063422265,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1ad892133660c7b0f9117f01c225a6bf658e4e82",
+      "hash": "sha256:9252f2e982a2bdd5db185b629ae2567f4ae2ff6f1fb771d9a3f5566ae3b1dbf6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "82"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f1fb-7f05-73a9-ae21-ace8fdbcb80e"
+    }
+  ],
+  "id": "01a1f21e-292f-7606-90f1-64313faa633c",
+  "kind": "decision",
+  "reason": "After the blind review of issue 143 (review of the branch from the issue alone, and its fixes: DEC-82 says the dry run serves once the declaration is edited, the manual and the changelog say approvals are broken until the entry is dropped and stale after, a declaration not taken out is noticed only where every book declares the name, DEC-77's met revisit taken out): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "70de5382e75a62708f235a0b84c44e23d0472084",
+  "seen": "sha256:aeb0670166db38d265d489ea9ca686dbecbb6dad1c722d6c9c58574932fc2231",
+  "seen_address": "3fffbe17523b29bf4ec56690396566924fc8c353",
+  "subject": "01a1f1fb-7f05-73a9-ae21-ace9bc3a9291",
+  "v": 1,
+  "verb": "approve"
+}

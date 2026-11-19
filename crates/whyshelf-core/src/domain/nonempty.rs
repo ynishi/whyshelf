@@ -284,6 +284,13 @@ impl fmt::Display for NonBlank {
     }
 }
 
+/// A set of texts is looked up by a `&str`: the order is the text's own.
+impl std::borrow::Borrow<str> for NonBlank {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
 /// A text of one line: not empty or only white space (as [`NonBlank`]), and with no
 /// line break (`\n` or `\r`).
 ///

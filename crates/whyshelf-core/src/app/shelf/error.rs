@@ -14,7 +14,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::build::{
-    ClaimKeyProblem, NewDocProblem, NextKeyProblem, NoFreeKey, PlanProblem,
+    ClaimKeyProblem, DropProblem, NewDocProblem, NextKeyProblem, NoFreeKey, PlanProblem,
 };
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::ExemptRefusal;
@@ -51,6 +51,11 @@ pub enum ShelfError {
     /// Every problem is listed.
     #[error("the filter has {} problem(s)", .0.len())]
     Filter(NonEmptyVec<FilterProblem>),
+    /// The names `fmt --drop` was asked to drop do not fit the declaration of the
+    /// books: `id` or `key`, or a name every book declares. Every problem is listed,
+    /// and nothing is written.
+    #[error("the names to drop have {} problem(s)", .0.len())]
+    Drop(NonEmptyVec<DropProblem>),
     /// The reference names nothing: no document, and no record of the ledger.
     #[error("`{reference}` names no document")]
     NotFound {
@@ -453,6 +458,7 @@ impl ShelfError {
         match self {
             Self::Schema(_)
             | Self::Filter(_)
+            | Self::Drop(_)
             | Self::NotFound { .. }
             | Self::Ambiguous { .. }
             | Self::UnknownBook { .. }

@@ -680,6 +680,37 @@
 //! lists this declaration, typed, beside the other ways to settle an edit: see
 //! [What settles an origin](#what-settles-an-origin).
 //!
+//! ## Retire a field
+//!
+//! Taking a field, a link or a link to artifacts out of a book's declaration leaves the
+//! documents that wrote it with an entry the book does not declare: `check` tells each
+//! as an unknown entry, and a document that tells one is not valid. `status --with` finds
+//! the valid documents that hold a value for a field before (not those that write it
+//! with nothing in it, nor invalid ones, which `check` tells after), and `fmt --drop`
+//! takes the entry out of all of them after, in this order:
+//!
+//! 1. `status --with <field>` lists the documents that hold a value for the field
+//!    (add `--book` for one book). A link is not a field to `--with`: look for the
+//!    documents that write it with `check` once the declaration no longer has it.
+//! 2. Take the declaration out of `.whyshelf/books.toml`. A document that still writes
+//!    the entry (with a value or with nothing in it) is now not valid, and `check`
+//!    tells the unknown entry: until the entry is taken out, its approval and those
+//!    that stand on it are broken, not stale. Once it is out (step 4), a document
+//!    that held a value reads without it, so its hash is another, and its approval
+//!    is stale: this is the declaration's doing, not `fmt`'s, and those documents
+//!    are approved again (`judge approve --stale`).
+//! 3. `fmt --check --drop <name>` lists the files `fmt` would write and, for each, the
+//!    names it would take out (`dropped` in the answer). Nothing is written.
+//! 4. `fmt --drop <name>` writes them. A name every book still declares is a request
+//!    error (exit 2), so a declaration not taken out of every book is noticed here;
+//!    where only some books declared it, a declaration not taken out shows as an
+//!    empty `dropped`. `id` and `key` cannot be dropped, and a book that still
+//!    declares the name keeps its entries.
+//! 5. `check`. A file `fmt` leaves alone (a YAML comment in its front matter, a
+//!    read-only file, a hard link, a file that changed while `fmt` ran) still tells the
+//!    unknown entry, and is edited by hand; `fmt --check --drop <name>` lists it under
+//!    `left_alone`, with why.
+//!
 //! ## An artifact that moved
 //!
 //! A file moved (or a Rust item renamed) is, to its approvals, a file gone: the pin
@@ -831,7 +862,7 @@
 //!                             and a drawing of them; it reads no document and no ledger
 //!                             (exit 1, as check, when the declaration cannot be used)
 //!   status [--book <name>]... [--standing <word>]... [--where <field>=<value>]...
-//!          [--without <field>]...
+//!          [--without <field>]... [--with <field>]...
 //!                             every document, or those that pass the filters: what was
 //!                             decided, and where it stands now (the filters are under
 //!                             "Output and exit status")
@@ -884,9 +915,12 @@
 //!                             take back decisions or declarations by the id of their record
 //!   new <book> [--title <text>] [--key <key>] [<entry>=<value> | <entry>+=<item>]... [--body <text>]
 //!                             one new document, valid for its book, at <book dir>/<key>.md
-//!   fmt [--check]             every document's file in the one form `new` writes, where that
+//!   fmt [--check] [--drop <name>]...
+//!                             every document's file in the one form `new` writes, where that
 //!                             changes no reading of it; --check writes nothing, and exits 1
-//!                             when a file is not in the form, or would be left alone
+//!                             when a file is not in the form, or would be left alone;
+//!                             --drop also takes out the entry of that name where the
+//!                             file's book declares none (see "Retire a field")
 //!   schema                    the JSON Schema of the answer of every command
 //! ```
 //!
@@ -1051,10 +1085,13 @@
 //!   leaves out an entry written with nothing in it that the build reads as not
 //!   written (an optional field, or a link whose count admits none), by the rule
 //!   `new` writes with ([`domain::shelf::build::Shelf::form_entries`]); every other
-//!   entry is kept as it is written. A file is written only when its text in the
+//!   entry is kept as it is written, except an entry of a name given to `--drop`
+//!   (below). A file is written only when its text in the
 //!   form reads back as what the file reads as now without those entries (the
-//!   same other entries, the same body), so no document, problem, hash or approval
-//!   changes; the check is made on every file, on every run. A file already in the
+//!   same other entries, the same body), so no hash or approval changes, and
+//!   no problem does but the unknown entry of a name given to `--drop`, which goes
+//!   (a document that told only those is valid afterwards); the check is made on
+//!   every file, on every run. A file already in the
 //!   form is not written; `new` writes this form, so what it writes is in it. A
 //!   file whose front matter cannot be read, one whose front matter holds a YAML
 //!   comment (the form would lose it; the rule is on
@@ -1072,6 +1109,18 @@
 //!   files written, each a sound file of its own. `fmt --check` writes nothing, lists the files `fmt`
 //!   would write and, apart, those it would leave alone, and exits 1 when there is
 //!   any of either: a file left alone is not in the form either.
+//! - `fmt --drop <name>`, repeated for each name, is the second half of retiring a
+//!   field, a link or a link to artifacts (see "Retire a field" below): it takes the
+//!   entry of that name out of every file whose book declares nothing of that name
+//!   (no field, link or link to artifacts), whatever the entry holds; an entry of the
+//!   name in a book that declares it stays, and so does every entry no `--drop` names. It
+//!   is also the dry run when given with `--check`, which lists, for each file it
+//!   would write, the names it would take out. Every other rule of `fmt` holds: a file
+//!   with a comment, a read-only file and a hard link are left alone, and the entry
+//!   stays in them. The names are checked against the declaration before anything is
+//!   read or written: an empty name is an argument error, and `id`, `key` and a name
+//!   every book declares are request errors (exit 2), each told, nothing written.
+//!   The last is so that a name still declared everywhere is noticed.
 //! - Only `judge`, `new`, `init` and `fmt` write: `judge` one new file per decision
 //!   or declaration, `new` one new document's file, never in place of a file that is
 //!   there, `init` the declaration, its other files and its documents, never in place of a file that
@@ -1110,14 +1159,14 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read, written or put on disk (for `new` and `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
 //!
 //! `status` answers `{"docs", "filters", "health"}`: the documents that pass the
 //! filters (all of them when none is given), the filters as given (`books` by
 //! name and each once, `standings` in a fixed order, `where` as `{"field",
-//! "value"}` in the order given, and `without` as the field names in the order
-//! given, each empty when none was), and the `health` of
+//! "value"}` in the order given, and `without` and `with` as the field names in the
+//! order given, each empty when none was), and the `health` of
 //! the whole project, not of the documents listed. The filters are:
 //!
 //! - `--book <name>`: the documents of this book;
@@ -1128,17 +1177,21 @@
 //!   The text after the first `=` is the value, read as the type of the field.
 //! - `--without <field>`: the documents whose book declares the field and that
 //!   hold no value for it (left out, or written with nothing in it).
+//! - `--with <field>`: the documents whose book declares the field and that hold a
+//!   value for it, whichever (written, with something in it). A field every book
+//!   that declares it requires is answered: every valid document of those books has
+//!   a value.
 //!
 //! Each may be repeated. A document must pass every kind given; of one kind
 //! repeated, it passes by any one (`--book a --book b --standing stale` is the stale
-//! documents of `a` or `b`), except that each `--where` and each `--without` is a
-//! condition it must hold. A book or a field that is not declared, a value no book
-//! that declares the field reads as its type, an empty value, a field asked with
-//! `--where` and with `--without`, and a `--without` of a field that every book
-//! declaring it requires (of the books asked, when any are and one of them
-//! declares it) are a request error
+//! documents of `a` or `b`), except that each `--where`, each `--without` and each
+//! `--with` is a condition it must hold. A book or a field that is not declared, a
+//! value no book that declares the field reads as its type, an empty value, a field
+//! asked with `--where` or `--with` and with `--without`, and a `--without` of a
+//! field that every book declaring it requires (of the books asked, when any are and
+//! one of them declares it) are a request error
 //! (exit 2) that lists every problem. A document that is not valid passes the
-//! `--book` of any of its files and never a `--where` or a `--without`. The rule is on the page of [`domain::shelf::filter`].
+//! `--book` of any of its files and never a `--where`, a `--without` or a `--with`. The rule is on the page of [`domain::shelf::filter`].
 //!
 //! `check` answers `clean` (whether it exits 0) beside what it found; each of its
 //! `books` is `{"name", "dir", "valid", "invalid", "skipped", "skipped_files"}`; its
@@ -1257,9 +1310,12 @@
 //! clone); and each call is stopped after 30 s.
 //!
 //! `fmt` answers `{"rewritten": [...], "in_form": <count>, "not_in_form": null,
-//! "left_alone": [{"file", "reason", "line", "detail"}]}`, the files by their path
-//! under the root; `fmt --check` answers the same with `rewritten` empty and
-//! `not_in_form` the files `fmt` would write. `in_form` is a count, not a list: it
+//! "left_alone": [{"file", "reason", "line", "detail"}], "dropped": [{"file",
+//! "names"}]}`, the files by their path under the root; `fmt --check` answers the
+//! same with `rewritten` empty and `not_in_form` the files `fmt` would write.
+//! `dropped` is, for each file in `rewritten` (for `--check`, in `not_in_form`) that
+//! loses an entry of a name given to `--drop`, the names it loses, in the order of
+//! the names; it is empty without `--drop`. `in_form` is a count, not a list: it
 //! is most files, and nothing is to be done about them. A `reason` is `unparsed`,
 //! `comment` (with its `line` in the file), `reads_otherwise`, `read_only`,
 //! `linked` or `changed`. A

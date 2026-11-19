@@ -9,7 +9,7 @@ use whyshelf_core::app::shelf::{
 };
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonEmptyVec;
-use whyshelf_core::domain::shelf::build::{FormEntries, RawValue, Shelf};
+use whyshelf_core::domain::shelf::build::{DropNames, FormEntries, RawValue, Shelf};
 use whyshelf_core::domain::shelf::schema::{BookName, BookSchemaDecl, KeyPatternDecl, Schema};
 
 use super::Project;
@@ -43,7 +43,12 @@ fn entries_of(key: &str) -> FormEntries {
     }];
     let schema = Schema::validate(decls, &BTreeSet::new()).unwrap();
     let entries = BTreeMap::from([("key".to_owned(), RawValue::Text(key.to_owned()))]);
-    Shelf::form_entries(&schema, &BookName::new("spec").unwrap(), &entries)
+    Shelf::form_entries(
+        &schema,
+        &BookName::new("spec").unwrap(),
+        &entries,
+        &DropNames::none(),
+    )
 }
 
 #[tokio::test]

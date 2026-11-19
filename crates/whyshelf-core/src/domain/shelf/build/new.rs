@@ -58,8 +58,8 @@ use crate::domain::shelf::schema::{
 
 use super::plan::{NewRequest, PlannedValue};
 use super::{
-    Candidate, DocProblem, DocReading, FormEntries, Judged, KeyIndex, RawValue, Shelf, ask_of,
-    resolve_artifacts, resolve_links,
+    Candidate, DocProblem, DocReading, DropNames, FormEntries, Judged, KeyIndex, RawValue, Shelf,
+    ask_of, resolve_artifacts, resolve_links,
 };
 
 /// A key a new document may take: read in its book's grammar and written by no file
@@ -597,7 +597,12 @@ impl Shelf {
                 let artifact_links = resolve_artifacts(artifacts, artifact_links);
                 Ok(NewDoc {
                     doc: Doc::new(draft, links, artifact_links),
-                    entries: Self::form_entries(&self.schema, &key.key.book, &entries),
+                    entries: Self::form_entries(
+                        &self.schema,
+                        &key.key.book,
+                        &entries,
+                        &DropNames::none(),
+                    ),
                 })
             }
             Judged::Invalid { file, .. } => Err(NewDocProblem::Invalid(file.problems)),

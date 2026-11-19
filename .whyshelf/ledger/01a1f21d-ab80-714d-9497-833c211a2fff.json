@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "95781e3803b00090143fab5bb879c79641c384ce",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:77c620cf9aaaa3cdbdf31ece0917472f17d45b0396905697fb0867c9b1281c73",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795063391066,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4181d40e89264f003a05072849315f2bbfe3750b",
+      "hash": "sha256:7eadac6a9ad1e3958244c3a3864969fa9b52cd3d3c7b78fb6d8080d20c921193",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "66"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb06-d455-710f-8a4e-5bd7fa7cd3c8"
+    }
+  ],
+  "id": "01a1f21d-ab80-714d-9497-833c211a2fff",
+  "kind": "decision",
+  "reason": "After the blind review of issue 143 (review of the branch from the issue alone, and its fixes: DEC-82 says the dry run serves once the declaration is edited, the manual and the changelog say approvals are broken until the entry is dropped and stale after, a declaration not taken out is noticed only where every book declares the name, DEC-77's met revisit taken out): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "70de5382e75a62708f235a0b84c44e23d0472084",
+  "seen": "sha256:bec2db8e9dae2fdd83d15b27cc6fef30586b6b18cec5ddeeb614696418512d4f",
+  "seen_address": "e961eec29c1b9474cbbea0c6050e7974c366759a",
+  "subject": "01a1cb06-d737-7530-9290-115fa03aad66",
+  "v": 1,
+  "verb": "approve"
+}

@@ -112,7 +112,8 @@ pub enum BooksCommand {
     /// any one of the values of a kind repeated. `health` is of the whole project,
     /// not of the documents listed. A book or a field that is not declared, a value
     /// no book reads as the field's type, a value left empty (`--where field=`), a
-    /// field asked with a value and with no value, no value asked of a field every
+    /// field asked with a value (`--where`, `--with`) and with no value, no value
+    /// asked of a field every
     /// book that declares it requires, or a word that is no standing is a request
     /// error (exit 2).
     Status {
@@ -138,6 +139,15 @@ pub enum BooksCommand {
         /// requires are request errors (exit 2).
         #[arg(long = "without", value_name = "FIELD")]
         withouts: Vec<String>,
+        /// Only the documents of a book that declares the field, which hold a value
+        /// for it, whichever value: they write it with something in it. Repeat it for
+        /// each field a document must hold; it is one more condition beside the
+        /// others, as `--where` is, and may be given with `--where` on the same field.
+        /// A field no book declares, and one that is also asked with `--without`, are
+        /// request errors (exit 2). It is for finding the documents that hold a field
+        /// before the declaration of it is taken out.
+        #[arg(long = "with", value_name = "FIELD")]
+        withs: Vec<String>,
     },
     /// One document in full, with where its approval stops holding.
     Get {
@@ -243,11 +253,23 @@ pub enum BooksCommand {
     /// first, every text in double quotes, the whole text normalized as it is read:
     /// `\n` line endings, no trailing white space), when that changes no
     /// reading of it; a file it cannot write so is left as it is, and listed with why.
+    /// With `--drop NAME` it also takes out of each file the entry of that name, when
+    /// the book of the file declares no field, link or link to artifacts of that name,
+    /// and says which names it took out of which file. A name that is `id` or `key`,
+    /// or that every book declares, or that is empty is a request error (exit 2),
+    /// and nothing is written.
     Fmt {
         /// Write nothing: list the files not in the form, those it would write and
-        /// those it would leave alone apart, and exit 1 when there is any of either.
+        /// those it would leave alone apart, and exit 1 when there is any of either;
+        /// with `--drop`, the names it would take out of each file too.
         #[arg(long)]
         check: bool,
+        /// Take the entry of this name out of every file whose book does not declare
+        /// it (a field, a link or a link to artifacts taken out of the declaration of
+        /// the books); an entry of that name in a book that declares it stays. Repeat
+        /// it for each name.
+        #[arg(long = "drop", value_name = "NAME")]
+        drops: Vec<String>,
     },
     /// The JSON Schema of the answer of every command.
     Schema,

@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::domain::actor::Actor;
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
-use crate::domain::shelf::build::{DocReading, FormEntries, RawValue, Shelf};
+use crate::domain::shelf::build::{DocReading, DropNames, FormEntries, RawValue, Shelf};
 use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record};
 use crate::domain::shelf::schema::{
     BookRange, BookSchemaDecl, BuiltinPresets, Cardinality, FieldEntryDecl, FieldPresence,
@@ -466,7 +466,7 @@ impl FakeShelf {
             .expect("a file of a book")
             .name()
             .clone();
-        let form = Shelf::form_entries(&schema, &book, entries);
+        let form = Shelf::form_entries(&schema, &book, entries, &DropNames::none());
         lock(&self.files).insert(at, fake_text(&form, body));
     }
 
