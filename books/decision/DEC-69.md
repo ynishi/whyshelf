@@ -2,7 +2,7 @@
 id: "01a1d9f7-a611-74b7-88a2-a58381f213dc"
 key: "DEC-69"
 issues: ["#99"]
-rejected: ["Gather the lines by their text in the command line: the rule of what is one cause would sit in a surface and be written twice, for check and for stale", "Add the causes to the JSON answers: every name stays in the answer, and a shape added later can be built on the same rule", "Make each reason a structured cause the adapters give: its shape belongs with what a space a project declares answers (#110), and the text of a reason already tells one cause from another"]
+rejected: ["Gather the lines by their text in the command line: the rule of what is one cause would sit in a surface and be written twice, for check and for stale", "Add the causes to the JSON answers: every name stays in the answer, and a shape added later can be built on the same rule", "Make each reason a structured cause the adapters give: what an adapter answers is the contract of DEC-84, whose answers have a shape the domain fixes and give a reason as a text, and the text of a reason already tells one cause from another"]
 related: ["DEC-45", "DEC-26"]
 revisit: "When an adapter gives one cause in two wordings, or two causes in one, or the answers need causes"
 rustdoc: ["whyshelf_core::domain::shelf::untold::untold_causes", "whyshelf_core::domain::shelf::untold::UntoldCause", "whyshelf_core::domain::shelf::untold::Held", "whyshelf_core::domain::shelf::untold::Writers", "whyshelf_core::domain::shelf::untold::UntoldName", "whyshelf"]
