@@ -78,9 +78,11 @@ use super::schema::{
     ScalarType, Schema, WithoutFrontMatter,
 };
 
+mod drop_names;
 mod new;
 mod plan;
 
+pub use drop_names::{DropAsk, DropNames, DropProblem};
 pub use new::{
     ClaimKeyProblem, NEXT_KEY_TRIES, NewDoc, NewDocProblem, NewKey, NextKeyProblem, NoFreeKey,
     OutOfRange,
@@ -356,38 +358,51 @@ pub enum DocReading {
 }
 
 /// The entries a file of a book is written with: the entries of a document, less those
-/// the build reads as not written and the file need not hold.
+/// the build reads as not written and the file need not hold, and those a caller asked
+/// to drop that the book does not declare.
 ///
 /// It can be made by [`Shelf::form_entries`] only, so that what `new` writes and what
 /// `fmt` writes are told by one rule: the writers of a front matter take this type,
 /// not a map of raw values.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FormEntries(BTreeMap<String, RawValue>);
+pub struct FormEntries {
+    entries: BTreeMap<String, RawValue>,
+    /// The names asked to drop that an entry was left out for.
+    dropped: BTreeSet<NonBlank>,
+}
 
 impl FormEntries {
     /// Every entry to write, `id` and `key` included, by name.
     pub fn as_map(&self) -> &BTreeMap<String, RawValue> {
-        &self.0
+        &self.entries
     }
 
     /// The entry written under `name`, if any.
     pub fn get(&self, name: &str) -> Option<&RawValue> {
-        self.0.get(name)
+        self.entries.get(name)
     }
 
     /// Every entry to write, in the order of their names.
     pub fn iter(&self) -> impl Iterator<Item = (&String, &RawValue)> {
-        self.0.iter()
+        self.entries.iter()
     }
 
     /// How many entries there are.
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.entries.len()
     }
 
     /// Whether there is no entry.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.entries.is_empty()
+    }
+
+    /// The names of the entries left out because the caller asked to drop them
+    /// ([`DropNames`]) and the book does not declare them; none when no name was asked,
+    /// and none for a name no entry holds. An entry left out because it says nothing
+    /// is not here.
+    pub fn dropped(&self) -> &BTreeSet<NonBlank> {
+        &self.dropped
     }
 }
 
@@ -1812,7 +1827,8 @@ impl Shelf {
     }
 
     /// The entries a file of `book` is written with, from the entries of a document:
-    /// those the build reads as not written and the file need not hold are left out.
+    /// those the build reads as not written and the file need not hold are left out, and
+    /// so are those `drop` lists that the book does not declare.
     ///
     /// The one place that is decided, for `new` and for `fmt` alike. An entry that says
     /// nothing (the build's own `Written::of`) is left out only when the build reads it as one that
@@ -1823,21 +1839,37 @@ impl Shelf {
     /// which problems the build tells, or their order. Every entry that says something
     /// is kept. A book the schema does not declare leaves nothing out.
     ///
-    /// The build of the result is the build of `entries`: the same document, the same
-    /// problems in the same order.
+    /// An entry whose name is in `drop` is left out too, whatever it holds, when the
+    /// book declares nothing under that name (no field, link or link to artifacts): the
+    /// build tells such an entry as an unknown one, and it is the one problem the
+    /// result does not keep. The names left out are in [`FormEntries::dropped`]. The
+    /// `id` and the `key` are never in `drop`. `new` passes [`DropNames::none`].
+    ///
+    /// The build of the result is the build of `entries`, without the unknown entries
+    /// of `drop`: the same document, the same problems in the same order less the
+    /// [`DocProblem::UnknownEntry`] of each name dropped.
     pub fn form_entries(
         schema: &Schema,
         book: &BookName,
         entries: &BTreeMap<String, RawValue>,
+        drop: &DropNames,
     ) -> FormEntries {
         let book = schema.book(book);
-        FormEntries(
-            entries
-                .iter()
-                .filter(|(name, raw)| !book.is_some_and(|book| need_not_hold(book, name, raw)))
-                .map(|(name, raw)| (name.clone(), raw.clone()))
-                .collect(),
-        )
+        let mut kept = BTreeMap::new();
+        let mut dropped = BTreeSet::new();
+        for (name, raw) in entries {
+            if let (Some(book), Some(asked)) = (book, drop.listed(name))
+                && Declared::of(book, name).is_none()
+            {
+                dropped.insert(asked.clone());
+            } else if !book.is_some_and(|book| need_not_hold(book, name, raw)) {
+                kept.insert(name.clone(), raw.clone());
+            }
+        }
+        FormEntries {
+            entries: kept,
+            dropped,
+        }
     }
 
     /// A shelf from the schema, what an adapter read of the documents, and what the

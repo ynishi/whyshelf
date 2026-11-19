@@ -357,7 +357,7 @@ async fn every_template_makes_a_project_that_reads_clean_in_the_form_and_pending
         }
 
         assert_clean(&app.books_check().await.unwrap(), &meant_gaps(template));
-        let form = app.fmt_check().await.unwrap();
+        let form = app.fmt_check(&Default::default()).await.unwrap();
         assert!(form.all_in_form(), "{template:?}: {form:?}");
         assert_eq!(form.in_form.len(), count);
 

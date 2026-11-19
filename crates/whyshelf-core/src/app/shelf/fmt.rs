@@ -4,11 +4,13 @@
 //!
 //! ```text
 //!   BookSchemaSource -> the dirs of the books
+//!   DropAsk -> DropNames::new(&Schema) ........ the names to drop, checked once
 //!   DocSource::forms -> per file: its reading, its bytes, the line of a comment
 //!        |
 //!        v  plan (here, per file), in this order
 //!   unparsed, unheld ......................................... left alone
-//!   Shelf::form_entries -> the entries the form holds        (the same as `new`'s)
+//!   Shelf::form_entries -> the entries the form holds        (the same as `new`'s),
+//!                          and the names it dropped
 //!   DocSource::render   -> the text in the form, and what it reads as
 //!   the bytes are the text ................................. counted, not written
 //!   a comment in the front matter ............................ left alone
@@ -20,12 +22,35 @@
 //! The promise: `fmt` writes a file only when the text in the form reads back as the
 //! file does without the entries that say nothing and that the build reads as not
 //! written (an optional field written empty, a link whose count admits none written
-//! with no key). Which entries those are is decided by the entry point `new`
+//! with no key), and without the entries it was asked to drop (see below). Which
+//! entries those are is decided by the entry point `new`
 //! asks too ([`Shelf::form_entries`]), so what `new` writes is in the form, and `fmt`
 //! rewrites a file that holds such an entry without it. An entry that says nothing
 //! and that the build tells a problem for (a required field, a link whose count asks
 //! for a key, an undeclared entry, the `id` and the `key`) stays in the form, so the
-//! rewrite does not change what `check` says.
+//! rewrite does not change what `check` says. The one thing a rewrite changes in it is
+//! the unknown entry of each name `fmt` was asked to drop, which goes; a `fmt` asked to
+//! drop nothing changes none.
+//!
+//! # Dropping a name
+//!
+//! `fmt --drop NAME`, once for each name, is for a field, a link or a link to artifacts
+//! taken out of a book's declaration: every document that held it tells an unknown
+//! entry in `check`, and nothing else takes it out of them. [`DropNames::new`] checks
+//! the names against the declaration once, after it is read: `id`, `key` and a name
+//! every book declares are a [`ShelfError::Drop`], and nothing is written. Then
+//! `form_entries` leaves out an entry of such a name from a file of a book that
+//! declares nothing under it, whatever the entry holds; an entry of that name in a book
+//! that declares it stays. Every other safeguard is as it was: a file with a comment, a
+//! read-only file, a hard link and a file whose text would not read back as the entries
+//! the form holds are left alone, so the entry stays in them and `check` still tells
+//! it. What a file reads back as is compared with the entries the form holds, so an
+//! entry dropped is not among them and is checked like the rest. `fmt` changes no hash:
+//! what a document's hash covers is what the declaration reads, and it changed when the
+//! declaration stopped reading the field, not when the entry goes.
+//! [`FmtReport::dropped`] gives, for each file listed as rewritten or as not in the form,
+//! the names dropped from it, so `fmt_check` shows the files and the names a rewrite
+//! would take out without writing anything.
 //!
 //! The form is the adapter's (its text is never read here): the whole text after
 //! the normalization rule, [`normalize`](crate::domain::shelf::doc::normalize), so a
@@ -44,9 +69,11 @@
 //! way leaves the first of them written, each a sound file of its own in the form,
 //! and the rest as they were.
 
+use std::collections::BTreeSet;
+
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::NonEmptyVec;
-use crate::domain::shelf::build::{DocReading, RawProblem, Shelf, UnheldValue};
+use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::shelf::build::{DocReading, DropAsk, DropNames, RawProblem, Shelf, UnheldValue};
 use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
@@ -70,6 +97,20 @@ pub struct FmtReport {
     pub not_in_form: Vec<RelPath>,
     /// The files left as they are, each with why.
     pub left_alone: Vec<LeftAlone>,
+    /// For each file in `rewritten` (or, for `fmt_check`, in `not_in_form`) that loses
+    /// an entry it was asked to drop, the names it loses; a file that loses none is not
+    /// here. Empty when no name was asked.
+    pub dropped: Vec<Dropped>,
+}
+
+/// The names of the entries a rewritten file loses because `fmt` was asked to drop
+/// them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dropped {
+    /// The file.
+    pub file: RelPath,
+    /// The names, each once, in the order of the names.
+    pub names: BTreeSet<NonBlank>,
 }
 
 impl FmtReport {
@@ -121,8 +162,21 @@ enum Plan {
         file: RelPath,
         read: Vec<u8>,
         text: Vec<u8>,
+        /// The names the rewrite takes out (none unless `--drop`).
+        dropped: BTreeSet<NonBlank>,
     },
     LeaveAlone(LeftAlone),
+}
+
+impl Dropped {
+    /// The names a rewrite takes out of `file`, as the report says them: none for a
+    /// file that loses none.
+    fn of(file: &RelPath, names: BTreeSet<NonBlank>) -> Option<Self> {
+        (!names.is_empty()).then(|| Dropped {
+            file: file.clone(),
+            names,
+        })
+    }
 }
 
 /// A file left as it is, and why.
@@ -137,6 +191,7 @@ fn leave(file: &RelPath, why: LeftAloneWhy) -> Plan {
 /// order (the module page).
 async fn plan<D: DocSource>(
     schema: &Schema,
+    drop: &DropNames,
     docs: &D,
     found: FileRead,
 ) -> Result<Plan, ShelfError> {
@@ -164,7 +219,7 @@ async fn plan<D: DocSource>(
     let Some(book) = schema.book_of(&origin) else {
         return Ok(leave(&origin, LeftAloneWhy::ReadsOtherwise));
     };
-    let form = Shelf::form_entries(schema, book.name(), &entries);
+    let form = Shelf::form_entries(schema, book.name(), &entries, drop);
     let rendered = docs.render(&origin, &form, &body);
     if rendered.text == read {
         return Ok(Plan::InForm(origin));
@@ -191,6 +246,7 @@ async fn plan<D: DocSource>(
             file: origin,
             read,
             text: rendered.text,
+            dropped: form.dropped().clone(),
         })
     } else {
         Ok(leave(&origin, LeftAloneWhy::ReadsOtherwise))
@@ -198,8 +254,10 @@ async fn plan<D: DocSource>(
 }
 
 /// The plan of every file of the books.
-async fn plans<P: ShelfRead>(ports: &P) -> Result<Vec<Plan>, ShelfError> {
+async fn plans<P: ShelfRead>(ports: &P, ask: &DropAsk) -> Result<Vec<Plan>, ShelfError> {
     let schema = schema_of(ports).await?.map_err(ShelfError::Schema)?;
+    // The names to drop fit the declaration, or nothing is read or written.
+    let drop = DropNames::new(&schema, ask.clone()).map_err(ShelfError::Drop)?;
     let found = ports
         .docs()
         .forms(&schema.ranges())
@@ -212,20 +270,25 @@ async fn plans<P: ShelfRead>(ports: &P) -> Result<Vec<Plan>, ShelfError> {
         if Shelf::skip_of(&schema, &file.reading).is_some() {
             continue;
         }
-        plans.push(plan(&schema, ports.docs(), file).await?);
+        plans.push(plan(&schema, &drop, ports.docs(), file).await?);
     }
     Ok(plans)
 }
 
 impl<P: ShelfRead> ShelfApp<P> {
     /// Which documents' files are not in the one form, and which `fmt` would leave
-    /// as they are, each with why. Writes nothing.
-    pub async fn fmt_check(&self) -> Result<FmtReport, ShelfError> {
+    /// as they are, each with why, and for each file it would write, the names it would
+    /// drop (`ask`). Writes nothing. Names that do not fit the declaration are
+    /// [`ShelfError::Drop`].
+    pub async fn fmt_check(&self, ask: &DropAsk) -> Result<FmtReport, ShelfError> {
         let mut report = FmtReport::default();
-        for plan in plans(&self.ports).await? {
+        for plan in plans(&self.ports, ask).await? {
             match plan {
                 Plan::InForm(file) => report.in_form.push(file),
-                Plan::Rewrite { file, .. } => report.not_in_form.push(file),
+                Plan::Rewrite { file, dropped, .. } => {
+                    report.dropped.extend(Dropped::of(&file, dropped));
+                    report.not_in_form.push(file);
+                }
                 Plan::LeaveAlone(left) => report.left_alone.push(left),
             }
         }
@@ -238,13 +301,21 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// in the form reads back as the entries the form holds and the body of the file
     /// now (the module page); every other
     /// file is left as it is, and listed with why. A file in the form is not written.
-    pub async fn fmt(&mut self) -> Result<FmtReport, ShelfError> {
+    /// The names in `ask` are dropped from the files of the books that do not declare
+    /// them (the module page); names that do not fit the declaration are
+    /// [`ShelfError::Drop`], and nothing is written.
+    pub async fn fmt(&mut self, ask: &DropAsk) -> Result<FmtReport, ShelfError> {
         let mut report = FmtReport::default();
-        for plan in plans(&self.ports).await? {
+        for plan in plans(&self.ports, ask).await? {
             match plan {
                 Plan::InForm(file) => report.in_form.push(file),
                 Plan::LeaveAlone(left) => report.left_alone.push(left),
-                Plan::Rewrite { file, read, text } => {
+                Plan::Rewrite {
+                    file,
+                    read,
+                    text,
+                    dropped,
+                } => {
                     let done = self
                         .ports
                         .doc_replacer()
@@ -252,7 +323,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
                         .await
                         .map_err(port(ShelfPort::DocReplace))?;
                     match done {
-                        Replacement::Replaced => report.rewritten.push(file),
+                        Replacement::Replaced => {
+                            report.dropped.extend(Dropped::of(&file, dropped));
+                            report.rewritten.push(file);
+                        }
                         Replacement::Changed => report.left_alone.push(LeftAlone {
                             file,
                             why: LeftAloneWhy::Changed,

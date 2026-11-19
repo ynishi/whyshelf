@@ -1506,7 +1506,7 @@ mod tests {
     /// Every entry of a reading as the entries of a form: a book that declares nothing
     /// leaves nothing out, so these are the entries as they are.
     fn all_of(entries: &BTreeMap<String, RawValue>) -> FormEntries {
-        use whyshelf_core::domain::shelf::build::Shelf;
+        use whyshelf_core::domain::shelf::build::{DropNames, Shelf};
         use whyshelf_core::domain::shelf::schema::{
             BookName, BookSchemaDecl, KeyPatternDecl, Schema,
         };
@@ -1522,7 +1522,12 @@ mod tests {
             links: Vec::new(),
         }];
         let schema = Schema::validate(decls, &BTreeSet::new()).expect("a sound declaration");
-        let form = Shelf::form_entries(&schema, &BookName::new("spec").unwrap(), entries);
+        let form = Shelf::form_entries(
+            &schema,
+            &BookName::new("spec").unwrap(),
+            entries,
+            &DropNames::none(),
+        );
         assert_eq!(form.as_map(), entries, "a book that declares nothing");
         form
     }

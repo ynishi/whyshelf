@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "09e2eafea40c7d3e6f98a469e7c70a222d655853",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b88464351a77a47856bfe0215ccf3a1574ab1ad4426e9e1503532dac04a193a3",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "904018c7c715aa6f99114b46bb20ca9a61a45a5a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1128b2f96c9d9da835cb67e628082a17449e9f9de03375854fdcc009aa3c5f2b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795063422265,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8a417f9aeb881a0f28fe99b100dcfbe46f345e4b",
+      "hash": "sha256:afeb8ba63fbd85982166f075a580c4164d76f1f8a11b963b469acd3cda4dc1f6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "77"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e9bf-f4ea-76e3-8c9e-25d40627ad8e"
+    }
+  ],
+  "id": "01a1f21e-26e7-7135-9cfe-a87d390ff8ff",
+  "kind": "decision",
+  "reason": "After the blind review of issue 143 (review of the branch from the issue alone, and its fixes: DEC-82 says the dry run serves once the declaration is edited, the manual and the changelog say approvals are broken until the entry is dropped and stale after, a declaration not taken out is noticed only where every book declares the name, DEC-77's met revisit taken out): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "70de5382e75a62708f235a0b84c44e23d0472084",
+  "seen": "sha256:1a77f7581b0b514abac5438fa4c7bdbc682396c8422d332ee67570bee6c092e9",
+  "seen_address": "6a82d969a5613a0063eb0a46b36cb5afaaa3cefa",
+  "subject": "01a1e9c0-1efe-7398-be72-cd5fd3d27753",
+  "v": 1,
+  "verb": "approve"
+}

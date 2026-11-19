@@ -51,6 +51,14 @@
 //!   written). An invalid document, and a document of a book that does not declare
 //!   the field, do not pass it either. It is held by the same function as a value
 //!   condition, and is a condition of its own beside them.
+//! - **A condition of any value** ([`FieldWant::AnyValue`]) is the other side of it: it
+//!   holds only for a valid document whose book declares the field and holds a value
+//!   for it, whichever value that is. An invalid document, a document of a book that
+//!   does not declare the field, and a document that holds no value (not written, or
+//!   written with nothing in it) do not pass it. It is a condition of its own beside
+//!   the others, and overlaps a value condition on the same field without clashing
+//!   with it. It is for finding the documents that hold a field before its declaration
+//!   is taken out of a book.
 //! - **What fits the declaration** ([`StatusFilter::new`]): every book asked is
 //!   declared, every field is declared by some book, the value is not empty or
 //!   blank ([`FilterProblem::EmptyValue`]: it asks for no value, and a request that
@@ -59,8 +67,8 @@
 //!   as the type of at least one book that declares the field (any text is an item
 //!   of a list field). A book that declares the field with a type the value cannot
 //!   be read as is not an error: its documents do not pass that condition. A request
-//!   that no document could pass is refused too: a field asked with a value and with
-//!   no value ([`FilterProblem::Contradicts`]), and no value asked of a field that
+//!   that no document could pass is refused too: a field asked with a value (a given
+//!   one or any) and with no value ([`FilterProblem::Contradicts`]), and no value asked of a field that
 //!   every book that declares it requires, among the books asked when any are and
 //!   one of them declares it ([`FilterProblem::AlwaysWritten`]). Only
 //!   those two are refused of this kind: a field asked with two values is answered,
@@ -115,6 +123,9 @@ pub enum FieldWant {
     /// The field holds no value: the document does not write it, or writes it with
     /// nothing in it (which the build reads as not written).
     NoValue,
+    /// The field holds a value, whichever it is: the document writes it and has
+    /// something in it to say.
+    AnyValue,
 }
 
 /// A [`StatusFilterAsk`] checked against the declaration, so that
@@ -146,6 +157,8 @@ enum Wanted {
     Equal(FieldValue),
     /// The field holds no value.
     NoValue,
+    /// The field holds a value, whichever it is.
+    AnyValue,
 }
 
 impl Wanted {
@@ -154,6 +167,7 @@ impl Wanted {
     fn is_met_by(&self, value: Option<&FieldValue>) -> bool {
         match (self, value) {
             (Self::NoValue, value) => value.is_none(),
+            (Self::AnyValue, value) => value.is_some(),
             (Self::Item(item), Some(FieldValue::TextList(items))) => {
                 items.iter().any(|i| i == item)
             }
@@ -193,8 +207,8 @@ pub enum FilterProblem {
         /// The field.
         field: EntryName,
     },
-    /// The field is asked for with a value and with no value, which no document can
-    /// hold, so nothing could pass.
+    /// The field is asked for with a value (a given one or any) and with no value,
+    /// which no document can hold, so nothing could pass.
     #[error(
         "the field `{field}` is asked for with a value and with no value: no document holds both"
     )]
@@ -241,7 +255,7 @@ impl StatusFilter {
             // asked of nothing.
             let typed = match &want.value {
                 FieldWant::Value(text) => Some((text, NonBlank::new(text.as_str()))),
-                FieldWant::NoValue => None,
+                FieldWant::NoValue | FieldWant::AnyValue => None,
             };
             for book in schema.books().values() {
                 let Some(decl) = book.fields().get(&want.field) else {
@@ -252,10 +266,11 @@ impl StatusFilter {
                     declared_in_page = true;
                     always_written &= decl.presence == FieldPresence::Required;
                 }
-                let read = match &typed {
-                    None => Some(Wanted::NoValue),
-                    Some((_, Err(_))) => None,
-                    Some((_, Ok(value))) => match &decl.ty {
+                let read = match (&want.value, &typed) {
+                    (FieldWant::NoValue, _) => Some(Wanted::NoValue),
+                    (FieldWant::AnyValue, _) => Some(Wanted::AnyValue),
+                    (_, None | Some((_, Err(_)))) => None,
+                    (_, Some((_, Ok(value)))) => match &decl.ty {
                         FieldType::Scalar(ScalarType::TextList) => {
                             Some(Wanted::Item(value.clone()))
                         }
@@ -272,7 +287,7 @@ impl StatusFilter {
                     unknown.insert(&want.field);
                     problems.push(FilterProblem::UnknownField(field));
                 }
-                None if declared_in_page && always_written => {
+                None if want.value == FieldWant::NoValue && declared_in_page && always_written => {
                     problems.push(FilterProblem::AlwaysWritten { field });
                 }
                 None => {}
@@ -290,12 +305,12 @@ impl StatusFilter {
                 wanted,
             });
         }
-        // A declared field asked for with a value and with no value, told once (a field
-        // no book declares is told as that already).
+        // A declared field asked for with a value (a given one or any) and with no
+        // value, told once (a field no book declares is told as that already).
         let with_a_value: BTreeSet<&EntryName> = ask
             .fields
             .iter()
-            .filter(|want| matches!(want.value, FieldWant::Value(_)))
+            .filter(|want| matches!(want.value, FieldWant::Value(_) | FieldWant::AnyValue))
             .map(|want| &want.field)
             .collect();
         let mut contradicted = BTreeSet::new();
@@ -500,6 +515,13 @@ mod tests {
         FieldAsk {
             field: EntryName::new(field).expect("a field name"),
             value: FieldWant::NoValue,
+        }
+    }
+
+    fn with(field: &str) -> FieldAsk {
+        FieldAsk {
+            field: EntryName::new(field).expect("a field name"),
+            value: FieldWant::AnyValue,
         }
     }
 
@@ -1030,6 +1052,156 @@ mod tests {
         });
         assert!(admits(&twice, &shelf, 1, FRESH));
         assert!(!admits(&twice, &shelf, 2, FRESH));
+    }
+
+    #[test]
+    fn a_condition_of_any_value_holds_for_a_valid_document_of_a_declaring_book_with_one() {
+        let shelf = shelf_of(vec![
+            dec(1, &[("topic", list(&["x"]))]),
+            note(2, &[("topic", text("y"))]),
+            // Not written, and written with nothing in it, which is not written.
+            dec(3, &[]),
+            dec(4, &[("topic", list(&[]))]),
+            dec(5, &[("topic", RawValue::Null)]),
+            note(6, &[("topic", text(" "))]),
+            // A book that does not declare the field, and files that are no valid
+            // document.
+            plain(7),
+            broken("decisions/b.md", 8),
+        ]);
+        let any = filter(StatusFilterAsk {
+            fields: vec![with("topic")],
+            ..ask()
+        });
+        for n in [1, 2] {
+            assert!(admits(&any, &shelf, n, FRESH), "{n}");
+        }
+        for (n, why) in [
+            (3, "it does not write it"),
+            (4, "it writes it with nothing in it"),
+            (5, "it writes it as null"),
+            (6, "it writes it blank"),
+            (7, "its book does not declare the field"),
+            (8, "it is invalid"),
+            (9, "no file carries it"),
+        ] {
+            assert!(!admits(&any, &shelf, n, FRESH), "{n}: {why}");
+        }
+    }
+
+    #[test]
+    fn a_condition_of_any_value_is_one_of_its_own_beside_the_others() {
+        let shelf = shelf_of(vec![
+            dec(1, &[("count", int(2)), ("topic", list(&["x"]))]),
+            dec(2, &[("count", int(2))]),
+            dec(3, &[("count", int(3)), ("topic", list(&["x"]))]),
+        ]);
+        // Any value of the field and a value of another, or of the same field.
+        let both = filter(StatusFilterAsk {
+            fields: vec![with("topic"), field_ask("count", "2")],
+            ..ask()
+        });
+        assert!(admits(&both, &shelf, 1, FRESH));
+        assert!(!admits(&both, &shelf, 2, FRESH));
+        assert!(!admits(&both, &shelf, 3, FRESH));
+        let same_field = filter(StatusFilterAsk {
+            fields: vec![with("topic"), field_ask("topic", "x"), without("count")],
+            ..ask()
+        });
+        assert!(!admits(&same_field, &shelf, 1, FRESH));
+        let overlap = filter(StatusFilterAsk {
+            fields: vec![with("topic"), field_ask("topic", "x")],
+            ..ask()
+        });
+        assert!(admits(&overlap, &shelf, 1, FRESH));
+        assert!(!admits(&overlap, &shelf, 2, FRESH));
+        // With a book and a standing, as every kind of condition combines.
+        let in_books = filter(StatusFilterAsk {
+            books: books(&["decision"]),
+            standings: [STALE].into(),
+            fields: vec![with("topic")],
+        });
+        assert!(admits(&in_books, &shelf, 1, STALE));
+        assert!(!admits(&in_books, &shelf, 1, FRESH));
+        assert!(!admits(&in_books, &shelf, 2, STALE));
+    }
+
+    #[test]
+    fn a_condition_of_any_value_of_a_required_field_passes_every_valid_document() {
+        // `title` is required in the three books, so any value of it is asked without
+        // a problem and every valid document passes, where no value of it is refused.
+        let shelf = shelf_of(vec![dec(1, &[]), note(2, &[]), plain(3)]);
+        let any = filter(StatusFilterAsk {
+            fields: vec![with("title")],
+            ..ask()
+        });
+        for n in [1, 2, 3] {
+            assert!(admits(&any, &shelf, n, FRESH), "{n}");
+        }
+    }
+
+    #[test]
+    fn a_field_asked_with_any_value_and_with_no_value_is_one_problem() {
+        for fields in [
+            vec![with("topic"), without("topic")],
+            vec![without("topic"), with("topic")],
+            vec![
+                without("topic"),
+                with("topic"),
+                without("topic"),
+                field_ask("topic", "b"),
+            ],
+        ] {
+            assert_eq!(
+                problems(StatusFilterAsk { fields, ..ask() }),
+                vec![FilterProblem::Contradicts {
+                    field: entry("topic")
+                }]
+            );
+        }
+    }
+
+    #[test]
+    fn any_value_of_a_field_every_declaring_book_requires_is_not_a_problem() {
+        // The refusal of a field that is always written is the one of no value alone.
+        for field in ["title", "topic", "count"] {
+            assert!(
+                StatusFilter::new(
+                    &schema(),
+                    StatusFilterAsk {
+                        fields: vec![with(field)],
+                        ..ask()
+                    }
+                )
+                .is_ok(),
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_field_no_book_declares_is_a_problem_asked_with_any_value_too() {
+        assert_eq!(
+            problems(StatusFilterAsk {
+                fields: vec![with("nothing"), with("base")],
+                ..ask()
+            }),
+            vec![
+                FilterProblem::UnknownField(entry("nothing")),
+                FilterProblem::UnknownField(entry("base")),
+            ]
+        );
+        // With no value too, it is told as not declared only.
+        assert_eq!(
+            problems(StatusFilterAsk {
+                fields: vec![with("nothing"), without("nothing")],
+                ..ask()
+            }),
+            vec![
+                FilterProblem::UnknownField(entry("nothing")),
+                FilterProblem::UnknownField(entry("nothing")),
+            ]
+        );
     }
 
     #[test]
