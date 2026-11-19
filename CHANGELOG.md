@@ -10,6 +10,30 @@ and this project adheres to
 
 ### Added
 
+- Retiring a field, a link or a link to artifacts from a book. `status --with
+  <field>`, repeatable, lists the valid documents of a book that declares the
+  field and holds a value for it, whichever (one more condition beside
+  `--where` and `--without`; the answer's `filters` has `with`); `--with` and
+  `--without` of one field is a request error (exit 2), as no document could
+  pass. `fmt --drop <name>`, repeatable, takes the entry of that name out of
+  each file whose book declares no field, link or link to artifacts of that
+  name, whatever the entry holds; an entry of the name in a book that declares
+  it, and every entry not named, stay, and a file `fmt` leaves alone (a
+  comment, read-only, a hard link) keeps its entry. With `--check` it writes
+  nothing, and the answer's new `dropped` lists, for each file written (or
+  that would be), the names it loses. `id`, `key` and a name every book
+  declares are request errors (exit 2), each told, and so is an empty name;
+  nothing is written. `fmt` without `--drop` does what it did. To retire a
+  field: `status --with f`, take it out of the declaration (the documents that
+  still write it are not valid, and their approvals broken, until the entry is
+  out; then those that held a value have another hash, so their approvals are
+  stale), `fmt --check --drop f`, `fmt --drop f`, `check`. In the library,
+  `FieldWant::AnyValue`,
+  `DropAsk`, `DropNames` and `DropProblem`, `ShelfError::Drop`,
+  `FmtReport::dropped` (`Dropped`), and `FormEntries::dropped`;
+  `ShelfApp::fmt` and `fmt_check` take a `&DropAsk`, and `Shelf::form_entries`
+  a `&DropNames` (`DropNames::none()` for what `new` writes) (#143).
+
 - `judge moved --prefix <old> <new> --reason <text>` declares, in one run, that
   every name under a prefix moved to the same name under another, as when a
   directory or a Rust module is renamed. Every name an approval that stands
