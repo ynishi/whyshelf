@@ -588,9 +588,13 @@ pub trait ArtifactSource: Send + Sync {
     /// from the bytes read, and where its content can be read back, when the adapter
     /// can say), absent, cannot tell now (with why), or not a name of the space (with
     /// why). Every name asked about has an answer; a name of a space it does not
-    /// offer cannot be told. An error is for what stops the reading itself (a thing
-    /// that is there and cannot be read); what a space's names are is each adapter's
-    /// own rule, on its page.
+    /// offer cannot be told. A name whose thing is there and cannot be read, or is
+    /// past a bound of what the adapter reads for it, cannot be told (or, where its
+    /// adapter says so on its page, is there under presence only and cannot be told
+    /// under any other comparison), and every other name is still answered: an error
+    /// is for what stops the whole reading (a store that cannot be asked at all, one
+    /// call of it past its bound of time), and then no name is answered. What a
+    /// space's names are is each adapter's own rule, on its page.
     fn resolve(
         &self,
         asks: &ArtifactAsks,

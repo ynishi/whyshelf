@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795095328919,
+  "expires": null,
+  "frame": [],
+  "id": "01a1f404-f8f6-7425-bf6b-2705ad9b7a6c",
+  "kind": "decision",
+  "reason": "After the blind review of issue 146, stage 1: each sentence of this finding reads true of the code before the change (the asks of an adapter spread over three ports and one match, and the four adapters differing where nothing said they may)",
+  "revision": "cbe7d55fb7e5088f853fa2ed23663fa44ed755b7",
+  "seen": "sha256:924d8878fba0c6e23537ab04298e6f21897561fb5d89d1cf6654c1e77a04f90e",
+  "seen_address": "b3ee70b756711565f95b938c480d5b73d3dad7ad",
+  "subject": "01a1f3c3-6146-753b-a7d1-b4c94e138ad1",
+  "v": 1,
+  "verb": "approve"
+}

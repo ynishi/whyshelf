@@ -1,0 +1,12 @@
+---
+id: "01a1f3c4-569c-711e-af85-e6456a1155fc"
+key: "DEC-85"
+issues: ["#146"]
+rejected: ["Keep an error for a file that is there and cannot be read: one such file stops the reading of every name of every space, the command gives no answer for the others and exits with 3", "Count a thing that cannot be read as absent: an approval would break on a file whose permissions changed, as though the evidence were gone"]
+related: ["DEC-45", "DEC-84", "DEC-54"]
+revisit: "When a person needs one name that cannot be read to fail the command (a check in CI that is to stop on a file it cannot read)"
+rustdoc: ["whyshelf_core::app::shelf::ports::ArtifactSource::resolve", "whyshelf_core::domain::shelf::artifact::ArtifactReading::cannot_tell", "whyshelf_core::domain::shelf::freshness::Notice", "whyshelf_infra::shelf::artifact::file::FileSpace::resolve", "whyshelf_infra::shelf::artifact::file::FileSpace::current"]
+serves: ["REQ-36", "REQ-2"]
+title: "A name whose thing cannot be read is told as cannot be told for that name alone, and an error of a reading is for what stops the whole ask"
+---
+When an adapter cannot read the thing a name leads to (it is there and the system refuses it, a read fails part way, or it is past a bound of that name), the answer for that name is cannot tell, with why, and every other name asked with it is answered as usual. One space answers such a name as DEC-54 decides instead: in rust-item, an item whose own page cannot be read or is past its bound is there under presence, as its page is listed, and cannot be told under a comparison of its content. An error of a reading is for what stops the ask as a whole, such as Git that cannot be run or one call of it that takes longer than its bound, and then no answer is given for any name. This widens DEC-45, which left an error open for a thing that is there and cannot be read: the space file answered such a file with an error that stopped the reading of every name, while the other spaces told that one name as cannot be told. With the rule of DEC-45 that a pinned name that cannot be told later is a notice and changes no freshness, an approval that pinned a file which later cannot be read (its permissions changed, say) stays fresh with a notice, and check lists the name under unknown and stays clean, where it exited with 3 before. An approval that would pin a name that cannot be told now is refused, as before. The current bytes of such a name are none.

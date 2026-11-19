@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "bc31bd0cf13d7d4027d161f3fe6241b2f5dfcde4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8f4ccfa43e139e5ff0dab23df126bf2924a803335fd2259e889b086ff30b60e5",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795095312519,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ee861d2416d9639a70226f715b5e99fa4dffd003",
+      "hash": "sha256:773669698978e8c21bb33352b3f05e9aecf5edab6a36666a88647d3f60ed204d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    }
+  ],
+  "id": "01a1f404-bfe8-7707-967f-acd4cfd8adb9",
+  "kind": "decision",
+  "reason": "After the blind review of issue 146, stage 1 (review of the branch from the issue alone, then of its fixes: one name that cannot be read is cannot tell, with rust-item's own page there under presence as DEC-54 says; every read of a name's content, a blob read back and Git's answer of the renames held to a bound of bytes; inputs past 1 MiB worked on a blocking thread; a conformance test for the four adapters): each document reads true of the code, and each test it names exists and checks what it says",
+  "revision": "cbe7d55fb7e5088f853fa2ed23663fa44ed755b7",
+  "seen": "sha256:ef9679686db56889965b61250430c1536ba4c1dc48d9cd52e083eb440f062fbc",
+  "seen_address": "2e4f3e3a8517e2e2dfd040a21a3d9110f682e0fd",
+  "subject": "01a1cad2-39f7-7193-ab89-6bfcc17747f4",
+  "v": 1,
+  "verb": "approve"
+}

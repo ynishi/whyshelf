@@ -31,6 +31,71 @@
 //! `[defaults] artifact = "file"` so that a link to artifacts that names neither a
 //! preset nor a space is one to files.
 //!
+//! # The contract of an adapter
+//!
+//! A link names a thing in a space, and an approval pins what that thing's content
+//! was. Every adapter is held to these promises, whatever its names are:
+//!
+//! - **Identifying.** A name leads, by the rule of its space, to one thing in what the
+//!   adapter reads, or to an answer that it does not (absent, cannot tell, not a
+//!   name). A name that can match two things gets one answer by a fixed rule.
+//! - **Reproducible.** The same name over the same content gives the same answer
+//!   (its kind, the hash of its content, its reason), however often, in whatever
+//!   order and with whatever else it is asked; the content does not depend on where
+//!   the tree sits, the time or the locale. The address an answer carries, and the
+//!   suggestions of where a name moved, are outside this promise.
+//! - **Content only.** An adapter answers what the content is, never whether it is
+//!   right.
+//!
+//! And to these rules:
+//!
+//! - A text is no name by the grammar of the space alone, with no I/O.
+//! - What the adapter is not sure of cannot be told: absent and there are said only
+//!   of what it looked at.
+//! - A name whose thing cannot be read (refused, failing part way, past a bound of
+//!   that name) cannot be told, and every other name asked with it is answered; an
+//!   error is for what stops the whole ask (a Git that cannot be run, or a call of it
+//!   that takes longer than its bound), and then no name is answered. One space
+//!   tells such a name otherwise, as DEC-54 decides: in `rust-item`, an item whose
+//!   own page cannot be read or is past its bound is there under `presence` (its page
+//!   is listed), and cannot be told under a comparison of its content.
+//! - Each thing read for a name (a file, a page, a file of settings) is held to a
+//!   bound of bytes, and so are, of what Git gives, its listing of the work tree, its
+//!   answer of the renames and a blob read back; nesting walked by recursion or a
+//!   stack, to a depth; a program run, to a time. Nothing is cut or passed over to
+//!   answer another thing. In suggestions, Git's renames past their time or their
+//!   bound are a note of the name, and not an error (DEC-60).
+//! - It reads and writes nothing else, and reads nothing outside the root of the
+//!   project or the build directory it declares.
+//! - Of these, what may be larger than 1 MiB (a content, a page, a file of tests,
+//!   Git's listing of the work tree and its answer of the renames) is parsed, scanned
+//!   and hashed on a blocking thread when it is, never on the async ones; a smaller
+//!   one is worked where it is asked for.
+//! - Only an adapter that reads content back gives an address, and it reads back,
+//!   by an address it gave, what its store holds: an address of a content the store
+//!   does not hold (a file Git never added) reads back none.
+//!
+//! The domain fixes the shape of the answers ([`ArtifactReading`]) and how a content
+//! is hashed; what a name is stays the adapter's. Each adapter writes, on its module
+//! page, its space's definition under these seven headings:
+//!
+//! | heading | what it says |
+//! |---|---|
+//! | `The names of the space` | the grammar: the form, the separators and escapes, the characters allowed |
+//! | `Positions` | for names that hold a position (a line, a range), how it is counted |
+//! | `Equal names` | two ways of writing a name of one thing, and whether one is the form written |
+//! | `One thing for a name` | what a name that matches two things comes to |
+//! | `The answers` | when a name is there, absent, cannot be told, or no name |
+//! | `What is compared` | what of the thing is the content, and the bounds of reading it |
+//! | `Where it reads` | the root, and the build directory it declares |
+//!
+//! A test of this module's (`conformance`, private), through a hook each adapter
+//! gives for its tests, holds every adapter to the promises of identifying and of
+//! reproducibility over one machine, to the answers above, to each bound of bytes and
+//! of depth its hook declares, to reading back, and to the seven headings; its page
+//! lists what it checks, and what it does not (the blocking threads, reading and
+//! writing nothing else, the bound of time, and the time and the locale).
+//!
 //! [`ArtifactSource`]: whyshelf_core::app::shelf::ArtifactSource
 //! [`MoveSource`]: whyshelf_core::app::shelf::MoveSource
 //! [`ArtifactReading`]: whyshelf_core::domain::shelf::artifact::ArtifactReading
@@ -432,6 +497,29 @@ impl MoveSource for ArtifactSpaces {
         }
     }
 }
+
+/// The most bytes of an input worked on where it is asked for; a larger one is worked
+/// on a blocking thread (the contract, on the module page).
+const BLOCKING_PAST: usize = 1024 * 1024;
+
+/// The result of `work` over an input of `len` bytes: run where it is asked for when
+/// the input is at most [`BLOCKING_PAST`] bytes, and on a blocking thread when it is
+/// larger (the contract, on the module page); or why the thread stopped (a bug if it
+/// ever happens, or a runtime shutting down), which the adapter tells as cannot tell.
+async fn on_blocking<T: Send + 'static>(
+    len: usize,
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    if len <= BLOCKING_PAST {
+        return Ok(work());
+    }
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod conformance;
 
 #[cfg(test)]
 mod prefix_tests;

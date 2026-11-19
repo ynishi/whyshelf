@@ -125,6 +125,20 @@ and this project adheres to
 
 ### Changed
 
+- One name of the space `file` that cannot be read is told as cannot tell, with
+  why, and every other name asked with it is answered; before, it failed the
+  whole reading (exit 3). An approval that pinned such a file stays fresh, with
+  a notice, as for every name that cannot be told (DEC-45, DEC-85). Each thing
+  an adapter reads for a name is held to a bound of bytes: a file of the space
+  `file` (and a blob it reads back) to 16 MiB, past which it cannot be told
+  (and reads back none), and the cargo settings rust-item reads to 1 MiB, past
+  which none of its names can be told; Git's answer of the renames is held to
+  the listing's bound, past which the suggestions give a note and no rename.
+  rust-item tells a page or a directory of modules outside the project root and
+  the build directory as cannot tell, settings linked out of the root included.
+  Inputs past 1 MiB are hashed, scanned and parsed on a blocking thread. In the
+  library, `ArtifactError::Io` is gone (the adapter of `file` no longer fails a
+  reading for one name), and `GitError` gains `Stopped` and `Cut` (#146).
 - The records a `judge` run writes (`judge`, `judge approve --stale` and
   `--pending`, `judge same`, `judge moved`, `judge exempt`, `judge withdraw`)
   are put on disk once, at the end of the run, as the files of `new` and

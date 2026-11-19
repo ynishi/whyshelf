@@ -1,0 +1,8 @@
+---
+id: "01a1f3c3-9c0c-75fe-ac48-12ad508a6851"
+key: "REQ-36"
+grounds: ["F-55"]
+issues: ["#146"]
+title: "A space is added by one adapter that meets one contract: each of its names identifies one thing, and the same name over the same content gives the same answer"
+---
+The adapter of a space is held to one contract, which says what the domain asks of every adapter, what an adapter may answer, and what it promises, so that a new space needs one adapter that meets it and nothing more. Identifying: a name of a space leads, by the rule of that space, to one thing in what the adapter reads, or to one of the answers that it does not (absent, cannot tell, not a name); a space whose names can match more than one thing has a fixed rule that gives one answer. How fine the thing is (a whole file, what an item promises, one test) and the form of a name are the space's own. Reproducible: the same name over the same content gives the same answer, its kind, the hash of its content and its reason, however often and in whatever order it is asked and whatever is asked with it, and the content does not depend on where the tree sits, the time or the locale. The address that content is read back by, and suggestions of where a name moved, are outside this promise: the one follows Git and the settings of the person, and the other is never pinned. Content only: an adapter answers what the content is, never whether it is right. One name that cannot be read, or that is past a bound, stops no other name. Every adapter is checked against the contract by one test, so that an adapter which passes it is known to keep these promises.

@@ -7,7 +7,7 @@
 //! |---|---|
 //! | [`RevisionSource`]: the commit `HEAD` names | `git rev-parse --verify HEAD` |
 //! | [`Git::blob_names`]: the blob each file's content is (or would be) in, converted as Git converts it on the way in | `git config -z --name-only --list` (the keys `filter.<driver>.clean`, `process`, `smudge`, `required` picked out as bytes), then `git -c filter.<driver>.clean= … hash-object -- <paths>` (no `-w`: only the name, nothing is written) |
-//! | [`Git::read_blob`]: the content of a blob, by its name | `git cat-file blob <name>` |
+//! | [`Git::read_blob`], [`Git::read_blob_within`]: the content of a blob, by its name, the second within a bound of bytes | `git cat-file blob <name>` |
 //! | [`Git::work_tree_files`]: the files of the work tree Git lists | `git ls-files -z --cached --others --exclude-standard` |
 //! | [`Git::renames_since`]: the renames between a commit and the index | `git rev-parse --verify --quiet <commit>^{commit}`, then `git diff-index --cached --no-ext-diff --no-textconv --ignore-submodules=all --relative --find-renames --name-status -z <commit> --` |
 //! | [`Git::user_name`]: who the project's settings say the user is | `git config --get user.name` |
@@ -166,6 +166,24 @@ pub enum GitError {
         command: String,
         /// The bound.
         after: Duration,
+    },
+    /// A call wrote more than the bytes it may (its `cap`), and was stopped: what it
+    /// gave is a part, and is not read.
+    #[error("git {command} wrote more than {cap} bytes, and was stopped")]
+    Cut {
+        /// The command.
+        command: &'static str,
+        /// The bound, in bytes.
+        cap: usize,
+    },
+    /// What Git gave could not be read, as the blocking thread it was read on
+    /// stopped (a bug if it ever happens, or a runtime shutting down).
+    #[error("the reading of what git {command} gave stopped: {why}")]
+    Stopped {
+        /// The command.
+        command: &'static str,
+        /// Why the thread stopped.
+        why: String,
     },
     /// `git` was started and could not be talked to (its pipes, its exit), or could
     /// not be started for another reason than its absence.
@@ -456,18 +474,16 @@ impl Git {
                 stderr: out.said(),
             });
         }
-        let mut entries: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
-        if out.cut {
-            // The last entry of a cut listing may be a part of a path.
-            entries.pop();
-        }
-        let mut files: Vec<RelPath> = entries.into_iter().filter_map(path_of_bytes).collect();
-        files.sort();
-        files.dedup();
-        Ok(Some(Listing {
-            files,
-            cut: out.cut,
-        }))
+        let cut = out.cut;
+        // The listing may be as large as `cap`: it is cut into paths on a blocking
+        // thread, not on the async ones.
+        let files = tokio::task::spawn_blocking(move || listed(&out.stdout, cut))
+            .await
+            .map_err(|e| GitError::Stopped {
+                command: "ls-files",
+                why: e.to_string(),
+            })?;
+        Ok(Some(Listing { files, cut }))
     }
 
     /// What Git's rename detection pairs between the commit `revision` and the index
@@ -476,8 +492,14 @@ impl Git {
     /// It compares blobs and reads nothing of the work tree, so a file moved is seen
     /// once Git has it in the index (`git mv`, or moved and `git add`ed), with its
     /// content as added. Outside a repository, and for a revision that is no commit
-    /// of it, nothing is looked at, and that is the answer.
-    pub async fn renames_since(&self, revision: &Revision) -> Result<RenamesSince, GitError> {
+    /// of it, nothing is looked at, and that is the answer. At most `cap` bytes of
+    /// Git's answer are read: past them it is [`GitError::Cut`], never the renames of a
+    /// part of it.
+    pub async fn renames_since(
+        &self,
+        revision: &Revision,
+        cap: usize,
+    ) -> Result<RenamesSince, GitError> {
         if !self.in_repository().await? {
             return Ok(RenamesSince::NotARepository);
         }
@@ -508,31 +530,63 @@ impl Git {
             rev,
             "--",
         ];
-        let Some(out) = self.run(&args).await? else {
+        let Some(out) = self.run_bounded(&args, Some(cap), &[]).await? else {
             return Ok(RenamesSince::NotARepository);
         };
+        if out.cut {
+            return Err(GitError::Cut {
+                command: "diff-index",
+                cap,
+            });
+        }
         if !out.ok() {
             return Err(GitError::Failed {
                 command: "diff-index",
                 stderr: out.said(),
             });
         }
-        Ok(RenamesSince::Found(renames_of(&out.stdout)))
+        // The answer may be as large as `cap`: it is read into renames on a blocking
+        // thread, not on the async ones.
+        let renames = tokio::task::spawn_blocking(move || renames_of(&out.stdout))
+            .await
+            .map_err(|e| GitError::Stopped {
+                command: "diff-index",
+                why: e.to_string(),
+            })?;
+        Ok(RenamesSince::Found(renames))
     }
 
     /// The content of the blob `address` names, or none when it is no name of Git's
     /// or Git holds no such blob (in a partial clone, one not fetched yet).
     pub async fn read_blob(&self, address: &ContentAddress) -> Result<Option<Vec<u8>>, GitError> {
+        self.blob(address, None).await
+    }
+
+    /// As [`Git::read_blob`], reading at most `cap` bytes: a blob larger than that is
+    /// none, as it cannot be read back whole.
+    pub async fn read_blob_within(
+        &self,
+        address: &ContentAddress,
+        cap: usize,
+    ) -> Result<Option<Vec<u8>>, GitError> {
+        self.blob(address, Some(cap)).await
+    }
+
+    /// The content of the blob `address` names, within `cap` bytes when given.
+    async fn blob(
+        &self,
+        address: &ContentAddress,
+        cap: Option<usize>,
+    ) -> Result<Option<Vec<u8>>, GitError> {
         // A name that is not Git's is nothing Git can read, and is never passed on.
         if !is_object_name(address.as_str()) {
             return Ok(None);
         }
-        Ok(
-            match self.run(&["cat-file", "blob", address.as_str()]).await? {
-                Some(out) if out.ok() => Some(out.stdout),
-                Some(_) | None => None,
-            },
-        )
+        let args = ["cat-file", "blob", address.as_str()];
+        Ok(match self.run_bounded(&args, cap, &[]).await? {
+            Some(out) if out.ok() && !out.cut => Some(out.stdout),
+            Some(_) | None => None,
+        })
     }
 
     /// The `user.name` Git's settings give at the root (read even outside a
@@ -631,6 +685,19 @@ fn path_of_bytes(bytes: &[u8]) -> Option<RelPath> {
     std::str::from_utf8(bytes).ok()?.parse().ok()
 }
 
+/// The paths of a listing of `git ls-files -z`, sorted, each once; the last entry of
+/// a listing that was `cut` is left out, as it may be a part of a path.
+fn listed(stdout: &[u8], cut: bool) -> Vec<RelPath> {
+    let mut entries: Vec<&[u8]> = stdout.split(|b| *b == 0).collect();
+    if cut {
+        entries.pop();
+    }
+    let mut files: Vec<RelPath> = entries.into_iter().filter_map(path_of_bytes).collect();
+    files.sort();
+    files.dedup();
+    files
+}
+
 /// Whether a text is an object name as Git writes it: 40 (SHA-1) or 64 (SHA-256)
 /// lowercase hexadecimal digits.
 fn is_object_name(text: &str) -> bool {
@@ -707,7 +774,7 @@ mod tests {
         assert_eq!(git.work_tree_files(1 << 20).await.unwrap(), None);
         let revision = Revision::from_validated("a".repeat(40)).unwrap();
         assert_eq!(
-            git.renames_since(&revision).await.unwrap(),
+            git.renames_since(&revision, 1 << 20).await.unwrap(),
             RenamesSince::NotARepository
         );
     }

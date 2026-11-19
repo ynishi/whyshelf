@@ -3,9 +3,9 @@
 //!
 //! | what | what it does | with |
 //! |---|---|---|
-//! | [`FileSpace::resolve`] | reads each named file's bytes from the working tree and hashes them; names the blob its content is (or would be) in Git | `tokio::fs`, [`Git::blob_names`] |
-//! | [`FileSpace::current`] | the bytes of a named file now | `tokio::fs` |
-//! | [`FileSpace::read_back`] | the content of a blob, by its name | [`Git::read_blob`] |
+//! | [`FileSpace::resolve`] | reads each named file's bytes from the working tree, up to [`MAX_FILE_BYTES`], and hashes them; names the blob its content is (or would be) in Git | `tokio::fs`, [`Git::blob_names`] |
+//! | [`FileSpace::current`] | the bytes of a named file now, the ones `resolve` hashes | `tokio::fs` |
+//! | [`FileSpace::read_back`] | the content of a blob, by its name, up to [`MAX_FILE_BYTES`] | [`Git::read_blob_within`] |
 //! | [`FileSpace::suggest`] | for each gone file, the files it may have moved to | [`Git::work_tree_files`], `tokio::fs`, [`Git::renames_since`] |
 //! | [`presets`] | the preset `file`: the space, `compare = "bytes"`, `means = "depends"`; and the preset `code`: the space, `compare = "presence"`, `means = "depends"` | values |
 //! | [`FileWrite`] for [`FileSpace`] | a new file at a path, where nothing is, for `init` | `tokio::fs` (`create_new`) |
@@ -13,10 +13,11 @@
 //! ```text
 //!   name ──a path under the root?── no ──► not a name (why)
 //!     │ yes
-//!   path ──tokio::fs::read──► bytes, kept when no part of the path names an entry in another case only
+//!   path ──tokio::fs, at most MAX_FILE_BYTES──► bytes, kept when no part of the path names an entry in another case only
 //!                               ──ArtifactReading::of_bytes──► a hash per comparison asked (always)
 //!                               └──git hash-object──► blob name ──► ContentAddress (in a repository)
-//!        └─ no file there, or one named in another case only ──► absent
+//!        ├─ no file there, or one named in another case only ──► absent
+//!        └─ a link out of the root, too large, cannot be read ──► cannot tell
 //!   ContentAddress ──git cat-file blob──► bytes, or not readable
 //! ```
 //!
@@ -28,8 +29,50 @@
 //! and `a/../b` are none). Any other text is not a name of the space, and the adapter
 //! says so with why ([`ArtifactReading::not_a_name`]); the document that writes it is
 //! invalid. A file that is there is the only thing a name has there: a directory is
-//! nothing there. The adapter always answers, and says "cannot tell" only of a name
-//! reached through a symbolic link (below).
+//! nothing there.
+//!
+//! # Positions
+//!
+//! A name holds no position in a file: it names the file whole.
+//!
+//! # Equal names
+//!
+//! A path is compared as written, case included (below): no two spellings name one
+//! file, and none is rewritten into another. A name whose path holds a symbolic link
+//! inside the root is its own name, with the content of the file the link leads to
+//! (below).
+//!
+//! # One thing for a name
+//!
+//! A path leads to one entry of the file system, or to none: no name matches two
+//! things.
+//!
+//! # The answers
+//!
+//! | answer | when |
+//! |---|---|
+//! | there | a regular file is at the path as written, with its bytes and, in a repository, the address of its blob |
+//! | absent | nothing is there, a directory is, or an entry is there in another ASCII case only |
+//! | cannot tell | a symbolic link on the path leads outside the root or is broken; the file is larger than [`MAX_FILE_BYTES`]; or it is there and cannot be read (its permissions, a read that fails) |
+//! | not a name | the text is no path under the root, as above |
+//!
+//! A file that cannot be read is told as such alone: every other name asked with it
+//! is answered. Only Git, asked once for every file, can fail the whole reading.
+//!
+//! # What is compared
+//!
+//! The content of a name is every byte of the file, read up to [`MAX_FILE_BYTES`];
+//! what of them counts is the link's comparison. The address is the name of the blob
+//! Git would store for the file, its line endings converted as Git converts them and
+//! no filter driver run ([`Git::blob_names`]); it is never compared. It is read back,
+//! up to the same bound, only while Git holds that blob: a file never added has an
+//! address and reads nothing back.
+//!
+//! # Where it reads
+//!
+//! The files under the root of the project, through a symbolic link only while it
+//! stays inside the root (below); Git, run in the root. It declares no build
+//! directory.
 //!
 //! # The case of a path
 //!
@@ -81,7 +124,9 @@
 //!    name the pin wrote (`renamed`, with Git's similarity). The index holds blobs,
 //!    so no filter of the repository runs: a file moved with `git mv`, or moved and
 //!    added, is seen with its content as added; one moved and not added is found by
-//!    its content only, when it is unchanged.
+//!    its content only, when it is unchanged. At most `listing_bytes` of Git's answer
+//!    are read: a longer one is a history that cannot be read (below), never the
+//!    renames of a part of it.
 //!
 //! What could not be looked at is a typed note of the name ([`MoveNote`]), never a
 //! failure: a file or directory that cannot be read, or a file too large, passed
@@ -133,6 +178,10 @@ use super::super::git::{Git, GitError, RenamesSince, first_line};
 /// ([`PATH_ONLY_SPACE`]), so an old pin always names a space this adapter answers
 /// for.
 pub const FILE_SPACE: &str = PATH_ONLY_SPACE;
+
+/// The most bytes of a file a reading reads: the largest file the search for moves
+/// reads ([`ScanLimits::file_bytes`]); a larger one cannot be told.
+pub const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 
 /// The name of the preset of a link to files that stands on each byte of them.
 pub const FILE_PRESET: &str = "file";
@@ -221,18 +270,10 @@ impl FileWrite for FileSpace {
     }
 }
 
-/// Why the files could not be read.
+/// Why the files could not be read at all: a file that is there and cannot be read
+/// is no error, but a name that cannot be told.
 #[derive(Debug, thiserror::Error)]
 pub enum ArtifactError {
-    /// A file is there and could not be read.
-    #[error("cannot read {}", .path.display())]
-    Io {
-        /// The file.
-        path: PathBuf,
-        /// The operating system's error.
-        #[source]
-        source: io::Error,
-    },
     /// Git gave no usable name for a file that is there.
     #[error(transparent)]
     Git(#[from] GitError),
@@ -248,6 +289,8 @@ pub struct FileSpace {
     root: PathBuf,
     git: Git,
     limits: ScanLimits,
+    /// The most bytes of a file a reading reads.
+    max_file: u64,
 }
 
 /// The bounds of one search for the same content ([`FileSpace::suggest`]): a search
@@ -260,7 +303,8 @@ pub struct ScanLimits {
     pub file_bytes: u64,
     /// The most bytes read in all.
     pub total_bytes: u64,
-    /// The most bytes of Git's listing of the work tree held.
+    /// The most bytes of Git's listing of the work tree held, and of its answer of
+    /// the renames since a revision.
     pub listing_bytes: usize,
 }
 
@@ -276,7 +320,7 @@ impl Default for ScanLimits {
     fn default() -> Self {
         Self {
             files: 20_000,
-            file_bytes: 16 * 1024 * 1024,
+            file_bytes: MAX_FILE_BYTES,
             total_bytes: 512 * 1024 * 1024,
             listing_bytes: 16 * 1024 * 1024,
         }
@@ -427,6 +471,7 @@ impl FileSpace {
             git: Git::new(root.clone()),
             root,
             limits: ScanLimits::default(),
+            max_file: MAX_FILE_BYTES,
         }
     }
 
@@ -437,11 +482,18 @@ impl FileSpace {
     }
 
     /// For each name: not a name (no path under the root), the hash of the file
-    /// under each comparison asked and where its content can be read back, or no
-    /// file. Every name asked about has an answer.
+    /// under each comparison asked and where its content can be read back, no file,
+    /// or cannot tell (a link out of the root, a file too large or that cannot be
+    /// read). Every name asked about has an answer: an error is for Git, which is
+    /// asked once for every file.
     pub async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, ArtifactError> {
         let mut readings = SpaceReadings::new();
         let mut present = Vec::new();
+        let untold = |why: String| {
+            NonBlank::new(why)
+                .map(ArtifactReading::cannot_tell)
+                .map_err(ArtifactError::Reason)
+        };
         for (name, comparisons) in asks {
             let path = match path_of(name) {
                 Ok(path) => path,
@@ -453,25 +505,35 @@ impl FileSpace {
                     continue;
                 }
             };
-            match bytes(&self.root, &path).await? {
-                Read::Bytes(bytes) => {
-                    readings.insert(
-                        name.clone(),
-                        ArtifactReading::of_bytes(&bytes, comparisons, None),
-                    );
-                    present.push((name, path));
+            let reading = match read_within(&self.root, &path, self.max_file).await {
+                Ok(Bounded::Bytes(bytes)) => {
+                    // A file may be as large as the bound: a large one is hashed on
+                    // a blocking thread.
+                    let asked = comparisons.clone();
+                    match super::on_blocking(bytes.len(), move || {
+                        ArtifactReading::of_bytes(&bytes, &asked, None)
+                    })
+                    .await
+                    {
+                        Ok(reading) => {
+                            present.push((name, path));
+                            reading
+                        }
+                        Err(why) => untold(format!("the hash of {path} stopped: {why}"))?,
+                    }
                 }
-                Read::NoFile => {
-                    readings.insert(name.clone(), ArtifactReading::absent());
-                }
-                Read::Outside => {
-                    let why = NonBlank::new(
-                        "a symbolic link on the path leads outside the root of the project, or is broken: nothing is read through it",
-                    )
-                    .map_err(ArtifactError::Reason)?;
-                    readings.insert(name.clone(), ArtifactReading::cannot_tell(why));
-                }
-            }
+                Ok(Bounded::NoFile) => ArtifactReading::absent(),
+                Ok(Bounded::Outside) => untold(
+                    "a symbolic link on the path leads outside the root of the project, or is broken: nothing is read through it"
+                        .to_owned(),
+                )?,
+                Ok(Bounded::TooLarge) => untold(format!(
+                    "{path} is larger than {} bytes, and is not read",
+                    self.max_file
+                ))?,
+                Err(e) => untold(format!("{path} cannot be read: {e}"))?,
+            };
+            readings.insert(name.clone(), reading);
         }
         let paths: Vec<&RelPath> = present.iter().map(|(_, path)| path).collect();
         if let Some(addresses) = self.git.blob_names(&paths).await? {
@@ -484,24 +546,28 @@ impl FileSpace {
         Ok(readings)
     }
 
-    /// The bytes of the file a name is, as they are now, or none when it is no path
-    /// or no file is there.
+    /// The bytes of the file a name is, as they are now (the bytes
+    /// [`resolve`](Self::resolve) hashes), or none when it is no path, no file is
+    /// there, or it cannot be told.
     pub async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, ArtifactError> {
-        match path_of(name) {
-            Ok(path) => Ok(match bytes(&self.root, &path).await? {
-                Read::Bytes(bytes) => Some(bytes),
-                Read::NoFile | Read::Outside => None,
-            }),
-            Err(_) => Ok(None),
-        }
+        let Ok(path) = path_of(name) else {
+            return Ok(None);
+        };
+        Ok(match read_within(&self.root, &path, self.max_file).await {
+            Ok(Bounded::Bytes(bytes)) => Some(bytes),
+            Ok(Bounded::NoFile | Bounded::Outside | Bounded::TooLarge) | Err(_) => None,
+        })
     }
 
-    /// The content a file had at `address`, or none when it cannot be read back.
+    /// The content a file had at `address`, or none when it cannot be read back: Git
+    /// holds no such blob (the file was never added), or it is larger than the most
+    /// bytes of a file a reading reads.
     pub async fn read_back(
         &self,
         address: &ContentAddress,
     ) -> Result<Option<Vec<u8>>, ArtifactError> {
-        Ok(self.git.read_blob(address).await?)
+        let cap = usize::try_from(self.max_file).unwrap_or(usize::MAX);
+        Ok(self.git.read_blob_within(address, cap).await?)
     }
 
     /// For each gone name, the files it may have moved to (the rules on the module
@@ -532,6 +598,11 @@ impl FileSpace {
             }
         }
         if !wanted.is_empty() {
+            // The comparisons, in the order of `wanted`: each file is hashed under
+            // them all, a large one on a blocking thread, as a file may be as large
+            // as the bound.
+            let comparisons: std::sync::Arc<[Comparison]> =
+                wanted.keys().map(|c| (*c).clone()).collect();
             let mut tally = Tally::default();
             let files = match self.git.work_tree_files(self.limits.listing_bytes).await? {
                 Some(listing) => {
@@ -548,9 +619,21 @@ impl FileSpace {
                     }
                     continue;
                 };
+                let asked = std::sync::Arc::clone(&comparisons);
+                let Ok(hashes) = super::on_blocking(bytes.len(), move || {
+                    asked
+                        .iter()
+                        .map(|comparison| comparison.fingerprint(&bytes))
+                        .collect::<Vec<_>>()
+                })
+                .await
+                else {
+                    tally.unreadable += 1;
+                    continue;
+                };
                 let mut matched: BTreeSet<&ArtifactName> = BTreeSet::new();
-                for (comparison, by_hash) in &wanted {
-                    if let Some(names) = by_hash.get(&comparison.fingerprint(&bytes)) {
+                for (by_hash, hash) in wanted.values().zip(&hashes) {
+                    if let Some(names) = by_hash.get(hash) {
                         matched.extend(names.iter().copied());
                     }
                 }
@@ -621,7 +704,11 @@ impl FileSpace {
         }
         let mut unknown: BTreeMap<&ArtifactName, BTreeSet<Revision>> = BTreeMap::new();
         for (revision, names) in by_revision {
-            let found_since = match self.git.renames_since(revision).await {
+            let found_since = match self
+                .git
+                .renames_since(revision, self.limits.listing_bytes)
+                .await
+            {
                 Ok(found_since) => found_since,
                 // A history that cannot be read stops this way of looking, not the
                 // answer.
@@ -840,43 +927,8 @@ async fn place_of(root: &std::path::Path, path: &RelPath) -> io::Result<Place> {
     Ok(Place::NoFile)
 }
 
-/// What reading a named file gave.
-enum Read {
-    /// Its bytes.
-    Bytes(Vec<u8>),
-    /// No file is there as written.
-    NoFile,
-    /// A symbolic link on the path leads outside the root, or is broken: nothing is
-    /// read.
-    Outside,
-}
-
-/// The bytes of a file under `root`: none when no file is there (nothing, a
-/// directory, or a path that names an entry in another case only), and nothing read
-/// when a link on the path leaves the root or is broken ([`place_of`]); through a
-/// link inside the root, the target's bytes.
-async fn bytes(root: &std::path::Path, path: &RelPath) -> Result<Read, ArtifactError> {
-    let full = root.join(path.as_str());
-    match place_of(root, path).await {
-        Ok(Place::File { .. }) => {}
-        Ok(Place::NoFile) => return Ok(Read::NoFile),
-        Ok(Place::Outside) => return Ok(Read::Outside),
-        Err(source) => return Err(ArtifactError::Io { path: full, source }),
-    }
-    let bytes = match tokio::fs::read(&full).await {
-        Ok(bytes) => bytes,
-        Err(e) if is_absent(&e) => return Ok(Read::NoFile),
-        Err(source) => return Err(ArtifactError::Io { path: full, source }),
-    };
-    if named_as_written(root, path).await {
-        Ok(Read::Bytes(bytes))
-    } else {
-        Ok(Read::NoFile)
-    }
-}
-
-/// What reading a named file within a bound of bytes gave, for another space whose
-/// names start with a path of this one (`rust-test`).
+/// What reading a named file within a bound of bytes gave, for this space and for
+/// another whose names start with a path of this one (`rust-test`, `js-test`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Bounded {
     /// Its bytes.
@@ -891,8 +943,11 @@ pub(super) enum Bounded {
 }
 
 /// The bytes of a file under `root` by the rules of this space (`place_of`, the case
-/// of a path as written), when it has at most `max` bytes: an error only when the
-/// file is there and cannot be read.
+/// of a path as written), when it has at most `max` bytes: none when no file is there
+/// (nothing, a directory, or a path that names an entry in another case only), and
+/// nothing read when a link on the path leaves the root or is broken; through a link
+/// inside the root, the target's bytes. An error only when the file is there and
+/// cannot be read, which each caller tells as a name that cannot be told.
 pub(super) async fn read_within(
     root: &std::path::Path,
     path: &RelPath,
@@ -1084,6 +1139,7 @@ mod tests {
     use whyshelf_core::domain::shelf::artifact::{ArtifactState, Comparison, LinePrefix, Untold};
     use whyshelf_core::domain::shelf::ledger::NoteKind;
 
+    use super::super::conformance;
     use super::*;
 
     /// Whether `git` can be run here; the tests that need it pass without it.
@@ -1134,6 +1190,126 @@ mod tests {
             tokio::fs::create_dir_all(parent).await.unwrap();
         }
         tokio::fs::write(full, text).await.unwrap();
+    }
+
+    /// The bound of bytes of the files of the conformance test.
+    const MAX_TEST_FILE: u64 = 64;
+
+    /// The hook of the conformance test: files in a repository (when Git is here, so
+    /// that each has an address), one that cannot be read, one past the bound, a link
+    /// out of the root and a link inside it.
+    struct Files;
+
+    impl conformance::Hook for Files {
+        fn space(&self) -> &'static str {
+            FILE_SPACE
+        }
+
+        fn source(&self) -> &'static str {
+            include_str!("file.rs")
+        }
+
+        fn bounds(&self) -> Vec<&'static str> {
+            vec!["a file"]
+        }
+
+        fn unread(&self) -> conformance::Unread {
+            conformance::Unread::CannotTell
+        }
+
+        fn walks_nesting(&self) -> bool {
+            false
+        }
+
+        fn adapter_at(&self, dir: &std::path::Path) -> super::super::Adapter {
+            super::super::Adapter::File(FileSpace {
+                max_file: MAX_TEST_FILE,
+                ..FileSpace::new(dir.to_path_buf())
+            })
+        }
+
+        async fn tree(&self, dir: &std::path::Path) -> conformance::Tree {
+            let root = dir.join("root");
+            write(&root, "a.txt", "one\n").await;
+            write(&root, "dir/b.txt", "two\n").await;
+            write(&root, "locked.txt", "locked\n").await;
+            let over = usize::try_from(MAX_TEST_FILE).unwrap() + 1;
+            write(&root, "big.txt", &"x".repeat(over)).await;
+            if git_installed().await {
+                run(&root, &["init", "-q"]).await;
+                run(&root, &["add", "-A"]).await;
+            }
+            // Written after the files were added: Git names its blob, and holds none.
+            write(&root, "new.txt", "never added\n").await;
+            let mut tree = conformance::Tree::of(self.adapter_at(&root));
+            tree.present = vec![p("a.txt"), p("dir/b.txt")];
+            tree.unstored = vec![p("new.txt")];
+            tree.absent = vec![p("missing.txt"), p("A.txt"), p("dir")];
+            tree.not_names = vec![p("/a.txt"), p("a//b.txt"), p("../a.txt")];
+            tree.over_bytes = vec![conformance::OverBytes::Name {
+                bound: "a file",
+                name: p("big.txt"),
+            }];
+            tree.prefix = Some((
+                PrefixMove::new(
+                    NamePrefix::new("dir").unwrap(),
+                    NamePrefix::new("moved").unwrap(),
+                )
+                .unwrap(),
+                p("dir/b.txt"),
+                p("moved/b.txt"),
+            ));
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                write(dir, "outside/x.txt", "out\n").await;
+                tokio::fs::symlink(dir.join("outside"), root.join("out"))
+                    .await
+                    .unwrap();
+                tree.outside = Some(p("out/x.txt"));
+                tokio::fs::symlink("a.txt", root.join("alias.txt"))
+                    .await
+                    .unwrap();
+                tree.spellings = Some((p("a.txt"), p("alias.txt")));
+                let locked = root.join("locked.txt");
+                tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))
+                    .await
+                    .unwrap();
+                // Run as a user every file opens to (root), it is no name to test.
+                if tokio::fs::File::open(&locked).await.is_err() {
+                    tree.unreadable = Some(p("locked.txt"));
+                }
+            }
+            tree
+        }
+    }
+
+    #[tokio::test]
+    async fn the_adapter_keeps_the_contract_of_an_adapter() {
+        conformance::check(&Files).await;
+    }
+
+    /// The bound of time is the whole reading's (Git is asked once for every file):
+    /// past it the reading is an error, and no name is answered.
+    #[tokio::test]
+    async fn a_git_past_its_bound_of_time_fails_the_whole_reading() {
+        if !git_installed().await {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "a.txt", "one\n").await;
+        run(dir.path(), &["init", "-q"]).await;
+        // Under a bound of zero, Git is stopped before it can answer: it is started
+        // within the first poll, and cannot have exited by its end.
+        let files = FileSpace {
+            git: Git::new(dir.path().to_path_buf()).with_timeout(std::time::Duration::ZERO),
+            ..FileSpace::new(dir.path().to_path_buf())
+        };
+        let found = files.resolve(&bytes_of(&["a.txt", "missing.txt"])).await;
+        assert!(
+            matches!(found, Err(ArtifactError::Git(GitError::TimedOut { .. }))),
+            "{found:?}"
+        );
     }
 
     #[test]
@@ -1952,6 +2128,87 @@ mod tests {
                 .iter()
                 .any(|n| n.kind() == NoteKind::ScanTruncated),
             "{found:?}"
+        );
+    }
+
+    /// Git's answer of renames past its bound is cut, never read in part: the search
+    /// for moves notes a history that cannot be read, and gives no rename.
+    #[tokio::test]
+    async fn an_answer_of_renames_past_its_bound_is_a_note_and_no_rename() {
+        if !git_installed().await {
+            return;
+        }
+        let dir = approved(true).await;
+        isolated_git(dir.path(), &["mv", "src/a.rs", "src/b.rs"]).await;
+        write(dir.path(), "src/b.rs", &CODE.replace("seven", "seventh")).await;
+        isolated_git(dir.path(), &["add", "src/b.rs"]).await;
+        let git = Git::new(dir.path().to_path_buf());
+        let revision = git.revision().await.unwrap().unwrap();
+        assert!(matches!(
+            git.renames_since(&revision, 8).await,
+            Err(GitError::Cut {
+                command: "diff-index",
+                cap: 8
+            })
+        ));
+        assert!(matches!(
+            git.renames_since(&revision, 1 << 20).await,
+            Ok(RenamesSince::Found(renames)) if !renames.is_empty()
+        ));
+        let gone = gone_at(dir.path()).await;
+        let found = FileSpace::new(dir.path().to_path_buf())
+            .with_limits(ScanLimits {
+                listing_bytes: 8,
+                ..ScanLimits::default()
+            })
+            .suggest(&gone)
+            .await
+            .unwrap();
+        let suggested = &found[&p("src/a.rs")];
+        assert!(
+            suggested
+                .candidates
+                .iter()
+                .all(|c| !matches!(c.found(), FoundBy::Renamed { .. })),
+            "{suggested:?}"
+        );
+        assert!(
+            suggested.notes.iter().any(|n| matches!(
+                n,
+                MoveNote::HistoryUnreadable { detail } if detail.as_str().contains("more than 8 bytes")
+            )),
+            "{suggested:?}"
+        );
+    }
+
+    /// A blob is read back only within the bound of a file: one past it reads back
+    /// none, as it cannot be read back whole.
+    #[tokio::test]
+    async fn a_blob_past_the_bound_of_a_file_reads_back_none() {
+        if !git_installed().await {
+            return;
+        }
+        let dir = approved(true).await;
+        let path: RelPath = "src/a.rs".parse().unwrap();
+        let git = Git::new(dir.path().to_path_buf());
+        let address = git.blob_names(&[&path]).await.unwrap().unwrap().remove(0);
+        let len = CODE.len();
+        assert_eq!(
+            git.read_blob_within(&address, len).await.unwrap(),
+            Some(CODE.as_bytes().to_vec())
+        );
+        assert_eq!(git.read_blob_within(&address, len - 1).await.unwrap(), None);
+        let small = FileSpace {
+            max_file: u64::try_from(len - 1).unwrap(),
+            ..FileSpace::new(dir.path().to_path_buf())
+        };
+        assert_eq!(small.read_back(&address).await.unwrap(), None);
+        assert!(
+            FileSpace::new(dir.path().to_path_buf())
+                .read_back(&address)
+                .await
+                .unwrap()
+                .is_some()
         );
     }
 

@@ -43,10 +43,26 @@
 //!   in, outermost first:
 //!   `tests/cart.test.ts::Cart::adds an item`.
 //!
+//! A name holds no control character, so a test whose title holds one (a tab, a line
+//! break) cannot be named. Any other text is not a name of the space, and the adapter
+//! says so with why.
+//!
+//! # Positions
+//!
+//! A name holds no position in a file: it names a test call whole.
+//!
+//! # Equal names
+//!
 //! A title is compared with the value of the literal in the source, code point by
-//! code point, case included, not normalized. A name holds no control character,
-//! so a test whose title holds one (a tab, a line break) cannot be named. Any other
-//! text is not a name of the space, and the adapter says so with why.
+//! code point, case included, not normalized; so the spellings of one value name one
+//! title (`a:b` and `a\:b`). The path of the file is compared as the space `file`
+//! compares one, case included. No name is rewritten into another.
+//!
+//! # One thing for a name
+//!
+//! Each `describe` of a title on the way is searched, and two tests of the name on
+//! the levels searched are one, their texts joined in the order of the file (finding
+//! the test, below).
 //!
 //! # Prefixes of the names
 //!
@@ -267,7 +283,9 @@
 //!   template), so it tells what `bytes` tells, under another hash.
 //! - `presence`: only that the test is there.
 //!
-//! There is no address: the text is made, not stored, so nothing is read back.
+//! There is no address: the text is made, not stored, so nothing is read back. The
+//! file is read up to [`MAX_FILE_BYTES`] and lexed to [`MAX_DEPTH`] (reading the
+//! file, above).
 //!
 //! # What it costs
 //!
@@ -287,6 +305,12 @@
 //! | absent | no file is there; or it is scanned, and has no `describe` or test of the titles on the way, and nothing on the way may make one |
 //! | cannot tell | a symbolic link on the path leaves the root or is broken; the file cannot be read, is too large, is not UTF-8, does not lex, or nests too deep; or the test is not found, and something on the way may make it |
 //! | not a name | the text is not of the grammar above |
+//!
+//! # Where it reads
+//!
+//! The files under the root of the project, by the rules of the space `file`
+//! (through a symbolic link only while it stays inside the root). It declares no
+//! build directory, and runs no program.
 //!
 //! # Known limits
 //!
@@ -640,16 +664,46 @@ impl JsTestSpace {
         for (path, tests) in by_file {
             let wanted: Vec<Wanted> = tests.iter().map(|(_, _, t)| t.wanted.clone()).collect();
             let found = self.find_in(&path, wanted).await;
-            for ((name, comparisons, _), found) in tests.into_iter().zip(found) {
-                let reading = match found {
-                    Found::Text(text) => {
-                        ArtifactReading::of_bytes(text.as_bytes(), comparisons, None)
-                    }
-                    Found::Absent => ArtifactReading::absent(),
-                    Found::CannotTell(why) => {
-                        ArtifactReading::cannot_tell(reason(why.to_string())?)
-                    }
-                };
+            // The texts may be as large as the file: large ones are hashed on a
+            // blocking thread.
+            let asked: Vec<BTreeSet<Comparison>> =
+                tests.iter().map(|(_, c, _)| (*c).clone()).collect();
+            let len = found
+                .iter()
+                .map(|found| match found {
+                    Found::Text(text) => text.len(),
+                    Found::Absent | Found::CannotTell(_) => 0,
+                })
+                .sum();
+            let told = super::on_blocking(len, move || {
+                found
+                    .into_iter()
+                    .zip(asked)
+                    .map(|(found, asked)| {
+                        Ok(match found {
+                            Found::Text(text) => {
+                                ArtifactReading::of_bytes(text.as_bytes(), &asked, None)
+                            }
+                            Found::Absent => ArtifactReading::absent(),
+                            Found::CannotTell(why) => {
+                                ArtifactReading::cannot_tell(reason(why.to_string())?)
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, JsTestError>>()
+            })
+            .await;
+            let told = match told {
+                Ok(told) => told?,
+                Err(why) => {
+                    let why = Untellable::Stopped {
+                        path: path.clone(),
+                        why,
+                    };
+                    vec![ArtifactReading::cannot_tell(reason(why.to_string())?); tests.len()]
+                }
+            };
+            for ((name, _, _), reading) in tests.into_iter().zip(told) {
                 readings.insert(name.clone(), reading);
             }
         }
@@ -2880,13 +2934,122 @@ impl Lexed<'_> {
 mod tests {
     use std::path::Path;
 
-    use whyshelf_core::domain::shelf::artifact::{ArtifactState, Untold};
+    use whyshelf_core::domain::shelf::artifact::{ArtifactState, NamePrefix, Untold};
 
+    use super::super::conformance;
     use super::super::file::ScanLimits;
     use super::*;
 
     fn n(text: &str) -> ArtifactName {
         ArtifactName::new(text).unwrap()
+    }
+
+    /// The bound of bytes of the files of the conformance test.
+    const MAX_TEST_FILE: u64 = 256;
+
+    /// The tests of the conformance test: one, one in a `describe`, twins, and one
+    /// whose title holds a `:`.
+    const TESTS: &str = "test(\"one\", () => {\n  expect(1).toBe(1);\n});\n\ndescribe(\"group\", () => {\n  it(\"inner\", () => {});\n});\n\ntest(\"twin\", () => {});\ntest(\"twin\", () => {});\n\ntest(\"a:b\", () => {});\n";
+
+    /// The hook of the conformance test: the tests above, a file that cannot be read,
+    /// one past the bound, one that nests one past the depth, and a link out of the
+    /// root.
+    struct Tests;
+
+    impl conformance::Hook for Tests {
+        fn space(&self) -> &'static str {
+            JS_TEST_SPACE
+        }
+
+        fn source(&self) -> &'static str {
+            include_str!("js_test.rs")
+        }
+
+        fn bounds(&self) -> Vec<&'static str> {
+            vec!["a file"]
+        }
+
+        fn unread(&self) -> conformance::Unread {
+            conformance::Unread::CannotTell
+        }
+
+        fn walks_nesting(&self) -> bool {
+            true
+        }
+
+        fn adapter_at(&self, dir: &Path) -> super::super::Adapter {
+            super::super::Adapter::JsTest(JsTestSpace {
+                max_file: MAX_TEST_FILE,
+                ..JsTestSpace::new(dir.to_path_buf())
+            })
+        }
+
+        async fn tree(&self, dir: &Path) -> conformance::Tree {
+            let root = dir.join("root");
+            write(&root, "src/a.test.ts", TESTS).await;
+            write(&root, "src/locked.test.ts", "test(\"t\", () => {});\n").await;
+            let pad = "/".repeat(usize::try_from(MAX_TEST_FILE).unwrap());
+            write(
+                &root,
+                "src/big.test.ts",
+                &format!("test(\"t\", () => {{}});\n{pad}\n"),
+            )
+            .await;
+            let deep = format!(
+                "test(\"t\", () => {{ {}{} }});\n",
+                "(".repeat(MAX_DEPTH),
+                ")".repeat(MAX_DEPTH)
+            );
+            write(&root, "src/deep.test.ts", &deep).await;
+
+            let mut tree = conformance::Tree::of(self.adapter_at(&root));
+            tree.present = vec![n("src/a.test.ts::one"), n("src/a.test.ts::group::inner")];
+            tree.absent = vec![n("src/a.test.ts::missing"), n("src/none.test.ts::t")];
+            tree.not_names = vec![
+                n("src/a.test.ts"),
+                n("src/a.txt::t"),
+                n("src/a.test.ts::a\\b"),
+            ];
+            tree.over_bytes = vec![conformance::OverBytes::Name {
+                bound: "a file",
+                name: n("src/big.test.ts::t"),
+            }];
+            tree.too_deep = Some(n("src/deep.test.ts::t"));
+            tree.two_things = Some(n("src/a.test.ts::twin"));
+            tree.spellings = Some((n("src/a.test.ts::a:b"), n("src/a.test.ts::a\\:b")));
+            tree.prefix = Some((
+                PrefixMove::new(
+                    NamePrefix::new("src/a.test.ts::group").unwrap(),
+                    NamePrefix::new("src/a.test.ts::suite").unwrap(),
+                )
+                .unwrap(),
+                n("src/a.test.ts::group::inner"),
+                n("src/a.test.ts::suite::inner"),
+            ));
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                write(dir, "outside/x.test.ts", "test(\"t\", () => {});\n").await;
+                tokio::fs::symlink(dir.join("outside"), root.join("out"))
+                    .await
+                    .unwrap();
+                tree.outside = Some(n("out/x.test.ts::t"));
+                let locked = root.join("src/locked.test.ts");
+                tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))
+                    .await
+                    .unwrap();
+                // Run as a user every file opens to (root), it is no name to test.
+                if tokio::fs::File::open(&locked).await.is_err() {
+                    tree.unreadable = Some(n("src/locked.test.ts::t"));
+                }
+            }
+            tree
+        }
+    }
+
+    #[tokio::test]
+    async fn the_adapter_keeps_the_contract_of_an_adapter() {
+        conformance::check(&Tests).await;
     }
 
     fn asks(names: &[&str]) -> SpaceAsks {
