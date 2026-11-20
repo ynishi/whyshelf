@@ -10,6 +10,27 @@ and this project adheres to
 
 ### Added
 
+- Who may decide (#114). `.whyshelf/books.toml` may name groups of actors
+  (`[[group]]`, each member an exact name, with an optional `from` and `until`)
+  and declare, for a book (`[book.decide]`) and for the records of no book
+  (`[decide]`, required once a book declares a rule), which groups may write
+  each kind of judgement (`approve`, `deny`, `deprecate`, `retire`, `revoke`,
+  `same`, `exempt`, `moved`), a `default`, and a `since`. `judge` refuses a
+  record whose name the rule does not admit, exit 1, and writes nothing;
+  `judge approve --stale` and `--pending` leave such a document out as
+  `not_admitted`. A record in the ledger the rule does not admit is not used and
+  is a `ledger_problems` entry of `check` (exit 1) until `judge withdraw` by a
+  name admitted to `revoke` takes it back. There is no authentication: the rule
+  is about the name written, as declared. A project that declares no rule takes
+  any name and writes records of the same form as before. In a project that
+  declares a rule, decisions and declarations of the same meaning of a document
+  name their document's book in an optional record key `book`; a record without
+  it keeps its form and hash, and is read with the book its document is in now,
+  so a rule declared over an earlier ledger is best given a `since`. A build
+  from before this cannot read a record that has the key. In
+  the library, `Ledger::build` takes the admission (`Admit::of(&shelf)`, or
+  `Admit::unruled()`), and `LedgerAppend::append` takes an `AdmittedRecord`,
+  which only `Ledger::accept` makes.
 - The preset `rustdoc-promise` (`space = "rust-item"`, `compare = "lines"`,
   `means = "depends"`) pins what a Rust item promises: its declaration and its
   docs, read from the page `cargo doc` wrote for it. An edit of a function's
