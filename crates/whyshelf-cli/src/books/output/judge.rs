@@ -21,9 +21,10 @@ use super::{CauseOut, DocRef, Namer};
 pub struct JudgedAllOut {
     /// The judgements.
     pub judged: Vec<JudgedOut>,
-    /// The approvals not made, each `repeats`: one made now would pin exactly what
-    /// the approval that stands pins and lapse when it lapses (`--again` makes it
-    /// anyway). Empty for every verb but `approve`.
+    /// The approvals not made, each `repeats`: one made now would be by one who
+    /// already approved the content that stands, and lapse when that reading and the
+    /// approval that stands lapse (`--again` makes it anyway). Another actor's approval of that content is a
+    /// second reading, and is made. Empty for every verb but `approve`.
     pub left_out: Vec<LeftOutOut>,
 }
 
@@ -79,10 +80,12 @@ pub struct LeftOutOut {
     /// Why: of `--stale`, `broken` (its approval is broken now); of `--stale` and
     /// `--pending`, `refused` (the model refuses its approval now) or `stands_on` (a
     /// `depends` link names a document that is broken, pending or stale and not in
-    /// the run, or left out); of every one, `repeats` (one made now would pin exactly
-    /// what the approval that stands pins and lapse when it lapses; of `--stale`, one
-    /// stale only through an upstream's upstream the run approved again on a new
-    /// hash).
+    /// the run, or left out); of every one, `repeats` (one made now would be by one
+    /// who already approved the content that stands, and lapse when that reading
+    /// and the approval that stands lapse; of `--stale`, one stale only through an upstream's upstream the run
+    /// approved again on a new hash); of `--stale`, `second_reading` (one made now
+    /// would be of the content that stands by an actor who has not approved it, which
+    /// a run that chose the document by a rule does not make: name the document).
     pub reason: &'static str,
     /// A sentence for a person.
     pub detail: String,
@@ -92,9 +95,11 @@ pub struct LeftOutOut {
     pub link: Option<String>,
     /// For `stands_on`, why that document holds it back: `broken`, `pending` (and
     /// not in the run), `stale` (and not in the run) or `left_out` (refused or broken
-    /// in the run; one that `repeats` stands, and holds nothing back).
+    /// in the run; one that `repeats`, or is a `second_reading`, stands, and holds
+    /// nothing back).
     pub upstream_is: Option<&'static str>,
-    /// For `repeats`, the approval that stands (its record's id).
+    /// For `repeats` and `second_reading`, the approval that stands (its record's
+    /// id).
     pub approval: Option<String>,
     /// For `broken`, the kinds of its causes, each once, in the order of `causes`;
     /// empty otherwise.
@@ -297,7 +302,10 @@ fn left_out_warning(namer: &Namer<'_>, left: &LeftOut, again: bool) -> String {
             "warning: {doc} is broken and was not {approved} ({})",
             left_out_kinds(namer, left).join(", ")
         ),
-        LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } | LeftOutWhy::Repeats { .. } => {
+        LeftOutWhy::Refused(_)
+        | LeftOutWhy::StandsOn { .. }
+        | LeftOutWhy::Repeats { .. }
+        | LeftOutWhy::SecondReading { .. } => {
             format!(
                 "warning: {doc} was not {approved}: {}",
                 left_out_detail(namer, left)
@@ -360,7 +368,10 @@ fn left_out_detail(namer: &Namer<'_>, left: &LeftOut) -> String {
         ),
         LeftOutWhy::Refused(refusal) => refusal.to_string(),
         LeftOutWhy::Repeats { approval } => format!(
-            "an approval now would pin what its approval {approval} pins and lapse when it lapses: it would only repeat it"
+            "an approval now would pin what its approval {approval} pins, by one who already approved that content, and lapse when that reading and the approval that stands lapse: it would only repeat it"
+        ),
+        LeftOutWhy::SecondReading { approval } => format!(
+            "an approval now would pin what its approval {approval} pins, by one who has not approved it: a second reading is made by naming the document, with `judge approve`"
         ),
         LeftOutWhy::StandsOn { held, key } => {
             let upstream = key
@@ -401,9 +412,10 @@ impl Namer<'_> {
                 Some(held.link.to_string()),
                 Some(hold_word(held.hold)),
             ),
-            LeftOutWhy::Broken(_) | LeftOutWhy::Refused(_) | LeftOutWhy::Repeats { .. } => {
-                (None, None, None)
-            }
+            LeftOutWhy::Broken(_)
+            | LeftOutWhy::Refused(_)
+            | LeftOutWhy::Repeats { .. }
+            | LeftOutWhy::SecondReading { .. } => (None, None, None),
         };
         LeftOutOut {
             doc: DocRef {
@@ -415,13 +427,16 @@ impl Namer<'_> {
                 LeftOutWhy::Refused(_) => "refused",
                 LeftOutWhy::StandsOn { .. } => "stands_on",
                 LeftOutWhy::Repeats { .. } => "repeats",
+                LeftOutWhy::SecondReading { .. } => "second_reading",
             },
             detail: left_out_detail(self, left),
             upstream,
             link,
             upstream_is,
             approval: match &left.why {
-                LeftOutWhy::Repeats { approval } => Some(approval.to_string()),
+                LeftOutWhy::Repeats { approval } | LeftOutWhy::SecondReading { approval } => {
+                    Some(approval.to_string())
+                }
                 LeftOutWhy::Broken(_) | LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } => {
                     None
                 }
@@ -433,7 +448,8 @@ impl Namer<'_> {
                 }
                 LeftOutWhy::Refused(_)
                 | LeftOutWhy::StandsOn { .. }
-                | LeftOutWhy::Repeats { .. } => Vec::new(),
+                | LeftOutWhy::Repeats { .. }
+                | LeftOutWhy::SecondReading { .. } => Vec::new(),
             },
         }
     }

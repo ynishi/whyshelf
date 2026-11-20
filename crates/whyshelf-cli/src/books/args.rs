@@ -318,9 +318,11 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         /// as one run).
         #[arg(long, requires = "reason")]
         pending: bool,
-        /// Approve even a document whose approval is fresh and would be repeated
-        /// exactly (same pins, same expiry), for a person who read it again; without
-        /// it, such a document is left out, with a warning on stderr.
+        /// Approve even a document whose approval would only repeat the actor's own
+        /// (same pins, same expiry, by one who approved that content), for a person
+        /// who read it again; without it, such a document is left out, with a
+        /// warning on stderr. Another actor's approval of the same content is
+        /// written without it.
         #[arg(long, conflicts_with_all = ["stale", "pending"])]
         again: bool,
         /// Why.

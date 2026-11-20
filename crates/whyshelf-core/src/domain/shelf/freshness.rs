@@ -1212,7 +1212,7 @@ fn freshness_of(
         Err(failure) => causes.push(Cause::SelfNotValid(failure)),
     }
     if let Some(since) = expires
-        && cx.now >= since
+        && since.lapsed_by(cx.now)
     {
         causes.push(Cause::Expired { since });
     }

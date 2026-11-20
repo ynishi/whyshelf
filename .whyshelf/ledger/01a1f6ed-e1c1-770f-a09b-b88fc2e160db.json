@@ -1,0 +1,107 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::approve_chosen",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::held_back",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::pending",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::pending_upstream",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::stale",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795144143635,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dd0569f50df65c8e603d65945b732663f342f60a",
+      "hash": "sha256:665cc53a4d4f74d28db81b7538b987de5e1845ab18bcd77117dc4cb4fe848add",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "18"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c6a9-7783-7239-aa91-3d22bdc409e0"
+    },
+    {
+      "address": "48d2691e26f4ab75d5af7b6545971af269a8037d",
+      "hash": "sha256:26b6d742e1de43e4baa2445759027f4b6a4f74941de27100321a25951966f1c4",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "25"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c9f3-ac8c-704d-a130-821e5c0f7fbb"
+    }
+  ],
+  "id": "01a1f6ed-e1c1-770f-a09b-b88fc2e160db",
+  "kind": "decision",
+  "reason": "Second readings (#114 stage R): the books say the rule of Ledger::kind_of as built; V-33, V-34, V-36, V-48, V-60 and V-61 re-read and still true; blind review over three rounds, its findings fixed",
+  "revision": "e45695b9f288728a2283490f8ec4c6ea1722e4e6",
+  "seen": "sha256:6a05673c8e338e6d101a089428056f35319f6ac683565df3c8916850158fc4b3",
+  "seen_address": "a16bf2a83f7535a4002091103b039c106c15c98e",
+  "subject": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a",
+  "v": 1,
+  "verb": "approve"
+}

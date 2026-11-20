@@ -1,6 +1,7 @@
 //! Who judges, on the binary and a small project of files (DEC-34): the actor given
 //! with `--actor`, else `WHYSHELF_ACTOR`, else Git's `user.name` of the project, and
-//! never a name read from a file of the project.
+//! never a name read from a file of the project. It is asked before any judgement of
+//! a run is decided, so with no name a run that would write nothing fails too.
 //!
 //! Git runs with the person's own settings shut out: no system file, an empty
 //! global file, a home inside the project, and no `GIT_*` variable of the caller,
@@ -162,5 +163,45 @@ fn with_no_actor_the_judgement_is_refused_and_no_file_names_one() {
     assert!(!stdout.contains("mallory"), "{stdout}");
     assert!(!stderr.contains("mallory"), "{stderr}");
     assert!(!project.0.join(".whyshelf/ledger").exists());
+    assert_eq!(project.files(), before, "nothing is written");
+}
+
+#[test]
+fn with_no_actor_a_run_that_would_only_repeat_is_refused_too() {
+    let project = Project::new("actor-none-repeat");
+    repository(&project, None);
+    let first = whyshelf(&project, &["judge", "approve", "N-1"], Some("tester"));
+    assert_eq!(first.status.code(), Some(0));
+    let before = project.files();
+    // The approval would repeat tester's, but who approves is asked first: what an
+    // approval is depends on who makes it.
+    let output = whyshelf(&project, &["judge", "approve", "N-1"], None);
+    let answer = json(&output);
+    assert_eq!(output.status.code(), Some(3), "{answer}");
+    assert_eq!(answer["error"], "failed", "{answer}");
+    assert!(
+        answer["messages"].to_string().contains("WHYSHELF_ACTOR"),
+        "{answer}"
+    );
+    assert_eq!(project.files(), before, "nothing is written");
+}
+
+#[test]
+fn with_no_actor_a_verb_the_documents_state_would_refuse_fails_on_the_name_first() {
+    let project = Project::new("actor-none-refused");
+    repository(&project, None);
+    let revoke = ["judge", "revoke", "N-1", "--reason", "nothing to revoke"];
+    // N-1 is pending: with a name, revoking it is refused (exit 2).
+    let named = whyshelf(&project, &revoke, Some("tester"));
+    assert_eq!(named.status.code(), Some(2), "{}", json(&named));
+    let before = project.files();
+    // With none, the run asks who decides before it decides anything.
+    let output = whyshelf(&project, &revoke, None);
+    let answer = json(&output);
+    assert_eq!(output.status.code(), Some(3), "{answer}");
+    assert!(
+        answer["messages"].to_string().contains("WHYSHELF_ACTOR"),
+        "{answer}"
+    );
     assert_eq!(project.files(), before, "nothing is written");
 }

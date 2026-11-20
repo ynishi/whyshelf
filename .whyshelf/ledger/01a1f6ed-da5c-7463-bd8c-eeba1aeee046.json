@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "5f658f6893cc144291dabec303dfb14985fc55bc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3df3be22f92336daa55e3880fcfb472007faa07b39623be4689d00acdc75f7f2",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stats.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795144143635,
+  "expires": null,
+  "frame": [
+    {
+      "address": "06aaac453e1c7f23a04acac5938ed075cd5c026f",
+      "hash": "sha256:00739559d194a612ee44f19913e5d61dc37199e9541e2c22b144b9ea33378c3f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "55"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c847-f192-7237-ad26-fff5f77b2194"
+    },
+    {
+      "address": "3400dbc2f7d06a0abae6df7e3c489bd5f4a8f624",
+      "hash": "sha256:d6fe01cfa0864a168ed390e185d99b585cb5416067bf091d402792186f174438",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "57"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8ad-9bab-71bd-a155-f52d9ae7d16d"
+    }
+  ],
+  "id": "01a1f6ed-da5c-7463-bd8c-eeba1aeee046",
+  "kind": "decision",
+  "reason": "Second readings (#114 stage R): the books say the rule of Ledger::kind_of as built; V-33, V-34, V-36, V-48, V-60 and V-61 re-read and still true; blind review over three rounds, its findings fixed",
+  "revision": "e45695b9f288728a2283490f8ec4c6ea1722e4e6",
+  "seen": "sha256:4a6933a73c69f531940b9f70719531f4c7f5a7f401002d82f80a23bb4d93a767",
+  "seen_address": "7dfa18720a1f88ecce40dd2d0f1c16f49b5eaec7",
+  "subject": "01a1c847-f478-75b4-991d-1d40b11c87a8",
+  "v": 1,
+  "verb": "approve"
+}
