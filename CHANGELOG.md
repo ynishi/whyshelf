@@ -31,6 +31,25 @@ and this project adheres to
   the library, `Ledger::build` takes the admission (`Admit::of(&shelf)`, or
   `Admit::unruled()`), and `LedgerAppend::append` takes an `AdmittedRecord`,
   which only `Ledger::accept` makes.
+- A second approval by another name (#114). A rule may ask for `approvals = N`
+  (1 to 10, 1 when not given): an approval under it holds once N distinct
+  names approved the same content, each counted while its own latest reading
+  has not lapsed. Until then the document is `awaiting` in `status` (and
+  `status --standing awaiting`), listed by `check` (exit unchanged), and not
+  failed by `stale --exit-code` itself; what stands on it is stale
+  (`upstream_declared`, `unseconded`), `judge approve --stale` holds it back
+  (`stands_on`, `upstream_is` `awaiting`), and `stale` offers approving the
+  upstream with another `--actor`. A same meaning joins the content it
+  declares once N names declared that one edge (the top-level rule's
+  `approvals` for an artifact); `check` notes a short edge that a standing
+  approval meets (`same_meaning_short`), and a name declaring an edge again
+  writes nothing. The declaration is a problem when no N names may approve or
+  declare the same meaning, when the top-level `approvals` is below a book's,
+  or when its `since` is later than that of a book asking for more than one
+  name. A project with no rule counts nothing and answers as before. In the
+  library, `Standing::Approved` holds `freshness` and `quorum`, and
+  `FreshnessLevel`, `UpstreamStatus`, `OriginEvent`, `Settlement` and `Hold`
+  have a new variant each.
 - The preset `rustdoc-promise` (`space = "rust-item"`, `compare = "lines"`,
   `means = "depends"`) pins what a Rust item promises: its declaration and its
   docs, read from the page `cargo doc` wrote for it. An edit of a function's
