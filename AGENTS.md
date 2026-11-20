@@ -18,7 +18,8 @@
     documentation outranks stale issue text.
 - Never work on `main`; one branch per issue, cut from `origin/main` after a
   fetch. `just worktree-new <type> <slug>` from the main checkout does that and
-  runs `just branch-check`.
+  runs `just branch-check`; `just worktree-remove <slug>` removes it, with its
+  build directory, once `origin/main` holds the branch.
 - `just check` is green. [CONTRIBUTING.md](CONTRIBUTING.md#verification) says
   what it covers.
 - Review a change locally before it goes up — by a person or an AI agent — and
