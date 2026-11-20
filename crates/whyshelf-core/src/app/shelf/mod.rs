@@ -15,7 +15,7 @@
 //! | [`get`](ShelfApp::get) | no | [`GetReport`]: one document, its standing, notices and root causes |
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
 //! | [`unlinked`](ShelfApp::unlinked) | no | [`UnlinkedReport`]: the problems of the declaration, or the documents linked neither way, those no link reaches and those that hold none, those decided against apart |
-//! | [`stale`](ShelfApp::stale) | no | [`StaleReport`]: the approvals that no longer hold, with where they start to fail and what can settle each origin |
+//! | [`stale`](ShelfApp::stale) | no | [`StaleReport`]: the approvals that no longer hold, with where they start to fail and what can settle each origin, and whether a gate passes ([`StaleReport::gate`]) |
 //! | [`stats`](ShelfApp::stats) | no | [`StatsReport`]: how the work went, from the ledger: approvals made again, pending time, runs, and the pins that changed under approvals made again |
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
@@ -128,6 +128,8 @@ mod same_meaning_tests;
 #[cfg(test)]
 mod space_tests;
 #[cfg(test)]
+mod stale_gate_tests;
+#[cfg(test)]
 mod status_filter_tests;
 #[cfg(test)]
 mod successor_tests;
@@ -161,7 +163,7 @@ pub use ports::{
 };
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, Awaiting, BookCount, BooksCheck, DiffItem, DiffReport,
-    DownstreamEdge, ExemptEntry, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy,
+    DownstreamEdge, ExemptEntry, Gate, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy,
     MapReport, MovedAway, MovesReport, Names, RepeatedExemption, Row, SettledOrigin, StaleEntry,
     StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry,
     UnlinkedLists, UnlinkedReport, UnneededExemption, UpstreamEdge, UpstreamEnd,

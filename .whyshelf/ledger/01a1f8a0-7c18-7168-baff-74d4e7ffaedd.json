@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a835fadffdf90d378a8859d938e900c2a105f141",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a943a941c8b8c595655589d9d3bc8b85bbcfa9d7c329b9c5bf101d65172f902a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795172629214,
+  "expires": null,
+  "frame": [
+    {
+      "address": "89d9ab9c5c416c308ae23064b5b492ffdb908512",
+      "hash": "sha256:ee621f9c5bf8366db9b36daf08d6cb31f2d14f9a53c5a9945eeb7cd21a7150f0",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "26"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c532-68dc-71dd-a7c8-35e9618f81f6"
+    }
+  ],
+  "id": "01a1f8a0-7c18-7168-baff-74d4e7ffaedd",
+  "kind": "decision",
+  "reason": "New for #151: V-110 names stale_gate_tests, which checks each case of DEC-26 on the report's gate; the tests exist and pass",
+  "revision": "ad2cd0f2562bbf84ebb1358c8445e616f0871959",
+  "seen": "sha256:3f623ad950c4df18d757767c4dc48348934ac804789a6758b397862261721f60",
+  "seen_address": "428fe218f4689325142865b083fbe9aa336d550e",
+  "subject": "01a1f896-c2b6-7071-bc5f-832eb20788b2",
+  "v": 1,
+  "verb": "approve"
+}
