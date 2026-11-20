@@ -69,7 +69,7 @@ use crate::domain::shelf::build::{DocReading, FormEntries};
 #[cfg(doc)]
 use crate::domain::shelf::ledger::GoneNames;
 use crate::domain::shelf::ledger::{
-    GoneName, JudgedAt, JudgementId, Record, RecordProblem, SpaceSuggestions,
+    AdmittedRecord, GoneName, JudgedAt, JudgementId, Record, RecordProblem, SpaceSuggestions,
 };
 use crate::domain::shelf::schema::{BookRange, BuiltinPresets, ShelfDecl};
 
@@ -353,8 +353,12 @@ pub trait LedgerAppend: Send + Sync {
     /// whole, and is not put on disk: that is [`FileSync::persist`], at the end of
     /// the run. A write that fails after the file was made removes that file (and no
     /// other), so a failure leaves no part of a record behind. Only a run of writes
-    /// calls this, so that every file it made is put on disk.
-    fn append(&self, record: &Record) -> impl Future<Output = Result<RelPath, Self::Error>> + Send;
+    /// calls this, so that every file it made is put on disk, and only with a record
+    /// the rules of who may decide admit ([`AdmittedRecord`]).
+    fn append(
+        &self,
+        record: &AdmittedRecord,
+    ) -> impl Future<Output = Result<RelPath, Self::Error>> + Send;
 }
 
 /// The time. The domain never reads a clock.

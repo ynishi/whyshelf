@@ -29,7 +29,7 @@ use whyshelf_core::app::shelf::{
 use whyshelf_core::domain::canon::Canon;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::shelf::ledger::Record;
+use whyshelf_core::domain::shelf::ledger::{AdmittedRecord, Record};
 
 use super::create;
 
@@ -190,7 +190,8 @@ impl LedgerAppend for JsonLedger {
     /// [`FileSync::persist`]'s, for every record of a run at once.
     ///
     /// [`FileSync::persist`]: whyshelf_core::app::shelf::FileSync::persist
-    async fn append(&self, record: &Record) -> Result<RelPath, LedgerError> {
+    async fn append(&self, record: &AdmittedRecord) -> Result<RelPath, LedgerError> {
+        let record = record.record();
         let file = self.file_of(record).map_err(|e| LedgerError::Name {
             path: self.dir.clone(),
             source: Some(e),
@@ -263,9 +264,16 @@ mod tests {
     use whyshelf_core::domain::actor::Actor;
     use whyshelf_core::domain::id::EntityId;
     use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet};
-    use whyshelf_core::domain::shelf::ledger::{JudgedAt, JudgementId, Revocation};
+    use whyshelf_core::domain::shelf::ledger::{Admit, JudgedAt, JudgementId, Ledger, Revocation};
 
     use super::*;
+
+    /// `record`, admitted as a project that declares no rule admits it.
+    fn admitted(record: &Record) -> AdmittedRecord {
+        Ledger::build(Vec::new(), &Admit::unruled())
+            .accept(record.clone())
+            .unwrap()
+    }
 
     fn jid(n: u128) -> JudgementId {
         let bits = (n & 0x0fff_ffff_ffff_ffff) | (0x7u128 << 76) | (0b10u128 << 62);
@@ -300,12 +308,12 @@ mod tests {
         assert!(!ledger.dir().exists(), "a read creates nothing");
 
         let record = revocation();
-        let file = ledger.append(&record).await.unwrap();
+        let file = ledger.append(&admitted(&record)).await.unwrap();
         assert_eq!(file, ledger.path_of(&record));
         assert_eq!(file.as_str(), format!(".whyshelf/ledger/{}.json", jid(2)));
         assert!(root.path().join(file.as_str()).is_file());
         assert!(matches!(
-            ledger.append(&record).await,
+            ledger.append(&admitted(&record)).await,
             Err(LedgerError::Taken { .. })
         ));
         let read = ledger.read().await.unwrap();
@@ -323,7 +331,7 @@ mod tests {
             .await
             .unwrap();
         tokio::fs::write(&file, b"theirs").await.unwrap();
-        let Err(LedgerError::Taken { path }) = ledger.append(&record).await else {
+        let Err(LedgerError::Taken { path }) = ledger.append(&admitted(&record)).await else {
             panic!("the record is taken");
         };
         assert_eq!(path, file);
@@ -341,7 +349,10 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let ledger = ledger_in(root.path());
         let record = revocation();
-        ledger.append(&revocation_of(5, 1)).await.unwrap();
+        ledger
+            .append(&admitted(&revocation_of(5, 1)))
+            .await
+            .unwrap();
         // A directory that takes no new entry.
         let mut closed = tokio::fs::metadata(ledger.dir())
             .await
@@ -352,7 +363,7 @@ mod tests {
         tokio::fs::set_permissions(ledger.dir(), closed)
             .await
             .unwrap();
-        let result = ledger.append(&record).await;
+        let result = ledger.append(&admitted(&record)).await;
         let mut reopened = tokio::fs::metadata(ledger.dir())
             .await
             .unwrap()
@@ -567,10 +578,10 @@ mod tests {
             revocation_of(3, 1),
             revocation_of(4, 1),
         );
-        one.append(&own).await.unwrap();
-        one.append(&same).await.unwrap();
-        other.append(&theirs).await.unwrap();
-        other.append(&same).await.unwrap();
+        one.append(&admitted(&own)).await.unwrap();
+        one.append(&admitted(&same)).await.unwrap();
+        other.append(&admitted(&theirs)).await.unwrap();
+        other.append(&admitted(&same)).await.unwrap();
 
         // Each file is named by the id of its record, so the records of the two
         // branches are two files, and the same record is one name with one content.

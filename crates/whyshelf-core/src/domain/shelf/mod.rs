@@ -124,6 +124,8 @@
 //! | the invariants of a decision | `Decision::assemble`, visible to the ledger's modules only | a [`Decision`] or a [`DecisionProblem`] |
 //! | reading a record back | [`Record::from_canon`] | a [`Record`] or a [`RecordProblem`] |
 //! | a contradiction among records | [`Ledger::build`] | [`LedgerProblem`]s |
+//! | what a rule of who may decide says of a name | [`Authority::permission`](schema::Authority::permission) | a [`Permission`](schema::Permission) |
+//! | whether a record is admitted by who may decide, and the book it is read with | `Admit::admission` in `ledger/admit.rs`, asked by [`Ledger::build`] of every record and by [`Ledger::accept`](ledger::Ledger::accept) of every record to be written; the book is `Admit::book_of`, from the key `book` or [`Shelf::book_of`](build::Shelf::book_of) | used or a [`LedgerProblem::NotAdmitted`](ledger::LedgerProblem::NotAdmitted); an [`AdmittedRecord`](ledger::AdmittedRecord), the one thing a write takes, or a [`NotAdmitted`](ledger::NotAdmitted) |
 //! | what was decided | [`Ledger::status_of`] | a [`DeclaredStatus`] |
 //! | what a person typed | [`resolve`] | a [`Resolution`] (an identity only the ledger knows has an [`Absence`], which cannot be invalid) |
 //! | what a link that names a preset, or the default, declares | [`expand`](schema::expand), before [`Schema::validate`]; the presets of the adapters come as a value, as the spaces do | the declaration with the values put in, and the preset of each link for `map` alone |

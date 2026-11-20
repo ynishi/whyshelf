@@ -862,6 +862,42 @@
 //! Git's work (`git checkout`) and yours. A release is a Git tag: check it out and
 //! `status` says what held then, because freshness is derived, never stored.
 //!
+//! ## Who may decide
+//!
+//! A project may name groups of actors and declare, for a book, which groups may
+//! write each kind of judgement about its documents:
+//!
+//! ```toml
+//! [[group]]
+//! name = "maintainers"
+//! members = ["ana", { name = "bo", until = "2026-12-01" }]
+//!
+//! [decide]                   # the records of no book: moves, the same meaning of an artifact
+//! default = ["maintainers"]
+//!
+//! [[book]]
+//! name = "requirement"
+//! # ...
+//! [book.decide]
+//! approve = ["maintainers"]  # approve, deny, deprecate, retire, revoke, same, exempt, moved
+//! since = "2026-12-01"       # the records made from then on
+//! ```
+//!
+//! There is no authentication: the rule is about the name a record writes, taken
+//! as declared (`--actor`, `WHYSHELF_ACTOR`, Git's `user.name`), as its time is. It
+//! checks the ledger against what contributors agreed, and stops no one who writes
+//! another name. `judge` refuses a record whose name the rule does not admit, exit 1,
+//! and writes nothing; `judge approve --stale` and `--pending` leave such a document
+//! out as `not_admitted`. A record in the ledger the rule does not admit (one written
+//! by hand, say) is not used, so it makes no decision stand, and `check` lists it
+//! under `ledger_problems`, exit 1, until `judge withdraw <id>` by a name the rule
+//! admits to `revoke` in its book takes it back. A record made from now on names the
+//! book its document is in (its key `book`); one made before is read with the book
+//! the document is in now, so a rule declared over an earlier ledger is best given a
+//! `since`. A project that declares no rule takes any name, as before. The rules are
+//! on [`Authority`](domain::shelf::schema::Authority)'s page, and how a record is
+//! read with them on [`Admit`](domain::shelf::ledger::Admit)'s.
+//!
 //! ## Commands
 //!
 //! ```text
@@ -1016,7 +1052,10 @@
 //!   by anyone's run: a run that chooses
 //!   its documents by a rule did not read them, so it writes no second reading,
 //!   which is made by naming the document with `judge approve`; such a document
-//!   stands too, and holds back nothing on it). Each is
+//!   stands too, and holds back nothing on it), or `not_admitted` (who may decide
+//!   does not admit the actor to approve in the document's book, see "Who may
+//!   decide"; the others are approved, and what stands on it is held back as
+//!   `left_out`; `--pending` leaves one out the same way). Each is
 //!   listed under `left_out` as `{"doc", "reason", "detail", "upstream", "link",
 //!   "upstream_is", "approval", "kinds", "causes"}` (`kinds` and `causes` for
 //!   `broken`, `upstream`, `link` and `upstream_is` for `stands_on`, `approval`, the

@@ -67,6 +67,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
   - that a document is not expected to be reached by a cover (`judge exempt`).
 
   Each is a ledger record with a reason, and `judge withdraw` takes it back.
+- **Who may decide.** `.whyshelf/books.toml` may name groups of actors (`[[group]]`) and, per book (`[book.decide]`) and for the records of no book (`[decide]`), which groups may write each kind of judgement (an exemption is ruled by the book that declares the link it exempts from). `judge` refuses a name the rule does not admit; `check` fails on a record in the ledger it does not admit, which is not used. There is no authentication: the rule is about the name written, as declared. A rule declared over an earlier ledger is best given a `since`.
 
 ## Commands
 

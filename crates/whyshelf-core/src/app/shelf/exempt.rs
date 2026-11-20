@@ -8,7 +8,9 @@
 //!                                                     or an ExemptRefusal
 //!   + time, actor, new id, reason
 //!                     ---- Exempt::new -------------> a Record
-//!   record            ---- RunWrites::record -------> the ledger (create-only), every
+//!   record            ---- Ledger::accept ---------> admitted by who may decide, or
+//!                                                     NotAdmitted
+//!   admitted          ---- RunWrites::record -------> the ledger (create-only), every
 //!                                                     record put on disk once, at the end
 //! ```
 //!
@@ -22,7 +24,7 @@ use crate::domain::id::DocId;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::{ExemptRefusal, frame_exempt};
-use crate::domain::shelf::ledger::{Exempt, Ledger, Record};
+use crate::domain::shelf::ledger::{Exempt, Record};
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::{BookName, EntryName};
 
@@ -31,7 +33,6 @@ use super::error::ShelfError;
 use super::load::{Loaded, load};
 use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
-use super::run_writes::RunWrites;
 
 /// A request to exempt a document from one covering link.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +86,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         }
         let mut loaded = load(&self.ports).await?;
         let mut exempted = Vec::with_capacity(requests.len());
+        let mut admitted = Vec::with_capacity(requests.len());
         for request in requests {
             let one = match self.declare_exempt(&loaded, request).await {
                 Ok(one) => one,
@@ -99,23 +101,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 }
                 Err(other) => return Err(other),
             };
-            loaded.records.push(Record::Exempt(one.record.clone()));
-            loaded.ledger = Ledger::build(loaded.records.clone());
+            admitted.push(loaded.take(Record::Exempt(one.record.clone()))?);
             exempted.push(one);
         }
-        let records = exempted
-            .iter()
-            .map(|one| Record::Exempt(one.record.clone()))
-            .collect::<Vec<_>>();
-        RunWrites::run(&self.ports, |writes| {
-            Box::pin(async move {
-                for record in &records {
-                    writes.record(record).await?;
-                }
-                Ok(())
-            })
-        })
-        .await?;
+        self.write(&admitted).await?;
         Ok(exempted)
     }
 

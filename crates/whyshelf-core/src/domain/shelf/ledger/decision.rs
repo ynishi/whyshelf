@@ -12,7 +12,7 @@ use crate::domain::nonempty::NonBlank;
 
 use super::super::artifact::{ArtifactKey, ContentAddress, Revision};
 use super::super::doc::DocHash;
-use super::super::schema::EntryName;
+use super::super::schema::{BookName, EntryName};
 use super::{
     ApproveFrame, ArtifactPin, FramePin, JudgedAt, JudgementId, PresentFrame, RetireFrame, Seen,
 };
@@ -101,6 +101,7 @@ pub struct Decision {
     actor: Actor,
     at: JudgedAt,
     reason: Option<NonBlank>,
+    book: Option<BookName>,
 }
 
 impl Decision {
@@ -123,7 +124,7 @@ impl Decision {
             seen_address: frame.seen_address,
             revision: frame.revision,
         };
-        Self::assemble(id, frame.subject, verb, actor, at, reason)
+        Self::assemble(id, frame.subject, verb, actor, at, reason, frame.book)
     }
 
     /// A denial.
@@ -135,7 +136,7 @@ impl Decision {
         reason: Option<NonBlank>,
     ) -> Result<Self, DecisionProblem> {
         let verb = DecisionVerb::Deny { seen: frame.seen };
-        Self::assemble(id, frame.subject, verb, actor, at, reason)
+        Self::assemble(id, frame.subject, verb, actor, at, reason, frame.book)
     }
 
     /// A deprecation.
@@ -147,7 +148,7 @@ impl Decision {
         reason: Option<NonBlank>,
     ) -> Result<Self, DecisionProblem> {
         let verb = DecisionVerb::Deprecate { seen: frame.seen };
-        Self::assemble(id, frame.subject, verb, actor, at, reason)
+        Self::assemble(id, frame.subject, verb, actor, at, reason, frame.book)
     }
 
     /// A retirement.
@@ -159,12 +160,13 @@ impl Decision {
         reason: Option<NonBlank>,
     ) -> Result<Self, DecisionProblem> {
         let verb = DecisionVerb::Retire { seen: frame.seen };
-        Self::assemble(id, frame.subject, verb, actor, at, reason)
+        Self::assemble(id, frame.subject, verb, actor, at, reason, frame.book)
     }
 
     /// The one place the invariants of a decision are checked (the expiry's by
     /// [`DecisionProblem::expires_after`]): every constructor and the reader of the canonical form go
-    /// through it.
+    /// through it. `book` is the book of the subject the record names (its key `book`),
+    /// when it names one.
     pub(super) fn assemble(
         id: JudgementId,
         subject: DocId,
@@ -172,6 +174,7 @@ impl Decision {
         actor: Actor,
         at: JudgedAt,
         reason: Option<NonBlank>,
+        book: Option<BookName>,
     ) -> Result<Self, DecisionProblem> {
         if let DecisionVerb::Approve {
             frame,
@@ -210,6 +213,7 @@ impl Decision {
             actor,
             at,
             reason,
+            book,
         })
     }
 
@@ -241,6 +245,13 @@ impl Decision {
     /// Why, as it was given, if it was.
     pub fn reason(&self) -> Option<&NonBlank> {
         self.reason.as_ref()
+    }
+
+    /// The book its document was in when it was made, as the record names it (its
+    /// key `book`): none for a record made before records named one, or of a
+    /// document whose book the shelf could not tell. Only who may decide reads it.
+    pub fn book(&self) -> Option<&BookName> {
+        self.book.as_ref()
     }
 }
 

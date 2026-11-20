@@ -13,7 +13,7 @@ use whyshelf_core::domain::shelf::artifact::{
 use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
 use whyshelf_core::domain::shelf::freshness::assess;
 use whyshelf_core::domain::shelf::ledger::{
-    Decision, JudgedAt, JudgementId, Ledger, frame_approve,
+    Admit, Decision, JudgedAt, JudgementId, Ledger, frame_approve,
 };
 use whyshelf_core::domain::shelf::schema::{
     BookSchemaDecl, Cardinality, CompareDecl, FieldEntryDecl, FieldPresence, FieldTypeDecl,
@@ -106,18 +106,21 @@ fn shelf(schema: &Schema, bytes: &[u8]) -> Shelf {
 /// The ledger that approves SP-1 on `shelf`.
 fn approved(shelf: &Shelf) -> Ledger {
     let id = DocId::new(eid(1));
-    let frame = frame_approve(shelf, &Ledger::build(Vec::new()), id).unwrap();
-    Ledger::build(vec![Record::Decision(
-        Decision::approve(
-            JudgementId::new(eid(10)),
-            frame,
-            None,
-            Actor::new("tester").unwrap(),
-            JudgedAt::new(10),
-            None,
-        )
-        .unwrap(),
-    )])
+    let frame = frame_approve(shelf, &Ledger::build(Vec::new(), &Admit::unruled()), id).unwrap();
+    Ledger::build(
+        vec![Record::Decision(
+            Decision::approve(
+                JudgementId::new(eid(10)),
+                frame,
+                None,
+                Actor::new("tester").unwrap(),
+                JudgedAt::new(10),
+                None,
+            )
+            .unwrap(),
+        )],
+        &Admit::unruled(),
+    )
 }
 
 const THEN: &[u8] = b"assert!(fast);\n";

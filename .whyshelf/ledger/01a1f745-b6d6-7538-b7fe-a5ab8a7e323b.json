@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2e8ae01fff885b856d85e263d367e6061cdde083",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c179349b0ecf6e76e497108d64ba172b1ebc806be5d84b04853db8ed457f02a4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b477824f027d5c12b6d4982450f3458f282c7f61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ade3237bc3b00612988868b792584abd00c515c38fb9b3a4ddbec379098a296",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ddac657b30a358317a5a95a8846dcf0a61bc26cf",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fce2d89c83cd4e6249fa06dca9539afb4a6270ba806b2d6feeeaf0769b5ad939",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7bbfeb560c708d2332037c3c673f81031f030e54",
+      "hash": "sha256:014c638e8680d3ed28b9be79f3adecede14178e1e68714b68e212c55cece2dfc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "11"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-11d9-7657-8910-6240e23765d9"
+    }
+  ],
+  "id": "01a1f745-b6d6-7538-b7fe-a5ab8a7e323b",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:552c5cbdeffde9917d43abfaa8b60fbe297380ecbed886e4b97da0a06c2ebc07",
+  "seen_address": "79a591912f2c1ec455a73bc27f8af837e8982558",
+  "subject": "01a1c4ba-15af-74cf-8ea9-0f39eda83aa0",
+  "v": 1,
+  "verb": "approve"
+}

@@ -6,8 +6,11 @@
 //!                                                     hash an approval pinned), or a
 //!                                                     SameMeaningRefusal
 //!   + time, actor, new id, reason
-//!                     ---- SameMeaning::new --------> a Record
-//!   record            ---- RunWrites::record -------> the ledger (create-only), every
+//!                     ---- SameMeaning::new,
+//!                          in_book ----------------> a Record, naming its document's book
+//!   record            ---- Ledger::accept ---------> admitted by who may decide, or
+//!                                                     NotAdmitted
+//!   admitted          ---- RunWrites::record -------> the ledger (create-only), every
 //!                                                     record put on disk once, at the end
 //! ```
 //!
@@ -22,7 +25,7 @@ use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{ArtifactKey, ArtifactName};
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::ledger::{
-    Ledger, Record, SameMeaning, SameMeaningOf, SameMeaningTarget, frame_same_meaning,
+    Record, SameMeaning, SameMeaningOf, SameMeaningTarget, frame_same_meaning,
 };
 use crate::domain::shelf::lookup::Reference;
 
@@ -31,7 +34,6 @@ use super::error::ShelfError;
 use super::load::{Loaded, load};
 use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
-use super::run_writes::RunWrites;
 
 /// What a declaration is to be about, as the person names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,21 +101,13 @@ impl<P: ShelfWrite> ShelfApp<P> {
         }
         let mut loaded = load(&self.ports).await?;
         let mut declared = Vec::with_capacity(requests.len());
+        let mut admitted = Vec::with_capacity(requests.len());
         for request in requests {
             let one = self.declare(&loaded, request).await?;
-            loaded.records.push(one.record.clone());
-            loaded.ledger = Ledger::build(loaded.records.clone());
+            admitted.push(loaded.take(one.record.clone())?);
             declared.push(one);
         }
-        RunWrites::run(&self.ports, |writes| {
-            Box::pin(async {
-                for one in &declared {
-                    writes.record(&one.record).await?;
-                }
-                Ok(())
-            })
-        })
-        .await?;
+        self.write(&admitted).await?;
         Ok(declared)
     }
 
@@ -155,8 +149,9 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .new_judgement_id()
             .await
             .map_err(port(ShelfPort::Ids))?;
-        let record =
-            Record::SameMeaning(SameMeaning::new(id, of, actor, loaded.now, request.reason)?);
+        let record = Record::SameMeaning(
+            SameMeaning::new(id, of, actor, loaded.now, request.reason)?.in_book(&loaded.shelf),
+        );
         Ok(Declared { record, about })
     }
 }

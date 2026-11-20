@@ -142,6 +142,7 @@ fn a_record_of_the_first_version_reads_back_unchanged() {
 
 #[test]
 fn an_approval_without_artifacts_or_addresses_has_the_first_form() {
+    // A project that declares no rule of who may decide names no book.
     let s = shelf(vec![fr(1, &[])]);
     let canon = approve(&s, &ledger(vec![]), 1, 1001, 10, None).to_canon();
     let keys: Vec<&str> = map_of(&canon).keys().map(String::as_str).collect();

@@ -69,7 +69,7 @@ use std::pin::Pin;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::build::NewDoc;
-use crate::domain::shelf::ledger::Record;
+use crate::domain::shelf::ledger::AdmittedRecord;
 
 use super::error::{PersistProblem, ShelfError};
 use super::new_doc::Created;
@@ -211,8 +211,11 @@ impl<'p, P: ShelfWrite> RunWrites<'p, P> {
     /// Write a record of the ledger, create-only, at the path the ledger gives: a
     /// record already there is the ledger's error, not a [`Wrote::AlreadyThere`], and
     /// stops the run like any other failure of the write, at the file it was for
-    /// ([`LedgerAppend::path_of`]).
-    pub(super) async fn record(&mut self, record: &Record) -> Result<(), Stop> {
+    /// ([`LedgerAppend::path_of`]). Only a record the rules of who may decide admit
+    /// is written: the one way to one is [`Ledger::accept`].
+    ///
+    /// [`Ledger::accept`]: crate::domain::shelf::ledger::Ledger::accept
+    pub(super) async fn record(&mut self, record: &AdmittedRecord) -> Result<(), Stop> {
         let ledger = self.ports.append();
         match ledger.append(record).await {
             Ok(file) => {
@@ -220,7 +223,7 @@ impl<'p, P: ShelfWrite> RunWrites<'p, P> {
                 Ok(())
             }
             Err(source) => Err(Stop {
-                failed: ledger.path_of(record),
+                failed: ledger.path_of(record.record()),
                 cause: port(ShelfPort::LedgerAppend)(source),
             }),
         }

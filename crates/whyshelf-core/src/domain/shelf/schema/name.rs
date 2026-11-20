@@ -1,5 +1,6 @@
-//! The names a declaration gives: of a book, a field or a link, an enum word and a
-//! preset ([`BookName`], [`EntryName`], [`FieldWord`], [`PresetName`]), with the one
+//! The names a declaration gives: of a book, a field or a link, an enum word, a
+//! preset and a group ([`BookName`], [`EntryName`], [`FieldWord`], [`PresetName`],
+//! [`GroupName`]), with the one
 //! grammar of names they share, the directory of a book ([`BookDir`]) and what a book
 //! is for ([`BookDescription`]).
 
@@ -139,6 +140,12 @@ name_type!(
     /// The name of a preset of links to artifacts ([`expand`](super::expand)): the grammar of
     /// [`BookName`].
     PresetName,
+    reserved = false
+);
+name_type!(
+    /// The name of a group of actors ([`Group`](super::Group)): the grammar of
+    /// [`BookName`].
+    GroupName,
     reserved = false
 );
 

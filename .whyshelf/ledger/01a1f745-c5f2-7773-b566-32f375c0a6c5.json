@@ -1,0 +1,139 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7d8b65a4dc7868d6aed2f5cf95b87a9d2ca12bb7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c588f5b35398ba49efbe72e22486114b76a783552c1f641ac163623084ec159",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "512cc58ee31a36a2f7784cf1a27d5da51469341f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b67e44743e71e27ea589c678675b57015868f74449559a1f6e17496d1d94b2aa",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f65d39489a1eec371133be615346bf7f621d2633",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:864085be9311ee2378d1dafaffbd76001ed011136dee8b62b4b51398cbfb1ebd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a223b53a305d2ba82b80518450bc8769c9255864",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d654c1aa4f9562ae579c794929b16f6d05bae3df4a35a4c3df88c79300b6721c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2ccc124c8f6ee3c4f8f7a71eccb5c4c3036b4352",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6f1285300486f4ef7515f87f5dadca1fa9915d36cf23404d48bb53ecca14f19a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d1d881bcfe383a435dc95a44292907393ab16dbc",
+      "hash": "sha256:b0d7183d426e1c555cd1199b5ace3d0a55ce10fd6f4a7b4d8cf1fa9ffd2e9c12",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "b2658e3ea467b40ba29fb5f907ece7c9fffb8c1b",
+      "hash": "sha256:4801f4277e4358483975f11c893726ace7decb09a0fc761397164c782163738e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ce54-705b-a4fb-17382395564a"
+    },
+    {
+      "address": "70a5dd9de54859341dbb149ca40373305205c37d",
+      "hash": "sha256:cd35831f4a42399efcdeb7bd78922f5392b0d77c54ab52fe052d07d73e6453b5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a1f745-c5f2-7773-b566-32f375c0a6c5",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:d62fa60dd298e63c294806ae4a292703e599438d10324162c2b31b39e5b73ffd",
+  "seen_address": "34f9a655305375885329cdbacec1b1458349b989",
+  "subject": "01a1c4ba-19a6-76f9-a7c1-40f9f8460ecf",
+  "v": 1,
+  "verb": "approve"
+}

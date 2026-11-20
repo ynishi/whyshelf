@@ -26,7 +26,8 @@ use super::artifact::{
 };
 use super::build::{DocReading, RawValue, Shelf};
 use super::ledger::{
-    Decision, JudgedAt, JudgementId, Ledger, Record, frame_approve, frame_present, frame_retire,
+    Admit, Decision, JudgedAt, JudgementId, Ledger, Record, frame_approve, frame_present,
+    frame_retire,
 };
 use super::schema::{
     BookSchemaDecl, Cardinality, CompareDecl, FieldEntryDecl, FieldPresence, FieldTypeDecl,
@@ -319,8 +320,10 @@ pub(super) fn shelf_reading(
     Shelf::build(schema, readings, &found)
 }
 
+/// The ledger of `records`, read as a project that declares no rule of who may
+/// decide reads it.
 pub(super) fn ledger(records: Vec<Record>) -> Ledger {
-    Ledger::build(records)
+    Ledger::build(records, &Admit::unruled())
 }
 
 /// An approval of `subject` (a small number) that the shelf's frame allows.
@@ -351,10 +354,10 @@ pub(super) fn approve(
 pub(super) fn approved(shelf: &Shelf, subjects: &[u128]) -> Ledger {
     let mut records = Vec::new();
     for subject in subjects {
-        let so_far = Ledger::build(records.clone());
+        let so_far = ledger(records.clone());
         records.push(approve(shelf, &so_far, *subject, 1000 + subject, 10, None));
     }
-    Ledger::build(records)
+    ledger(records)
 }
 
 pub(super) fn deny(shelf: &Shelf, subject: u128, judgement: u128, at: i64) -> Record {

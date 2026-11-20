@@ -18,9 +18,10 @@
 //!        v                                            v  ArtifactReadings
 //!   Shelf::build <------------------------------------+
 //!        |
-//!        +---------------+
+//!        +---------------+--> Admit::of (who may decide, the book of each document)
+//!                        |        |
 //!                        +--> Loaded --assess--> Assessment --> View --> reports
-//!   LedgerRead -> Ledger::build
+//!   LedgerRead -> Ledger::build <-+
 //!   Clock ---------------------------------------^ (now)
 //!
 //!   (no name written in a link to artifacts: the ArtifactSource is not asked to resolve)
@@ -31,7 +32,7 @@ use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::Shelf;
 use crate::domain::shelf::freshness::{Assessment, assess};
-use crate::domain::shelf::ledger::{JudgedAt, Ledger, Record};
+use crate::domain::shelf::ledger::{Admit, AdmittedRecord, JudgedAt, Ledger, Record};
 use crate::domain::shelf::schema::{Schema, SchemaProblem};
 
 use super::error::ShelfError;
@@ -46,6 +47,8 @@ use super::report::{Health, Names, Row};
 pub(super) struct Loaded {
     pub(super) shelf: Shelf,
     pub(super) ledger: Ledger,
+    /// What the ledger was read with of who may decide, and is built again with.
+    admit: Admit,
     /// The records the ledger was built from, so that a run of judgements can build it
     /// again with the ones it adds.
     pub(super) records: Vec<Record>,
@@ -110,11 +113,13 @@ pub(super) async fn load_with<P: ShelfRead>(
         .read()
         .await
         .map_err(port(ShelfPort::LedgerRead))?;
-    let ledger = Ledger::build(contents.records.clone());
+    let admit = Admit::of(&shelf);
+    let ledger = Ledger::build(contents.records.clone(), &admit);
     let now = ports.clock().now().await.map_err(port(ShelfPort::Clock))?;
     Ok(Loaded {
         shelf,
         ledger,
+        admit,
         records: contents.records,
         unreadable: contents.unreadable,
         artifacts,
@@ -123,6 +128,20 @@ pub(super) async fn load_with<P: ShelfRead>(
 }
 
 impl Loaded {
+    /// `record`, accepted on the ledger as the run has left it ([`Ledger::accept`]),
+    /// and taken into the reading, so that the next record of the run is decided and
+    /// accepted on the ledger this one leaves: the one way a use case adds a record it
+    /// writes. A record the rules of who may decide refuse is
+    /// [`ShelfError::NotAdmitted`], and is not taken.
+    // The error is read once and ends the use case; it is not a hot path.
+    #[allow(clippy::result_large_err)]
+    pub(super) fn take(&mut self, record: Record) -> Result<AdmittedRecord, ShelfError> {
+        let admitted = self.ledger.accept(record)?;
+        self.records.push(admitted.record().clone());
+        self.ledger = Ledger::build(self.records.clone(), &self.admit);
+        Ok(admitted)
+    }
+
     /// The freshness of everything, at the time of the load.
     pub(super) fn assess(&self) -> Assessment {
         assess(&self.shelf, &self.ledger, self.now)

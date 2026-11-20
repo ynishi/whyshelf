@@ -49,7 +49,31 @@
 //! [defaults]
 //! artifact = "file"                # the preset of a link to artifacts that names
 //!                                  # neither a preset nor a space; none when not written
+//!
+//! [[group]]                        # optional: names of actors, for who may decide
+//! name = "maintainers"
+//! members = ["ana", { name = "bo", until = "2026-12-01" }]   # also `from`
+//!
+//! [decide]                         # who may decide about the records of no book
+//! default = ["maintainers"]
 //! ```
+//!
+//! and, in a `[[book]]`, who may decide about its documents:
+//!
+//! ```toml
+//! [book.decide]
+//! approve = ["maintainers"]        # any of approve, deny, deprecate, retire, revoke,
+//!                                  # same, exempt, moved
+//! default = ["maintainers"]        # the kinds not named
+//! since = "2026-12-01"             # optional: the records made from then on
+//! ```
+//!
+//! What a group and a rule mean, and that the rule is about the names written, with
+//! no authentication, is on the page of
+//! [`Authority`](whyshelf_core::domain::shelf::schema::Authority)'s module. A time
+//! (`since`, `from`, `until`) is read as a time typed on the command line is
+//! ([`parse_time`]), and one that is neither form is a
+//! failure to read the TOML, as a key a rule does not know is.
 //!
 //! The word `artifact` as a target is read here into
 //! [`LinkTargetDecl::Artifact`]; the domain refuses a book of that name, so the word
@@ -94,13 +118,15 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::create;
+use super::system::parse_time;
 use serde::Deserialize;
 use whyshelf_core::app::shelf::{BookSchemaSource, Creation, DeclarationText, DeclarationWrite};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::schema::{
-    ARTIFACT_TARGET, BookSchemaDecl, CoverDecl, DefaultsDecl, FieldEntryDecl, FieldPresence,
-    FieldTypeDecl, KeyPatternDecl, LinkTargetDecl, PresetDecl, ScopeDecl, ShelfDecl,
-    WrittenBookDecl, WrittenLinkDecl, WrittenPresetValues,
+    ARTIFACT_TARGET, BookRuleDecl, BookSchemaDecl, CoverDecl, DecideDecl, DecideKind, DefaultsDecl,
+    FieldEntryDecl, FieldPresence, FieldTypeDecl, GroupDecl, KeyPatternDecl, LinkTargetDecl,
+    MemberDecl, PresetDecl, RuleDecl, RuleTime, ScopeDecl, ShelfDecl, WrittenBookDecl,
+    WrittenLinkDecl, WrittenPresetValues,
 };
 
 /// Why the declaration of the books could not be read.
@@ -226,14 +252,31 @@ impl BookSchemaSource for BooksToml {
     }
 }
 
-/// The declaration a TOML text holds: its books, presets and defaults, as written.
+/// The declaration a TOML text holds: its books, presets, defaults and who may
+/// decide, as written.
 pub fn parse(text: &str) -> Result<ShelfDecl, toml::de::Error> {
     let file: FileDto = toml::from_str(text)?;
+    let mut rules = Vec::new();
+    let mut books = Vec::with_capacity(file.book.len());
+    for mut book in file.book {
+        if let Some(rule) = book.decide.take() {
+            rules.push(BookRuleDecl {
+                book: book.name.clone(),
+                rule: rule.into_decl(),
+            });
+        }
+        books.push(book.into_decl());
+    }
     Ok(ShelfDecl {
-        books: file.book.into_iter().map(BookDto::into_decl).collect(),
+        books,
         presets: file.preset.into_iter().map(PresetDto::into_decl).collect(),
         defaults: DefaultsDecl {
             artifact: file.defaults.and_then(|d| d.artifact),
+        },
+        decide: DecideDecl {
+            groups: file.group.into_iter().map(GroupDto::into_decl).collect(),
+            shelf: file.decide.map(RuleDto::into_decl),
+            books: rules,
         },
     })
 }
@@ -246,6 +289,133 @@ struct FileDto {
     #[serde(default)]
     preset: Vec<PresetDto>,
     defaults: Option<DefaultsDto>,
+    #[serde(default)]
+    group: Vec<GroupDto>,
+    /// The rule of the records of no book.
+    decide: Option<RuleDto>,
+}
+
+/// A group of actors: a name and its members, each a name or a table with the times
+/// it is in the group.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GroupDto {
+    name: String,
+    members: Vec<MemberDto>,
+}
+
+impl GroupDto {
+    fn into_decl(self) -> GroupDecl {
+        GroupDecl {
+            name: self.name,
+            members: self
+                .members
+                .into_iter()
+                .map(|member| match member {
+                    MemberDto::Name(name) => MemberDecl {
+                        name,
+                        from: None,
+                        until: None,
+                    },
+                    MemberDto::Spanned(SpannedDto { name, from, until }) => {
+                        MemberDecl { name, from, until }
+                    }
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(
+    untagged,
+    expecting = "a member is a name, or a table { name, from, until } whose times are RFC 3339 with an offset or `Z`, or a date `YYYY-MM-DD`"
+)]
+enum MemberDto {
+    Name(String),
+    Spanned(SpannedDto),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SpannedDto {
+    name: String,
+    #[serde(default, deserialize_with = "time")]
+    from: Option<RuleTime>,
+    #[serde(default, deserialize_with = "time")]
+    until: Option<RuleTime>,
+}
+
+/// A rule of who may decide: the groups of each kind of judgement it names, of the
+/// kinds it does not, and from when it reads records. A key that names no kind is
+/// refused here.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RuleDto {
+    approve: Option<Vec<String>>,
+    deny: Option<Vec<String>>,
+    deprecate: Option<Vec<String>>,
+    retire: Option<Vec<String>>,
+    revoke: Option<Vec<String>>,
+    same: Option<Vec<String>>,
+    exempt: Option<Vec<String>>,
+    moved: Option<Vec<String>>,
+    default: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "time")]
+    since: Option<RuleTime>,
+}
+
+impl RuleDto {
+    fn into_decl(self) -> RuleDecl {
+        let kinds = [
+            (DecideKind::Approve, self.approve),
+            (DecideKind::Deny, self.deny),
+            (DecideKind::Deprecate, self.deprecate),
+            (DecideKind::Retire, self.retire),
+            (DecideKind::Revoke, self.revoke),
+            (DecideKind::Same, self.same),
+            (DecideKind::Exempt, self.exempt),
+            (DecideKind::Moved, self.moved),
+        ];
+        RuleDecl {
+            kinds: kinds
+                .into_iter()
+                .filter_map(|(kind, groups)| groups.map(|groups| (kind, groups)))
+                .collect(),
+            default: self.default,
+            since: self.since,
+        }
+    }
+}
+
+/// A time of a rule as written: a string, or a TOML date or date-time, which is
+/// read as its text.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum TimeDto {
+    Text(String),
+    Toml(toml::value::Datetime),
+}
+
+/// A time of a rule, read as a time typed on the command line is
+/// ([`parse_time`]), whether quoted or a TOML date (`since = 2026-12-01`); one that
+/// is neither form (a date-time with no offset, say) is a failure to read the TOML.
+fn time<'de, D>(deserializer: D) -> Result<Option<RuleTime>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let written: Option<TimeDto> = Option::deserialize(deserializer)?;
+    written
+        .map(|written| {
+            let text = match written {
+                TimeDto::Text(text) => text,
+                TimeDto::Toml(at) => at.to_string(),
+            };
+            parse_time(&text)
+                .map(|at| RuleTime::from_millis(at.millis()))
+                .map_err(serde::de::Error::custom)
+        })
+        .transpose()
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,6 +476,8 @@ struct BookDto {
     field: Vec<FieldDto>,
     #[serde(default)]
     link: Vec<LinkDto>,
+    /// Who may decide about the documents of the book.
+    decide: Option<RuleDto>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -842,6 +1014,90 @@ means = "informs"
             SchemaProblem::BadDescription { .. }
         ));
         assert!(parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\ndescription=1\n").is_err());
+    }
+
+    #[test]
+    fn who_may_decide_is_read_into_the_authority_of_the_schema() {
+        let decls = parse(
+            "[[group]]\nname='maintainers'\nmembers=['ana', {name='bo', until='2026-12-01'}]\n\
+             [decide]\ndefault=['maintainers']\n\
+             [[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [book.decide]\napprove=['maintainers']\nsince='2026-11-11'\n",
+        )
+        .unwrap();
+        assert_eq!(decls.decide.groups[0].members[1].name, "bo");
+        assert!(decls.decide.groups[0].members[1].until.is_some());
+        assert_eq!(decls.decide.books[0].book, "a");
+        assert_eq!(
+            decls.decide.books[0].rule.since.map(|t| t.millis()),
+            Some(1_794_355_200_000)
+        );
+        let schema = validate(decls).unwrap();
+        let authority = schema.authority();
+        assert!(!authority.is_unruled());
+        let book = schema.book("a").unwrap().name().clone();
+        let rule = authority.rule_of(Some(&book)).unwrap();
+        assert!(rule.named(DecideKind::Approve).is_some());
+        assert!(authority.rule_of(None).is_some());
+        // A project that declares none is unruled.
+        let plain = validate(parse("[[book]]\nname='a'\ndir='a'\nkey='slug'\n").unwrap()).unwrap();
+        assert!(plain.authority().is_unruled());
+    }
+
+    #[test]
+    fn a_time_of_a_rule_may_be_a_toml_date_but_not_one_with_no_offset() {
+        let rule = |since: &str| {
+            parse(&format!(
+                "[[group]]\nname='m'\nmembers=['ana']\n[decide]\ndefault=['m']\nsince={since}\n"
+            ))
+        };
+        let quoted = rule("'2026-11-11'").unwrap();
+        let date = rule("2026-11-11").unwrap();
+        let instant = rule("2026-11-11T00:00:00Z").unwrap();
+        let millis = |d: &ShelfDecl| {
+            d.decide
+                .shelf
+                .as_ref()
+                .and_then(|r| r.since)
+                .map(|t| t.millis())
+        };
+        assert_eq!(millis(&quoted), Some(1_794_355_200_000));
+        assert_eq!(millis(&date), millis(&quoted));
+        assert_eq!(millis(&instant), millis(&quoted));
+        assert!(rule("2026-11-11T00:00:00").is_err());
+    }
+
+    #[test]
+    fn a_rule_of_who_may_decide_that_cannot_be_used_is_a_problem_of_the_declaration() {
+        let decls = parse(
+            "[[group]]\nname='empty'\nmembers=[]\n\
+             [[group]]\nname='late'\nmembers=[{name='ana', from='2026-12-01', until='2026-11-01'}]\n\
+             [[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [book.decide]\napprove=['nobody']\ndeny=[]\n",
+        )
+        .unwrap();
+        let problems: Vec<String> = validate(decls)
+            .unwrap_err()
+            .into_vec()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            problems,
+            [
+                "the group `empty` has no member",
+                "the group `late`: the `from` of `ana` is not before its `until`",
+                "book `a`: `[book.decide]` names the group `nobody`, which is not declared",
+                "book `a`: `[book.decide]`: `deny` names no group",
+                "a book declares who may decide, and `[decide]` does not: the records of no \
+                 book (a move, the same meaning of an artifact) and those whose book cannot be \
+                 told would escape every rule",
+            ]
+        );
+        // A time that is neither form, and a kind no rule has, are failures to read the
+        // TOML.
+        assert!(parse("[decide]\nsince='soon'\n").is_err());
+        assert!(parse("[decide]\nread=['a']\n").is_err());
     }
 
     #[test]

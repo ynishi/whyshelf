@@ -1,0 +1,80 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "73080a658ef3eb790a48a32f3ba1abdfd8bfad30",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:17d531319fc0483e73e0204db808f37dc6a3b01aec4b1fae170cca5e6225667b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/absent_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2963a0437157c1de6320d814f3f2bc83a53c31be",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6dbce57f4bb70f19e799d0b75cc7b18f5a6c4204f33d1abe7de2b45db6246aa6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11891129d27429b1a8097e576d0f157c6b3cd482",
+      "hash": "sha256:11cccbc99d5bcad0b080459ad707cac5bce11386aecf2af95545c684c1ce5a1a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-778a-7288-ae20-3289a8a7a718"
+    },
+    {
+      "address": "d7a292650bcffaef1d0c947abe40235c719878dc",
+      "hash": "sha256:c03e03305a381cb0aae097cab40d04c7bfd71505936711141eaa0c160fa3ff01",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "43"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-7849-7632-b126-5a6b72f508b0"
+    }
+  ],
+  "id": "01a1f745-cf43-75f3-96e0-26a7322c1ce0",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:313904c8338a9ea385badc4a85aeadd2b8aa234c91bf78d33bc16ddd7942b4f2",
+  "seen_address": "594af04e9e0bc168ec244f93e6e183bc2b041094",
+  "subject": "01a1c5c5-790a-74a0-9dad-6cfab3896b88",
+  "v": 1,
+  "verb": "approve"
+}

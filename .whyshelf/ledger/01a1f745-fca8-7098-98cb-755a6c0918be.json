@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "93c981eb1ae0162f77e2311dd53b77452d871b36",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2c19c3a996d5601673f335c54ac8abf9c34047db7b620968e643499a3b578168",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/decide.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9ace93bd6fff1be46a68ad5b488ded85fa507d0e",
+      "hash": "sha256:6599ee1d0b6414293d727c077a050734aa210b98e3b0fb8e0b64a6823ee85138",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "88"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c41-7b18-8d07-3f9a5e2b6c40"
+    }
+  ],
+  "id": "01a1f745-fca8-7098-98cb-755a6c0918be",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:f7cde4ba49a9a7995d8a45e467492d50641e4f5a5590d19be124117404f83678",
+  "seen_address": "6dd362b1a6c3f477f6361e10b1d3c1d70510f778",
+  "subject": "01a1f6a0-2c41-7c62-a4e9-1b7d8c3f0e52",
+  "v": 1,
+  "verb": "approve"
+}

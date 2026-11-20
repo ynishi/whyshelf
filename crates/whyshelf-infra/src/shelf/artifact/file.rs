@@ -1841,12 +1841,15 @@ mod tests {
     async fn gone_at(root: &std::path::Path) -> Vec<GoneName> {
         use whyshelf_core::app::shelf::LedgerRead;
         use whyshelf_core::domain::shelf::artifact::ArtifactReadings;
-        use whyshelf_core::domain::shelf::ledger::{Ledger, PinnedNames};
+        use whyshelf_core::domain::shelf::ledger::{Admit, Ledger, PinnedNames};
         let ledger = super::super::super::ledger::JsonLedger::new(
             root.join(".whyshelf/ledger"),
             ".whyshelf/ledger".parse().unwrap(),
         );
-        let pinned = PinnedNames::of(&Ledger::build(ledger.read().await.unwrap().records));
+        let pinned = PinnedNames::of(&Ledger::build(
+            ledger.read().await.unwrap().records,
+            &Admit::unruled(),
+        ));
         let source = FileSpace::new(root.to_path_buf());
         let mut readings = ArtifactReadings::new();
         for (space, names) in pinned.asks().spaces() {

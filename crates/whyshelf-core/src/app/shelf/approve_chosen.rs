@@ -13,6 +13,7 @@
 //!        frame_approve refuses ─────────────────────────► left out (Refused)
 //!        would repeat the actor's own reading ──────────► left out (Repeats)
 //!        would be another actor's second reading ───────► left out (SecondReading)
+//!        the actor may not approve in its book ─────────► left out (NotAdmitted)
 //!        otherwise decided, on the ledger the ones before it left
 //!   every one decided ──► written, all together
 //! ```
@@ -37,7 +38,11 @@
 //! again, taken by another actor's run, is left out so. An expired approval is not:
 //! anyone's approval of it approves it again ([`ApprovalKind::Renewal`]).
 //! Such a document stands, so it holds back nothing on it; whether a run leaves it
-//! out is the domain's ([`ApprovalKind::left_out`]). Each is left out with why, never
+//! out is the domain's ([`ApprovalKind::left_out`]). Nor is an approval the rules of
+//! who may decide do not admit for the actor in the document's book
+//! ([`Ledger::accept`]): the run still approves the others, and exits as it would
+//! (a named `judge approve` is refused instead), and what stands on it is held back.
+//! Each is left out with why, never
 //! passed over in silence. What neither rule takes is not touched: `--stale` alone
 //! touches no pending document, and `--pending` alone approves nothing again.
 //!
@@ -72,6 +77,7 @@
 //! [`ApprovalKind::SecondReading`]: crate::domain::shelf::ledger::ApprovalKind::SecondReading
 //! [`ApprovalKind::left_out`]: crate::domain::shelf::ledger::ApprovalKind::left_out
 //! [`Ledger::kind_of`]: crate::domain::shelf::ledger::Ledger::kind_of
+//! [`Ledger::accept`]: crate::domain::shelf::ledger::Ledger::accept
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -86,7 +92,7 @@ use crate::domain::shelf::order::{
 
 use super::ShelfApp;
 use super::error::ShelfError;
-use super::judge::{Decided, JudgeRequest, Judgement, expires_after_now, taken};
+use super::judge::{Decided, JudgeRequest, Judgement, expires_after_now};
 use super::load::load;
 use super::ports::ShelfWrite;
 use super::read::identity;
@@ -285,6 +291,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         // `kind_of` already read.
         let mut now = assessment;
         let mut judged: Vec<ChosenJudged> = Vec::new();
+        let mut admitted = Vec::new();
         for (id, rule) in order {
             // An upstream left out because an approval would repeat a reading, or be
             // a second one, stands, and holds nothing back: what stands on it is
@@ -331,11 +338,19 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 )
                 .await;
             match decided {
-                Ok(Decided::Judged(one)) => {
-                    taken(&mut loaded, &one);
-                    now = loaded.assess();
-                    judged.push(ChosenJudged { rule, judged: one });
-                }
+                Ok(Decided::Judged(one)) => match loaded.take(one.record.clone()) {
+                    Ok(record) => {
+                        now = loaded.assess();
+                        admitted.push(record);
+                        judged.push(ChosenJudged { rule, judged: one });
+                    }
+                    // The actor may not approve in the document's book: the others are
+                    // approved, and what stands on it is held back.
+                    Err(ShelfError::NotAdmitted(not)) => {
+                        left_out.push(leave(LeftOutWhy::NotAdmitted(not)));
+                    }
+                    Err(other) => return Err(other),
+                },
                 // A candidate whose approval now would repeat the actor's own reading
                 // (stale only through its upstream's upstream, whose hash is new,
                 // when this run approved its upstream again on the same hash), or be
@@ -347,7 +362,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 Err(other) => return Err(other),
             }
         }
-        self.write(judged.iter().map(|one| &one.judged)).await?;
+        self.write(&admitted).await?;
         left_out.sort_by_key(|l| l.left.doc);
         Ok(ChosenApproved {
             judged,
