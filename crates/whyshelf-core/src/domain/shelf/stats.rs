@@ -13,8 +13,14 @@
 //! are counted apart as well. The approvals of a document are taken in the order
 //! [`Ledger::standing_decision`] reads them, by time and then by identity. A revoked
 //! approval never made the document approved: an approval is *again* when an earlier
-//! approval of the same document is in the ledger and is not revoked, and the
-//! approval it is *made again from* is the latest such one.
+//! approval of the same document is in the ledger and is not revoked, and it is no
+//! second reading ([`ApprovalKind::SecondReading`], asked of the ledger before it):
+//! another actor's approval of the content that stood, with its expiry, before it
+//! lapsed, changed nothing freshness reads, and is counted
+//! as an approval and in its run, not as one made again. The approval it is *made
+//! again from* is the latest earlier one that is not revoked. So a ledger written
+//! before second readings were written may answer fewer approvals made again: one
+//! made with `--again` by another actor is a second reading.
 //!
 //! - **Approvals** ([`Approvals`]): per document, the number of its approvals, how
 //!   many of them are again, and how many are revoked; per book, the totals.
@@ -83,7 +89,7 @@ use crate::domain::id::DocId;
 use super::artifact::{ArtifactKey, ArtifactState, Comparison};
 use super::build::Shelf;
 use super::doc::{DocHash, DocKey};
-use super::ledger::{Decision, DecisionVerb, JudgedAt, Ledger};
+use super::ledger::{ApprovalKind, Asked, Before, Decision, DecisionVerb, JudgedAt, Ledger};
 use super::schema::BookName;
 
 /// How many of the largest runs [`Runs::largest`] lists.
@@ -120,7 +126,8 @@ pub struct DocApprovals {
     pub key: Option<DocKey>,
     /// How many approvals of it there are, revoked or not.
     pub approvals: usize,
-    /// How many of them came after an earlier approval of it that is not revoked.
+    /// How many of them came after an earlier approval of it that is not revoked, and
+    /// are no second reading (see the module page).
     pub again: usize,
     /// How many of them are revoked.
     pub revoked: usize,
@@ -266,7 +273,9 @@ pub fn of(ledger: &Ledger, shelf: &Shelf, since: Option<JudgedAt>) -> Stats {
                 if revoked {
                     counted.revoked += 1;
                 }
-                if let Some(before) = standing {
+                if let Some(before) = standing
+                    && !second_reading(ledger, approval)
+                {
                     counted.again += 1;
                     for origin in changed_pins(before, approval) {
                         *origins.entry(origin).or_default() += 1;
@@ -373,6 +382,17 @@ pub fn of(ledger: &Ledger, shelf: &Shelf, since: Option<JudgedAt>) -> Stats {
         runs: Runs { sizes, largest },
         origins,
     }
+}
+
+/// Whether the approval `approval` was a second reading, asked of the ledger as it was
+/// before it ([`Ledger::kind_of`]).
+fn second_reading(ledger: &Ledger, approval: &Decision) -> bool {
+    Asked::decision(approval).is_some_and(|asked| {
+        matches!(
+            ledger.kind_of(&asked, Before::decision(approval)),
+            ApprovalKind::SecondReading { .. }
+        )
+    })
 }
 
 /// What a changed pin names, before it is named.

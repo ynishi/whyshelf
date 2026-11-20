@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795144143635,
+  "expires": null,
+  "frame": [],
+  "id": "01a1f6ed-dce5-769f-af28-ac7b446d611c",
+  "kind": "decision",
+  "reason": "Second readings (#114 stage R): the books say the rule of Ledger::kind_of as built; V-33, V-34, V-36, V-48, V-60 and V-61 re-read and still true; blind review over three rounds, its findings fixed",
+  "revision": "e45695b9f288728a2283490f8ec4c6ea1722e4e6",
+  "seen": "sha256:8c398025fb7334d3118b9951e88117e57c1267d89d397dfebdd45f51573c75f1",
+  "seen_address": "34bfec41a835118e265c27083b0e034bf7e795ef",
+  "subject": "01a1c8cf-da4d-771d-9241-c0c21d994cfb",
+  "v": 1,
+  "verb": "approve"
+}

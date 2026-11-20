@@ -8,10 +8,11 @@
 //!     --stale:   stale ──► expired or stale ─────────┐   broken ──► left out (Broken)
 //!     --pending: pending, or pending_upstream ───────┤
 //!                                                    ▼
-//!     upstream_first ──► one at a time:
+//!     the actor, asked once ──► upstream_first ──► one at a time:
 //!        held_back by an upstream, as the run left it ──► left out (StandsOn)
 //!        frame_approve refuses ─────────────────────────► left out (Refused)
-//!        would repeat the approval that stands ─────────► left out (Repeats)
+//!        would repeat the actor's own reading ──────────► left out (Repeats)
+//!        would be another actor's second reading ───────► left out (SecondReading)
 //!        otherwise decided, on the ledger the ones before it left
 //!   every one decided ──► written, all together
 //! ```
@@ -25,13 +26,24 @@
 //! gone, an upstream that is not valid, a cycle). Nor is one whose frame the model
 //! refuses now, nor one a `Depends` link of which names a document that is broken,
 //! pending or stale and not in the run (approve it first), or itself left out for any
-//! reason but a repeat ([`held_back`]). Nor is one stale only through its upstream's
-//! upstream, whose hash is new, when the run approved its upstream again: what it
-//! pinned is unchanged, so an approval now would repeat it ([`repeated`]), and it
-//! holds again without one. Such a repeat stands, so it holds back nothing on it. Each
-//! is left out with why, never passed over in silence. What neither rule takes is
-//! not touched: `--stale` alone touches no pending document, and `--pending` alone
-//! approves nothing again.
+//! reason but a repeat or a second reading ([`held_back`]). Nor is one stale only
+//! through its upstream's upstream, whose hash is new, when the run approved its
+//! upstream again: what it pinned is unchanged, so an approval now would repeat it
+//! ([`ApprovalKind::Repeat`]), and it holds again without one. Nor is an approval of
+//! the content that stands by an actor who has not read it
+//! ([`ApprovalKind::SecondReading`]): the run chose the document by a rule and did
+//! not read it, so it writes no second reading (one is said by naming the document,
+//! with `judge approve <ref>`); one stale only through an upstream the run approved
+//! again, taken by another actor's run, is left out so. An expired approval is not:
+//! anyone's approval of it approves it again ([`ApprovalKind::Renewal`]).
+//! Such a document stands, so it holds back nothing on it; whether a run leaves it
+//! out is the domain's ([`ApprovalKind::left_out`]). Each is left out with why, never
+//! passed over in silence. What neither rule takes is not touched: `--stale` alone
+//! touches no pending document, and `--pending` alone approves nothing again.
+//!
+//! The actor is asked once, after what the run is asked is checked and before any
+//! document is decided, even when nothing is taken: what an approval is depends on
+//! who makes it.
 //!
 //! The documents are taken upstream first ([`upstream_first`]), so every upstream of
 //! the set is decided, or left out, before what stands on it, and one pass is the
@@ -41,8 +53,8 @@
 //!
 //! Each document is decided on the ledger the earlier ones of the run left, and so
 //! is what holds it back: after each approval decided, the ledger is built again
-//! with it (as the frame and [`repeated`] read it) and assessed again, by the one
-//! [`assess`](crate::domain::shelf::freshness::assess), so an upstream stale only
+//! with it (as the frame and [`Ledger::kind_of`] read it) and assessed again, by the
+//! one [`assess`](crate::domain::shelf::freshness::assess), so an upstream stale only
 //! through a pending one the run approved holds nothing back. Which documents the
 //! run takes is read once, from the assessment before the run. That costs one
 //! assessment of the whole project per approval made.
@@ -56,14 +68,17 @@
 //! [`pending_upstream`]: crate::domain::shelf::order::pending_upstream
 //! [`upstream_first`]: crate::domain::shelf::order::upstream_first
 //! [`held_back`]: crate::domain::shelf::order::held_back
-//! [`repeated`]: crate::domain::shelf::ledger::repeated
+//! [`ApprovalKind::Repeat`]: crate::domain::shelf::ledger::ApprovalKind::Repeat
+//! [`ApprovalKind::SecondReading`]: crate::domain::shelf::ledger::ApprovalKind::SecondReading
+//! [`ApprovalKind::left_out`]: crate::domain::shelf::ledger::ApprovalKind::left_out
+//! [`Ledger::kind_of`]: crate::domain::shelf::ledger::Ledger::kind_of
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
-use crate::domain::shelf::ledger::{DecisionProblem, JudgedAt};
+use crate::domain::shelf::ledger::{JudgedAt, Taking};
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::{
     Rule, held_back, pending, pending_of, pending_upstream, stale, upstream_first,
@@ -71,7 +86,7 @@ use crate::domain::shelf::order::{
 
 use super::ShelfApp;
 use super::error::ShelfError;
-use super::judge::{Decided, JudgeRequest, Judgement, taken};
+use super::judge::{Decided, JudgeRequest, Judgement, expires_after_now, taken};
 use super::load::load;
 use super::ports::ShelfWrite;
 use super::read::identity;
@@ -195,26 +210,20 @@ impl<P: ShelfWrite> ShelfApp<P> {
     ///
     /// `until` applies to every approval of the run, and must be after now: one that
     /// is not is refused before anything is selected, even when nothing is taken
-    /// ([`DecisionProblem::ExpiresNotAfter`]). Then each reference of the
+    /// ([`DecisionProblem::ExpiresNotAfter`](crate::domain::shelf::ledger::DecisionProblem::ExpiresNotAfter)).
+    /// Then each reference of the
     /// [`PendingScope`] is resolved, and one that names nothing, or a document that is
-    /// not pending ([`ShelfError::NotPending`]), fails the request. Nothing to approve
-    /// is an empty run, which writes nothing. No refusal of a frame fails the run (the
-    /// document is left out); a port that fails, or a decision that breaks an
-    /// invariant, does, and then nothing is written.
+    /// not pending ([`ShelfError::NotPending`]), fails the request. Then the actor is
+    /// asked once (the request's, else the actor port's), and no name fails the run.
+    /// Nothing to approve is an empty run, which writes nothing. No refusal of a
+    /// frame fails the run (the document is left out); a port that fails, or a
+    /// decision that breaks an invariant, does, and then nothing is written.
     pub async fn approve_chosen(
         &mut self,
         request: ApproveChosenRequest,
     ) -> Result<ChosenApproved, ShelfError> {
         let mut loaded = load(&self.ports).await?;
-        if let Some(expires) = request.until
-            && expires <= loaded.now
-        {
-            return Err(DecisionProblem::ExpiresNotAfter {
-                at: loaded.now,
-                expires,
-            }
-            .into());
-        }
+        expires_after_now(&loaded, request.until)?;
         let assessment = loaded.assess();
         let names = loaded.names();
         let key_of = |id: DocId| names.key_of(id).cloned();
@@ -259,6 +268,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
                     }),
             );
         }
+        let actor = match request.actor {
+            Some(actor) => actor,
+            None => self.port_actor().await?,
+        };
         let run: BTreeSet<DocId> = rules.keys().copied().collect();
         // upstream_first orders exactly the members of `run`, the keys of `rules`, so
         // each comes with its rule.
@@ -269,15 +282,21 @@ impl<P: ShelfWrite> ShelfApp<P> {
 
         // Hold-back reads standings as the run has left them: the assessment is made
         // again of the ledger each approval decided leaves, the ledger the frame and
-        // `repeated` already read.
+        // `kind_of` already read.
         let mut now = assessment;
         let mut judged: Vec<ChosenJudged> = Vec::new();
         for (id, rule) in order {
-            // An upstream left out because an approval would repeat its own stands,
-            // and holds nothing back: what stands on it is decided as any other.
+            // An upstream left out because an approval would repeat a reading, or be
+            // a second one, stands, and holds nothing back: what stands on it is
+            // decided as any other.
             let left: BTreeSet<DocId> = left_out
                 .iter()
-                .filter(|l| !matches!(l.left.why, LeftOutWhy::Repeats { .. }))
+                .filter(|l| {
+                    !matches!(
+                        l.left.why,
+                        LeftOutWhy::Repeats { .. } | LeftOutWhy::SecondReading { .. }
+                    )
+                })
                 .map(|l| l.left.doc)
                 .collect();
             let leave = |why: LeftOutWhy| ChosenLeftOut {
@@ -305,8 +324,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
                             again: false,
                         },
                         reference: Reference::Id(id),
-                        actor: request.actor.clone(),
+                        actor: Some(actor.clone()),
                     },
+                    actor.clone(),
+                    Taking::Chosen,
                 )
                 .await;
             match decided {
@@ -315,10 +336,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
                     now = loaded.assess();
                     judged.push(ChosenJudged { rule, judged: one });
                 }
-                // A candidate stale only through its upstream's upstream, whose hash
-                // is new: this run approved its upstream again (on the same hash),
-                // so what its own approval pinned has not changed, one made now
-                // would repeat it, and it holds again without one.
+                // A candidate whose approval now would repeat the actor's own reading
+                // (stale only through its upstream's upstream, whose hash is new,
+                // when this run approved its upstream again on the same hash), or be
+                // another actor's second reading, which a chosen run does not write.
                 Ok(Decided::LeftOut(left)) => left_out.push(ChosenLeftOut { rule, left }),
                 Err(ShelfError::Refused(refusal)) => {
                     left_out.push(leave(LeftOutWhy::Refused(refusal)));

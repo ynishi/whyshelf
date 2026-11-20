@@ -41,4 +41,11 @@ impl JudgedAt {
     pub fn millis(&self) -> i64 {
         self.0
     }
+
+    /// An approval that expires at this time has lapsed by `at`: it lapses at the
+    /// moment itself. The one rule of when an expiry has passed, read by the check of
+    /// a new decision, by freshness and by what a new approval is.
+    pub fn lapsed_by(self, at: JudgedAt) -> bool {
+        self <= at
+    }
 }

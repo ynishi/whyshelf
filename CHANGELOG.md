@@ -125,6 +125,34 @@ and this project adheres to
 
 ### Changed
 
+- Another actor's approval of the content that stands is a second reading, and
+  `judge approve <ref>` writes it in every project; before, it repeated the
+  approval that stands and was left out as `repeats` unless `--again` was given.
+  An approval repeats only when its actor already approved that content and asks
+  for the expiry that reading and the approval that stands both have, which has
+  not passed; once the approval that stands expired, when a new one would
+  make the document expire at another time, or while a declared move reads one
+  of its pins (where a repeat was left out before), anyone's approval of it is
+  an approval made again, `--stale` too. `judge approve --stale` and `--pending` write no
+  second reading: such a document is left out with the reason `second_reading`
+  and the approval that stands, warned of on stderr, and holds back nothing on it.
+  `stats` counts a second reading as an approval and in its run, not as one made
+  again, so a ledger that holds approvals made with `--again` by another actor
+  answers fewer approvals made again. The actor is now asked once per run, after
+  every reference resolves and every expiry is after now and before any document
+  is decided: with no `--actor`, `WHYSHELF_ACTOR` or Git `user.name`, a run of
+  `judge approve` that would only leave out repeats fails (exit 3) where it
+  exited 0, and so does an empty `--stale` or `--pending` run. Every verb of
+  `judge` asks it there, so with no name `judge deny`, `deprecate`, `retire` or
+  `revoke` fails (exit 3) where the document's state would refuse it (a revoke
+  of a pending document exits 2 with a name). In the library,
+  `ledger::repeated` is gone: `Ledger::readers` lists who approved the content
+  that stands (`Readers`), `Ledger::kind_of` tells a new approval apart
+  (`ApprovalKind`: `New`, `SecondReading`, `Repeat`, `Renewal`, asked with
+  `Asked` and `Before`), and `ApprovalKind::left_out` says what a run leaves out
+  by how it took the document (`Taking`, `LeaveOut`); `LeftOutWhy` has
+  `SecondReading`; `JudgedAt::lapsed_by` and `DecisionProblem::expires_after`
+  say once when an expiry has passed (#114).
 - Two adapters that name one space, two built-in presets of one name, a preset
   an adapter offers for another space, or a name of a space that is no space,
   are an error when the project is opened: the command reads nothing and exits

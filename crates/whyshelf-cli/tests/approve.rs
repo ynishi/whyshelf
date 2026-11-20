@@ -1,6 +1,7 @@
 //! `judge approve`, on the binary and a small project of files: the same approval run
 //! twice writes its record once, and the second run lists the document as left out,
 //! `repeats`, with a warning line on stderr and exit 0; `--again` writes it anyway.
+//! Another actor's approval of the same content is a second reading, and is written.
 
 mod common;
 
@@ -58,4 +59,35 @@ fn approving_a_fresh_approval_again_leaves_it_out_and_again_writes_it() {
     // `--again` is not for `--stale`.
     let both = project.run(&["judge", "approve", "--stale", "--again", "--reason", "x"]);
     assert_eq!(both.status.code(), Some(2));
+}
+
+#[test]
+fn another_actors_approval_of_the_same_content_is_written_and_then_repeats() {
+    let project = Project::new("approve-second");
+    let first = project.run(&["judge", "approve", "N-1"]);
+    assert_eq!(first.status.code(), Some(0));
+    assert_eq!(records(&project), 1);
+
+    // A second reading: written, with no warning.
+    let second = project.run(&["judge", "approve", "--actor", "bo", "N-1"]);
+    assert_eq!(second.status.code(), Some(0));
+    assert_eq!(records(&project), 2);
+    let answer = json(&second);
+    assert_eq!(answer["judged"][0]["record"]["actor"], "bo");
+    assert_eq!(answer["left_out"], serde_json::json!([]));
+    assert_eq!(String::from_utf8_lossy(&second.stderr), "");
+    let standing = answer["judged"][0]["record"]["id"]
+        .as_str()
+        .expect("the record's id")
+        .to_owned();
+
+    // Either reader approving it again repeats bo's approval, which stands.
+    for actor in ["tester", "bo"] {
+        let again = project.run(&["judge", "approve", "--actor", actor, "N-1"]);
+        assert_eq!(again.status.code(), Some(0));
+        let answer = json(&again);
+        assert_eq!(answer["left_out"][0]["reason"], "repeats", "{answer}");
+        assert_eq!(answer["left_out"][0]["approval"], standing.as_str());
+    }
+    assert_eq!(records(&project), 2);
 }

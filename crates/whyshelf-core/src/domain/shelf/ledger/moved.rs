@@ -225,7 +225,7 @@ impl MovedTo {
 /// and the moves it is read through, when people declared some after it was made.
 ///
 /// Two values, kept apart: the [`ArtifactPin`] is what was pinned (what a record
-/// writes and what [`repeated`](super::repeated) compares), and the reading is
+/// writes and what [`Readers`](super::Readers) compares), and the reading is
 /// derived from the ledger on every assessment, never stored. Made by
 /// [`Ledger::read_pins`] alone.
 ///

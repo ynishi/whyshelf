@@ -1,10 +1,14 @@
 //! Tests of `judge` over the in-memory fake: an approval that would only repeat the
-//! one that stands (the same frame, the same expiry) is left out, with no record,
-//! unless the request says `again`; the rest of the run is judged as before. And
-//! `judge approve --stale` leaves out, as a repeat, one stale only through an
-//! upstream's upstream the run approved again, and lets what stands on it be
+//! reading of the one who approves (the same frame, the same expiry) is left out,
+//! with no record, unless the request says `again`; another actor's approval of the
+//! same content is a second reading and is written; the rest of the run is judged as
+//! before, and who approves is asked before any of it. And `judge approve --stale`
+//! leaves out, as a repeat, one stale only through an upstream's upstream the run
+//! approved again, and, as a second reading, the same by another actor, while one
+//! only expired is approved again by anyone's run, and lets what stands on it be
 //! decided as any other.
 
+use crate::domain::actor::Actor;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::freshness::{Freshness, Notice, Standing};
 use crate::domain::shelf::ledger::{FrameRefusal, JudgedAt, JudgementId, Record};
@@ -14,7 +18,7 @@ use crate::domain::shelf::schema::{CompareDecl, LinkTargetDecl};
 use super::fake_tests::{FakeShelf, block_on, docid, file_space, fr, sp, sp_tested};
 use super::{
     ApproveStaleRequest, JudgeRequest, JudgedAll, Judgement, LeftOutWhy, SameMeaningAbout,
-    SameMeaningRequest, ShelfApp, ShelfError,
+    SameMeaningRequest, ShelfApp, ShelfError, ShelfPort,
 };
 
 fn r(text: &str) -> Reference {
@@ -486,6 +490,149 @@ fn approve_stale_does_not_hold_back_what_stands_on_a_repeat() {
     );
     assert!(block_on(app.stale()).unwrap().entries.is_empty());
     assert_eq!(app.ports().record_count(), 6);
+}
+
+/// An approval of `reference` by `actor`, with no expiry.
+fn approve_by(reference: &str, actor: &str) -> JudgeRequest {
+    JudgeRequest {
+        actor: Some(Actor::new(actor).unwrap()),
+        ..approve(reference)
+    }
+}
+
+fn stale_by(actor: Option<&str>) -> ApproveStaleRequest {
+    ApproveStaleRequest {
+        reason: why("looked again"),
+        actor: actor.map(|a| Actor::new(a).unwrap()),
+        until: None,
+    }
+}
+
+#[test]
+fn another_actors_approval_of_the_same_content_is_written_and_a_readers_again_repeats() {
+    let mut app = app();
+    // alice (the actor port's name), then bo, then alice again.
+    block_on(app.judge(approve("FR-1"))).unwrap();
+    let second = block_on(app.judge(approve_by("FR-1", "bo"))).unwrap();
+    assert_eq!(subjects(&second), [docid(1)]);
+    assert!(second.left_out.is_empty());
+    assert_eq!(app.ports().record_count(), 2);
+    let of_bo = record_id(&app, 1);
+
+    // Each reader of the content that stands now repeats; bo's approval stands.
+    for actor in ["alice", "bo"] {
+        let run = block_on(app.judge(approve_by("FR-1", actor))).unwrap();
+        assert_eq!(left_repeating(&run), [("finding:FR-1".to_owned(), of_bo)]);
+    }
+    assert_eq!(app.ports().record_count(), 2);
+    // The document is fresh, as after one approval.
+    let row = block_on(app.get(&r("FR-1"))).unwrap().row;
+    assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
+}
+
+#[test]
+fn with_no_name_a_run_that_would_only_repeat_fails_and_writes_nothing() {
+    let mut fake = FakeShelf::new().with_files(vec![fr(1, "slow", &[])]);
+    fake.actor = None;
+    let mut app = ShelfApp::new(fake);
+    block_on(app.judge(approve_by("FR-1", "alice"))).unwrap();
+    // Every document would repeat, but who approves is asked first.
+    let err = block_on(app.judge(approve("FR-1"))).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ShelfError::Port {
+                port: ShelfPort::Actor,
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+    assert_eq!(app.ports().record_count(), 1);
+    // A past expiry and a reference that names nothing are refused before it.
+    let err = block_on(app.judge(approve_as("FR-1", Some(500), false))).unwrap_err();
+    assert!(matches!(err, ShelfError::Decision(_)), "{err:?}");
+    let err = block_on(app.judge(approve("FR-9"))).unwrap_err();
+    assert!(matches!(err, ShelfError::NotFound { .. }), "{err:?}");
+    assert_eq!(app.ports().record_count(), 1);
+}
+
+#[test]
+fn approve_stale_by_another_actor_renews_an_expired_approval() {
+    let mut app = app();
+    block_on(app.judge(approve_as("FR-1", Some(2000), false))).unwrap();
+    app.ports().set_now(3000);
+    assert_eq!(block_on(app.stale()).unwrap().entries.len(), 1);
+
+    // The approval that stands lapsed: bo's approves the document again, as the
+    // one whose reading lapsed would; it is no second reading to leave out.
+    let done = block_on(app.approve_stale(stale_by(Some("bo")))).unwrap();
+    assert!(done.left_out.is_empty());
+    let judged: Vec<_> = done.judged.iter().map(|j| j.judged.subject).collect();
+    assert_eq!(judged, [docid(1)]);
+    assert_eq!(app.ports().record_count(), 2);
+    assert!(block_on(app.stale()).unwrap().entries.is_empty());
+}
+
+#[test]
+fn approve_stale_by_another_actor_leaves_out_as_second_readings_what_only_an_upstream_made_stale() {
+    // FR-1 on FR-2 on FR-3 on FR-4, all approved by alice; FR-4 is edited.
+    let mut app = ShelfApp::new(FakeShelf::new().with_files(vec![
+        fr(1, "top", &["FR-2"]),
+        fr(2, "upper", &["FR-3"]),
+        fr(3, "lower", &["FR-4"]),
+        fr(4, "bottom", &[]),
+    ]));
+    block_on(app.judge_all(vec![
+        approve("FR-4"),
+        approve("FR-3"),
+        approve("FR-2"),
+        approve("FR-1"),
+    ]))
+    .unwrap();
+    let (of_fr2, of_fr1) = (record_id(&app, 2), record_id(&app, 3));
+    app.ports().edit(fr(4, "bottom, edited", &[]), 4);
+
+    let done = block_on(app.approve_stale(stale_by(Some("bo")))).unwrap();
+    // FR-4 and FR-3 stand on new content: bo approves them.
+    let judged: Vec<_> = done.judged.iter().map(|j| j.judged.subject).collect();
+    assert_eq!(judged, [docid(4), docid(3)]);
+    // FR-2 would be bo's reading of what alice approved, and FR-1, on it, is decided
+    // as any other: neither is written, and neither holds back.
+    let left: Vec<_> = done
+        .left_out
+        .iter()
+        .map(|l| (l.left.doc, l.left.why.clone()))
+        .collect();
+    assert_eq!(
+        left,
+        [
+            (docid(1), LeftOutWhy::SecondReading { approval: of_fr1 }),
+            (docid(2), LeftOutWhy::SecondReading { approval: of_fr2 }),
+        ]
+    );
+    assert!(block_on(app.stale()).unwrap().entries.is_empty());
+    assert_eq!(app.ports().record_count(), 6);
+}
+
+#[test]
+fn approve_stale_with_no_name_fails_and_writes_nothing() {
+    let mut fake = FakeShelf::new().with_files(vec![fr(1, "slow", &[])]);
+    fake.actor = None;
+    let mut app = ShelfApp::new(fake);
+    block_on(app.judge(approve_by("FR-1", "alice"))).unwrap();
+    let err = block_on(app.approve_stale(stale_by(None))).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ShelfError::Port {
+                port: ShelfPort::Actor,
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+    assert_eq!(app.ports().record_count(), 1);
 }
 
 #[test]

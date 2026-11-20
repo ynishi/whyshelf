@@ -541,64 +541,6 @@ impl FrameGraph {
     }
 }
 
-/// The approval that stands about the document of `frame`, when an approval made on
-/// `frame` at `now`, lapsing at `until`, would only repeat it; none when it would
-/// add something.
-///
-/// `frame` is what [`frame_approve`] took, and `until` must be after `now`
-/// ([`DecisionProblem::ExpiresNotAfter`]): only an approval the model would make repeats one, so a
-/// document it refuses (an artifact a `depends` link names that cannot be told now,
-/// an upstream decided against, an expiry already past) never repeats one, and stays
-/// refused.
-///
-/// It repeats the one that stands when both hold:
-///
-/// - **it stands the same way**: the decision that stands ([`Ledger::status_of`]) is
-///   an approval, with the same expiry as `until` (none and none, or the same time).
-///   A denial, a deprecation, a retirement or nothing (pending, or an approval since
-///   withdrawn with nothing before it) is not repeated by an approval; an approval
-///   withdrawn with an earlier one before it leaves that earlier one standing, and it
-///   is that one that is compared;
-/// - **it pins exactly what that one pins**: the hash of the document, and every pin
-///   of an upstream (link, identity, key, hash) and of an artifact (link, space and
-///   name, comparison, what was there and its hash), compared as values. What
-///   freshness never reads is not compared (rule A4): the addresses and the
-///   revision a new record would carry.
-///
-/// Freshness is not asked. An approval stale only through what it stands on (an
-/// upstream pending, or approved again on the same hash) is repeated by one made
-/// now, which would stand on the same and be as stale; a document fresh only because
-/// people declared an edit keeps the meaning has a new hash, and is not. Who
-/// approves and why are not what an approval stands on, and are not compared.
-///
-/// The pins compared are the stored ones ([`ArtifactPin`]), never as read through a
-/// move ([`ReadPin`]): a new approval would record the name it pins now, so one made
-/// after a move pins the new name, which the record that stands does not, and adds it.
-pub fn repeated(
-    ledger: &Ledger,
-    frame: &ApproveFrame,
-    now: JudgedAt,
-    until: Option<JudgedAt>,
-) -> Option<JudgementId> {
-    if expires_after(now, until).is_err() {
-        return None;
-    }
-    let DeclaredStatus::Approved {
-        judgement,
-        seen,
-        frame: pinned,
-        artifacts,
-        expires,
-    } = ledger.status_of(frame.subject)
-    else {
-        return None;
-    };
-    let same = expires == until
-        && StandsOn::of(&seen, &pinned, &artifacts)
-            == StandsOn::of(&frame.seen, &frame.frame, &frame.artifacts);
-    same.then_some(judgement)
-}
-
 /// Why a record cannot be withdrawn by its identity.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum WithdrawRefusal {
@@ -624,6 +566,7 @@ mod frame;
 mod judgement;
 mod moved;
 mod pin;
+mod readers;
 mod record;
 mod same_meaning;
 
@@ -642,7 +585,6 @@ pub use same_meaning::{
 };
 
 pub use canon::RecordProblem;
-use decision::expires_after;
 pub use decision::{Decision, DecisionProblem, DecisionVerb};
 pub use frame::{
     ApproveFrame, FrameRefusal, NotStanding, PresentFrame, RetireFrame, frame_approve,
@@ -651,6 +593,7 @@ pub use frame::{
 pub use judgement::{JudgedAt, JudgementId};
 pub use pin::{ArtifactPin, FramePin, PATH_ONLY_SPACE, PinnedArtifact, Seen};
 use pin::{NameForm, StandsOn};
+pub use readers::{ApprovalKind, Asked, Before, LeaveOut, Readers, Taking};
 pub use record::{Record, RecordHash, Revocation};
 
 #[cfg(test)]
@@ -680,6 +623,8 @@ mod merge_tests;
 mod moved_prefix_tests;
 #[cfg(test)]
 mod moved_tests;
+#[cfg(test)]
+mod readers_tests;
 #[cfg(test)]
 mod revocation_tests;
 #[cfg(test)]

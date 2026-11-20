@@ -23,8 +23,8 @@ use crate::domain::shelf::freshness::{
 };
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{
-    Decision, DeclaredStatus, Exempt, FrameRefusal, JudgementId, LedgerProblem, MoveSuggestions,
-    Record,
+    Decision, DeclaredStatus, Exempt, FrameRefusal, JudgementId, LeaveOut, LedgerProblem,
+    MoveSuggestions, Record,
 };
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::HeldBack;
@@ -622,8 +622,8 @@ pub struct JudgedAll {
     /// The records written, in the order the documents were named.
     pub judged: Vec<Judged>,
     /// The approvals not made, in the order the documents were named: each would
-    /// have repeated the approval that stands ([`LeftOutWhy::Repeats`]). Only an
-    /// approval is left out; every other verb is judged or refused.
+    /// have repeated the reading of the one who approves ([`LeftOutWhy::Repeats`]).
+    /// Only an approval is left out; every other verb is judged or refused.
     pub left_out: Vec<LeftOut>,
 }
 
@@ -645,17 +645,36 @@ pub enum LeftOutWhy {
         key: Option<DocKey>,
     },
     /// Of `judge approve`, and of `--stale` for one stale only through what an
-    /// earlier approval of the run approved again: an approval made now would pin
-    /// exactly what the one that stands pins and lapse when it lapses
-    /// ([`repeated`]), so it would add nothing. That one may be fresh or not (stale
-    /// over a pending upstream, say): it is the repeat that is told, not a
+    /// earlier approval of the run approved again: an approval made now would be a
+    /// [`Repeat`], by one who already read the content that stands and with the
+    /// expiry of that reading, so it would add nothing. That one may be fresh or not
+    /// (stale over a pending upstream, say): it is the repeat that is told, not a
     /// freshness. It stands, and holds back nothing that stands on it.
     ///
-    /// [`repeated`]: crate::domain::shelf::ledger::repeated
+    /// [`Repeat`]: crate::domain::shelf::ledger::ApprovalKind::Repeat
     Repeats {
         /// The approval that stands.
         approval: JudgementId,
     },
+    /// Of `judge approve --stale`: an approval made now would be a
+    /// [`SecondReading`], of the content that stands by one who has not read it,
+    /// which a run that chose the document by a rule does not write; it is said by
+    /// naming the document. It stands, and holds back nothing that stands on it.
+    ///
+    /// [`SecondReading`]: crate::domain::shelf::ledger::ApprovalKind::SecondReading
+    SecondReading {
+        /// The approval that stands.
+        approval: JudgementId,
+    },
+}
+
+impl From<LeaveOut> for LeftOutWhy {
+    fn from(leave: LeaveOut) -> Self {
+        match leave {
+            LeaveOut::Repeats { approval } => Self::Repeats { approval },
+            LeaveOut::SecondReading { approval } => Self::SecondReading { approval },
+        }
+    }
 }
 
 /// An approval asked for that was not made.

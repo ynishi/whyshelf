@@ -163,7 +163,7 @@ impl Decision {
     }
 
     /// The one place the invariants of a decision are checked (the expiry's by
-    /// [`expires_after`]): every constructor and the reader of the canonical form go
+    /// [`DecisionProblem::expires_after`]): every constructor and the reader of the canonical form go
     /// through it.
     pub(super) fn assemble(
         id: JudgementId,
@@ -189,7 +189,7 @@ impl Decision {
                     });
                 }
             }
-            expires_after(at, *expires)?;
+            DecisionProblem::expires_after(at, *expires)?;
             if frame.iter().any(|pin| pin.target() == subject) {
                 return Err(DecisionProblem::FrameNamesSubject);
             }
@@ -244,15 +244,17 @@ impl Decision {
     }
 }
 
-/// An approval made at `at` that lapses at `expires` lapses after it is made, or
-/// none: the rule of [`DecisionProblem::ExpiresNotAfter`], said once for a decision
-/// and for [`repeated`](super::repeated).
-pub(super) fn expires_after(
-    at: JudgedAt,
-    expires: Option<JudgedAt>,
-) -> Result<(), DecisionProblem> {
-    match expires {
-        Some(expires) if expires <= at => Err(DecisionProblem::ExpiresNotAfter { at, expires }),
-        _ => Ok(()),
+impl DecisionProblem {
+    /// An approval made at `at` that lapses at `expires` has not lapsed by then
+    /// ([`JudgedAt::lapsed_by`]), or has no expiry: the check of
+    /// [`DecisionProblem::ExpiresNotAfter`], made by a decision as it is assembled and
+    /// by a run before it asks for its actor.
+    pub fn expires_after(at: JudgedAt, expires: Option<JudgedAt>) -> Result<(), Self> {
+        match expires {
+            Some(expires) if expires.lapsed_by(at) => {
+                Err(DecisionProblem::ExpiresNotAfter { at, expires })
+            }
+            _ => Ok(()),
+        }
     }
 }

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "843b08dd99fa879b7b9037c21b798ad227203967",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21672f67486a9509de35df9e8744b598f3195031ac8a2d59ea9b8bec00bd72e0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "540e83edc1e80cd789e9d98ed03bf2982c1d92b4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:55fb209c51c59b409b6c5da17c7abc416279158cfdd5e21d95e0b08c83b63b20",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795144143635,
+  "expires": null,
+  "frame": [
+    {
+      "address": "95fbccde3f317789144b7850a9c722d055eca3da",
+      "hash": "sha256:2f5d0de4cf110348121a317cc2d3594029ebb7a5f425c2d0fe511a4ea711cab7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    }
+  ],
+  "id": "01a1f6ed-d4d0-77ca-ab6c-dd557ce1e365",
+  "kind": "decision",
+  "reason": "Second readings (#114 stage R): the books say the rule of Ledger::kind_of as built; V-33, V-34, V-36, V-48, V-60 and V-61 re-read and still true; blind review over three rounds, its findings fixed",
+  "revision": "e45695b9f288728a2283490f8ec4c6ea1722e4e6",
+  "seen": "sha256:e6b205f9a01b541f65fff69ac82aa0126616317732f174912f9faa0def77ac03",
+  "seen_address": "abb2a367a46d3ab3d96fee6da2cb4e6fb3f085fe",
+  "subject": "01a1c6a9-797b-7261-bf2c-9fa48fea4c5e",
+  "v": 1,
+  "verb": "approve"
+}

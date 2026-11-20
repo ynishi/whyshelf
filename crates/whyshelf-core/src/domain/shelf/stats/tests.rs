@@ -423,6 +423,32 @@ fn a_pin_only_one_frame_holds_is_no_origin() {
 }
 
 #[test]
+fn a_second_reading_is_an_approval_and_a_run_but_not_one_made_again() {
+    let (tester, other) = (actor(), Actor::new("other").unwrap());
+    let (a, b) = (shelf_at("a", b"one"), shelf_at("b", b"one"));
+    let records = vec![
+        // FR-1 as `a`: tester at 10, other at 20 (a second reading), tester at 30 (a
+        // reader's again, as `--again` makes it); then as `b`, other at 40.
+        approval(&a, docid(1), 101, 10, &tester),
+        approval(&a, docid(1), 102, 20, &other),
+        approval(&a, docid(1), 103, 30, &tester),
+        approval(&b, docid(1), 104, 40, &other),
+    ];
+    let stats = of(&Ledger::build(records), &b, None);
+    let fr1 = &stats.approvals.docs[0];
+    assert_eq!(
+        fr1.key.as_ref().map(ToString::to_string),
+        key("finding:FR-1")
+    );
+    // Four approvals; those at 30 and 40 are again, the second reading at 20 is not.
+    assert_eq!((fr1.approvals, fr1.again, fr1.revoked), (4, 2, 0));
+    assert_eq!(stats.runs.sizes.count, 4);
+    // The approval at 40 is set beside the one at 30: FR-1 is no upstream, and t.rs
+    // is not pinned by FR-1, so nothing is an origin.
+    assert!(stats.origins.is_empty(), "{:?}", stats.origins);
+}
+
+#[test]
 fn a_revoked_approval_is_not_one_made_before() {
     let tester = actor();
     let one = spec_shelf(&schema(), &[], &["t.rs"], &[("t.rs", b"one")]);

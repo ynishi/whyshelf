@@ -27,11 +27,14 @@
 //! those of the documents' files from the [`DocSource`], the revision from the
 //! [`RevisionSource`]. None of them changes what is refused.
 //!
-//! The time is the one the project was read at. The actor and the identity of the
-//! record are fetched after the frame (or what stands to be revoked, or the
-//! successor) is checked, and before the decision's own invariants are, which may
-//! still refuse it. The write is the last step, for every judgement of a run after
-//! all of them are decided, so a refusal writes nothing.
+//! The time is the one the project was read at. A run first checks what it is asked
+//! (every reference resolves, every expiry is after now), then asks for the actor
+//! once, before any judgement is decided, since what an approval is depends on who
+//! makes it ([`Ledger::kind_of`]): with no name the run fails, whatever it would have
+//! written. The identity of each record is fetched after its frame (or what stands to
+//! be revoked, or the successor) is checked, and before the decision's own
+//! invariants are, which may still refuse it. The write is the last step, for every
+//! judgement of a run after all of them are decided, so a refusal writes nothing.
 //!
 //! **`--successor`.** A deprecation records only that the document is to be replaced;
 //! who replaces it is a fact of the links ([`Shelf::replacers_of`]) and a verdict of
@@ -40,9 +43,12 @@
 //! named is one of [`Successors::of`] the document deprecated.
 //!
 //! **An approval that adds nothing.** Between the frame and the record, an approval
-//! is asked of the domain whether it would only repeat the one that stands
-//! ([`repeated`]); when it would, and the request does not say `again`, it is left
-//! out ([`LeftOutWhy::Repeats`]): no record, no refusal.
+//! is asked of the domain what it would be beside the readers of the content that
+//! stands ([`Ledger::kind_of`]), and whether a run that named the document leaves it
+//! out ([`ApprovalKind::left_out`]): a repeat of the reading of the one who approves
+//! is, unless the request says `again` ([`LeftOutWhy::Repeats`]: no record, no
+//! refusal). Another actor's approval of the same content is a second reading and is
+//! written.
 //!
 //! **`revoke`.** A revocation withdraws a decision, not a document, so the reference
 //! names the document and the decision withdrawn is the one that stands about it now
@@ -51,6 +57,8 @@
 //! [`Shelf::replacers_of`]: crate::domain::shelf::build::Shelf::replacers_of
 //! [`Successors::of`]: crate::domain::shelf::freshness::Successors::of
 //! [`Ledger::status_of`]: crate::domain::shelf::ledger::Ledger::status_of
+//! [`Ledger::kind_of`]: crate::domain::shelf::ledger::Ledger::kind_of
+//! [`ApprovalKind::left_out`]: crate::domain::shelf::ledger::ApprovalKind::left_out
 
 use std::collections::BTreeSet;
 
@@ -58,9 +66,9 @@ use crate::domain::actor::Actor;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
-    ApproveFrame, Decision, DecisionVerb, DeclaredStatus, JudgedAt, JudgementId, Ledger,
-    PresentFrame, Record, RetireFrame, Revocation, frame_approve, frame_present, frame_retire,
-    repeated,
+    ApproveFrame, Asked, Before, Decision, DecisionProblem, DecisionVerb, DeclaredStatus, JudgedAt,
+    JudgementId, Ledger, PresentFrame, Record, RetireFrame, Revocation, Taking, frame_approve,
+    frame_present, frame_retire,
 };
 use crate::domain::shelf::lookup::Reference;
 
@@ -79,6 +87,36 @@ pub(super) fn taken(loaded: &mut Loaded, one: &Judged) {
     loaded.ledger = Ledger::build(loaded.records.clone());
 }
 
+/// What a request asks, checked before the run asks for its actor: its reference and
+/// a deprecation's successor resolve, and an approval's expiry is after now. The rest
+/// of what may refuse it is checked as it is decided.
+// The error is read once and ends the use case; it is not a hot path.
+#[allow(clippy::result_large_err)]
+fn checked(loaded: &Loaded, request: &JudgeRequest) -> Result<(), ShelfError> {
+    identity(loaded, &request.reference)?;
+    match &request.judgement {
+        Judgement::Approve { until, .. } => expires_after_now(loaded, *until),
+        Judgement::Deprecate {
+            successor: Some(successor),
+            ..
+        } => identity(loaded, successor).map(|_| ()),
+        Judgement::Deny { .. }
+        | Judgement::Deprecate { .. }
+        | Judgement::Retire { .. }
+        | Judgement::Revoke { .. } => Ok(()),
+    }
+}
+
+/// An approval's expiry, when it has one, is after the time the project was read at
+/// ([`DecisionProblem::ExpiresNotAfter`]): checked before a run asks for its actor.
+#[allow(clippy::result_large_err)]
+pub(super) fn expires_after_now(
+    loaded: &Loaded,
+    until: Option<JudgedAt>,
+) -> Result<(), ShelfError> {
+    DecisionProblem::expires_after(loaded.now, until).map_err(Into::into)
+}
+
 /// What a person decides about a document, with what only that decision has.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Judgement {
@@ -88,9 +126,11 @@ pub enum Judgement {
         until: Option<JudgedAt>,
         /// Why, if the person says.
         reason: Option<NonBlank>,
-        /// Make it even when it would only repeat the approval that stands
-        /// ([`repeated`]): for a person who read the document again and wants that
-        /// recorded. Without it, such an approval is left out.
+        /// Make it even when it would only repeat the reading of the one who approves
+        /// ([`ApprovalKind::Repeat`]): for a person who read the document again and
+        /// wants that recorded. Without it, such an approval is left out.
+        ///
+        /// [`ApprovalKind::Repeat`]: crate::domain::shelf::ledger::ApprovalKind::Repeat
         again: bool,
     },
     /// The document is refused as it is now.
@@ -165,22 +205,49 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// ([`ShelfError::PartWay`]), and each is a record of its own, so what is there
     /// is sound.)
     ///
-    /// An approval that would only repeat the one that stands about its document
-    /// ([`repeated`]: the new one would pin exactly what that one pins and lapse
-    /// when it lapses) is not made unless the request says `again`: it is left out
-    /// with why ([`LeftOutWhy::Repeats`]), and no record is written for it. A document
-    /// left out is no refusal: the others of the run are judged and written as
-    /// before, and a run that leaves out every one writes nothing, fails nothing and
-    /// never asks the actor port (who would judge is fetched only for a record).
+    /// Before any is decided, the run checks what it is asked: every reference
+    /// resolves (a successor's too), and every approval's expiry is after now
+    /// ([`DecisionProblem::ExpiresNotAfter`]). Then it asks the actor port once, for
+    /// the requests that name no actor, whatever they would write: what an approval
+    /// is depends on who makes it, so a run with no name fails even when it would
+    /// leave out every document.
+    ///
+    /// An approval that would only repeat the reading of the one who approves
+    /// ([`ApprovalKind::Repeat`]: by a reader of the content that stands, whose
+    /// reading and the approval that stands have not lapsed and lapse when the new
+    /// one would) is not made unless
+    /// the request says `again`: it is left out with why ([`LeftOutWhy::Repeats`]),
+    /// and no record is written for it. Another actor's approval of the same content
+    /// is a second reading and is written. A document left out is no refusal: the
+    /// others of the run are judged and written as before, and a run that leaves out
+    /// every one writes nothing and fails nothing.
+    ///
+    /// [`ApprovalKind::Repeat`]: crate::domain::shelf::ledger::ApprovalKind::Repeat
     pub async fn judge_all(
         &mut self,
         requests: Vec<JudgeRequest>,
     ) -> Result<JudgedAll, ShelfError> {
         let mut loaded = load(&self.ports).await?;
+        for request in &requests {
+            checked(&loaded, request)?;
+        }
+        let mut port_actor: Option<Actor> = None;
+        let mut actors = Vec::with_capacity(requests.len());
+        for request in &requests {
+            let actor = match (&request.actor, &port_actor) {
+                (Some(actor), _) | (None, Some(actor)) => actor.clone(),
+                (None, None) => {
+                    let actor = self.port_actor().await?;
+                    port_actor = Some(actor.clone());
+                    actor
+                }
+            };
+            actors.push(actor);
+        }
         let mut judged = Vec::with_capacity(requests.len());
         let mut left_out = Vec::new();
-        for request in requests {
-            match self.decide(&loaded, request).await? {
+        for (request, actor) in requests.into_iter().zip(actors) {
+            match self.decide(&loaded, request, actor, Taking::Named).await? {
                 Decided::Judged(one) => {
                     taken(&mut loaded, &one);
                     judged.push(one);
@@ -214,11 +281,25 @@ impl<P: ShelfWrite> ShelfApp<P> {
         .await
     }
 
-    /// One judgement, decided on what is loaded; nothing is written.
+    /// The actor the actor port names: asked once per run, before any judgement of it
+    /// is decided.
+    pub(super) async fn port_actor(&self) -> Result<Actor, ShelfError> {
+        self.ports
+            .actor_source()
+            .actor()
+            .await
+            .map_err(port(ShelfPort::Actor))
+    }
+
+    /// One judgement by `actor`, decided on what is loaded, of a document the run
+    /// took by `taking`; nothing is written. The request's own actor is not read:
+    /// the run asked for it first.
     pub(super) async fn decide(
         &self,
         loaded: &Loaded,
         request: JudgeRequest,
+        actor: Actor,
+        taking: Taking,
     ) -> Result<Decided, ShelfError> {
         let subject = identity(loaded, &request.reference)?;
         let key = loaded.shelf.doc(subject).map(|doc| doc.key().clone());
@@ -241,13 +322,17 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 again,
             } => {
                 // The frame first, so what the model refuses stays refused; then
-                // whether the approval would add anything, which is the domain's.
+                // what the approval would be and whether the run leaves it out, which
+                // are the domain's.
                 let frame = frame_approve(&loaded.shelf, &loaded.ledger, subject)?;
-                if !again && let Some(approval) = repeated(&loaded.ledger, &frame, now, until) {
+                let kind = loaded
+                    .ledger
+                    .kind_of(&Asked::frame(&frame, &actor, until, now), Before::Now);
+                if let Some(leave) = kind.left_out(taking, again) {
                     return Ok(Decided::LeftOut(LeftOut {
                         doc: subject,
                         key,
-                        why: LeftOutWhy::Repeats { approval },
+                        why: LeftOutWhy::from(leave),
                     }));
                 }
                 (Plan::Approve(frame, until), reason)
@@ -290,15 +375,6 @@ impl<P: ShelfWrite> ShelfApp<P> {
             }
         };
 
-        let actor = match request.actor {
-            Some(actor) => actor,
-            None => self
-                .ports
-                .actor_source()
-                .actor()
-                .await
-                .map_err(port(ShelfPort::Actor))?,
-        };
         let id = self
             .ports
             .ids()
