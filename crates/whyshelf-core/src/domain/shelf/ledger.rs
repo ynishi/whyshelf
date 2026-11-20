@@ -17,7 +17,8 @@
 //!
 //! [`Ledger::build`] takes every record and sets aside what contradicts itself
 //! (two records of one id that differ, a revocation of something that is not there,
-//! of a revocation, or of a conflict) as [`LedgerProblem`]s. [`Ledger::status_of`]
+//! of a revocation, or of a conflict), and what the rules of who may decide do not
+//! admit ([`Admit`]), as [`LedgerProblem`]s. [`Ledger::status_of`]
 //! then reads the *declared* status of a document from the latest decision about it
 //! that is not revoked. The declared status says what people decided; whether the
 //! decision still holds is [`freshness`](super::freshness)'s question.
@@ -92,9 +93,9 @@ pub enum DeclaredStatus {
 
 /// A contradiction among the records, which the ledger sets aside.
 // `Conflict` holds two or more whole records inline (the enum is as large as that), and
-// the other variants hold two identifiers. A ledger has few problems, so the size costs
-// little, and boxing the records would only add an allocation per conflict and a deref
-// in each match.
+// the other variants hold two identifiers, or why one record is not admitted. A ledger
+// has few problems, so the size costs little, and boxing the records would only add an
+// allocation per conflict and a deref in each match.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LedgerProblem {
@@ -130,6 +131,10 @@ pub enum LedgerProblem {
         /// The id it names.
         target: JudgementId,
     },
+    /// A record the rules of who may decide do not admit, which is not used; for a
+    /// revocation, of one record it names, which it does not withdraw.
+    #[error("{0}")]
+    NotAdmitted(NotAdmitted),
 }
 
 /// The records grouped by identity: those that stand alone, and the identities whose
@@ -141,14 +146,19 @@ struct Grouped {
     moveds: BTreeMap<JudgementId, Moved>,
     exempts: BTreeMap<JudgementId, Exempt>,
     conflicted: BTreeSet<JudgementId>,
+    /// The book each record but a revocation is read with by who may decide.
+    books: BTreeMap<JudgementId, RecordBook>,
+    /// The records but revocations the rules do not admit.
+    not_admitted: BTreeMap<JudgementId, NotAdmitted>,
     /// The conflicts.
     problems: Vec<LedgerProblem>,
 }
 
 impl Grouped {
     /// The same record twice is one record; two different ones with one id conflict,
-    /// and neither is kept.
-    fn of(records: Vec<Record>) -> Self {
+    /// and neither is kept. Each record that stands alone, but a revocation, is read
+    /// by `admit` with its book.
+    fn of(records: Vec<Record>, admit: &Admit) -> Self {
         let mut by_id: BTreeMap<JudgementId, BTreeMap<RecordHash, Record>> = BTreeMap::new();
         for record in records {
             by_id
@@ -164,10 +174,24 @@ impl Grouped {
             moveds: BTreeMap::new(),
             exempts: BTreeMap::new(),
             conflicted: BTreeSet::new(),
+            books: BTreeMap::new(),
+            not_admitted: BTreeMap::new(),
             problems: Vec::new(),
         };
         for (id, group) in by_id {
-            match Count::of(group.into_values()) {
+            let record = Count::of(group.into_values());
+            // Unruled, every record is admitted whatever its book: nothing to read.
+            if !admit.is_unruled()
+                && let Count::One(record) = &record
+                && !matches!(record, Record::Revocation(_))
+            {
+                let book = admit.book_of(record);
+                if let Err(not) = admit.admission(record, None, &book) {
+                    grouped.not_admitted.insert(id, not);
+                }
+                grouped.books.insert(id, book);
+            }
+            match record {
                 Count::None => {}
                 Count::One(Record::Decision(d)) => {
                     grouped.decisions.insert(id, d);
@@ -196,10 +220,23 @@ impl Grouped {
     }
 }
 
+/// The book the record `target` a revocation names is read with, from `books` (the
+/// book of each record but a revocation): `[decide]` when it has none. Read by
+/// [`revoked_by`] and by [`Ledger::accept`].
+fn target_book(books: &BTreeMap<JudgementId, RecordBook>, target: JudgementId) -> RecordBook {
+    books.get(&target).cloned().unwrap_or(RecordBook::Shelf)
+}
+
 /// The decisions and declarations the revocations withdraw. A revocation of a
 /// conflict, of a revocation or of what is not there withdraws nothing for that
-/// target and is reported in `problems`.
-fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<JudgementId> {
+/// target and is reported in `problems`, and so does one `admit` does not admit to
+/// withdraw that target, read with the target's book, while no revocation it admits
+/// withdraws that target (once one does, nothing is left to put right).
+fn revoked_by(
+    grouped: &Grouped,
+    admit: &Admit,
+    problems: &mut Vec<LedgerProblem>,
+) -> BTreeSet<JudgementId> {
     let Grouped {
         decisions,
         revocations,
@@ -207,9 +244,11 @@ fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<
         moveds,
         exempts,
         conflicted,
+        books,
         ..
     } = grouped;
     let mut revoked = BTreeSet::new();
+    let mut refused = Vec::new();
     for (id, revocation) in revocations {
         for target in revocation.targets.iter().copied() {
             if conflicted.contains(&target) {
@@ -227,7 +266,12 @@ fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<
                 || moveds.contains_key(&target)
                 || exempts.contains_key(&target)
             {
-                revoked.insert(target);
+                match admit.revocation(revocation, target, &target_book(books, target)) {
+                    Ok(()) => {
+                        revoked.insert(target);
+                    }
+                    Err(not) => refused.push(not),
+                }
             } else {
                 problems.push(LedgerProblem::RevokesUnknown {
                     revocation: *id,
@@ -236,6 +280,12 @@ fn revoked_by(grouped: &Grouped, problems: &mut Vec<LedgerProblem>) -> BTreeSet<
             }
         }
     }
+    problems.extend(
+        refused
+            .into_iter()
+            .filter(|not| not.target.is_none_or(|target| !revoked.contains(&target)))
+            .map(LedgerProblem::NotAdmitted),
+    );
     revoked
 }
 
@@ -252,31 +302,51 @@ pub struct Ledger {
     revoked: BTreeSet<JudgementId>,
     subjects: BTreeSet<DocId>,
     problems: Vec<LedgerProblem>,
+    /// What the records were admitted by, and what a record to be written is.
+    admit: Admit,
+    /// The book each record but a revocation is read with, admitted or not.
+    books: BTreeMap<JudgementId, RecordBook>,
+    /// The records the rules do not admit, which are not used.
+    set_aside: BTreeSet<JudgementId>,
 }
 
 impl Ledger {
-    /// A ledger from records, in any order and with repeats.
+    /// A ledger from records, in any order and with repeats, read with who may
+    /// decide as `admit` says.
     ///
     /// The same record twice is one record. Two different records with one id are a
     /// [`Conflict`](LedgerProblem::Conflict) and neither is used (as two worktrees
     /// that picked one id for two decisions have no reason to be believed over one
     /// another). A revocation of something that is not there, of a revocation, or of
     /// a conflict is set aside for that one target only. A revocation of decisions of
-    /// several subjects, or of someone else's, is allowed.
-    pub fn build(records: Vec<Record>) -> Self {
-        let mut grouped = Grouped::of(records);
+    /// several subjects, or of someone else's, is allowed. A record the rules do not
+    /// admit is not used, and is a [`NotAdmitted`](LedgerProblem::NotAdmitted) until a
+    /// revocation the rules admit withdraws it (the rules are on [`Admit`]'s module
+    /// page); a project that declares no rule admits every record.
+    pub fn build(records: Vec<Record>, admit: &Admit) -> Self {
+        let mut grouped = Grouped::of(records, admit);
         let mut problems = std::mem::take(&mut grouped.problems);
-        let revoked = revoked_by(&grouped, &mut problems);
+        let revoked = revoked_by(&grouped, admit, &mut problems);
         let Grouped {
-            decisions,
+            mut decisions,
             mut same_meanings,
             mut moveds,
             mut exempts,
+            books,
+            not_admitted,
             ..
         } = grouped;
-        same_meanings.retain(|id, _| !revoked.contains(id));
-        moveds.retain(|id, _| !revoked.contains(id));
-        exempts.retain(|id, _| !revoked.contains(id));
+        let set_aside: BTreeSet<JudgementId> = not_admitted.keys().copied().collect();
+        problems.extend(
+            not_admitted
+                .into_values()
+                .filter(|not| !revoked.contains(&not.record))
+                .map(LedgerProblem::NotAdmitted),
+        );
+        decisions.retain(|id, _| !set_aside.contains(id));
+        same_meanings.retain(|id, _| !revoked.contains(id) && !set_aside.contains(id));
+        moveds.retain(|id, _| !revoked.contains(id) && !set_aside.contains(id));
+        exempts.retain(|id, _| !revoked.contains(id) && !set_aside.contains(id));
         let subjects = decisions.values().map(|d| d.subject()).collect();
         Self {
             decisions,
@@ -286,6 +356,9 @@ impl Ledger {
             revoked,
             subjects,
             problems,
+            admit: admit.clone(),
+            books,
+            set_aside,
         }
     }
 
@@ -408,8 +481,10 @@ impl Ledger {
     }
 
     /// Whether the record `id` can be withdrawn: it is a decision or a declaration of
-    /// this ledger, and no revocation withdraws it yet. The one place a withdrawal
-    /// by identity is checked.
+    /// this ledger, used or not admitted by the rules of who may decide (withdrawing
+    /// one is how its problem is put right), and no revocation withdraws it yet. The
+    /// one place a withdrawal by identity is checked; whether the one who withdraws
+    /// may is [`Ledger::accept`]'s.
     pub fn check_withdraw(&self, id: JudgementId) -> Result<(), WithdrawRefusal> {
         if self.revoked.contains(&id) {
             Err(WithdrawRefusal::AlreadyWithdrawn { id })
@@ -417,6 +492,7 @@ impl Ledger {
             || self.same_meanings.contains_key(&id)
             || self.moveds.contains_key(&id)
             || self.exempts.contains_key(&id)
+            || self.set_aside.contains(&id)
         {
             Ok(())
         } else {
@@ -472,7 +548,8 @@ impl Ledger {
     }
 
     /// Every decision of the ledger, revoked or not, by identity; those of an
-    /// identity whose records conflict are not among them.
+    /// identity whose records conflict, and those the rules of who may decide do not
+    /// admit, are not among them.
     pub fn decisions(&self) -> impl Iterator<Item = &Decision> {
         self.decisions.values()
     }
@@ -559,6 +636,7 @@ pub enum WithdrawRefusal {
     },
 }
 
+mod admit;
 mod canon;
 mod decision;
 mod exempt;
@@ -584,6 +662,7 @@ pub use same_meaning::{
     frame_same_meaning,
 };
 
+pub use admit::{Admit, AdmittedRecord, NotAdmitted, RecordBook};
 pub use canon::RecordProblem;
 pub use decision::{Decision, DecisionProblem, DecisionVerb};
 pub use frame::{
@@ -609,6 +688,8 @@ use crate::domain::location::RelPath;
 #[cfg(test)]
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 
+#[cfg(test)]
+mod admit_tests;
 #[cfg(test)]
 mod artifact_tests;
 #[cfg(test)]

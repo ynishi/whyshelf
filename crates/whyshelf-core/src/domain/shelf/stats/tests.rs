@@ -21,7 +21,15 @@ use crate::domain::shelf::fixtures_tests::{
     actor, docid, entries, file_artifact, fr_titled, jid, ledger, path, schema, schema_of_lines,
     shelf_reading, sp_testing, text,
 };
-use crate::domain::shelf::ledger::{Decision, JudgedAt, Ledger, Record, Revocation, frame_approve};
+use crate::domain::shelf::ledger::{
+    Admit, Decision, JudgedAt, Ledger, Record, Revocation, frame_approve,
+};
+
+/// The ledger of `records`, read as a project that declares no rule of who may decide
+/// reads it.
+fn unruled(records: Vec<Record>) -> Ledger {
+    Ledger::build(records, &Admit::unruled())
+}
 use crate::domain::shelf::schema::Schema;
 
 use super::*;
@@ -125,7 +133,7 @@ fn book(name: &str) -> Option<BookName> {
 #[test]
 fn approvals_are_counted_with_those_made_again_and_a_revoked_one_apart() {
     let (records, shelf) = story();
-    let stats = of(&Ledger::build(records), &shelf, None);
+    let stats = of(&unruled(records), &shelf, None);
     let counts: Vec<(usize, usize, usize)> = stats
         .approvals
         .docs
@@ -164,7 +172,7 @@ fn approvals_are_counted_with_those_made_again_and_a_revoked_one_apart() {
 #[test]
 fn the_pending_time_runs_from_the_identity_to_the_first_approval() {
     let (records, shelf) = story();
-    let stats = of(&Ledger::build(records), &shelf, None);
+    let stats = of(&unruled(records), &shelf, None);
     let pending: Vec<(Option<BookName>, Spread)> = stats
         .pending
         .iter()
@@ -225,7 +233,7 @@ fn a_spread_is_nearest_rank() {
 #[test]
 fn runs_are_the_decisions_of_one_time_and_one_actor() {
     let (records, shelf) = story();
-    let stats = of(&Ledger::build(records), &shelf, None);
+    let stats = of(&unruled(records), &shelf, None);
     // (10, tester) 2, (20, tester) 2, (30, tester) 1, (5000, other) 1, (5000, tester) 1;
     // the revocation is no decision.
     assert_eq!(
@@ -258,7 +266,7 @@ fn runs_are_the_decisions_of_one_time_and_one_actor() {
 #[test]
 fn origins_are_the_pins_whose_hash_changed_under_an_approval_made_again() {
     let (records, shelf) = story();
-    let stats = of(&Ledger::build(records.clone()), &shelf, None);
+    let stats = of(&unruled(records.clone()), &shelf, None);
     // t.rs changed under both approvals of SP-2 made again, FR-1 under the first;
     // FR-1's own approval made again stood on nothing.
     assert_eq!(
@@ -279,7 +287,7 @@ fn origins_are_the_pins_whose_hash_changed_under_an_approval_made_again() {
     );
 
     // Counted alike, a document comes before an artifact.
-    let stats = of(&Ledger::build(records[..4].to_vec()), &shelf, None);
+    let stats = of(&unruled(records[..4].to_vec()), &shelf, None);
     let order: Vec<bool> = stats
         .origins
         .iter()
@@ -292,7 +300,7 @@ fn origins_are_the_pins_whose_hash_changed_under_an_approval_made_again() {
 #[test]
 fn since_keeps_the_records_at_or_after_it() {
     let (records, shelf) = story();
-    let stats = of(&Ledger::build(records), &shelf, Some(JudgedAt::new(20)));
+    let stats = of(&unruled(records), &shelf, Some(JudgedAt::new(20)));
     let counts: Vec<(Option<String>, usize, usize)> = stats
         .approvals
         .docs
@@ -321,7 +329,7 @@ fn since_keeps_the_records_at_or_after_it() {
     assert_eq!(stats.runs.sizes.count, 4);
     assert_eq!(stats.origins[0].count, 2);
 
-    let late = of(&Ledger::build(story().0), &shelf, Some(JudgedAt::new(6000)));
+    let late = of(&unruled(story().0), &shelf, Some(JudgedAt::new(6000)));
     assert!(late.approvals.docs.is_empty());
     assert!(late.origins.is_empty());
     assert_eq!(late.runs.sizes.count, 0);
@@ -340,7 +348,7 @@ fn a_document_that_is_no_valid_document_now_is_of_no_book() {
         ],
         &[("t.rs", b"three")],
     );
-    let stats = of(&Ledger::build(records), &shelf, None);
+    let stats = of(&unruled(records), &shelf, None);
     let last = stats.approvals.docs.last().unwrap();
     assert_eq!((last.doc, &last.key), (docid(4), &None));
     let none = stats.approvals.books.last().unwrap();
@@ -351,9 +359,9 @@ fn a_document_that_is_no_valid_document_now_is_of_no_book() {
 #[test]
 fn the_same_ledger_gives_the_same_answer_in_any_order() {
     let (mut records, shelf) = story();
-    let once = of(&Ledger::build(records.clone()), &shelf, None);
+    let once = of(&unruled(records.clone()), &shelf, None);
     records.reverse();
-    assert_eq!(of(&Ledger::build(records), &shelf, None), once);
+    assert_eq!(of(&unruled(records), &shelf, None), once);
 }
 
 /// A shelf of `schema` with SP-2 grounded on `grounds` and tested by `tests`, the
@@ -396,7 +404,7 @@ fn a_pin_whose_comparison_changed_is_no_origin() {
         approval(&as_lines, docid(2), 102, 20, &tester),
         approval(&edited, docid(2), 103, 30, &tester),
     ];
-    let stats = of(&Ledger::build(records), &edited, None);
+    let stats = of(&unruled(records), &edited, None);
     // 20 against 10: bytes and lines, not compared; 30 against 20: lines both.
     assert_eq!(stats.approvals.docs[0].again, 2);
     assert_eq!(origin_names(&stats), [("t.rs".to_owned(), 1)]);
@@ -417,7 +425,7 @@ fn a_pin_only_one_frame_holds_is_no_origin() {
         approval(&before, docid(2), 101, 10, &tester),
         approval(&after, docid(2), 102, 20, &tester),
     ];
-    let stats = of(&Ledger::build(records), &after, None);
+    let stats = of(&unruled(records), &after, None);
     assert_eq!(stats.approvals.docs[0].again, 1);
     assert!(stats.origins.is_empty(), "{:?}", stats.origins);
 }
@@ -434,7 +442,7 @@ fn a_second_reading_is_an_approval_and_a_run_but_not_one_made_again() {
         approval(&a, docid(1), 103, 30, &tester),
         approval(&b, docid(1), 104, 40, &other),
     ];
-    let stats = of(&Ledger::build(records), &b, None);
+    let stats = of(&unruled(records), &b, None);
     let fr1 = &stats.approvals.docs[0];
     assert_eq!(
         fr1.key.as_ref().map(ToString::to_string),
@@ -464,7 +472,7 @@ fn a_revoked_approval_is_not_one_made_before() {
         revocation(106, 105, 25),
         approval(&one, docid(2), 107, 30, &tester),
     ];
-    let stats = of(&Ledger::build(records), &one, None);
+    let stats = of(&unruled(records), &one, None);
     let counts: Vec<(Option<String>, usize, usize, usize)> = stats
         .approvals
         .docs

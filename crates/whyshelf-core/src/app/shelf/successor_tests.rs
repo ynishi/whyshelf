@@ -69,7 +69,10 @@ fn a_deprecation_naming_a_successor_is_written_and_says_its_successors() {
     );
     assert!(matches!(judged.record, Record::Decision(_)));
     assert_eq!(app.ports().append_count(), 1);
-    let ledger = crate::domain::shelf::ledger::Ledger::build(app.ports().records());
+    let ledger = crate::domain::shelf::ledger::Ledger::build(
+        app.ports().records(),
+        &crate::domain::shelf::ledger::Admit::unruled(),
+    );
     assert!(matches!(
         ledger.status_of(docid(1)),
         DeclaredStatus::Deprecated { .. }

@@ -2059,6 +2059,41 @@ impl Shelf {
         self.docs.get(&id)
     }
 
+    /// The book the document `id` is in now, when the shelf can tell one: the book of
+    /// its valid document, or the one book every file that carries it is under. None
+    /// when no file carries it (it is gone, or may be in a file whose identity cannot
+    /// be read) or its files are under two books. The one place the book of an
+    /// identity is told, which a record names in its key `book` and which reads a
+    /// record that names none.
+    pub fn book_of(&self, id: DocId) -> Option<&BookName> {
+        if let Some(doc) = self.docs.get(&id) {
+            return Some(&doc.key().book);
+        }
+        let mut books =
+            self.invalid
+                .get(&id)?
+                .iter()
+                .map(|file| match self.schema.membership(file.origin()) {
+                    Membership::In(book) => Some(book.name()),
+                    Membership::Outside => None,
+                });
+        let first = books.next()??;
+        books.all(|book| book == Some(first)).then_some(first)
+    }
+
+    /// The book a new record about the document `id` names in its key `book`: its
+    /// book now ([`Shelf::book_of`]) when the project declares a rule of who may
+    /// decide, and none when it declares no rule, where nothing reads the key, so that
+    /// such a project writes records of the form it wrote before. The one place a new
+    /// record's book is chosen.
+    pub fn book_to_record(&self, id: DocId) -> Option<&BookName> {
+        if self.schema.authority().is_unruled() {
+            None
+        } else {
+            self.book_of(id)
+        }
+    }
+
     /// The valid documents.
     pub fn docs(&self) -> &BTreeMap<DocId, Doc> {
         &self.docs

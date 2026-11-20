@@ -33,8 +33,9 @@ use crate::domain::nonempty::NonEmptyVec;
 
 use super::super::artifact::{Comparison, Space};
 use super::{
-    BookSchemaDecl, Cardinality, CompareDecl, CoverDecl, LinkEntryDecl, LinkTargetDecl, NamePlace,
-    NameProblem, PresetName, Propagation, SchemaProblem, WordAt, offered, read_word, report,
+    BookSchemaDecl, Cardinality, CompareDecl, CoverDecl, DecideDecl, LinkEntryDecl, LinkTargetDecl,
+    NamePlace, NameProblem, PresetName, Propagation, SchemaProblem, WordAt, offered, read_word,
+    report,
 };
 
 /// The values a preset gives a link to artifacts: each is given only when it is
@@ -166,8 +167,8 @@ impl From<LinkEntryDecl> for WrittenLinkDecl {
 /// A book as written, with its links as written.
 pub type WrittenBookDecl = BookSchemaDecl<WrittenLinkDecl>;
 
-/// The declaration of a project as an adapter read it: the books, the presets and
-/// the defaults, nothing checked.
+/// The declaration of a project as an adapter read it: the books, the presets, the
+/// defaults and who may decide, nothing checked.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ShelfDecl {
     /// The books.
@@ -176,6 +177,8 @@ pub struct ShelfDecl {
     pub presets: Vec<PresetDecl>,
     /// The defaults.
     pub defaults: DefaultsDecl,
+    /// Who may decide about the documents of the books.
+    pub decide: DecideDecl,
 }
 
 impl ShelfDecl {
@@ -196,6 +199,7 @@ impl ShelfDecl {
                 .collect(),
             presets: Vec::new(),
             defaults: DefaultsDecl::default(),
+            decide: DecideDecl::default(),
         }
     }
 }

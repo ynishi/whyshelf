@@ -5,7 +5,7 @@
 //! [`new_doc`](super::ShelfApp::new_doc), which makes a document's file, and
 //! [`fmt`](super::ShelfApp::fmt), which writes documents' files over in the form).
 //!
-//! A judgement is made in five steps, and the application decides none of them:
+//! A judgement is made in six steps, and the application decides none of them:
 //!
 //! ```text
 //!   reference ---- resolve ----------------------> the document's identity
@@ -16,9 +16,16 @@
 //!             ---- Decision::approve / deny /
 //!                  deprecate / retire,
 //!                  Revocation::new ---------------> a Record, or a DecisionProblem
-//!   record    ---- RunWrites::record --------------> the ledger (create-only), every
+//!   record    ---- Ledger::accept ----------------> an AdmittedRecord, or NotAdmitted
+//!                                                   (who may decide), on the ledger
+//!                                                   the run has left
+//!   admitted  ---- RunWrites::record --------------> the ledger (create-only), every
 //!                                                   record put on disk once, at the end
 //! ```
+//!
+//! A record whose name the rules of who may decide do not admit for its kind and its
+//! book is refused ([`ShelfError::NotAdmitted`]), and the run writes nothing
+//! ([`Ledger::accept`]).
 //!
 //! An approval is given, between the frame and the record, the address of each thing
 //! it stands on and the revision now ([`ApproveFrame::addressed`], rule A5): the
@@ -58,6 +65,7 @@
 //! [`Successors::of`]: crate::domain::shelf::freshness::Successors::of
 //! [`Ledger::status_of`]: crate::domain::shelf::ledger::Ledger::status_of
 //! [`Ledger::kind_of`]: crate::domain::shelf::ledger::Ledger::kind_of
+//! [`Ledger::accept`]: crate::domain::shelf::ledger::Ledger::accept
 //! [`ApprovalKind::left_out`]: crate::domain::shelf::ledger::ApprovalKind::left_out
 
 use std::collections::BTreeSet;
@@ -66,9 +74,9 @@ use crate::domain::actor::Actor;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
-    ApproveFrame, Asked, Before, Decision, DecisionProblem, DecisionVerb, DeclaredStatus, JudgedAt,
-    JudgementId, Ledger, PresentFrame, Record, RetireFrame, Revocation, Taking, frame_approve,
-    frame_present, frame_retire,
+    AdmittedRecord, ApproveFrame, Asked, Before, Decision, DecisionProblem, DecisionVerb,
+    DeclaredStatus, JudgedAt, JudgementId, PresentFrame, Record, RetireFrame, Revocation, Taking,
+    frame_approve, frame_present, frame_retire,
 };
 use crate::domain::shelf::lookup::Reference;
 
@@ -79,13 +87,6 @@ use super::ports::{ActorSource, DocSource, IdSource, RevisionSource, ShelfPort, 
 use super::read::identity;
 use super::report::{Judged, JudgedAll, LeftOut, LeftOutWhy};
 use super::run_writes::RunWrites;
-
-/// Take a judgement decided into the reading, so the next of the run is decided on
-/// the ledger as it left it.
-pub(super) fn taken(loaded: &mut Loaded, one: &Judged) {
-    loaded.records.push(one.record.clone());
-    loaded.ledger = Ledger::build(loaded.records.clone());
-}
 
 /// What a request asks, checked before the run asks for its actor: its reference and
 /// a deprecation's successor resolve, and an approval's expiry is after now. The rest
@@ -183,7 +184,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
     ///
     /// A judgement the model refuses (a document that is not valid, a link that
     /// cannot be followed, a cycle, an expiry that is not in the future, nothing to
-    /// revoke, a successor that is none) writes nothing.
+    /// revoke, a successor that is none, a name who may decide does not admit) writes
+    /// nothing.
     pub async fn judge(&mut self, request: JudgeRequest) -> Result<JudgedAll, ShelfError> {
         self.judge_all(vec![request]).await
     }
@@ -245,31 +247,29 @@ impl<P: ShelfWrite> ShelfApp<P> {
             actors.push(actor);
         }
         let mut judged = Vec::with_capacity(requests.len());
+        let mut admitted = Vec::with_capacity(requests.len());
         let mut left_out = Vec::new();
         for (request, actor) in requests.into_iter().zip(actors) {
             match self.decide(&loaded, request, actor, Taking::Named).await? {
                 Decided::Judged(one) => {
-                    taken(&mut loaded, &one);
+                    admitted.push(loaded.take(one.record.clone())?);
                     judged.push(one);
                 }
                 Decided::LeftOut(left) => left_out.push(left),
             }
         }
-        self.write(&judged).await?;
+        self.write(&admitted).await?;
         Ok(JudgedAll { judged, left_out })
     }
 
-    /// Append the records of a run, every one decided, in order, and put them on disk
-    /// once, at the end ([`RunWrites::run`]). The one write of [`judge_all`](Self::judge_all)
-    /// and of `approve_chosen`.
+    /// Append the records of a run, every one decided and admitted, in order, and put
+    /// them on disk once, at the end ([`RunWrites::run`]). The one write of every use
+    /// case that writes records to the ledger.
     pub(super) async fn write<'a>(
         &mut self,
-        judged: impl IntoIterator<Item = &'a Judged>,
+        admitted: impl IntoIterator<Item = &'a AdmittedRecord>,
     ) -> Result<(), ShelfError> {
-        let records = judged
-            .into_iter()
-            .map(|one| &one.record)
-            .collect::<Vec<_>>();
+        let records = admitted.into_iter().collect::<Vec<_>>();
         RunWrites::run(&self.ports, |writes| {
             Box::pin(async move {
                 for record in records {

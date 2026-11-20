@@ -19,7 +19,6 @@ use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::load;
 use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
-use super::run_writes::RunWrites;
 
 /// A request to withdraw records by their identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,7 +35,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// Withdraw the records named, with one revocation, and append it.
     ///
     /// Refused (nothing written): a record that is no decision or declaration of the
-    /// ledger, or one already withdrawn. An empty list is
+    /// ledger, or one already withdrawn, and a name the rules of who may decide do not
+    /// admit to revoke a record named in that record's book
+    /// ([`ShelfError::NotAdmitted`]). A record those rules do not admit can be
+    /// withdrawn, by a name they admit to revoke. An empty list is
     /// [`ShelfError::NothingRequested`].
     pub async fn withdraw(&mut self, request: WithdrawRequest) -> Result<Record, ShelfError> {
         let loaded = load(&self.ports).await?;
@@ -67,10 +69,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
             loaded.now,
             request.reason,
         ));
-        RunWrites::run(&self.ports, |writes| {
-            Box::pin(async { writes.record(&record).await })
-        })
-        .await?;
-        Ok(record)
+        let admitted = loaded.ledger.accept(record)?;
+        self.write([&admitted]).await?;
+        Ok(admitted.record().clone())
     }
 }

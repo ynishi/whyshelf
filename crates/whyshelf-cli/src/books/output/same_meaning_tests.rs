@@ -14,7 +14,7 @@ use whyshelf_core::domain::shelf::artifact::{
 use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
 use whyshelf_core::domain::shelf::freshness::assess;
 use whyshelf_core::domain::shelf::ledger::{
-    Decision, JudgedAt, JudgementId, Ledger, Revocation, SameMeaning, SameMeaningTarget,
+    Admit, Decision, JudgedAt, JudgementId, Ledger, Revocation, SameMeaning, SameMeaningTarget,
     frame_approve, frame_same_meaning,
 };
 use whyshelf_core::domain::shelf::schema::{
@@ -158,13 +158,24 @@ fn shelf(finding: &str, test: &str) -> Shelf {
 fn records(shelf: &Shelf, now: &Shelf, targets: Vec<SameMeaningTarget>) -> Vec<Record> {
     let mut records = Vec::new();
     for n in [1, 2] {
-        let frame = frame_approve(shelf, &Ledger::build(records.clone()), docid(n)).unwrap();
+        let frame = frame_approve(
+            shelf,
+            &Ledger::build(records.clone(), &Admit::unruled()),
+            docid(n),
+        )
+        .unwrap();
         records.push(Record::Decision(
             Decision::approve(jid(10 + n), frame, None, actor(), JudgedAt::new(10), None).unwrap(),
         ));
     }
     for (i, target) in targets.into_iter().enumerate() {
-        let of = frame_same_meaning(now, &Ledger::build(records.clone()), target, None).unwrap();
+        let of = frame_same_meaning(
+            now,
+            &Ledger::build(records.clone(), &Admit::unruled()),
+            target,
+            None,
+        )
+        .unwrap();
         records.push(Record::SameMeaning(
             SameMeaning::new(jid(20 + i as u8), of, actor(), JudgedAt::new(50), because()).unwrap(),
         ));
@@ -272,7 +283,11 @@ fn the_notices_of_a_declared_edit_name_the_declarations_and_the_file() {
             SameMeaningTarget::Artifact(name("tests/a.rs")),
         ],
     );
-    let assessment = assess(&now, &Ledger::build(all), JudgedAt::new(100));
+    let assessment = assess(
+        &now,
+        &Ledger::build(all, &Admit::unruled()),
+        JudgedAt::new(100),
+    );
     let names = Names::default();
     let namer = Namer(&names);
     let out = |n: u8| -> Vec<Value> {

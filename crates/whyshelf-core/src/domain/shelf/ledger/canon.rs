@@ -446,6 +446,20 @@ const REVISION: &str = "revision";
 /// The optional key of an approval that holds its pins of artifacts (left out when
 /// there is none, so an approval that stands on no artifact has the first form).
 const ARTIFACTS: &str = "artifacts";
+/// The optional key of a decision and of a declaration of the same meaning of a
+/// document that holds the book its document was in when it was made, which who may
+/// decide reads (left out when the shelf could not tell one, so a record without it
+/// has the form, and the hash, a record made before had).
+const BOOK: &str = "book";
+
+/// The optional `book` of a record: absent when the key is not there.
+fn book_of(map: &CanonMap) -> Result<Option<BookName>, RecordProblem> {
+    match map.get(BOOK) {
+        None => Ok(None),
+        Some(Canon::Str(s)) => BookName::new(s).map(Some).map_err(RecordProblem::BadName),
+        Some(_) => Err(wrong(BOOK, "a text")),
+    }
+}
 
 fn pin_canon(pin: &FramePin) -> Canon {
     let mut entries = vec![
@@ -808,6 +822,7 @@ fn decision_canon(d: &Decision) -> Canon {
         }
         DecisionVerb::Retire { seen } => entries.push(("seen", seen_canon(seen))),
     }
+    push_opaque(&mut entries, BOOK, d.book().map(BookName::as_str));
     Canon::map(entries)
 }
 
@@ -859,9 +874,9 @@ fn decision_from(map: &CanonMap) -> Result<Decision, RecordProblem> {
     let (extra, optional): (&[&str], &[&str]) = match verb {
         Verb::Approve => (
             &["seen", "frame", "expires"],
-            &[ARTIFACTS, SEEN_ADDRESS, REVISION],
+            &[ARTIFACTS, SEEN_ADDRESS, REVISION, BOOK],
         ),
-        Verb::Deny | Verb::Deprecate | Verb::Retire => (&["seen"], &[]),
+        Verb::Deny | Verb::Deprecate | Verb::Retire => (&["seen"], &[BOOK]),
     };
     let keys: Vec<&str> = DECISION_KEYS.iter().chain(extra).copied().collect();
     exact_with(map, &keys, optional)?;
@@ -910,7 +925,8 @@ fn decision_from(map: &CanonMap) -> Result<Decision, RecordProblem> {
             seen: seen_from(submap(map, "seen")?)?,
         },
     };
-    Decision::assemble(id, subject, verb, actor, at, reason).map_err(RecordProblem::Invariant)
+    Decision::assemble(id, subject, verb, actor, at, reason, book_of(map)?)
+        .map_err(RecordProblem::Invariant)
 }
 
 fn revocation_from(map: &CanonMap) -> Result<Revocation, RecordProblem> {
@@ -952,7 +968,7 @@ fn same_meaning_canon(s: &SameMeaning) -> Canon {
             )
         }
     };
-    Canon::map([
+    let mut entries = vec![
         ("v", Canon::Int(VERSION)),
         ("kind", Canon::str(RecordKind::SameMeaning.as_str())),
         ("id", Canon::str(s.id.to_string())),
@@ -962,7 +978,9 @@ fn same_meaning_canon(s: &SameMeaning) -> Canon {
         ("actor", Canon::str(s.actor.as_str())),
         ("at", Canon::Int(s.at.millis())),
         ("reason", Canon::str(s.reason.as_str())),
-    ])
+    ];
+    push_opaque(&mut entries, BOOK, s.book.as_ref().map(BookName::as_str));
+    Canon::map(entries)
 }
 
 /// The hashes of `from`: a list of one or more texts, each read by `read`.
@@ -987,7 +1005,8 @@ fn artifact_hash_of(raw: &str, key: &str) -> Result<ArtifactHash, RecordProblem>
 }
 
 fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
-    exact(map, &SAME_MEANING_KEYS)?;
+    exact_with(map, &SAME_MEANING_KEYS, &[BOOK])?;
+    let book = book_of(map)?;
     let Common {
         id,
         actor,
@@ -1011,6 +1030,12 @@ fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
             (of, NameForm::Spaced)
         }
         Some(SubjectKind::Artifact) => {
+            // An artifact is of no book, so a declaration about one names none.
+            if book.is_some() {
+                return Err(RecordProblem::ExtraKey {
+                    key: BOOK.to_owned(),
+                });
+            }
             let (artifact, form) = artifact_of(subject, &["kind"], &[])?;
             let of = SameMeaningOf::Artifact {
                 artifact,
@@ -1028,6 +1053,7 @@ fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
     let mut declared =
         SameMeaning::new(id, of, actor, at, reason).map_err(RecordProblem::SameMeaning)?;
     declared.form = form;
+    declared.book = book;
     Ok(declared)
 }
 

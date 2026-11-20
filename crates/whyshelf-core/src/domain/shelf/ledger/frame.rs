@@ -1,6 +1,8 @@
 //! The facts a decision stands on, which the shelf supplies: [`frame_approve`],
 //! [`frame_present`] and [`frame_retire`] take an [`ApproveFrame`], a [`PresentFrame`]
-//! or a [`RetireFrame`], or refuse with a [`FrameRefusal`].
+//! or a [`RetireFrame`], or refuse with a [`FrameRefusal`]. Each frame also carries the
+//! book the shelf tells its document is in now ([`Shelf::book_of`]), which the
+//! decision names in its key `book`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -15,7 +17,7 @@ use super::super::artifact::{
 use super::super::build::{Detail, DocFailure, DocState, FailureTag, Shelf};
 use super::super::doc::{DocHash, DocKey, LinkState, UnresolvedLink};
 use super::super::graph::{Cycle, LabelledCycle};
-use super::super::schema::{ArtifactPropagation, EntryName, Propagation};
+use super::super::schema::{ArtifactPropagation, BookName, EntryName, Propagation};
 use super::{ArtifactPin, DeclaredStatus, FramePin, Ledger, NameForm, PinnedArtifact, Seen};
 
 /// The facts an approval stands on, taken by [`frame_approve`].
@@ -32,6 +34,7 @@ pub struct ApproveFrame {
     pub(super) artifacts: BTreeSet<ArtifactPin>,
     pub(super) seen_address: Option<ContentAddress>,
     pub(super) revision: Option<Revision>,
+    pub(super) book: Option<BookName>,
     subject_file: RelPath,
     upstream_files: BTreeMap<DocId, RelPath>,
 }
@@ -96,6 +99,7 @@ impl ApproveFrame {
 pub struct PresentFrame {
     pub(super) subject: DocId,
     pub(super) seen: DocHash,
+    pub(super) book: Option<BookName>,
 }
 
 /// The facts a retirement stands on, taken by [`frame_retire`].
@@ -103,6 +107,7 @@ pub struct PresentFrame {
 pub struct RetireFrame {
     pub(super) subject: DocId,
     pub(super) seen: Seen,
+    pub(super) book: Option<BookName>,
 }
 
 /// Why a frame cannot be taken. It owns what it says, so it is a `'static` error.
@@ -292,6 +297,7 @@ pub fn frame_approve(
         artifacts,
         seen_address: None,
         revision: None,
+        book: shelf.book_to_record(id).cloned(),
         subject_file: doc.origin().clone(),
         upstream_files,
     })
@@ -310,6 +316,7 @@ pub fn frame_present(shelf: &Shelf, id: DocId) -> Result<PresentFrame, FrameRefu
     Ok(PresentFrame {
         subject: id,
         seen: *doc.hash(),
+        book: shelf.book_to_record(id).cloned(),
     })
 }
 
@@ -322,5 +329,9 @@ pub fn frame_retire(shelf: &Shelf, id: DocId) -> RetireFrame {
         DocState::Gone => Seen::Not(FailureTag::Gone),
         DocState::Unknown { .. } => Seen::Not(FailureTag::Unknown),
     };
-    RetireFrame { subject: id, seen }
+    RetireFrame {
+        subject: id,
+        seen,
+        book: shelf.book_to_record(id).cloned(),
+    }
 }

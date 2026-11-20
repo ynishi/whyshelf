@@ -250,6 +250,7 @@ fn a_link_to_artifacts_is_mapped_with_its_values_and_the_preset_it_came_from() {
         defaults: DefaultsDecl {
             artifact: Some("file".to_owned()),
         },
+        decide: Default::default(),
     };
     let map = ShelfMap::of(&Schema::declared(decl, &builtins, &spaces()).unwrap());
     let presets: Vec<Option<PresetOrigin>> = map

@@ -2,7 +2,9 @@
 //!
 //! The name that goes into a judgement's `by`. It is taken as declared, like a
 //! Git author: from the configuration or from the command line. There is no
-//! authentication in the model.
+//! authentication in the model, so who may decide
+//! ([`Authority`](super::shelf::schema::Authority)) is a rule about this name as it
+//! is written, not about who wrote it.
 
 use std::fmt;
 

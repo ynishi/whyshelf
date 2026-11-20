@@ -85,7 +85,10 @@ pub struct LeftOutOut {
     /// and the approval that stands lapse; of `--stale`, one stale only through an upstream's upstream the run
     /// approved again on a new hash); of `--stale`, `second_reading` (one made now
     /// would be of the content that stands by an actor who has not approved it, which
-    /// a run that chose the document by a rule does not make: name the document).
+    /// a run that chose the document by a rule does not make: name the document); of
+    /// `--stale` and `--pending`, `not_admitted` (who may decide does not admit the
+    /// actor to approve in the document's book: the run approves the others, and
+    /// what stands on it is held back as `left_out`).
     pub reason: &'static str,
     /// A sentence for a person.
     pub detail: String,
@@ -94,9 +97,9 @@ pub struct LeftOutOut {
     /// For `stands_on`, the link that names it.
     pub link: Option<String>,
     /// For `stands_on`, why that document holds it back: `broken`, `pending` (and
-    /// not in the run), `stale` (and not in the run) or `left_out` (refused or broken
-    /// in the run; one that `repeats`, or is a `second_reading`, stands, and holds
-    /// nothing back).
+    /// not in the run), `stale` (and not in the run) or `left_out` (refused, broken
+    /// or `not_admitted` in the run; one that `repeats`, or is a `second_reading`,
+    /// stands, and holds nothing back).
     pub upstream_is: Option<&'static str>,
     /// For `repeats` and `second_reading`, the approval that stands (its record's
     /// id).
@@ -305,7 +308,8 @@ fn left_out_warning(namer: &Namer<'_>, left: &LeftOut, again: bool) -> String {
         LeftOutWhy::Refused(_)
         | LeftOutWhy::StandsOn { .. }
         | LeftOutWhy::Repeats { .. }
-        | LeftOutWhy::SecondReading { .. } => {
+        | LeftOutWhy::SecondReading { .. }
+        | LeftOutWhy::NotAdmitted(_) => {
             format!(
                 "warning: {doc} was not {approved}: {}",
                 left_out_detail(namer, left)
@@ -373,6 +377,7 @@ fn left_out_detail(namer: &Namer<'_>, left: &LeftOut) -> String {
         LeftOutWhy::SecondReading { approval } => format!(
             "an approval now would pin what its approval {approval} pins, by one who has not approved it: a second reading is made by naming the document, with `judge approve`"
         ),
+        LeftOutWhy::NotAdmitted(not) => not.why(),
         LeftOutWhy::StandsOn { held, key } => {
             let upstream = key
                 .as_ref()
@@ -415,7 +420,8 @@ impl Namer<'_> {
             LeftOutWhy::Broken(_)
             | LeftOutWhy::Refused(_)
             | LeftOutWhy::Repeats { .. }
-            | LeftOutWhy::SecondReading { .. } => (None, None, None),
+            | LeftOutWhy::SecondReading { .. }
+            | LeftOutWhy::NotAdmitted(_) => (None, None, None),
         };
         LeftOutOut {
             doc: DocRef {
@@ -428,6 +434,7 @@ impl Namer<'_> {
                 LeftOutWhy::StandsOn { .. } => "stands_on",
                 LeftOutWhy::Repeats { .. } => "repeats",
                 LeftOutWhy::SecondReading { .. } => "second_reading",
+                LeftOutWhy::NotAdmitted(_) => "not_admitted",
             },
             detail: left_out_detail(self, left),
             upstream,
@@ -437,9 +444,10 @@ impl Namer<'_> {
                 LeftOutWhy::Repeats { approval } | LeftOutWhy::SecondReading { approval } => {
                     Some(approval.to_string())
                 }
-                LeftOutWhy::Broken(_) | LeftOutWhy::Refused(_) | LeftOutWhy::StandsOn { .. } => {
-                    None
-                }
+                LeftOutWhy::Broken(_)
+                | LeftOutWhy::Refused(_)
+                | LeftOutWhy::StandsOn { .. }
+                | LeftOutWhy::NotAdmitted(_) => None,
             },
             kinds: left_out_kinds(self, left),
             causes: match &left.why {
@@ -449,7 +457,8 @@ impl Namer<'_> {
                 LeftOutWhy::Refused(_)
                 | LeftOutWhy::StandsOn { .. }
                 | LeftOutWhy::Repeats { .. }
-                | LeftOutWhy::SecondReading { .. } => Vec::new(),
+                | LeftOutWhy::SecondReading { .. }
+                | LeftOutWhy::NotAdmitted(_) => Vec::new(),
             },
         }
     }

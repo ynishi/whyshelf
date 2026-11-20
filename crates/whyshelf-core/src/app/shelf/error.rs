@@ -20,8 +20,8 @@ use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::ExemptRefusal;
 use crate::domain::shelf::filter::FilterProblem;
 use crate::domain::shelf::ledger::{
-    DecisionProblem, FrameRefusal, MovedRefusal, NamedWhy, PrefixRefusal, SameMeaningProblem,
-    SameMeaningRefusal, WithdrawRefusal,
+    DecisionProblem, FrameRefusal, MovedRefusal, NamedWhy, NotAdmitted, PrefixRefusal,
+    SameMeaningProblem, SameMeaningRefusal, WithdrawRefusal,
 };
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::NotPending;
@@ -132,6 +132,11 @@ pub enum ShelfError {
     /// withdrawn.
     #[error("the withdrawal is refused")]
     Withdraw(#[from] WithdrawRefusal),
+    /// The rules of who may decide do not admit the name the record would write for
+    /// it (there is no authentication: the rule is about the name written); nothing
+    /// was written.
+    #[error("the record is not admitted by who may decide")]
+    NotAdmitted(#[from] NotAdmitted),
     /// A document named to `judge approve --pending` is not pending: it is approved
     /// or decided against, or no valid document has it now.
     #[error("`{reference}` is not pending: it is {why}")]
@@ -514,6 +519,7 @@ impl ShelfError {
             // nothing behind it now or that cannot be told now.
             Self::Refused(_)
             | Self::Decision(_)
+            | Self::NotAdmitted(_)
             | Self::SameMeaningRefused(
                 SameMeaningRefusal::DocNotValid { .. }
                 | SameMeaningRefusal::ArtifactAbsent { .. }

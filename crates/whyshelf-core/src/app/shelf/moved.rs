@@ -8,7 +8,9 @@
 //!   the answers        ---- frame_moved ----------------> what moved (or a MovedRefusal)
 //!   + time, actor, new id, reason
 //!                      ---- Moved::new -----------------> a Record
-//!   record             ---- RunWrites::record ----------> the ledger (create-only), every
+//!   record             ---- Ledger::accept -------------> admitted by who may decide
+//!                                                         (`[decide]`), or NotAdmitted
+//!   admitted           ---- RunWrites::record ----------> the ledger (create-only), every
 //!                                                         record put on disk once, at the end
 //! ```
 //!
@@ -40,7 +42,7 @@ use crate::domain::actor::Actor;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactName, PrefixMove, Space};
 use crate::domain::shelf::ledger::{
-    Ledger, Moved, MovedOf, MovedRefusal, PinnedNames, Record, frame_moved, frame_prefix_moves,
+    Moved, MovedOf, MovedRefusal, PinnedNames, Record, frame_moved, frame_prefix_moves,
     moved_space, plan_prefix_moves,
 };
 
@@ -48,7 +50,6 @@ use super::ShelfApp;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
 use super::ports::{ActorSource, ArtifactSource, IdSource, ShelfPort, ShelfWrite, port};
-use super::run_writes::RunWrites;
 
 /// A request to declare that an artifact moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,26 +102,13 @@ impl<P: ShelfWrite> ShelfApp<P> {
         }
         let mut loaded = load(&self.ports).await?;
         let mut declared = Vec::with_capacity(requests.len());
+        let mut admitted = Vec::with_capacity(requests.len());
         for request in requests {
             let one = self.declare_moved(&loaded, request).await?;
-            loaded.records.push(Record::Moved(one.clone()));
-            loaded.ledger = Ledger::build(loaded.records.clone());
+            admitted.push(loaded.take(Record::Moved(one.clone()))?);
             declared.push(one);
         }
-        let records = declared
-            .iter()
-            .cloned()
-            .map(Record::Moved)
-            .collect::<Vec<_>>();
-        RunWrites::run(&self.ports, |writes| {
-            Box::pin(async move {
-                for record in &records {
-                    writes.record(record).await?;
-                }
-                Ok(())
-            })
-        })
-        .await?;
+        self.write(&admitted).await?;
         Ok(declared)
     }
 
@@ -145,7 +133,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         &mut self,
         request: PrefixMovedRequest,
     ) -> Result<MovedPrefix, ShelfError> {
-        let loaded = load(&self.ports).await?;
+        let mut loaded = load(&self.ports).await?;
         let pinned = PinnedNames::of(&loaded.ledger);
         let answers = self
             .ports
@@ -176,6 +164,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 .map_err(port(ShelfPort::Actor))?,
         };
         let mut moved = Vec::with_capacity(framed.len());
+        let mut admitted = Vec::with_capacity(framed.len());
         for of in framed.into_vec() {
             let id = self
                 .ports
@@ -183,24 +172,11 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 .new_judgement_id()
                 .await
                 .map_err(port(ShelfPort::Ids))?;
-            moved.push(Moved::new(
-                id,
-                of,
-                actor.clone(),
-                loaded.now,
-                request.reason.clone(),
-            ));
+            let one = Moved::new(id, of, actor.clone(), loaded.now, request.reason.clone());
+            admitted.push(loaded.take(Record::Moved(one.clone()))?);
+            moved.push(one);
         }
-        let records = moved.iter().cloned().map(Record::Moved).collect::<Vec<_>>();
-        RunWrites::run(&self.ports, |writes| {
-            Box::pin(async move {
-                for record in &records {
-                    writes.record(record).await?;
-                }
-                Ok(())
-            })
-        })
-        .await?;
+        self.write(&admitted).await?;
         Ok(MovedPrefix { moved, not_asked })
     }
 

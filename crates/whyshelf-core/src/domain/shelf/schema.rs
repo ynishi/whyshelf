@@ -9,7 +9,8 @@
 //! none: nothing downstream re-checks a name, a prefix or a link target. A
 //! declaration as a project writes it may name presets of links to artifacts and a
 //! default ([`ShelfDecl`]); [`expand`] puts their values in first, and
-//! [`Schema::declared`] does both.
+//! [`Schema::declared`] does both. It may also declare who may decide about the
+//! documents of the books ([`Authority`]), checked with them.
 //!
 //! The key grammar of a book ([`KeyPattern`]) is also decided here and only here:
 //! [`KeyPattern::parse`] turns the text of a key into a [`KeyForm`], and both the
@@ -21,6 +22,7 @@ use std::fmt;
 
 use thiserror::Error;
 
+use crate::domain::actor::Actor;
 use crate::domain::error::ValueError;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
@@ -248,6 +250,8 @@ pub enum NamePlace {
         /// The field, as written.
         field: String,
     },
+    /// The name of a group of actors.
+    Group,
 }
 
 impl fmt::Display for NamePlace {
@@ -263,6 +267,7 @@ impl fmt::Display for NamePlace {
             Self::EnumWord { book, field } => {
                 write!(f, "a word of field `{field}` of book `{book}`")
             }
+            Self::Group => f.write_str("the name of a group"),
         }
     }
 }
@@ -614,6 +619,72 @@ pub enum SchemaProblem {
         /// What the word says.
         of: WordOf,
     },
+    /// Two groups of one name.
+    #[error("the group `{name}` is declared twice")]
+    DuplicateGroup {
+        /// The name.
+        name: GroupName,
+    },
+    /// A group with no member.
+    #[error("the group `{group}` has no member")]
+    EmptyGroup {
+        /// The group, as written.
+        group: String,
+    },
+    /// A member that is no name of an actor.
+    #[error("the group `{group}`: `{member}` is not a name of an actor")]
+    BadMember {
+        /// The group, as written.
+        group: String,
+        /// The member, as written.
+        member: String,
+        /// Why.
+        #[source]
+        source: ValueError,
+    },
+    /// A member whose `from` is not before its `until`: it would be in the group at no
+    /// time.
+    #[error("the group `{group}`: the `from` of `{member}` is not before its `until`")]
+    MemberSpan {
+        /// The group, as written.
+        group: String,
+        /// The member.
+        member: Actor,
+    },
+    /// A rule of who may decide that names a group not declared.
+    #[error("{at} names the group `{group}`, which is not declared")]
+    UnknownGroup {
+        /// Where the rule is.
+        at: RulePlace,
+        /// The group, as written.
+        group: String,
+    },
+    /// A rule of who may decide that names no group for a kind, or as its default.
+    #[error("{at}: `{}` names no group", kind.map_or("default", DecideKind::word))]
+    NoGroup {
+        /// Where the rule is.
+        at: RulePlace,
+        /// The kind, or none for the default.
+        kind: Option<DecideKind>,
+    },
+    /// A rule of who may decide for a book that is not declared.
+    #[error("who may decide is declared for the book `{book}`, which is not declared")]
+    DecideOfUnknownBook {
+        /// The book, as written.
+        book: String,
+    },
+    /// Two rules of who may decide for one book.
+    #[error("who may decide is declared twice for the book `{book}`")]
+    DecideTwice {
+        /// The book, as written.
+        book: String,
+    },
+    /// A book declares who may decide and `[decide]` is not declared: the records of
+    /// no book, and those whose book cannot be told, would be ruled by none.
+    #[error(
+        "a book declares who may decide, and `[decide]` does not: the records of no book (a move, the same meaning of an artifact) and those whose book cannot be told would escape every rule"
+    )]
+    NoShelfRule,
 }
 
 /// What [`SchemaProblem::UnknownWord`] says: where the word was written, which word
@@ -654,10 +725,12 @@ pub(super) enum Membership<'a> {
     Outside,
 }
 
-/// The books of a project, checked as a whole.
+/// The books of a project, checked as a whole, and who may decide about their
+/// documents.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schema {
     books: Declared<BookName, BookSchema>,
+    authority: Authority,
 }
 
 /// The spaces offered, as a problem says them: `` `a`, `b` ``, or `none`.
@@ -706,19 +779,42 @@ impl Schema {
     /// both are returned at once, those of the expansion first. The schema keeps,
     /// for each link to artifacts, the preset it came from
     /// ([`BookSchema::preset_of`]).
+    ///
+    /// Who may decide ([`DecideDecl`]) is read with it, against the books the
+    /// declaration writes, and its problems come last ([`Authority`]).
     #[allow(clippy::result_large_err)]
     pub fn declared(
-        decl: ShelfDecl,
+        mut decl: ShelfDecl,
         builtins: &BuiltinPresets,
         spaces: &BTreeSet<Space>,
     ) -> Result<Self, NonEmptyVec<SchemaProblem>> {
+        let decide = std::mem::take(&mut decl.decide);
+        let written: BTreeSet<String> = decl.books.iter().map(|b| b.name.clone()).collect();
         let (expanded, problems) = expand_all(decl, builtins, spaces);
         let checked = Self::validate_expanded(expanded, spaces);
-        match (NonEmptyVec::from_vec(problems), checked) {
+        let mut ruled = Vec::new();
+        let authority = read_authority(decide, &written, &mut ruled);
+        let checked = match (NonEmptyVec::from_vec(problems), checked) {
             (Err(_), checked) => checked,
             (Ok(problems), Ok(_)) => Err(problems),
             (Ok(problems), Err(more)) => Err(problems.extended(more.into_vec())),
+        };
+        match (checked, NonEmptyVec::from_vec(ruled)) {
+            (Ok(schema), Err(_)) => Ok(Self {
+                authority,
+                ..schema
+            }),
+            (Ok(_), Ok(ruled)) => Err(ruled),
+            (Err(problems), ruled) => {
+                Err(problems.extended(ruled.map_or_else(|_| Vec::new(), NonEmptyVec::into_vec)))
+            }
         }
+    }
+
+    /// Who may decide about the documents of the books ([`Authority`]); unruled
+    /// when the declaration says nothing of it.
+    pub fn authority(&self) -> &Authority {
+        &self.authority
     }
 
     #[allow(clippy::result_large_err)]
@@ -752,7 +848,10 @@ impl Schema {
         {
             books.insert(book.name.clone(), book);
         }
-        Ok(Self { books })
+        Ok(Self {
+            books,
+            authority: Authority::default(),
+        })
     }
 
     /// The book a file belongs to: the one whose directory it is under.
@@ -799,6 +898,7 @@ impl Schema {
     }
 }
 
+mod decide;
 mod decl;
 mod declared;
 mod field;
@@ -815,6 +915,11 @@ pub use scope::{
     BookRange, BookScope, Pattern, PatternProblem, ScopeDecl, ScopeList, WithoutFrontMatter,
 };
 
+use decide::read_authority;
+pub use decide::{
+    Authority, BookRuleDecl, DecideDecl, DecideKind, DecideRule, Group, GroupDecl, Member,
+    MemberDecl, Permission, RuleDecl, RulePlace, RuleTime,
+};
 pub use declared::{Declared, Picked};
 pub use preset::{
     BuiltinPresets, DefaultsDecl, Expanded, PresetDecl, PresetOrigin, PresetPlace, PresetValues,
@@ -834,8 +939,8 @@ pub use link::{
     DeclaredLink, LinkKind, Propagation,
 };
 pub use name::{
-    BookDescription, BookDir, BookName, DescriptionProblem, EntryName, FieldWord, NameProblem,
-    PresetName,
+    BookDescription, BookDir, BookName, DescriptionProblem, EntryName, FieldWord, GroupName,
+    NameProblem, PresetName,
 };
 pub(super) use name::{ID_ENTRY, KEY_ENTRY};
 use validate::{Draft, check_dirs, check_links, check_prefixes, declared_names};

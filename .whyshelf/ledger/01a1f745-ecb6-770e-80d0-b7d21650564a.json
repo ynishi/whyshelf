@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f74137146aa1c105c37085e264319ec3939c4a14",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:24b7535b248796c066db0cd622adb087ccfc531b7ed98e18466baef314f93a9b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2963a0437157c1de6320d814f3f2bc83a53c31be",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6dbce57f4bb70f19e799d0b75cc7b18f5a6c4204f33d1abe7de2b45db6246aa6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9b3669f9aa7d260ba7e2a789840078b64e3ba91f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:70c1215ca1fc81ac0b6ad638c49bcd5b17f736fd1830488285b8d984eb57242f",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b706870cbac06039fa6de0e42af08f4ba530dcb",
+      "hash": "sha256:a6fb5160c904b99530d18041760c34aafc39a0c6d75b4ca92f70e630f1c5f0bf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "67"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+    }
+  ],
+  "id": "01a1f745-ecb6-770e-80d0-b7d21650564a",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:82ea163ce150897b496b2f81e4802ffbb0bc32f7e2c0a04be4c08ae3e6220b2a",
+  "seen_address": "f24f6219288068f02a888970923262b023ec08a5",
+  "subject": "01a1cb50-ffb0-76e1-92c3-a31d7baca809",
+  "v": 1,
+  "verb": "approve"
+}

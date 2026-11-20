@@ -42,6 +42,7 @@ use super::super::artifact::{
 };
 use super::super::build::{FailureTag, Shelf};
 use super::super::doc::DocHash;
+use super::super::schema::BookName;
 use super::{DeclaredStatus, JudgedAt, JudgementId, Ledger, NameForm, PinnedArtifact, ReadPin};
 
 /// What a declaration is about, and the hashes it says mean the same.
@@ -89,6 +90,8 @@ pub struct SameMeaning {
     /// How the record names its artifact: kept from a record read back, so it is
     /// written as it was stored.
     pub(super) form: NameForm,
+    /// The book of the document it is about, as the record names it (its key `book`).
+    pub(super) book: Option<BookName>,
 }
 
 impl SameMeaning {
@@ -115,7 +118,27 @@ impl SameMeaning {
             at,
             reason,
             form: NameForm::Spaced,
+            book: None,
         })
+    }
+
+    /// The declaration, naming the book its document is in now as `shelf` tells it
+    /// ([`Shelf::book_to_record`]), in its key `book`; a declaration about an
+    /// artifact, about a document whose book cannot be told, or in a project that
+    /// declares no rule of who may decide, names none.
+    pub fn in_book(mut self, shelf: &Shelf) -> Self {
+        self.book = match &self.of {
+            SameMeaningOf::Doc { id, .. } => shelf.book_to_record(*id).cloned(),
+            SameMeaningOf::Artifact { .. } => None,
+        };
+        self
+    }
+
+    /// The book of the document it is about, as the record names it; none for an
+    /// artifact, and for a record made before records named one. Only who may
+    /// decide reads it.
+    pub fn book(&self) -> Option<&BookName> {
+        self.book.as_ref()
     }
 
     /// The identity of the record.

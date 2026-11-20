@@ -1,0 +1,101 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::Shelf::book_of",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Admit",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::AdmittedRecord",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::accept",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::Authority",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::Authority::permission",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b32e226d7370480234befc91dcf5b2b21fd9696c",
+      "hash": "sha256:85cc022b92603cad104ebeb14d8b1c3f711c21b7fe4051e57ff5482f6ab62525",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "37"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1f6a0-2c41-7a3e-9b52-6e0d4f1c8a21"
+    }
+  ],
+  "id": "01a1f745-fab0-7777-a894-2f531e1d0b57",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:6599ee1d0b6414293d727c077a050734aa210b98e3b0fb8e0b64a6823ee85138",
+  "seen_address": "9ace93bd6fff1be46a68ad5b488ded85fa507d0e",
+  "subject": "01a1f6a0-2c41-7b18-8d07-3f9a5e2b6c40",
+  "v": 1,
+  "verb": "approve"
+}

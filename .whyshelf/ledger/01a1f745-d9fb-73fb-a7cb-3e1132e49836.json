@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "843b08dd99fa879b7b9037c21b798ad227203967",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21672f67486a9509de35df9e8744b598f3195031ac8a2d59ea9b8bec00bd72e0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "540e83edc1e80cd789e9d98ed03bf2982c1d92b4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:55fb209c51c59b409b6c5da17c7abc416279158cfdd5e21d95e0b08c83b63b20",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "50df7effc74ebecec9887d9441c66f97def68c1b",
+      "hash": "sha256:8ee51bb1680fa3f930a7879b2b95767a78c705141531c93118fac923ead05573",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    }
+  ],
+  "id": "01a1f745-d9fb-73fb-a7cb-3e1132e49836",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:e6b205f9a01b541f65fff69ac82aa0126616317732f174912f9faa0def77ac03",
+  "seen_address": "abb2a367a46d3ab3d96fee6da2cb4e6fb3f085fe",
+  "subject": "01a1c6a9-797b-7261-bf2c-9fa48fea4c5e",
+  "v": 1,
+  "verb": "approve"
+}

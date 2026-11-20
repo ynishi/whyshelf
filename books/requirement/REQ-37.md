@@ -1,0 +1,7 @@
+---
+id: "01a1f6a0-2c41-7a3e-9b52-6e0d4f1c8a21"
+key: "REQ-37"
+issues: ["#114"]
+title: "A project can declare who may write each kind of judgement about the documents of a book, and the ledger is read against it"
+---
+When documents are written and checked by more than one kind of contributor, people and coding agents or two teams, the project's rule about who signs what can be declared beside the books, so that the ledger is checked against it rather than against an arrangement kept elsewhere. The declaration names groups of actors and, for a book, which groups may write each kind of judgement about its documents; a judgement written under a name the rule does not admit is refused before it is written, and one found in the ledger is not taken as a decision and is a problem of the ledger, naming the record and the rule, until a name the rule admits takes it back (a revocation the rule does not admit, which is never withdrawn itself, until such a name withdraws what it named). There is no authentication: the rule is about the name a record writes, taken as declared, as every actor is, and it checks what contributors agreed without stopping one who writes another name. A rule declared over an earlier ledger can leave the records made before it as they were. A project that declares no rule decides as before.

@@ -92,6 +92,7 @@ fn shelf(
         defaults: DefaultsDecl {
             artifact: default.map(str::to_owned),
         },
+        decide: Default::default(),
     }
 }
 

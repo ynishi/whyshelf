@@ -24,7 +24,7 @@ use crate::domain::shelf::freshness::{
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{
     Decision, DeclaredStatus, Exempt, FrameRefusal, JudgementId, LeaveOut, LedgerProblem,
-    MoveSuggestions, Record,
+    MoveSuggestions, NotAdmitted, Record,
 };
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::HeldBack;
@@ -666,6 +666,11 @@ pub enum LeftOutWhy {
         /// The approval that stands.
         approval: JudgementId,
     },
+    /// Of `judge approve --stale` or `--pending`: the rules of who may decide do not
+    /// admit the actor to approve in the document's book. It is not approved, and
+    /// holds back what stands on it; `judge approve <ref>` refuses such an approval
+    /// instead ([`ShelfError::NotAdmitted`](super::ShelfError::NotAdmitted)).
+    NotAdmitted(NotAdmitted),
 }
 
 impl From<LeaveOut> for LeftOutWhy {

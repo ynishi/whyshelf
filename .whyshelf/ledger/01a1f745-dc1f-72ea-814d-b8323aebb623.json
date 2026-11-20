@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "fd4f309f6104ad5f501224dc2c2d454906a2e2ac",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:985bb67c22e8f87548a34fe05453f6900a9a6657f77c5d6cce5b2de497df5697",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/approve_stale.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b3cc61908f55a21a17d41a936f04176c913f2992",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a0b43f1e5f8162903f9b18e76d84b202f9e7540257c73a365f33ee57ae9ee90e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "50df7effc74ebecec9887d9441c66f97def68c1b",
+      "hash": "sha256:8ee51bb1680fa3f930a7879b2b95767a78c705141531c93118fac923ead05573",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    }
+  ],
+  "id": "01a1f745-dc1f-72ea-814d-b8323aebb623",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:f93d51aead4a8644a1b1818d30199af57a48ea04a751ada92408310537dd5e48",
+  "seen_address": "2c93af96c6885a9a6814023363c9cd37aebefccd",
+  "subject": "01a1c6a9-7aa1-7043-95a3-0a89a1618ae7",
+  "v": 1,
+  "verb": "approve"
+}

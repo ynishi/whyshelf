@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8fe3420a5e36b603e8a755532bef6debd68128e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1aa36a7cd4418c1a1e85902f24e872c6fd95141647f83bc6df254b88a091cc19",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/canon.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "dfb3c9dc99437595b502862ccd449f030f3ce8cd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:79d229cd4c88c7289966d1b745ec84d65b44fcc4812433a91f7b4eeb2009c0cd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ef5dc7e8fede7b3a9b0b187f3b38132971102866",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:56eadd7a240270cc42a8a69ef00331b51a82d3e0d52c3466d8eca589801b13bd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/revocation_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ade12cc518723763a3358e43391f9b1221b04ad0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7416cddd3d06a1ea37cc67e028c4729190afdcd1ced03d23accfc97cc48e4dbc",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2ccc124c8f6ee3c4f8f7a71eccb5c4c3036b4352",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6f1285300486f4ef7515f87f5dadca1fa9915d36cf23404d48bb53ecca14f19a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795149896111,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d740648a9acdbdb54f9fde12cf6df661af4b0dd9",
+      "hash": "sha256:95d308839ddd82cd6b2e8b1255d3783207eda53bcf1e3098ac3385e4212504c6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3b83-7c08-aeeb-5c338057481e"
+    },
+    {
+      "address": "42bc14a58ddd5884e1cb511a4ac672a4a103060e",
+      "hash": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157"
+    }
+  ],
+  "id": "01a1f745-bbd1-729f-a5cb-8d94be407192",
+  "kind": "decision",
+  "reason": "Who may decide (#114 G1): REQ-37, DEC-88, V-106, V-107, DEC-13, DEC-51 and DEC-62 say the rules as built, checked by a blind review on the binary with its findings fixed; the other verifications went stale only through test callers moved to Ledger::build with an admission, with their meaning kept",
+  "revision": "bfde8d5819a5895b2cd42aba5f5655a2f2a2036c",
+  "seen": "sha256:5288180a9d999e8da35bc3173f952d4fa0b4afeaa2eea4d3707767a96fbc5c60",
+  "seen_address": "03c38e6e673ee8347772b3d669de47d7acb9bc65",
+  "subject": "01a1c4ba-1664-702d-af36-26cafd3b5594",
+  "v": 1,
+  "verb": "approve"
+}

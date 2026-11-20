@@ -17,7 +17,7 @@ use crate::domain::actor::Actor;
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
 use crate::domain::shelf::build::{DocReading, DropNames, FormEntries, RawValue, Shelf};
-use crate::domain::shelf::ledger::{JudgedAt, JudgementId, Record};
+use crate::domain::shelf::ledger::{AdmittedRecord, JudgedAt, JudgementId, Record};
 use crate::domain::shelf::schema::{
     BookRange, BookSchemaDecl, BuiltinPresets, Cardinality, FieldEntryDecl, FieldPresence,
     FieldTypeDecl, KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, PresetName, PresetValues,
@@ -817,7 +817,8 @@ impl LedgerAppend for FakeShelf {
 
     /// Keeps the record, and gives the path of its file. Fails, writing nothing, when
     /// a test said so ([`FakeShelf::appends_before_failing`]).
-    async fn append(&self, record: &Record) -> Result<RelPath, FakeError> {
+    async fn append(&self, record: &AdmittedRecord) -> Result<RelPath, FakeError> {
+        let record = record.record();
         self.check()?;
         {
             let mut left = lock(&self.appends_before_failing);
