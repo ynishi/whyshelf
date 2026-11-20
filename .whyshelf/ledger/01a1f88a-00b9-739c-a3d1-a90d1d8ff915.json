@@ -1,0 +1,161 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "46fffdedb66ddf696d11fed1b4386e53da8f4dce",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21e53a7bccc6dc72f36c53dd11954548a3d64ef52447e85b393cc3853fc796ba",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "690d407fe7718b11a1b3485d6460156223b3aa52",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4e3ae2d69f3da1d249ea886090cdb83796463450fe30c98c1682f2cfbd2b9307",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e487ef31061452a9cfec86ab5821b61d097e868",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add768ddd5406e06645e18dda7518815a659d1f748b4a8cb827a8c355216144d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3d81d12432bd413ff606fc1186baac4de452268f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0d2b31f38f3108a75ff8da317e5f0e32a8b470f7dc1809501681cfc5e02f2e71",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "235e459fbfb958e309a7c359a034f9927331a24f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8a333289e7f10e526563aa36544a8869563e17fb5d467c1251ae6b5d3c4d946e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9ab09115d28eab89e793ca6c234617e4ae97e576",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:10cde3508647333e07bd52f3e58b7a0185eab1d1dc3347db9aa5816ac1df3c17",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2e8ae01fff885b856d85e263d367e6061cdde083",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c179349b0ecf6e76e497108d64ba172b1ebc806be5d84b04853db8ed457f02a4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2963a0437157c1de6320d814f3f2bc83a53c31be",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6dbce57f4bb70f19e799d0b75cc7b18f5a6c4204f33d1abe7de2b45db6246aa6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1ce9e6265717b729e65a2e537a97181562efdae3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b31e7b694dce6472f3d19c43f5fe3d4a07c505114b01c0e0f59466bbf9ff3524",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "29f85e7daad22edd540f8203d25570015c2f901e",
+      "hash": "sha256:0e28d87ef7fd94af64d800e7d7168dee93917e568ad032e8a4f62d70b9f904f9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c45a-279c-7672-ac87-9afd9c344dc8"
+    }
+  ],
+  "id": "01a1f88a-00b9-739c-a3d1-a90d1d8ff915",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:38d1ebdb1799195f4e7a078afb3ecb4dcfd6e89dcff18444255fafcf5405c286",
+  "seen_address": "c9ee0abf230a0c3d340519086554c780cc6c943a",
+  "subject": "01a1c45a-27fd-75bc-a433-f3e0233f0f72",
+  "v": 1,
+  "verb": "approve"
+}

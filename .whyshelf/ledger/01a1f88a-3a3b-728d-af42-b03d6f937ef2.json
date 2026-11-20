@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8c7a3c38cf31e4c58d3d431ea7b4dddc95a31815",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:57d36f913ea7b3fba5a7721e703ba0dcb6a2b81e1df5826eb634223e282124a7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/next.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2adeb0e997b2655abfd748f65e7f09cf88b02677",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:08118c0588e7f4af3795267f56c571b02256f8d7d0f12775a3026e28fea2e12e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "23ecf66b14a6f0dba1347e4139e74c1b86541acd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:432cb134a061bf5403c7d7786ded334dec4ced04d9e1bbf2f52903cf8e82e9e0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f09bf2dc77ab058226daa5f2c07162eaac755b47",
+      "hash": "sha256:c42948d7ad357e9ce772400ee3834bde64abfd9ffada9564fff51ab50286892b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a1f88a-3a3b-728d-af42-b03d6f937ef2",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:cde05d80b1c3a2ab1edabc2715507320075b2e35f76050fd9085b82da44bcbbc",
+  "seen_address": "774f5954aa64cfec89dffa9aa28ea6c238ce66f0",
+  "subject": "01a1db32-2f0d-760c-b870-8844f72644d6",
+  "v": 1,
+  "verb": "approve"
+}

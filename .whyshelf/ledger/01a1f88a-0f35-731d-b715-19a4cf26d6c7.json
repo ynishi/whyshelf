@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "bc4aa7da10673431361c0d5efef80694cb62ce25",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:37856d80c77f0b1d803c6ee67d18d46236e58eb36c78349002a80d170ee1cda7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "36a8ba224dd2217477ab5a9fa3f89941c19826dc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1a50e3cacee82ce0e2ea13dab3f0c33a9673f2228e453b9db94a407e93688251",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4a81237a4174d9175af6f1814f315351e10af324",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c2cdee9b8a8deed0de3be4e38f39088e0a36eed0805459c8867a779df5e4629b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b477824f027d5c12b6d4982450f3458f282c7f61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ade3237bc3b00612988868b792584abd00c515c38fb9b3a4ddbec379098a296",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1ce9e6265717b729e65a2e537a97181562efdae3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b31e7b694dce6472f3d19c43f5fe3d4a07c505114b01c0e0f59466bbf9ff3524",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bac0999d408e1c279c43992dc2812b698e24ee5e",
+      "hash": "sha256:5b166291dcdb398fe20cf946c63645890bec99b616c381db2abf7b24ef6099ba",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "47"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c64b-b4b9-723c-b0d7-3a6afd9617d3"
+    },
+    {
+      "address": "39252af38832187b59e9e968207026852ab259e5",
+      "hash": "sha256:c52ca9d0ec8e28a157346adaba371c02ebca30dc741450be4aab6cfcc6f40434",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "48"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c64b-b644-758a-85e6-34c76e900513"
+    }
+  ],
+  "id": "01a1f88a-0f35-731d-b715-19a4cf26d6c7",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:6ef84a4d498e500efca487c4d6f0e020fba79d5ff19dcf05396c974dfb5dc924",
+  "seen_address": "4a2006417a18ef16a03d9d1ee03ff26f56a66f36",
+  "subject": "01a1c64b-b81b-7364-8bf1-27b28c0b3680",
+  "v": 1,
+  "verb": "approve"
+}

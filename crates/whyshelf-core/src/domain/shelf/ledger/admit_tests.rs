@@ -51,6 +51,7 @@ fn rule(kinds: &[DecideKind], since: Option<i64>) -> DecideDecl {
                 kinds: kinds.iter().map(|k| (*k, maintainers.clone())).collect(),
                 default: None,
                 since: since.map(RuleTime::from_millis),
+                approvals: None,
             },
         }],
     }

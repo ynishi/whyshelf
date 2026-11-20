@@ -220,6 +220,16 @@ impl Grouped {
     }
 }
 
+/// The names of a pin's way, as it is read now: the name it wrote, the name it is read
+/// as, and each name a move took it from; one thing under each of them. The one place
+/// they are gathered, for what is declared of the pin's artifact
+/// ([`Ledger::pin_same_meaning`], [`Ledger::not_declared_by`]).
+fn way_names(pin: &ReadPin) -> BTreeSet<&ArtifactKey> {
+    let mut names: BTreeSet<&ArtifactKey> = BTreeSet::from([pin.pin().artifact(), pin.read_as()]);
+    names.extend(pin.moved().into_iter().flat_map(MovedTo::moved_from));
+    names
+}
+
 /// The book the record `target` a revocation names is read with, from `books` (the
 /// book of each record but a revocation): `[decide]` when it has none. Read by
 /// [`revoked_by`] and by [`Ledger::accept`].
@@ -365,19 +375,15 @@ impl Ledger {
     /// The declarations, not revoked, that make the hashes `a` and `b` of the
     /// document `id` mean the same, in the order of the way from `a` to `b`; `None`
     /// when none do. The one place two hashes of a document are said to mean the same.
+    /// An edit is joined only by as many different names as its declarations need
+    /// ([`SameMeaning`]'s page has the rule).
     pub fn doc_same_meaning(
         &self,
         id: DocId,
         a: &DocHash,
         b: &DocHash,
     ) -> Option<NonEmptyVec<JudgementId>> {
-        let edges = self.same_meanings.values().flat_map(|s| match &s.of {
-            SameMeaningOf::Doc { id: of, from, to } if *of == id => {
-                from.iter().map(|f| (s.id, *f, *to)).collect::<Vec<_>>()
-            }
-            _ => Vec::new(),
-        });
-        declared_way(edges, *a, *b)
+        self.joined(self.doc_declared(id), *a, *b)
     }
 
     /// As [`Ledger::doc_same_meaning`], for an artifact.
@@ -387,15 +393,7 @@ impl Ledger {
         a: &ArtifactHash,
         b: &ArtifactHash,
     ) -> Option<NonEmptyVec<JudgementId>> {
-        let edges = self.same_meanings.values().flat_map(|s| match &s.of {
-            SameMeaningOf::Artifact {
-                artifact: of,
-                from,
-                to,
-            } if of == artifact => from.iter().map(|f| (s.id, *f, *to)).collect::<Vec<_>>(),
-            _ => Vec::new(),
-        });
-        declared_way(edges, *a, *b)
+        self.joined(self.artifact_declared(|of| of == artifact), *a, *b)
     }
 
     /// As [`Ledger::artifact_same_meaning`], for a pin as it is read now: the
@@ -407,18 +405,127 @@ impl Ledger {
         a: &ArtifactHash,
         b: &ArtifactHash,
     ) -> Option<NonEmptyVec<JudgementId>> {
-        let mut names: BTreeSet<&ArtifactKey> =
-            BTreeSet::from([pin.pin().artifact(), pin.read_as()]);
-        names.extend(pin.moved().into_iter().flat_map(MovedTo::moved_from));
-        let edges = self.same_meanings.values().flat_map(|s| match &s.of {
-            SameMeaningOf::Artifact {
-                artifact: of,
-                from,
-                to,
-            } if names.contains(of) => from.iter().map(|f| (s.id, *f, *to)).collect::<Vec<_>>(),
-            _ => Vec::new(),
-        });
-        declared_way(edges, *a, *b)
+        self.joined(self.pin_declared(pin), *a, *b)
+    }
+
+    /// The edits declared to keep the meaning by fewer different names than they
+    /// need, which join nothing until more names declare them, that a pin of an
+    /// approval that stands meets: the edges among the declarations freshness reads
+    /// for that pin (of its document, or of every name of its artifact's way, as
+    /// [`Ledger::pin_same_meaning`] reads them) of which one end is the hash pinned, or
+    /// is joined to it by edges that count. Those of the approvals by the identity of
+    /// their document, each pin's in the order of the record (the document's own hash
+    /// first, then its upstreams, then its artifacts), each edge once. An edge no
+    /// approval that stands meets is not told, and none is in a project that declares
+    /// no rule, where every declaration needs one name.
+    pub fn same_meaning_short(&self) -> Vec<ShortSameMeaning> {
+        let mut out: Vec<ShortSameMeaning> = Vec::new();
+        if self.admit.is_unruled() {
+            return out;
+        }
+        let mut add = |found: Vec<ShortSameMeaning>| {
+            for short in found {
+                if !out.contains(&short) {
+                    out.push(short);
+                }
+            }
+        };
+        for subject in &self.subjects {
+            let DeclaredStatus::Approved { seen, frame, .. } = self.status_of(*subject) else {
+                continue;
+            };
+            let docs = std::iter::once((*subject, seen))
+                .chain(frame.iter().map(|pin| (pin.target(), *pin.hash())));
+            for (id, hash) in docs {
+                let edges = self.counted_edges(self.doc_declared(id));
+                add(same_meaning::short_from(&edges, hash, |_, a, b| {
+                    SameMeaningEdge::Doc { id, a, b }
+                }));
+            }
+            for pin in self.read_pins(*subject) {
+                let PinnedArtifact::Present { hash, .. } = pin.pin().seen() else {
+                    continue;
+                };
+                let edges = self.counted_edges(self.pin_declared(&pin));
+                add(same_meaning::short_from(&edges, *hash, |first, a, b| {
+                    SameMeaningEdge::Artifact {
+                        artifact: match &first.of {
+                            SameMeaningOf::Artifact { artifact, .. } => artifact.clone(),
+                            SameMeaningOf::Doc { .. } => pin.read_as().clone(),
+                        },
+                        a,
+                        b,
+                    }
+                }));
+            }
+        }
+        out
+    }
+
+    /// The declarations about the document `id`, each with one earlier hash and its
+    /// hash then.
+    fn doc_declared(&self, id: DocId) -> Vec<(&SameMeaning, DocHash, DocHash)> {
+        self.same_meanings
+            .values()
+            .flat_map(|s| match &s.of {
+                SameMeaningOf::Doc { id: of, from, to } if *of == id => {
+                    from.iter().map(|f| (s, *f, *to)).collect::<Vec<_>>()
+                }
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
+    /// The declarations about the artifacts `of` takes, each with one earlier hash and
+    /// its hash then.
+    fn artifact_declared(
+        &self,
+        of: impl Fn(&ArtifactKey) -> bool,
+    ) -> Vec<(&SameMeaning, ArtifactHash, ArtifactHash)> {
+        self.same_meanings
+            .values()
+            .flat_map(|s| match &s.of {
+                SameMeaningOf::Artifact { artifact, from, to } if of(artifact) => {
+                    from.iter().map(|f| (s, *f, *to)).collect::<Vec<_>>()
+                }
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
+    /// The declarations freshness reads for a pin as it is read now: those about each
+    /// name of its way ([`way_names`]). The one selection, read by
+    /// [`Ledger::pin_same_meaning`] and [`Ledger::same_meaning_short`].
+    fn pin_declared(&self, pin: &ReadPin) -> Vec<(&SameMeaning, ArtifactHash, ArtifactHash)> {
+        let names = way_names(pin);
+        self.artifact_declared(|of| names.contains(of))
+    }
+
+    /// Whether `declared` joins `a` to `b`, and by which declarations. A ledger no rule
+    /// reads takes each declaration as an edge of its own, as every one needs one
+    /// name, and counts nothing.
+    fn joined<H: Ord + Copy>(
+        &self,
+        declared: Vec<(&SameMeaning, H, H)>,
+        a: H,
+        b: H,
+    ) -> Option<NonEmptyVec<JudgementId>> {
+        if self.admit.is_unruled() {
+            return same_meaning::each_way(declared, a, b);
+        }
+        same_meaning::way(&self.counted_edges(declared), a, b)
+    }
+
+    /// The edges `declared` makes, each declaration with its need.
+    fn counted_edges<'a, H: Ord + Copy>(
+        &self,
+        declared: Vec<(&'a SameMeaning, H, H)>,
+    ) -> Vec<same_meaning::Edge<'a, H>> {
+        same_meaning::edges(
+            declared
+                .into_iter()
+                .map(|(s, from, to)| (s, self.need(s.id, s.at), from, to)),
+        )
     }
 
     /// A declaration that is not revoked, by its identity.
@@ -656,10 +763,9 @@ pub use moved::{
     NoteKind, NothingWhy, PinnedNames, PinnedThere, PrefixPlan, PrefixRefusal, ReadPin, Similarity,
     SpaceSuggestions, frame_moved, frame_prefix_moves, moved_space, plan_prefix_moves,
 };
-use same_meaning::declared_way;
 pub use same_meaning::{
-    SameMeaning, SameMeaningOf, SameMeaningProblem, SameMeaningRefusal, SameMeaningTarget,
-    frame_same_meaning,
+    SameMeaning, SameMeaningEdge, SameMeaningOf, SameMeaningProblem, SameMeaningRefusal,
+    SameMeaningTarget, ShortSameMeaning, frame_same_meaning,
 };
 
 pub use admit::{Admit, AdmittedRecord, NotAdmitted, RecordBook};
@@ -672,7 +778,7 @@ pub use frame::{
 pub use judgement::{JudgedAt, JudgementId};
 pub use pin::{ArtifactPin, FramePin, PATH_ONLY_SPACE, PinnedArtifact, Seen};
 use pin::{NameForm, StandsOn};
-pub use readers::{ApprovalKind, Asked, Before, LeaveOut, Readers, Taking};
+pub use readers::{ApprovalKind, Asked, Before, LeaveOut, Quorum, Readers, Taking};
 pub use record::{Record, RecordHash, Revocation};
 
 #[cfg(test)]
@@ -704,6 +810,8 @@ mod merge_tests;
 mod moved_prefix_tests;
 #[cfg(test)]
 mod moved_tests;
+#[cfg(test)]
+mod quorum_tests;
 #[cfg(test)]
 mod readers_tests;
 #[cfg(test)]

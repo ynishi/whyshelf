@@ -16,7 +16,7 @@ use super::freshness::{
     Assessment, Degradation, Freshness, FreshnessLevel, Severity, Standing, StandingKind,
 };
 use super::graph::components;
-use super::ledger::{DeclaredStatus, FramePin, Ledger};
+use super::ledger::{DeclaredStatus, FramePin, Ledger, Quorum};
 use super::schema::{EntryName, Propagation};
 
 /// The rule that took a document into a run of approvals. The two take apart sets: a
@@ -41,14 +41,16 @@ pub struct StaleChoice {
 /// The rule of `--stale`: an approval that is expired or stale is taken to be made
 /// again; one that is broken is not, and is told with its degradation, since what it
 /// stood on is gone, refused or cannot be trusted. Every other standing (fresh,
-/// pending, decided against) is not looked at.
+/// pending, decided against) is not looked at, and neither is a quorum: a fresh
+/// approval that awaits other names is not degraded, and another name settles it,
+/// not a run.
 pub fn stale(assessment: &Assessment) -> StaleChoice {
     let mut choice = StaleChoice {
         again: BTreeSet::new(),
         broken: Vec::new(),
     };
     for (id, standing) in assessment.standings() {
-        let Standing::Approved(Freshness::Degraded(degradation)) = standing else {
+        let Some(Freshness::Degraded(degradation)) = standing.freshness() else {
             continue;
         };
         match degradation.level() {
@@ -127,6 +129,9 @@ impl fmt::Display for NotPending {
             Self::Decided(DecidedKind::Deprecated) => "deprecated",
             Self::Decided(DecidedKind::Retired) => "retired",
             Self::Decided(DecidedKind::Approved(FreshnessLevel::Fresh)) => "approved, and fresh",
+            Self::Decided(DecidedKind::Approved(FreshnessLevel::Awaiting)) => {
+                "approved, and awaiting the approvals of other names"
+            }
             Self::Decided(DecidedKind::Approved(FreshnessLevel::Expired)) => {
                 "approved, and expired"
             }
@@ -236,6 +241,11 @@ pub enum Hold {
     Pending,
     /// The upstream's approval is stale and not in the run: approve it again first.
     Stale,
+    /// The upstream's approval awaits the approvals of other names ([`Quorum::Short`]),
+    /// at any freshness, an expired one included, in the run or not: an approval on
+    /// it would be stale from the start, as on a pending one, until another name
+    /// approves it.
+    Awaiting,
     /// The upstream is itself held back, or refused, in the same run.
     LeftOut,
 }
@@ -253,15 +263,19 @@ pub struct HeldBack {
 
 /// The first upstream that keeps `id` from being approved so that it holds, if one
 /// does: a document a `Depends` link of `id` resolves to now that is broken, pending
-/// and not in `run`, stale and not in `run`, or in `left_out` (the documents of the
-/// same run already left out), in that order of precedence, the links in the order
-/// the document holds them. `run` is every document the run takes; one of it is
-/// decided before what stands on it ([`upstream_first`]), approved or left out, so
-/// one of it left out is told as `LeftOut`, not by its standing.
+/// and not in `run`, stale and not in `run`, approved with a quorum short of names
+/// ([`Quorum::Short`], at any freshness), or in `left_out` (the documents of the same
+/// run already left out), in that order of precedence, the links in the order the
+/// document holds them. `run` is every document the run takes; one of it is decided
+/// before what stands on it ([`upstream_first`]), approved or left out, so one of it
+/// left out is told as `LeftOut`, not by its standing.
 ///
 /// An approval made on such an upstream would be broken or stale from the start. An
-/// upstream whose approval only expired holds nothing back: an approval on it is a
-/// notice, not a staleness. What a decision says against an upstream (denied,
+/// upstream whose approval only expired holds nothing back, unless its quorum is
+/// short: an approval on it is a notice, not a staleness. A short quorum is read
+/// before that, as it is no level of the freshness, and an expired approval that
+/// awaits other names would otherwise let what stands on it through. What a
+/// decision says against an upstream (denied,
 /// deprecated, retired), a link that cannot be followed and a cycle are refusals of
 /// the frame ([`frame_approve`](super::ledger::frame_approve)), not this. Standings
 /// are read from `assessment`, which the caller makes of the ledger as the approvals
@@ -285,15 +299,19 @@ pub fn held_back(
             let upstream = target.id();
             let in_run = run.contains(&upstream);
             let hold = match assessment.standing_of(upstream) {
-                Standing::Approved(Freshness::Degraded(d)) if d.level() == Severity::Broken => {
-                    Some(Hold::Broken)
-                }
+                Standing::Approved {
+                    freshness: Freshness::Degraded(d),
+                    ..
+                } if d.level() == Severity::Broken => Some(Hold::Broken),
                 Standing::Pending if !in_run => Some(Hold::Pending),
-                Standing::Approved(Freshness::Degraded(d))
-                    if !in_run && d.level() == Severity::Stale =>
-                {
-                    Some(Hold::Stale)
-                }
+                Standing::Approved {
+                    freshness: Freshness::Degraded(d),
+                    ..
+                } if !in_run && d.level() == Severity::Stale => Some(Hold::Stale),
+                Standing::Approved {
+                    quorum: Quorum::Short { .. },
+                    ..
+                } => Some(Hold::Awaiting),
                 _ if left_out.contains(&upstream) => Some(Hold::LeftOut),
                 _ => None,
             }?;

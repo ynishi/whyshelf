@@ -105,6 +105,8 @@ fn check_with(severity: CoverSeverity) -> BooksCheck {
         exempt: Vec::new(),
         unneeded: Vec::new(),
         repeated: Vec::new(),
+        awaiting: Vec::new(),
+        same_meaning_short: Vec::new(),
         names: Default::default(),
     }
 }

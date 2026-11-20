@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "deca753accf532b91324a836b47292c5bb70bfaa",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b927d5ae5dca6c985581f42e17c74865c9c0eadb885c569968c6359e03add7a3",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b1c7978d476a7e612ffc24bb7f70020d619f2942",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1a565e11e35d4e7d635374f3e7fc2e09096d715533169d264504cf7df06fa847",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "779f2ce868ac743adf6d3568827523efff6f7f73",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1c5dd1ce1cc77467ce6e65c40f98a27b0182a2310937f5194d5a60f955fc7ab4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9b11195c42bff6d7b0dca5f22d38ff48f586dcb0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c8b3b31d1671dddb9be9dd62cf7e09cf81e5d6eb50bbec397fd351d099388f0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1ce9e6265717b729e65a2e537a97181562efdae3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b31e7b694dce6472f3d19c43f5fe3d4a07c505114b01c0e0f59466bbf9ff3524",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "128541e0a37df8900d44133f05b193f2bb288d7b",
+      "hash": "sha256:89b98c1d76f5aa72c0ba9c5a26d3cc529751d7128d03f851bb0968877b5502ff",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "23"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4d3-a3a0-7506-8312-b5aef92e4742"
+    }
+  ],
+  "id": "01a1f88a-099c-753f-bcee-5d60ba39ce97",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:502a1e4cdf910d292acba752a44da154cbe0e84a10be8dac1904b36f26c890d0",
+  "seen_address": "9d67b8409ba05d055e949fc40cd8e37778cf0338",
+  "subject": "01a1c4d3-a447-7273-a614-51ab620651af",
+  "v": 1,
+  "verb": "approve"
+}

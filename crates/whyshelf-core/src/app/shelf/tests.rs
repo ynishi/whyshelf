@@ -260,7 +260,7 @@ fn an_approval_is_appended_and_holds_until_an_upstream_is_edited() {
     let report = block_on(app.stale()).unwrap();
     assert!(report.entries.is_empty());
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
+    assert_eq!(row.standing, Standing::FRESH);
 
     // The finding is edited: its approval no longer holds, and the spec that stands
     // on it is told which upstream changed.
@@ -274,7 +274,11 @@ fn an_approval_is_appended_and_holds_until_an_upstream_is_edited() {
         .iter()
         .find(|e| e.row.id == docid(2))
         .unwrap();
-    let Standing::Approved(Freshness::Degraded(degradation)) = &spec.row.standing else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(degradation),
+        ..
+    } = &spec.row.standing
+    else {
         panic!("the approval of the spec should be degraded");
     };
     let causes = degradation.causes();
@@ -405,7 +409,7 @@ fn an_approval_with_an_expiry_lapses_when_the_clock_reaches_it() {
     }))
     .unwrap();
     let held = block_on(app.get(&r("FR-1"))).unwrap().row;
-    assert_eq!(held.standing, Standing::Approved(Freshness::Fresh));
+    assert_eq!(held.standing, Standing::FRESH);
 
     app.ports().set_now(3000);
     let report = block_on(app.stale()).unwrap();
@@ -453,7 +457,7 @@ fn judge_all_approves_an_upstream_and_its_downstream_in_one_run() {
     // The spec was framed on the approval of the finding made one step before it, so
     // it holds, and it is told when that finding is edited.
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
+    assert_eq!(row.standing, Standing::FRESH);
     assert!(block_on(app.stale()).unwrap().entries.is_empty());
     app.ports().edit(fr(1, "slower", &[]), 1);
     let ids: Vec<_> = block_on(app.stale())

@@ -73,10 +73,7 @@ fn a_pending_or_approved_document_has_a_notice_for_each_and_a_denied_one_none() 
     let approved_now = assess(&s, &approved_all, JudgedAt::new(100));
     assert_eq!(absent_notices(&approved_now, 2).len(), 2);
     // The notice changes no freshness: the approval holds.
-    assert_eq!(
-        approved_now.standing_of(docid(2)),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(approved_now.standing_of(docid(2)), Standing::FRESH);
 
     // A denied, deprecated or retired document is not expected to keep its evidence.
     for decided in [

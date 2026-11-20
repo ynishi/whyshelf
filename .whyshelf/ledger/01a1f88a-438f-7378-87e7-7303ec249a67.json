@@ -1,0 +1,147 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d12deed0a82a6f2098f2fb840c6c172ef2f572e6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d02ddda7397623c002e26a8f88aefd3a99768dd8163ba680cd444b7d570d7f76",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4bf7bfa5faa5c63bd8165c2eb5ff5d9c3eee2d92",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:eaf25f03b28557720fd47bc387513571bdbb14cb02093566006b32804d888f97",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fake_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b20dee74976e37cae24b97bbe1d63fd0cc8a0430",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:dda0c5b3e07ad2c070f92f28cbe4efa1cd88d3913377ebebe09efd49441092e1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9ad41da91cb4ef610f4d6793d8c6a7f952dfab61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8dccbac46743e1060cf28dd958c54434de7b2d2c56a1a8ea1edaf98d73db7023",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "42bcc13db9bb898b3d51a929249630db004caae0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9a5025bdb5d7da520e19e638bc0aea0126116391753cc6df9fef2446b25558c2",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/form_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3a5865bb0282c4185acb9242c703db72f02218d2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6b4d61fd833ddd9bad566927a87f980056db8ac79e6d817b360a85c10e51d34f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2dc41634876f78cdfaa1ef2c5b1ecaaef1c2d7e3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a8d491f423136ddf396cfdc5a95b7a8e91df74efdc772104e9cd1222b03ef750",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a223b53a305d2ba82b80518450bc8769c9255864",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d654c1aa4f9562ae579c794929b16f6d05bae3df4a35a4c3df88c79300b6721c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8a417f9aeb881a0f28fe99b100dcfbe46f345e4b",
+      "hash": "sha256:afeb8ba63fbd85982166f075a580c4164d76f1f8a11b963b469acd3cda4dc1f6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "77"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e9bf-f4ea-76e3-8c9e-25d40627ad8e"
+    }
+  ],
+  "id": "01a1f88a-438f-7378-87e7-7303ec249a67",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:f84b2e3e20be0ebce45fb1f9558bfd627e4ae09818c2f458bd90298b2f8ae591",
+  "seen_address": "b403ce8804aa9a11dc09128a77e856d05149e119",
+  "subject": "01a1e9c0-1b5b-7355-b26b-1882069dfcd9",
+  "v": 1,
+  "verb": "approve"
+}

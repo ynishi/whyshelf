@@ -15,6 +15,7 @@
 //!
 //! [decide]                        # the records of no book, and of a book that cannot be told
 //! default = ["maintainers"]
+//! approvals = 2                   # at least the most a book asks for
 //!
 //! [[book]]
 //! name = "requirement"
@@ -22,6 +23,7 @@
 //! [book.decide]
 //! approve = ["maintainers"]       # who may approve the documents of the book (and declare
 //!                                 # the same meaning of one, as `same` is not named)
+//! approvals = 2                   # different names that approve the same content
 //! default = ["maintainers", "agents"]   # the kinds the rule does not name
 //! since = "2026-12-01"            # the records made from then on; RFC 3339 also
 //! ```
@@ -55,6 +57,25 @@
 //! - When any book declares a rule, `[decide]` is declared too: it rules the records
 //!   of no book (a declaration of a move, of the same meaning of an artifact) and those
 //!   whose book cannot be told, so that no record escapes every rule.
+//! - A rule may ask for `approvals`, from 1 (the default) to [`Approvals::MOST`]: an
+//!   approval of a document it reads settles only once that many different names
+//!   approve the same content, and a declaration that an edit keeps the meaning counts
+//!   once that many different names declare it ([`Authority::approvals`] says how many
+//!   a record needs; whether they are there is the ledger's,
+//!   [`Ledger::quorum`](crate::domain::shelf::ledger::Ledger::quorum)). The names
+//!   that may approve under it (the members of the groups of `approve`, else of the
+//!   default, whatever their times), and those that may declare the same meaning (of
+//!   `same`, else as `approve`), are at least that many: a time when fewer of them
+//!   are members is no problem of the declaration, and an approval made then waits. The
+//!   `approvals` of `[decide]` are at least the most a book asks for, since a
+//!   declaration of the same meaning of an artifact keeps the approvals of every book
+//!   that pins it: one name could otherwise keep an approval of a book fresh that asks
+//!   for two. For the same reason `[decide]` reads every record a book that asks for
+//!   more than one name reads: its `since`, when it has one, is not later than any
+//!   such book's, and such a book with no `since` leaves `[decide]` none, as a
+//!   declaration made before `[decide]`'s `since` would be read by no rule and need
+//!   one name. A book that asks for one name puts no bound on it. A second name is a name declared, as
+//!   every name is: one person who writes two names is two names.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -63,6 +84,48 @@ use crate::domain::actor::Actor;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec};
 
 use super::{BookName, GroupName, NamePlace, SchemaProblem};
+
+/// How many different names a rule asks to approve the same content, or to declare
+/// the same meaning of one edit, before it counts: from one, the default, to
+/// [`Approvals::MOST`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Approvals(u8);
+
+impl Approvals {
+    /// One name, as before rules could ask for more: what a record no rule reads
+    /// needs.
+    pub const ONE: Self = Self(1);
+
+    /// The most a rule may ask for. A rule asking more names than a team gives is
+    /// more likely a slip than an intent, and one that cannot be met keeps every
+    /// approval of its book waiting.
+    pub const MOST: u8 = 10;
+
+    /// The number a declaration writes, when it is from one to [`Approvals::MOST`].
+    pub fn new(written: i64) -> Option<Self> {
+        u8::try_from(written)
+            .ok()
+            .filter(|n| (1..=Self::MOST).contains(n))
+            .map(Self)
+    }
+
+    /// How many names.
+    pub fn count(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
+impl Default for Approvals {
+    fn default() -> Self {
+        Self::ONE
+    }
+}
+
+impl fmt::Display for Approvals {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// A moment a rule names (`since`, a member's `from` and `until`), in unix
 /// milliseconds, as an adapter read it from what the declaration writes.
@@ -217,9 +280,16 @@ pub struct DecideRule {
     kinds: BTreeMap<DecideKind, NonEmptySet<GroupName>>,
     default: Option<NonEmptySet<GroupName>>,
     since: Option<RuleTime>,
+    approvals: Approvals,
 }
 
 impl DecideRule {
+    /// How many different names an approval of the same content, or a declaration of
+    /// the same meaning, needs under the rule.
+    pub fn approvals(&self) -> Approvals {
+        self.approvals
+    }
+
     /// The groups named for one kind.
     pub fn named(&self, kind: DecideKind) -> Option<&NonEmptySet<GroupName>> {
         self.kinds.get(&kind)
@@ -297,8 +367,8 @@ impl Authority {
     }
 
     /// What the rule of `book` (of the records of no book, when none) says of a
-    /// record of `kind` written by `actor` at `at`: the one place a rule is read (the
-    /// rules are on the module page).
+    /// record of `kind` written by `actor` at `at`: the one place a rule is read for
+    /// who may write a record (the rules are on the module page).
     pub fn permission(
         &self,
         book: Option<&BookName>,
@@ -306,12 +376,9 @@ impl Authority {
         actor: &Actor,
         at: RuleTime,
     ) -> Permission {
-        let Some(rule) = self.rule_of(book) else {
+        let Some(rule) = self.reading(book, at) else {
             return Permission::Unruled;
         };
-        if rule.since.is_some_and(|since| at < since) {
-            return Permission::Unruled;
-        }
         let Some(groups) = rule.groups_of(kind) else {
             return Permission::Open;
         };
@@ -328,6 +395,21 @@ impl Authority {
                 since: rule.since,
             }
         }
+    }
+
+    /// How many different names a record of `book` (of no book, when none) made at
+    /// `at` needs to count: the `approvals` of the rule that reads it, admitted or
+    /// open; one when none does (an unruled book, a record made before `since`).
+    pub fn approvals(&self, book: Option<&BookName>, at: RuleTime) -> Approvals {
+        self.reading(book, at)
+            .map_or(Approvals::ONE, |rule| rule.approvals)
+    }
+
+    /// The rule that reads a record of `book` made at `at`: none when the book has
+    /// none, or the record was made before its `since`.
+    fn reading(&self, book: Option<&BookName>, at: RuleTime) -> Option<&DecideRule> {
+        self.rule_of(book)
+            .filter(|rule| rule.since.is_none_or(|since| since <= at))
     }
 }
 
@@ -390,6 +472,8 @@ pub struct RuleDecl {
     pub default: Option<Vec<String>>,
     /// `since`, when written.
     pub since: Option<RuleTime>,
+    /// `approvals`, the number as written, when written.
+    pub approvals: Option<i64>,
 }
 
 /// The rule of one book, with the book's name as written.
@@ -405,9 +489,11 @@ pub struct BookRuleDecl {
 /// whose name breaks the grammar or is used twice, that has no member, a member that
 /// is no name of an actor or whose `from` is not before its `until`, a rule that
 /// names a group not declared or a list of no group, a rule of a book `books` does
-/// not hold (the names of the books as written) or of one book twice, and rules of
-/// books with no `[decide]`. What is wrong is left out of what is returned, which is
-/// used only when nothing is.
+/// not hold (the names of the books as written) or of one book twice, rules of
+/// books with no `[decide]`, an `approvals` out of its range or above the names that
+/// may approve, and a `[decide]` that asks fewer than a book or reads fewer records
+/// (a later `since`). What is wrong is left out of what is returned, which is used
+/// only when nothing is.
 pub(super) fn read_authority(
     decl: DecideDecl,
     books: &BTreeSet<String>,
@@ -455,6 +541,38 @@ pub(super) fn read_authority(
         .map(|rule| read_rule(rule, &RulePlace::Shelf, &declared, problems));
     if ruled_books && shelf.is_none() {
         problems.push(SchemaProblem::NoShelfRule);
+    }
+    // The book that asks the most, the first by name of those that ask as many.
+    let most = rules.iter().fold(
+        None,
+        |most: Option<(&BookName, Approvals)>, (book, rule)| match most {
+            Some((_, asked)) if asked >= rule.approvals => most,
+            _ => Some((book, rule.approvals)),
+        },
+    );
+    if let (Some(shelf), Some((book, asked))) = (&shelf, most)
+        && shelf.approvals < asked
+    {
+        problems.push(SchemaProblem::ShelfApprovalsBelowBook {
+            approvals: shelf.approvals,
+            book: book.clone(),
+            book_approvals: asked,
+        });
+    }
+    // Nor may `[decide]` read fewer records than a book that asks for more than one
+    // name: a record made before its `since` is read by no rule, so its need would be
+    // one name whatever that book asks for. A book that asks for one loses nothing.
+    // The first such book by name that reads earlier records is told.
+    if let Some(shelf) = &shelf
+        && let Some(since) = shelf.since
+        && let Some((book, _)) = rules.iter().find(|(_, rule)| {
+            rule.approvals > Approvals::ONE && rule.since.is_none_or(|from| from < since)
+        })
+    {
+        problems.push(SchemaProblem::ShelfSinceAfterBook {
+            since,
+            book: book.clone(),
+        });
     }
     Authority {
         groups,
@@ -525,6 +643,7 @@ fn read_rule(
     groups: &Groups<'_>,
     problems: &mut Vec<SchemaProblem>,
 ) -> DecideRule {
+    let told = problems.len();
     let mut names = |kind: Option<DecideKind>, written: Vec<String>| {
         if written.is_empty() {
             problems.push(SchemaProblem::NoGroup {
@@ -556,9 +675,50 @@ fn read_rule(
         }
     }
     let default = decl.default.and_then(|written| names(None, written));
-    DecideRule {
+    let approvals = match decl.approvals {
+        None => Approvals::ONE,
+        Some(written) => Approvals::new(written).unwrap_or_else(|| {
+            problems.push(SchemaProblem::ApprovalsOutOfRange {
+                at: place.clone(),
+                written,
+            });
+            Approvals::ONE
+        }),
+    };
+    let rule = DecideRule {
         kinds,
         default,
         since: decl.since,
+        approvals,
+    };
+    // The names that may approve, and those that may declare the same meaning,
+    // whatever their times: a rule that asks for more is one no approval of its book
+    // (no declaration of an edit) could ever meet. An open kind admits any name. A
+    // rule whose groups have problems told already is not counted: the names it
+    // would count are not the ones it means.
+    if problems.len() == told {
+        let approve = rule.groups_of(DecideKind::Approve);
+        for kind in [DecideKind::Approve, DecideKind::Same] {
+            let Some(writers) = rule.groups_of(kind) else {
+                continue;
+            };
+            if kind == DecideKind::Same && approve == Some(writers) {
+                continue;
+            }
+            let names: BTreeSet<&Actor> = writers
+                .iter()
+                .filter_map(|group| groups.read.get(group))
+                .flat_map(|group| group.members.iter().map(Member::name))
+                .collect();
+            if names.len() < rule.approvals.count() {
+                problems.push(SchemaProblem::TooFewApprovers {
+                    at: place.clone(),
+                    kind,
+                    approvals: rule.approvals,
+                    names: names.len(),
+                });
+            }
+        }
     }
+    rule
 }

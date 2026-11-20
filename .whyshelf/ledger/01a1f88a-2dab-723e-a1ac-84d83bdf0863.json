@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7d8b65a4dc7868d6aed2f5cf95b87a9d2ca12bb7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c588f5b35398ba49efbe72e22486114b76a783552c1f641ac163623084ec159",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "36a8ba224dd2217477ab5a9fa3f89941c19826dc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1a50e3cacee82ce0e2ea13dab3f0c33a9673f2228e453b9db94a407e93688251",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "abceb4e93b1cdd3a893e28c4e2d4367cb0710b61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c738a47b70b40fc0db1c682a8e6cd0d8817d75bcd7335993dee8d25c9978a8dd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/scope_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a223b53a305d2ba82b80518450bc8769c9255864",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d654c1aa4f9562ae579c794929b16f6d05bae3df4a35a4c3df88c79300b6721c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ab1f7fb4185be121d516904cdc8aa26b670e3d00",
+      "hash": "sha256:37551d47d732d115fabf4690772c5a8bb1a11f245275691eb3cb1759c5804e0e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "63"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
+    }
+  ],
+  "id": "01a1f88a-2dab-723e-a1ac-84d83bdf0863",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:be3985bc5f56363af8f9d6db37cde00d4ba75a6ebc4cfeb216c513965b9d53c1",
+  "seen_address": "c80cacfc3438e5b5f5763d703b90e8fe018b6232",
+  "subject": "01a1ca93-506a-7227-95d5-fba4474cfc64",
+  "v": 1,
+  "verb": "approve"
+}

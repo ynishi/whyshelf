@@ -59,8 +59,11 @@ fn approved_on(at_approval: &Shelf, addressed: bool) -> Ledger {
 
 fn causes_of(assessment: &Assessment, n: u128) -> Vec<Cause> {
     match assessment.standing_of(docid(n)) {
-        Standing::Approved(Freshness::Fresh) => Vec::new(),
-        Standing::Approved(Freshness::Degraded(d)) => d.causes().iter().cloned().collect(),
+        Standing::FRESH => Vec::new(),
+        Standing::Approved {
+            freshness: Freshness::Degraded(d),
+            ..
+        } => d.causes().iter().cloned().collect(),
         other => panic!("not an approval: {other:?}"),
     }
 }

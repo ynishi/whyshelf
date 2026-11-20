@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b77eaefb9813c7a6a11175190e1ef5dc60019507",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:170afc1ef59d4744f3fe6ba18f7fad2d2d1525f90e979aa72e69837cc1f9ee19",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "bb0a4da1a4cdbb69a348d1daa29516b6dc31c494",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f852f94cd5ebdffd9c43044ee9a8e8165af232bdbf70530f9d139f320bed6cf",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6435d5a6b20e37fee75a605ed4b3ab33aa3b3095",
+      "hash": "sha256:a166c621a3f56d49226550e2ea032d1f19420c217245e5fe4a269f66fe9c1209",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "74"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e20f-84aa-7350-905c-6c3af70e7219"
+    }
+  ],
+  "id": "01a1f88a-3fe8-7531-9d7d-55eaee5c4d0e",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:565c181b4faefcf0210ccb87be044a149f365d2cf80ff63fbd0e69c1b158d8cd",
+  "seen_address": "becc5a4aafabbaead58d08e1cd507d3ecb30bbfe",
+  "subject": "01a1e20f-ab27-753e-af1b-85e0f2f11c60",
+  "v": 1,
+  "verb": "approve"
+}

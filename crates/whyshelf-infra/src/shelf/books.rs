@@ -56,6 +56,7 @@
 //!
 //! [decide]                         # who may decide about the records of no book
 //! default = ["maintainers"]
+//! approvals = 2                    # optional: at least the most a book asks for
 //! ```
 //!
 //! and, in a `[[book]]`, who may decide about its documents:
@@ -66,7 +67,11 @@
 //!                                  # same, exempt, moved
 //! default = ["maintainers"]        # the kinds not named
 //! since = "2026-12-01"             # optional: the records made from then on
+//! approvals = 2                    # optional: different names to approve the same content
 //! ```
+//!
+//! `approvals` is read as a whole number as written; one that is no number is a
+//! failure to read the TOML, and the domain says whether it is in its range.
 //!
 //! What a group and a rule mean, and that the rule is about the names written, with
 //! no authentication, is on the page of
@@ -363,6 +368,8 @@ struct RuleDto {
     default: Option<Vec<String>>,
     #[serde(default, deserialize_with = "time")]
     since: Option<RuleTime>,
+    /// As written: the domain says whether it is in range.
+    approvals: Option<i64>,
 }
 
 impl RuleDto {
@@ -384,6 +391,7 @@ impl RuleDto {
                 .collect(),
             default: self.default,
             since: self.since,
+            approvals: self.approvals,
         }
     }
 }
@@ -618,7 +626,7 @@ mod tests {
 
     use whyshelf_core::domain::shelf::artifact::Space;
     use whyshelf_core::domain::shelf::schema::{
-        Cardinality, Propagation, Schema, SchemaProblem, WordAt, WordOf,
+        Approvals, Cardinality, Propagation, Schema, SchemaProblem, WordAt, WordOf,
     };
 
     use super::*;
@@ -1098,6 +1106,129 @@ means = "informs"
         // TOML.
         assert!(parse("[decide]\nsince='soon'\n").is_err());
         assert!(parse("[decide]\nread=['a']\n").is_err());
+    }
+
+    #[test]
+    fn approvals_are_read_and_a_rule_that_cannot_meet_them_is_a_problem_of_the_declaration() {
+        let decide = |shelf: &str, book: &str| {
+            format!(
+                "[[group]]\nname='m'\nmembers=['ana', 'bo']\n\
+                 [decide]\ndefault=['m']\n{shelf}\n\
+                 [[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+                 [[book]]\nname='b'\ndir='b'\nkey='slug'\n\
+                 [book.decide]\napprove=['m']\n{book}\n"
+            )
+        };
+        let schema = validate(parse(&decide("approvals=2", "approvals=2")).unwrap()).unwrap();
+        let book = schema.book("b").unwrap().name().clone();
+        let authority = schema.authority();
+        let two = Approvals::new(2).unwrap();
+        assert_eq!(authority.rule_of(Some(&book)).unwrap().approvals(), two);
+        assert_eq!(authority.rule_of(None).unwrap().approvals(), two);
+        // An unruled book, and a rule that writes none, ask for one name.
+        let unruled = schema.book("a").unwrap().name().clone();
+        assert_eq!(
+            authority.approvals(Some(&unruled), RuleTime::from_millis(0)),
+            Approvals::ONE
+        );
+        let plain = validate(parse(&decide("", "")).unwrap()).unwrap();
+        let unwritten = plain
+            .authority()
+            .approvals(Some(&book), RuleTime::from_millis(0));
+        assert_eq!(unwritten, Approvals::ONE);
+
+        let problems = |shelf: &str, book: &str| -> Vec<String> {
+            validate(parse(&decide(shelf, book)).unwrap())
+                .unwrap_err()
+                .into_vec()
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        };
+        assert_eq!(
+            problems("approvals=3", "approvals=3"),
+            [
+                "book `b`: `[book.decide]` asks for 3 different names to approve, and only 2 may approve under it",
+                "`[decide]` asks for 3 different names to approve, and only 2 may approve under it",
+            ]
+        );
+        assert_eq!(
+            problems("", "approvals=2"),
+            [
+                "`[decide]` asks for fewer different names (1) than book `b` (2): a declaration of the same meaning of an artifact keeps that book's approvals, and is ruled by `[decide]`"
+            ]
+        );
+        assert_eq!(
+            problems("approvals=11", "approvals=0"),
+            [
+                "book `b`: `[book.decide]`: `approvals` is 0, and it takes a number from 1 to 10",
+                "`[decide]`: `approvals` is 11, and it takes a number from 1 to 10",
+            ]
+        );
+        // A number of no whole number is a failure to read the TOML.
+        assert!(parse(&decide("approvals='two'", "")).is_err());
+
+        // `same` naming a group of fewer names than asked: no edit could ever count.
+        let solo = "[[group]]\nname='m'\nmembers=['ana', 'bo']\n\
+                    [[group]]\nname='s'\nmembers=['ana']\n\
+                    [decide]\ndefault=['m']\napprovals=2\nsame=['s']\n";
+        let problems: Vec<String> = validate(parse(solo).unwrap())
+            .unwrap_err()
+            .into_vec()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            problems,
+            [
+                "`[decide]` asks for 2 different names to declare a same meaning, and only 1 may declare a same meaning under it"
+            ]
+        );
+        // A group that cannot be read is told once, not counted as too few names.
+        let ghost = "[[group]]\nname='s'\nmembers=['ana']\n\
+                     [decide]\ndefault=['s', 'ghost']\napprovals=2\n";
+        let problems = validate(parse(ghost).unwrap()).unwrap_err().into_vec();
+        assert_eq!(problems.len(), 1, "{problems:?}");
+    }
+
+    #[test]
+    fn decide_that_reads_fewer_records_than_a_ruled_book_is_a_problem_of_the_declaration() {
+        let declared = |shelf_since: &str, book_since: &str| {
+            parse(&format!(
+                "[[group]]\nname='m'\nmembers=['ana', 'bo']\n\
+                 [decide]\ndefault=['m']\napprovals=2\n{shelf_since}\n\
+                 [[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+                 [book.decide]\napprove=['m']\napprovals=2\n{book_since}\n"
+            ))
+            .unwrap()
+        };
+        let told = |shelf_since: &str, book_since: &str| -> Vec<String> {
+            let problems = validate(declared(shelf_since, book_since)).err();
+            problems.map_or_else(Vec::new, |problems| {
+                problems.iter().map(ToString::to_string).collect()
+            })
+        };
+        let later = "`[decide]` reads the records made from unix ms 1798761600000, and book `a` reads earlier ones: a declaration of the same meaning of an artifact made before then would be ruled by none, and keep that book's approvals with one name";
+        // The book reads every record, `[decide]` only those from 2027.
+        assert_eq!(told("since='2027-01-01'", ""), [later]);
+        // The book reads from an earlier time than `[decide]`.
+        assert_eq!(told("since='2027-01-01'", "since='2026-12-01'"), [later]);
+        // As many records, or more: no problem.
+        assert!(told("since='2027-01-01'", "since='2027-01-01'").is_empty());
+        assert!(told("since='2026-12-01'", "since='2027-01-01'").is_empty());
+        assert!(told("", "since='2027-01-01'").is_empty());
+        assert!(told("", "").is_empty());
+
+        // A book that asks for one name, as every book of a rule did before
+        // `approvals`, puts no bound on `[decide]`'s `since`.
+        let one = parse(
+            "[[group]]\nname='m'\nmembers=['ana']\n\
+             [decide]\ndefault=['m']\nsince='2027-01-01'\n\
+             [[book]]\nname='a'\ndir='a'\nkey='slug'\n\
+             [book.decide]\napprove=['m']\n",
+        )
+        .unwrap();
+        assert!(validate(one).is_ok());
     }
 
     #[test]

@@ -112,7 +112,11 @@ fn a_shelf_declared_with_a_default_has_the_freshness_of_one_that_writes_the_spac
         .map(|app| block_on(app.get(&r("SP-2"))).unwrap().row.standing)
         .collect();
     assert_eq!(rows[0], rows[1]);
-    let Standing::Approved(Freshness::Degraded(d)) = &rows[0] else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = &rows[0]
+    else {
         panic!("the approval no longer holds: {:?}", rows[0]);
     };
     assert!(

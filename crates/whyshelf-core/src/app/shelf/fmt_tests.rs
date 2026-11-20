@@ -7,7 +7,7 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::build::{DocReading, DropAsk, DropProblem, RawProblem, RawValue, ReadId};
 use crate::domain::shelf::doc::DocHash;
-use crate::domain::shelf::freshness::{Freshness, Standing};
+use crate::domain::shelf::freshness::Standing;
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::{Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl};
 
@@ -140,7 +140,7 @@ fn fmt_changes_no_hash_and_no_approval() {
     let before = hashes_and_standings(&app);
     assert!(before.iter().any(|(id, hash, standing)| *id == docid(1)
         && hash.is_some()
-        && *standing == Standing::Approved(Freshness::Fresh)));
+        && *standing == Standing::FRESH));
     let report = block_on(app.fmt(&DropAsk::default())).unwrap();
     assert_eq!(report.rewritten.len(), 1);
     assert_eq!(hashes_and_standings(&app), before);

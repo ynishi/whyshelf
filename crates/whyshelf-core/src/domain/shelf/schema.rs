@@ -685,6 +685,63 @@ pub enum SchemaProblem {
         "a book declares who may decide, and `[decide]` does not: the records of no book (a move, the same meaning of an artifact) and those whose book cannot be told would escape every rule"
     )]
     NoShelfRule,
+    /// A rule's `approvals` that is not from one to [`Approvals::MOST`].
+    #[error(
+        "{at}: `approvals` is {written}, and it takes a number from 1 to {}",
+        Approvals::MOST
+    )]
+    ApprovalsOutOfRange {
+        /// Where the rule is.
+        at: RulePlace,
+        /// The number, as written.
+        written: i64,
+    },
+    /// A rule that asks for more different names than may approve (or declare the
+    /// same meaning) under it, whatever their times: no approval of its book (no
+    /// declaration of an edit) could settle.
+    #[error(
+        "{at} asks for {approvals} different names to {deed}, and only {names} may {deed} under it",
+        deed = kind.deed()
+    )]
+    TooFewApprovers {
+        /// Where the rule is.
+        at: RulePlace,
+        /// The kind the names are too few for: `approve`, or `same` when it names
+        /// other groups.
+        kind: DecideKind,
+        /// What it asks for.
+        approvals: Approvals,
+        /// How many names may approve.
+        names: usize,
+    },
+    /// `[decide]` asks for fewer names than a book: a declaration of the same meaning
+    /// of an artifact, which `[decide]` rules, would keep the approvals of that book
+    /// fresh with fewer names than they need.
+    #[error(
+        "`[decide]` asks for fewer different names ({approvals}) than book `{book}` ({book_approvals}): a declaration of the same meaning of an artifact keeps that book's approvals, and is ruled by `[decide]`"
+    )]
+    ShelfApprovalsBelowBook {
+        /// What `[decide]` asks for.
+        approvals: Approvals,
+        /// The book that asks the most.
+        book: BookName,
+        /// What it asks for.
+        book_approvals: Approvals,
+    },
+    /// `[decide]` reads fewer records than a book that asks for more than one name:
+    /// its `since` is later than the book's, or the book has none. A declaration of
+    /// the same meaning of an artifact
+    /// made before `[decide]`'s `since` would be read by no rule, so one name would
+    /// keep that book's approvals fresh however many names it asks for.
+    #[error(
+        "`[decide]` reads the records made from {since}, and book `{book}` reads earlier ones: a declaration of the same meaning of an artifact made before then would be ruled by none, and keep that book's approvals with one name"
+    )]
+    ShelfSinceAfterBook {
+        /// `[decide]`'s `since`.
+        since: RuleTime,
+        /// The first book, by name, that reads earlier records.
+        book: BookName,
+    },
 }
 
 /// What [`SchemaProblem::UnknownWord`] says: where the word was written, which word
@@ -917,8 +974,8 @@ pub use scope::{
 
 use decide::read_authority;
 pub use decide::{
-    Authority, BookRuleDecl, DecideDecl, DecideKind, DecideRule, Group, GroupDecl, Member,
-    MemberDecl, Permission, RuleDecl, RulePlace, RuleTime,
+    Approvals, Authority, BookRuleDecl, DecideDecl, DecideKind, DecideRule, Group, GroupDecl,
+    Member, MemberDecl, Permission, RuleDecl, RulePlace, RuleTime,
 };
 pub use declared::{Declared, Picked};
 pub use preset::{

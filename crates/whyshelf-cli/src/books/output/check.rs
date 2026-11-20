@@ -4,16 +4,18 @@
 
 use schemars::JsonSchema;
 use serde::Serialize;
-use whyshelf_core::app::shelf::{BooksCheck, Names};
+use whyshelf_core::app::shelf::{Awaiting, BooksCheck, Names};
+use whyshelf_core::domain::shelf::ledger::{SameMeaningEdge, ShortSameMeaning};
 use whyshelf_core::domain::shelf::schema::CoverSeverity;
 use whyshelf_core::domain::shelf::untold::untold_causes;
+use whyshelf_core::domain::words::{Join, Mark, listed};
 
 use super::cause::{absent_detail, moved_detail, unneeded_word};
 use super::untold::{CHECK_UNTOLD, untold_line};
 use super::words::{plural, schema_problem};
 use super::{
     AbsentOut, DocRef, ExemptOut, HealthOut, MovedNameOut, Namer, RepeatedOut, UnknownOut,
-    UnneededOut,
+    UnneededOut, standing,
 };
 
 /// One book, counted.
@@ -85,6 +87,57 @@ pub struct BooksCheckOut {
     /// notice `exemption_repeated`), as merged branches can leave them; they leave
     /// `clean` as it is.
     pub exemption_repeated: Vec<RepeatedOut>,
+    /// The approvals whose content fewer different names read than their rule of
+    /// who may decide asks for, at any freshness (`standing` is `awaiting` when it is
+    /// fresh): another name is to approve the same content. They leave `clean` as it
+    /// is. Left out when there is none, as there never is where no rule asks for more
+    /// than one name.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub awaiting: Vec<AwaitingEntryOut>,
+    /// The edits declared to keep the meaning by fewer different names than they
+    /// need, that a pin of an approval that stands meets: they join nothing until
+    /// more names declare them. They leave `clean` as it is. Left out when there is
+    /// none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub same_meaning_short: Vec<SameMeaningShortOut>,
+}
+
+/// An approval whose content awaits the approvals of other names.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct AwaitingEntryOut {
+    /// The document.
+    pub doc: DocRef,
+    /// Where it stands: `awaiting` when it is fresh, else the level of its
+    /// freshness (`expired`, `stale`, `broken`).
+    pub standing: &'static str,
+    /// The names whose reading counts now, each once.
+    pub readers: Vec<String>,
+    /// How many different names the rule asks for.
+    pub need: usize,
+    /// A sentence for a person.
+    pub detail: String,
+}
+
+/// An edit declared to keep the meaning by fewer different names than its
+/// declarations need.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct SameMeaningShortOut {
+    /// The document the edit is of; null for an artifact.
+    pub doc: Option<DocRef>,
+    /// The name of the artifact the edit is of; null for a document.
+    pub artifact: Option<String>,
+    /// The space of that artifact, beside `artifact`.
+    pub space: Option<String>,
+    /// The two hashes the declarations say mean the same, the smaller first.
+    pub hashes: Vec<String>,
+    /// The declarations (record ids), in the order of identity.
+    pub declared: Vec<String>,
+    /// The names that declared it, each once.
+    pub names: Vec<String>,
+    /// How many different names it needs.
+    pub need: usize,
+    /// A sentence for a person.
+    pub detail: String,
 }
 
 /// A document a covering link is expected to reach and does not.
@@ -191,14 +244,24 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
 
 /// The lines `check` writes on stderr beside its answer, one per book that skipped
 /// files, in the order of the books: `note: book spec skipped 3 files with no front
-/// matter`. A skipped file is no failure, and the lines change no exit; they are
-/// there so that a run that shows the answer only when it fails still says that
-/// files were left out.
+/// matter`; then one per approval that awaits the approvals of other names, in the
+/// order of `awaiting`, and one per edit declared to keep the meaning by too few
+/// names, in the order of `same_meaning_short`, each `note: <detail>`. None of them
+/// is a failure, and the lines change no exit; they are there so that a run that
+/// shows the answer only when it fails still says what was left out or waits.
 pub fn check_notes(check: &BooksCheck) -> Vec<String> {
-    let BooksCheck::Checked { books, .. } = check else {
+    let BooksCheck::Checked {
+        books,
+        awaiting,
+        same_meaning_short,
+        names,
+        ..
+    } = check
+    else {
         return Vec::new();
     };
-    books
+    let namer = Namer(names);
+    let skipped = books
         .iter()
         .filter(|book| !book.skipped.is_empty())
         .map(|book| {
@@ -208,8 +271,82 @@ pub fn check_notes(check: &BooksCheck) -> Vec<String> {
                 book.name,
                 plural(count)
             )
-        })
-        .collect()
+        });
+    let waits = awaiting
+        .iter()
+        .map(|a| format!("note: {}", namer.awaiting_detail(a)));
+    let short = same_meaning_short
+        .iter()
+        .map(|s| format!("note: {}", namer.same_meaning_short_detail(s)));
+    skipped.chain(waits).chain(short).collect()
+}
+
+impl Namer<'_> {
+    /// The sentence of an approval that awaits other names.
+    fn awaiting_detail(&self, awaiting: &Awaiting) -> String {
+        format!(
+            "{} is approved by {}, and its rule asks for {} different names: another name is to approve the same content",
+            self.label(awaiting.doc),
+            listed(awaiting.readers.iter(), Mark::Backtick, Join::And),
+            awaiting.need
+        )
+    }
+
+    /// The sentence of an edit declared to keep the meaning by too few names.
+    fn same_meaning_short_detail(&self, short: &ShortSameMeaning) -> String {
+        let (of, a, b) = match &short.of {
+            SameMeaningEdge::Doc { id, a, b } => (self.label(*id), a.to_string(), b.to_string()),
+            SameMeaningEdge::Artifact { artifact, a, b } => {
+                (artifact.to_string(), a.to_string(), b.to_string())
+            }
+        };
+        format!(
+            "the edit of {of} between {a} and {b} is declared to keep the meaning by {}, and its rule asks for {} different names: it joins nothing until another name declares it",
+            listed(short.names.iter(), Mark::Backtick, Join::And),
+            short.need
+        )
+    }
+
+    fn awaiting(&self, awaiting: &Awaiting) -> AwaitingEntryOut {
+        AwaitingEntryOut {
+            doc: self.doc(awaiting.doc),
+            standing: standing(awaiting.standing),
+            readers: awaiting
+                .readers
+                .iter()
+                .map(|a| a.as_str().to_owned())
+                .collect(),
+            need: awaiting.need.count(),
+            detail: self.awaiting_detail(awaiting),
+        }
+    }
+
+    fn same_meaning_short(&self, short: &ShortSameMeaning) -> SameMeaningShortOut {
+        let (doc, artifact, space, hashes) = match &short.of {
+            SameMeaningEdge::Doc { id, a, b } => (
+                Some(self.doc(*id)),
+                None,
+                None,
+                vec![a.to_string(), b.to_string()],
+            ),
+            SameMeaningEdge::Artifact { artifact, a, b } => (
+                None,
+                Some(artifact.name().to_string()),
+                Some(artifact.space().to_string()),
+                vec![a.to_string(), b.to_string()],
+            ),
+        };
+        SameMeaningShortOut {
+            doc,
+            artifact,
+            space,
+            hashes,
+            declared: short.declared.iter().map(ToString::to_string).collect(),
+            names: short.names.iter().map(|a| a.as_str().to_owned()).collect(),
+            need: short.need.count(),
+            detail: self.same_meaning_short_detail(short),
+        }
+    }
 }
 
 /// The answer of `check`.
@@ -227,6 +364,8 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             exempt: Vec::new(),
             exemption_unneeded: Vec::new(),
             exemption_repeated: Vec::new(),
+            awaiting: Vec::new(),
+            same_meaning_short: Vec::new(),
         },
         BooksCheck::Checked {
             books,
@@ -238,6 +377,8 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             exempt,
             unneeded,
             repeated,
+            awaiting,
+            same_meaning_short,
             names,
         } => {
             let namer = Namer(names);
@@ -371,6 +512,11 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                         exemptions: r.exemptions.iter().map(ToString::to_string).collect(),
                         detail: namer.repeated(Some(r.doc), &r.book, &r.link, &r.exemptions),
                     })
+                    .collect(),
+                awaiting: awaiting.iter().map(|a| namer.awaiting(a)).collect(),
+                same_meaning_short: same_meaning_short
+                    .iter()
+                    .map(|s| namer.same_meaning_short(s))
                     .collect(),
             }
         }

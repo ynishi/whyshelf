@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [],
+  "id": "01a1f88a-494b-715a-a727-22686832f804",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:6957de2aed4f7b23d0dbc76493c4e263c8502942aaf57c658345ceaaa4dc57e8",
+  "seen_address": "b818706c621f264b47782ffb194b7775e4389c1b",
+  "subject": "01a1f6a0-2c41-7a3e-9b52-6e0d4f1c8a21",
+  "v": 1,
+  "verb": "approve"
+}

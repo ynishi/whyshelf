@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d05b7103d3b7cdbe9cc9dbde23bc6f9347d11a41",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1d06756a41b04fb2393f120507511b365f064394dddfb13af5df363f46375580",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/actor.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b77eaefb9813c7a6a11175190e1ef5dc60019507",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:170afc1ef59d4744f3fe6ba18f7fad2d2d1525f90e979aa72e69837cc1f9ee19",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "18043f59ad21212c02248de6ae6190ae95685067",
+      "hash": "sha256:2b40c7219de6e63b98ee933e423a47e71e0a67775e325f5689d0966fabf8c6be",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "34"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e310-703a-82cc-fecc69ebdc07"
+    }
+  ],
+  "id": "01a1f88a-224d-754e-a8a5-edb972223a49",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:6357bb0ef6f337a9ef6845a0517cc92893fefc178c3d22573def3d189dfd7fb9",
+  "seen_address": "0cdc83119d50dd07543238dbd4aef14024a0bb04",
+  "subject": "01a1c887-35f7-7582-ade1-d6717c584690",
+  "v": 1,
+  "verb": "approve"
+}

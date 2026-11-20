@@ -184,7 +184,7 @@ fn a_pinned_name_that_later_cannot_be_told_is_a_notice_and_the_approval_stays_fr
     app.ports()
         .cannot_tell(&file_space(), "tests/a.rs", "the tree is not mounted");
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
+    assert_eq!(row.standing, Standing::FRESH);
     assert!(row.notices.iter().any(|n| matches!(
         n,
         Notice::ArtifactUnknown { link, artifact: named, why }
@@ -205,7 +205,10 @@ fn a_pinned_name_that_later_cannot_be_told_is_a_notice_and_the_approval_stays_fr
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
     assert!(matches!(
         row.standing,
-        Standing::Approved(Freshness::Degraded(_))
+        Standing::Approved {
+            freshness: Freshness::Degraded(_),
+            ..
+        }
     ));
 }
 
@@ -253,7 +256,11 @@ fn the_same_name_in_two_spaces_is_two_artifacts() {
     app.ports()
         .put_in(&other_space(), "a", b"edited elsewhere\n");
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    let Standing::Approved(Freshness::Degraded(degradation)) = &row.standing else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(degradation),
+        ..
+    } = &row.standing
+    else {
         panic!("degraded: {:?}", row.standing);
     };
     let changed: Vec<_> = degradation

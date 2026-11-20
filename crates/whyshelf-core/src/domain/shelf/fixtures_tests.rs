@@ -30,8 +30,9 @@ use super::ledger::{
     frame_retire,
 };
 use super::schema::{
-    BookSchemaDecl, Cardinality, CompareDecl, FieldEntryDecl, FieldPresence, FieldTypeDecl,
-    KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation, Schema,
+    BookRuleDecl, BookSchemaDecl, BuiltinPresets, Cardinality, CompareDecl, DecideDecl,
+    FieldEntryDecl, FieldPresence, FieldTypeDecl, GroupDecl, KeyPatternDecl, LinkEntryDecl,
+    LinkTargetDecl, MemberDecl, Propagation, RuleDecl, RuleTime, Schema, ShelfDecl,
 };
 
 /// A UUID v7 identifier from a small number.
@@ -251,15 +252,23 @@ pub(super) fn shelf_answered(
     readings: Vec<DocReading>,
     artifacts: &[(&str, ArtifactReading)],
 ) -> Shelf {
-    let schema = schema();
-    let mut found: ArtifactReadings = Shelf::artifact_asks(&schema, &readings)
+    shelf_answered_by(&schema(), readings, artifacts)
+}
+
+/// As [`shelf_answered`], with the books of `schema`.
+fn shelf_answered_by(
+    schema: &Schema,
+    readings: Vec<DocReading>,
+    artifacts: &[(&str, ArtifactReading)],
+) -> Shelf {
+    let mut found: ArtifactReadings = Shelf::artifact_asks(schema, &readings)
         .iter()
         .map(|(space, at, _)| (space.clone(), at.clone(), ArtifactReading::absent()))
         .collect();
     for (p, reading) in artifacts {
         found.insert(file_space(), name(p), reading.clone());
     }
-    Shelf::build(&schema, readings, &found)
+    Shelf::build(schema, readings, &found)
 }
 
 /// A spec `SP-<n>` with identity `n`, grounded in these findings and tested by these
@@ -358,6 +367,95 @@ pub(super) fn approved(shelf: &Shelf, subjects: &[u128]) -> Ledger {
         records.push(approve(shelf, &so_far, *subject, 1000 + subject, 10, None));
     }
     ledger(records)
+}
+
+/// Who may decide, asking for `approvals` different names: `maintainers` (`ana`, `bo`,
+/// `cy`) may write every kind of judgement about the findings (from `since`, when
+/// given) and the records of no book.
+pub(super) fn asking(approvals: i64, since: Option<i64>) -> DecideDecl {
+    let maintainers = vec!["maintainers".to_owned()];
+    let member = |name: &str| MemberDecl {
+        name: name.to_owned(),
+        from: None,
+        until: None,
+    };
+    DecideDecl {
+        groups: vec![GroupDecl {
+            name: "maintainers".to_owned(),
+            members: vec![member("ana"), member("bo"), member("cy")],
+        }],
+        shelf: Some(RuleDecl {
+            default: Some(maintainers.clone()),
+            approvals: Some(approvals),
+            ..RuleDecl::default()
+        }),
+        books: vec![BookRuleDecl {
+            book: "finding".to_owned(),
+            rule: RuleDecl {
+                default: Some(maintainers),
+                since: since.map(RuleTime::from_millis),
+                approvals: Some(approvals),
+                ..RuleDecl::default()
+            },
+        }],
+    }
+}
+
+/// The schema of the three books under who may decide as `decide` says.
+fn ruled_schema(decide: DecideDecl) -> Schema {
+    let mut decl = ShelfDecl::of_books(decls());
+    decl.decide = decide;
+    Schema::declared(decl, &BuiltinPresets::new(), &spaces()).unwrap()
+}
+
+/// A shelf of the three books and `readings`, under who may decide as `decide` says.
+pub(super) fn ruled_shelf(decide: DecideDecl, readings: Vec<DocReading>) -> Shelf {
+    Shelf::build(&ruled_schema(decide), readings, &ArtifactReadings::new())
+}
+
+/// As [`ruled_shelf`], whose artifacts in the space `file` are these names, each with
+/// this hash (as its bytes compare); every other name asked is absent.
+pub(super) fn ruled_shelf_with(
+    decide: DecideDecl,
+    readings: Vec<DocReading>,
+    artifacts: &[(&str, ArtifactHash)],
+) -> Shelf {
+    let answers: Vec<(&str, ArtifactReading)> = artifacts
+        .iter()
+        .map(|(p, hash)| {
+            let hashes = BTreeMap::from([(Comparison::Bytes, *hash)]);
+            (*p, ArtifactReading::of_hashes(hashes, None))
+        })
+        .collect();
+    shelf_answered_by(&ruled_schema(decide), readings, &answers)
+}
+
+/// The ledger of `records`, read with who may decide as `shelf` declares it.
+pub(super) fn admitted(shelf: &Shelf, records: Vec<Record>) -> Ledger {
+    Ledger::build(records, &Admit::of(shelf))
+}
+
+/// An approval of `subject` by `by`, made at `at` and lapsing at `until`, on the frame
+/// `ledger` gives.
+pub(super) fn approve_as(
+    shelf: &Shelf,
+    ledger: &Ledger,
+    subject: u128,
+    judgement: u128,
+    (by, at, until): (&str, i64, Option<i64>),
+) -> Record {
+    let frame = frame_approve(shelf, ledger, docid(subject)).unwrap();
+    Record::Decision(
+        Decision::approve(
+            jid(judgement),
+            frame,
+            until.map(JudgedAt::new),
+            Actor::new(by).unwrap(),
+            JudgedAt::new(at),
+            None,
+        )
+        .unwrap(),
+    )
 }
 
 pub(super) fn deny(shelf: &Shelf, subject: u128, judgement: u128, at: i64) -> Record {

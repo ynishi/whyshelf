@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2adeb0e997b2655abfd748f65e7f09cf88b02677",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:08118c0588e7f4af3795267f56c571b02256f8d7d0f12775a3026e28fea2e12e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795171155185,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a1f88a-0bd9-74c9-8c1e-88a0764ce4c7",
+  "kind": "decision",
+  "reason": "Re-read for #114 stage G2 (a second approval by another name): the edited books state the quorum, the awaiting standing and the unseconded upstream as the code does; the verifications' tests changed only for Standing::Approved holding freshness and quorum, and the shared in_seconds helper, and still check what they state",
+  "revision": "ccfb9b3ef82937512b1f53ada09caec09b39cebb",
+  "seen": "sha256:88358390b91499d7e01ee8eca2447d308887c5c4e9a0377c415c34da4434293c",
+  "seen_address": "befd8c4f9003053924576f918f04c779b3cf2e8d",
+  "subject": "01a1c5ae-37cb-7230-9fce-a99ff188132c",
+  "v": 1,
+  "verb": "approve"
+}

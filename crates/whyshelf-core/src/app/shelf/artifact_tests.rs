@@ -118,7 +118,7 @@ fn outside_version_control_an_approval_keeps_no_address_and_holds_the_same() {
     };
     assert_eq!((seen_address, revision), (&None, &None));
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
+    assert_eq!(row.standing, Standing::FRESH);
 
     // The approved content cannot be read back, and says why.
     let shown = block_on(app.show_approved(&r("SP-2"))).unwrap();
@@ -138,7 +138,11 @@ fn a_test_edited_after_the_approval_makes_it_stale_and_diff_shows_both_contents(
 
     app.ports().put_file("tests/a.rs", b"assert!(faster);\n");
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    let Standing::Approved(Freshness::Degraded(d)) = &row.standing else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = &row.standing
+    else {
         panic!("the approval no longer holds: {:?}", row.standing);
     };
     assert!(
@@ -195,7 +199,11 @@ fn a_test_that_arrives_and_one_that_goes_are_stale_and_broken() {
     app.ports().put_file("tests/b.rs", b"new\n");
     app.ports().remove_file("tests/a.rs");
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    let Standing::Approved(Freshness::Degraded(d)) = &row.standing else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = &row.standing
+    else {
         panic!("degraded");
     };
     assert!(

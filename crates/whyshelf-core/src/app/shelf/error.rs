@@ -499,7 +499,8 @@ impl ShelfError {
                 | SameMeaningRefusal::NotPinned { .. }
                 | SameMeaningRefusal::SeveralEarlier { .. }
                 | SameMeaningRefusal::PinnedUnderOtherComparison { .. }
-                | SameMeaningRefusal::NothingToDeclare,
+                | SameMeaningRefusal::NothingToDeclare
+                | SameMeaningRefusal::AlreadyDeclaredBy { .. },
             )
             | Self::Withdraw(
                 WithdrawRefusal::Unknown { .. } | WithdrawRefusal::AlreadyWithdrawn { .. },

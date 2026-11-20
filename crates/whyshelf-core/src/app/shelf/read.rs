@@ -7,7 +7,7 @@
 //!
 //! | use case | asks |
 //! |---|---|
-//! | `books_check` | [`Schema::declared`] (the declaration expanded, then checked), then [`Shelf::tally_by_book`] and [`assess`] for the faults around the documents |
+//! | `books_check` | [`Schema::declared`] (the declaration expanded, then checked), then [`Shelf::tally_by_book`] and [`assess`] for the faults around the documents and the approvals that await other names, and [`Ledger::same_meaning_short`] |
 //! | `map` | [`Schema::declared`], then [`ShelfMap::of`]; nothing else is read |
 //! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it; with a filter ([`status_filtered`](ShelfApp::status_filtered)), [`StatusFilter::new`] against the declaration and [`StatusFilter::admits`] per identity |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
@@ -20,6 +20,7 @@
 //! [`Shelf::tally_by_book`]: crate::domain::shelf::build::Shelf::tally_by_book
 //! [`assess`]: crate::domain::shelf::freshness::assess
 //! [`Ledger::status_of`]: crate::domain::shelf::ledger::Ledger::status_of
+//! [`Ledger::same_meaning_short`]: crate::domain::shelf::ledger::Ledger::same_meaning_short
 //! [`Standing`]: crate::domain::shelf::freshness::Standing
 //! [`StatusFilter::new`]: crate::domain::shelf::filter::StatusFilter::new
 //! [`StatusFilter::admits`]: crate::domain::shelf::filter::StatusFilter::admits
@@ -35,7 +36,7 @@ use std::collections::BTreeSet;
 use crate::domain::id::DocId;
 use crate::domain::shelf::filter::{StatusFilter, StatusFilterAsk};
 use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing};
-use crate::domain::shelf::ledger::{JudgedAt, MovedTo};
+use crate::domain::shelf::ledger::{JudgedAt, MovedTo, Quorum};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order;
@@ -49,9 +50,9 @@ use super::error::ShelfError;
 use super::load::{Loaded, View, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
-    Absent, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, GetReport, MapReport, MovedAway,
-    RepeatedExemption, SettledOrigin, StaleEntry, StaleReport, StatsReport, StatusReport,
-    TraceReport, Uncovered, Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
+    Absent, Awaiting, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, GetReport, MapReport,
+    MovedAway, RepeatedExemption, SettledOrigin, StaleEntry, StaleReport, StatsReport,
+    StatusReport, TraceReport, Uncovered, Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 
 /// The identity a reference names, or why it names none.
@@ -191,8 +192,8 @@ impl<P: ShelfRead> ShelfApp<P> {
             .iter()
             .flat_map(|(id, standing)| {
                 let key = loaded.shelf.doc(*id).map(|doc| doc.key().clone());
-                let causes = match standing {
-                    Standing::Approved(Freshness::Degraded(d)) => d.causes().iter().collect(),
+                let causes = match standing.freshness() {
+                    Some(Freshness::Degraded(d)) => d.causes().iter().collect(),
                     _ => Vec::new(),
                 };
                 causes.into_iter().filter_map(move |cause| match cause {
@@ -256,6 +257,22 @@ impl<P: ShelfRead> ShelfApp<P> {
                 }
             }
         }
+        // The approvals that await other names, at any freshness, as the ledger
+        // counted them for the assessment.
+        let awaiting = assessment
+            .standings()
+            .iter()
+            .filter_map(|(id, standing)| match standing.quorum()? {
+                Quorum::Met => None,
+                Quorum::Short { readers, need } => Some(Awaiting {
+                    doc: *id,
+                    key: loaded.shelf.doc(*id).map(|doc| doc.key().clone()),
+                    standing: standing.kind(),
+                    readers: readers.clone(),
+                    need: *need,
+                }),
+            })
+            .collect();
         Ok(BooksCheck::Checked {
             books,
             health: view.health(),
@@ -266,6 +283,8 @@ impl<P: ShelfRead> ShelfApp<P> {
             exempt,
             unneeded,
             repeated,
+            awaiting,
+            same_meaning_short: loaded.ledger.same_meaning_short(),
             names: loaded.names(),
         })
     }
@@ -404,8 +423,8 @@ impl<P: ShelfRead> ShelfApp<P> {
         let mut entries: Vec<StaleEntry> = assessment
             .standings()
             .iter()
-            .filter_map(|(id, standing)| match standing {
-                Standing::Approved(Freshness::Degraded(degradation)) => Some(StaleEntry {
+            .filter_map(|(id, standing)| match standing.freshness() {
+                Some(Freshness::Degraded(degradation)) => Some(StaleEntry {
                     row: view.row(*id),
                     level: degradation.level(),
                     roots: assessment.roots_of(*id),
@@ -417,7 +436,7 @@ impl<P: ShelfRead> ShelfApp<P> {
         let unknown = assessment
             .standings()
             .iter()
-            .filter(|(_, standing)| matches!(standing, Standing::Approved(_)))
+            .filter(|(_, standing)| matches!(standing, Standing::Approved { .. }))
             .flat_map(|(id, _)| {
                 let doc = loaded.shelf.doc(*id);
                 let key = doc.map(|doc| doc.key().clone());

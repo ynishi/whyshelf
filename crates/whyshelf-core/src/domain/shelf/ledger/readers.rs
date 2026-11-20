@@ -1,11 +1,14 @@
 //! Who has read the content an approval stands on, and what a new approval of the
 //! document would be beside them: [`Ledger::readers`] and [`Ledger::kind_of`], the one
-//! place two approvals are matched for what they stand on and who made them. The rules
-//! are on [`Readers`], [`ApprovalKind`] and [`ApprovalKind::left_out`].
+//! place two approvals are matched for what they stand on and who made them; and
+//! whether enough of them did for the approval to settle, [`Ledger::quorum`]. The
+//! rules are on [`Readers`], [`ApprovalKind`], [`ApprovalKind::left_out`] and
+//! [`Quorum`].
 //!
 //! ```text
 //!   ledger ──► Readers  ◄── what an approval stands on (the one comparison)
 //!                 │
+//!                 ├──────────────► Quorum (Met / Short): freshness, order, check read it
 //!                 ▼
 //!            ApprovalKind ──► left_out(taking, again)
 //!                 │
@@ -17,8 +20,10 @@ use std::collections::BTreeSet;
 
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
+use crate::domain::nonempty::NonEmptySet;
 
 use super::super::doc::DocHash;
+use super::super::schema::Approvals;
 use super::moved::moved_way;
 use super::{
     ApproveFrame, ArtifactPin, Decision, DecisionVerb, FramePin, JudgedAt, JudgementId, Ledger,
@@ -274,6 +279,28 @@ impl ApprovalKind {
     }
 }
 
+/// Whether the approval that stands about a document has as many different readers
+/// as the rule that reads it asks for ([`Ledger::quorum`]).
+///
+/// It is a fact of its own beside the freshness of the approval, never one of its
+/// causes: a level of degradation is the strongest of the causes, so a short quorum
+/// among them would be hidden by any stronger one, and an approval that also lapsed
+/// would let it through where an upstream that only expired holds nothing back. So
+/// an approval is fresh or degraded as before, and short or met besides; how the two
+/// are shown together is [`Standing::kind`](super::super::freshness::Standing::kind)'s.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Quorum {
+    /// Enough different names read the content (or no approval stands).
+    Met,
+    /// Fewer different names read the content than the rule asks for.
+    Short {
+        /// The names whose reading counts now, each once.
+        readers: NonEmptySet<Actor>,
+        /// How many the rule asks for.
+        need: Approvals,
+    },
+}
+
 /// What an approval stands on; none for a decision that is no approval.
 fn stands_on(decision: &Decision) -> Option<StandsOn<'_>> {
     match decision.verb() {
@@ -326,6 +353,46 @@ impl Ledger {
             approvals.push(decision);
         }
         Readers { approvals }
+    }
+
+    /// Whether the approval that stands about `subject` has, at `now`, as many
+    /// different readers ([`Ledger::readers`]) as the rule that reads it asks for
+    /// (its need: the `approvals` of that rule; one when no rule reads it). The one
+    /// place approvals are counted for it, read by freshness, by the order of a run
+    /// and by `check`.
+    ///
+    /// A name counts once, however many of its approvals are among the readers, and
+    /// only while its own latest reading has not lapsed at `now`
+    /// ([`JudgedAt::lapsed_by`]), whoever approved last: so once any reading lapses,
+    /// an approval that needed it waits again. When every reading lapsed, the reader
+    /// of the approval that stands is counted alone: the approval is expired, which
+    /// freshness tells ([`Cause::Expired`](super::super::freshness::Cause::Expired)),
+    /// and one that needs one name is never short. With no approval standing,
+    /// nothing awaits: [`Quorum::Met`]. A project that declares no rule asks for one
+    /// name of every approval, so its quorum is met without reading the readers.
+    pub fn quorum(&self, subject: DocId, now: JudgedAt) -> Quorum {
+        if self.admit.is_unruled() {
+            return Quorum::Met;
+        }
+        let readers = self.readers(subject, Before::Now);
+        let Some(standing) = readers.standing() else {
+            return Quorum::Met;
+        };
+        let need = self.need(standing.id(), standing.at());
+        let mut counted = readers.actors().into_iter().filter(|actor| {
+            readers
+                .latest_of(actor)
+                .is_some_and(|own| !expires_of(own).is_some_and(|e| e.lapsed_by(now)))
+        });
+        let readers = match counted.next() {
+            Some(first) => NonEmptySet::new(first.clone(), counted.cloned()),
+            None => NonEmptySet::new(standing.actor().clone(), []),
+        };
+        if readers.len() >= need.count() {
+            Quorum::Met
+        } else {
+            Quorum::Short { readers, need }
+        }
     }
 
     /// What the approval `asked` would be beside the readers of its document, reading

@@ -129,7 +129,7 @@ fn a_comment_added_keeps_the_approval_fresh_and_diff_says_unchanged() {
         b"// why it is fast\n    assert!(fast);   \n\n",
     );
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::Approved(Freshness::Fresh));
+    assert_eq!(row.standing, Standing::FRESH);
     assert!(!file_changed(&app));
 
     app.ports().put_file("tests/a.rs", b"assert!(slow);\n");
@@ -145,7 +145,11 @@ fn diff_compares_by_the_pin_s_comparison_after_the_declaration_changed() {
     app.ports()
         .put_file("tests/a.rs", b"// why it is fast\nassert!(fast);\n");
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    let Standing::Approved(Freshness::Degraded(d)) = &row.standing else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = &row.standing
+    else {
         panic!("the comparison changed: {:?}", row.standing);
     };
     assert!(

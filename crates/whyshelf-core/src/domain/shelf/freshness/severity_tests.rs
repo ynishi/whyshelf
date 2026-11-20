@@ -28,7 +28,10 @@ fn declared(status: UpstreamStatus) -> Cause {
 /// The degradation of a standing that is a degraded approval.
 fn degraded(d: Standing) -> Degradation {
     match d {
-        Standing::Approved(Freshness::Degraded(d)) => d,
+        Standing::Approved {
+            freshness: Freshness::Degraded(d),
+            ..
+        } => d,
         other => panic!("a degraded approval, got {other:?}"),
     }
 }
