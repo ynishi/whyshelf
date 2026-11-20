@@ -547,6 +547,48 @@ pub struct StaleReport {
     pub health: Health,
 }
 
+impl StaleReport {
+    /// Whether a gate can say the approvals hold, as DEC-26 decides: the one place
+    /// the rule is read, so that a surface maps the answer to its own signal (the
+    /// command line to an exit status) instead of reading the fields again.
+    ///
+    /// An approval that does not hold, or that only expired, is
+    /// [`Gate::DoesNotHold`]; with none, one that pins a name its adapter cannot
+    /// tell about now is [`Gate::CannotTell`], since whether it holds cannot be
+    /// said while its freshness is unchanged; otherwise [`Gate::Holds`]. A document
+    /// still pending has no approval and is no reason to fail, and neither is a
+    /// fresh approval still awaiting names (DEC-89): another name settles it.
+    pub fn gate(&self) -> Gate {
+        if !self.entries.is_empty() {
+            Gate::DoesNotHold
+        } else if !self.unknown.is_empty() {
+            Gate::CannotTell
+        } else {
+            Gate::Holds
+        }
+    }
+}
+
+/// What a gate can say about the approvals of a shelf ([`StaleReport::gate`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Gate {
+    /// No approval is degraded, and none pins a name that cannot be told about
+    /// now; pending documents and fresh approvals still awaiting names pass too.
+    Holds,
+    /// An approval does not hold, or only expired.
+    DoesNotHold,
+    /// No approval is known not to hold, but one pins a name that cannot be told
+    /// about now.
+    CannotTell,
+}
+
+impl Gate {
+    /// Whether the gate passes: only when it [`Holds`](Self::Holds).
+    pub fn passes(self) -> bool {
+        matches!(self, Self::Holds)
+    }
+}
+
 /// The result of `stats`: how the work went, as the ledger tells it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatsReport {

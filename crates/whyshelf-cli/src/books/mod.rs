@@ -821,11 +821,10 @@ fn warn_no_next(root: output::NextRoot<'_>, typed: Option<&Path>) {
     }
 }
 
-/// The exit of `stale` once its answer is printed: with `--exit-code`, 1 when any
-/// approval does not hold, or when one stands on a name that cannot be told now (a
-/// gate cannot say it holds); otherwise 0.
+/// The exit of `stale` once its answer is printed: with `--exit-code`, 1 when the
+/// report's gate does not pass ([`StaleReport::gate`]); otherwise 0.
 fn stale_exit(report: &StaleReport, exit_code: bool) -> Exit {
-    if exit_code && (!report.entries.is_empty() || !report.unknown.is_empty()) {
+    if exit_code && !report.gate().passes() {
         Exit::Stopped
     } else {
         Exit::Ok
