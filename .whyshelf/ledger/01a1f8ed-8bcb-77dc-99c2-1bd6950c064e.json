@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test::RustTestSpace",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795177679676,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9db87ce77a0bfbccccf40dded4dcc5788569d9c0",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    },
+    {
+      "address": "537ad92c67cad3f36024aa45964f6604c6a23a47",
+      "hash": "sha256:da4400e50c4645fbb1ed3c9028302053e58da039407d2a8e91d092ebc33f2f00",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1cad2-34df-74f6-b9c7-64f09ffc1dd4"
+    },
+    {
+      "address": "e0c46ae21bc953a796c659a1cc13c0d26ce2987a",
+      "hash": "sha256:84dbb7afe91c0975f6c4069df64cf17775c305bba9f17db63459f57ae4066a19",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1f0cd-c91f-7248-ac40-b50655ca22d8"
+    }
+  ],
+  "id": "01a1f8ed-8bcb-77dc-99c2-1bd6950c064e",
+  "kind": "decision",
+  "reason": "New for #155: DEC-90 states the test part (the outermost cfg(test) module on the way, else the file), every item beside but tests, inner modules read through with a nameless depth mark, out-of-line modules not followed, and what it replaces in DEC-64 and adds to DEC-56, as rust_test.rs does; V-111 names the unit tests that check it, which exist and pass",
+  "revision": "c3b25ff5a3cffbddbaa46d156543cf76dc02d87d",
+  "seen": "sha256:5a5349db835027f7c6713ab7232707cdd6652f473b54905c5b8f165688c1414b",
+  "seen_address": "eb6cfea4868db0f2f5bae07dc0bcb91450d86436",
+  "subject": "01a1f9c4-5e21-7a3b-9d47-6c1e2b8f0a55",
+  "v": 1,
+  "verb": "approve"
+}

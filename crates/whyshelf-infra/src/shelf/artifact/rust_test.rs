@@ -17,7 +17,8 @@
 //!     └─ lexed once (proc-macro2), nesting held to MAX_DEPTH
 //!          ├─ does not lex, or nests too deep ──► cannot tell
 //!          └─ its items scanned, then those of each inline module named (every twin)
-//!               ├─ found: the function's tokens, doc attributes left out ──► there (its text)
+//!               ├─ found: the function's tokens, then the items beside it in its
+//!               │  test part, doc attributes left out ──► there (its text)
 //!               ├─ not found, and a twin on the way is out of line (`mod x;`) ──► cannot tell
 //!               ├─ not found, and a macro on the way may make it ──► cannot tell
 //!               └─ not found ──► absent
@@ -117,8 +118,10 @@
 //! - every other item, as tokens up to its end: the first `;` or brace group at the
 //!   top of the item.
 //!
-//! Only the modules named are scanned below the file. Each module named is every
-//! inline module (`mod tests { … }`) of the name in the items before it: twins
+//! To find the test, only the modules named are scanned below the file; once it is
+//! found, every inline module of its test part is scanned too, for the items beside
+//! it (what is compared, below). Each module named is every inline module
+//! (`mod tests { … }`) of the name in the items before it: twins
 //! under their own `#[cfg]` are each searched, as twin functions are joined. A twin
 //! declared out of line (`mod x;`) is not followed: a test not found in the inline
 //! ones cannot be told.
@@ -155,21 +158,58 @@
 //!
 //! # What is compared
 //!
-//! The text of a test is the function item's own tokens as the source has them,
-//! from its first outer attribute to the end of its body, each doc attribute
-//! (`///`, `//!`, `#[doc …]`) left out where it stands as an attribute (on the
-//! function, and on a statement or an item in its body; not in the tokens of a
-//! macro call, where it is data), printed as `proc-macro2` prints a token stream:
-//! white space and comments count for nothing, so an edit of them, or of the docs,
-//! makes nothing stale, and any other edit of the function does. The text is what
-//! [`ArtifactReading::of_bytes`] hashes, so every comparison works over it:
+//! A test means what the helpers beside it do, so its text is its own text, then
+//! the text of the items beside it in its test part:
+//!
+//! - Its own text is the function item's tokens as the source has them, from its
+//!   first outer attribute to the end of its body (twins joined, in the order of
+//!   the file, one on each line).
+//! - Its test part is the outermost inline module on the way to it that carries a
+//!   `cfg` holding only under test, outer or inner (`#[cfg(test)]`, `#![cfg(test)]`;
+//!   an `all` of which one holds only under test, such as
+//!   `#[cfg(all(test, unix))]`; an `any` of which each does), or the file when no
+//!   module on the way does. Twins of a module on the way may be two parts: each is
+//!   taken, in the order of the file, two apart by an empty line, and one inside
+//!   another is taken once.
+//! - The items beside it are every item of the part, in the order of the file, each
+//!   on a line of its own after its own text: the inner attributes of the part, its
+//!   helpers, `use`s, constants, types, `impl`s, macro definitions and item macro
+//!   calls, and the items of each inline module in it, at any depth. A module in
+//!   the part is read through, not printed: its name, its visibility and its braces
+//!   are left out. Each line of an item inside it starts with a mark of how many
+//!   modules of the part it is in, as many `>` (`> fn h () { }` one deep, `>>` two);
+//!   no item starts with `>`, so a mark is never taken for an item, and a line of the
+//!   part's own level has none. Then come the attributes of those modules (outer,
+//!   then inner, outermost first), so that they stay tied to the items they apply
+//!   to, then the item. So a module renamed, made public, or of tests only added
+//!   changes no line, and a move of a prefix (`judge moved --prefix`) follows the
+//!   test; a module with no item but tests is no line; and an item moved into or out
+//!   of a module changes its mark. Every function read as a test, wherever it stands
+//!   in the part, is left out, the test itself among them. So each line beside is
+//!   one item, with its depth and every attribute over it, none of them a test, and
+//!   the text tells where the test ends.
+//! - A module declared out of line (`mod common;`), an `include!` and a fixture the
+//!   test reads are not followed: only the tokens that declare them are in the
+//!   part. The code outside the part (the code under test, beside inline tests) is
+//!   not compared.
+//! - Nothing is parsed or resolved: an item is its tokens, and no call is followed.
+//!
+//! Each piece is printed as `proc-macro2` prints a token stream, each doc attribute
+//! (`///`, `//!`, `#[doc …]`) left out where it stands as an attribute (on an item,
+//! and on a statement or an item in a body; not in the tokens of a macro call,
+//! where it is data): white space and comments count for nothing. So an edit of
+//! them or of the docs, of another test, or of the code outside the part makes
+//! nothing stale; any other edit of the function, or of an item beside it, does,
+//! for every test of the part. The text is what [`ArtifactReading::of_bytes`]
+//! hashes, so every comparison works over it:
 //!
 //! - `bytes` (the preset `test`): every token.
-//! - `lines`: the text is one line, save inside a string that spans lines, so it
-//!   tells what `bytes` tells, under another hash; an `ignore` prefix is held
-//!   against the start of that one line, and one the text starts with (`#`) leaves
-//!   out the whole test, so that no edit is seen. It is allowed, since the domain
-//!   offers every comparison over a content, and adds nothing.
+//! - `lines`: the text is a line for the test (one for each twin) and one for each
+//!   item beside, save inside a string that spans lines, so it tells what `bytes`
+//!   tells, under another hash; an `ignore` prefix is held against the start of
+//!   each line, and one a line starts with (`#`) leaves out that line, so that no
+//!   edit of it is seen. It is allowed, since the domain offers every comparison
+//!   over a content, and adds nothing.
 //! - `presence`: only that the test is there.
 //!
 //! There is no address: the text is made, not stored, so nothing is read back. The
@@ -193,9 +233,31 @@
 //!
 //! # Known limits
 //!
-//! - The text is the function alone. An edit of a helper it calls, of a `use` at
-//!   the top of the file, of a fixture it reads, or a `cfg` that stops its module
-//!   from being compiled, leaves an approval of it fresh.
+//! - The text holds the items beside the test in its test part, not only those it
+//!   calls: an edit of a helper there makes every test of the part stale, the tests
+//!   that do not call it among them. Split the part into modules that hold only
+//!   under test to keep them apart.
+//! - A function made a test by an attribute rust-test does not read as one
+//!   (`#[rstest]`, `#[test_case(…)]`), and a test written inside an item macro call
+//!   (`proptest! { … }`), is an item beside: an edit of it makes the other tests of
+//!   the part stale. The error is toward stale.
+//! - A module in the part counts for its depth, its attributes and its items, not
+//!   for its name: where two sibling modules at one depth, with the same attributes,
+//!   meet, the boundary can shift over their items in their order and change no line
+//!   (`mod a { fn x() {} } mod b { fn y() {} }` read as
+//!   `mod a { fn x() {} fn y() {} } mod b {}`). Which module an item is in, and so
+//!   what a test calls by a path or through a glob `use`, can then change while an
+//!   approval of the test stays fresh. This is accepted only there: items at one
+//!   depth, in one order, across sibling modules; any other move, a swap of two
+//!   items of one name across a module's boundary among them, changes the text.
+//! - What is outside the test part is not compared: a helper outside it under
+//!   `#[cfg(test)]` (a function at the top of a file of code that only tests use,
+//!   or one shared with the tests of other files), a module declared out of line
+//!   and the file it is, a file `include!` reads, a fixture the test reads, and the
+//!   outer attributes of the module that is the part and of the modules on the way
+//!   to it (a `cfg` that stops one from being compiled among them; an inner
+//!   `#![cfg(..)]` of the part is an item beside). An edit of any of them leaves an
+//!   approval of the test fresh; name such a file whole beside the test.
 //! - The file is read whether or not a crate compiles it: a test in a file no
 //!   crate includes (no `mod` names it), or under a `cfg` never set, reads as there.
 //! - The file is lexed and scanned, not parsed: one whose tokens lex but which is no
@@ -214,8 +276,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use proc_macro2::{Delimiter, Group, Ident, Spacing, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, TokenStream, TokenTree};
 use whyshelf_core::app::shelf::{Answers, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
@@ -306,8 +369,9 @@ const KEYWORDS: &[&str] = &[
 /// The presets this adapter offers: one, [`TEST_PRESET`], for a link to the tests
 /// that show a document holds, that stands on each token of them
 /// (`space` [`RUST_TEST_SPACE`], `compare = "bytes"`, `means = "depends"`): an edit
-/// of a test makes the approvals that name it stale, one of another test in the file
-/// does not, and a test that goes away breaks them.
+/// of a test, or of an item beside it in its test part, makes the approvals that
+/// name it stale, one of another test in the file does not, and a test that goes
+/// away breaks them.
 pub fn presets() -> BuiltinPresets {
     let values = PresetValues {
         space: Some(RUST_TEST_SPACE.to_owned()),
@@ -476,21 +540,20 @@ impl RustTestSpace {
             // blocking thread.
             let asked: Vec<BTreeSet<Comparison>> =
                 tests.iter().map(|(_, c, _)| (*c).clone()).collect();
-            let len = found
-                .iter()
-                .map(|found| match found {
-                    Found::Text(text) => text.len(),
-                    Found::Absent | Found::CannotTell(_) => 0,
-                })
-                .sum();
+            let len = found.iter().fold(0_usize, |len, found| match found {
+                Found::Text(text) => len.saturating_add(text.len()),
+                Found::Absent | Found::CannotTell(_) => len,
+            });
             let told = super::on_blocking(len, move || {
                 found
                     .into_iter()
                     .zip(asked)
                     .map(|(found, asked)| {
                         Ok(match found {
+                            // Joined one at a time, so that the texts of the items
+                            // beside, which every test of a part shares, are held once.
                             Found::Text(text) => {
-                                ArtifactReading::of_bytes(text.as_bytes(), &asked, None)
+                                ArtifactReading::of_bytes(text.joined().as_bytes(), &asked, None)
                             }
                             Found::Absent => ArtifactReading::absent(),
                             Found::CannotTell(why) => {
@@ -526,7 +589,7 @@ impl RustTestSpace {
         };
         let found = self.find_in(&test.file, vec![test.wanted()]).await;
         Ok(match found.into_iter().next() {
-            Some(Found::Text(text)) => Some(text.into_bytes()),
+            Some(Found::Text(text)) => Some(text.joined().into_bytes()),
             Some(Found::Absent | Found::CannotTell(_)) | None => None,
         })
     }
@@ -830,9 +893,49 @@ pub(super) fn renamed(
 /// What a name comes to in a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Found {
-    Text(String),
+    Text(Text),
     Absent,
     CannotTell(Untellable),
+}
+
+/// The text of a test found, in parts: its own text, then the text of the items
+/// beside it in each of its test parts (what is compared, on the page of the
+/// module). The text of a part is made once and shared by every test of it, since
+/// it may be as large as the file. A part with no item beside is empty, and there
+/// are none when no part has an item beside.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Text {
+    own: String,
+    beside: Vec<Arc<str>>,
+}
+
+impl Text {
+    /// The bytes of the text joined.
+    fn len(&self) -> usize {
+        self.beside
+            .iter()
+            .enumerate()
+            .fold(self.own.len(), |len, (at, part)| {
+                len.saturating_add(1 + usize::from(at > 0))
+                    .saturating_add(part.len())
+            })
+    }
+
+    /// The text: its own, then each part beside it on the lines after, two parts
+    /// apart by an empty line (no line of a part is empty), so that an item moved
+    /// from one twin part to the other changes the text.
+    fn joined(&self) -> String {
+        let mut text = String::with_capacity(self.len());
+        text.push_str(&self.own);
+        for (at, part) in self.beside.iter().enumerate() {
+            text.push('\n');
+            if at > 0 {
+                text.push('\n');
+            }
+            text.push_str(part);
+        }
+        text
+    }
 }
 
 /// What each of `wanted` comes to in the source `text` of the file at `path`: the
@@ -868,17 +971,23 @@ fn look_up(path: &RelPath, text: &str, wanted: &[Wanted]) -> Vec<Found> {
         });
     }
     let top = Items::scan(tokens);
+    // The text of the items beside of each test part, by its place, made once.
+    let mut parts = BTreeMap::new();
     wanted
         .iter()
-        .map(|w| find(path, &top, &w.modules, &w.function))
+        .map(|w| match find(path, &top, &w.modules, &w.function) {
+            Ok(test) => Found::Text(test.text(&top, &mut parts)),
+            Err(found) => found,
+        })
         .collect()
 }
 
 /// One list of items (of a file or of an inline module), scanned: its inner
-/// attributes and its items, with the tokens they were scanned from.
+/// attributes (each with where its `#` is in the tokens) and its items, with the
+/// tokens they were scanned from.
 struct Items {
     tokens: Vec<TokenTree>,
-    inner: Vec<Group>,
+    inner: Vec<(usize, Group)>,
     items: Vec<Scanned>,
 }
 
@@ -916,7 +1025,7 @@ impl Items {
                 && punct(&t, i + 1, '!')
                 && let Some(group) = bracket(&t, i + 2)
             {
-                inner.push(group.clone());
+                inner.push((i, group.clone()));
                 i += 3;
                 continue;
             }
@@ -1025,7 +1134,7 @@ impl Items {
     /// What in this list may make items: its inner attributes that are not inert,
     /// and its item macro calls.
     fn makers(&self, makers: &mut Makers) {
-        for attr in &self.inner {
+        for (_, attr) in &self.inner {
             if let Some(path) = not_inert(attr) {
                 makers.add(format!("the attribute `#![{path}]`"));
             }
@@ -1081,22 +1190,98 @@ impl fmt::Display for Makers {
     }
 }
 
+/// A test found: its own text (twins joined in the order of the file), and the
+/// places of its test parts, in the order of the file.
+struct Test {
+    own: String,
+    parts: BTreeSet<Vec<usize>>,
+}
+
+impl Test {
+    /// Its text: its own, then the items beside it in each test part that is in no
+    /// other of them, the text of a part taken from `made` or made into it; a part
+    /// with no item beside is kept empty, unless no part has one.
+    fn text(self, top: &Items, made: &mut BTreeMap<Vec<usize>, Option<Arc<str>>>) -> Text {
+        let mut beside: Vec<Option<Arc<str>>> = Vec::new();
+        let mut kept: Option<&Vec<usize>> = None;
+        // A place sorts before every place inside it, so a part inside one kept
+        // follows it at once.
+        for part in &self.parts {
+            if kept.is_some_and(|outer| part.starts_with(outer)) {
+                continue;
+            }
+            kept = Some(part);
+            let text = made
+                .entry(part.clone())
+                .or_insert_with(|| printed_part(top, part));
+            beside.push(text.clone());
+        }
+        let beside = if beside.iter().all(Option::is_none) {
+            Vec::new()
+        } else {
+            beside
+                .into_iter()
+                .map(|part| part.unwrap_or_else(|| Arc::from("")))
+                .collect()
+        };
+        Text {
+            own: self.own,
+            beside,
+        }
+    }
+}
+
+/// Where a list of items the walk is in stands: the index of each module item on
+/// the way from the file, and how many of them lead to the test part, when a
+/// module on the way is one (none: the part is the file).
+#[derive(Debug, Clone, Default)]
+struct At {
+    path: Vec<usize>,
+    part: Option<usize>,
+}
+
+impl At {
+    /// The place of the module at `index` in this list; it starts the test part when
+    /// none is on the way yet and it carries a `cfg` that holds only under test
+    /// (`under_test`, an outer or an inner attribute of it).
+    fn in_module(&self, index: usize, under_test: bool) -> Self {
+        let mut path = self.path.clone();
+        path.push(index);
+        let part = self.part.or_else(|| under_test.then_some(path.len()));
+        Self { path, part }
+    }
+
+    /// The place of the test part: the modules on the way to it (none for the file).
+    fn part(&self) -> Vec<usize> {
+        self.path[..self.part.unwrap_or(0)].to_vec()
+    }
+}
+
 /// The test `function` under the inline `modules` of the items `top` of the file at
-/// `path` (the rules on the page of the module).
-fn find(path: &RelPath, top: &Items, modules: &[Segment], function: &Segment) -> Found {
+/// `path` (the rules on the page of the module), or what the name comes to when it
+/// is not found.
+fn find(
+    path: &RelPath,
+    top: &Items,
+    modules: &[Segment],
+    function: &Segment,
+) -> Result<Test, Found> {
     let mut makers = Makers::default();
     top.makers(&mut makers);
     // The first module of the name on the way that is declared out of line.
     let mut out_of_line: Option<String> = None;
-    // The items of the modules the walk is in, once it is below the file.
+    // The items of the modules the walk is in, once it is below the file, and
+    // where each stands.
     let mut owned: Vec<Items>;
     let mut levels: Vec<&Items> = vec![top];
+    let mut places: Vec<At> = vec![At::default()];
     let mut named: Vec<String> = Vec::new();
     for module in modules {
         named.push(module.to_string());
         let mut next = Vec::new();
-        for level in &levels {
-            for item in &level.items {
+        let mut next_places = Vec::new();
+        for (level, at) in levels.iter().zip(&places) {
+            for (index, item) in level.items.iter().enumerate() {
                 let Kind::Mod { name, body } = &item.kind else {
                     continue;
                 };
@@ -1117,17 +1302,25 @@ fn find(path: &RelPath, top: &Items, modules: &[Segment], function: &Segment) ->
                 }
                 let items = Items::scan(body.stream());
                 items.makers(&mut makers);
+                let under_test = item
+                    .attrs
+                    .iter()
+                    .chain(items.inner.iter().map(|(_, attr)| attr))
+                    .any(only_under_test);
+                next_places.push(at.in_module(index, under_test));
                 next.push(items);
             }
         }
         if next.is_empty() {
-            return not_found(path, out_of_line, &makers);
+            return Err(not_found(path, out_of_line, &makers));
         }
         owned = next;
         levels = owned.iter().collect();
+        places = next_places;
     }
     let mut texts = Vec::new();
-    for level in &levels {
+    let mut parts = BTreeSet::new();
+    for (level, at) in levels.iter().zip(&places) {
         for item in &level.items {
             let Kind::Fn(name) = &item.kind else {
                 continue;
@@ -1137,6 +1330,7 @@ fn find(path: &RelPath, top: &Items, modules: &[Segment], function: &Segment) ->
             }
             if item.attrs.iter().any(is_test) {
                 texts.push(without_docs(level.tokens_of(item)).to_string());
+                parts.insert(at.part());
             } else {
                 for attr in &item.attrs {
                     if let Some(p) = not_inert(attr) {
@@ -1149,9 +1343,146 @@ fn find(path: &RelPath, top: &Items, modules: &[Segment], function: &Segment) ->
         }
     }
     if texts.is_empty() {
-        not_found(path, out_of_line, &makers)
+        Err(not_found(path, out_of_line, &makers))
     } else {
-        Found::Text(texts.join("\n"))
+        Ok(Test {
+            own: texts.join("\n"),
+            parts,
+        })
+    }
+}
+
+/// The text of the items beside in the test part at `at` (the index of each module
+/// item on the way from the file): its inner attributes, then each item but the
+/// tests on a line of its own, in the order of the file, doc attributes left out
+/// (the rules on the page of the module); none when there is no such item.
+fn printed_part(top: &Items, at: &[usize]) -> Option<Arc<str>> {
+    let mut scanned: Option<Items> = None;
+    for &index in at {
+        let items = scanned.as_ref().unwrap_or(top);
+        let body = match items.items.get(index) {
+            Some(Scanned {
+                kind: Kind::Mod {
+                    body: Some(body), ..
+                },
+                ..
+            }) => body.stream(),
+            // The walk gave the place, so a module is there.
+            _ => return None,
+        };
+        scanned = Some(Items::scan(body));
+    }
+    let items = scanned.as_ref().unwrap_or(top);
+    let mut lines: Vec<TokenStream> = items
+        .inner
+        .iter()
+        .map(|(at, _)| items.tokens[*at..*at + 3].iter().cloned().collect())
+        .collect();
+    beside(items, 0, &[], &mut lines);
+    let lines: Vec<String> = lines
+        .into_iter()
+        .map(|tokens| without_docs(tokens).to_string())
+        .filter(|line| !line.is_empty())
+        .collect();
+    (!lines.is_empty()).then(|| Arc::from(lines.join("\n")))
+}
+
+/// The items of a list but its tests, each one line of tokens, pushed onto `lines`
+/// in their order: the mark of `depth` (how many modules of the part it is in, as
+/// many `>`), then `over` (the attributes of those modules, outermost first), then
+/// the item. A function read as a test is left out, and an inline module is read
+/// through: its items are lines one deeper, after `over`, its own outer attributes
+/// and its inner ones, and its name, its visibility and its braces are no token of
+/// any line, so a module with no item but tests is none. No item starts with `>`,
+/// so the mark is never taken for the item. A module declared out of line, an
+/// `include!` and every other item are their own tokens: nothing is followed or
+/// parsed.
+fn beside(items: &Items, depth: usize, over: &[TokenTree], lines: &mut Vec<TokenStream>) {
+    let mark = (0..depth).map(|at| {
+        let spacing = if at + 1 < depth {
+            Spacing::Joint
+        } else {
+            Spacing::Alone
+        };
+        TokenTree::Punct(Punct::new('>', spacing))
+    });
+    let mark: Vec<TokenTree> = mark.collect();
+    for item in &items.items {
+        match &item.kind {
+            Kind::Fn(_) if item.attrs.iter().any(is_test) => {}
+            Kind::Mod {
+                body: Some(body), ..
+            } => {
+                let inside = Items::scan(body.stream());
+                let mut within = over.to_vec();
+                // The outer attributes are the first tokens of an item, two each.
+                within.extend(
+                    items.tokens[item.start..item.start + 2 * item.attrs.len()]
+                        .iter()
+                        .cloned(),
+                );
+                for (at, _) in &inside.inner {
+                    within.extend(inside.tokens[*at..*at + 3].iter().cloned());
+                }
+                beside(&inside, depth + 1, &within, lines);
+            }
+            _ => lines.push(
+                mark.iter()
+                    .chain(over)
+                    .cloned()
+                    .chain(items.tokens_of(item))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+/// Whether an attribute is a `cfg` that holds only under test: `cfg(test)` (with a
+/// comma after it or not, as rustc takes it), an `all` of which one holds only
+/// under test, or an `any` of which each does.
+fn only_under_test(attr: &Group) -> bool {
+    let tokens: Vec<TokenTree> = attr.stream().into_iter().collect();
+    match tokens.as_slice() {
+        [TokenTree::Ident(cfg), TokenTree::Group(predicate)]
+            if cfg == "cfg" && predicate.delimiter() == Delimiter::Parenthesis =>
+        {
+            let inside: Vec<TokenTree> = predicate.stream().into_iter().collect();
+            matches!(predicates(&inside).as_slice(), [one] if holds_only_under_test(one))
+        }
+        _ => false,
+    }
+}
+
+/// The predicates of a list of `cfg`, between its commas (one after the last is
+/// none).
+fn predicates(list: &[TokenTree]) -> Vec<&[TokenTree]> {
+    let mut each: Vec<&[TokenTree]> = list
+        .split(|t| matches!(t, TokenTree::Punct(p) if p.as_char() == ','))
+        .collect();
+    if each.last().is_some_and(|last| last.is_empty()) {
+        each.pop();
+    }
+    each
+}
+
+/// Whether a predicate of `cfg` holds only under test (as [`only_under_test`]).
+fn holds_only_under_test(predicate: &[TokenTree]) -> bool {
+    match predicate {
+        [TokenTree::Ident(word)] => word == "test",
+        [TokenTree::Ident(word), TokenTree::Group(list)]
+            if list.delimiter() == Delimiter::Parenthesis =>
+        {
+            let inside: Vec<TokenTree> = list.stream().into_iter().collect();
+            let each = predicates(&inside);
+            if word == "all" {
+                each.iter().any(|part| holds_only_under_test(part))
+            } else if word == "any" {
+                !each.is_empty() && each.iter().all(|part| holds_only_under_test(part))
+            } else {
+                false
+            }
+        }
+        _ => false,
     }
 }
 
@@ -1425,9 +1756,10 @@ mod tests {
     /// The bound of bytes of the files of the conformance test.
     const MAX_TEST_FILE: u64 = 256;
 
-    /// The tests of the conformance test: one, one in a module, and twins under two
-    /// `#[cfg]`s.
-    const TESTS: &str = "#[test]\nfn one() {\n    assert_eq!(1, 1);\n}\n\n#[cfg(unix)]\n#[test]\nfn twin() {}\n\n#[cfg(not(unix))]\n#[test]\nfn twin() {}\n\nmod tests {\n    #[test]\n    fn inner() {}\n}\n";
+    /// The tests of the conformance test: one beside a helper, twins under two
+    /// `#[cfg]`s, and one in a module that holds only under test, beside a helper
+    /// of its own, so that each text holds the items beside it.
+    const TESTS: &str = "fn h() -> u8 { 1 }\n\n#[test]\nfn one() {\n    assert_eq!(h(), 1);\n}\n\n#[cfg(unix)]\n#[test]\nfn twin() {}\n\n#[cfg(not(unix))]\n#[test]\nfn twin() {}\n\n#[cfg(test)]\nmod tests {\n    fn g() {}\n    #[test]\n    fn inner() { g() }\n}\n";
 
     /// The hook of the conformance test: the tests above, a file that cannot be read,
     /// one past the bound, one that nests one past the depth, and a link out of the
@@ -1575,6 +1907,14 @@ mod tests {
         look_up(&path, text, &wanted).remove(0)
     }
 
+    /// The text `function` under `modules` reads as in the source `text`; it is found.
+    fn text_in(text: &str, modules: &[&str], function: &str) -> String {
+        match in_source(text, modules, function) {
+            Found::Text(found) => found.joined(),
+            other => panic!("{modules:?} {function}: {other:?}"),
+        }
+    }
+
     fn may_be_made(found: &Found) -> Option<String> {
         match found {
             Found::CannotTell(why @ Untellable::MayBeMade { .. }) => Some(why.to_string()),
@@ -1669,22 +2009,296 @@ mod tests {
             );
         }
         // The text is the tokens of the item: its attributes and its body, the
-        // docs and the comments left out.
+        // docs and the comments left out; then, a line each, the items beside it in
+        // its test part, `mod tests` (each test of it left out, at any depth; the
+        // modules `deeper` and `deepest` hold tests only, so they are no line).
+        let beside = "use super ::*;\nfn not_a_test () { }\nmod elsewhere ;";
         assert_eq!(
             text(r, "src/lib.rs::tests::holds").await.unwrap(),
-            "# [test] fn holds () { assert ! (true) ; }"
+            format!("# [test] fn holds () {{ assert ! (true) ; }}\n{beside}")
         );
         assert_eq!(
             text(r, "src/lib.rs::tests::waits").await.unwrap(),
-            "# [tokio :: test (flavor = \"current_thread\")] async fn waits () { }"
+            format!(
+                "# [tokio :: test (flavor = \"current_thread\")] async fn waits () {{ }}\n{beside}"
+            )
         );
         // The body is the brace group after the const generic arguments.
+        let far = text(r, "src/lib.rs::tests::deeper::deepest::far")
+            .await
+            .unwrap();
         assert!(
-            text(r, "src/lib.rs::tests::deeper::deepest::far")
-                .await
-                .unwrap()
-                .ends_with("{ let _ = 1 ; }")
+            far.ends_with(&format!("{{ let _ = 1 ; }}\n{beside}")),
+            "{far}"
         );
+        // A test at the top of a file with no module that holds only under test has
+        // the file for its part: every item there but the tests, those of `mod tests`
+        // after its attribute.
+        assert_eq!(
+            text(r, "src/lib.rs::top").await.unwrap(),
+            "# [test] fn top () { assert_eq ! (helper () , 1) ; }\nfn helper () -> u8 { 1 }\n> # [cfg (test)] use super ::*;\n> # [cfg (test)] fn not_a_test () { }\n> # [cfg (test)] mod elsewhere ;"
+        );
+    }
+
+    /// A file of code with inline tests: code under test, then a test part with a
+    /// helper, a constant, an inner module with a helper of its own, a module out of
+    /// line and two tests.
+    const PART: &str = r#"fn code() -> u8 { 1 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod common;
+
+    /// Two.
+    const TWO: u8 = 2;
+
+    fn helper() -> u8 { code() + 1 }
+
+    #[test]
+    fn one() { assert_eq!(helper(), TWO); }
+
+    mod inner {
+        fn deep() -> u8 { 3 }
+
+        #[test]
+        fn nested() { assert_eq!(deep(), 3); }
+    }
+
+    #[test]
+    fn other() { assert_eq!(code(), 1); }
+}
+"#;
+
+    #[test]
+    fn an_edit_of_an_item_beside_a_test_in_its_part_changes_its_text() {
+        let before = text_in(PART, &["tests"], "one");
+        for (from, to) in [
+            // A helper, a constant and a `use` of the part.
+            ("{ code() + 1 }", "{ code() + 2 }"),
+            ("const TWO: u8 = 2;", "const TWO: u8 = 3;"),
+            ("use super::*;", "use super::code;"),
+            // A helper in a module inside the part.
+            ("fn deep() -> u8 { 3 }", "fn deep() -> u8 { 4 }"),
+        ] {
+            let edited = PART.replace(from, to);
+            assert_ne!(edited, PART);
+            assert_ne!(text_in(&edited, &["tests"], "one"), before, "{to}");
+        }
+        // The test in the inner module stands on the same part.
+        assert_ne!(
+            text_in(
+                &PART.replace("{ 3 }", "{ 4 }"),
+                &["tests", "inner"],
+                "nested"
+            ),
+            text_in(PART, &["tests", "inner"], "nested")
+        );
+    }
+
+    #[test]
+    fn an_edit_of_another_test_or_of_the_code_under_test_keeps_the_text() {
+        let before = text_in(PART, &["tests"], "one");
+        for (from, to) in [
+            // Another test of the part, at its top and in a module inside it.
+            ("assert_eq!(code(), 1);", "assert_eq!(code(), 2);"),
+            ("assert_eq!(deep(), 3);", "assert_eq!(deep(), 4);"),
+            // The code outside the module that holds only under test.
+            ("fn code() -> u8 { 1 }", "fn code() -> u8 { 5 }"),
+            // A doc beside, and the spacing of an item beside.
+            ("/// Two.", "/// The number two."),
+            (
+                "fn helper() -> u8 { code() + 1 }",
+                "fn helper()->u8{code()+1}",
+            ),
+        ] {
+            let edited = PART.replace(from, to);
+            assert_ne!(edited, PART);
+            assert_eq!(text_in(&edited, &["tests"], "one"), before, "{to}");
+        }
+        // No test is beside another, wherever it stands.
+        assert!(!before.contains("fn other"), "{before}");
+        assert!(!before.contains("fn nested"), "{before}");
+        // The helper of the inner module is a line of its own, marked one deep, its
+        // module left out.
+        assert!(before.contains("\n> fn deep () -> u8 { 3 }"), "{before}");
+        assert!(!before.contains("inner"), "{before}");
+    }
+
+    #[test]
+    fn a_module_in_the_part_is_read_through_so_its_name_counts_for_nothing() {
+        let names = [
+            ("one", &["tests"][..]),
+            ("other", &["tests"][..]),
+            ("nested", &["tests", "inner"][..]),
+        ];
+        let texts = |source: &str, inner: &str| -> Vec<String> {
+            names
+                .iter()
+                .map(|(function, modules)| {
+                    let modules: Vec<&str> = modules
+                        .iter()
+                        .map(|m| if *m == "inner" { inner } else { m })
+                        .collect();
+                    text_in(source, &modules, function)
+                })
+                .collect()
+        };
+        let before = texts(PART, "inner");
+        // The inner module renamed: no text changes, the moved test's among them.
+        let renamed = PART.replace("mod inner {", "mod renamed {");
+        assert_eq!(texts(&renamed, "renamed"), before);
+        // So is its visibility, and a module that holds tests only added.
+        let public = PART.replace("mod inner {", "pub(crate) mod inner {");
+        assert_eq!(texts(&public, "inner"), before);
+        let added = PART.replace(
+            "    #[test]\n    fn other()",
+            "    mod added {\n        #[test]\n        fn new() {}\n    }\n\n    #[test]\n    fn other()",
+        );
+        assert_ne!(added, PART);
+        assert_eq!(texts(&added, "inner"), before);
+        // A helper of the inner module edited still changes the text of each test.
+        let edited = PART.replace("fn deep() -> u8 { 3 }", "fn deep() -> u8 { 4 }");
+        for (now, then) in texts(&edited, "inner").iter().zip(&before) {
+            assert_ne!(now, then);
+        }
+        // An attribute of the inner module stands before each of its items, and its
+        // inner ones after it, so it stays tied to them: an item moved out of the
+        // module and an attribute added change the text.
+        let tied = "#[cfg(test)]\nmod tests {\n    #[cfg(unix)]\n    mod inner {\n        #![allow(dead_code)]\n        fn a() {}\n        fn b() {}\n    }\n    #[test]\n    fn t() {}\n}\n";
+        let text = text_in(tied, &["tests"], "t");
+        assert_eq!(
+            text,
+            "# [test] fn t () { }\n> # [cfg (unix)] #! [allow (dead_code)] fn a () { }\n> # [cfg (unix)] #! [allow (dead_code)] fn b () { }"
+        );
+        let moved = tied.replace("        fn b() {}\n    }\n", "    }\n    fn b() {}\n");
+        assert_ne!(moved, tied);
+        assert_ne!(text_in(&moved, &["tests"], "t"), text);
+        let unattributed = tied.replace("    #[cfg(unix)]\n    mod inner", "    mod inner");
+        assert_ne!(text_in(&unattributed, &["tests"], "t"), text);
+        // Each line of an item in a module carries its depth below the part, so two
+        // helpers of one name swapped across the boundary of a module change the
+        // text, though no module's name is in it.
+        let swap = "#[cfg(test)] mod tests { fn h() -> u8 { 1 } mod inner { fn h() -> u8 { 2 } } #[test] fn a() { assert_eq!(h(), 1); } }\n";
+        let swapped = "#[cfg(test)] mod tests { mod inner { fn h() -> u8 { 1 } } fn h() -> u8 { 2 } #[test] fn a() { assert_eq!(h(), 1); } }\n";
+        let text = text_in(swap, &["tests"], "a");
+        assert_eq!(
+            text,
+            "# [test] fn a () { assert_eq ! (h () , 1) ; }\nfn h () -> u8 { 1 }\n> fn h () -> u8 { 2 }"
+        );
+        assert_ne!(text_in(swapped, &["tests"], "a"), text);
+        // Two deep, the mark is two long.
+        let deeper = "#[cfg(test)] mod tests { mod a { mod b { fn h() {} } } #[test] fn t() {} }\n";
+        assert_eq!(
+            text_in(deeper, &["tests"], "t"),
+            "# [test] fn t () { }\n>> fn h () { }"
+        );
+    }
+
+    #[test]
+    fn a_module_declared_out_of_line_is_its_declaration_only() {
+        let before = text_in(PART, &["tests"], "one");
+        assert!(before.contains("\nmod common ;\n"), "{before}");
+        // An attribute on the declaration is of its tokens.
+        let pathed = PART.replace("mod common;", "#[path = \"c.rs\"] mod common;");
+        assert_ne!(text_in(&pathed, &["tests"], "one"), before);
+        // So is an `include!`, whose file is not read.
+        let included = PART.replace("mod common;", "include!(\"c.rs\");");
+        assert!(
+            text_in(&included, &["tests"], "one").contains("\ninclude ! (\"c.rs\") ;\n"),
+            "{included}"
+        );
+    }
+
+    #[test]
+    fn the_test_part_is_the_outermost_module_that_holds_only_under_test_else_the_file() {
+        // A file of tests with no such module: a helper at its top is beside.
+        let file = "use std::fmt;\n\nfn helper() -> u8 { 1 }\n\n#[test]\nfn a() { assert_eq!(helper(), 1); }\n\nmod more {\n    #[test]\n    fn b() {}\n}\n";
+        let before = text_in(file, &[], "a");
+        assert_eq!(
+            before,
+            "# [test] fn a () { assert_eq ! (helper () , 1) ; }\nuse std :: fmt ;\nfn helper () -> u8 { 1 }"
+        );
+        assert_ne!(text_in(&file.replace("{ 1 }", "{ 2 }"), &[], "a"), before);
+        assert_eq!(
+            text_in(file, &["more"], "b"),
+            "# [test] fn b () { }\nuse std :: fmt ;\nfn helper () -> u8 { 1 }"
+        );
+        // A `cfg` that holds only under test starts the part; one that may hold
+        // otherwise does not, and nor does one in a `cfg_attr`.
+        for (cfg, part) in [
+            ("#[cfg(test)]", true),
+            ("#[cfg(test,)]", true),
+            ("#[cfg(all(unix, test,))]", true),
+            ("#[cfg(all(unix, test))]", true),
+            ("#[cfg(any(test, all(test, unix)))]", true),
+            ("#[cfg(any(test, feature = \"x\"))]", false),
+            ("#[cfg(not(test))]", false),
+            ("#[cfg(any())]", false),
+            ("#[cfg_attr(unix, cfg(test))]", false),
+        ] {
+            let source = format!("fn code() {{}}\n{cfg} mod t {{ #[test] fn a() {{}} }}\n");
+            let text = text_in(&source, &["t"], "a");
+            assert_eq!(text == "# [test] fn a () { }", part, "{cfg}: {text}");
+        }
+        // An inner `cfg` of the module starts the part as an outer one does.
+        assert_eq!(
+            text_in(
+                "fn code() {}\nmod t { #![cfg(test)] #[test] fn a() {} }\n",
+                &["t"],
+                "a"
+            ),
+            "# [test] fn a () { }\n#! [cfg (test)]"
+        );
+        // The outermost such module on the way.
+        let nested = "fn code() {}\nmod m {\n    fn under() {}\n    #[cfg(test)]\n    mod t {\n        fn h() {}\n        #[cfg(test)]\n        mod u {\n            #[test]\n            fn a() {}\n        }\n    }\n}\n";
+        assert_eq!(
+            text_in(nested, &["m", "t", "u"], "a"),
+            "# [test] fn a () { }\nfn h () { }"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_name_asked_with_others_in_any_order_reads_the_same() {
+        let root = tempfile::tempdir().unwrap();
+        let r = root.path();
+        write(r, "src/lib.rs", PART).await;
+        let names = [
+            "src/lib.rs::tests::one",
+            "src/lib.rs::tests::other",
+            "src/lib.rs::tests::inner::nested",
+        ];
+        let space = RustTestSpace::new(r.to_path_buf());
+        let all = space.resolve(&asks(&names)).await.unwrap();
+        for name in names {
+            let alone = space.resolve(&asks(&[name])).await.unwrap();
+            assert_eq!(alone[&n(name)], all[&n(name)], "{name}");
+            let wanted: Vec<Wanted> = names
+                .iter()
+                .rev()
+                .map(|t| TestName::parse(t).unwrap().wanted())
+                .collect();
+            let path: RelPath = "src/lib.rs".parse().unwrap();
+            let reversed = look_up(&path, PART, &wanted);
+            let at = names.iter().rev().position(|t| *t == name).unwrap();
+            let Found::Text(found) = &reversed[at] else {
+                panic!("{name}")
+            };
+            assert_eq!(Some(found.joined()), text(r, name).await, "{name}");
+        }
+        // The tests of one part hold its text once, shared.
+        let wanted: Vec<Wanted> = names[..2]
+            .iter()
+            .map(|t| TestName::parse(t).unwrap().wanted())
+            .collect();
+        let path: RelPath = "src/lib.rs".parse().unwrap();
+        match look_up(&path, PART, &wanted).as_slice() {
+            [Found::Text(one), Found::Text(other)] => {
+                assert!(Arc::ptr_eq(&one.beside[0], &other.beside[0]));
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[tokio::test]
@@ -1736,12 +2350,10 @@ mod tests {
     #[test]
     fn a_doc_inside_a_macro_call_is_data_and_is_kept() {
         let source = "#[test] fn a() { quote! { /// kept\n struct S; } }\n";
-        let Found::Text(text) = in_source(source, &[], "a") else {
-            panic!()
-        };
+        let text = text_in(source, &[], "a");
         assert!(text.contains("doc = \" kept\""), "{text}");
-        let other = in_source(&source.replace("/// kept", "/// changed"), &[], "a");
-        assert_ne!(other, Found::Text(text));
+        let other = text_in(&source.replace("/// kept", "/// changed"), &[], "a");
+        assert_ne!(other, text);
     }
 
     #[tokio::test]
@@ -1794,23 +2406,34 @@ mod tests {
 
     #[test]
     fn twin_modules_are_each_searched_and_twin_functions_are_one_test() {
-        let source = "#[cfg(a)] mod dup { #[test] fn x() {} }\n#[cfg(not(a))] mod dup { #[test] fn y() {} }\n";
+        let source = "#[cfg(a)] mod dup { fn h() {} #[test] fn x() {} }\n#[cfg(not(a))] mod dup { fn h() {} #[test] fn y() {} }\n";
+        // No module on the way holds only under test, so the part is the file: the
+        // items of each twin are beside, after its attribute, its test left out.
+        let beside = "> # [cfg (a)] fn h () { }\n> # [cfg (not (a))] fn h () { }";
         assert_eq!(
-            in_source(source, &["dup"], "y"),
-            Found::Text("# [test] fn y () { }".to_owned())
+            text_in(source, &["dup"], "y"),
+            format!("# [test] fn y () {{ }}\n{beside}")
         );
         assert_eq!(
-            in_source(source, &["dup"], "x"),
-            Found::Text("# [test] fn x () { }".to_owned())
+            text_in(source, &["dup"], "x"),
+            format!("# [test] fn x () {{ }}\n{beside}")
         );
         let source = "#[cfg(unix)] #[test] fn a() { 1; }\n#[cfg(windows)] #[test] fn a() { 2; }\n";
         assert_eq!(
-            in_source(source, &[], "a"),
-            Found::Text(
-                "# [cfg (unix)] # [test] fn a () { 1 ; }\n# [cfg (windows)] # [test] fn a () { 2 ; }"
-                    .to_owned()
-            )
+            text_in(source, &[], "a"),
+            "# [cfg (unix)] # [test] fn a () { 1 ; }\n# [cfg (windows)] # [test] fn a () { 2 ; }"
         );
+        // Twin test parts are each beside, in the order of the file, apart by an
+        // empty line.
+        let source = "#[cfg(all(test, unix))] mod t { fn u() {} #[test] fn a() {} }\n#[cfg(all(test, not(unix)))] mod t { fn w() {} #[test] fn a() {} }\n";
+        let twins = text_in(source, &["t"], "a");
+        assert_eq!(
+            twins,
+            "# [test] fn a () { }\n# [test] fn a () { }\nfn u () { }\n\nfn w () { }"
+        );
+        // So an item moved from one twin part to the other changes the text.
+        let moved = "#[cfg(all(test, unix))] mod t { #[test] fn a() {} }\n#[cfg(all(test, not(unix)))] mod t { fn u() {} fn w() {} #[test] fn a() {} }\n";
+        assert_ne!(text_in(moved, &["t"], "a"), twins);
     }
 
     #[test]
@@ -1879,21 +2502,19 @@ mod tests {
     fn a_where_clause_that_ends_in_a_comma_ends_before_the_body() {
         // As rustfmt writes it, a helper before a test, then the test itself.
         let helper = "fn helper<T>(x: T) -> Option<T>\nwhere\n    T: Copy,\n{\n    Some(x)\n}\n\n#[test]\nfn after() {}\n";
-        assert_eq!(
-            in_source(helper, &[], "after"),
-            Found::Text("# [test] fn after () { }".to_owned())
+        let text = text_in(helper, &[], "after");
+        assert!(
+            text.starts_with("# [test] fn after () { }\nfn helper"),
+            "{text}"
         );
+        assert!(text.ends_with("{ Some (x) }"), "{text}");
         let test = "#[test]\nfn a<T>()\nwhere\n    T: Copy,\n    Vec<T>: Clone,\n{\n    let _ = 1;\n}\n#[test] fn b() {}\n";
-        let Found::Text(text) = in_source(test, &[], "a") else {
-            panic!()
-        };
+        let text = text_in(test, &[], "a");
         assert!(text.ends_with("{ let _ = 1 ; }"), "{text}");
         assert!(matches!(in_source(test, &[], "b"), Found::Text(_)));
         // Const generic braces are still no body, and `->` and `=>` close nothing.
         let generic = "#[test] fn c<const N: usize>() -> Foo<{ N }> where [(); { N }]:, Bar<{ 1 }, { 2 }>: X { match 1 { _ => 2 }; }\n#[test] fn d() {}\n";
-        let Found::Text(text) = in_source(generic, &[], "c") else {
-            panic!()
-        };
+        let text = text_in(generic, &[], "c");
         assert!(text.ends_with("{ match 1 { _ => 2 } ; }"), "{text}");
         assert!(matches!(in_source(generic, &[], "d"), Found::Text(_)));
     }
@@ -1914,8 +2535,8 @@ mod tests {
     fn an_out_of_line_twin_leaves_the_inline_ones_searched() {
         let source = "mod mixed;\n#[cfg(x)] mod mixed { #[test] fn z() {} }\n";
         assert_eq!(
-            in_source(source, &["mixed"], "z"),
-            Found::Text("# [test] fn z () { }".to_owned())
+            text_in(source, &["mixed"], "z"),
+            "# [test] fn z () { }\nmod mixed ;"
         );
         let why = match in_source(source, &["mixed"], "w") {
             Found::CannotTell(why) => why.to_string(),
@@ -2106,13 +2727,17 @@ mod tests {
         for source in [
             "#!/usr/bin/env run-cargo-script\n#[test] fn a() {}\n",
             "\u{feff}#[test] fn a() {}\n",
-            "#![allow(unused)]\n#[test] fn a() {}\n",
         ] {
             assert_eq!(
-                in_source(source, &[], "a"),
-                Found::Text("# [test] fn a () { }".to_owned()),
+                text_in(source, &[], "a"),
+                "# [test] fn a () { }",
                 "{source:?}"
             );
         }
+        // An inner attribute is no line of an interpreter: it is beside the test.
+        assert_eq!(
+            text_in("#![allow(unused)]\n#[test] fn a() {}\n", &[], "a"),
+            "# [test] fn a () { }\n#! [allow (unused)]"
+        );
     }
 }

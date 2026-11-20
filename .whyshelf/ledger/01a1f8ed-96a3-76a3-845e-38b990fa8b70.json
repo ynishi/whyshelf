@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795177682449,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9db87ce77a0bfbccccf40dded4dcc5788569d9c0",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    }
+  ],
+  "id": "01a1f8ed-96a3-76a3-845e-38b990fa8b70",
+  "kind": "decision",
+  "reason": "Re-read for #155: DEC-64 now says Present gives the function and then the items beside it in its test part, and DEC-56 that a helper of one feature is held by the text of each test named by function, as DEC-90 and rust_test.rs do; the verifications' tests changed only for the wider text and pass",
+  "revision": "c3b25ff5a3cffbddbaa46d156543cf76dc02d87d",
+  "seen": "sha256:26efed3d233832ebc15e42282bfa61f00945e286247b11f4e3c72343de54eefd",
+  "seen_address": "4a616bf62641785ab793b0a2a1173065d31e81a4",
+  "subject": "01a1c877-8fbd-7353-9e60-cfe043fb39a9",
+  "v": 1,
+  "verb": "approve"
+}
