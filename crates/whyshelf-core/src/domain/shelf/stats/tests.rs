@@ -18,11 +18,11 @@ use crate::domain::id::{DocId, EntityId};
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::build::{DocReading, Shelf};
 use crate::domain::shelf::fixtures_tests::{
-    actor, docid, entries, file_artifact, fr_titled, jid, ledger, path, schema, schema_of_lines,
-    shelf_reading, sp_testing, text,
+    actor, docid, entries, file_artifact, file_space, fr_titled, jid, ledger, name, path, schema,
+    schema_of_lines, shelf_reading, sp_testing, text,
 };
 use crate::domain::shelf::ledger::{
-    Admit, Decision, JudgedAt, Ledger, Record, Revocation, frame_approve,
+    Admit, Decision, JudgedAt, Ledger, Moved, MovedOf, Record, Revocation, frame_approve,
 };
 
 /// The ledger of `records`, read as a project that declares no rule of who may decide
@@ -428,6 +428,67 @@ fn a_pin_only_one_frame_holds_is_no_origin() {
     let stats = of(&unruled(records), &after, None);
     assert_eq!(stats.approvals.docs[0].again, 1);
     assert!(stats.origins.is_empty(), "{:?}", stats.origins);
+}
+
+#[test]
+fn a_pin_of_an_artifact_is_matched_across_a_declared_move_under_the_name_it_is_read_as() {
+    let tester = actor();
+    let before = spec_shelf(&schema(), &[], &["t.rs"], &[("t.rs", b"one")]);
+    // t.rs moved to u.rs at 15, its content changed, and SP-2's link now names u.rs.
+    let after = spec_shelf(&schema(), &[], &["u.rs"], &[("u.rs", b"two")]);
+    let moved = Record::Moved(Moved::new(
+        jid(103),
+        MovedOf::new(file_space(), name("t.rs"), name("u.rs")).unwrap(),
+        tester.clone(),
+        JudgedAt::new(15),
+        NonBlank::new("renamed").unwrap(),
+    ));
+    let records = vec![
+        approval(&before, docid(2), 101, 10, &tester),
+        moved.clone(),
+        approval(&after, docid(2), 102, 20, &tester),
+    ];
+    let stats = of(&unruled(records), &after, None);
+    assert_eq!(stats.approvals.docs[0].again, 1);
+    // Once, under the name it is read as now.
+    assert_eq!(origin_names(&stats), [("u.rs".to_owned(), 1)]);
+
+    // With the same content across the move, nothing changed and nothing is counted.
+    let same = spec_shelf(&schema(), &[], &["u.rs"], &[("u.rs", b"one")]);
+    let records = vec![
+        approval(&before, docid(2), 101, 10, &tester),
+        moved,
+        approval(&same, docid(2), 102, 20, &tester),
+    ];
+    let stats = of(&unruled(records), &same, None);
+    assert!(stats.origins.is_empty(), "{:?}", stats.origins);
+}
+
+#[test]
+fn two_pins_a_move_brings_to_one_name_are_each_compared() {
+    let tester = actor();
+    let before = spec_shelf(
+        &schema(),
+        &[],
+        &["t.rs", "u.rs"],
+        &[("t.rs", b"one"), ("u.rs", b"two")],
+    );
+    // t.rs moved onto u.rs at 15, whose content is what it was.
+    let after = spec_shelf(&schema(), &[], &["u.rs"], &[("u.rs", b"two")]);
+    let records = vec![
+        approval(&before, docid(2), 101, 10, &tester),
+        Record::Moved(Moved::new(
+            jid(103),
+            MovedOf::new(file_space(), name("t.rs"), name("u.rs")).unwrap(),
+            tester.clone(),
+            JudgedAt::new(15),
+            NonBlank::new("merged").unwrap(),
+        )),
+        approval(&after, docid(2), 102, 20, &tester),
+    ];
+    let stats = of(&unruled(records), &after, None);
+    // The pin of t.rs, read as u.rs now, held other content.
+    assert_eq!(origin_names(&stats), [("u.rs".to_owned(), 1)]);
 }
 
 #[test]

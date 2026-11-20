@@ -227,9 +227,9 @@ impl MovedTo {
 /// Two values, kept apart: the [`ArtifactPin`] is what was pinned (what a record
 /// writes and what [`Readers`](super::Readers) compares), and the reading is
 /// derived from the ledger on every assessment, never stored. Made by
-/// [`Ledger::read_pins`] alone.
+/// [`Ledger::pins_read_now`] alone.
 ///
-/// [`Ledger::read_pins`]: super::Ledger::read_pins
+/// [`Ledger::pins_read_now`]: super::Ledger::pins_read_now
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ReadPin {
     pub(super) pin: ArtifactPin,

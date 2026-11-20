@@ -171,6 +171,14 @@ and this project adheres to
 
 ### Changed
 
+- The origins of `stats` match an artifact's pin by the name it is read as now
+  through the declared moves, as freshness reads it (#154): a pin of the old
+  name before a move and one of the new name after it are one pin, counted
+  once under the new name when its content changed; before, each was held by
+  one approval only and no origin was counted. When moves bring two pins of the
+  earlier approval to one name, each is compared. In the library,
+  `Ledger::pins_read_now` reads the pins of any approval as `Ledger::read_pins`
+  reads those of the approval that stands.
 - Another actor's approval of the content that stands is a second reading, and
   `judge approve <ref>` writes it in every project; before, it repeated the
   approval that stands and was left out as `repeats` unless `--again` was given.
