@@ -10,6 +10,12 @@ and this project adheres to
 
 ### Added
 
+- The stale report says whether a gate can say the approvals hold (#151). In
+  the library, `StaleReport::gate` answers `Gate::Holds`, `Gate::DoesNotHold`
+  (an approval that does not hold, or only expired) or `Gate::CannotTell` (one
+  pins a name that cannot be told now), as DEC-26 decides, so a program that
+  uses the library no longer writes that rule again; `stale --exit-code` maps
+  it to its exit status and behaves as before.
 - Who may decide (#114). `.whyshelf/books.toml` may name groups of actors
   (`[[group]]`, each member an exact name, with an optional `from` and `until`)
   and declare, for a book (`[book.decide]`) and for the records of no book
