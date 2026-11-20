@@ -37,8 +37,11 @@
 //! - **Origins over time** ([`OriginCount`]): for each approval that is again, its
 //!   frame is set beside the frame of the approval it is made again from. Each pin
 //!   both frames hold whose hash differs is an *origin* of that approval made again:
-//!   an upstream by its identity, an artifact by its space and name (an artifact
-//!   that came or went counts, as its hash differs from none). A pin of an artifact
+//!   an upstream by its identity, an artifact by its space and the name it is read
+//!   as now through the declared moves, as freshness reads it
+//!   ([`Ledger::pins_read_now`]), so a pin of the old name before a move and one of
+//!   the new name after it are one pin (an artifact that came or went counts, as
+//!   its hash differs from none). A pin of an artifact
 //!   is compared only with a pin of the same comparison: when the comparison
 //!   differs, the hashes were made differently and are not compared (as
 //!   [`Cause::ArtifactComparisonChanged`](super::freshness::Cause::ArtifactComparisonChanged)
@@ -277,7 +280,7 @@ pub fn of(ledger: &Ledger, shelf: &Shelf, since: Option<JudgedAt>) -> Stats {
                     && !second_reading(ledger, approval)
                 {
                     counted.again += 1;
-                    for origin in changed_pins(before, approval) {
+                    for origin in changed_pins(ledger, before, approval) {
                         *origins.entry(origin).or_default() += 1;
                     }
                 }
@@ -403,17 +406,19 @@ enum OriginKey {
 }
 
 /// The pins both approvals hold whose hash differs, an artifact's only under the
-/// same comparison, each once.
-fn changed_pins(before: &Decision, after: &Decision) -> BTreeSet<OriginKey> {
+/// same comparison, each once. An artifact's pin is matched, and counted, by the
+/// name it is read as now through the declared moves ([`Ledger::pins_read_now`]),
+/// as freshness reads it: a pin of the old name before a move and one of the new
+/// name after it are one pin. When moves bring two pins of the earlier frame to one
+/// name, each is compared, as freshness compares each: it is an origin when either
+/// differs.
+fn changed_pins(ledger: &Ledger, before: &Decision, after: &Decision) -> BTreeSet<OriginKey> {
     let (
         DecisionVerb::Approve {
             frame: frame_before,
-            artifacts: artifacts_before,
             ..
         },
-        DecisionVerb::Approve {
-            frame, artifacts, ..
-        },
+        DecisionVerb::Approve { frame, .. },
     ) = (before.verb(), after.verb())
     else {
         return BTreeSet::new();
@@ -422,10 +427,15 @@ fn changed_pins(before: &Decision, after: &Decision) -> BTreeSet<OriginKey> {
         .iter()
         .map(|pin| (pin.target(), pin.hash()))
         .collect();
-    let artifacts_before: BTreeMap<(&ArtifactKey, &Comparison), ArtifactState> = artifacts_before
-        .iter()
-        .map(|pin| ((pin.artifact(), pin.comparison()), pin.seen().state()))
-        .collect();
+    let read_before = ledger.pins_read_now(before);
+    let mut artifacts_before: BTreeMap<(&ArtifactKey, &Comparison), BTreeSet<ArtifactState>> =
+        BTreeMap::new();
+    for read in &read_before {
+        artifacts_before
+            .entry((read.read_as(), read.pin().comparison()))
+            .or_default()
+            .insert(read.pin().seen().state());
+    }
     let docs = frame
         .iter()
         .filter(|pin| {
@@ -434,14 +444,18 @@ fn changed_pins(before: &Decision, after: &Decision) -> BTreeSet<OriginKey> {
                 .is_some_and(|h| *h != pin.hash())
         })
         .map(|pin| OriginKey::Doc(pin.target()));
-    let artifacts = artifacts
+    let read_after = ledger.pins_read_now(after);
+    let artifacts = read_after
         .iter()
-        .filter(|pin| {
+        .filter(|read| {
             artifacts_before
-                .get(&(pin.artifact(), pin.comparison()))
-                .is_some_and(|state| *state != pin.seen().state())
+                .get(&(read.read_as(), read.pin().comparison()))
+                .is_some_and(|states| {
+                    let state = read.pin().seen().state();
+                    states.iter().any(|before| *before != state)
+                })
         })
-        .map(|pin| OriginKey::Artifact(pin.artifact().clone()));
+        .map(|read| OriginKey::Artifact(read.read_as().clone()));
     docs.chain(artifacts).collect()
 }
 

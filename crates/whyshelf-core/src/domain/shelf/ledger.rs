@@ -561,15 +561,21 @@ impl Ledger {
     }
 
     /// The artifact pins of the approval that stands about `id`, each as it is read
-    /// now ([`Ledger::moved_to`], at the time of that approval), in the order of the
-    /// record; none when no approval stands. A move is of something that was there,
-    /// so a pin that pinned its name as absent is read as written. The one maker of
-    /// a [`ReadPin`]: what
-    /// freshness, a declaration and a snapshot compare with what is there now.
+    /// now ([`Ledger::pins_read_now`]); none when no approval stands. What freshness,
+    /// a declaration and a snapshot compare with what is there now.
     pub fn read_pins(&self, id: DocId) -> Vec<ReadPin> {
-        let Some(decision) = self.standing_decision(id) else {
-            return Vec::new();
-        };
+        self.standing_decision(id)
+            .map(|decision| self.pins_read_now(decision))
+            .unwrap_or_default()
+    }
+
+    /// The artifact pins of the approval `decision`, each as it is read now
+    /// ([`Ledger::moved_to`], at the time of that approval), in the order of the
+    /// record; none when it is no approval. A move is of something that was there,
+    /// so a pin that pinned its name as absent is read as written. The one maker of
+    /// a [`ReadPin`], for the approval that stands ([`Ledger::read_pins`]) and for
+    /// an earlier one that stats compares with it.
+    pub fn pins_read_now(&self, decision: &Decision) -> Vec<ReadPin> {
         let DecisionVerb::Approve { artifacts, .. } = decision.verb() else {
             return Vec::new();
         };

@@ -428,7 +428,7 @@ impl Ledger {
     }
 
     /// Whether freshness reads a pin of `approval` through a move declared `before`
-    /// (the rule of [`Ledger::read_pins`]: a pin of something that was there, read
+    /// (the rule of [`Ledger::pins_read_now`]: a pin of something that was there, read
     /// through the moves since the approval). A new approval pins what it finds, read
     /// through none, so it would change what freshness reads even where its pins are
     /// the same values.
