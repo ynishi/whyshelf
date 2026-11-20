@@ -171,6 +171,15 @@ and this project adheres to
 
 ### Changed
 
+- The text a name of the space `rust-test` comes to holds the items beside the
+  test in its test part (#155): the outermost inline module on the way whose
+  `cfg` holds only under test, or the file when none does. Every item there
+  but the functions read as tests is taken, inner modules read through, so an
+  edit of a helper, a `use`, a constant, a type or an impl beside a test makes
+  its approvals stale, while an edit of another test, of the code outside the
+  part, or a module renamed inside it does not. A module declared out of line
+  and a file `include!` reads are not followed. An approval of a test made
+  before reads as stale once, unless nothing is beside it.
 - The origins of `stats` match an artifact's pin by the name it is read as now
   through the declared moves, as freshness reads it (#154): a pin of the old
   name before a move and one of the new name after it are one pin, counted

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b77eaefb9813c7a6a11175190e1ef5dc60019507",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:170afc1ef59d4744f3fe6ba18f7fad2d2d1525f90e979aa72e69837cc1f9ee19",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4eba9b45484ea868b99c171f4435e696253b94ee",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:91db8c1127c85fdcaf1b64bc28aae80b76630201ea2736a199820e76079889af",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795177682449,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9fe71823a15c72b78f67b7910d5e2de5a82f08fd",
+      "hash": "sha256:5ee09e3c7e5438f9458b5b3eb9e0943cb3ef412b11be6a07443d6e9da7efee0c",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    }
+  ],
+  "id": "01a1f8ed-9c57-722f-9591-f292b9c2cfed",
+  "kind": "decision",
+  "reason": "Re-read for #155: DEC-64 now says Present gives the function and then the items beside it in its test part, and DEC-56 that a helper of one feature is held by the text of each test named by function, as DEC-90 and rust_test.rs do; the verifications' tests changed only for the wider text and pass",
+  "revision": "c3b25ff5a3cffbddbaa46d156543cf76dc02d87d",
+  "seen": "sha256:71d508657b3910cb0bd0b86a8cc23352a12e9ef6d85dd8f881236ea757d9ce44",
+  "seen_address": "d6e1c07a6fe96ddda7e4371d47bdc925f9257aaf",
+  "subject": "01a1cad2-3c53-7056-a5ba-b95678ef107e",
+  "v": 1,
+  "verb": "approve"
+}

@@ -416,18 +416,32 @@
 //! are all searched, and twin tests are one. Finding them runs no program: the file
 //! is read (at most 16 MiB), lexed, and its items scanned; no expression or type is
 //! parsed. What is compared is the function item's own tokens, from its first
-//! attribute to the end of its body, with its doc attributes left out (not those in
-//! a macro call's tokens, which are data). So an edit of white space, comments or
-//! doc comments changes nothing, an edit of another test in the file changes
-//! nothing, any other edit of the function makes the approvals that name it stale,
-//! and a test renamed or removed breaks them, save where a module on the way
-//! holds an item macro or an attribute that is not inert (below): there a test
+//! attribute to the end of its body, then every other item of its test part, one
+//! on each line, in the order of the file: the part is the outermost inline module
+//! on the way that carries a `cfg` holding only under test (`#[cfg(test)]`,
+//! `#![cfg(test)]`), or the file when none on the way does, and its items are its
+//! helpers, `use`s, constants, types and macro calls, those of the inline modules
+//! in it included, every function read as a test, wherever it stands, left out. A
+//! module in the part is read through: its name and braces are in no line, and a
+//! mark of its depth (`>` a module) and its attributes stand before each of its
+//! items, so renaming it, or adding a module of tests only, changes no text and
+//! `judge moved --prefix` follows the test, while an item moved into or out of it
+//! changes the text. Doc attributes are left out (not those in a macro call's
+//! tokens, which are data). So an edit of
+//! white space, comments or doc comments changes nothing, an edit of another test
+//! in the file changes nothing, any other edit of the function or of an item beside
+//! it in its part makes the approvals that name it stale (those of every test of
+//! the part), and a test renamed or removed breaks them, save where a module on the
+//! way holds an item macro or an attribute that is not inert (below): there a test
 //! removed cannot be told, and the approval stays fresh, with a notice that it
-//! cannot be told. Nothing outside the function counts:
-//! an edit of a helper it calls, of a `use` at the top of the file, or a `cfg` that
-//! stops its module from being compiled leaves it fresh, and a test in a file no
-//! crate compiles reads as there. A file that cannot be read, is too large or does
-//! not lex cannot be told, nor can a test under a module declared out of line
+//! cannot be told. Nothing outside the test part counts: an edit of the code under
+//! test beside inline tests, of a module declared out of line (`mod common;`, whose
+//! declaration alone is in the part), of a file `include!` reads, of a fixture, or
+//! of an outer attribute of the part or of a module above it (a `cfg` there that
+//! stops the part from being compiled among them) leaves it fresh, while an inner
+//! `#![cfg(..)]` inside the part is an item beside; and a test in a file no crate
+//! compiles reads as there. A file that cannot be read, is too large
+//! or does not lex cannot be told, nor can a test under a module declared out of line
 //! (`mod x;`), whose file is not followed: name such a test by the file of its
 //! module. Macros are not expanded: a test not found where a macro may make it (an
 //! item macro call, `include!`, an attribute macro on a module on the way or on a

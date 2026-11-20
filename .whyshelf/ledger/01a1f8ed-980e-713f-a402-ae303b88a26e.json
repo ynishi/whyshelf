@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "427fd439065f80a6a49ff7d40d5c4aa88d69f477",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:76b1fb30f854d5e5f587fda725787b6e52cfa5e6db811ade0e89e97d29fce329",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/verification_spread.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795177682449,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4a616bf62641785ab793b0a2a1173065d31e81a4",
+      "hash": "sha256:26efed3d233832ebc15e42282bfa61f00945e286247b11f4e3c72343de54eefd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "56"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c877-8fbd-7353-9e60-cfe043fb39a9"
+    }
+  ],
+  "id": "01a1f8ed-980e-713f-a402-ae303b88a26e",
+  "kind": "decision",
+  "reason": "Re-read for #155: DEC-64 now says Present gives the function and then the items beside it in its test part, and DEC-56 that a helper of one feature is held by the text of each test named by function, as DEC-90 and rust_test.rs do; the verifications' tests changed only for the wider text and pass",
+  "revision": "c3b25ff5a3cffbddbaa46d156543cf76dc02d87d",
+  "seen": "sha256:c8e8a091eab678b160f3b0c3c7021b7b0c7f8f42276bd3aefaa01b90219500b7",
+  "seen_address": "ca76ab85e1b0b7373ec0334c076ad48edf2b844f",
+  "subject": "01a1c877-9138-726f-9e0d-817c5f8f866f",
+  "v": 1,
+  "verb": "approve"
+}
