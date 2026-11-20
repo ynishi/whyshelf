@@ -508,7 +508,7 @@ impl PinnedNames {
     pub fn of(ledger: &Ledger) -> Self {
         let mut names: BTreeMap<ArtifactKey, NonEmptyVec<PinnedThere>> = BTreeMap::new();
         for subject in ledger.subjects() {
-            let revision = match ledger.standing_decision(*subject).map(|d| &d.verb) {
+            let revision = match ledger.standing_decision(*subject).map(|d| d.verb()) {
                 Some(DecisionVerb::Approve { revision, .. }) => revision.clone(),
                 _ => None,
             };
