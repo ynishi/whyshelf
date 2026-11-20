@@ -6,7 +6,7 @@ use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::DocReading;
 use crate::domain::shelf::exemption::CoverMiss;
 use crate::domain::shelf::fixtures_tests::{
-    actor, decls, deny, docid, fr, jid, ledger, list, reading, spaces, text,
+    by, decls, deny, docid, fr, jid, ledger, list, reading, spaces, text,
 };
 use crate::domain::shelf::ledger::{Exempt, ExemptOf, Record, Revocation};
 use crate::domain::shelf::schema::{BookSchemaDecl, CoverDecl, CoverSeverity, Schema};
@@ -22,7 +22,7 @@ fn exempt_from(judgement: u128, doc: u128, book: &str, link: &str) -> Record {
             BookName::new(book).unwrap(),
             EntryName::new(link).unwrap(),
         ),
-        actor(),
+        by(),
         JudgedAt::new(50),
         NonBlank::new("kept on purpose").unwrap(),
     ))
@@ -139,7 +139,7 @@ fn exempt(doc: u128) -> Record {
     Record::Exempt(Exempt::new(
         jid(2001),
         ExemptOf::new(docid(doc), book, link),
-        actor(),
+        by(),
         JudgedAt::new(50),
         NonBlank::new("kept on purpose").unwrap(),
     ))
@@ -244,7 +244,7 @@ fn an_exemption_withdrawn_leaves_the_gap_as_it_was() {
         Record::Revocation(Revocation::new(
             jid(3001),
             NonEmptySet::from_set([jid(2001)].into()).unwrap(),
-            actor(),
+            by(),
             JudgedAt::new(60),
             NonBlank::new("it is to be grounded").unwrap(),
         )),

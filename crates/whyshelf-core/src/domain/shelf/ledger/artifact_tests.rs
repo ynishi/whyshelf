@@ -8,7 +8,7 @@ use crate::domain::shelf::artifact::{
     ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
 };
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, docid, file_artifact, file_space, fr, jid, ledger, name, shelf, shelf_with,
+    approve, by, docid, file_artifact, file_space, fr, jid, ledger, name, shelf, shelf_with,
     sp_testing,
 };
 
@@ -61,7 +61,7 @@ fn addressed_approval() -> Record {
         Some(Revision::from_validated("c1".into()).unwrap()),
     );
     Record::Decision(
-        Decision::approve(jid(1002), frame, None, actor(), JudgedAt::new(20), None).unwrap(),
+        Decision::approve(jid(1002), frame, None, by(), JudgedAt::new(20), None).unwrap(),
     )
 }
 

@@ -26,7 +26,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -314,7 +314,7 @@ fn a_denial_and_a_retirement_are_recorded_with_their_reasons() {
             reason: Some(reason),
         },
         reference: r("FR-1"),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;
@@ -350,7 +350,7 @@ fn a_row_carries_the_decision_that_stands_with_who_when_and_why() {
     let denied = block_on(app.judge(JudgeRequest {
         judgement: Judgement::Deny { reason: None },
         reference: r("FR-1"),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap()
     .judged
@@ -377,7 +377,7 @@ fn a_row_carries_the_decision_that_stands_with_who_when_and_why() {
             reason: NonBlank::new("withdrawn").unwrap(),
         },
         reference: r("FR-1"),
-        actor: None,
+        by: Default::default(),
     };
     block_on(app.judge(revoke())).unwrap();
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;
@@ -405,7 +405,7 @@ fn an_approval_with_an_expiry_lapses_when_the_clock_reaches_it() {
             again: false,
         },
         reference: r("FR-1"),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     let held = block_on(app.get(&r("FR-1"))).unwrap().row;
@@ -425,7 +425,7 @@ fn revoke_withdraws_the_standing_decision_and_needs_one() {
             reason: NonBlank::new(why).unwrap(),
         },
         reference: r("FR-1"),
-        actor: None,
+        by: Default::default(),
     };
     let err = block_on(app.judge(revoke("changed my mind"))).unwrap_err();
     assert!(matches!(err, ShelfError::NothingToRevoke { .. }));

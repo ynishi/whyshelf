@@ -107,6 +107,8 @@ pub struct ExemptOut {
     pub exemption: String,
     /// Who declared it.
     pub actor: String,
+    /// Who ran the command, when not the actor; null when the actor ran it.
+    pub ran_by: Option<String>,
     /// When (unix milliseconds).
     pub at: i64,
     /// Why.
@@ -126,6 +128,8 @@ pub struct UnneededOut {
     pub exemption: String,
     /// Who declared it.
     pub actor: String,
+    /// Who ran the command, when not the actor; null when the actor ran it.
+    pub ran_by: Option<String>,
     /// When (unix milliseconds).
     pub at: i64,
     /// Why it was declared.

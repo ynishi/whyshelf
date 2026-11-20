@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use whyshelf_core::app::shelf::{Declared, DeclaredAbout, Names};
-use whyshelf_core::domain::actor::Actor;
+use whyshelf_core::domain::actor::{Actor, Attribution};
 use whyshelf_core::domain::id::{DocId, EntityId};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet};
@@ -43,8 +43,8 @@ fn rel(text: &str) -> RelPath {
     text.parse().unwrap()
 }
 
-fn actor() -> Actor {
-    Actor::new("tester").unwrap()
+fn actor() -> Attribution {
+    Attribution::one(Actor::new("tester").unwrap())
 }
 
 fn because() -> NonBlank {

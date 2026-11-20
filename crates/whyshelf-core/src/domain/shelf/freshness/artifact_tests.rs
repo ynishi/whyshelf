@@ -7,7 +7,7 @@ use crate::domain::shelf::artifact::{
     ArtifactHash, ArtifactReading, ArtifactReadings, ContentAddress, Revision,
 };
 use crate::domain::shelf::fixtures_tests::{
-    actor, docid, file_artifact, fr, jid, ledger, shelf_answered, shelf_with, sp_testing,
+    by, docid, file_artifact, fr, jid, ledger, shelf_answered, shelf_with, sp_testing,
 };
 use crate::domain::shelf::ledger::{Decision, FrameRefusal, JudgedAt, Record, frame_approve};
 
@@ -47,7 +47,7 @@ fn approved_on(at_approval: &Shelf, addressed: bool) -> Ledger {
                 jid(1000 + subject),
                 frame,
                 None,
-                actor(),
+                by(),
                 JudgedAt::new(10),
                 None,
             )

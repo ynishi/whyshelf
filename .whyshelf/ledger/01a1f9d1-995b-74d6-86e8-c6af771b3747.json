@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795192625000,
+  "expires": null,
+  "frame": [],
+  "id": "01a1f9d1-995b-74d6-86e8-c6af771b3747",
+  "kind": "decision",
+  "reason": "Read against the code of #156: ran_by is kept beside the actor only when it differs, given by --ran-by or WHYSHELF_RAN_BY, never by Git or a file, and read by no judgement; checked by the tests named and a blind review on throwaway projects",
+  "revision": "7c2fb8b5015d66b07813c49e0c5a9826c7bd8f7b",
+  "seen": "sha256:95f083a8066cd859c2319275b697b278ba07f1266106e2c8684c09e785129115",
+  "seen_address": "71a7cda082bba9006aa501bd0d7f7782561932fc",
+  "subject": "01a1f9a4-7f89-76d0-b544-7edaa33afeb7",
+  "v": 1,
+  "verb": "approve"
+}

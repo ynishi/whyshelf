@@ -558,6 +558,10 @@ pub trait ActorSource: Send + Sync {
 
     /// The name of the person (or tool) that judges, as it is declared.
     fn actor(&self) -> impl Future<Output = Result<Actor, Self::Error>> + Send;
+
+    /// The name of who runs the command, as it is declared; none when no one is: the
+    /// actor's name is not a stand-in for it.
+    fn ran_by(&self) -> impl Future<Output = Result<Option<Actor>, Self::Error>> + Send;
 }
 
 /// The artifacts of a project, things outside the documents, by their names in the

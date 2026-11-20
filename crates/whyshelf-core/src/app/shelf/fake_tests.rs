@@ -221,6 +221,10 @@ pub(super) struct FakeShelf {
     pub(super) clock_step: Mutex<i64>,
     pub(super) next_id: Mutex<u128>,
     pub(super) actor: Option<Actor>,
+    /// Who the port names as running the command: no one, unless a test says.
+    pub(super) ran_by: Mutex<Option<Actor>>,
+    /// How many times the port was asked, for the actor and for who ran the command.
+    pub(super) asks: Mutex<(usize, usize)>,
     pub(super) appends: Mutex<usize>,
     pub(super) failing: Option<&'static str>,
     /// The bytes of the files that are no document (and of a document's file, when a
@@ -346,6 +350,8 @@ impl FakeShelf {
             clock_step: Mutex::new(0),
             next_id: Mutex::new(9000),
             actor: Some(Actor::new("alice").expect("a name")),
+            ran_by: Mutex::new(None),
+            asks: Mutex::new((0, 0)),
             appends: Mutex::new(0),
             failing: None,
             files: Mutex::new(BTreeMap::new()),
@@ -962,11 +968,37 @@ impl FileSync for FakeShelf {
     }
 }
 
+/// A request's names of who judges: the actor `name`, and no one who ran the command.
+pub(super) fn named(name: &str) -> super::AttributionAsk {
+    super::AttributionAsk {
+        actor: Some(Actor::new(name).unwrap()),
+        ran_by: None,
+    }
+}
+
 impl ActorSource for FakeShelf {
     type Error = FakeError;
 
     async fn actor(&self) -> Result<Actor, FakeError> {
+        lock(&self.asks).0 += 1;
         self.actor.clone().ok_or(FakeError("no actor"))
+    }
+
+    async fn ran_by(&self) -> Result<Option<Actor>, FakeError> {
+        lock(&self.asks).1 += 1;
+        Ok(lock(&self.ran_by).clone())
+    }
+}
+
+impl FakeShelf {
+    /// From now on the port names `name` as who runs the command.
+    pub(super) fn run_by(&self, name: &str) {
+        *lock(&self.ran_by) = Some(Actor::new(name).unwrap());
+    }
+
+    /// How many times the port was asked for the actor, and for who ran the command.
+    pub(super) fn names_asked(&self) -> (usize, usize) {
+        *lock(&self.asks)
     }
 }
 

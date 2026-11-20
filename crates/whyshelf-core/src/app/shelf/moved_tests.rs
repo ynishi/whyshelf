@@ -2,7 +2,6 @@
 //! artifact source, what it writes, that a refusal writes nothing, and that a run is
 //! written whole or not at all.
 
-use crate::domain::actor::Actor;
 use crate::domain::canon::Canon;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::freshness::{Cause, Freshness, Standing};
@@ -26,7 +25,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -35,7 +34,7 @@ fn moved(from: &str, to: &str) -> MovedRequest {
         from: aname(from),
         to: aname(to),
         reason: NonBlank::new("the module was split").unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -93,7 +92,7 @@ fn a_declared_move_with_the_link_rewritten_keeps_the_approval_fresh() {
 
     let asked_before = app.ports().asked().len();
     let declared = block_on(app.moved(vec![MovedRequest {
-        actor: Some(Actor::new("bob").unwrap()),
+        by: super::fake_tests::named("bob"),
         ..moved("tests/a.rs", "tests/b.rs")
     }]))
     .unwrap();
@@ -364,7 +363,7 @@ fn withdrawing_a_move_reads_the_pin_as_written_again() {
     block_on(app.withdraw(WithdrawRequest {
         records: vec![declared[0].id()],
         reason: NonBlank::new("it was a copy after all").unwrap(),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     assert!(matches!(

@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "82208310328e453ab98de7ba29cca4b9a1fea060",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:374d66e871bfdb60fd8e13a7fe2d056c042cc23406079b1805b5afac0d6f933b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795192743318,
+  "expires": null,
+  "frame": [
+    {
+      "address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+      "hash": "sha256:8a7484e072bdb063dd1c2cfc2af5c5ac0d055149aa9ee10f83fc58495f330902",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "40"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c577-33e1-735e-b992-19f40a27438a"
+    }
+  ],
+  "id": "01a1f9d3-ab29-7633-a654-ab0c36aed38f",
+  "kind": "decision",
+  "reason": "#156 edited the test files these name: call sites changed for the attribution a record now holds (by: AttributionAsk, Attribution), and some files gained the ran_by tests that V-112 names; the tests each of these verifications names still check what it states",
+  "revision": "7c2fb8b5015d66b07813c49e0c5a9826c7bd8f7b",
+  "seen": "sha256:c3529ebef0122ae9a687c6414bcfe58da3c557a87518a381f44c166dc786bccf",
+  "seen_address": "07db1f1a35a5bf8e858eae090366c1062a967886",
+  "subject": "01a1c577-367b-725d-b911-25170a16cfd6",
+  "v": 1,
+  "verb": "approve"
+}

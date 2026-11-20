@@ -65,6 +65,7 @@
 mod adapter;
 mod approve_chosen;
 mod approved;
+mod attribution;
 mod dispatch;
 mod error;
 mod exempt;
@@ -146,6 +147,7 @@ pub use approve_chosen::{
     ApproveChosenRequest, ApproveStaleRequest, Choose, ChosenApproved, ChosenJudged, ChosenLeftOut,
     PendingScope,
 };
+pub use attribution::AttributionAsk;
 pub use dispatch::{DispatchError, SpaceRegistry, Spaces};
 pub use error::{ErrorClass, Obstacle, PersistProblem, ShelfError};
 pub use exempt::{ExemptRequest, Exempted};

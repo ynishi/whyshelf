@@ -805,6 +805,8 @@ mod admit_tests;
 #[cfg(test)]
 mod artifact_tests;
 #[cfg(test)]
+mod attribution_tests;
+#[cfg(test)]
 mod comparison_tests;
 #[cfg(test)]
 mod exempt_tests;

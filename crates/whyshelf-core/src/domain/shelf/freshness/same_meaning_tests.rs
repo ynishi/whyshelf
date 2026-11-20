@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::artifact::ArtifactHash;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, docid, file_artifact, fr, fr_titled, jid, ledger, name, shelf, shelf_with,
+    approve, by, docid, file_artifact, fr, fr_titled, jid, ledger, name, shelf, shelf_with,
     sp_testing,
 };
 use crate::domain::shelf::ledger::{
@@ -36,7 +36,7 @@ fn declaration(judgement: u128, of: SameMeaningOf) -> Record {
         SameMeaning::new(
             jid(judgement),
             of,
-            actor(),
+            by(),
             JudgedAt::new(50),
             NonBlank::new("a typo fixed").unwrap(),
         )
@@ -61,7 +61,7 @@ fn revoke(judgement: u128, target: u128) -> Record {
     Record::Revocation(Revocation::new(
         jid(judgement),
         NonEmptySet::from_set(BTreeSet::from([jid(target)])).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(60),
         NonBlank::new("not the same after all").unwrap(),
     ))

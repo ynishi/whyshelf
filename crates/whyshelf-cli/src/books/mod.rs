@@ -59,10 +59,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
-    ApproveChosenRequest, Choose, EntryInput, ErrorClass, ExemptRequest, JudgeRequest, Judgement,
-    MapReport, MovedRequest, NewDocRequest, PendingScope, PrefixMovedRequest, SameMeaningAbout,
-    SameMeaningRequest, ShelfApp, ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter,
-    UnlinkedReport, WithdrawRequest,
+    ApproveChosenRequest, AttributionAsk, Choose, EntryInput, ErrorClass, ExemptRequest,
+    JudgeRequest, Judgement, MapReport, MovedRequest, NewDocRequest, PendingScope,
+    PrefixMovedRequest, SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError, StaleReport,
+    UnlinkedAsk, UnlinkedFilter, UnlinkedReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -83,6 +83,10 @@ use args::{Common, Verb};
 
 /// The environment variable that names who judges.
 const ACTOR_VAR: &str = "WHYSHELF_ACTOR";
+
+/// The environment variable that names who ran the command, when it is not the one
+/// who judges.
+const RAN_BY_VAR: &str = "WHYSHELF_RAN_BY";
 
 /// The environment variable that names cargo's build directory, where the docs of
 /// the space `rust-item` are looked for first.
@@ -146,6 +150,7 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
     let project = match Project::new(
         root.unwrap_or_else(|| PathBuf::from(".")),
         std::env::var(ACTOR_VAR).ok(),
+        std::env::var(RAN_BY_VAR).ok(),
         std::env::var_os(CARGO_TARGET_DIR_VAR).map(PathBuf::from),
     ) {
         Ok(project) => project,
@@ -431,10 +436,17 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             .map(|t| NonBlank::new(t).map_err(|e| format!("--reason: {e}")))
             .transpose()
     };
-    let actor_of = |actor: Option<String>| {
-        actor
-            .map(|a| Actor::new(&a).map_err(|e| format!("--actor `{a}`: {e}")))
-            .transpose()
+    // The names a command line gives of who judges and who ran it: a form that is no
+    // name is a wrong request, and a name left out is the port's.
+    let by_of = |actor: Option<String>, ran_by: Option<String>| -> Result<AttributionAsk, String> {
+        let name_of = |flag: &str, name: Option<String>| {
+            name.map(|n| Actor::new(&n).map_err(|e| format!("--{flag} `{n}`: {e}")))
+                .transpose()
+        };
+        Ok(AttributionAsk {
+            actor: name_of("actor", actor)?,
+            ran_by: name_of("ran-by", ran_by)?,
+        })
     };
     let (judgement, common) = match verb {
         Verb::Same {
@@ -443,9 +455,10 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             from,
             reason,
             actor,
+            ran_by,
         } => {
             let reason = NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?;
-            let actor = actor_of(actor)?;
+            let by = by_of(actor, ran_by)?;
             let about: Vec<SameMeaningAbout> = references
                 .into_iter()
                 .map(SameMeaningAbout::Doc)
@@ -467,7 +480,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
                         about,
                         from,
                         reason: reason.clone(),
-                        actor: actor.clone(),
+                        by: by.clone(),
                     })
                     .collect(),
             ));
@@ -478,26 +491,23 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             to,
             reason,
             actor,
+            ran_by,
         } => {
             let reason = NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?;
-            let actor = actor_of(actor)?;
+            let by = by_of(actor, ran_by)?;
             if prefix {
                 let of = PrefixMove::new(
                     NamePrefix::new(&from).map_err(|e| format!("OLD `{from}`: {e}"))?,
                     NamePrefix::new(&to).map_err(|e| format!("NEW `{to}`: {e}"))?,
                 )
                 .map_err(|e| e.to_string())?;
-                return Ok(JudgeRun::MovedPrefix(PrefixMovedRequest {
-                    of,
-                    reason,
-                    actor,
-                }));
+                return Ok(JudgeRun::MovedPrefix(PrefixMovedRequest { of, reason, by }));
             }
             return Ok(JudgeRun::Moved(vec![MovedRequest {
                 from: ArtifactName::new(&from).map_err(|e| format!("OLD `{from}`: {e}"))?,
                 to: ArtifactName::new(&to).map_err(|e| format!("NEW `{to}`: {e}"))?,
                 reason,
-                actor,
+                by,
             }]));
         }
         Verb::Exempt {
@@ -505,10 +515,11 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             from,
             reason,
             actor,
+            ran_by,
         } => {
             let args::BookLink { book, link } = from;
             let reason = NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?;
-            let actor = actor_of(actor)?;
+            let by = by_of(actor, ran_by)?;
             return Ok(JudgeRun::Exempt(
                 references
                     .into_iter()
@@ -517,7 +528,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
                         book: book.clone(),
                         link: link.clone(),
                         reason: reason.clone(),
-                        actor: actor.clone(),
+                        by: by.clone(),
                     })
                     .collect(),
             ));
@@ -526,6 +537,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             records,
             reason,
             actor,
+            ran_by,
         } => {
             let records = records
                 .iter()
@@ -538,7 +550,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             return Ok(JudgeRun::Withdraw(WithdrawRequest {
                 records,
                 reason: NonBlank::new(&reason).map_err(|e| format!("--reason: {e}"))?,
-                actor: actor_of(actor)?,
+                by: by_of(actor, ran_by)?,
             }));
         }
         Verb::Approve {
@@ -548,6 +560,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             again,
             reason: text,
             actor,
+            ran_by,
             until,
         } => {
             let until = until
@@ -580,7 +593,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
                 return Ok(JudgeRun::Chosen(ApproveChosenRequest {
                     choose,
                     reason: reason(&text)?.ok_or_else(|| format!("{flag} needs --reason"))?,
-                    actor: actor_of(actor)?,
+                    by: by_of(actor, ran_by)?,
                     until,
                 }));
             }
@@ -594,6 +607,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
                     references,
                     reason: text,
                     actor,
+                    ran_by,
                 },
             )
         }
@@ -624,7 +638,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             common,
         ),
     };
-    let actor = actor_of(common.actor)?;
+    let by = by_of(common.actor, common.ran_by)?;
     Ok(JudgeRun::Decide(
         common
             .references
@@ -632,7 +646,7 @@ fn judge_run(verb: Verb) -> Result<JudgeRun, String> {
             .map(|reference| JudgeRequest {
                 judgement: judgement.clone(),
                 reference,
-                actor: actor.clone(),
+                by: by.clone(),
             })
             .collect(),
     ))

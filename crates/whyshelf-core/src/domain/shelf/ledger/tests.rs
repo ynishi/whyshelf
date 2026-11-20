@@ -6,8 +6,7 @@ use crate::domain::canon::Canon;
 use crate::domain::shelf::build::{DocReading, RawProblem, ReadId};
 use crate::domain::shelf::doc::UnresolvedWhy;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, deny, deprecate, docid, fr, fr_titled, jid, ledger, path, reading, retire,
-    shelf,
+    approve, by, deny, deprecate, docid, fr, fr_titled, jid, ledger, path, reading, retire, shelf,
 };
 
 use super::*;
@@ -16,7 +15,7 @@ fn revoke(judgement: u128, target: u128, at: i64) -> Record {
     Record::Revocation(Revocation::new(
         jid(judgement),
         NonEmptySet::from_set(BTreeSet::from([jid(target)])).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(at),
         NonBlank::new("changed my mind").unwrap(),
     ))

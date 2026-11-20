@@ -12,7 +12,7 @@ use whyshelf_core::domain::words::{Join, Mark, listed};
 
 use super::cause::{absent_detail, moved_detail, unneeded_word};
 use super::untold::{CHECK_UNTOLD, untold_line};
-use super::words::{plural, schema_problem};
+use super::words::{plural, ran_by, schema_problem};
 use super::{
     AbsentOut, DocRef, ExemptOut, HealthOut, MovedNameOut, Namer, RepeatedOut, UnknownOut,
     UnneededOut, standing,
@@ -470,6 +470,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                         severity: e.severity.word(),
                         exemption: e.record.id().to_string(),
                         actor: e.record.actor().as_str().to_owned(),
+                        ran_by: ran_by(e.record.attribution()),
                         at: e.record.at().millis(),
                         reason: e.record.reason().as_str().to_owned(),
                     })
@@ -487,6 +488,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                             link: of.link().to_string(),
                             exemption: u.record.id().to_string(),
                             actor: u.record.actor().as_str().to_owned(),
+                            ran_by: ran_by(u.record.attribution()),
                             at: u.record.at().millis(),
                             reason: u.record.reason().as_str().to_owned(),
                             why: unneeded_word(&u.why),

@@ -10,6 +10,22 @@ and this project adheres to
 
 ### Added
 
+- A record keeps who ran a judgement apart from who answers for it (#156).
+  `--ran-by <name>` on every `judge` verb, else the variable `WHYSHELF_RAN_BY`
+  (a blank value is none), names who ran the command when it is not the actor,
+  such as a coding agent running it for a person; there is no other source, so
+  neither Git's `user.name` nor a file of the project names one. A record of any
+  kind keeps it as an optional key `ran_by` only when it is another name than
+  the actor's, so a record written before, and one whose command the actor ran,
+  keep the form and the hash they had. A `--ran-by` that is the actor is one
+  name: no key, and the answers say `null`. `ran_by` is told and read by no
+  judgement: who may decide, who has read a document, what an approval repeats
+  and the runs of `stats` read the actor alone. The answers that show a
+  record's actor (`decision` of every row, `get --approved`, `exempt` and
+  `exemption_unneeded` of `check`) show `ran_by` beside it, `null` when the
+  actor ran the command. Like the actor, it is as declared: a variable a
+  committed file sets (a direnv `.envrc`, say) is not told from one a person
+  set.
 - The stale report says whether a gate can say the approvals hold (#151). In
   the library, `StaleReport::gate` answers `Gate::Holds`, `Gate::DoesNotHold`
   (an approval that does not hold, or only expired) or `Gate::CannotTell` (one
@@ -171,6 +187,23 @@ and this project adheres to
 
 ### Changed
 
+- A build from before `ran_by` (#156) does not read a record that has the key,
+  and its `check` fails on it; its other commands act as if the record were not
+  there, so its `judge` can write over that decision with no warning. A CI that
+  checks the books, and everyone who judges in the project, needs this version
+  before such a record is committed. Every other record is written and read as
+  before, with the same hash; a stored record whose `ran_by` is its `actor` is
+  refused as unreadable, not read as one name. In the library, the requests of
+  the `judge` use cases (`JudgeRequest`, `ApproveChosenRequest`,
+  `ApproveStaleRequest`, `SameMeaningRequest`, `MovedRequest`,
+  `PrefixMovedRequest`, `ExemptRequest`, `WithdrawRequest`) take
+  `by: AttributionAsk` instead of `actor`, the record constructors (`Decision`,
+  `Revocation`, `SameMeaning`, `Moved`, `Exempt`) take an `Attribution` instead
+  of an `Actor` (`Attribution::new` holds the one place two names are
+  compared), `ActorSource` gains `ran_by`, `ProjectActor::new` and
+  `Project::new` take the declared `ran_by`, `RecordProblem` has
+  `RanByIsActor`, and `ActorError` has `RanByRefused` (a `WHYSHELF_RAN_BY` that is
+  no name, said as that variable's).
 - The text a name of the space `rust-test` comes to holds the items beside the
   test in its test part (#155): the outermost inline module on the way whose
   `cfg` holds only under test, or the file when none does. Every item there

@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "ff1cdf6195e3b5114c92ee21545b944758787762",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d8e8e47443ed435cd3d521d3d88bc334a32cd8032cbea3d4570dde50c5e50d3b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "604e120a21270dff0c8b3ac38fceae3d837b58eb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:58f74b2cef34f58f1acb67733292d0c5538b7021d11de1921a79a6a67b1cd021",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cdb2255c9c7e887c2828c23184bd726ef5cde87a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a6e4a9ad2fd0b64b36f194943d9cf2049fb509c86837c6a7c72886b92f684466",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "081e607858c956a337832eb088b651594aa6da72",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:18c841246a4ea5646f7b7abd878f1293d513321ebc501045c6bb5760ff75270d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "94440d859ab1998ecdeb0fed03c4ac373b201072",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4441c0d657dcfdc421bcec8397505f91ea041da279ae57dd36a9ba26f6761318",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795192743318,
+  "expires": null,
+  "frame": [
+    {
+      "address": "40df97284f46b7fc9cfd0ceb0d410c2f5221e77d",
+      "hash": "sha256:1d5e2748dcb01a60123690bea74c4e74b05d788e33867b6b632a42663b245425",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "9"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c434-c205-7538-9b17-4fe0f9900392"
+    }
+  ],
+  "id": "01a1f9d3-7723-76dc-9b59-de28ac9cf0fa",
+  "kind": "decision",
+  "reason": "#156 edited the test files these name: call sites changed for the attribution a record now holds (by: AttributionAsk, Attribution), and some files gained the ran_by tests that V-112 names; the tests each of these verifications names still check what it states",
+  "revision": "7c2fb8b5015d66b07813c49e0c5a9826c7bd8f7b",
+  "seen": "sha256:38358f43b4b51b85481343dca7fc35c56b00810d4eaf83b22793084f5d12fd24",
+  "seen_address": "e0815a96896a7d3441e576a614d6a2ea7f666f11",
+  "subject": "01a1c434-c247-7331-9063-4647de8cf529",
+  "v": 1,
+  "verb": "approve"
+}

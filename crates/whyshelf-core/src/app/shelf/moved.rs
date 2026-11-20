@@ -6,7 +6,7 @@
 //!   + new name         ---- MovedOf::new ---------------> a move (two names that differ)
 //!   both names, in it  ---- ArtifactSource::resolve ----> what is at each now
 //!   the answers        ---- frame_moved ----------------> what moved (or a MovedRefusal)
-//!   + time, actor, new id, reason
+//!   + time, actor (and who ran the command), new id, reason
 //!                      ---- Moved::new -----------------> a Record
 //!   record             ---- Ledger::accept -------------> admitted by who may decide
 //!                                                         (`[decide]`), or NotAdmitted
@@ -38,7 +38,6 @@
 //! what each is under the new one is the adapter's, which names move is
 //! [`plan_prefix_moves`]'s, whether a move stands is [`frame_moved`]'s.
 
-use crate::domain::actor::Actor;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactName, PrefixMove, Space};
 use crate::domain::shelf::ledger::{
@@ -47,9 +46,10 @@ use crate::domain::shelf::ledger::{
 };
 
 use super::ShelfApp;
+use super::attribution::AttributionAsk;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
-use super::ports::{ActorSource, ArtifactSource, IdSource, ShelfPort, ShelfWrite, port};
+use super::ports::{ArtifactSource, IdSource, ShelfPort, ShelfWrite, port};
 
 /// A request to declare that an artifact moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,8 +60,8 @@ pub struct MovedRequest {
     pub to: ArtifactName,
     /// Why it is the same thing. Required.
     pub reason: NonBlank,
-    /// Who declares it. `None` is the person the actor port names.
-    pub actor: Option<Actor>,
+    /// Who declares it, and who runs the command.
+    pub by: AttributionAsk,
 }
 
 /// A request to declare that every name under one prefix moved to the same name under
@@ -72,8 +72,8 @@ pub struct PrefixMovedRequest {
     pub of: PrefixMove,
     /// Why they are the same things. Required.
     pub reason: NonBlank,
-    /// Who declares it. `None` is the person the actor port names.
-    pub actor: Option<Actor>,
+    /// Who declares it, and who runs the command.
+    pub by: AttributionAsk,
 }
 
 /// What a declaration of the move of a prefix wrote.
@@ -154,15 +154,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .await
             .map_err(port(ShelfPort::Artifacts))?;
         let framed = frame_prefix_moves(plan, &readings)?;
-        let actor = match request.actor {
-            Some(actor) => actor,
-            None => self
-                .ports
-                .actor_source()
-                .actor()
-                .await
-                .map_err(port(ShelfPort::Actor))?,
-        };
+        let by = self.attribution(request.by).await?;
         let mut moved = Vec::with_capacity(framed.len());
         let mut admitted = Vec::with_capacity(framed.len());
         for of in framed.into_vec() {
@@ -172,7 +164,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 .new_judgement_id()
                 .await
                 .map_err(port(ShelfPort::Ids))?;
-            let one = Moved::new(id, of, actor.clone(), loaded.now, request.reason.clone());
+            let one = Moved::new(id, of, by.clone(), loaded.now, request.reason.clone());
             admitted.push(loaded.take(Record::Moved(one.clone()))?);
             moved.push(one);
         }
@@ -198,21 +190,13 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .await
             .map_err(port(ShelfPort::Artifacts))?;
         let of = frame_moved(of, &readings)?;
-        let actor = match request.actor {
-            Some(actor) => actor,
-            None => self
-                .ports
-                .actor_source()
-                .actor()
-                .await
-                .map_err(port(ShelfPort::Actor))?,
-        };
+        let by = self.attribution(request.by).await?;
         let id = self
             .ports
             .ids()
             .new_judgement_id()
             .await
             .map_err(port(ShelfPort::Ids))?;
-        Ok(Moved::new(id, of, actor, loaded.now, request.reason))
+        Ok(Moved::new(id, of, by, loaded.now, request.reason))
     }
 }

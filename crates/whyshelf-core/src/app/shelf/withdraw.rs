@@ -11,14 +11,14 @@
 
 use std::collections::BTreeSet;
 
-use crate::domain::actor::Actor;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::ledger::{JudgementId, Record, Revocation};
 
 use super::ShelfApp;
+use super::attribution::AttributionAsk;
 use super::error::ShelfError;
 use super::load::load;
-use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
+use super::ports::{IdSource, ShelfPort, ShelfWrite, port};
 
 /// A request to withdraw records by their identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,8 +27,8 @@ pub struct WithdrawRequest {
     pub records: Vec<JudgementId>,
     /// Why. Required.
     pub reason: NonBlank,
-    /// Who withdraws them. `None` is the person the actor port names.
-    pub actor: Option<Actor>,
+    /// Who withdraws them, and who runs the command.
+    pub by: AttributionAsk,
 }
 
 impl<P: ShelfWrite> ShelfApp<P> {
@@ -47,28 +47,15 @@ impl<P: ShelfWrite> ShelfApp<P> {
         }
         let targets = NonEmptySet::from_set(request.records.into_iter().collect::<BTreeSet<_>>())
             .map_err(|_| ShelfError::NothingRequested)?;
-        let actor = match request.actor {
-            Some(actor) => actor,
-            None => self
-                .ports
-                .actor_source()
-                .actor()
-                .await
-                .map_err(port(ShelfPort::Actor))?,
-        };
+        let by = self.attribution(request.by).await?;
         let id = self
             .ports
             .ids()
             .new_judgement_id()
             .await
             .map_err(port(ShelfPort::Ids))?;
-        let record = Record::Revocation(Revocation::new(
-            id,
-            targets,
-            actor,
-            loaded.now,
-            request.reason,
-        ));
+        let record =
+            Record::Revocation(Revocation::new(id, targets, by, loaded.now, request.reason));
         let admitted = loaded.ledger.accept(record)?;
         self.write([&admitted]).await?;
         Ok(admitted.record().clone())

@@ -4,7 +4,7 @@
 
 use std::error::Error as _;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::DocReading;
@@ -64,7 +64,7 @@ fn exempt(judgement: u128, doc: u128) -> Record {
     Record::Exempt(Exempt::new(
         jid(judgement),
         ExemptOf::new(docid(doc), book("spec"), link("grounds")),
-        Actor::new("alice").unwrap(),
+        Attribution::one(Actor::new("alice").unwrap()),
         JudgedAt::new(50),
         NonBlank::new("kept on purpose").unwrap(),
     ))
@@ -388,7 +388,7 @@ fn a_withdrawn_exemption_no_longer_blocks_a_new_one() {
         Record::Revocation(Revocation::new(
             jid(3001),
             NonEmptySet::from_set([jid(2001)].into()).unwrap(),
-            Actor::new("alice").unwrap(),
+            Attribution::one(Actor::new("alice").unwrap()),
             JudgedAt::new(60),
             NonBlank::new("to be grounded").unwrap(),
         )),

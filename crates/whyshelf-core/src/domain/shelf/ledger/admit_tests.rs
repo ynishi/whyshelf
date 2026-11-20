@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::canon::Canon;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::fixtures_tests::{decls, docid, fr, jid, shelf, spaces};
@@ -81,7 +81,7 @@ fn approve_by(shelf: &Shelf, subject: u128, judgement: u128, by: &str, at: i64) 
             jid(judgement),
             frame,
             None,
-            Actor::new(by).unwrap(),
+            Attribution::one(Actor::new(by).unwrap()),
             JudgedAt::new(at),
             None,
         )
@@ -94,7 +94,7 @@ fn deny_by(shelf: &Shelf, subject: u128, judgement: u128, by: &str, at: i64) -> 
         Decision::deny(
             jid(judgement),
             frame_present(shelf, docid(subject)).unwrap(),
-            Actor::new(by).unwrap(),
+            Attribution::one(Actor::new(by).unwrap()),
             JudgedAt::new(at),
             None,
         )
@@ -107,7 +107,7 @@ fn revoke_by(judgement: u128, targets: &[u128], by: &str, at: i64) -> Record {
     Record::Revocation(Revocation::new(
         jid(judgement),
         NonEmptySet::from_set(targets).unwrap(),
-        Actor::new(by).unwrap(),
+        Attribution::one(Actor::new(by).unwrap()),
         JudgedAt::new(at),
         NonBlank::new("not admitted").unwrap(),
     ))
@@ -176,6 +176,32 @@ fn a_record_the_rule_does_not_admit_is_not_used_and_is_a_problem_of_the_ledger()
         ledger.status_of(docid(1)),
         DeclaredStatus::Approved { judgement, .. } if judgement == jid(1002)
     ));
+}
+
+#[test]
+fn who_ran_the_command_is_not_read_by_who_may_decide() {
+    // `ana` may approve and `bo` may not. A record by `ana` that `bo` ran is admitted,
+    // and one by `bo` that `ana` ran is not: only the name that answers for a record
+    // is read.
+    let shelf = ruled(rule(&[DecideKind::Approve], None));
+    let ran_by = |record: Record, name: &str| {
+        let Canon::Map(mut map) = record.to_canon() else {
+            panic!("a record is a map");
+        };
+        map.insert("ran_by".to_owned(), Canon::str(name));
+        Record::from_canon(&Canon::Map(map)).unwrap()
+    };
+    let ana_run_by_bo = ran_by(approve_by(&shelf, 1, 1001, "ana", 10), "bo");
+    let bo_run_by_ana = ran_by(approve_by(&shelf, 2, 1002, "bo", 10), "ana");
+
+    let ledger = Ledger::build(
+        vec![ana_run_by_bo.clone(), bo_run_by_ana.clone()],
+        &Admit::of(&shelf),
+    );
+    assert_eq!(not_admitted(ledger.problems()), vec![(jid(1002), None)]);
+    let base = Ledger::build(Vec::new(), &Admit::of(&shelf));
+    assert!(base.accept(ana_run_by_bo).is_ok());
+    assert!(base.accept(bo_run_by_ana).is_err());
 }
 
 #[test]

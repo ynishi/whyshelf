@@ -12,7 +12,7 @@ use whyshelf_core::domain::shelf::doc::LinkState;
 use whyshelf_core::domain::shelf::freshness::{Freshness, RootCause, Standing, Successors};
 use whyshelf_core::domain::shelf::ledger::{DeclaredStatus, Quorum};
 
-use super::words::state_word;
+use super::words::{ran_by, state_word};
 use super::{CauseOut, DocRef, Namer, NoticeOut, standing};
 
 /// What the shelf has for a document now.
@@ -49,6 +49,8 @@ pub struct DecisionOut {
     pub judgement: String,
     /// Who decided.
     pub actor: String,
+    /// Who ran the command, when not the actor; null when the actor ran it.
+    pub ran_by: Option<String>,
     /// When (unix milliseconds).
     pub at: i64,
     /// Why, as it was given; none when no reason was given.
@@ -215,6 +217,7 @@ impl Namer<'_> {
             decision: row.decision.as_ref().map(|d| DecisionOut {
                 judgement: d.id().to_string(),
                 actor: d.actor().as_str().to_owned(),
+                ran_by: ran_by(d.attribution()),
                 at: d.at().millis(),
                 reason: d.reason().map(|r| r.as_str().to_owned()),
             }),

@@ -496,7 +496,7 @@ mod tests {
     #[test]
     fn a_pending_document_is_one_valid_with_no_decision_standing_withdrawn_or_never_made() {
         use crate::domain::nonempty::{NonBlank, NonEmptySet};
-        use crate::domain::shelf::fixtures_tests::{actor, deny, jid};
+        use crate::domain::shelf::fixtures_tests::{by, deny, jid};
         use crate::domain::shelf::freshness::assess;
         use crate::domain::shelf::ledger::{JudgedAt, Record, Revocation};
         // FR-1 never decided; FR-2 approved then withdrawn; FR-3 approved; FR-4
@@ -522,7 +522,7 @@ mod tests {
         records.push(Record::Revocation(Revocation::new(
             jid(1),
             NonEmptySet::from_set(BTreeSet::from([jid(1002)])).unwrap(),
-            actor(),
+            by(),
             JudgedAt::new(20),
             NonBlank::new("not yet").unwrap(),
         )));

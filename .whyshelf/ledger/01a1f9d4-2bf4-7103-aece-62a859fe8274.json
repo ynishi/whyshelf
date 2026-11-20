@@ -1,0 +1,80 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "927d5d6c95f47bc3821cab8c04462b2cdbe9b9a4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:00225562d7a5da3d2ff9bb8b573a07a56ecbb13ea75fce352a7a2382a739b735",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1ce9e6265717b729e65a2e537a97181562efdae3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b31e7b694dce6472f3d19c43f5fe3d4a07c505114b01c0e0f59466bbf9ff3524",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795192743318,
+  "expires": null,
+  "frame": [
+    {
+      "address": "42bc14a58ddd5884e1cb511a4ac672a4a103060e",
+      "hash": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157"
+    },
+    {
+      "address": "9ace93bd6fff1be46a68ad5b488ded85fa507d0e",
+      "hash": "sha256:6599ee1d0b6414293d727c077a050734aa210b98e3b0fb8e0b64a6823ee85138",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "88"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c41-7b18-8d07-3f9a5e2b6c40"
+    }
+  ],
+  "id": "01a1f9d4-2bf4-7103-aece-62a859fe8274",
+  "kind": "decision",
+  "reason": "#156 edited the test files these name: call sites changed for the attribution a record now holds (by: AttributionAsk, Attribution), and some files gained the ran_by tests that V-112 names; the tests each of these verifications names still check what it states",
+  "revision": "7c2fb8b5015d66b07813c49e0c5a9826c7bd8f7b",
+  "seen": "sha256:be029a812eddc8b619055a8ac21f0257d987839bc61cec11abe650dbb5650612",
+  "seen_address": "0afc562f8c32d56f211370aac0296f2510543f7a",
+  "subject": "01a1f6a0-2c41-7d05-b6a1-9e4c2d7f3a63",
+  "v": 1,
+  "verb": "approve"
+}

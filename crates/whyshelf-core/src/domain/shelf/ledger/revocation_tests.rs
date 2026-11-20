@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::domain::shelf::fixtures_tests::{actor, deny, docid, fr, jid, ledger, shelf};
+use crate::domain::shelf::fixtures_tests::{by, deny, docid, fr, jid, ledger, shelf};
 
 use super::*;
 
@@ -14,7 +14,7 @@ fn revoke(judgement: u128, targets: &[u128], at: i64) -> Record {
     Record::Revocation(Revocation::new(
         jid(judgement),
         NonEmptySet::from_set(targets).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(at),
         NonBlank::new("changed my mind").unwrap(),
     ))

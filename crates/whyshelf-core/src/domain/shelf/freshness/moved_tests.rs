@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::artifact::{ArtifactHash, Space};
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, docid, file_artifact, file_space, fr, jid, ledger, name, shelf_with, sp_testing,
+    approve, by, docid, file_artifact, file_space, fr, jid, ledger, name, shelf_with, sp_testing,
 };
 use crate::domain::shelf::ledger::{
     JudgedAt, Moved, MovedOf, Record, SameMeaning, SameMeaningOf, SameMeaningTarget,
@@ -39,7 +39,7 @@ fn moved_in(space: Space, judgement: u128, from: &str, to: &str, at: i64) -> Rec
     Record::Moved(Moved::new(
         jid(judgement),
         MovedOf::new(space, name(from), name(to)).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(at),
         NonBlank::new("the module was split").unwrap(),
     ))
@@ -189,7 +189,7 @@ fn an_edit_with_a_move_can_be_declared_to_keep_the_meaning_at_the_new_name() {
         SameMeaning::new(
             jid(2002),
             of,
-            actor(),
+            by(),
             JudgedAt::new(60),
             NonBlank::new("formatting").unwrap(),
         )
@@ -216,7 +216,7 @@ fn an_edit_declared_before_the_move_still_keeps_the_meaning_after_it() {
                 from: NonEmptySet::from_set(BTreeSet::from([h("a")])).unwrap(),
                 to: h("a "),
             },
-            actor(),
+            by(),
             JudgedAt::new(40),
             NonBlank::new("formatting").unwrap(),
         )

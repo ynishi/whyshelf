@@ -24,7 +24,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: reference.parse::<Reference>().unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -145,7 +145,7 @@ fn a_name_declared_moved_is_asked_about_as_its_new_name_and_nothing_gone_asks_no
         from: aname("tests/a.rs"),
         to: aname("tests/d.rs"),
         reason: crate::domain::nonempty::NonBlank::new("split").unwrap(),
-        actor: None,
+        by: Default::default(),
     }]))
     .unwrap();
     let report = block_on(app.moves()).unwrap();
@@ -281,7 +281,7 @@ fn a_name_pinned_in_two_spaces_is_listed_with_a_note_and_never_asked_about() {
         from: aname("tests/c.rs"),
         to: aname("tests/d.rs"),
         reason: crate::domain::nonempty::NonBlank::new("split").unwrap(),
-        actor: None,
+        by: Default::default(),
     }]));
     assert!(refused.is_err());
 }

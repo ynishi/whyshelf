@@ -8,7 +8,8 @@ use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::shelf::artifact::{ArtifactHash, ArtifactReading};
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, docid, file_artifact, file_space, fr, jid, ledger, name, shelf_with, sp_testing,
+    actor, approve, by, docid, file_artifact, file_space, fr, jid, ledger, name, shelf_with,
+    sp_testing,
 };
 
 use super::*;
@@ -26,7 +27,7 @@ fn moved_in(space: Space, judgement: u128, from: &str, to: &str, at: i64) -> Mov
     Moved::new(
         jid(judgement),
         MovedOf::new(space, name(from), name(to)).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(at),
         because(),
     )
@@ -338,7 +339,7 @@ fn a_move_of_another_space_or_withdrawn_moves_nothing() {
         Record::Revocation(Revocation::new(
             jid(3001),
             NonEmptySet::from_set([jid(2001)].into()).unwrap(),
-            actor(),
+            by(),
             JudgedAt::new(60),
             NonBlank::new("it was a copy").unwrap(),
         )),
@@ -596,7 +597,7 @@ fn the_names_asked_about_are_those_pins_of_something_there_are_read_as_now() {
     moved_once.push(Record::Revocation(Revocation::new(
         jid(3001),
         NonEmptySet::from_set([jid(2001)].into()).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(60),
         NonBlank::new("it was a copy").unwrap(),
     )));

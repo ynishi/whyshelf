@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonBlank;
 
@@ -98,7 +98,7 @@ pub struct Decision {
     id: JudgementId,
     subject: DocId,
     verb: DecisionVerb,
-    actor: Actor,
+    by: Attribution,
     at: JudgedAt,
     reason: Option<NonBlank>,
     book: Option<BookName>,
@@ -112,7 +112,7 @@ impl Decision {
         id: JudgementId,
         frame: ApproveFrame,
         expires: Option<JudgedAt>,
-        actor: Actor,
+        by: Attribution,
         at: JudgedAt,
         reason: Option<NonBlank>,
     ) -> Result<Self, DecisionProblem> {
@@ -124,43 +124,43 @@ impl Decision {
             seen_address: frame.seen_address,
             revision: frame.revision,
         };
-        Self::assemble(id, frame.subject, verb, actor, at, reason, frame.book)
+        Self::assemble(id, frame.subject, verb, by, at, reason, frame.book)
     }
 
     /// A denial.
     pub fn deny(
         id: JudgementId,
         frame: PresentFrame,
-        actor: Actor,
+        by: Attribution,
         at: JudgedAt,
         reason: Option<NonBlank>,
     ) -> Result<Self, DecisionProblem> {
         let verb = DecisionVerb::Deny { seen: frame.seen };
-        Self::assemble(id, frame.subject, verb, actor, at, reason, frame.book)
+        Self::assemble(id, frame.subject, verb, by, at, reason, frame.book)
     }
 
     /// A deprecation.
     pub fn deprecate(
         id: JudgementId,
         frame: PresentFrame,
-        actor: Actor,
+        by: Attribution,
         at: JudgedAt,
         reason: Option<NonBlank>,
     ) -> Result<Self, DecisionProblem> {
         let verb = DecisionVerb::Deprecate { seen: frame.seen };
-        Self::assemble(id, frame.subject, verb, actor, at, reason, frame.book)
+        Self::assemble(id, frame.subject, verb, by, at, reason, frame.book)
     }
 
     /// A retirement.
     pub fn retire(
         id: JudgementId,
         frame: RetireFrame,
-        actor: Actor,
+        by: Attribution,
         at: JudgedAt,
         reason: Option<NonBlank>,
     ) -> Result<Self, DecisionProblem> {
         let verb = DecisionVerb::Retire { seen: frame.seen };
-        Self::assemble(id, frame.subject, verb, actor, at, reason, frame.book)
+        Self::assemble(id, frame.subject, verb, by, at, reason, frame.book)
     }
 
     /// The one place the invariants of a decision are checked (the expiry's by
@@ -171,7 +171,7 @@ impl Decision {
         id: JudgementId,
         subject: DocId,
         verb: DecisionVerb,
-        actor: Actor,
+        by: Attribution,
         at: JudgedAt,
         reason: Option<NonBlank>,
         book: Option<BookName>,
@@ -210,7 +210,7 @@ impl Decision {
             id,
             subject,
             verb,
-            actor,
+            by,
             at,
             reason,
             book,
@@ -234,7 +234,12 @@ impl Decision {
 
     /// Who decided.
     pub fn actor(&self) -> &Actor {
-        &self.actor
+        self.by.actor()
+    }
+
+    /// Who decided, and who ran the command when it was another.
+    pub fn attribution(&self) -> &Attribution {
+        &self.by
     }
 
     /// When.

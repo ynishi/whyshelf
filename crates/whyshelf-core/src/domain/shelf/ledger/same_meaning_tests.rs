@@ -8,7 +8,7 @@ use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::shelf::artifact::ArtifactHash;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, deny, docid, file_artifact, fr, fr_titled, jid, ledger, name, reading, shelf,
+    approve, by, deny, docid, file_artifact, fr, fr_titled, jid, ledger, name, reading, shelf,
     shelf_with, sp_testing,
 };
 
@@ -30,7 +30,7 @@ fn because() -> NonBlank {
 
 fn declaration(judgement: u128, of: SameMeaningOf) -> Record {
     Record::SameMeaning(
-        SameMeaning::new(jid(judgement), of, actor(), JudgedAt::new(50), because()).unwrap(),
+        SameMeaning::new(jid(judgement), of, by(), JudgedAt::new(50), because()).unwrap(),
     )
 }
 
@@ -62,7 +62,7 @@ fn revoke(judgement: u128, targets: &[u128], at: i64) -> Record {
     Record::Revocation(Revocation::new(
         jid(judgement),
         NonEmptySet::from_set(targets.iter().map(|t| jid(*t)).collect()).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(at),
         NonBlank::new("not the same after all").unwrap(),
     ))
@@ -171,7 +171,7 @@ fn a_declaration_whose_hash_now_is_among_the_earlier_ones_is_refused() {
             from: NonEmptySet::from_set(BTreeSet::from([dh(1), dh(2)])).unwrap(),
             to: dh(2),
         },
-        actor(),
+        by(),
         JudgedAt::new(50),
         because(),
     );

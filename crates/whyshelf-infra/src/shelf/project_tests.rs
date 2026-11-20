@@ -16,7 +16,7 @@ use super::Project;
 use super::init::Template;
 
 fn project(dir: &tempfile::TempDir) -> Project {
-    Project::new(dir.path(), Some("tester".to_owned()), None).unwrap()
+    Project::new(dir.path(), Some("tester".to_owned()), None, None).unwrap()
 }
 
 fn rel(text: &str) -> RelPath {

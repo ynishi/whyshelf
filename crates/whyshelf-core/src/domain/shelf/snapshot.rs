@@ -30,7 +30,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 
@@ -174,7 +174,7 @@ impl SnapshotItem {
 pub struct Snapshot {
     judgement: JudgementId,
     subject: DocId,
-    actor: Actor,
+    by: Attribution,
     at: JudgedAt,
     revision: Option<Revision>,
     items: Vec<SnapshotItem>,
@@ -229,7 +229,7 @@ impl Snapshot {
         Some(Self {
             judgement: decision.id(),
             subject: id,
-            actor: decision.actor().clone(),
+            by: decision.attribution().clone(),
             at: decision.at(),
             revision: revision.clone(),
             items,
@@ -248,7 +248,12 @@ impl Snapshot {
 
     /// Who approved.
     pub fn actor(&self) -> &Actor {
-        &self.actor
+        self.by.actor()
+    }
+
+    /// Who approved, and who ran the command when it was another.
+    pub fn attribution(&self) -> &Attribution {
+        &self.by
     }
 
     /// When.
@@ -362,7 +367,7 @@ mod tests {
                 crate::domain::shelf::fixtures_tests::jid(1001),
                 frame,
                 None,
-                crate::domain::shelf::fixtures_tests::actor(),
+                crate::domain::shelf::fixtures_tests::by(),
                 JudgedAt::new(10),
                 None,
             )

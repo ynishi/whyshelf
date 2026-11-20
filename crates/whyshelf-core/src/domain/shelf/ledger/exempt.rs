@@ -17,7 +17,7 @@
 //! [`LinkKind::cover`]: super::super::schema::LinkKind::cover
 //! [`Ledger::exemptions`]: super::Ledger::exemptions
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonBlank;
 
@@ -63,7 +63,7 @@ impl ExemptOf {
 pub struct Exempt {
     pub(super) id: JudgementId,
     pub(super) of: ExemptOf,
-    pub(super) actor: Actor,
+    pub(super) by: Attribution,
     pub(super) at: JudgedAt,
     pub(super) reason: NonBlank,
 }
@@ -75,14 +75,14 @@ impl Exempt {
     pub fn new(
         id: JudgementId,
         of: ExemptOf,
-        actor: Actor,
+        by: Attribution,
         at: JudgedAt,
         reason: NonBlank,
     ) -> Self {
         Self {
             id,
             of,
-            actor,
+            by,
             at,
             reason,
         }
@@ -100,7 +100,12 @@ impl Exempt {
 
     /// Who declared it.
     pub fn actor(&self) -> &Actor {
-        &self.actor
+        self.by.actor()
+    }
+
+    /// Who declared it, and who ran the command when it was another.
+    pub fn attribution(&self) -> &Attribution {
+        &self.by
     }
 
     /// When.

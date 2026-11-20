@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use thiserror::Error;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution, SameName};
 use crate::domain::canon::Canon;
 use crate::domain::error::ValueError;
 use crate::domain::hash::{ContentHash, HashKind};
@@ -149,6 +149,14 @@ pub enum RecordProblem {
     /// The record is well formed but breaks an invariant of a declaration of a move.
     #[error("the record breaks an invariant of a declaration of a move")]
     Moved(#[source] MovedProblem),
+    /// A `ran_by` that is the record's `actor`: a name is written once, so this is no
+    /// form this program writes, and reading it as one name would give a record whose
+    /// form, and hash, are not the stored one's.
+    #[error("the record's `ran_by` is its actor `{name}`: one name is written once")]
+    RanByIsActor {
+        /// The name.
+        name: String,
+    },
 }
 
 type CanonMap = BTreeMap<String, Canon>;
@@ -212,7 +220,7 @@ fn exact(map: &CanonMap, keys: &[&str]) -> Result<(), RecordProblem> {
 
 /// Checks that a map has every key of `required`, and no key beyond those and
 /// `optional`: the keys added after the first version of a record are optional, so
-/// a record written before them reads back as it was (rule A5).
+/// a record written before them reads back as it was (rule A5), as `ran_by` is.
 fn exact_with(map: &CanonMap, required: &[&str], optional: &[&str]) -> Result<(), RecordProblem> {
     if let Some(key) = required.iter().find(|k| !map.contains_key(**k)) {
         return Err(missing(key));
@@ -451,6 +459,26 @@ const ARTIFACTS: &str = "artifacts";
 /// decide reads (left out when the shelf could not tell one, so a record without it
 /// has the form, and the hash, a record made before had).
 const BOOK: &str = "book";
+
+/// The optional key of every kind of record that holds who ran the command, when it
+/// was not the actor (left out otherwise, so a record of one name has the form, and
+/// the hash, a record made before had).
+const RAN_BY: &str = "ran_by";
+/// The keys every kind of record may have beside its own, which says who ran the
+/// command ([`Attribution`]).
+const ATTRIBUTION_OPTIONAL: [&str; 1] = [RAN_BY];
+
+/// The optional keys of a kind of record: its own, and [`ATTRIBUTION_OPTIONAL`].
+fn with_attribution<'a>(own: &[&'a str]) -> Vec<&'a str> {
+    own.iter().chain(&ATTRIBUTION_OPTIONAL).copied().collect()
+}
+
+/// Adds who answers for a record, and who ran the command when it is another, to
+/// the entries of its canonical form: the one writer of an [`Attribution`].
+fn push_attribution(entries: &mut Vec<(&str, Canon)>, by: &Attribution) {
+    entries.push(("actor", Canon::str(by.actor().as_str())));
+    push_opaque(entries, RAN_BY, by.ran_by().map(Actor::as_str));
+}
 
 /// The optional `book` of a record: absent when the key is not there.
 fn book_of(map: &CanonMap) -> Result<Option<BookName>, RecordProblem> {
@@ -719,18 +747,7 @@ impl Record {
     pub fn to_canon(&self) -> Canon {
         match self {
             Self::Decision(d) => decision_canon(d),
-            Self::Revocation(r) => Canon::map([
-                ("v", Canon::Int(VERSION)),
-                ("kind", Canon::str(RecordKind::Revocation.as_str())),
-                ("id", Canon::str(r.id.to_string())),
-                (
-                    "targets",
-                    Canon::list(r.targets.iter().map(|t| Canon::str(t.to_string()))),
-                ),
-                ("actor", Canon::str(r.actor.as_str())),
-                ("at", Canon::Int(r.at.millis())),
-                ("reason", Canon::str(r.reason.as_str())),
-            ]),
+            Self::Revocation(r) => revocation_canon(r),
             Self::SameMeaning(s) => same_meaning_canon(s),
             Self::Moved(m) => moved_canon(m),
             Self::Exempt(e) => exempt_canon(e),
@@ -771,6 +788,22 @@ impl Record {
     }
 }
 
+fn revocation_canon(r: &Revocation) -> Canon {
+    let mut entries: Vec<(&str, Canon)> = vec![
+        ("v", Canon::Int(VERSION)),
+        ("kind", Canon::str(RecordKind::Revocation.as_str())),
+        ("id", Canon::str(r.id.to_string())),
+        (
+            "targets",
+            Canon::list(r.targets.iter().map(|t| Canon::str(t.to_string()))),
+        ),
+        ("at", Canon::Int(r.at.millis())),
+        ("reason", Canon::str(r.reason.as_str())),
+    ];
+    push_attribution(&mut entries, &r.by);
+    Canon::map(entries)
+}
+
 fn decision_canon(d: &Decision) -> Canon {
     let mut entries: Vec<(&str, Canon)> = vec![
         ("v", Canon::Int(VERSION)),
@@ -778,13 +811,13 @@ fn decision_canon(d: &Decision) -> Canon {
         ("verb", Canon::str(Verb::of(d.verb()).as_str())),
         ("id", Canon::str(d.id().to_string())),
         ("subject", Canon::str(d.subject().to_string())),
-        ("actor", Canon::str(d.actor().as_str())),
         ("at", Canon::Int(d.at().millis())),
         (
             "reason",
             d.reason().map_or(Canon::Null, |r| Canon::str(r.as_str())),
         ),
     ];
+    push_attribution(&mut entries, d.attribution());
     match d.verb() {
         DecisionVerb::Approve {
             seen,
@@ -826,23 +859,39 @@ fn decision_canon(d: &Decision) -> Canon {
     Canon::map(entries)
 }
 
-/// The fields a decision and a revocation have in the same way, read in this order.
+/// The fields every kind of record has in the same way, read in this order.
 struct Common<R> {
     id: JudgementId,
-    actor: Actor,
+    by: Attribution,
     at: JudgedAt,
     reason: R,
 }
 
-/// The `id`, `actor` and `at` of a record, and its `reason` as `reason` reads it (a
-/// decision may have none, a revocation must give one).
+/// The `id`, `actor`, `ran_by` and `at` of a record, and its `reason` as `reason`
+/// reads it (a decision may have none, a revocation must give one). The one reader of
+/// an [`Attribution`]: a `ran_by` that is the actor is refused, as the writer never
+/// writes it.
 fn read_common<R>(
     map: &CanonMap,
     reason: impl FnOnce(&CanonMap) -> Result<R, RecordProblem>,
 ) -> Result<Common<R>, RecordProblem> {
+    let id = judgement_id_of(text(map, "id")?, "id")?;
+    let actor = Actor::new(text(map, "actor")?).map_err(|e| bad("actor", e))?;
+    let by = match map.get(RAN_BY) {
+        None => Attribution::one(actor),
+        Some(Canon::Str(name)) => {
+            let ran_by = Actor::new(name).map_err(|e| bad(RAN_BY, e))?;
+            Attribution::ran_for(actor, ran_by).map_err(|SameName(name)| {
+                RecordProblem::RanByIsActor {
+                    name: name.to_string(),
+                }
+            })?
+        }
+        Some(_) => return Err(wrong(RAN_BY, "a text")),
+    };
     Ok(Common {
-        id: judgement_id_of(text(map, "id")?, "id")?,
-        actor: Actor::new(text(map, "actor")?).map_err(|e| bad("actor", e))?,
+        id,
+        by,
         at: JudgedAt::new(int(map, "at")?),
         reason: reason(map)?,
     })
@@ -871,7 +920,7 @@ fn decision_from(map: &CanonMap) -> Result<Decision, RecordProblem> {
             found: verb_name.to_owned(),
         });
     };
-    let (extra, optional): (&[&str], &[&str]) = match verb {
+    let (extra, own): (&[&str], &[&str]) = match verb {
         Verb::Approve => (
             &["seen", "frame", "expires"],
             &[ARTIFACTS, SEEN_ADDRESS, REVISION, BOOK],
@@ -879,14 +928,9 @@ fn decision_from(map: &CanonMap) -> Result<Decision, RecordProblem> {
         Verb::Deny | Verb::Deprecate | Verb::Retire => (&["seen"], &[BOOK]),
     };
     let keys: Vec<&str> = DECISION_KEYS.iter().chain(extra).copied().collect();
-    exact_with(map, &keys, optional)?;
+    exact_with(map, &keys, &with_attribution(own))?;
 
-    let Common {
-        id,
-        actor,
-        at,
-        reason,
-    } = read_common(map, optional_reason)?;
+    let Common { id, by, at, reason } = read_common(map, optional_reason)?;
     let subject = doc_id(map, "subject")?;
     let verb = match verb {
         Verb::Approve => {
@@ -925,18 +969,13 @@ fn decision_from(map: &CanonMap) -> Result<Decision, RecordProblem> {
             seen: seen_from(submap(map, "seen")?)?,
         },
     };
-    Decision::assemble(id, subject, verb, actor, at, reason, book_of(map)?)
+    Decision::assemble(id, subject, verb, by, at, reason, book_of(map)?)
         .map_err(RecordProblem::Invariant)
 }
 
 fn revocation_from(map: &CanonMap) -> Result<Revocation, RecordProblem> {
-    exact(map, &REVOCATION_KEYS)?;
-    let Common {
-        id,
-        actor,
-        at,
-        reason,
-    } = read_common(map, required_reason)?;
+    exact_with(map, &REVOCATION_KEYS, &ATTRIBUTION_OPTIONAL)?;
+    let Common { id, by, at, reason } = read_common(map, required_reason)?;
     let targets = items(map, "targets")?
         .iter()
         .map(|c| match c {
@@ -945,7 +984,7 @@ fn revocation_from(map: &CanonMap) -> Result<Revocation, RecordProblem> {
         })
         .collect::<Result<BTreeSet<_>, _>>()?;
     let targets = NonEmptySet::from_set(targets).map_err(|_| RecordProblem::EmptyTargets)?;
-    Ok(Revocation::new(id, targets, actor, at, reason))
+    Ok(Revocation::new(id, targets, by, at, reason))
 }
 
 fn same_meaning_canon(s: &SameMeaning) -> Canon {
@@ -975,10 +1014,10 @@ fn same_meaning_canon(s: &SameMeaning) -> Canon {
         ("subject", subject),
         ("from", from),
         ("to", to),
-        ("actor", Canon::str(s.actor.as_str())),
         ("at", Canon::Int(s.at.millis())),
         ("reason", Canon::str(s.reason.as_str())),
     ];
+    push_attribution(&mut entries, &s.by);
     push_opaque(&mut entries, BOOK, s.book.as_ref().map(BookName::as_str));
     Canon::map(entries)
 }
@@ -1005,14 +1044,9 @@ fn artifact_hash_of(raw: &str, key: &str) -> Result<ArtifactHash, RecordProblem>
 }
 
 fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
-    exact_with(map, &SAME_MEANING_KEYS, &[BOOK])?;
+    exact_with(map, &SAME_MEANING_KEYS, &with_attribution(&[BOOK]))?;
     let book = book_of(map)?;
-    let Common {
-        id,
-        actor,
-        at,
-        reason,
-    } = read_common(map, required_reason)?;
+    let Common { id, by, at, reason } = read_common(map, required_reason)?;
     let subject = submap(map, "subject")?;
     let kind = text(subject, "kind")?;
     let (of, form) = match SubjectKind::parse(kind) {
@@ -1051,65 +1085,57 @@ fn same_meaning_from(map: &CanonMap) -> Result<SameMeaning, RecordProblem> {
         }
     };
     let mut declared =
-        SameMeaning::new(id, of, actor, at, reason).map_err(RecordProblem::SameMeaning)?;
+        SameMeaning::new(id, of, by, at, reason).map_err(RecordProblem::SameMeaning)?;
     declared.form = form;
     declared.book = book;
     Ok(declared)
 }
 
 fn moved_canon(m: &Moved) -> Canon {
-    Canon::map([
+    let mut entries = vec![
         ("v", Canon::Int(VERSION)),
         ("kind", Canon::str(RecordKind::Moved.as_str())),
         ("id", Canon::str(m.id.to_string())),
         ("space", Canon::str(m.of.space().as_str())),
         ("from", Canon::str(m.of.from_name().as_str())),
         ("to", Canon::str(m.of.to_name().as_str())),
-        ("actor", Canon::str(m.actor.as_str())),
         ("at", Canon::Int(m.at.millis())),
         ("reason", Canon::str(m.reason.as_str())),
-    ])
+    ];
+    push_attribution(&mut entries, &m.by);
+    Canon::map(entries)
 }
 
 fn moved_from(map: &CanonMap) -> Result<Moved, RecordProblem> {
-    exact(map, &MOVED_KEYS)?;
-    let Common {
-        id,
-        actor,
-        at,
-        reason,
-    } = read_common(map, required_reason)?;
+    exact_with(map, &MOVED_KEYS, &ATTRIBUTION_OPTIONAL)?;
+    let Common { id, by, at, reason } = read_common(map, required_reason)?;
     let space = Space::new(text(map, "space")?).map_err(RecordProblem::BadSpace)?;
     let name_of =
         |key: &str| ArtifactName::new(text(map, key)?).map_err(RecordProblem::BadArtifactName);
     let of = MovedOf::new(space, name_of("from")?, name_of("to")?).map_err(RecordProblem::Moved)?;
-    Ok(Moved::new(id, of, actor, at, reason))
+    Ok(Moved::new(id, of, by, at, reason))
 }
 
 fn exempt_canon(e: &Exempt) -> Canon {
-    Canon::map([
+    let mut entries = vec![
         ("v", Canon::Int(VERSION)),
         ("kind", Canon::str(RecordKind::Exempt.as_str())),
         ("id", Canon::str(e.id.to_string())),
         ("subject", Canon::str(e.of.doc().to_string())),
         ("book", Canon::str(e.of.book().as_str())),
         ("link", Canon::str(e.of.link().as_str())),
-        ("actor", Canon::str(e.actor.as_str())),
         ("at", Canon::Int(e.at.millis())),
         ("reason", Canon::str(e.reason.as_str())),
-    ])
+    ];
+    push_attribution(&mut entries, &e.by);
+    Canon::map(entries)
 }
 
 fn exempt_from(map: &CanonMap) -> Result<Exempt, RecordProblem> {
-    exact(map, &EXEMPT_KEYS)?;
-    let Common {
-        id,
-        actor,
-        at,
-        reason,
-    } = read_common(map, required_reason)?;
+    exact_with(map, &EXEMPT_KEYS, &ATTRIBUTION_OPTIONAL)?;
+    let Common { id, by, at, reason } = read_common(map, required_reason)?;
     let book = BookName::new(text(map, "book")?).map_err(RecordProblem::BadName)?;
     let link = EntryName::new(text(map, "link")?).map_err(RecordProblem::BadName)?;
     let of = ExemptOf::new(doc_id(map, "subject")?, book, link);
-    Ok(Exempt::new(id, of, actor, at, reason))
+    Ok(Exempt::new(id, of, by, at, reason))
 }

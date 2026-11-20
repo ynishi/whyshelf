@@ -14,7 +14,7 @@ fn approve(reference: &str, until: Option<JudgedAt>) -> JudgeRequest {
             again: false,
         },
         reference: reference.parse::<Reference>().unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 

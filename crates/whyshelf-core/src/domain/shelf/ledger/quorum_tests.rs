@@ -9,7 +9,7 @@
 
 use std::slice::from_ref;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::shelf::artifact::ArtifactHash;
 use crate::domain::shelf::fixtures_tests::{
     admitted, approve_as, asking, docid, file_artifact, file_space, fr, fr_titled, jid, name,
@@ -58,7 +58,7 @@ fn same_at(judgement: u128, by: &str, (from, to): (DocHash, DocHash), at: i64) -
                 from: NonEmptySet::new(from, []),
                 to,
             },
-            Actor::new(by).unwrap(),
+            Attribution::one(Actor::new(by).unwrap()),
             JudgedAt::new(at),
             NonBlank::new("the same").unwrap(),
         )
@@ -304,7 +304,7 @@ fn moved_spec() -> (Shelf, Vec<Record>) {
     let moved = Record::Moved(Moved::new(
         jid(3001),
         MovedOf::new(file_space(), name("tests/a.rs"), name("tests/b.rs")).unwrap(),
-        Actor::new("ana").unwrap(),
+        Attribution::one(Actor::new("ana").unwrap()),
         JudgedAt::new(20),
         NonBlank::new("renamed").unwrap(),
     ));
@@ -327,7 +327,7 @@ fn artifact_same(judgement: u128, by: &str, at: &str) -> Record {
         SameMeaning::new(
             jid(judgement),
             artifact_edit(at),
-            Actor::new(by).unwrap(),
+            Attribution::one(Actor::new(by).unwrap()),
             JudgedAt::new(30),
             NonBlank::new("the same").unwrap(),
         )

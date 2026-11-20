@@ -12,7 +12,7 @@ use whyshelf_core::domain::shelf::snapshot::{
 };
 
 use super::super::textdiff;
-use super::words::state_word;
+use super::words::{ran_by, state_word};
 use super::{DocRef, HealthOut, Namer, RowOut};
 
 /// What an item of an approval is, and which document or file it names.
@@ -75,6 +75,8 @@ pub struct ApprovedOut {
     pub judgement: String,
     /// Who approved.
     pub actor: String,
+    /// Who ran the command, when not the actor; null when the actor ran it.
+    pub ran_by: Option<String>,
     /// When (unix milliseconds).
     pub at: i64,
     /// The commit the approval was made at, when the record keeps one (a hint).
@@ -196,6 +198,7 @@ pub fn approved(report: &ApprovedReport) -> ApprovedOut {
         row: namer.row(&report.row),
         judgement: report.snapshot.judgement().to_string(),
         actor: report.snapshot.actor().as_str().to_owned(),
+        ran_by: ran_by(report.snapshot.attribution()),
         at: report.snapshot.at().millis(),
         revision: report.snapshot.revision().map(ToString::to_string),
         items: report
