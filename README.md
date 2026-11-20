@@ -105,6 +105,8 @@ This fails in any of these cases:
 - an approval no longer holds;
 - an approval stands on a name that cannot be told now. For `rust-item`, build the docs first (`cargo doc --no-deps`).
 
+Run it on pull requests as well as on the main branch, on the result of merging the pull request into the main branch (what a GitHub workflow on `pull_request` checks out), so that a key two branches took in files of different names is reported before the merge rather than after it. Two runs of `new` that took one key write one file, and that merge conflicts: there is no result to check until the conflict is resolved. The result is made from the main branch of the time: once the main branch moves, run the check again, or require a branch to be up to date before it is merged, or merge through a merge queue (on GitHub, give the workflow the `merge_group` trigger), so that what lands was checked against what it lands on.
+
 ## whyshelf's own books
 
 The findings, requirements, decisions and verifications of whyshelf itself are books under `books/`, approved in `.whyshelf/ledger/`. `just check` builds the docs and runs the gate above on them. `whyshelf status` lists them.
@@ -118,6 +120,8 @@ just rust-doc
 ```
 
 Cargo prints the path of each page it generates. Start at the `whyshelf` crate page, which is the manual. The page of the `whyshelf` binary (the `whyshelf-cli` crate) is built as the second step.
+
+How several people or branches add documents to one shelf at once is the manual's section "Working from several branches".
 
 ## Crates
 

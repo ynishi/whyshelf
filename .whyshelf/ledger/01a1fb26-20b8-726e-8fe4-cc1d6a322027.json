@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a9b858a507ac0e79c822a05e27ef0b8533aef6ac",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:70c72d5af70d292c490bd060d7833ae846c683c387a72a41f5a6f2489a112583",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/parallel.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795214941487,
+  "expires": null,
+  "frame": [
+    {
+      "address": "105bfad63b94d45bbfa189e66d5d06af1393619e",
+      "hash": "sha256:31f8a04b2509ce5c6cf20cdf71ca67715ff534fb091d0508aac5bc414851d453",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "92"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fb17-df61-7261-b4ee-e0a9ecdf00fd"
+    }
+  ],
+  "id": "01a1fb26-20b8-726e-8fe4-cc1d6a322027",
+  "kind": "decision",
+  "reason": "Blind review (Opus, from #132 and the branch only), two rounds, should-fix 5 then 1, fixed: the manual's section, README In CI and V-114's test agree with the code (duplicates in build.rs flag both files, the hash leaves out key, place and links, a link names a key); just check exit 0",
+  "revision": "31bca838eccedd03960956c52a2d44a51d424abe",
+  "seen": "sha256:cbdde60bc900608d04f0d28529c81f9267148d8af2274f43a3582893c7076622",
+  "seen_address": "bfc9596a5274af6b6a61f7e714f5d3c586b484a8",
+  "subject": "01a1fb18-02ed-7353-a00e-3fc9446e9996",
+  "v": 1,
+  "verb": "approve"
+}

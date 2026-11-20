@@ -10,6 +10,13 @@ and this project adheres to
 
 ### Added
 
+- The manual has a section "Working from several branches" (#132): what to push
+  together, when to fetch and run `check`, which document to renumber when two
+  branches took one key and what renumbering rewrites, to link only keys the
+  main branch or the branch itself holds, and what to do after two branches approved one document.
+  The README's "In CI" says to run the gate on pull requests too, on the result
+  of their merge, and how to keep that result current once the main branch
+  moves.
 - A record keeps who ran a judgement apart from who answers for it (#156).
   `--ran-by <name>` on every `judge` verb, else the variable `WHYSHELF_RAN_BY`
   (a blank value is none), names who ran the command when it is not the actor,

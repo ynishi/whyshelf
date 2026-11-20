@@ -173,6 +173,8 @@ issue -> finding -> requirement / decision / verification (pending)
   `review` for a check made by reading, such as the blind review. A
   verification has one method: one that rests on both kinds of test is two
   verifications, one of each, each checking the decisions its own tests reach.
+- A key a task took that main took first is renumbered on the task's branch,
+  as the manual's section "Working from several branches" says.
 - Write a document with `whyshelf new <book> --title <text> <entry>=<value>`;
   give a list item that holds a comma with `<entry>+=<item>`. A document edited
   by hand is put back in the one form with `whyshelf fmt`, which changes
