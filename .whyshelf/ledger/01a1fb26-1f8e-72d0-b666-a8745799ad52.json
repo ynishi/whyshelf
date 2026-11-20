@@ -1,0 +1,46 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795214941487,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4667cf411f7a099d6d5183bf17dd76362a06a5af",
+      "hash": "sha256:5d2dcf1f103326f534fac37140df3c22ea99da20a86668a860f9e9e62aa9a2e1",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "39"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1fb17-d9d0-7550-ba37-441b6e4286ab"
+    }
+  ],
+  "id": "01a1fb26-1f8e-72d0-b666-a8745799ad52",
+  "kind": "decision",
+  "reason": "Blind review (Opus, from #132 and the branch only), two rounds, should-fix 5 then 1, fixed: the manual's section, README In CI and V-114's test agree with the code (duplicates in build.rs flag both files, the hash leaves out key, place and links, a link names a key); just check exit 0",
+  "revision": "31bca838eccedd03960956c52a2d44a51d424abe",
+  "seen": "sha256:31f8a04b2509ce5c6cf20cdf71ca67715ff534fb091d0508aac5bc414851d453",
+  "seen_address": "105bfad63b94d45bbfa189e66d5d06af1393619e",
+  "subject": "01a1fb17-df61-7261-b4ee-e0a9ecdf00fd",
+  "v": 1,
+  "verb": "approve"
+}

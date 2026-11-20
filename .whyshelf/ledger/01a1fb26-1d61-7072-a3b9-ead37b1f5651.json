@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795214941487,
+  "expires": null,
+  "frame": [],
+  "id": "01a1fb26-1d61-7072-a3b9-ead37b1f5651",
+  "kind": "decision",
+  "reason": "Blind review (Opus, from #132 and the branch only), two rounds, should-fix 5 then 1, fixed: the manual's section, README In CI and V-114's test agree with the code (duplicates in build.rs flag both files, the hash leaves out key, place and links, a link names a key); just check exit 0",
+  "revision": "31bca838eccedd03960956c52a2d44a51d424abe",
+  "seen": "sha256:bd51710693531c4f7b54bf465631ce1d1c16fc59d850178b0f9359eb19d7dbfc",
+  "seen_address": "6f48c802311d6dc8bffc6a1a50684cad809158d5",
+  "subject": "01a1fb17-951f-73ea-a30c-b3c715eee803",
+  "v": 1,
+  "verb": "approve"
+}

@@ -944,6 +944,40 @@
 //! name already declared the edit, and it awaits another name): one name counts once. The names
 //! are as declared as every name is: one person who writes two names is two names.
 //!
+//! ## Working from several branches
+//!
+//! A key is a short name a branch takes at once; the identity is what a document is.
+//! Two branches can take the same key, and nothing prevents it: it is found and
+//! repaired. whyshelf reads only the shelf it is run on, never another branch or an
+//! open pull request, so that `check` holds only what that shelf contains.
+//!
+//! - Push documents early and apart from the code they are about, so that they are
+//!   reviewed and merged quickly. The unit is the documents the books' `cover` rules
+//!   of strength `error` ask for together (in the `sample` template, a requirement,
+//!   a decision that serves it and a verification that checks it), pending or
+//!   approved: less than that fails `check`.
+//! - Before starting and before merging, fetch and merge the main branch and run
+//!   `check`. Run it in CI on pull requests too, on the result of their merge (the
+//!   README, "In CI").
+//! - When the main branch took a key the branch took too, renumber the branch's
+//!   document, the one the main branch does not hold yet. Which one to renumber is a
+//!   person's choice; this is the default. With two files of one key, `check` reports
+//!   both as invalid, the main branch's too, until one is renumbered. `new` names a
+//!   file after its key, so two runs of `new` that took one key wrote one file, and
+//!   Git stops the merge on it: put the main branch's side back in that file and the
+//!   branch's side in a file of its own, then renumber the branch's.
+//! - Renumbering a document gives it the key `new` would take now (`new`, under
+//!   Commands), puts its file where `new` would, and rewrites its `key:` and the
+//!   links that mean it. Its identity stays, and its approvals hold, for the reason
+//!   the document's hash gives under Books.
+//! - Link only keys the main branch or this branch holds. A link names a key, so a
+//!   link to a document of another branch means another document once that one is
+//!   renumbered: a pending document says nothing of it, and an approved one is stale
+//!   through a `depends` link that changed.
+//! - Two branches that approve one document each keep their record, and the later
+//!   approval stands. A document whose text conflict was resolved is stale unless it
+//!   is the text that approval saw: read it and approve it again.
+//!
 //! ## Commands
 //!
 //! ```text
