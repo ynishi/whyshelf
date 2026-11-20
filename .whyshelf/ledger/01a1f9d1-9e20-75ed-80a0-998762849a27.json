@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1d665ccc8ea16e08c0a0860ee7485e4b00bfa1b6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:460bedd9047ca2a102ab2f4ea3403b7561dfe8285785c57c28fe00b0639ef17d",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "714a20ed69b52f2cf2711b2511c7fd417097b2b4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8d42a1a1004c34669994523154ab6ebc11080972d78c70ad16477b47fa273068",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/repository_ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795192625000,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a9b2fd3c4ceba61ffda41404197124792b3fb23d",
+      "hash": "sha256:d1cbb29f21ce6cbdc780eea2f9611ecbb427d583290301d8825f4234a4b8981d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "91"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f9a4-bea7-7778-ac4a-a68538d58570"
+    }
+  ],
+  "id": "01a1f9d1-9e20-75ed-80a0-998762849a27",
+  "kind": "decision",
+  "reason": "Read against the code of #156: ran_by is kept beside the actor only when it differs, given by --ran-by or WHYSHELF_RAN_BY, never by Git or a file, and read by no judgement; checked by the tests named and a blind review on throwaway projects",
+  "revision": "7c2fb8b5015d66b07813c49e0c5a9826c7bd8f7b",
+  "seen": "sha256:280ce524cf5d5c387fa906abde39f373d84353bd7a09d1df63b55e9ba25e3249",
+  "seen_address": "bd24c3e9c969db134ddee860fe6047349fd84684",
+  "subject": "01a1f9a5-0a13-76af-a15b-b7d44cac4f3b",
+  "v": 1,
+  "verb": "approve"
+}

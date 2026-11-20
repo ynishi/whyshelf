@@ -70,7 +70,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::Attribution;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
@@ -81,9 +81,10 @@ use crate::domain::shelf::ledger::{
 use crate::domain::shelf::lookup::Reference;
 
 use super::ShelfApp;
+use super::attribution::{AttributionAsk, PortNames};
 use super::error::ShelfError;
 use super::load::{Loaded, load};
-use super::ports::{ActorSource, DocSource, IdSource, RevisionSource, ShelfPort, ShelfWrite, port};
+use super::ports::{DocSource, IdSource, RevisionSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
 use super::report::{Judged, JudgedAll, LeftOut, LeftOutWhy};
 use super::run_writes::RunWrites;
@@ -165,8 +166,8 @@ pub struct JudgeRequest {
     pub judgement: Judgement,
     /// The document.
     pub reference: Reference,
-    /// Who judges. `None` is the person the actor port names.
-    pub actor: Option<Actor>,
+    /// Who judges, and who runs the command.
+    pub by: AttributionAsk,
 }
 
 /// One judgement decided: a record to write, or an approval left out.
@@ -233,24 +234,17 @@ impl<P: ShelfWrite> ShelfApp<P> {
         for request in &requests {
             checked(&loaded, request)?;
         }
-        let mut port_actor: Option<Actor> = None;
-        let mut actors = Vec::with_capacity(requests.len());
+        // The port is asked at most once a run for each name, however the requests ask.
+        let mut asked = PortNames::default();
+        let mut attributions = Vec::with_capacity(requests.len());
         for request in &requests {
-            let actor = match (&request.actor, &port_actor) {
-                (Some(actor), _) | (None, Some(actor)) => actor.clone(),
-                (None, None) => {
-                    let actor = self.port_actor().await?;
-                    port_actor = Some(actor.clone());
-                    actor
-                }
-            };
-            actors.push(actor);
+            attributions.push(self.attribution_in(request.by.clone(), &mut asked).await?);
         }
         let mut judged = Vec::with_capacity(requests.len());
         let mut admitted = Vec::with_capacity(requests.len());
         let mut left_out = Vec::new();
-        for (request, actor) in requests.into_iter().zip(actors) {
-            match self.decide(&loaded, request, actor, Taking::Named).await? {
+        for (request, by) in requests.into_iter().zip(attributions) {
+            match self.decide(&loaded, request, by, Taking::Named).await? {
                 Decided::Judged(one) => {
                     admitted.push(loaded.take(one.record.clone())?);
                     judged.push(one);
@@ -281,24 +275,14 @@ impl<P: ShelfWrite> ShelfApp<P> {
         .await
     }
 
-    /// The actor the actor port names: asked once per run, before any judgement of it
-    /// is decided.
-    pub(super) async fn port_actor(&self) -> Result<Actor, ShelfError> {
-        self.ports
-            .actor_source()
-            .actor()
-            .await
-            .map_err(port(ShelfPort::Actor))
-    }
-
-    /// One judgement by `actor`, decided on what is loaded, of a document the run
-    /// took by `taking`; nothing is written. The request's own actor is not read:
-    /// the run asked for it first.
+    /// One judgement by `by`, decided on what is loaded, of a document the run
+    /// took by `taking`; nothing is written. The request's own names are not read:
+    /// the run asked for them first.
     pub(super) async fn decide(
         &self,
         loaded: &Loaded,
         request: JudgeRequest,
-        actor: Actor,
+        by: Attribution,
         taking: Taking,
     ) -> Result<Decided, ShelfError> {
         let subject = identity(loaded, &request.reference)?;
@@ -327,7 +311,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 let frame = frame_approve(&loaded.shelf, &loaded.ledger, subject)?;
                 let kind = loaded
                     .ledger
-                    .kind_of(&Asked::frame(&frame, &actor, until, now), Before::Now);
+                    .kind_of(&Asked::frame(&frame, by.actor(), until, now), Before::Now);
                 if let Some(leave) = kind.left_out(taking, again) {
                     return Ok(Decided::LeftOut(LeftOut {
                         doc: subject,
@@ -385,17 +369,15 @@ impl<P: ShelfWrite> ShelfApp<P> {
         let record = match plan {
             Plan::Approve(frame, until) => {
                 let frame = self.addressed(loaded, frame).await?;
-                Record::Decision(Decision::approve(id, frame, until, actor, now, reason)?)
+                Record::Decision(Decision::approve(id, frame, until, by, now, reason)?)
             }
-            Plan::Deny(frame) => Record::Decision(Decision::deny(id, frame, actor, now, reason)?),
+            Plan::Deny(frame) => Record::Decision(Decision::deny(id, frame, by, now, reason)?),
             Plan::Deprecate(frame) => {
-                Record::Decision(Decision::deprecate(id, frame, actor, now, reason)?)
+                Record::Decision(Decision::deprecate(id, frame, by, now, reason)?)
             }
-            Plan::Retire(frame) => {
-                Record::Decision(Decision::retire(id, frame, actor, now, reason)?)
-            }
+            Plan::Retire(frame) => Record::Decision(Decision::retire(id, frame, by, now, reason)?),
             Plan::Revoke(targets, reason) => {
-                Record::Revocation(Revocation::new(id, targets, actor, now, reason))
+                Record::Revocation(Revocation::new(id, targets, by, now, reason))
             }
         };
 

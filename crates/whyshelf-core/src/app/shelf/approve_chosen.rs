@@ -47,9 +47,9 @@
 //! passed over in silence. What neither rule takes is not touched: `--stale` alone
 //! touches no pending document, and `--pending` alone approves nothing again.
 //!
-//! The actor is asked once, after what the run is asked is checked and before any
-//! document is decided, even when nothing is taken: what an approval is depends on
-//! who makes it.
+//! The actor, and who ran the command, are asked once, after what the run is asked is
+//! checked and before any document is decided, even when nothing is taken: what an
+//! approval is depends on who makes it.
 //!
 //! The documents are taken upstream first ([`upstream_first`]), so every upstream of
 //! the set is decided, or left out, before what stands on it, and one pass is the
@@ -82,7 +82,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::shelf::ledger::{JudgedAt, Taking};
@@ -92,6 +91,7 @@ use crate::domain::shelf::order::{
 };
 
 use super::ShelfApp;
+use super::attribution::AttributionAsk;
 use super::error::ShelfError;
 use super::judge::{Decided, JudgeRequest, Judgement, expires_after_now};
 use super::load::load;
@@ -140,8 +140,8 @@ pub struct ApproveChosenRequest {
     pub choose: Choose,
     /// Why, for every approval made. Required.
     pub reason: NonBlank,
-    /// Who judges. `None` is the person the actor port names.
-    pub actor: Option<Actor>,
+    /// Who judges, and who runs the command.
+    pub by: AttributionAsk,
     /// When every approval made lapses, if they do: one expiry for the whole run. An
     /// expiry an approval had before is not carried over.
     pub until: Option<JudgedAt>,
@@ -153,8 +153,8 @@ pub struct ApproveChosenRequest {
 pub struct ApproveStaleRequest {
     /// Why, for every approval made. Required.
     pub reason: NonBlank,
-    /// Who judges. `None` is the person the actor port names.
-    pub actor: Option<Actor>,
+    /// Who judges, and who runs the command.
+    pub by: AttributionAsk,
     /// When every approval made lapses, if they do: one expiry for the whole run. An
     /// expiry an approval had before is not carried over.
     pub until: Option<JudgedAt>,
@@ -202,7 +202,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         self.approve_chosen(ApproveChosenRequest {
             choose: Choose::Stale,
             reason: request.reason,
-            actor: request.actor,
+            by: request.by,
             until: request.until,
         })
         .await
@@ -220,8 +220,9 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// ([`DecisionProblem::ExpiresNotAfter`](crate::domain::shelf::ledger::DecisionProblem::ExpiresNotAfter)).
     /// Then each reference of the
     /// [`PendingScope`] is resolved, and one that names nothing, or a document that is
-    /// not pending ([`ShelfError::NotPending`]), fails the request. Then the actor is
-    /// asked once (the request's, else the actor port's), and no name fails the run.
+    /// not pending ([`ShelfError::NotPending`]), fails the request. Then the names of
+    /// who judges are asked once (the request's, else the actor port's), and no actor
+    /// fails the run.
     /// Nothing to approve is an empty run, which writes nothing. No refusal of a
     /// frame fails the run (the document is left out); a port that fails, or a
     /// decision that breaks an invariant, does, and then nothing is written.
@@ -275,10 +276,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
                     }),
             );
         }
-        let actor = match request.actor {
-            Some(actor) => actor,
-            None => self.port_actor().await?,
-        };
+        let by = self.attribution(request.by).await?;
         let run: BTreeSet<DocId> = rules.keys().copied().collect();
         // upstream_first orders exactly the members of `run`, the keys of `rules`, so
         // each comes with its rule.
@@ -332,9 +330,12 @@ impl<P: ShelfWrite> ShelfApp<P> {
                             again: false,
                         },
                         reference: Reference::Id(id),
-                        actor: Some(actor.clone()),
+                        by: AttributionAsk {
+                            actor: Some(by.actor().clone()),
+                            ran_by: by.ran_by().cloned(),
+                        },
                     },
-                    actor.clone(),
+                    by.clone(),
                     Taking::Chosen,
                 )
                 .await;

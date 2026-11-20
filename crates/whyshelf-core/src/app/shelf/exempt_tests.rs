@@ -3,7 +3,7 @@
 //! writes nothing; a link added later makes the exemption unneeded; `withdraw` takes
 //! it back.
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::build::DocReading;
 use crate::domain::shelf::exemption::{CoverMiss, ExemptRefusal, Unneeded};
@@ -48,7 +48,7 @@ fn exempt_from(reference: &str, book: &str, link: &str) -> ExemptRequest {
         book: BookName::new(book).unwrap(),
         link: EntryName::new(link).unwrap(),
         reason: NonBlank::new("kept on purpose").unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -184,7 +184,7 @@ fn written(n: u128, doc: u128) -> Record {
             BookName::new("spec").unwrap(),
             EntryName::new("grounds").unwrap(),
         ),
-        Actor::new("bob").unwrap(),
+        Attribution::one(Actor::new("bob").unwrap()),
         JudgedAt::new(500),
         NonBlank::new("kept on a branch").unwrap(),
     ))
@@ -235,7 +235,7 @@ fn an_exemption_unneeded_at_once_is_refused_and_writes_nothing() {
     block_on(app.judge_all(vec![JudgeRequest {
         judgement: Judgement::Deny { reason: None },
         reference: "FR-2".parse().unwrap(),
-        actor: None,
+        by: Default::default(),
     }]))
     .unwrap();
     let appended = app.ports().append_count();
@@ -290,7 +290,7 @@ fn an_exemption_is_withdrawn_by_its_record_id() {
     block_on(app.withdraw(WithdrawRequest {
         records: ids,
         reason: NonBlank::new("to be grounded").unwrap(),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     let after = check(&app);

@@ -901,7 +901,8 @@
 //! ```
 //!
 //! There is no authentication: the rule is about the name a record writes, taken
-//! as declared (`--actor`, `WHYSHELF_ACTOR`, Git's `user.name`), as its time is. It
+//! as declared (`--actor`, `WHYSHELF_ACTOR`, Git's `user.name`), as its time is; who
+//! ran the command (`ran_by`) is read by no rule. It
 //! checks the ledger against what contributors agreed, and stops no one who writes
 //! another name. `judge` refuses a record whose name the rule does not admit, exit 1,
 //! and writes nothing; `judge approve --stale` and `--pending` leave such a document
@@ -989,13 +990,13 @@
 //!                             documents that pin it and where it may have moved (for files:
 //!                             the same content, then Git's renames); it declares nothing
 //!   diff <ref>                each item of that approval, as approved and now, with a line diff
-//!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>] [--again]
+//!   judge approve <ref>... [--until <time>] [--reason <text>] [--actor <name>] [--ran-by <name>] [--again]
 //!                             approve each; one whose standing approval a new one would
 //!                             repeat exactly is left out, unless --again
-//!   judge approve --stale --reason <text> [--until <time>] [--actor <name>]
+//!   judge approve --stale --reason <text> [--until <time>] [--actor <name>] [--ran-by <name>]
 //!                             approve again, in one run and upstream first, every approval
 //!                             that is expired or stale and would hold; the rest are left out
-//!   judge approve --pending [<ref>...] [--stale] --reason <text> [--until <time>] [--actor <name>]
+//!   judge approve --pending [<ref>...] [--stale] --reason <text> [--until <time>] [--actor <name>] [--ran-by <name>]
 //!                             approve, in one run and upstream first, every pending document,
 //!                             or those named and the pending ones they stand on, that would
 //!                             hold; the rest are left out (with --stale, both in one run)
@@ -1059,7 +1060,8 @@
 //!   <detail>; pass --again to approve it anyway`. Leaving out is no refusal: the
 //!   others of the run are judged and written as before, and a run that leaves out
 //!   every document writes nothing and exits 0. The actor (`--actor`, else
-//!   `WHYSHELF_ACTOR`, else Git's `user.name`) is asked once per run, after every
+//!   `WHYSHELF_ACTOR`, else Git's `user.name`), and who ran the command (`--ran-by`,
+//!   else `WHYSHELF_RAN_BY`) with it, is asked once per run, after every
 //!   reference resolves and every expiry is after now, and before any document is
 //!   decided, since what an approval is depends on who makes it: with no name the
 //!   run fails (exit 3), even one that would only leave out repeats, which exited 0
@@ -1143,7 +1145,7 @@
 //!   so a pending upstream is approved before the stale document on it, and a stale
 //!   upstream again before the pending document on it; each entry of `judged` and
 //!   of `left_out` says which rule took it, `"rule": "stale"` or `"pending"`.
-//!   `--until` and `--actor` reach every approval of the run, and the answer, the
+//!   `--until`, `--actor` and `--ran-by` reach every approval of the run, and the answer, the
 //!   exits and the time of the records are those of `--stale`; nothing pending is an
 //!   empty run.
 //! - An approval is refused when the document is not valid, a `depends` link cannot
@@ -1252,6 +1254,23 @@
 //!   command, `fmt --check` among them, only reads and creates nothing. Who judges
 //!   is `--actor`, else `WHYSHELF_ACTOR`, else Git's `user.name`; never a committed
 //!   file.
+//! - Who ran the command is told beside who judges, when it is another: a program (a
+//!   coding agent, a script) may run `judge` for a person who answers for it, and the
+//!   record then names both, the person as `actor` and the program as `ran_by`. Every
+//!   `judge` verb takes `--ran-by <name>`; without it `WHYSHELF_RAN_BY` names one (a
+//!   blank value is none), else no one: never Git's `user.name`, which names the person
+//!   whose checkout it is whoever runs the command in it, and never a committed file.
+//!   A name that is the actor's is one name: no `ran_by` is written, and the answers
+//!   say `null`. A record has the key only when there is one, so every other record
+//!   keeps the form, and the hash, it has always had; a whyshelf that does not know
+//!   the key refuses such a record, and its `check` lists it under
+//!   `unreadable_records`; its other commands act as if the record were not there,
+//!   so its `judge` can write over that decision with no warning. A stored record whose `ran_by` is its `actor` is refused
+//!   in the same way, never read as one name. It is told and nothing more: who may decide, who has read a
+//!   document, what an approval would repeat, what an actor declared and the runs
+//!   `stats` counts are all read from the actor alone. Like the actor, it is as
+//!   declared, and whyshelf cannot tell a variable a committed file set (a direnv
+//!   `.envrc`, say) from one a person set: such a file can name either.
 //! - None of these commands needs a Git repository. Git is used, when it is there,
 //!   to name and read back the content an approval saw and to keep `HEAD` as a hint
 //!   of the revision, and for `moves` to list the files of the work tree and the
@@ -1270,8 +1289,10 @@
 //! document is
 //! `{"id": ..., "key": ...}`; its `standing` is `pending`, `denied`, `deprecated`,
 //! `retired`, or for an approval `fresh`, `awaiting`, `expired`, `stale` or `broken`; its
-//! `decision` is the decision that stands (the record's `judgement` id, `actor`, `at`
-//! and `reason`, null when none was given), or null while it is pending; a cause has
+//! `decision` is the decision that stands (the record's `judgement` id, `actor`,
+//! `ran_by` (null when the actor ran the command), `at` and `reason`, null when none
+//! was given), or null while it is pending; `get --approved` shows `actor` and
+//! `ran_by` of the approval in the same way; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
 //! its `space`) and a `detail` sentence; every answer that reads the documents (`check` and
 //! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `stale`, `stats`, `moves`, `diff`) carries
@@ -1323,10 +1344,10 @@
 //! "book", "link", "severity"}`, the book and link expected to reach it and their
 //! strength (`warn` or `error`), and the `not_covered` notice carries the same
 //! `severity` and `book`. Its `exempt` lists each exemption that stands in the place
-//! of a gap as `{"doc", "book", "link", "severity", "exemption", "actor", "at",
-//! "reason"}` (`exemption` is the record id `judge withdraw` takes); its
+//! of a gap as `{"doc", "book", "link", "severity", "exemption", "actor", "ran_by",
+//! "at", "reason"}` (`exemption` is the record id `judge withdraw` takes); its
 //! `exemption_unneeded` each exemption no longer needed as `{"doc", "book", "link",
-//! "exemption", "actor", "at", "reason", "why", "detail"}`, with `why` one of
+//! "exemption", "actor", "ran_by", "at", "reason", "why", "detail"}`, with `why` one of
 //! `reached`, `not_declared`, `no_cover`, `other_book`, `not_valid` or
 //! `decided_against` and `detail` the sentence of the stderr line, after
 //! `warning: ` and before `; withdraw it`; and its `exemption_repeated` each

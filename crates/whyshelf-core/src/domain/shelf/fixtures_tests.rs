@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use uuid::Uuid;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::location::RelPath;
 
@@ -75,6 +75,11 @@ pub(super) fn file_artifact(text: &str) -> ArtifactKey {
 
 pub(super) fn actor() -> Actor {
     Actor::new("tester").unwrap()
+}
+
+/// The plain one-name attribution of [`actor`]: a record whose actor ran the command too.
+pub(super) fn by() -> Attribution {
+    Attribution::one(actor())
 }
 
 pub(super) fn text(s: &str) -> RawValue {
@@ -350,7 +355,7 @@ pub(super) fn approve(
             jid(judgement),
             frame,
             expires.map(JudgedAt::new),
-            actor(),
+            by(),
             JudgedAt::new(at),
             None,
         )
@@ -450,7 +455,7 @@ pub(super) fn approve_as(
             jid(judgement),
             frame,
             until.map(JudgedAt::new),
-            Actor::new(by).unwrap(),
+            Attribution::one(Actor::new(by).unwrap()),
             JudgedAt::new(at),
             None,
         )
@@ -460,21 +465,19 @@ pub(super) fn approve_as(
 
 pub(super) fn deny(shelf: &Shelf, subject: u128, judgement: u128, at: i64) -> Record {
     let frame = frame_present(shelf, docid(subject)).unwrap();
-    Record::Decision(
-        Decision::deny(jid(judgement), frame, actor(), JudgedAt::new(at), None).unwrap(),
-    )
+    Record::Decision(Decision::deny(jid(judgement), frame, by(), JudgedAt::new(at), None).unwrap())
 }
 
 pub(super) fn deprecate(shelf: &Shelf, subject: u128, judgement: u128, at: i64) -> Record {
     let frame = frame_present(shelf, docid(subject)).unwrap();
     Record::Decision(
-        Decision::deprecate(jid(judgement), frame, actor(), JudgedAt::new(at), None).unwrap(),
+        Decision::deprecate(jid(judgement), frame, by(), JudgedAt::new(at), None).unwrap(),
     )
 }
 
 pub(super) fn retire(shelf: &Shelf, subject: u128, judgement: u128, at: i64) -> Record {
     let frame = frame_retire(shelf, docid(subject));
     Record::Decision(
-        Decision::retire(jid(judgement), frame, actor(), JudgedAt::new(at), None).unwrap(),
+        Decision::retire(jid(judgement), frame, by(), JudgedAt::new(at), None).unwrap(),
     )
 }

@@ -3,7 +3,7 @@
 
 use crate::domain::shelf::doc::DocLabel;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, docid, fr, fr_titled, jid, ledger, reading, shelf,
+    approve, by, docid, fr, fr_titled, jid, ledger, reading, shelf,
 };
 use crate::domain::shelf::graph::{CycleSource, LabelledCycle};
 
@@ -124,7 +124,7 @@ fn a_retirement_frame_is_taken_of_any_document_and_sees_a_gone_one_as_gone() {
 
     // Each is a retirement that can be made.
     for frame in [gone, invalid, valid] {
-        assert!(Decision::retire(jid(1001), frame, actor(), JudgedAt::new(10), None).is_ok());
+        assert!(Decision::retire(jid(1001), frame, by(), JudgedAt::new(10), None).is_ok());
     }
 }
 
@@ -138,7 +138,7 @@ fn an_approval_must_expire_after_it_is_made() {
             jid(1001),
             frame,
             Some(JudgedAt::new(expires)),
-            actor(),
+            by(),
             at,
             None,
         )

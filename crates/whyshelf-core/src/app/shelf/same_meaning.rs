@@ -20,7 +20,6 @@
 //! `judge`, several declarations are decided in order on one reading, each on the
 //! ledger the ones before it left, and all are written or none.
 
-use crate::domain::actor::Actor;
 use crate::domain::hash::ContentHash;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonBlank;
@@ -32,9 +31,10 @@ use crate::domain::shelf::ledger::{
 use crate::domain::shelf::lookup::Reference;
 
 use super::ShelfApp;
+use super::attribution::AttributionAsk;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
-use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
+use super::ports::{IdSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
 
 /// What a declaration is to be about, as the person names it.
@@ -56,8 +56,8 @@ pub struct SameMeaningRequest {
     pub from: Option<ContentHash>,
     /// Why the meaning is kept. Required.
     pub reason: NonBlank,
-    /// Who declares it. `None` is the person the actor port names.
-    pub actor: Option<Actor>,
+    /// Who declares it, and who runs the command.
+    pub by: AttributionAsk,
 }
 
 /// What a declaration was about, as the answer names it.
@@ -137,17 +137,10 @@ impl<P: ShelfWrite> ShelfApp<P> {
             },
         };
 
-        let actor = match request.actor {
-            Some(actor) => actor,
-            None => self
-                .ports
-                .actor_source()
-                .actor()
-                .await
-                .map_err(port(ShelfPort::Actor))?,
-        };
-        // A name that declared an edge already adds nothing by declaring it again.
-        let of = loaded.ledger.not_declared_by(of, &actor)?;
+        let by = self.attribution(request.by).await?;
+        // A name that declared an edge already adds nothing by declaring it again; who
+        // ran the command is not a name that declared it.
+        let of = loaded.ledger.not_declared_by(of, by.actor())?;
         let id = self
             .ports
             .ids()
@@ -155,7 +148,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .await
             .map_err(port(ShelfPort::Ids))?;
         let record = Record::SameMeaning(
-            SameMeaning::new(id, of, actor, loaded.now, request.reason)?.in_book(&loaded.shelf),
+            SameMeaning::new(id, of, by, loaded.now, request.reason)?.in_book(&loaded.shelf),
         );
         Ok(Declared { record, about })
     }

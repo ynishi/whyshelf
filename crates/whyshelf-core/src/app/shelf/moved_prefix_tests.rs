@@ -3,7 +3,6 @@
 //! approvals stand again after one declaration, and that a name that cannot be moved
 //! is named, with nothing written.
 
-use crate::domain::actor::Actor;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::shelf::artifact::{NamePrefix, PrefixMove, Space};
 use crate::domain::shelf::freshness::{Cause, Freshness, Standing};
@@ -30,7 +29,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -42,7 +41,7 @@ fn request(from: &str, to: &str) -> PrefixMovedRequest {
     PrefixMovedRequest {
         of: PrefixMove::new(prefix(from), prefix(to)).unwrap(),
         reason: NonBlank::new("the directory was renamed").unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -102,7 +101,7 @@ fn a_renamed_module_is_declared_once_and_the_approval_stands_again() {
         app.ports().asked().len(),
     );
     let done = block_on(app.moved_prefix(PrefixMovedRequest {
-        actor: Some(Actor::new("bob").unwrap()),
+        by: super::fake_tests::named("bob"),
         ..request("src/m", "src/n")
     }))
     .unwrap();

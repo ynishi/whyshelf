@@ -25,7 +25,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: reference.parse::<Reference>().unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 

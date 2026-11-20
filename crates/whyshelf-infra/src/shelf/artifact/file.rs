@@ -1421,7 +1421,7 @@ mod tests {
         write(root, "notes/N-1.md", NOTE).await;
         write(root, "src/a.rs", CODE).await;
         let mut app = whyshelf_core::app::shelf::ShelfApp::new(
-            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None)
+            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None, None)
                 .unwrap(),
         );
         app.judge_all(vec![JudgeRequest {
@@ -1431,7 +1431,7 @@ mod tests {
                 again: false,
             },
             reference: "N-1".parse().unwrap(),
-            actor: None,
+            by: Default::default(),
         }])
         .await
         .unwrap();
@@ -1505,7 +1505,7 @@ mod tests {
             from: p("src/a.rs"),
             to: p("src/b.rs"),
             reason: NonBlank::new("renamed").unwrap(),
-            actor: None,
+            by: Default::default(),
         }])
         .await
         .unwrap();
@@ -1795,7 +1795,7 @@ mod tests {
             isolated_git(root, &["commit", "-q", "-m", "start"]).await;
         }
         let mut app = ShelfApp::new(
-            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None)
+            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None, None)
                 .unwrap(),
         );
         app.judge_all(vec![JudgeRequest {
@@ -1805,7 +1805,7 @@ mod tests {
                 again: false,
             },
             reference: "N-1".parse().unwrap(),
-            actor: None,
+            by: Default::default(),
         }])
         .await
         .unwrap();
@@ -1817,7 +1817,7 @@ mod tests {
     async fn suggested(root: &std::path::Path) -> (Vec<(String, FoundBy)>, Vec<NoteKind>) {
         use whyshelf_core::app::shelf::ShelfApp;
         let app = ShelfApp::new(
-            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None)
+            super::super::super::Project::new(root.to_path_buf(), Some("t".to_owned()), None, None)
                 .unwrap(),
         );
         let report = app.moves().await.unwrap();
@@ -2080,8 +2080,13 @@ mod tests {
         );
         // `get --approved` reads it back: the content Git stores.
         let app = ShelfApp::new(
-            super::super::super::Project::new(dir.path().to_path_buf(), Some("t".to_owned()), None)
-                .unwrap(),
+            super::super::super::Project::new(
+                dir.path().to_path_buf(),
+                Some("t".to_owned()),
+                None,
+                None,
+            )
+            .unwrap(),
         );
         let approved = app.show_approved(&"N-1".parse().unwrap()).await.unwrap();
         let item = approved

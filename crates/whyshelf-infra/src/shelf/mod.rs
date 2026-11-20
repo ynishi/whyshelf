@@ -142,7 +142,9 @@ pub struct Project {
 impl Project {
     /// The adapters of the project at `root`. `actor` is who judges when the
     /// environment says so (`WHYSHELF_ACTOR`, read by the caller); without it the
-    /// Git setting `user.name` of the project is asked. `cargo_target_dir` is the
+    /// Git setting `user.name` of the project is asked. `ran_by` is who ran the
+    /// command when the environment says so (`WHYSHELF_RAN_BY`, read by the caller);
+    /// without it no one is named. `cargo_target_dir` is the
     /// build directory the environment names (`CARGO_TARGET_DIR`, read by the
     /// caller), where the space `rust-item` looks for the docs first.
     ///
@@ -153,6 +155,7 @@ impl Project {
     pub fn new(
         root: impl Into<PathBuf>,
         actor: Option<String>,
+        ran_by: Option<String>,
         cargo_target_dir: Option<PathBuf>,
     ) -> Result<Self, DispatchError> {
         let root: PathBuf = root.into();
@@ -173,7 +176,7 @@ impl Project {
             ))?,
             files: FileSpace::new(root.clone()),
             git: Git::new(root.clone()),
-            actor: ProjectActor::new(root.clone(), actor),
+            actor: ProjectActor::new(root.clone(), actor, ran_by),
             root,
         })
     }

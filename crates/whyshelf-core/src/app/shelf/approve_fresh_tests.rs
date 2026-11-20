@@ -17,8 +17,8 @@ use crate::domain::shelf::schema::{CompareDecl, LinkTargetDecl};
 
 use super::fake_tests::{FakeShelf, block_on, docid, file_space, fr, sp, sp_tested};
 use super::{
-    ApproveStaleRequest, JudgeRequest, JudgedAll, Judgement, LeftOutWhy, SameMeaningAbout,
-    SameMeaningRequest, ShelfApp, ShelfError, ShelfPort,
+    ApproveStaleRequest, AttributionAsk, JudgeRequest, JudgedAll, Judgement, LeftOutWhy,
+    SameMeaningAbout, SameMeaningRequest, ShelfApp, ShelfError, ShelfPort,
 };
 
 fn r(text: &str) -> Reference {
@@ -33,7 +33,7 @@ fn approve_as(reference: &str, until: Option<i64>, again: bool) -> JudgeRequest 
             again,
         },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -45,7 +45,7 @@ fn verb(reference: &str, judgement: Judgement) -> JudgeRequest {
     JudgeRequest {
         judgement,
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -225,7 +225,7 @@ fn an_edit_declared_to_keep_the_meaning_is_approved_on_the_hash_now() {
     block_on(app.same_meaning(vec![SameMeaningRequest {
         about: SameMeaningAbout::Doc(r("FR-1")),
         reason: why("a typo fixed"),
-        actor: None,
+        by: Default::default(),
         from: None,
     }]))
     .unwrap();
@@ -247,7 +247,7 @@ fn an_upstream_edit_declared_to_keep_the_meaning_is_approved_on_the_hash_now() {
     block_on(app.same_meaning(vec![SameMeaningRequest {
         about: SameMeaningAbout::Doc(r("FR-1")),
         reason: why("a typo fixed"),
-        actor: None,
+        by: Default::default(),
         from: None,
     }]))
     .unwrap();
@@ -431,7 +431,7 @@ fn approve_stale_leaves_out_as_a_repeat_one_stale_only_through_an_upstream_it_ap
 
     let done = block_on(app.approve_stale(ApproveStaleRequest {
         reason: why("looked again"),
-        actor: None,
+        by: Default::default(),
         until: None,
     }))
     .unwrap();
@@ -471,7 +471,7 @@ fn approve_stale_does_not_hold_back_what_stands_on_a_repeat() {
 
     let done = block_on(app.approve_stale(ApproveStaleRequest {
         reason: why("looked again"),
-        actor: None,
+        by: Default::default(),
         until: None,
     }))
     .unwrap();
@@ -498,7 +498,7 @@ fn approve_stale_does_not_hold_back_what_stands_on_a_repeat() {
 /// An approval of `reference` by `actor`, with no expiry.
 fn approve_by(reference: &str, actor: &str) -> JudgeRequest {
     JudgeRequest {
-        actor: Some(Actor::new(actor).unwrap()),
+        by: super::fake_tests::named(actor),
         ..approve(reference)
     }
 }
@@ -506,7 +506,10 @@ fn approve_by(reference: &str, actor: &str) -> JudgeRequest {
 fn stale_by(actor: Option<&str>) -> ApproveStaleRequest {
     ApproveStaleRequest {
         reason: why("looked again"),
-        actor: actor.map(|a| Actor::new(a).unwrap()),
+        by: AttributionAsk {
+            actor: actor.map(|a| Actor::new(a).unwrap()),
+            ran_by: None,
+        },
         until: None,
     }
 }

@@ -289,6 +289,10 @@ pub struct Common {
     /// Who judges (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
     #[arg(long)]
     pub actor: Option<String>,
+    /// Who ran the command, when not the one who answers for it (default:
+    /// `WHYSHELF_RAN_BY`, else no one).
+    #[arg(long = "ran-by", value_name = "NAME")]
+    pub ran_by: Option<String>,
 }
 
 /// The verbs of a judgement.
@@ -296,9 +300,9 @@ pub struct Common {
 pub enum Verb {
     /// The document is sound as it is now.
     #[command(override_usage = "\
-whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <ACTOR>] [--until <UNTIL>]
-       whyshelf judge approve --stale --reason <REASON> [--actor <ACTOR>] [--until <UNTIL>]
-       whyshelf judge approve --pending [<REFERENCES>...] [--stale] --reason <REASON> [--actor <ACTOR>] [--until <UNTIL>]")]
+whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <ACTOR>] [--ran-by <NAME>] [--until <UNTIL>]
+       whyshelf judge approve --stale --reason <REASON> [--actor <ACTOR>] [--ran-by <NAME>] [--until <UNTIL>]
+       whyshelf judge approve --pending [<REFERENCES>...] [--stale] --reason <REASON> [--actor <ACTOR>] [--ran-by <NAME>] [--until <UNTIL>]")]
     Approve {
         /// The documents, as for every verb ([`Common::references`]); with
         /// --pending, the pending documents to approve with the pending ones they
@@ -331,6 +335,10 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         /// Who judges (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
         #[arg(long)]
         actor: Option<String>,
+        /// Who ran the command, when not the one who answers for it (default:
+        /// `WHYSHELF_RAN_BY`, else no one).
+        #[arg(long = "ran-by", value_name = "NAME")]
+        ran_by: Option<String>,
         /// When the approval lapses: an RFC 3339 time with an offset or `Z`
         /// (`2026-11-11T00:00:00+09:00`, `2026-11-11T00:00:00Z`), or a date
         /// `YYYY-MM-DD`, the start of that day in UTC. A time with no offset is
@@ -386,6 +394,10 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         /// Who declares it (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
         #[arg(long)]
         actor: Option<String>,
+        /// Who ran the command, when not the one who answers for it (default:
+        /// `WHYSHELF_RAN_BY`, else no one).
+        #[arg(long = "ran-by", value_name = "NAME")]
+        ran_by: Option<String>,
     },
     /// Declare that an artifact moved from one name to another (needs --reason), one
     /// move per run: an approval's pin of something at the old name, made at or
@@ -416,6 +428,10 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         /// Who declares it (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
         #[arg(long)]
         actor: Option<String>,
+        /// Who ran the command, when not the one who answers for it (default:
+        /// `WHYSHELF_RAN_BY`, else no one).
+        #[arg(long = "ran-by", value_name = "NAME")]
+        ran_by: Option<String>,
     },
     /// Declare that each document is not expected to be reached by one covering link
     /// (needs --reason): it is not listed in `check`'s `uncovered` for that link, and
@@ -436,6 +452,10 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         /// Who declares it (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
         #[arg(long)]
         actor: Option<String>,
+        /// Who ran the command, when not the one who answers for it (default:
+        /// `WHYSHELF_RAN_BY`, else no one).
+        #[arg(long = "ran-by", value_name = "NAME")]
+        ran_by: Option<String>,
     },
     /// Withdraw decisions or declarations by the `id` of their record (needs
     /// --reason), with one revocation.
@@ -449,6 +469,10 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         /// Who withdraws them (default: `WHYSHELF_ACTOR`, else Git's `user.name`).
         #[arg(long)]
         actor: Option<String>,
+        /// Who ran the command, when not the one who answers for it (default:
+        /// `WHYSHELF_RAN_BY`, else no one).
+        #[arg(long = "ran-by", value_name = "NAME")]
+        ran_by: Option<String>,
     },
 }
 

@@ -77,7 +77,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use thiserror::Error;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::words::{Join, Mark, listed};
@@ -149,7 +149,7 @@ pub enum MovedProblem {
 pub struct Moved {
     pub(super) id: JudgementId,
     pub(super) of: MovedOf,
-    pub(super) actor: Actor,
+    pub(super) by: Attribution,
     pub(super) at: JudgedAt,
     pub(super) reason: NonBlank,
 }
@@ -157,11 +157,17 @@ pub struct Moved {
 impl Moved {
     /// A declaration of a move ([`MovedOf::new`], or what [`frame_moved`] framed). The
     /// reason is required: a declaration is a claim a reader must be able to check.
-    pub fn new(id: JudgementId, of: MovedOf, actor: Actor, at: JudgedAt, reason: NonBlank) -> Self {
+    pub fn new(
+        id: JudgementId,
+        of: MovedOf,
+        by: Attribution,
+        at: JudgedAt,
+        reason: NonBlank,
+    ) -> Self {
         Self {
             id,
             of,
-            actor,
+            by,
             at,
             reason,
         }
@@ -179,7 +185,12 @@ impl Moved {
 
     /// Who declared it.
     pub fn actor(&self) -> &Actor {
-        &self.actor
+        self.by.actor()
+    }
+
+    /// Who declared it, and who ran the command when it was another.
+    pub fn attribution(&self) -> &Attribution {
+        &self.by
     }
 
     /// When.

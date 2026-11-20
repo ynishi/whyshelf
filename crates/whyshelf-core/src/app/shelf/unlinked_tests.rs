@@ -51,7 +51,7 @@ fn app() -> ShelfApp<FakeShelf> {
         block_on(app.judge(JudgeRequest {
             judgement: Judgement::Retire { reason: None },
             reference: key.parse::<Reference>().unwrap(),
-            actor: None,
+            by: Default::default(),
         }))
         .unwrap();
     }

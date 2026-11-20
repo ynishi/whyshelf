@@ -33,7 +33,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use thiserror::Error;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::hash::ContentHash;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec};
@@ -105,7 +105,7 @@ pub enum SameMeaningProblem {
 pub struct SameMeaning {
     pub(super) id: JudgementId,
     pub(super) of: SameMeaningOf,
-    pub(super) actor: Actor,
+    pub(super) by: Attribution,
     pub(super) at: JudgedAt,
     pub(super) reason: NonBlank,
     /// How the record names its artifact: kept from a record read back, so it is
@@ -121,7 +121,7 @@ impl SameMeaning {
     pub fn new(
         id: JudgementId,
         of: SameMeaningOf,
-        actor: Actor,
+        by: Attribution,
         at: JudgedAt,
         reason: NonBlank,
     ) -> Result<Self, SameMeaningProblem> {
@@ -135,7 +135,7 @@ impl SameMeaning {
         Ok(Self {
             id,
             of,
-            actor,
+            by,
             at,
             reason,
             form: NameForm::Spaced,
@@ -174,7 +174,12 @@ impl SameMeaning {
 
     /// Who declared it.
     pub fn actor(&self) -> &Actor {
-        &self.actor
+        self.by.actor()
+    }
+
+    /// Who declared it, and who ran the command when it was another.
+    pub fn attribution(&self) -> &Attribution {
+        &self.by
     }
 
     /// When.
@@ -512,7 +517,7 @@ impl Ledger {
 fn declared_by<H: Ord>(declared: Vec<(&SameMeaning, H, H)>, by: &Actor) -> BTreeSet<(H, H)> {
     declared
         .into_iter()
-        .filter(|(s, _, _)| s.actor == *by)
+        .filter(|(s, _, _)| s.actor() == by)
         .map(|(_, from, to)| ends(from, to))
         .collect()
 }
@@ -607,7 +612,7 @@ impl<H> Edge<'_, H> {
         let mut names = BTreeSet::new();
         self.declarations
             .iter()
-            .filter(|s| names.insert(&s.actor))
+            .filter(|s| names.insert(s.actor()))
             .map(|s| s.id)
             .collect()
     }
@@ -710,8 +715,8 @@ pub(super) fn short_from<H: Ord + Copy>(
                 edge.declarations[1..].iter().map(|s| s.id).collect(),
             );
             let names = NonEmptySet::new(
-                first.actor.clone(),
-                edge.declarations[1..].iter().map(|s| s.actor.clone()),
+                first.actor().clone(),
+                edge.declarations[1..].iter().map(|s| s.actor().clone()),
             );
             Some(ShortSameMeaning {
                 of: of(first, edge.ends.0, edge.ends.1),

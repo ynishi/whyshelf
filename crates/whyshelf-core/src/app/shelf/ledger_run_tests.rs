@@ -8,10 +8,12 @@
 // The error is the use case's own, read once by each test.
 #![allow(clippy::result_large_err)]
 
+use crate::domain::canon::Canon;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{NamePrefix, PrefixMove};
 use crate::domain::shelf::build::DocReading;
+use crate::domain::shelf::ledger::Record;
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::{BookName, CoverDecl, EntryName};
 
@@ -34,7 +36,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -110,7 +112,7 @@ fn exempt(reference: &str) -> ExemptRequest {
         book: BookName::new("spec").unwrap(),
         link: EntryName::new("grounds").unwrap(),
         reason: NonBlank::new("kept on purpose").unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -118,7 +120,7 @@ fn same(reference: &str) -> SameMeaningRequest {
     SameMeaningRequest {
         about: SameMeaningAbout::Doc(r(reference)),
         reason: NonBlank::new("a typo fixed").unwrap(),
-        actor: None,
+        by: Default::default(),
         from: None,
     }
 }
@@ -128,7 +130,7 @@ fn moved(from: &str, to: &str) -> MovedRequest {
         from: aname(from),
         to: aname(to),
         reason: NonBlank::new("the module was split").unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -147,7 +149,7 @@ fn cases() -> Vec<Case> {
                 block_on(app.approve_chosen(ApproveChosenRequest {
                     choose: Choose::Pending(PendingScope::All),
                     reason: reason("reviewed"),
-                    actor: None,
+                    by: Default::default(),
                     until: None,
                 }))
                 .map(drop)
@@ -199,7 +201,7 @@ fn cases() -> Vec<Case> {
                         )
                         .unwrap(),
                         reason: NonBlank::new("the directory was renamed").unwrap(),
-                        actor: None,
+                        by: Default::default(),
                     }),
                 )
                 .map(drop)
@@ -214,7 +216,7 @@ fn cases() -> Vec<Case> {
                 block_on(app.withdraw(WithdrawRequest {
                     records: vec![first],
                     reason: NonBlank::new("not the same after all").unwrap(),
-                    actor: None,
+                    by: Default::default(),
                 }))
                 .map(drop)
             },
@@ -340,6 +342,46 @@ fn records_all_written_and_not_put_on_disk_are_not_durable_and_are_named() {
         assert_eq!(error.class(), ErrorClass::Failed, "{}", case.name);
         // The records are not removed.
         assert_eq!(app.ports().record_count(), records + case.records);
+    }
+}
+
+/// Who ran the command, as a record's canonical form says it: the one `ran_by` key.
+fn ran_by_of(record: &Record) -> Option<String> {
+    match record.to_canon() {
+        Canon::Map(map) => match map.get("ran_by") {
+            None => None,
+            Some(Canon::Str(name)) => Some(name.clone()),
+            Some(other) => panic!("a ran_by that is no text: {other:?}"),
+        },
+        other => panic!("a record is a map: {other:?}"),
+    }
+}
+
+#[test]
+fn every_use_case_writes_who_ran_the_command_as_the_port_names_one() {
+    for case in cases() {
+        let mut app = (case.make)();
+        let records = app.ports().record_count();
+        // Only now: what the case wrote to be ready is not about it.
+        app.ports().run_by("bot");
+        (case.run)(&mut app).unwrap_or_else(|e| panic!("{}: {e:?}", case.name));
+        let written: Vec<Record> = app.ports().records().into_iter().skip(records).collect();
+        assert_eq!(written.len(), case.records, "{}", case.name);
+        for record in &written {
+            assert_eq!(ran_by_of(record).as_deref(), Some("bot"), "{}", case.name);
+        }
+    }
+}
+
+#[test]
+fn a_record_names_no_one_who_ran_it_when_the_port_names_none() {
+    for case in cases() {
+        let mut app = (case.make)();
+        let records = app.ports().record_count();
+        (case.run)(&mut app).unwrap_or_else(|e| panic!("{}: {e:?}", case.name));
+        for record in app.ports().records().iter().skip(records) {
+            assert_eq!(ran_by_of(record), None, "{}", case.name);
+        }
     }
 }
 

@@ -13,13 +13,13 @@ use std::collections::BTreeSet;
 
 use uuid::Uuid;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::id::{DocId, EntityId};
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::build::{DocReading, Shelf};
 use crate::domain::shelf::fixtures_tests::{
-    actor, docid, entries, file_artifact, file_space, fr_titled, jid, ledger, name, path, schema,
-    schema_of_lines, shelf_reading, sp_testing, text,
+    actor, by, docid, entries, file_artifact, file_space, fr_titled, jid, ledger, name, path,
+    schema, schema_of_lines, shelf_reading, sp_testing, text,
 };
 use crate::domain::shelf::ledger::{
     Admit, Decision, JudgedAt, Ledger, Moved, MovedOf, Record, Revocation, frame_approve,
@@ -75,7 +75,7 @@ fn approval(shelf: &Shelf, subject: DocId, judgement: u128, at: i64, by: &Actor)
             jid(judgement),
             frame,
             None,
-            by.clone(),
+            Attribution::one(by.clone()),
             JudgedAt::new(at),
             None,
         )
@@ -87,7 +87,7 @@ fn revocation(judgement: u128, target: u128, at: i64) -> Record {
     Record::Revocation(Revocation::new(
         jid(judgement),
         NonEmptySet::from_set(BTreeSet::from([jid(target)])).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(at),
         NonBlank::new("taken back").unwrap(),
     ))
@@ -439,7 +439,7 @@ fn a_pin_of_an_artifact_is_matched_across_a_declared_move_under_the_name_it_is_r
     let moved = Record::Moved(Moved::new(
         jid(103),
         MovedOf::new(file_space(), name("t.rs"), name("u.rs")).unwrap(),
-        tester.clone(),
+        Attribution::one(tester.clone()),
         JudgedAt::new(15),
         NonBlank::new("renamed").unwrap(),
     ));
@@ -480,7 +480,7 @@ fn two_pins_a_move_brings_to_one_name_are_each_compared() {
         Record::Moved(Moved::new(
             jid(103),
             MovedOf::new(file_space(), name("t.rs"), name("u.rs")).unwrap(),
-            tester.clone(),
+            Attribution::one(tester.clone()),
             JudgedAt::new(15),
             NonBlank::new("merged").unwrap(),
         )),

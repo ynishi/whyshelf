@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "85c651bf6fdc0a0a61a20df5548f6b6d808ed312",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3be794727f863e98cfec267c7348f2d5d20eb15b11408cce700a8b05b0cd8f17",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/quorum_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "319aa28360a9957fbcb3382f3ad1576bc8b6c9f3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0ad5282f20bee9c8d9787ac3879b66b28a8bf2b0c74305df6e203e22c31123b0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "23ecf66b14a6f0dba1347e4139e74c1b86541acd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:432cb134a061bf5403c7d7786ded334dec4ced04d9e1bbf2f52903cf8e82e9e0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1ce9e6265717b729e65a2e537a97181562efdae3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b31e7b694dce6472f3d19c43f5fe3d4a07c505114b01c0e0f59466bbf9ff3524",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795192743318,
+  "expires": null,
+  "frame": [
+    {
+      "address": "08650010061001c66ac2f9bce9ff37f9a6070852",
+      "hash": "sha256:2c67de778b4996f552d5a20817b9afa195f3b9ff5e59859b1c51e952d5e32a7e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "89"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74"
+    }
+  ],
+  "id": "01a1f9d4-3175-70d2-be8f-cebde7beecd6",
+  "kind": "decision",
+  "reason": "#156 edited the test files these name: call sites changed for the attribution a record now holds (by: AttributionAsk, Attribution), and some files gained the ran_by tests that V-112 names; the tests each of these verifications names still check what it states",
+  "revision": "7c2fb8b5015d66b07813c49e0c5a9826c7bd8f7b",
+  "seen": "sha256:e84a8d78cad80d0a5ed2fad088a608a0d3bfd025915f5ea5a3e31eca472ae61a",
+  "seen_address": "d10076cc78cb62b13a07353a6e47e5f87bd75a90",
+  "subject": "01a1f6a0-2c42-7c3f-a8d2-4e6b1f9c2d07",
+  "v": 1,
+  "verb": "approve"
+}

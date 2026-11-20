@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e7dcc6941c01c1f084b9cc3ff77f305f88cccae0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:211f392eae2a0bf88836138fc6cd90a5bcae69298e2daeea96f7cede60606bd9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/unlinked_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "eb7890f9bbb4de2506e76f3f4eb0fa7123d18157",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:372375674c7eccaac3614217466e4ff582643da7bb46435167156fdb47c14bcf",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "108928374f6dfadcb9c6da00a7e377f2960f22b4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:74d20d58cfba76afda7e3cf0d111010988219587f8be65e7aa9641bbfa854524",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795192743318,
+  "expires": null,
+  "frame": [
+    {
+      "address": "573dc5ef3fcd0ec4d1b9d4ef061d37ecf56d23b0",
+      "hash": "sha256:85f4c818721f36f774e93d3e9edf25469f44c19ccc46b4d76040798211c9c323",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "49"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c671-1d95-725c-bd74-8b605650d16c"
+    }
+  ],
+  "id": "01a1f9d3-bd57-743c-87cb-8433e83f25a8",
+  "kind": "decision",
+  "reason": "#156 edited the test files these name: call sites changed for the attribution a record now holds (by: AttributionAsk, Attribution), and some files gained the ran_by tests that V-112 names; the tests each of these verifications names still check what it states",
+  "revision": "7c2fb8b5015d66b07813c49e0c5a9826c7bd8f7b",
+  "seen": "sha256:55f96286ec885bbac4531ec6946fa0575870b64e56ee02208d0d4bf24eed13cf",
+  "seen_address": "f3800ec71b7325f4bf54c56848cd56ed6014d8e7",
+  "subject": "01a1c671-1e88-731a-a996-a78758d9570d",
+  "v": 1,
+  "verb": "approve"
+}

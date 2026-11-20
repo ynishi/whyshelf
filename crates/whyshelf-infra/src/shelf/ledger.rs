@@ -261,7 +261,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use uuid::Uuid;
-    use whyshelf_core::domain::actor::Actor;
+    use whyshelf_core::domain::actor::{Actor, Attribution};
     use whyshelf_core::domain::id::EntityId;
     use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet};
     use whyshelf_core::domain::shelf::ledger::{Admit, JudgedAt, JudgementId, Ledger, Revocation};
@@ -284,7 +284,7 @@ mod tests {
         Record::Revocation(Revocation::new(
             jid(2),
             NonEmptySet::from_set(BTreeSet::from([jid(1)])).unwrap(),
-            Actor::new("ana").unwrap(),
+            Attribution::one(Actor::new("ana").unwrap()),
             JudgedAt::new(1_700_000_000_000),
             NonBlank::new("wrong file").unwrap(),
         ))
@@ -414,7 +414,7 @@ mod tests {
         let record = Record::Revocation(Revocation::new(
             jid(4),
             NonEmptySet::from_set(BTreeSet::from([jid(1)])).unwrap(),
-            Actor::new("ana").unwrap(),
+            Attribution::one(Actor::new("ana").unwrap()),
             JudgedAt::new(1_700_000_000_000),
             NonBlank::new("caf\u{e9} a/b").unwrap(),
         ));
@@ -432,7 +432,7 @@ mod tests {
         let record = Record::Revocation(Revocation::new(
             jid(3),
             NonEmptySet::from_set(BTreeSet::from([jid(1)])).unwrap(),
-            Actor::new("ana").unwrap(),
+            Attribution::one(Actor::new("ana").unwrap()),
             JudgedAt::new(1_700_000_000_000),
             NonBlank::new("a \"quoted\" word, a \\ and a / ,\nsecond line\twith é and 日本")
                 .unwrap(),
@@ -549,7 +549,7 @@ mod tests {
         Record::Revocation(Revocation::new(
             jid(id),
             NonEmptySet::from_set(BTreeSet::from([jid(target)])).unwrap(),
-            Actor::new("ana").unwrap(),
+            Attribution::one(Actor::new("ana").unwrap()),
             JudgedAt::new(1_700_000_000_000),
             NonBlank::new("wrong file").unwrap(),
         ))
@@ -642,6 +642,16 @@ mod tests {
                 });
             let record = decode(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
             assert_eq!(record.to_canon(), stored, "{}", path.display());
+            // And the file this program would write for it is the file that is there,
+            // byte for byte.
+            let mut written = serde_json::to_string_pretty(&to_json(&record.to_canon())).unwrap();
+            written.push('\n');
+            assert_eq!(
+                written.as_bytes(),
+                bytes.as_slice(),
+                "{} would be written otherwise",
+                path.display()
+            );
             assert_eq!(
                 *record.hash().hash(),
                 ContentHash::of(HashKind::ShelfJudgement, &stored),

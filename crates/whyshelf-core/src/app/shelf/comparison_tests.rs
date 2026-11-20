@@ -29,7 +29,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -90,7 +90,7 @@ fn a_hash_pinned_under_another_comparison_is_a_request_error_and_writes_nothing(
     let err = block_on(app.same_meaning(vec![SameMeaningRequest {
         about: SameMeaningAbout::Artifact(aname("tests/a.rs")),
         reason: NonBlank::new("renamed").unwrap(),
-        actor: None,
+        by: Default::default(),
         from: Some(*pinned.hash()),
     }]))
     .unwrap_err();

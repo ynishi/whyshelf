@@ -4,10 +4,10 @@
 //! |---|---|---|
 //! | [`SystemClock`] | [`Clock`] | the system time, in unix milliseconds |
 //! | [`UuidV7Ids`] | [`IdSource`] | a UUID v7 (sorts by creation, the surrogate key of a record and the identity of a new document) |
-//! | [`ProjectActor`] | [`ActorSource`] | the name the caller took from `WHYSHELF_ACTOR`, else Git's `user.name` of the project (asked only when no actor was given on the command line) |
+//! | [`ProjectActor`] | [`ActorSource`] | the name the caller took from `WHYSHELF_ACTOR`, else Git's `user.name` of the project (asked only when no actor was given on the command line); and who runs the command, the name the caller took from `WHYSHELF_RAN_BY`, else no one |
 //!
-//! Who acts is never read from a file that is committed: a committed file would let
-//! anyone write a judgement in another person's name.
+//! Who acts, and who ran the command, is never read from a file that is committed: a
+//! committed file would let anyone write a judgement in another person's name.
 
 use std::path::PathBuf;
 
@@ -129,23 +129,44 @@ pub enum ActorError {
         #[source]
         source: ValueError,
     },
+    /// The name `WHYSHELF_RAN_BY` gives of who ran the command is refused by the
+    /// rule of a name.
+    #[error("WHYSHELF_RAN_BY `{name}` is not a name of who ran the command")]
+    RanByRefused {
+        /// The name.
+        name: String,
+        /// Why.
+        #[source]
+        source: ValueError,
+    },
 }
 
-/// Who acts in a project, when the command line names no one.
+/// Who acts in a project, and who runs the command, when the command line names no
+/// one.
 ///
-/// A name given on the command line (`--actor`) wins before this adapter is
-/// asked: the application takes it as the actor and never calls the port.
+/// A name given on the command line (`--actor`, `--ran-by`) wins before this adapter
+/// is asked: the application takes it and never calls the port for that name.
+///
+/// Who runs the command is only what the caller declares (it reads `WHYSHELF_RAN_BY`):
+/// Git's `user.name` names the person whose checkout it is, and a program that runs
+/// the command works under that person's Git, so it is no name of who ran it.
 #[derive(Debug, Clone)]
 pub struct ProjectActor {
     root: PathBuf,
     declared: Option<String>,
+    declared_ran_by: Option<String>,
 }
 
 impl ProjectActor {
     /// The actor of the project at `root`: `declared` when given (the caller reads
-    /// `WHYSHELF_ACTOR`), else Git's `user.name` there.
-    pub fn new(root: PathBuf, declared: Option<String>) -> Self {
-        Self { root, declared }
+    /// `WHYSHELF_ACTOR`), else Git's `user.name` there; and who runs the command:
+    /// `declared_ran_by` when given (the caller reads `WHYSHELF_RAN_BY`), else no one.
+    pub fn new(root: PathBuf, declared: Option<String>, declared_ran_by: Option<String>) -> Self {
+        Self {
+            root,
+            declared,
+            declared_ran_by,
+        }
     }
 }
 
@@ -163,6 +184,20 @@ impl ActorSource for ProjectActor {
             },
         };
         Actor::new(&name).map_err(|source| ActorError::Refused { name, source })
+    }
+
+    async fn ran_by(&self) -> Result<Option<Actor>, ActorError> {
+        match self.declared_ran_by.as_deref().map(str::trim) {
+            Some(name) if !name.is_empty() => {
+                Actor::new(name)
+                    .map(Some)
+                    .map_err(|source| ActorError::RanByRefused {
+                        name: name.to_owned(),
+                        source,
+                    })
+            }
+            _ => Ok(None),
+        }
     }
 }
 
@@ -218,7 +253,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_declared_actor_wins() {
-        let actor = ProjectActor::new(PathBuf::from("."), Some("ana".to_owned()));
+        let actor = ProjectActor::new(PathBuf::from("."), Some("ana".to_owned()), None);
         assert_eq!(actor.actor().await.unwrap().as_str(), "ana");
     }
 
@@ -241,7 +276,7 @@ mod tests {
     #[tokio::test]
     async fn the_declared_name_wins_over_gits_user_name() {
         let repo = repo_named("gina").await;
-        let actor = ProjectActor::new(repo.path().to_path_buf(), Some("ana".to_owned()));
+        let actor = ProjectActor::new(repo.path().to_path_buf(), Some("ana".to_owned()), None);
         assert_eq!(actor.actor().await.unwrap().as_str(), "ana");
     }
 
@@ -249,7 +284,7 @@ mod tests {
     async fn with_no_declared_name_gits_user_name_is_used() {
         let repo = repo_named("gina").await;
         for declared in [None, Some(String::new()), Some("  ".to_owned())] {
-            let actor = ProjectActor::new(repo.path().to_path_buf(), declared.clone());
+            let actor = ProjectActor::new(repo.path().to_path_buf(), declared.clone(), None);
             assert_eq!(
                 actor.actor().await.unwrap().as_str(),
                 "gina",
@@ -270,8 +305,58 @@ mod tests {
         tokio::fs::write(repo.path().join(".env"), "WHYSHELF_ACTOR=mallory\n")
             .await
             .unwrap();
-        let actor = ProjectActor::new(repo.path().to_path_buf(), None);
+        let actor = ProjectActor::new(repo.path().to_path_buf(), None, None);
         assert_eq!(actor.actor().await.unwrap().as_str(), "gina");
+        assert_eq!(actor.ran_by().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn a_declared_ran_by_is_the_name_as_declared() {
+        let actor = ProjectActor::new(PathBuf::from("."), None, Some("  bot ".to_owned()));
+        assert_eq!(actor.ran_by().await.unwrap().unwrap().as_str(), "bot");
+    }
+
+    #[tokio::test]
+    async fn no_ran_by_is_declared_by_a_blank_or_missing_name() {
+        for declared in [None, Some(String::new()), Some(" \t ".to_owned())] {
+            let actor = ProjectActor::new(PathBuf::from("."), None, declared.clone());
+            assert_eq!(actor.ran_by().await.unwrap(), None, "declared {declared:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_declared_ran_by_that_is_no_name_is_refused() {
+        let actor = ProjectActor::new(PathBuf::from("."), None, Some("a\nb".to_owned()));
+        assert!(matches!(
+            actor.ran_by().await,
+            Err(ActorError::RanByRefused { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn gits_user_name_is_not_who_ran_the_command() {
+        let repo = repo_named("gina").await;
+        let actor = ProjectActor::new(repo.path().to_path_buf(), None, None);
+        assert_eq!(actor.ran_by().await.unwrap(), None);
+        // Nor does a declared actor stand for it.
+        let actor = ProjectActor::new(repo.path().to_path_buf(), Some("ana".to_owned()), None);
+        assert_eq!(actor.ran_by().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn no_ran_by_is_read_from_the_projects_files() {
+        // Files a committed project could hold, each naming someone else as who ran it.
+        let repo = repo_named("gina").await;
+        let whyshelf = repo.path().join(".whyshelf");
+        tokio::fs::create_dir_all(&whyshelf).await.unwrap();
+        tokio::fs::write(whyshelf.join("ran_by"), "mallory\n")
+            .await
+            .unwrap();
+        tokio::fs::write(repo.path().join(".env"), "WHYSHELF_RAN_BY=mallory\n")
+            .await
+            .unwrap();
+        let actor = ProjectActor::new(repo.path().to_path_buf(), None, None);
+        assert_eq!(actor.ran_by().await.unwrap(), None);
     }
 
     #[tokio::test]

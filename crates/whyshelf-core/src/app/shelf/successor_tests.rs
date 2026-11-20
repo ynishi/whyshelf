@@ -43,7 +43,7 @@ fn deprecate(reference: &str, successor: Option<&str>) -> JudgeRequest {
             reason: None,
         },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -51,7 +51,7 @@ fn deny(reference: &str) -> JudgeRequest {
     JudgeRequest {
         judgement: Judgement::Deny { reason: None },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 

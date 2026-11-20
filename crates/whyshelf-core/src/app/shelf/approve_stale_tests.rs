@@ -2,7 +2,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::domain::actor::Actor;
 use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::freshness::{Cause, Degradation, Freshness, Severity, Standing};
 use crate::domain::shelf::ledger::{
@@ -27,7 +26,7 @@ fn approve(reference: &str, until: Option<i64>) -> JudgeRequest {
             again: false,
         },
         reference: reference.parse::<Reference>().unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -36,7 +35,7 @@ fn approve(reference: &str, until: Option<i64>) -> JudgeRequest {
 fn again(app: &mut ShelfApp<FakeShelf>) -> Result<ChosenApproved, ShelfError> {
     block_on(app.approve_stale(ApproveStaleRequest {
         reason: reason("reviewed"),
-        actor: None,
+        by: Default::default(),
         until: None,
     }))
 }
@@ -283,7 +282,7 @@ fn an_approval_broken_only_through_its_upstream_is_left_out() {
     block_on(app.judge(JudgeRequest {
         judgement: Judgement::Deny { reason: None },
         reference: "FR-6".parse().unwrap(),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     let before = app.ports().record_count();
@@ -319,7 +318,7 @@ fn a_stale_approval_newly_linking_a_broken_one_is_left_out_as_standing_on_it() {
     block_on(app.judge(JudgeRequest {
         judgement: Judgement::Deny { reason: None },
         reference: "FR-9".parse().unwrap(),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     app.ports().edit(fr(7, "alone", &["FR-8"]), 7);
@@ -366,7 +365,7 @@ fn a_stale_approval_on_a_deprecated_upstream_is_refused_and_the_rest_is_written(
             reason: None,
         },
         reference: "FR-1".parse().unwrap(),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     app.ports().edit(fr(4, "apart, edited", &[]), 4);
@@ -423,7 +422,7 @@ fn until_and_actor_reach_every_record_and_an_old_expiry_is_not_kept() {
     app.ports().edit(fr(1, "slower", &[]), 1);
     let done = block_on(app.approve_stale(ApproveStaleRequest {
         reason: reason("reviewed"),
-        actor: Some(Actor::new("bob").unwrap()),
+        by: super::fake_tests::named("bob"),
         until: Some(JudgedAt::new(9000)),
     }))
     .unwrap();
@@ -446,7 +445,7 @@ fn an_until_not_after_now_is_refused_even_when_nothing_is_stale() {
     let before = app.ports().record_count();
     let err = block_on(app.approve_stale(ApproveStaleRequest {
         reason: reason("reviewed"),
-        actor: None,
+        by: Default::default(),
         until: Some(JudgedAt::new(1000)),
     }))
     .unwrap_err();

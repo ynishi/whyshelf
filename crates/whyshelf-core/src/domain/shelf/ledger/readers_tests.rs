@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::shelf::fixtures_tests::{deny, docid, fr_titled, jid, ledger, shelf};
 
 use super::*;
@@ -26,7 +26,7 @@ fn approval(shelf: &Shelf, judgement: u128, by: &str, at: i64, until: Option<i64
             jid(judgement),
             frame,
             until.map(JudgedAt::new),
-            who(by),
+            Attribution::one(who(by)),
             JudgedAt::new(at),
             None,
         )
@@ -38,7 +38,7 @@ fn revoke(judgement: u128, target: u128, at: i64) -> Record {
     Record::Revocation(Revocation::new(
         jid(judgement),
         NonEmptySet::from_set(BTreeSet::from([jid(target)])).unwrap(),
-        who("ana"),
+        Attribution::one(who("ana")),
         JudgedAt::new(at),
         NonBlank::new("not read").unwrap(),
     ))
@@ -249,7 +249,7 @@ fn another_actor_asking_another_expiry_than_the_approval_that_stands_renews_it()
 fn while_a_move_reads_a_pin_of_the_approval_that_stands_a_new_one_renews_it() {
     use crate::domain::shelf::artifact::ArtifactHash;
     use crate::domain::shelf::fixtures_tests::{
-        actor, approve, file_space, fr, name, shelf_with, sp_testing,
+        actor, approve, by, file_space, fr, name, shelf_with, sp_testing,
     };
     // SP-2 pins tests/a.rs, approved at 10; a move to tests/b.rs is declared at 50.
     let s = shelf_with(
@@ -261,7 +261,7 @@ fn while_a_move_reads_a_pin_of_the_approval_that_stands_a_new_one_renews_it() {
     let moved = Record::Moved(Moved::new(
         jid(3),
         MovedOf::new(file_space(), name("tests/a.rs"), name("tests/b.rs")).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(50),
         NonBlank::new("renamed").unwrap(),
     ));

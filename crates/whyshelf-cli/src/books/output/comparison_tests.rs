@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use whyshelf_core::app::shelf::{DiffItem, Names};
-use whyshelf_core::domain::actor::Actor;
+use whyshelf_core::domain::actor::{Actor, Attribution};
 use whyshelf_core::domain::id::{DocId, EntityId};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::artifact::{
@@ -113,7 +113,7 @@ fn approved(shelf: &Shelf) -> Ledger {
                 JudgementId::new(eid(10)),
                 frame,
                 None,
-                Actor::new("tester").unwrap(),
+                Attribution::one(Actor::new("tester").unwrap()),
                 JudgedAt::new(10),
                 None,
             )

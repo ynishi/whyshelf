@@ -1,0 +1,150 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1a957a63000a22619f54e1a4504600d5c352ccfd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:64283251a265f709a0ddf7ec6ca57331f8fb5a67af5c4be2ace5f17d19c706ee",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/textdiff.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "933fc453db45badb9a2b0c77569d58141ad2dd8b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:65ad93c23c72a478cf491e9189d9b11862b7ad7a470a1ea706ea2d11ade1a662",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "49b692c071996155224ff92bfc11f8e4659a502f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a472c3deabec95e56feb781dcbbc22670447bcf55afd8ad6d38389b5efe2b74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "95677bb2080c45c487e5b39bb609e1526a7b1ce6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:cf47efdda456952dbe2868a17c02b64ae1c10518bd5742e3b17087e18c3d9198",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "15438da9bc8d0cd40806c9bd31b33b6a1dff226e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94764bb140e397d0abc15683e76086bc530de516a33c9563da7755fa0dc4a899",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6f170f82e149880ddcae6b83386966e04ca004fb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8387fa4d6c8c11a1caa327194158384d2abd617287c4f26c03768b758e22448a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/snapshot.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "07fe9db207fe7541df5aa9b12a7b48385892c735",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:922b6690df494f5ac670c16aa3be7813b9adb9e42110d7125c252fdbb40ccf90",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795192743318,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0e4e9a9d264df7a0338203288590f0b9a6b5ec3d",
+      "hash": "sha256:3588744daad16f3b85676117140282d1ffb704caa82584d6adc7e4235257ec77",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "6"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fa37-74bf-bbd8-1dbc0e039102"
+    },
+    {
+      "address": "7b851de2655aeec6ed6d7f8845f16438a7968ab8",
+      "hash": "sha256:f87f51b8bd50ed101be705f87f2cdc0cdb37eef87c02a532672312696010a175",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    }
+  ],
+  "id": "01a1f9d3-726a-734a-a79f-cff6a4e78943",
+  "kind": "decision",
+  "reason": "#156 edited the test files these name: call sites changed for the attribution a record now holds (by: AttributionAsk, Attribution), and some files gained the ran_by tests that V-112 names; the tests each of these verifications names still check what it states",
+  "revision": "7c2fb8b5015d66b07813c49e0c5a9826c7bd8f7b",
+  "seen": "sha256:c9c41d2cd8fa31c90edfb5b56551c06fef18b31c3728107cede9f14b7a4fce72",
+  "seen_address": "8a0f1e38df4c90cee5a456c21f394e8cd3d2738f",
+  "subject": "01a1c3d2-fcc8-780b-9a64-87c28c477246",
+  "v": 1,
+  "verb": "approve"
+}

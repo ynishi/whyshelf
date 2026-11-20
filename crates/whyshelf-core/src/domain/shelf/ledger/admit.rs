@@ -150,9 +150,9 @@ impl Admit {
                 d.actor(),
                 d.at(),
             ),
-            Record::Revocation(r) => (DecideKind::Revoke, &r.actor, r.at),
+            Record::Revocation(r) => (DecideKind::Revoke, r.by.actor(), r.at),
             Record::SameMeaning(s) => (DecideKind::Same, s.actor(), s.at()),
-            Record::Moved(m) => (DecideKind::Moved, &m.actor, m.at),
+            Record::Moved(m) => (DecideKind::Moved, m.actor(), m.at),
             Record::Exempt(e) => (DecideKind::Exempt, e.actor(), e.at()),
         };
         self.judged(record.id(), kind, actor, at, target, book)
@@ -171,7 +171,7 @@ impl Admit {
         self.judged(
             revocation.id,
             DecideKind::Revoke,
-            &revocation.actor,
+            revocation.by.actor(),
             revocation.at,
             Some(target),
             book,

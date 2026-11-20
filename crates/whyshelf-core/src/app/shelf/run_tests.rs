@@ -13,7 +13,7 @@ fn judge(judgement: Judgement, reference: &str) -> JudgeRequest {
     JudgeRequest {
         judgement,
         reference: reference.parse::<Reference>().unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -61,7 +61,7 @@ fn the_decisions_of_one_run_share_one_time() {
     app.ports().edit(fr(1, "slower", &[]), 1);
     block_on(app.approve_stale(ApproveStaleRequest {
         reason: reason("reviewed"),
-        actor: None,
+        by: Default::default(),
         until: None,
     }))
     .unwrap();

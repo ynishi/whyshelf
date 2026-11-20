@@ -1,7 +1,6 @@
 //! Tests of `same_meaning` and `withdraw` over the in-memory fake: what is written,
 //! in what order, and that a refusal writes nothing.
 
-use crate::domain::actor::Actor;
 use crate::domain::canon::Canon;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing};
@@ -30,7 +29,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: r(reference),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -38,7 +37,7 @@ fn same(reference: &str) -> SameMeaningRequest {
     SameMeaningRequest {
         about: SameMeaningAbout::Doc(r(reference)),
         reason: NonBlank::new("a typo fixed").unwrap(),
-        actor: None,
+        by: Default::default(),
         from: None,
     }
 }
@@ -47,7 +46,7 @@ fn withdraw(records: Vec<JudgementId>) -> WithdrawRequest {
     WithdrawRequest {
         records,
         reason: NonBlank::new("not the same after all").unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -219,7 +218,7 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     let declared = block_on(app.same_meaning(vec![SameMeaningRequest {
         about: SameMeaningAbout::Artifact(aname("tests/a.rs")),
         reason: NonBlank::new("formatting").unwrap(),
-        actor: Some(Actor::new("bob").unwrap()),
+        by: super::fake_tests::named("bob"),
         from: None,
     }]))
     .unwrap();
@@ -245,7 +244,7 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     let err = block_on(app.same_meaning(vec![SameMeaningRequest {
         about: SameMeaningAbout::Artifact(aname("tests/z.rs")),
         reason: NonBlank::new("formatting").unwrap(),
-        actor: None,
+        by: Default::default(),
         from: None,
     }]))
     .unwrap_err();
@@ -260,7 +259,7 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     let err = block_on(app.same_meaning(vec![SameMeaningRequest {
         about: SameMeaningAbout::Artifact(aname("tests/a.rs")),
         reason: NonBlank::new("formatting").unwrap(),
-        actor: None,
+        by: Default::default(),
         from: None,
     }]))
     .unwrap_err();

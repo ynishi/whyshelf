@@ -1,10 +1,17 @@
 //! The words more than one answer writes the same way: a plural, a problem of the
-//! declaration, a text as a word of a shell, what an artifact is now, and the word of
-//! a standing.
+//! declaration, a text as a word of a shell, what an artifact is now, the word of
+//! a standing, and who ran the command that made a record.
 
+use whyshelf_core::domain::actor::{Actor, Attribution};
 use whyshelf_core::domain::shelf::artifact::ArtifactState;
 use whyshelf_core::domain::shelf::freshness::{FreshnessLevel, StandingKind};
 use whyshelf_core::domain::shelf::schema::SchemaProblem;
+
+/// Who ran the command that made a record, as every answer that shows the record's
+/// actor shows it beside it: null when the actor ran it. The one place it is written.
+pub(super) fn ran_by(by: &Attribution) -> Option<String> {
+    by.ran_by().map(|name: &Actor| name.as_str().to_owned())
+}
 
 /// `s` unless the number is one.
 pub(super) fn plural(count: usize) -> &'static str {

@@ -2,7 +2,7 @@
 //! identity, the [`Revocation`] that withdraws others, and the [`RecordHash`] that
 //! tells two records of one identity apart. Their canonical form is `canon.rs`'s.
 
-use crate::domain::actor::Actor;
+use crate::domain::actor::Attribution;
 use crate::domain::hash::ContentHash;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 
@@ -14,7 +14,7 @@ use super::{Decision, Exempt, JudgedAt, JudgementId, Moved, SameMeaning};
 pub struct Revocation {
     pub(super) id: JudgementId,
     pub(super) targets: NonEmptySet<JudgementId>,
-    pub(super) actor: Actor,
+    pub(super) by: Attribution,
     pub(super) at: JudgedAt,
     pub(super) reason: NonBlank,
 }
@@ -24,14 +24,14 @@ impl Revocation {
     pub fn new(
         id: JudgementId,
         targets: NonEmptySet<JudgementId>,
-        actor: Actor,
+        by: Attribution,
         at: JudgedAt,
         reason: NonBlank,
     ) -> Self {
         Self {
             id,
             targets,
-            actor,
+            by,
             at,
             reason,
         }

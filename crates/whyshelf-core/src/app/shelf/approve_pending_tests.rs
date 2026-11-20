@@ -3,7 +3,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::build::{DocReading, RawValue};
@@ -26,7 +25,7 @@ fn approve(reference: &str) -> JudgeRequest {
             again: false,
         },
         reference: reference.parse::<Reference>().unwrap(),
-        actor: None,
+        by: Default::default(),
     }
 }
 
@@ -41,7 +40,7 @@ fn run(app: &mut ShelfApp<FakeShelf>, choose: Choose) -> Result<ChosenApproved, 
     block_on(app.approve_chosen(ApproveChosenRequest {
         choose,
         reason: reason("reviewed"),
-        actor: None,
+        by: Default::default(),
         until: None,
     }))
 }
@@ -95,7 +94,7 @@ fn every_pending_document_is_approved_upstream_first_a_withdrawn_one_too() {
             reason: reason("not yet"),
         },
         reference: "FR-1".parse().unwrap(),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     assert_eq!(pending_count(&app), 3);
@@ -195,7 +194,7 @@ fn a_broken_upstream_leaves_the_named_one_out_as_standing_on_it() {
     block_on(app.judge(JudgeRequest {
         judgement: Judgement::Deny { reason: None },
         reference: "FR-6".parse().unwrap(),
-        actor: None,
+        by: Default::default(),
     }))
     .unwrap();
     let before = app.ports().record_count();
@@ -298,7 +297,7 @@ fn until_and_actor_reach_every_record() {
     let done = block_on(app.approve_chosen(ApproveChosenRequest {
         choose: Choose::Pending(PendingScope::All),
         reason: reason("reviewed"),
-        actor: Some(Actor::new("bob").unwrap()),
+        by: super::fake_tests::named("bob"),
         until: Some(JudgedAt::new(9000)),
     }))
     .unwrap();

@@ -6,7 +6,7 @@
 //!                                                     valid, the link covering its
 //!                                                     book, no exemption standing),
 //!                                                     or an ExemptRefusal
-//!   + time, actor, new id, reason
+//!   + time, actor (and who ran the command), new id, reason
 //!                     ---- Exempt::new -------------> a Record
 //!   record            ---- Ledger::accept ---------> admitted by who may decide, or
 //!                                                     NotAdmitted
@@ -19,7 +19,6 @@
 //! reading, each on the ledger the ones before it left (so the same document named
 //! twice is refused the second time), and all are written or none (DEC-27).
 
-use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::doc::DocKey;
@@ -29,9 +28,10 @@ use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::{BookName, EntryName};
 
 use super::ShelfApp;
+use super::attribution::AttributionAsk;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
-use super::ports::{ActorSource, IdSource, ShelfPort, ShelfWrite, port};
+use super::ports::{IdSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
 
 /// A request to exempt a document from one covering link.
@@ -45,8 +45,8 @@ pub struct ExemptRequest {
     pub link: EntryName,
     /// Why the document is meant to stay unreached. Required.
     pub reason: NonBlank,
-    /// Who declares it. `None` is the person the actor port names.
-    pub actor: Option<Actor>,
+    /// Who declares it, and who runs the command.
+    pub by: AttributionAsk,
 }
 
 /// One exemption `judge exempt` wrote.
@@ -122,15 +122,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
             request.book,
             request.link,
         )?;
-        let actor = match request.actor {
-            Some(actor) => actor,
-            None => self
-                .ports
-                .actor_source()
-                .actor()
-                .await
-                .map_err(port(ShelfPort::Actor))?,
-        };
+        let by = self.attribution(request.by).await?;
         let record_id = self
             .ports
             .ids()
@@ -139,7 +131,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .map_err(port(ShelfPort::Ids))?;
         Ok(Exempted {
             key: loaded.shelf.doc(id).map(|doc| doc.key().clone()),
-            record: Exempt::new(record_id, of, actor, loaded.now, request.reason),
+            record: Exempt::new(record_id, of, by, loaded.now, request.reason),
         })
     }
 }

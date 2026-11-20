@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
-use crate::domain::shelf::fixtures_tests::{actor, docid, jid, ledger};
+use crate::domain::shelf::fixtures_tests::{actor, by, docid, jid, ledger};
 
 use super::*;
 
@@ -26,7 +26,7 @@ fn exempt_of(judgement: u128, doc: u128, at: i64) -> Exempt {
     Exempt::new(
         jid(judgement),
         ExemptOf::new(docid(doc), book("spec"), link("grounds")),
-        actor(),
+        by(),
         JudgedAt::new(at),
         because(),
     )
@@ -150,7 +150,7 @@ fn the_records_of_the_other_kinds_read_as_they_did() {
     let revocation = Record::Revocation(Revocation::new(
         jid(3001),
         NonEmptySet::from_set([jid(2001)].into()).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(60),
         NonBlank::new("a mistake").unwrap(),
     ));
@@ -177,7 +177,7 @@ fn an_exemption_is_withdrawn_by_its_identity_and_then_no_longer_stands() {
     withdrawn.push(Record::Revocation(Revocation::new(
         jid(3001),
         NonEmptySet::from_set([jid(2001)].into()).unwrap(),
-        actor(),
+        by(),
         JudgedAt::new(60),
         NonBlank::new("it is grounded after all").unwrap(),
     )));

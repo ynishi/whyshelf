@@ -7,8 +7,8 @@ use std::collections::BTreeSet;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::artifact::Comparison;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, decls, docid, file_artifact, fr, jid, ledger, lines, list, name, reading,
-    schema, schema_of_lines, shelf_reading, sp_testing, spaces, text,
+    approve, by, decls, docid, file_artifact, fr, jid, ledger, lines, list, name, reading, schema,
+    schema_of_lines, shelf_reading, sp_testing, spaces, text,
 };
 use crate::domain::shelf::ledger::{
     JudgedAt, Record, SameMeaning, SameMeaningOf, SameMeaningRefusal, SameMeaningTarget,
@@ -162,7 +162,7 @@ fn a_declaration_of_the_same_meaning_holds_under_lines() {
         SameMeaning::new(
             jid(2001),
             of,
-            actor(),
+            by(),
             JudgedAt::new(50),
             NonBlank::new("renamed").unwrap(),
         )
@@ -255,7 +255,7 @@ fn a_declaration_about_a_file_under_two_comparisons_keeps_each_link_s_edit() {
         SameMeaning::new(
             jid(2001),
             of,
-            actor(),
+            by(),
             JudgedAt::new(50),
             NonBlank::new("a comment").unwrap(),
         )
@@ -322,7 +322,7 @@ fn a_code_edit_under_two_comparisons_needs_the_earlier_hash_named_and_takes_its_
         SameMeaning::new(
             jid(2001),
             frame_of_a(&edited, &records, Some(Comparison::Bytes.fingerprint(CODE))).unwrap(),
-            actor(),
+            by(),
             JudgedAt::new(50),
             NonBlank::new("renamed").unwrap(),
         )
