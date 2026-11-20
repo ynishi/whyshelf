@@ -137,7 +137,10 @@ fn an_expired_approval_is_approved_again() {
     let row = block_on(app.get(&"FR-1".parse().unwrap())).unwrap().row;
     assert!(matches!(
         row.standing,
-        Standing::Approved(Freshness::Degraded(ref d)) if d.level() == Severity::Expired
+        Standing::Approved {
+            freshness: Freshness::Degraded(ref d),
+            ..
+        } if d.level() == Severity::Expired
     ));
 
     let done = again(&mut app).unwrap();

@@ -22,6 +22,7 @@
 //! | `Gone` | `FindMoves`, `DeclareMoved(k)` | no: it is broken, and `--stale` leaves a broken approval out |
 //! | `Expired` | `ApproveUntil(d)` | no: `--stale` approves with no expiry unless told one, so a lapsed approval is approved again with `ApproveUntil` |
 //! | `UpstreamPending` | `ApprovePending(d)`, the upstream | no: until the upstream is decided, approving again changes nothing and is left out as repeated |
+//! | `UpstreamAwaiting` | `ApproveAsAnother(d)`, the upstream, by a name that has not approved it | no: until another name approves the upstream, `--stale` holds back what stands on it (`stands_on`, `upstream_is` `awaiting`) |
 //! | `UpstreamSuperseded`, `LinkBehindMove` | none: write the link to the successor, or to the new name, and the change of the link is a stale approval of its own | no: as above, repeated |
 //! | `UpstreamRefused`, `NotValid`, `Cycle` | none: mend the file, or look at the decision again, until there is something to say | no: it is broken |
 //!
@@ -85,6 +86,10 @@ pub enum Settlement {
     DeclareMoved(ArtifactKey),
     /// Approve the pending upstream this origin is.
     ApprovePending(DocId),
+    /// Approve the upstream this origin is, by a name that has not approved it: its
+    /// approval awaits the approvals of other names, and the same name approving it
+    /// again would only repeat its reading, and write nothing.
+    ApproveAsAnother(DocId),
     /// Approve this document again, with a new expiry.
     ApproveUntil(DocId),
     /// Approve again every approval of the shelf that an edit made stale (`judge
@@ -139,6 +144,7 @@ fn shown_by_diff(event: OriginEvent) -> bool {
         OriginEvent::Gone
         | OriginEvent::Expired
         | OriginEvent::UpstreamPending
+        | OriginEvent::UpstreamAwaiting
         | OriginEvent::UpstreamSuperseded
         | OriginEvent::LinkBehindMove
         | OriginEvent::UpstreamRefused
@@ -182,6 +188,10 @@ fn of_event(event: OriginEvent, origin: &Origin, read: Option<DocId>) -> Vec<Set
             Origin::Doc(doc) => vec![Settlement::ApprovePending(*doc)],
             Origin::Artifact(_) | Origin::Declaration | Origin::Cycle(_) => Vec::new(),
         },
+        OriginEvent::UpstreamAwaiting => match origin {
+            Origin::Doc(doc) => vec![Settlement::ApproveAsAnother(*doc)],
+            Origin::Artifact(_) | Origin::Declaration | Origin::Cycle(_) => Vec::new(),
+        },
         OriginEvent::UpstreamSuperseded
         | OriginEvent::LinkBehindMove
         | OriginEvent::UpstreamRefused
@@ -202,6 +212,7 @@ fn approving_again_settles(event: OriginEvent) -> bool {
         OriginEvent::Gone
         | OriginEvent::Expired
         | OriginEvent::UpstreamPending
+        | OriginEvent::UpstreamAwaiting
         | OriginEvent::UpstreamSuperseded
         | OriginEvent::LinkBehindMove
         | OriginEvent::UpstreamRefused
@@ -218,8 +229,9 @@ fn rank(settlement: &Settlement) -> u8 {
         Settlement::FindMoves => 2,
         Settlement::DeclareMoved(_) => 3,
         Settlement::ApprovePending(_) => 4,
-        Settlement::ApproveUntil(_) => 5,
-        Settlement::ApproveStale => 6,
+        Settlement::ApproveAsAnother(_) => 5,
+        Settlement::ApproveUntil(_) => 6,
+        Settlement::ApproveStale => 7,
     }
 }
 
@@ -235,7 +247,7 @@ mod tests {
 
     /// Every event, written out so that a new one fails to compile here until the
     /// tests say what they expect of it.
-    fn every_event() -> [OriginEvent; 11] {
+    fn every_event() -> [OriginEvent; 12] {
         let all = [
             OriginEvent::Edited,
             OriginEvent::Arrived,
@@ -244,6 +256,7 @@ mod tests {
             OriginEvent::Relinked,
             OriginEvent::LinkBehindMove,
             OriginEvent::UpstreamPending,
+            OriginEvent::UpstreamAwaiting,
             OriginEvent::UpstreamSuperseded,
             OriginEvent::UpstreamRefused,
             OriginEvent::NotValid,
@@ -258,6 +271,7 @@ mod tests {
                 | OriginEvent::Relinked
                 | OriginEvent::LinkBehindMove
                 | OriginEvent::UpstreamPending
+                | OriginEvent::UpstreamAwaiting
                 | OriginEvent::UpstreamSuperseded
                 | OriginEvent::UpstreamRefused
                 | OriginEvent::NotValid
@@ -373,6 +387,14 @@ mod tests {
     }
 
     #[test]
+    fn an_upstream_that_awaits_is_approved_by_another_name_and_not_by_stale() {
+        assert_eq!(
+            of_doc(&[OriginEvent::UpstreamAwaiting]),
+            vec![Settlement::ApproveAsAnother(docid(1))]
+        );
+    }
+
+    #[test]
     fn what_has_no_command_has_no_settlement() {
         for event in [
             OriginEvent::UpstreamSuperseded,
@@ -411,6 +433,7 @@ mod tests {
         // a gone artifact have no `ApproveStale`, with the shelf taking them.
         for event in [
             OriginEvent::UpstreamPending,
+            OriginEvent::UpstreamAwaiting,
             OriginEvent::UpstreamSuperseded,
             OriginEvent::LinkBehindMove,
         ] {

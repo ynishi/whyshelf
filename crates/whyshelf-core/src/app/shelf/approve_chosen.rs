@@ -26,8 +26,9 @@
 //! stood on is gone, refused or cannot be trusted (an artifact pinned there that is
 //! gone, an upstream that is not valid, a cycle). Nor is one whose frame the model
 //! refuses now, nor one a `Depends` link of which names a document that is broken,
-//! pending or stale and not in the run (approve it first), or itself left out for any
-//! reason but a repeat or a second reading ([`held_back`]). Nor is one stale only
+//! pending or stale and not in the run (approve it first), approved and awaiting the
+//! approvals of other names (another name is to approve it first), or itself left out
+//! for any reason but a repeat or a second reading ([`held_back`]). Nor is one stale only
 //! through its upstream's upstream, whose hash is new, when the run approved its
 //! upstream again: what it pinned is unchanged, so an approval now would repeat it
 //! ([`ApprovalKind::Repeat`]), and it holds again without one. Nor is an approval of

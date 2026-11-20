@@ -5,7 +5,9 @@
 //!   target            ---- frame_same_meaning ------> what to declare (every earlier
 //!                                                     hash an approval pinned), or a
 //!                                                     SameMeaningRefusal
-//!   + time, actor, new id, reason
+//!   + actor           ---- Ledger::not_declared_by -> without what the actor declared
+//!                                                     already, or NothingToDeclare
+//!   + time, new id, reason
 //!                     ---- SameMeaning::new,
 //!                          in_book ----------------> a Record, naming its document's book
 //!   record            ---- Ledger::accept ---------> admitted by who may decide, or
@@ -91,7 +93,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// Refused (nothing written): a document that is not valid, a name of an
     /// artifact no document links, linked in two spaces, with nothing behind it now
     /// or that cannot be told now, and an edit no approval that stands pinned another
-    /// hash of (or one already declared).
+    /// hash of (or one already declared: joined by the ledger, or declared by the
+    /// same name before).
     pub async fn same_meaning(
         &mut self,
         requests: Vec<SameMeaningRequest>,
@@ -143,6 +146,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 .await
                 .map_err(port(ShelfPort::Actor))?,
         };
+        // A name that declared an edge already adds nothing by declaring it again.
+        let of = loaded.ledger.not_declared_by(of, &actor)?;
         let id = self
             .ports
             .ids()

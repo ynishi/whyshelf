@@ -10,7 +10,7 @@ use whyshelf_core::domain::shelf::artifact::Artifact;
 use whyshelf_core::domain::shelf::build::DocPresence;
 use whyshelf_core::domain::shelf::doc::LinkState;
 use whyshelf_core::domain::shelf::freshness::{Freshness, RootCause, Standing, Successors};
-use whyshelf_core::domain::shelf::ledger::DeclaredStatus;
+use whyshelf_core::domain::shelf::ledger::{DeclaredStatus, Quorum};
 
 use super::words::state_word;
 use super::{CauseOut, DocRef, Namer, NoticeOut, standing};
@@ -70,14 +70,42 @@ pub struct RowOut {
     /// When the approval lapses (unix milliseconds), if it does.
     pub expires: Option<i64>,
     /// Where it stands now: `pending`, `denied`, `deprecated`, `retired`, or for an
-    /// approval `fresh`, `expired`, `stale`, `broken`.
+    /// approval `fresh`, `awaiting` (fresh, and awaiting the approvals of other
+    /// names), `expired`, `stale`, `broken`.
     pub standing: &'static str,
+    /// For an approval whose content fewer different names read than its rule of who
+    /// may decide asks for, at any freshness, who read it and how many are asked for;
+    /// left out otherwise, as it always is where no rule asks for more than one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub awaiting: Option<AwaitingOut>,
     /// For a deprecated document, what replaces it.
     pub successors: Vec<DocRef>,
     /// Why an approval does not hold.
     pub causes: Vec<CauseOut>,
     /// What is worth knowing that changes no freshness.
     pub notices: Vec<NoticeOut>,
+}
+
+/// Who read the content of an approval that awaits the approvals of other names.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct AwaitingOut {
+    /// The names whose reading counts now, each once.
+    pub readers: Vec<String>,
+    /// How many different names the rule asks for.
+    pub need: usize,
+}
+
+impl AwaitingOut {
+    /// The quorum of `standing` when it is short; none otherwise.
+    pub(super) fn of(standing: &Standing) -> Option<Self> {
+        match standing.quorum()? {
+            Quorum::Met => None,
+            Quorum::Short { readers, need } => Some(Self {
+                readers: readers.iter().map(|a| a.as_str().to_owned()).collect(),
+                need: need.count(),
+            }),
+        }
+    }
 }
 
 /// A file that is no valid document.
@@ -171,7 +199,10 @@ impl Namer<'_> {
         let (declared, expires) = declared(&row.declared);
         let (successors, causes) = match &row.standing {
             Standing::Deprecated { successors } => (self.successors(successors), Vec::new()),
-            Standing::Approved(Freshness::Degraded(degradation)) => (
+            Standing::Approved {
+                freshness: Freshness::Degraded(degradation),
+                ..
+            } => (
                 Vec::new(),
                 degradation.causes().iter().map(|c| self.cause(c)).collect(),
             ),
@@ -189,6 +220,7 @@ impl Namer<'_> {
             }),
             expires,
             standing: standing(row.standing.kind()),
+            awaiting: AwaitingOut::of(&row.standing),
             successors,
             causes,
             notices: row.notices.iter().map(|n| self.notice(n)).collect(),

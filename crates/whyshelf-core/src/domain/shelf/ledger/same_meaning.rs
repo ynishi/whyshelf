@@ -26,6 +26,8 @@
 //!
 //! [`Ledger::doc_same_meaning`]: super::Ledger::doc_same_meaning
 //! [`Ledger::artifact_same_meaning`]: super::Ledger::artifact_same_meaning
+//!
+//! How many different names an edit needs before it is joined is on [`SameMeaning`].
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -42,8 +44,10 @@ use super::super::artifact::{
 };
 use super::super::build::{FailureTag, Shelf};
 use super::super::doc::DocHash;
-use super::super::schema::BookName;
-use super::{DeclaredStatus, JudgedAt, JudgementId, Ledger, NameForm, PinnedArtifact, ReadPin};
+use super::super::schema::{Approvals, BookName};
+use super::{
+    DeclaredStatus, JudgedAt, JudgementId, Ledger, NameForm, PinnedArtifact, ReadPin, way_names,
+};
 
 /// What a declaration is about, and the hashes it says mean the same.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,6 +84,23 @@ pub enum SameMeaningProblem {
 }
 
 /// A person's declaration that an edit keeps the meaning.
+///
+/// # How many names
+///
+/// Each declaration joins each of its earlier hashes to its hash then: an *edge*, a
+/// pair of hashes, either way round. An edge is used for a way only once, for some
+/// declaration of it, the different names that declared the edge are at least as
+/// many as that declaration needs (the `approvals` of the rule that reads it; one
+/// when no rule does): so where a book asks for two names to approve, one name cannot
+/// keep an approval of it fresh by declaring the edit alone, and a declaration added
+/// never takes back an edge that counted (one made after a rule's `since` beside one
+/// made before it). The names are counted per edge, never per way: a way is made of
+/// edges, and counting it whole would let one name join two hashes by declaring a way
+/// of its own around the edge it was short on. An edge with fewer names joins
+/// nothing; one a pin of an approval that stands meets is told by
+/// [`Ledger::same_meaning_short`](super::Ledger::same_meaning_short) (in `check`,
+/// `same_meaning_short`) until more names declare it. A ledger no rule reads counts
+/// nothing: every declaration needs one name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SameMeaning {
     pub(super) id: JudgementId,
@@ -221,6 +242,14 @@ pub enum SameMeaningRefusal {
     /// same as it.
     #[error("no approval that stands pinned another hash of it: there is nothing to declare")]
     NothingToDeclare,
+    /// The one who declares it declared the same edit already, in a declaration not
+    /// revoked ([`Ledger::not_declared_by`]): one name counts once, so it would add
+    /// nothing, and the edit awaits the declaration of another name.
+    #[error("`{actor}` already declared this edit: it awaits the declaration of another name")]
+    AlreadyDeclaredBy {
+        /// The one who declares it.
+        actor: Actor,
+    },
     /// The hash named as the earlier one is no hash an approval that stands pinned
     /// for it (or it is the hash now, or already means the same as it).
     #[error("no approval that stands pinned {hash} for it, apart from the hash now")]
@@ -256,7 +285,10 @@ pub enum SameMeaningRefusal {
 /// means the same. Otherwise the declaration is refused as
 /// [`SameMeaningRefusal::SeveralEarlier`]. So an older downstream pin, from before a
 /// rewrite the document was approved again after, stays a change. A second
-/// declaration of the same edit is refused as [`SameMeaningRefusal::NothingToDeclare`].
+/// declaration of the same edit is refused: here as
+/// [`SameMeaningRefusal::NothingToDeclare`] when the ledger joins the edit already, and
+/// by [`Ledger::not_declared_by`] as [`SameMeaningRefusal::AlreadyDeclaredBy`] when the
+/// one who declares it declared it before, which adds no name.
 ///
 /// For an artifact, hashes are taken under one [`Comparison`] at a time, since two links
 /// may compare it differently: the one whose pins hold the hash named, else the only
@@ -437,6 +469,76 @@ pub fn frame_same_meaning(
     }
 }
 
+impl Ledger {
+    /// The edit `of`, as [`frame_same_meaning`] framed it, without the earlier
+    /// hashes that `by` already declared to mean what its hash means, in a
+    /// declaration not revoked among those counting reads for it: of the document, or
+    /// of every name of the artifact's way through its moves, as for each pin read as
+    /// that artifact ([`Ledger::pin_same_meaning`]). That edge has `by`'s name
+    /// already, and one name counts once, so a second declaration of it adds nothing
+    /// (as an approval that repeats its actor's own reading writes nothing). Where the
+    /// ledger joins the edit already, the frame refuses it first; this is for one
+    /// whose edge does not count yet and awaits another name. With no earlier hash
+    /// left, it is refused as [`SameMeaningRefusal::AlreadyDeclaredBy`].
+    pub fn not_declared_by(
+        &self,
+        of: SameMeaningOf,
+        by: &Actor,
+    ) -> Result<SameMeaningOf, SameMeaningRefusal> {
+        match of {
+            SameMeaningOf::Doc { id, from, to } => {
+                let declared = declared_by(self.doc_declared(id), by);
+                let from = unrepeated(from, to, &declared, by)?;
+                Ok(SameMeaningOf::Doc { id, from, to })
+            }
+            SameMeaningOf::Artifact { artifact, from, to } => {
+                let pins: Vec<ReadPin> = self
+                    .subjects
+                    .iter()
+                    .flat_map(|subject| self.read_pins(*subject))
+                    .filter(|pin| *pin.read_as() == artifact)
+                    .collect();
+                let mut names = BTreeSet::from([&artifact]);
+                names.extend(pins.iter().flat_map(way_names));
+                let declared = declared_by(self.artifact_declared(|of| names.contains(of)), by);
+                let from = unrepeated(from, to, &declared, by)?;
+                Ok(SameMeaningOf::Artifact { artifact, from, to })
+            }
+        }
+    }
+}
+
+/// The edges of `declared` that `by` declared.
+fn declared_by<H: Ord>(declared: Vec<(&SameMeaning, H, H)>, by: &Actor) -> BTreeSet<(H, H)> {
+    declared
+        .into_iter()
+        .filter(|(s, _, _)| s.actor == *by)
+        .map(|(_, from, to)| ends(from, to))
+        .collect()
+}
+
+/// The two hashes of an edge, the smaller first.
+fn ends<H: Ord>(x: H, y: H) -> (H, H) {
+    if x <= y { (x, y) } else { (y, x) }
+}
+
+/// The earlier hashes of `from` whose edge to `to` is not among `declared`, those
+/// `by` declared; none left is [`SameMeaningRefusal::AlreadyDeclaredBy`].
+fn unrepeated<H: Ord + Copy>(
+    from: NonEmptySet<H>,
+    to: H,
+    declared: &BTreeSet<(H, H)>,
+    by: &Actor,
+) -> Result<NonEmptySet<H>, SameMeaningRefusal> {
+    let left: BTreeSet<H> = from
+        .iter()
+        .filter(|f| !declared.contains(&ends(**f, to)))
+        .copied()
+        .collect();
+    NonEmptySet::from_set(left)
+        .map_err(|_| SameMeaningRefusal::AlreadyDeclaredBy { actor: by.clone() })
+}
+
 /// The earlier hashes a declaration covers, out of every hash an approval that
 /// stands pinned: the rule of [`frame_same_meaning`], for both kinds of subject.
 ///
@@ -478,39 +580,223 @@ fn earlier<H: Ord + Copy + std::fmt::Display>(
     NonEmptySet::from_set(from).map_err(|_| SameMeaningRefusal::NothingToDeclare)
 }
 
-/// The declarations that join `a` to `b`, in the order of the way from one to the
-/// other, or `None` when no way of declarations joins them.
-///
-/// Each declaration joins each of its earlier hashes to its hash then, both ways: a
-/// meaning kept from A to B is kept from B to A. The way is a shortest one, so the
-/// answer is the same for the same records in any order.
-pub(super) fn declared_way<H: Ord + Copy>(
-    edges: impl IntoIterator<Item = (JudgementId, H, H)>,
+/// One pair of hashes said to mean the same, with the declarations that say it and
+/// how many different names it needs (the rule is on [`SameMeaning`]).
+pub(super) struct Edge<'a, H> {
+    /// The two hashes, the smaller first.
+    ends: (H, H),
+    /// The declarations of it, in the order of identity.
+    declarations: Vec<&'a SameMeaning>,
+    /// The least the declarations need.
+    need: Approvals,
+}
+
+impl<H> Edge<'_, H> {
+    /// The declarations that make the edge count: the first of each name, in the
+    /// order of identity, as many as it needs; none while fewer names declared it.
+    fn counted(&self) -> Option<NonEmptyVec<JudgementId>> {
+        let firsts = self.firsts();
+        if firsts.len() < self.need.count() {
+            return None;
+        }
+        NonEmptyVec::from_vec(firsts.into_iter().take(self.need.count()).collect()).ok()
+    }
+
+    /// The first declaration of each name, in the order of identity.
+    fn firsts(&self) -> Vec<JudgementId> {
+        let mut names = BTreeSet::new();
+        self.declarations
+            .iter()
+            .filter(|s| names.insert(&s.actor))
+            .map(|s| s.id)
+            .collect()
+    }
+}
+
+/// The edges `declared` makes: each declaration with the need of its record, one of
+/// its earlier hashes, and its hash then. Each pair of hashes is one edge, in the
+/// order the declarations first name it.
+pub(super) fn edges<'a, H: Ord + Copy>(
+    declared: impl IntoIterator<Item = (&'a SameMeaning, Approvals, H, H)>,
+) -> Vec<Edge<'a, H>> {
+    let mut out: Vec<Edge<'a, H>> = Vec::new();
+    let mut at: BTreeMap<(H, H), usize> = BTreeMap::new();
+    for (record, need, from, to) in declared {
+        let ends = ends(from, to);
+        match at.get(&ends) {
+            Some(i) => {
+                let edge = &mut out[*i];
+                edge.declarations.push(record);
+                edge.need = edge.need.min(need);
+            }
+            None => {
+                at.insert(ends, out.len());
+                out.push(Edge {
+                    ends,
+                    declarations: vec![record],
+                    need,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// The declarations that join `a` to `b` over the edges that count, in the order of
+/// the way from one to the other (each edge's as [`Edge::counted`] gives them), or
+/// `None` when no way of them joins the two.
+pub(super) fn way<H: Ord + Copy>(
+    edges: &[Edge<'_, H>],
     a: H,
     b: H,
 ) -> Option<NonEmptyVec<JudgementId>> {
-    let mut next: BTreeMap<H, Vec<(H, JudgementId)>> = BTreeMap::new();
-    for (id, x, y) in edges {
-        next.entry(x).or_default().push((y, id));
-        next.entry(y).or_default().push((x, id));
+    let hops = declared_way(
+        edges
+            .iter()
+            .filter_map(|edge| Some((edge.counted()?, edge.ends.0, edge.ends.1))),
+        a,
+        b,
+    )?;
+    let mut ids = hops.iter().flat_map(NonEmptyVec::iter).copied();
+    let first = ids.next()?;
+    Some(NonEmptyVec::new(first, ids.collect()))
+}
+
+/// The declarations of `declared` that join `a` to `b`, each its own edge, in the
+/// order of the way: how a ledger no rule reads joins them, where each declaration
+/// needs one name and counting the names would change nothing.
+pub(super) fn each_way<'a, H: Ord + Copy>(
+    declared: impl IntoIterator<Item = (&'a SameMeaning, H, H)>,
+    a: H,
+    b: H,
+) -> Option<NonEmptyVec<JudgementId>> {
+    declared_way(declared.into_iter().map(|(s, x, y)| (s.id, x, y)), a, b)
+}
+
+/// The edges of `edges` declared by fewer different names than they need that a pin
+/// of `from` meets: one of their ends is `from`, or is joined to it by edges that
+/// count. Each is told with what it is about (`of`, given its first declaration and
+/// its two hashes).
+pub(super) fn short_from<H: Ord + Copy>(
+    edges: &[Edge<'_, H>],
+    from: H,
+    of: impl Fn(&SameMeaning, H, H) -> SameMeaningEdge,
+) -> Vec<ShortSameMeaning> {
+    let mut reached = BTreeSet::from([from]);
+    let mut next = vec![from];
+    while let Some(at) = next.pop() {
+        for edge in edges.iter().filter(|edge| edge.counted().is_some()) {
+            let (x, y) = edge.ends;
+            let onward = if x == at {
+                y
+            } else if y == at {
+                x
+            } else {
+                continue;
+            };
+            if reached.insert(onward) {
+                next.push(onward);
+            }
+        }
     }
-    let mut came: BTreeMap<H, (H, JudgementId)> = BTreeMap::new();
+    edges
+        .iter()
+        .filter(|edge| edge.counted().is_none())
+        .filter(|edge| reached.contains(&edge.ends.0) || reached.contains(&edge.ends.1))
+        .filter_map(|edge| {
+            let first = *edge.declarations.first()?;
+            let declared = NonEmptyVec::new(
+                first.id,
+                edge.declarations[1..].iter().map(|s| s.id).collect(),
+            );
+            let names = NonEmptySet::new(
+                first.actor.clone(),
+                edge.declarations[1..].iter().map(|s| s.actor.clone()),
+            );
+            Some(ShortSameMeaning {
+                of: of(first, edge.ends.0, edge.ends.1),
+                declared,
+                names,
+                need: edge.need,
+            })
+        })
+        .collect()
+}
+
+/// What an edge of declarations of the same meaning is about: a document or an
+/// artifact, with the two hashes it joins (the smaller first).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SameMeaningEdge {
+    /// Two hashes of a document.
+    Doc {
+        /// The document.
+        id: DocId,
+        /// One hash.
+        a: DocHash,
+        /// The other.
+        b: DocHash,
+    },
+    /// Two hashes of an artifact.
+    Artifact {
+        /// The artifact, by its space and its name.
+        artifact: ArtifactKey,
+        /// One hash.
+        a: ArtifactHash,
+        /// The other.
+        b: ArtifactHash,
+    },
+}
+
+/// An edge declared by fewer different names than its declarations need: it joins
+/// nothing until more names declare it ([`Ledger::same_meaning_short`]; the rule is
+/// on [`SameMeaning`]).
+///
+/// [`Ledger::same_meaning_short`]: super::Ledger::same_meaning_short
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShortSameMeaning {
+    /// What it is about.
+    pub of: SameMeaningEdge,
+    /// The declarations of it, in the order of identity.
+    pub declared: NonEmptyVec<JudgementId>,
+    /// The names that declared it, each once.
+    pub names: NonEmptySet<Actor>,
+    /// How many different names it needs: the least of its declarations'.
+    pub need: Approvals,
+}
+
+/// The labels of the edges that join `a` to `b`, in the order of the way from one
+/// to the other, or `None` when no way of them joins them.
+///
+/// Each edge joins its two hashes both ways: a meaning kept from A to B is kept
+/// from B to A. The way is a shortest one, so the answer is the same for the same
+/// records in any order.
+fn declared_way<H: Ord + Copy, L: Clone>(
+    edges: impl IntoIterator<Item = (L, H, H)>,
+    a: H,
+    b: H,
+) -> Option<NonEmptyVec<L>> {
+    let mut next: BTreeMap<H, Vec<(H, L)>> = BTreeMap::new();
+    for (label, x, y) in edges {
+        next.entry(x).or_default().push((y, label.clone()));
+        next.entry(y).or_default().push((x, label));
+    }
+    let mut came: BTreeMap<H, (H, L)> = BTreeMap::new();
     let mut queue = VecDeque::from([a]);
     let mut seen = BTreeSet::from([a]);
     while let Some(at) = queue.pop_front() {
         if at == b {
             let mut way = Vec::new();
             let mut here = b;
-            while let Some((before, id)) = came.get(&here) {
-                way.push(*id);
+            while let Some((before, label)) = came.get(&here) {
+                way.push(label.clone());
                 here = *before;
             }
             way.reverse();
             return NonEmptyVec::from_vec(way).ok();
         }
-        for (onward, id) in next.get(&at).into_iter().flatten() {
+        for (onward, label) in next.get(&at).into_iter().flatten() {
             if seen.insert(*onward) {
-                came.insert(*onward, (at, *id));
+                came.insert(*onward, (at, label.clone()));
                 queue.push_back(*onward);
             }
         }

@@ -44,9 +44,9 @@
 //! - its own hash differs from the approved one;
 //! - for each pinned upstream, the edge rules: an upstream that is gone, invalid or
 //!   unknowable is that fact alone; otherwise every rule that applies is kept (the
-//!   upstream's hash changed, its declared status is not an approval, its own
-//!   freshness is stale or broken), so a hash change and a broken upstream are both
-//!   reported;
+//!   upstream's hash changed, its declared status is not an approval, its approval
+//!   awaits other names, its own freshness is stale or broken), so a hash change and
+//!   a broken upstream are both reported;
 //! - for each `Depends` link name, the set of what it names now against what the
 //!   frame pinned ([`Cause::LinksChanged`]), leaving out what an edge rule already
 //!   said about the same upstream (matched by key, not by count);
@@ -94,6 +94,19 @@
 //! Every fact is said once. Notices ([`Notice`]) are what is worth knowing and does
 //! not change a freshness: they come from `collect_notices`'s table, and the edits a
 //! declaration kept from being causes from the comparisons above.
+//!
+//! # Who has read it
+//!
+//! Beside its freshness, an approval that stands has a [`Quorum`]: whether as many
+//! different names read its content as the rule of who may decide asks for
+//! ([`Ledger::quorum`]; one name where no rule asks for more, so it is always met
+//! there). The two are apart: a [`Freshness`] is fresh or degraded by its causes
+//! alone, and a quorum short of its names is no cause of the approval itself. What
+//! is shown of both is [`Standing::kind`]'s: a fresh approval short of names is
+//! [`FreshnessLevel::Awaiting`]; a degraded one keeps the level of its causes, and
+//! its quorum is told beside it. Downstream, an upstream whose approval is short, at
+//! any freshness, is one that does not stand as a settled approval, as a pending one
+//! is: [`Cause::UpstreamDeclared`] of [`UpstreamStatus::Unseconded`].
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -107,7 +120,7 @@ use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
 use super::exemption::{Unneeded, by_subject, read_exemption};
 use super::graph::{Cycle, CycleId};
 use super::ledger::{
-    DeclaredStatus, Exempt, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, ReadPin,
+    DeclaredStatus, Exempt, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, Quorum, ReadPin,
 };
 use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
 
@@ -157,11 +170,15 @@ pub enum Severity {
     Broken,
 }
 
-/// The declared status of an upstream, when it is not an approval.
+/// The status of an upstream, when it does not stand as a settled approval.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpstreamStatus {
     /// No decision stands about it.
     Pending,
+    /// Its approval stands with fewer different names than the rule of who may decide
+    /// asks for ([`Quorum::Short`]), at any freshness, an expired one included: it
+    /// awaits the approvals of other names, and what stands on it waits with it.
+    Unseconded,
     /// It was denied.
     Denied,
     /// It was retired.
@@ -321,6 +338,11 @@ pub enum OriginEvent {
     /// A pinned upstream has no decision: [`Cause::UpstreamDeclared`] of
     /// [`UpstreamStatus::Pending`].
     UpstreamPending,
+    /// A pinned upstream's approval awaits the approvals of other names:
+    /// [`Cause::UpstreamDeclared`] of [`UpstreamStatus::Unseconded`]. Only a name
+    /// that has not approved it settles it: the same name again would repeat its
+    /// reading.
+    UpstreamAwaiting,
     /// A pinned upstream was deprecated and others take its place:
     /// [`Cause::UpstreamDeclared`] of [`UpstreamStatus::Deprecated`] with successors.
     UpstreamSuperseded,
@@ -367,6 +389,7 @@ impl Cause {
                 Origin::Doc(pin.target()),
                 match status {
                     UpstreamStatus::Pending => OriginEvent::UpstreamPending,
+                    UpstreamStatus::Unseconded => OriginEvent::UpstreamAwaiting,
                     UpstreamStatus::Deprecated {
                         successors: Successors::Some(_),
                     } => OriginEvent::UpstreamSuperseded,
@@ -410,7 +433,7 @@ impl Cause {
     /// | `SelfChanged`, `UpstreamChanged` | `Stale` |
     /// | `SelfNotValid` (invalid, gone or unknown) | `Broken` |
     /// | `UpstreamNotValid` (invalid, gone or unknown) | `Broken` |
-    /// | `UpstreamDeclared` of `Pending`, or of `Deprecated` with successors | `Stale` |
+    /// | `UpstreamDeclared` of `Pending` or `Unseconded`, or of `Deprecated` with successors | `Stale` |
     /// | `UpstreamDeclared` of `Denied`, `Retired`, or of `Deprecated` with none | `Broken` |
     /// | `Via` | the strength it carries (`Stale` or `Broken`; an upstream that is only `Expired` makes no `Via`) |
     /// | `LinksChanged` | `Broken` when some key cannot be followed, otherwise `Stale` |
@@ -436,6 +459,7 @@ impl Cause {
             }
             Self::UpstreamDeclared { status, .. } => match status {
                 UpstreamStatus::Pending
+                | UpstreamStatus::Unseconded
                 | UpstreamStatus::Deprecated {
                     successors: Successors::Some(_),
                 } => Severity::Stale,
@@ -525,14 +549,20 @@ impl Freshness {
     }
 }
 
-/// A [`Freshness`] without its causes, for a display and for a notice.
+/// A [`Freshness`] without its causes, for a display and for a notice; and
+/// `Awaiting`, which only [`Standing::kind`] gives.
 ///
-/// The order (`Fresh`, `Expired`, `Stale`, `Broken`, as declared) is for sorting
-/// only, not a weight: how strong a degradation is, is a [`Severity`].
+/// The order (`Fresh`, `Awaiting`, `Expired`, `Stale`, `Broken`, as declared) is for
+/// sorting only, not a weight: how strong a degradation is, is a [`Severity`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FreshnessLevel {
     /// It holds.
     Fresh,
+    /// It holds, and its content awaits approvals of other names before it settles
+    /// ([`Quorum::Short`]). It is no level of a [`Freshness`], which knows nothing of
+    /// who read it: [`Standing::kind`] gives it to a fresh approval whose quorum is
+    /// short, and to no other.
+    Awaiting,
     /// It lapsed by the clock only.
     Expired,
     /// What it stood on has changed or is not settled.
@@ -558,8 +588,14 @@ pub enum Standing {
     },
     /// Retired.
     Retired,
-    /// Approved, and whether it holds.
-    Approved(Freshness),
+    /// Approved: whether it holds, and whether as many names read it as the rule
+    /// asks for, two facts apart (the module page says why).
+    Approved {
+        /// Whether it holds.
+        freshness: Freshness,
+        /// Whether enough different names read its content ([`Ledger::quorum`]).
+        quorum: Quorum,
+    },
 }
 
 impl Standing {
@@ -570,23 +606,57 @@ impl Standing {
         counts(Decided::from(self))
     }
 
-    /// The standing without the causes and the successors.
+    /// The standing without the causes and the successors: the one place the level
+    /// shown of an approval is read from its freshness and its quorum. A fresh
+    /// approval whose quorum is short is [`FreshnessLevel::Awaiting`]; any other
+    /// approval is at the level of its freshness, so a degraded one short of names is
+    /// shown as degraded (its quorum is told beside it, as [`Standing::quorum`]).
     pub fn kind(&self) -> StandingKind {
         match self {
             Self::Pending => StandingKind::Pending,
             Self::Denied => StandingKind::Denied,
             Self::Deprecated { .. } => StandingKind::Deprecated,
             Self::Retired => StandingKind::Retired,
-            Self::Approved(freshness) => StandingKind::Approved(freshness.level()),
+            Self::Approved {
+                freshness: Freshness::Fresh,
+                quorum: Quorum::Short { .. },
+            } => StandingKind::Approved(FreshnessLevel::Awaiting),
+            Self::Approved { freshness, .. } => StandingKind::Approved(freshness.level()),
         }
     }
+
+    /// The freshness of an approval; none for a standing that is no approval.
+    pub fn freshness(&self) -> Option<&Freshness> {
+        match self {
+            Self::Approved { freshness, .. } => Some(freshness),
+            Self::Pending | Self::Denied | Self::Deprecated { .. } | Self::Retired => None,
+        }
+    }
+
+    /// The quorum of an approval; none for a standing that is no approval.
+    pub fn quorum(&self) -> Option<&Quorum> {
+        match self {
+            Self::Approved { quorum, .. } => Some(quorum),
+            Self::Pending | Self::Denied | Self::Deprecated { .. } | Self::Retired => None,
+        }
+    }
+}
+
+#[cfg(test)]
+impl Standing {
+    /// An approval that holds and whose quorum is met: every approval that holds in a
+    /// project that declares no rule.
+    pub(crate) const FRESH: Self = Self::Approved {
+        freshness: Freshness::Fresh,
+        quorum: Quorum::Met,
+    };
 }
 
 impl From<&Standing> for Decided {
     fn from(standing: &Standing) -> Self {
         match standing {
             Standing::Pending => Self::Pending,
-            Standing::Approved(_) => Self::Approved,
+            Standing::Approved { .. } => Self::Approved,
             Standing::Denied => Self::Denied,
             Standing::Deprecated { .. } => Self::Deprecated,
             Standing::Retired => Self::Retired,
@@ -616,12 +686,13 @@ impl StandingKind {
     /// Every kind, in their order: the one list of them, so that a surface that
     /// names each kind (in words, as an answer prints them) reads them all from here
     /// and a word can be read back. A test checks that it holds each kind once.
-    pub const ALL: [StandingKind; 8] = [
+    pub const ALL: [StandingKind; 9] = [
         StandingKind::Pending,
         StandingKind::Denied,
         StandingKind::Deprecated,
         StandingKind::Retired,
         StandingKind::Approved(FreshnessLevel::Fresh),
+        StandingKind::Approved(FreshnessLevel::Awaiting),
         StandingKind::Approved(FreshnessLevel::Expired),
         StandingKind::Approved(FreshnessLevel::Stale),
         StandingKind::Approved(FreshnessLevel::Broken),
@@ -940,7 +1011,7 @@ impl Assessment {
         // with that cause's event and holder, and the rest are added to it.
         let mut by_origin: BTreeMap<Origin, Gathered> = BTreeMap::new();
         for (id, standing) in &self.standings {
-            if !matches!(standing, Standing::Approved(Freshness::Degraded(_))) {
+            if !matches!(standing.freshness(), Some(Freshness::Degraded(_))) {
                 continue;
             }
             for root in self.roots_of(*id) {
@@ -986,7 +1057,8 @@ impl Assessment {
         if !visited.insert(id) {
             return;
         }
-        let Some(Standing::Approved(Freshness::Degraded(degradation))) = self.standings.get(&id)
+        let Some(Freshness::Degraded(degradation)) =
+            self.standings.get(&id).and_then(Standing::freshness)
         else {
             return;
         };
@@ -1015,8 +1087,10 @@ impl Assessment {
     /// Whether the upstream `pin` names counts, among its own causes, the edit from
     /// the pinned hash to `now`.
     fn upstream_holds_edit(&self, pin: &FramePin, now: &DocHash) -> bool {
-        let Some(Standing::Approved(Freshness::Degraded(degradation))) =
-            self.standings.get(&pin.target())
+        let Some(Freshness::Degraded(degradation)) = self
+            .standings
+            .get(&pin.target())
+            .and_then(Standing::freshness)
         else {
             return false;
         };
@@ -1139,19 +1213,22 @@ fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
                 frame,
                 expires,
                 ..
-            } => Standing::Approved(freshness_of(
-                cx,
-                id,
-                Pinned {
-                    seen,
-                    frame,
-                    // The artifacts as the ledger reads them now, through moves.
-                    artifacts: &ledger.read_pins(id),
-                },
-                *expires,
-                &standings,
-                &mut kept,
-            )),
+            } => Standing::Approved {
+                freshness: freshness_of(
+                    cx,
+                    id,
+                    Pinned {
+                        seen,
+                        frame,
+                        // The artifacts as the ledger reads them now, through moves.
+                        artifacts: &ledger.read_pins(id),
+                    },
+                    *expires,
+                    &standings,
+                    &mut kept,
+                ),
+                quorum: ledger.quorum(id, cx.now),
+            },
         };
         standings.insert(id, standing);
         statuses.insert(id, status);
@@ -1443,29 +1520,38 @@ fn pin_causes<'p>(
 }
 
 /// What the standing of a pinned upstream makes of an approval: its declared status
-/// when that is not an approval, or a `Via` when the approval is itself stale or
-/// broken (not across a cycle both are in, where no `Via` passes).
-fn standing_cause(pin: &FramePin, upstream: Option<&Standing>, same_cycle: bool) -> Option<Cause> {
+/// when that is not an approval; for an approval, [`UpstreamStatus::Unseconded`]
+/// when its quorum is short, at any freshness, and a `Via` when it is itself stale or
+/// broken (not across a cycle both are in, where no `Via` passes), each that applies.
+fn standing_cause(pin: &FramePin, upstream: Option<&Standing>, same_cycle: bool) -> Vec<Cause> {
     let declared = |status| Cause::UpstreamDeclared {
         pin: pin.clone(),
         status,
     };
     match upstream {
-        Some(Standing::Pending) => Some(declared(UpstreamStatus::Pending)),
-        Some(Standing::Denied) => Some(declared(UpstreamStatus::Denied)),
-        Some(Standing::Retired) => Some(declared(UpstreamStatus::Retired)),
-        Some(Standing::Deprecated { successors }) => Some(declared(UpstreamStatus::Deprecated {
+        Some(Standing::Pending) => vec![declared(UpstreamStatus::Pending)],
+        Some(Standing::Denied) => vec![declared(UpstreamStatus::Denied)],
+        Some(Standing::Retired) => vec![declared(UpstreamStatus::Retired)],
+        Some(Standing::Deprecated { successors }) => vec![declared(UpstreamStatus::Deprecated {
             successors: successors.clone(),
-        })),
-        Some(Standing::Approved(Freshness::Degraded(degradation)))
-            if degradation.level() >= Severity::Stale && !same_cycle =>
-        {
-            Some(Cause::Via {
-                pin: pin.clone(),
-                severity: degradation.level(),
-            })
+        })],
+        Some(Standing::Approved { freshness, quorum }) => {
+            let mut causes = Vec::new();
+            if let Quorum::Short { .. } = quorum {
+                causes.push(declared(UpstreamStatus::Unseconded));
+            }
+            if let Freshness::Degraded(degradation) = freshness
+                && degradation.level() >= Severity::Stale
+                && !same_cycle
+            {
+                causes.push(Cause::Via {
+                    pin: pin.clone(),
+                    severity: degradation.level(),
+                });
+            }
+            causes
         }
-        Some(Standing::Approved(_)) | None => None,
+        None => Vec::new(),
     }
 }
 
@@ -1753,8 +1839,8 @@ fn collect_notices(
         }
         if let Some(DeclaredStatus::Approved { frame, .. }) = statuses.get(&doc.id()) {
             for pin in frame {
-                if let Some(Standing::Approved(Freshness::Degraded(degradation))) =
-                    standings.get(&pin.target())
+                if let Some(Freshness::Degraded(degradation)) =
+                    standings.get(&pin.target()).and_then(Standing::freshness)
                 {
                     notices.extend(degradation.causes().iter().filter_map(|cause| match cause {
                         Cause::Expired { since } => Some(Notice::UpstreamExpired {
@@ -1794,6 +1880,8 @@ mod moved_tests;
 mod notice_tests;
 #[cfg(test)]
 mod origin_tests;
+#[cfg(test)]
+mod quorum_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]

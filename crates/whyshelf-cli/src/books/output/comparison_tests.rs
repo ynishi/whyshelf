@@ -130,7 +130,10 @@ fn a_change_of_comparison_is_written_with_the_file_the_link_and_both_comparisons
     let ledger = approved(&shelf(&schema(None), THEN));
     let now = shelf(&schema(lines_without_slashes()), THEN);
     let assessment = assess(&now, &ledger, JudgedAt::new(100));
-    let Standing::Approved(Freshness::Degraded(d)) = assessment.standing_of(DocId::new(eid(1)))
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = assessment.standing_of(DocId::new(eid(1)))
     else {
         panic!("the comparison changed");
     };

@@ -60,6 +60,7 @@ pub fn standing(kind: StandingKind) -> &'static str {
         StandingKind::Deprecated => "deprecated",
         StandingKind::Retired => "retired",
         StandingKind::Approved(FreshnessLevel::Fresh) => "fresh",
+        StandingKind::Approved(FreshnessLevel::Awaiting) => "awaiting",
         StandingKind::Approved(FreshnessLevel::Expired) => "expired",
         StandingKind::Approved(FreshnessLevel::Stale) => "stale",
         StandingKind::Approved(FreshnessLevel::Broken) => "broken",

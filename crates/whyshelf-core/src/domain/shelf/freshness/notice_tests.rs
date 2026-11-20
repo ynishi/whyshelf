@@ -47,10 +47,7 @@ fn an_informs_link_to_a_pending_document_is_a_notice_carrying_its_standing() {
         vec![(docid(1), StandingKind::Pending)]
     );
     // The notice changes no freshness.
-    assert_eq!(
-        assessment.standing_of(docid(2)),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(assessment.standing_of(docid(2)), Standing::FRESH);
 }
 
 #[test]
@@ -75,10 +72,7 @@ fn an_informs_link_to_a_degraded_approval_carries_its_level() {
         vec![(docid(1), StandingKind::Approved(FreshnessLevel::Stale))]
     );
     // An `Informs` link carries no staleness.
-    assert_eq!(
-        assessment.standing_of(docid(2)),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(assessment.standing_of(docid(2)), Standing::FRESH);
 }
 
 #[test]
@@ -104,10 +98,7 @@ fn an_informs_link_that_cannot_be_followed_is_a_notice() {
         ),
         "{notices:?}"
     );
-    assert_eq!(
-        assessment.standing_of(docid(2)),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(assessment.standing_of(docid(2)), Standing::FRESH);
 }
 
 #[test]
@@ -118,16 +109,17 @@ fn an_upstream_whose_approval_only_expired_is_a_notice_and_no_via() {
     let ledger = ledger(vec![first, second]);
     let assessment = assess(&shelf, &ledger, JudgedAt::new(60));
 
-    let Standing::Approved(Freshness::Degraded(d)) = assessment.standing_of(docid(1)) else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = assessment.standing_of(docid(1))
+    else {
         panic!("the upstream lapsed");
     };
     assert_eq!(d.level(), Severity::Expired);
 
     // The downstream stays fresh: no `Via` is made of an expiry.
-    assert_eq!(
-        assessment.standing_of(docid(2)),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(assessment.standing_of(docid(2)), Standing::FRESH);
     assert!(assessment.roots_of(docid(2)).is_empty());
     let notices = assessment.notices_of(docid(2));
     assert_eq!(notices.len(), 1, "{notices:?}");

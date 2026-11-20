@@ -33,6 +33,12 @@
 //! `since`. Only a project that declares a rule names the book in a new record
 //! ([`Shelf::book_to_record`]); a build of whyshelf from before records named a book
 //! cannot read one that does: it is a key it does not know.
+//!
+//! The rule that reads a record also says how many different names it needs to count
+//! (its `approvals`, read in one place, as the need of the record): an approval that stands needs that many
+//! readers of its content ([`Ledger::quorum`]), and a declaration of the same meaning
+//! that many names declaring its edit. A record no rule reads (an unruled book, one
+//! made before `since`, a project that declares no rule) needs one, as before.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -46,7 +52,9 @@ use crate::domain::nonempty::NonEmptySet;
 use crate::domain::words::{Join, Mark, listed};
 
 use super::super::build::Shelf;
-use super::super::schema::{Authority, BookName, DecideKind, GroupName, Permission, RuleTime};
+use super::super::schema::{
+    Approvals, Authority, BookName, DecideKind, GroupName, Permission, RuleTime,
+};
 use super::{
     DecisionVerb, JudgedAt, JudgementId, Ledger, Record, Revocation, SameMeaningOf, target_book,
 };
@@ -168,6 +176,14 @@ impl Admit {
             Some(target),
             book,
         )
+    }
+
+    /// How many different names a record read with `book`, made at `at`, needs to
+    /// count: the `approvals` of the rule that reads it ([`Authority::approvals`]).
+    fn need(&self, at: JudgedAt, book: &RecordBook) -> Approvals {
+        self.0
+            .authority
+            .approvals(book.book(), RuleTime::from_millis(at.millis()))
     }
 
     #[allow(clippy::result_large_err)]
@@ -311,5 +327,18 @@ impl Ledger {
             }
         }
         Ok(AdmittedRecord(record))
+    }
+
+    /// How many different names the record `record`, made at `at`, needs to count:
+    /// the `approvals` of the rule that reads it with the book it is read with
+    /// ([`RecordBook`]), admitted or open; one when no rule reads it. The one place a
+    /// need is read, by [`Ledger::quorum`] for the approval that stands about a
+    /// document and by the same meaning for each declaration of an edit. A record the
+    /// rules do not admit is not used, so its need is never asked.
+    pub(super) fn need(&self, record: JudgementId, at: JudgedAt) -> Approvals {
+        // A project that declares no rule reads no book of a record: each needs one.
+        self.books
+            .get(&record)
+            .map_or(Approvals::ONE, |book| self.admit.need(at, book))
     }
 }

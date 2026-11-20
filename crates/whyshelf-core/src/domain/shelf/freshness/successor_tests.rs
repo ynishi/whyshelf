@@ -135,8 +135,10 @@ fn downstream_of_a_deprecation(others: Vec<DocReading>) -> (Shelf, Vec<Cause>, S
     let first = approve(&shelf, &ledger(vec![]), 1, 1001, 10, None);
     let second = approve(&shelf, &ledger(vec![first.clone()]), 2, 1002, 10, None);
     let ledger = ledger(vec![first, second, deprecate(&shelf, 1, 1003, 20)]);
-    let Standing::Approved(Freshness::Degraded(d)) =
-        assess(&shelf, &ledger, JudgedAt::new(100)).standing_of(docid(2))
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = assess(&shelf, &ledger, JudgedAt::new(100)).standing_of(docid(2))
     else {
         panic!("what stands on a deprecated document does not hold");
     };
@@ -189,7 +191,11 @@ fn a_downstream_of_a_deprecation_whose_only_replacer_is_denied_is_broken() {
         deny(&shelf, 3, 1004, 20),
     ]);
     let standing = assess(&shelf, &ledger, JudgedAt::new(100)).standing_of(docid(2));
-    let Standing::Approved(Freshness::Degraded(d)) = standing else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = standing
+    else {
         panic!("what stands on a deprecated document does not hold");
     };
     assert_eq!(d.level(), Severity::Broken);

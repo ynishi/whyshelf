@@ -66,8 +66,11 @@ fn standing(app: &ShelfApp<FakeShelf>, reference: &str) -> Standing {
 
 fn causes(app: &ShelfApp<FakeShelf>, reference: &str) -> Vec<Cause> {
     match standing(app, reference) {
-        Standing::Approved(Freshness::Fresh) => Vec::new(),
-        Standing::Approved(Freshness::Degraded(d)) => d.causes().iter().cloned().collect(),
+        Standing::FRESH => Vec::new(),
+        Standing::Approved {
+            freshness: Freshness::Degraded(d),
+            ..
+        } => d.causes().iter().cloned().collect(),
         other => panic!("not an approval: {other:?}"),
     }
 }
@@ -114,7 +117,7 @@ fn a_declared_move_with_the_link_rewritten_keeps_the_approval_fresh() {
     };
     assert_eq!(canon.get("kind"), Some(&Canon::str("moved")));
 
-    assert_eq!(standing(&app, "SP-2"), Standing::Approved(Freshness::Fresh));
+    assert_eq!(standing(&app, "SP-2"), Standing::FRESH);
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
     assert!(row.notices.is_empty(), "{:?}", row.notices);
 }
@@ -183,7 +186,7 @@ fn a_name_moved_away_cannot_be_moved_again() {
     app.ports().put_file("tests/a.rs", b"tests/a.rs");
     block_on(app.moved(vec![moved("tests/c.rs", "tests/a.rs")])).unwrap();
     assert_eq!(app.ports().append_count(), 5);
-    assert_eq!(standing(&app, "SP-2"), Standing::Approved(Freshness::Fresh));
+    assert_eq!(standing(&app, "SP-2"), Standing::FRESH);
 }
 
 #[test]
@@ -235,7 +238,7 @@ fn a_new_approval_after_a_move_pins_the_new_name_and_repeats_nothing() {
     app.ports()
         .edit(sp_tested(2, "cache", &["FR-1"], &["tests/b.rs"]), 2);
     block_on(app.moved(vec![moved("tests/a.rs", "tests/b.rs")])).unwrap();
-    assert_eq!(standing(&app, "SP-2"), Standing::Approved(Freshness::Fresh));
+    assert_eq!(standing(&app, "SP-2"), Standing::FRESH);
     // Fresh, and yet no repeat: the approval that stands pinned the old name.
     let run = block_on(app.judge_all(vec![approve("SP-2")])).unwrap();
     assert!(run.left_out.is_empty(), "{:?}", run.left_out);
@@ -347,7 +350,7 @@ fn a_run_of_moves_is_written_whole_or_not_at_all() {
             Record::Moved(declared[1].clone())
         ]
     );
-    assert_eq!(standing(&app, "SP-2"), Standing::Approved(Freshness::Fresh));
+    assert_eq!(standing(&app, "SP-2"), Standing::FRESH);
 }
 
 #[test]
@@ -357,7 +360,7 @@ fn withdrawing_a_move_reads_the_pin_as_written_again() {
     app.ports()
         .edit(sp_tested(2, "cache", &["FR-1"], &["tests/b.rs"]), 2);
     let declared = block_on(app.moved(vec![moved("tests/a.rs", "tests/b.rs")])).unwrap();
-    assert_eq!(standing(&app, "SP-2"), Standing::Approved(Freshness::Fresh));
+    assert_eq!(standing(&app, "SP-2"), Standing::FRESH);
     block_on(app.withdraw(WithdrawRequest {
         records: vec![declared[0].id()],
         reason: NonBlank::new("it was a copy after all").unwrap(),

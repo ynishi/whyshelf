@@ -160,7 +160,7 @@ pub use ports::{
     UnreadableWhy,
 };
 pub use report::{
-    Absent, ApprovedItem, ApprovedReport, BookCount, BooksCheck, DiffItem, DiffReport,
+    Absent, ApprovedItem, ApprovedReport, Awaiting, BookCount, BooksCheck, DiffItem, DiffReport,
     DownstreamEdge, ExemptEntry, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy,
     MapReport, MovedAway, MovesReport, Names, RepeatedExemption, Row, SettledOrigin, StaleEntry,
     StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry,

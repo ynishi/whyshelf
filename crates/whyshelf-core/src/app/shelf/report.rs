@@ -11,25 +11,26 @@
 
 use std::collections::BTreeMap;
 
+use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
-use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
+use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, SkippedFile};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
 use crate::domain::shelf::exemption::Unneeded;
 use crate::domain::shelf::filter::StatusFilterAsk;
 use crate::domain::shelf::freshness::{
-    Degradation, Notice, OriginGroup, RootCause, Severity, Standing, Successors,
+    Degradation, Notice, OriginGroup, RootCause, Severity, Standing, StandingKind, Successors,
 };
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{
     Decision, DeclaredStatus, Exempt, FrameRefusal, JudgementId, LeaveOut, LedgerProblem,
-    MoveSuggestions, NotAdmitted, Record,
+    MoveSuggestions, NotAdmitted, Record, ShortSameMeaning,
 };
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::HeldBack;
 use crate::domain::shelf::schema::{
-    BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
+    Approvals, BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
 };
 use crate::domain::shelf::settle::Settlement;
 use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
@@ -124,6 +125,10 @@ pub struct BookCount {
 }
 
 /// The result of `check`.
+// `Checked` holds a list of each kind inline (the enum is as large as that), and a
+// `check` makes one answer: boxing the lists would add an allocation and a deref to
+// each read of it and save nothing.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BooksCheck {
     /// The declaration of the books is not sound. Nothing was read through it.
@@ -170,10 +175,38 @@ pub enum BooksCheck {
         /// notices), as merged branches can leave them. They leave the check clean
         /// too.
         repeated: Vec<RepeatedExemption>,
+        /// The approvals whose content fewer different names read than the rule of
+        /// who may decide asks for, at any freshness (the
+        /// [`Quorum::Short`](crate::domain::shelf::ledger::Quorum::Short) of every
+        /// approval), by identity. They leave the check clean: another name is to
+        /// approve them.
+        awaiting: Vec<Awaiting>,
+        /// The edits declared to keep the meaning by fewer different names than
+        /// they need, which join nothing yet, that a pin of an approval that stands
+        /// meets
+        /// ([`Ledger::same_meaning_short`](crate::domain::shelf::ledger::Ledger::same_meaning_short)).
+        /// They leave the check clean too.
+        same_meaning_short: Vec<ShortSameMeaning>,
         /// The keys of the valid documents, for the documents the entries name
         /// (such as those an unneeded exemption's link reaches it from).
         names: Names,
     },
+}
+
+/// An approval whose content awaits the approvals of other names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Awaiting {
+    /// The document.
+    pub doc: DocId,
+    /// Its key, when it is valid.
+    pub key: Option<DocKey>,
+    /// Where it stands, as shown ([`Standing::kind`]): awaiting when it is fresh,
+    /// else the level of its freshness.
+    pub standing: StandingKind,
+    /// The names whose reading counts now.
+    pub readers: NonEmptySet<Actor>,
+    /// How many different names the rule asks for.
+    pub need: Approvals,
 }
 
 /// Two or more exemptions that stand of one document from one link.

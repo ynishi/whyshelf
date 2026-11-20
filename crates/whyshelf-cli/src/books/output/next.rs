@@ -35,6 +35,8 @@ const WHY_HOLDS: &str = "<why it holds>";
 const WHY_THEY_HOLD: &str = "<why they hold>";
 /// What a person writes in place of the time an approval lapses.
 const UNTIL: &str = "<time>";
+/// What a person writes in place of a name that has not approved the document.
+const ANOTHER: &str = "<another name>";
 
 /// The words of a command or of one of its arguments, from the command line's own
 /// definition: the names of the subcommands along `path` joined by a space (the
@@ -132,6 +134,15 @@ fn command(settlement: &Settlement, names: &Names, program: &str) -> String {
             "{program} {} {} {} {}",
             word(&approve, None),
             doc(id),
+            reason(&approve),
+            shell_word(WHY_HOLDS)
+        ),
+        Settlement::ApproveAsAnother(id) => format!(
+            "{program} {} {} {} {} {} {}",
+            word(&approve, None),
+            doc(id),
+            word(&approve, Some("actor")),
+            shell_word(ANOTHER),
             reason(&approve),
             shell_word(WHY_HOLDS)
         ),
@@ -251,6 +262,7 @@ mod tests {
             Settlement::FindMoves,
             Settlement::DeclareMoved(file("tests/a.rs")),
             Settlement::ApprovePending(docid(1)),
+            Settlement::ApproveAsAnother(docid(1)),
             Settlement::ApproveUntil(docid(1)),
             Settlement::ApproveStale,
         ]
@@ -305,6 +317,9 @@ mod tests {
                 "whyshelf judge moved tests/a.rs '<new name>' --reason '<why it is the same thing>'"
                     .to_owned(),
                 format!("whyshelf judge approve {id} --reason '<why it holds>'"),
+                format!(
+                    "whyshelf judge approve {id} --actor '<another name>' --reason '<why it holds>'"
+                ),
                 format!("whyshelf judge approve {id} --until '<time>' --reason '<why it holds>'"),
                 "whyshelf judge approve --stale --reason '<why they hold>'".to_owned(),
             ]

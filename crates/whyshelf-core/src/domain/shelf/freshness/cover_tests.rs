@@ -97,7 +97,7 @@ fn an_uncovered_approved_document_gets_the_notice_and_stays_fresh() {
     assert_eq!(not_covered(&shelf, &ledger, 1), grounds());
     assert_eq!(
         assess(&shelf, &ledger, JudgedAt::new(100)).standing_of(docid(1)),
-        Standing::Approved(Freshness::Fresh)
+        Standing::FRESH
     );
 }
 

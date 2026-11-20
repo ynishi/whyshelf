@@ -92,7 +92,7 @@ fn a_renamed_module_is_declared_once_and_the_approval_stands_again() {
     );
     assert!(matches!(
         standing(&app, "SP-2"),
-        Standing::Approved(Freshness::Degraded(d))
+        Standing::Approved { freshness: Freshness::Degraded(d), .. }
             if matches!(d.causes().iter().next(), Some(Cause::ArtifactLinksChanged { .. }))
     ));
 
@@ -149,7 +149,7 @@ fn a_renamed_module_is_declared_once_and_the_approval_stands_again() {
         assert!(ask.get(&file_space(), &aname(name)).is_some(), "{name}");
     }
 
-    assert_eq!(standing(&app, "SP-2"), Standing::Approved(Freshness::Fresh));
+    assert_eq!(standing(&app, "SP-2"), Standing::FRESH);
 }
 
 #[test]

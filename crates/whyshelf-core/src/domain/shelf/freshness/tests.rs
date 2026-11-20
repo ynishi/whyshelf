@@ -17,14 +17,8 @@ fn an_approval_of_what_is_unchanged_holds() {
     let at_approval = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
     let ledger = approved(&at_approval, &[1, 2]);
     let assessment = assess(&at_approval, &ledger, JudgedAt::new(100));
-    assert_eq!(
-        standing_of(&assessment, 1),
-        Standing::Approved(Freshness::Fresh)
-    );
-    assert_eq!(
-        standing_of(&assessment, 2),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(standing_of(&assessment, 1), Standing::FRESH);
+    assert_eq!(standing_of(&assessment, 2), Standing::FRESH);
 }
 
 #[test]
@@ -34,7 +28,11 @@ fn an_edited_upstream_degrades_what_stands_on_it_and_names_where_it_starts() {
     let now = shelf(vec![fr_titled(1, "edited", &[]), fr(2, &["FR-1"])]);
     let assessment = assess(&now, &ledger, JudgedAt::new(100));
 
-    let Standing::Approved(Freshness::Degraded(d)) = standing_of(&assessment, 1) else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = standing_of(&assessment, 1)
+    else {
         panic!("the edited document is not what was approved");
     };
     let (level, causes) = (d.level(), d.causes());
@@ -45,7 +43,11 @@ fn an_edited_upstream_degrades_what_stands_on_it_and_names_where_it_starts() {
             .any(|cause| matches!(cause, Cause::SelfChanged { .. }))
     );
 
-    let Standing::Approved(Freshness::Degraded(d)) = standing_of(&assessment, 2) else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = standing_of(&assessment, 2)
+    else {
         panic!("what stands on an edited document is degraded");
     };
     let (level, causes) = (d.level(), d.causes());
@@ -96,10 +98,7 @@ fn an_edit_approved_again_is_still_a_root_of_what_saw_the_older_text() {
     records.push(approve(&now, &ledger(records.clone()), 1, 1003, 20, None));
     let assessment = assess(&now, &ledger(records), JudgedAt::new(100));
 
-    assert_eq!(
-        standing_of(&assessment, 1),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(standing_of(&assessment, 1), Standing::FRESH);
     let roots = assessment.roots_of(docid(2));
     assert_eq!(roots.len(), 1, "{roots:?}");
     assert_eq!(roots[0].path, vec![docid(2)]);
@@ -121,12 +120,13 @@ fn an_approval_lapses_at_its_expiry_and_not_before() {
         Some(50),
     )]);
     let before = assess(&shelf, &ledger, JudgedAt::new(49));
-    assert_eq!(
-        standing_of(&before, 1),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(standing_of(&before, 1), Standing::FRESH);
     let at = assess(&shelf, &ledger, JudgedAt::new(50));
-    let Standing::Approved(Freshness::Degraded(d)) = standing_of(&at, 1) else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = standing_of(&at, 1)
+    else {
         panic!("an approval lapses when now reaches its expiry");
     };
     let (level, causes) = (d.level(), d.causes());
@@ -144,7 +144,11 @@ fn a_document_that_is_gone_after_its_approval_is_broken() {
     let ledger = approved(&at_approval, &[1]);
     let now = shelf(vec![]);
     let assessment = assess(&now, &ledger, JudgedAt::new(100));
-    let Standing::Approved(Freshness::Degraded(d)) = standing_of(&assessment, 1) else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = standing_of(&assessment, 1)
+    else {
         panic!("an approved document with no file does not hold");
     };
     let (level, causes) = (d.level(), d.causes());
@@ -166,7 +170,11 @@ fn an_upstream_that_turned_invalid_breaks_what_stands_on_it_and_says_why() {
         fr(2, &["FR-1"]),
     ]);
     let assessment = assess(&now, &ledger, JudgedAt::new(100));
-    let Standing::Approved(Freshness::Degraded(d)) = standing_of(&assessment, 2) else {
+    let Standing::Approved {
+        freshness: Freshness::Degraded(d),
+        ..
+    } = standing_of(&assessment, 2)
+    else {
         panic!("what stands on an invalid upstream does not hold");
     };
     assert_eq!(d.level(), Severity::Broken);
@@ -183,8 +191,10 @@ fn a_link_to_a_gone_upstream_is_said_once_and_another_key_is_a_change_of_links()
     let at_approval = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
     let ledger = approved(&at_approval, &[1, 2]);
     let causes_of_2 = |now: &Shelf| {
-        let Standing::Approved(Freshness::Degraded(d)) =
-            standing_of(&assess(now, &ledger, JudgedAt::new(100)), 2)
+        let Standing::Approved {
+            freshness: Freshness::Degraded(d),
+            ..
+        } = standing_of(&assess(now, &ledger, JudgedAt::new(100)), 2)
         else {
             panic!("what stands on a gone upstream does not hold");
         };
@@ -244,10 +254,7 @@ fn standing_of_a_listed_id_is_its_standing_and_of_an_unknown_id_is_pending() {
     let s = shelf(vec![fr(1, &[])]);
     let ledger = approved(&s, &[1]);
     let assessment = assess(&s, &ledger, JudgedAt::new(100));
-    assert_eq!(
-        assessment.standing_of(docid(1)),
-        Standing::Approved(Freshness::Fresh)
-    );
+    assert_eq!(assessment.standing_of(docid(1)), Standing::FRESH);
     assert!(!assessment.standings().contains_key(&docid(77)));
     assert_eq!(assessment.standing_of(docid(77)), Standing::Pending);
     assert!(assessment.notices_of(docid(77)).is_empty());
@@ -360,11 +367,12 @@ fn every_kind_of_standing_is_listed_once_in_order() {
         StandingKind::Deprecated => 2,
         StandingKind::Retired => 3,
         StandingKind::Approved(FreshnessLevel::Fresh) => 4,
-        StandingKind::Approved(FreshnessLevel::Expired) => 5,
-        StandingKind::Approved(FreshnessLevel::Stale) => 6,
-        StandingKind::Approved(FreshnessLevel::Broken) => 7,
+        StandingKind::Approved(FreshnessLevel::Awaiting) => 5,
+        StandingKind::Approved(FreshnessLevel::Expired) => 6,
+        StandingKind::Approved(FreshnessLevel::Stale) => 7,
+        StandingKind::Approved(FreshnessLevel::Broken) => 8,
     };
     let positions: Vec<usize> = StandingKind::ALL.into_iter().map(named).collect();
-    assert_eq!(positions, (0..8).collect::<Vec<_>>());
+    assert_eq!(positions, (0..9).collect::<Vec<_>>());
     assert!(StandingKind::ALL.windows(2).all(|w| w[0] < w[1]));
 }

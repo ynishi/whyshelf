@@ -97,7 +97,8 @@ pub struct LeftOutOut {
     /// For `stands_on`, the link that names it.
     pub link: Option<String>,
     /// For `stands_on`, why that document holds it back: `broken`, `pending` (and
-    /// not in the run), `stale` (and not in the run) or `left_out` (refused, broken
+    /// not in the run), `stale` (and not in the run), `awaiting` (its approval awaits
+    /// the approvals of other names, at any freshness) or `left_out` (refused, broken
     /// or `not_admitted` in the run; one that `repeats`, or is a `second_reading`,
     /// stands, and holds nothing back).
     pub upstream_is: Option<&'static str>,
@@ -391,6 +392,9 @@ fn left_out_detail(namer: &Namer<'_>, left: &LeftOut) -> String {
                 Hold::Stale => format!(
                     "the link `{link}` names {upstream}, which is stale: approve it again first, with `--stale`"
                 ),
+                Hold::Awaiting => format!(
+                    "the link `{link}` names {upstream}, whose approval awaits the approvals of other names its rule asks for: another name is to approve it first, with `judge approve`"
+                ),
                 Hold::LeftOut => {
                     format!("the link `{link}` names {upstream}, which was left out of this run")
                 }
@@ -405,6 +409,7 @@ fn hold_word(hold: Hold) -> &'static str {
         Hold::Broken => "broken",
         Hold::Pending => "pending",
         Hold::Stale => "stale",
+        Hold::Awaiting => "awaiting",
         Hold::LeftOut => "left_out",
     }
 }

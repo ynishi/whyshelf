@@ -608,7 +608,7 @@ impl Namer<'_> {
         }
     }
 
-    fn label(&self, id: DocId) -> String {
+    pub(super) fn label(&self, id: DocId) -> String {
         DocLabel::new(id, self.0.key_of(id).cloned()).to_string()
     }
 }
@@ -721,6 +721,9 @@ fn severity(severity: Severity) -> &'static str {
 fn upstream_status(status: &UpstreamStatus) -> &'static str {
     match status {
         UpstreamStatus::Pending => "pending (its approval was withdrawn)",
+        UpstreamStatus::Unseconded => {
+            "unseconded (its approval awaits the approvals of other names its rule asks for)"
+        }
         UpstreamStatus::Denied => "denied",
         UpstreamStatus::Retired => "retired",
         UpstreamStatus::Deprecated {

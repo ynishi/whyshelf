@@ -44,7 +44,15 @@ fn origins(assessment: &Assessment) -> Vec<Under> {
     let degraded: BTreeSet<DocId> = assessment
         .standings()
         .iter()
-        .filter(|(_, s)| matches!(s, Standing::Approved(Freshness::Degraded(_))))
+        .filter(|(_, s)| {
+            matches!(
+                s,
+                Standing::Approved {
+                    freshness: Freshness::Degraded(_),
+                    ..
+                }
+            )
+        })
         .map(|(id, _)| *id)
         .collect();
     let under: BTreeSet<DocId> = origins
@@ -199,8 +207,10 @@ fn a_via_starts_nowhere_and_a_pin_starts_at_what_it_names() {
     let at_approval = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
     let l = approved(&at_approval, &[1, 2]);
     let now = shelf(vec![fr_titled(1, "edited", &[]), fr(2, &["FR-1"])]);
-    let Standing::Approved(Freshness::Degraded(degradation)) =
-        assess(&now, &l, JudgedAt::new(100)).standing_of(docid(2))
+    let Standing::Approved {
+        freshness: Freshness::Degraded(degradation),
+        ..
+    } = assess(&now, &l, JudgedAt::new(100)).standing_of(docid(2))
     else {
         panic!("FR-2 stands on an edited upstream")
     };

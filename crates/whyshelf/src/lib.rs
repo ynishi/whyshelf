@@ -832,6 +832,7 @@
 //! | an artifact is gone | `moves`, and `judge moved <name> '<new name>'` with the old name filled in | not listed: it is broken |
 //! | an approval lapsed | `judge approve <ref> --until '<time>'` | not listed: it would approve without an expiry |
 //! | an upstream has no decision | `judge approve <upstream>` | not listed: approving again changes nothing until it is decided |
+//! | an upstream's approval awaits the approvals of other names (see "Who may decide") | `judge approve <upstream> --actor '<another name>'` | not listed: `--stale` holds back what stands on it until another name approves it |
 //! | an upstream was replaced, or a link writes a name the artifact moved away from | nothing to type: write the link to the successor, or to the new name | not listed |
 //! | an upstream was decided against, a document is not valid, or a cycle | nothing to type: mend the file, or look at the decision again | not listed |
 //!
@@ -874,6 +875,7 @@
 //!
 //! [decide]                   # the records of no book: moves, the same meaning of an artifact
 //! default = ["maintainers"]
+//! approvals = 2              # at least the most a book asks for
 //!
 //! [[book]]
 //! name = "requirement"
@@ -881,6 +883,7 @@
 //! [book.decide]
 //! approve = ["maintainers"]  # approve, deny, deprecate, retire, revoke, same, exempt, moved
 //! since = "2026-12-01"       # the records made from then on
+//! approvals = 2              # different names to approve the same content (1 to 10)
 //! ```
 //!
 //! There is no authentication: the rule is about the name a record writes, taken
@@ -897,6 +900,34 @@
 //! `since`. A project that declares no rule takes any name, as before. The rules are
 //! on [`Authority`](domain::shelf::schema::Authority)'s page, and how a record is
 //! read with them on [`Admit`](domain::shelf::ledger::Admit)'s.
+//!
+//! A rule's `approvals` (1, the default, to 10) is how many different names approve
+//! the same content before an approval of its book settles
+//! ([`Ledger::quorum`](domain::shelf::ledger::Ledger::quorum)). A name counts once,
+//! and only while its own latest approval of that content has not lapsed, whoever
+//! approved last, so a document waits again once any reading it needed lapses (with
+//! every reading lapsed, the approval is `expired`, its last reader told alone). Until there
+//! are enough, a fresh approval is `awaiting`, listed by `status`, `get` and `check`
+//! with `"awaiting": {"readers", "need"}` (and by `check` under `awaiting`, with a
+//! `note:` line on stderr, leaving it clean); a degraded one keeps its level and lists
+//! the same. `stale` and `stale --exit-code` look at degraded approvals only, so an
+//! awaiting document does not fail them, and `--stale` does not take it: another name
+//! settles it, with `judge approve <ref>`. What stands on an approval that awaits, at
+//! any freshness, an expired one included, is stale through it as on a pending
+//! upstream (a cause `upstream_declared`, "unseconded"), and a run of `--stale` or
+//! `--pending` holds it back as `stands_on` with `upstream_is` `awaiting`; so a CI
+//! that runs `stale --exit-code` fails between the first approval and the last. An
+//! edit declared to keep the meaning joins two hashes only once as many different
+//! names declared that edit as one of its declarations needs (the `approvals` of the
+//! record's book, of `[decide]` for an artifact, over every name of the artifact's
+//! way through its moves), counted per edit, never per way; `check` lists one with
+//! fewer that a pin of an approval that stands meets under `same_meaning_short`, with
+//! a `note:` line, and leaves it clean. `[decide]` asks for at least the most a book
+//! asks for, and reads every record a book that asks for more than one name reads (no
+//! later `since`). A name that declared an edit already, under any name of the
+//! artifact's way, is refused a second declaration of it (`judge same`, exit 2: that
+//! name already declared the edit, and it awaits another name): one name counts once. The names
+//! are as declared as every name is: one person who writes two names is two names.
 //!
 //! ## Commands
 //!
@@ -1039,7 +1070,8 @@
 //!   `broken` (it is broken now: an artifact pinned there that is gone, an upstream
 //!   that is not valid, a cycle), `refused` (the approval would be refused now, as
 //!   below: an upstream decided against, an artifact that cannot be told), or
-//!   `stands_on` (a `depends` link names a document that is broken, pending, or
+//!   `stands_on` (a `depends` link names a document that is broken, pending, whose
+//!   approval awaits other names (see "Who may decide"), or
 //!   itself left out for any reason but `repeats` or `second_reading`; a pending one is approved first, with `judge approve`
 //!   or in the same run with `--pending`), or
 //!   `repeats` (it was stale only through its upstream's upstream, whose hash is new,
@@ -1088,7 +1120,7 @@
 //!   left, and so is what holds it back: a document whose `depends` link names one
 //!   that is broken, or pending or stale and not in the run, or left out, as it
 //!   stands after the approvals made before it in the run, is left out as
-//!   `stands_on` (`upstream_is` `broken`, `pending`, `stale` or `left_out`); an
+//!   `stands_on` (`upstream_is` `broken`, `pending`, `stale`, `awaiting` or `left_out`); an
 //!   upstream stale only through one the run approved holds nothing back. One whose
 //!   approval the model refuses is left out as `refused`. Each is told on stderr as
 //!   `warning: <key> was not approved: <detail>`. A pending document has no approval
@@ -1223,7 +1255,7 @@
 //! stderr; only `--help` and `--version` answer in text. A
 //! document is
 //! `{"id": ..., "key": ...}`; its `standing` is `pending`, `denied`, `deprecated`,
-//! `retired`, or for an approval `fresh`, `expired`, `stale` or `broken`; its
+//! `retired`, or for an approval `fresh`, `awaiting`, `expired`, `stale` or `broken`; its
 //! `decision` is the decision that stands (the record's `judgement` id, `actor`, `at`
 //! and `reason`, null when none was given), or null while it is pending; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
@@ -1237,7 +1269,7 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, or nothing to declare, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
 //! | 3 | the run failed: a file could not be read, written or put on disk (for `new` and `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
 //!
 //! `status` answers `{"docs", "filters", "health"}`: the documents that pass the
