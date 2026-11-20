@@ -1,0 +1,17 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795136043828,
+  "from": [
+    "sha256:2076f40100fafda92b60cfe104fd9eb545ea8e7c85b92a2d24e183b3545e465d"
+  ],
+  "id": "01a1f672-3b74-71c1-a9e4-0b07444af6ba",
+  "kind": "same_meaning",
+  "reason": "The split of #107 moved the answer types of output.rs into child modules unchanged (their fields, order and docs); schemas, versioned, FORMAT_VERSION and the inline test stay in output.rs, byte for byte the same",
+  "subject": {
+    "kind": "artifact",
+    "name": "crates/whyshelf-cli/src/books/output.rs",
+    "space": "file"
+  },
+  "to": "sha256:5d2105fb35ac9ee9a940a6cde1eb7585735ed9111b069c5b650ff2f10e30ce41",
+  "v": 1
+}

@@ -115,13 +115,13 @@
 //! | which links have which meaning | [`Doc::links_of`], from the [`Link`]s of the document (each carries its [`LinkKind`]) | the links of one [`Propagation`] |
 //! | what a hash covers | `hash_doc` in `doc.rs`, private, called by `DocDraft::new` only | a [`DocHash`] (made by `DocHash::computed`, private to `doc.rs`) |
 //! | a hash read from a record | `DocHash::restore` | called by [`Record::from_canon`] only |
-//! | a pin | the private constructor of [`FramePin`] in `ledger.rs`: [`frame_approve`] takes it from a [`ResolvedLink`] as it is, [`Record::from_canon`] reads it back | a [`FramePin`] |
+//! | a pin | the constructor of [`FramePin`] in `ledger/pin.rs`, visible to the ledger's modules only: [`frame_approve`] takes it from a [`ResolvedLink`] as it is, [`Record::from_canon`] reads it back | a [`FramePin`] |
 //! | cycles, in either graph | `graph::cycles_of` (and `graph::components` for the order upstream first), called by [`Shelf::build`] and by the `FrameGraph` that `Ledger::frame_graph` makes | [`Cycle`]s of [`CycleSource::Links`] or [`CycleSource::Frames`] |
 //! | the graph of frames | `Ledger::frame_graph` (visible to the shelf's modules only) | a `FrameGraph` |
 //! | who replaces whom (a fact of links) | [`Shelf::replacers_of`] | the candidates |
 //! | who succeeds whom (a verdict) | [`Successors::of`] | [`Successors`] |
 //! | the facts a decision stands on | [`frame_approve`], [`frame_present`], [`frame_retire`] | an [`ApproveFrame`], a [`PresentFrame`], a [`RetireFrame`], or a [`FrameRefusal`] |
-//! | the invariants of a decision | `Decision::assemble`, private | a [`Decision`] or a [`DecisionProblem`] |
+//! | the invariants of a decision | `Decision::assemble`, visible to the ledger's modules only | a [`Decision`] or a [`DecisionProblem`] |
 //! | reading a record back | [`Record::from_canon`] | a [`Record`] or a [`RecordProblem`] |
 //! | a contradiction among records | [`Ledger::build`] | [`LedgerProblem`]s |
 //! | what was decided | [`Ledger::status_of`] | a [`DeclaredStatus`] |
@@ -133,7 +133,7 @@
 //! | what of an artifact counts, and which hashes are compared | [`Comparison`](artifact::Comparison), declared per link and kept in each pin; [`Comparison::fingerprint`](artifact::Comparison::fingerprint) is the one maker of an artifact's hash; pins of another comparison than the link's are [`Cause::ArtifactComparisonChanged`](freshness::Cause::ArtifactComparisonChanged), never compared | an [`ArtifactHash`](artifact::ArtifactHash) |
 //! | the form of a content address and of a revision (A7) | the adapter, then `from_validated` ([`ContentAddress::from_validated`], [`Revision::from_validated`]) checks only that it is not empty and has no space | an opaque value |
 //! | a link to artifacts never replaces | [`Schema::validate`] ([`SchemaProblem::ArtifactReplaces`]); the type [`ArtifactPropagation`] has no `Replaces` | an [`ArtifactLinkKind`] |
-//! | a pin of an artifact (A2) | the private constructor of [`ArtifactPin`]: [`frame_approve`] pins every artifact of a `Depends` link as it is, there or not, by its space and name, and refuses only one its adapter cannot tell about now ([`FrameRefusal::ArtifactUnknown`]) | an [`ArtifactPin`] with a [`PinnedArtifact`] |
+//! | a pin of an artifact (A2) | an [`ArtifactPin`], built only in `ledger/frame.rs` and `ledger/canon.rs` (its fields are visible to the ledger's modules only): [`frame_approve`] pins every artifact of a `Depends` link as it is, there or not, by its space and name, and refuses only one its adapter cannot tell about now ([`FrameRefusal::ArtifactUnknown`]) | an [`ArtifactPin`] with a [`PinnedArtifact`] |
 //! | which address goes on which item of an approval (A5) | [`ApproveFrame::addressed`], from the files of documents the frame knows ([`ApproveFrame::files`]) and what the adapters answered for its artifacts | the frame, with the addresses and the revision |
 //! | which records keep addresses and a revision, and how a record without them reads (A5) | [`Record::to_canon`] / [`Record::from_canon`]: optional keys, left out when empty | a [`Record`] |
 //! | how a record names an artifact, and how one written before spaces reads | [`Record::to_canon`] / [`Record::from_canon`]: `space` and `name`; a `path` with no `space` is a name in the space `file`, and the record is written again as it was stored | a [`Record`] |
@@ -155,7 +155,7 @@
 //!
 //! Two of these cannot be enforced by visibility alone: `DocHash::restore` and
 //! `ArtifactHash::restore` are visible to the whole module (the hash is made in
-//! `doc.rs` or by an adapter, and read back in `ledger.rs`), so the rule is a name:
+//! `doc.rs` or by an adapter, and read back in `ledger/canon.rs`), so the rule is a name:
 //! `restore` only where a record is read back.
 //!
 //! # Artifacts
