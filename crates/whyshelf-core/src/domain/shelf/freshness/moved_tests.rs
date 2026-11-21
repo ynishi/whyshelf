@@ -52,7 +52,7 @@ fn moved(judgement: u128, from: &str, to: &str, at: i64) -> Record {
 
 fn causes_of(assessment: &Assessment, n: u128) -> Vec<Cause> {
     match assessment.standing_of(docid(n)) {
-        Standing::FRESH => Vec::new(),
+        fresh if fresh.is_fresh_met() => Vec::new(),
         Standing::Approved {
             freshness: Freshness::Degraded(d),
             ..
@@ -78,7 +78,7 @@ fn an_unchanged_move_leaves_the_approval_as_it_was() {
 
     records.push(moved(2001, "tests/a.rs", "tests/b.rs", 50));
     let assessment = assessed(&now, records);
-    assert_eq!(assessment.standing_of(docid(2)), Standing::FRESH);
+    assert!(assessment.standing_of(docid(2)).is_fresh_met());
     assert!(assessment.notices_of(docid(2)).is_empty());
 }
 

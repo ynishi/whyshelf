@@ -119,7 +119,7 @@ fn no_filter_is_every_document_and_the_filters_are_empty() {
     );
     assert_eq!(
         answer["filters"],
-        value!({"books": [], "standings": [], "where": [], "without": [], "with": []})
+        value!({"books": [], "standings": [], "readers": [], "where": [], "without": [], "with": []})
     );
     // The same as naming every book: the rows are what `status` always answered.
     let both = answered(&project, &["--book", "decision", "--book", "note"]);
@@ -137,6 +137,7 @@ fn a_book_and_a_field_answer_the_decisions_that_name_the_issue() {
         value!({
             "books": ["decision"],
             "standings": [],
+            "readers": [],
             "where": [{"field": "issues", "value": "#41"}],
             "without": [],
             "with": [],
@@ -252,6 +253,7 @@ fn the_answer_carries_the_filters_as_given_with_the_standings_in_a_fixed_order()
         value!({
             "books": ["decision", "note"],
             "standings": ["pending", "stale"],
+            "readers": [],
             "where": [
                 {"field": "size", "value": "3"},
                 // The value is what follows the first `=`, as typed.
@@ -306,6 +308,7 @@ fn without_answers_the_documents_that_hold_no_value_and_the_filters_say_it() {
         value!({
             "books": [],
             "standings": [],
+            "readers": [],
             "where": [],
             "without": ["size", "level"],
             "with": [],

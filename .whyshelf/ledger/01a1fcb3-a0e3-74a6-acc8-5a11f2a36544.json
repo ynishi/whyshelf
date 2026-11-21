@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d8c84af6018963911840fad10894782a608875c0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f98527f8b622b688df1ef002e985e653b18cc839e2ab5231b1b2907c7a7324b9",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6903818e4ef099503c95e3ff2a2e0d15127c822d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c71bce08a6c01210eca31c2ab1eb0c09c9bf9ccdf084cfe5949310d033fb4c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/dispatch.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "293bac7ddff58b49073ac5f0a7ab0b665caf41fe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ec51ad10e7608461eb5d1540b1bbdd2681be7b63900ceda72e6c1dd55b34c557",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a096bf34557afb45206950a477b7443a5babc4e6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3087c4bd62ddca63092a2fcd081dfa10b140c60b29e5e835f35111b5fa8881ab",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cede9d7a47899f767eed83ccad7d29617dd7ac9c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0f7571bd378d795e98ca4a4a83c805f1ac4c2dfa567c384581782ef604b7c425",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240972613,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a128682ee8e3be1779ce23bb99749af0c64478b9",
+      "hash": "sha256:88c82d70c137e69d6b4d0777c12c63b4136b2ab7c98d2d32845720ca6aaa09ec",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "80"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f0ce-3040-7549-bf80-827e6a156a89"
+    }
+  ],
+  "id": "01a1fcb3-a0e3-74a6-acc8-5a11f2a36544",
+  "kind": "decision",
+  "reason": "Re-read for #105: DEC-70 gained the readers kind of a status filter (DEC-95); the verifications' test files changed where Standing::FRESH became the test helpers fresh() and is_fresh_met(), and a Standing::Approved gained its readers; what each states still holds: cargo test --workspace passes (1697)",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:e9fc08e33c14960ca14eab981fbeebed2146f46c96b5f13dd94d588cbdecd70f",
+  "seen_address": "68d4e84f7db2b355c758118768682bc3761b2aea",
+  "subject": "01a1f0ce-8cb8-726a-a5e7-51ec4ba0bd1d",
+  "v": 1,
+  "verb": "approve"
+}

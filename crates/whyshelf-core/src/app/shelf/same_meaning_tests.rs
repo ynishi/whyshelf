@@ -99,7 +99,7 @@ fn a_declared_edit_is_written_and_keeps_the_approvals_fresh() {
     assert_eq!(app.ports().records()[2], declared[0].record);
 
     for reference in ["FR-1", "SP-2"] {
-        assert_eq!(standing(&app, reference), Standing::FRESH, "{reference}");
+        assert!(standing(&app, reference).is_fresh_met(), "{reference}");
     }
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
     assert!(
@@ -180,7 +180,7 @@ fn a_run_declares_an_upstream_and_its_downstream_in_order() {
     );
 
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
     let kinds: Vec<_> = row
         .notices
         .iter()
@@ -233,7 +233,7 @@ fn a_declared_change_of_a_file_keeps_its_approval_fresh() {
     };
     assert_eq!(record.actor().as_str(), "bob");
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
     assert!(
         matches!(row.notices.as_slice(), [Notice::ArtifactSameMeaning { pin, .. }] if pin.pin().name() == &aname("tests/a.rs")),
         "{:?}",
@@ -312,7 +312,7 @@ fn a_named_earlier_hash_chooses_the_edit_and_an_unpinned_one_is_a_request_error(
     };
     assert_eq!(from.iter().copied().collect::<Vec<_>>(), [fast]);
     // FR-1 holds; SP-2 saw "slow", and slow -> fast was never declared.
-    assert_eq!(standing(&app, "FR-1"), Standing::FRESH);
+    assert!(standing(&app, "FR-1").is_fresh_met());
     assert!(is_stale(&standing(&app, "SP-2")));
 }
 
@@ -323,7 +323,7 @@ fn withdrawing_a_declaration_makes_the_declared_edit_stale_again() {
     let mut app = approved();
     app.ports().edit(fr(1, "slower", &[]), 1);
     let declared = block_on(app.same_meaning(vec![same("FR-1")])).unwrap();
-    assert_eq!(standing(&app, "SP-2"), Standing::FRESH);
+    assert!(standing(&app, "SP-2").is_fresh_met());
 
     let record = block_on(app.withdraw(withdraw(vec![declared[0].record.id()]))).unwrap();
     assert!(matches!(record, Record::Revocation(_)), "{record:?}");
@@ -360,7 +360,7 @@ fn withdrawing_a_decision_by_its_identity_takes_it_back() {
     let approval = app.ports().records()[1].id();
     block_on(app.withdraw(withdraw(vec![approval]))).unwrap();
     assert_eq!(standing(&app, "SP-2"), Standing::Pending);
-    assert_eq!(standing(&app, "FR-1"), Standing::FRESH);
+    assert!(standing(&app, "FR-1").is_fresh_met());
 }
 
 #[test]
@@ -390,7 +390,7 @@ fn withdrawing_what_cannot_be_withdrawn_is_refused_and_writes_nothing() {
         assert_eq!(err.class(), ErrorClass::Request);
     }
     assert_eq!(app.ports().append_count(), 3);
-    assert_eq!(standing(&app, "FR-1"), Standing::FRESH);
+    assert!(standing(&app, "FR-1").is_fresh_met());
 
     let err = block_on(app.withdraw(withdraw(vec![]))).unwrap_err();
     assert!(matches!(err, ShelfError::NothingRequested), "{err:?}");

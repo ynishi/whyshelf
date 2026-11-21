@@ -1,0 +1,94 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7de763afba82d996c08a742a2a64c64fdf28328b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0ded651f36a592746982663febde19b63543622ec91fde6e408bdd40fe6ec3c3",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8b75e355602bcbe905b921dd12c34c907af9a383",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:80b5d08a4bacedfa70e5b2580c33978ad7e7178941a0d8d34ad23aa0a6081405",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6b40d624c3c9f6032163bf13ed5325105c38a17b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3baba4b699935b634ccfe02d9e75b1f64eb96042c282aca3a48d2c4ec57267e9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240972613,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8ba3c117fdb4a0d0ceb43d04396fe74d06e7c223",
+      "hash": "sha256:d05433fd80e351ae6c08f5298c9109dc5cc36c482844ba6313fd7d12665ac88a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3c29-7041-9ec8-42f8da38f9c3"
+    },
+    {
+      "address": "a814c769b5a1a916732436f8d64e3baca93a2070",
+      "hash": "sha256:ca843dc3aa3fd15b1c6b35cf1c40a2a2c8e6024f3e8d6424958910dc1cb024e4",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "4"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3cd5-7944-ac64-25bd8640a4ca"
+    }
+  ],
+  "id": "01a1fcb3-533f-7339-a919-e680f5891318",
+  "kind": "decision",
+  "reason": "Re-read for #105: DEC-70 gained the readers kind of a status filter (DEC-95); the verifications' test files changed where Standing::FRESH became the test helpers fresh() and is_fresh_met(), and a Standing::Approved gained its readers; what each states still holds: cargo test --workspace passes (1697)",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:46164fbe61489817f1113012a80b73f8b4b00b84dc40129e9fcbc5b177ef3f1d",
+  "seen_address": "f535adc938f7d31dbc36a7a10772c0cd8389ff5e",
+  "subject": "01a1c332-3d7d-70c1-b5f4-22ab3a43d66f",
+  "v": 1,
+  "verb": "approve"
+}

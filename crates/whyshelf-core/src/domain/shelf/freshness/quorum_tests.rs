@@ -7,10 +7,11 @@
 
 use std::collections::BTreeSet;
 
+use crate::domain::actor::Actor;
 use crate::domain::shelf::fixtures_tests::{
     admitted, approve_as, asking, docid, fr, fr_titled, ledger, ruled_shelf,
 };
-use crate::domain::shelf::ledger::Record;
+use crate::domain::shelf::ledger::{ReaderCount, Record};
 use crate::domain::shelf::order::{Hold, held_back, stale};
 
 use super::assess_unasked as assess;
@@ -30,6 +31,72 @@ fn approval(
 /// Where `n` stands at time 100.
 fn standing(shelf: &Shelf, ledger: &Ledger, n: u128) -> Standing {
     assess(shelf, ledger, JudgedAt::new(100)).standing_of(docid(n))
+}
+
+/// The names of a reading, in order.
+fn names(set: &BTreeSet<Actor>) -> Vec<&str> {
+    set.iter().map(Actor::as_str).collect()
+}
+
+#[test]
+fn only_an_approval_has_readers() {
+    for standing in [Standing::Pending, Standing::Denied, Standing::Retired] {
+        assert_eq!(standing.read_by(), None, "{standing:?}");
+    }
+    let fresh = Standing::fresh();
+    assert_eq!(fresh.read_by().map(ReadBy::count), Some(ReaderCount::One));
+}
+
+#[test]
+fn an_approval_is_read_by_the_names_that_approved_its_content_in_every_project() {
+    let shelf = ruled_shelf(asking(2, None), vec![fr(1, &[])]);
+    let records = vec![
+        approval(&shelf, &[], (1, 1001), ("ana", 10, None)),
+        approval(&shelf, &[], (1, 1002), ("bo", 20, None)),
+    ];
+    // A project that declares no rule reads the same names, and its quorum is met.
+    let unruled = standing(&shelf, &ledger(records.clone()), 1);
+    let read_by = unruled.read_by().unwrap();
+    assert_eq!(names(read_by.counted()), ["ana", "bo"]);
+    assert_eq!(read_by.count(), ReaderCount::Several);
+    assert_eq!(unruled.quorum(), Some(&Quorum::Met));
+    // So does one that asks for two names.
+    let ruled = standing(&shelf, &admitted(&shelf, records), 1);
+    assert_eq!(ruled.read_by(), unruled.read_by());
+}
+
+#[test]
+fn an_expired_approval_read_by_two_names_is_read_by_nobody_while_its_quorum_is_short() {
+    let shelf = ruled_shelf(asking(2, None), vec![fr(1, &[])]);
+    // ana until 50, then bo until 60, whose approval stands: both lapsed at 100.
+    let ana = approval(&shelf, &[], (1, 1001), ("ana", 10, Some(50)));
+    let bo = approval(
+        &shelf,
+        std::slice::from_ref(&ana),
+        (1, 1002),
+        ("bo", 20, Some(60)),
+    );
+    let ledger = admitted(&shelf, vec![ana, bo]);
+    let expired = standing(&shelf, &ledger, 1);
+
+    let read_by = expired.read_by().unwrap();
+    assert_eq!(read_by.count(), ReaderCount::Nobody);
+    assert!(read_by.counted().is_empty());
+    assert_eq!(names(read_by.lapsed()), ["ana", "bo"]);
+    // The name of the approval that stands counts alone in the quorum, and in no
+    // reading.
+    let Some(Quorum::Short { readers, need }) = expired.quorum() else {
+        panic!("short: {expired:?}");
+    };
+    assert_eq!(
+        readers.iter().map(Actor::as_str).collect::<Vec<_>>(),
+        ["bo"]
+    );
+    assert_eq!(need.count(), 2);
+    assert_eq!(
+        expired.kind(),
+        StandingKind::Approved(FreshnessLevel::Expired)
+    );
 }
 
 #[test]
@@ -100,7 +167,7 @@ fn an_upstream_short_of_names_stales_and_holds_back_what_stands_on_it_even_expir
     // The same records, read in a project that declares no rule: FR-1 only expired,
     // and FR-2 holds, with a notice.
     let assessment = assess(&shelf, &ledger(records), JudgedAt::new(100));
-    assert_eq!(assessment.standing_of(docid(2)), Standing::FRESH);
+    assert!(assessment.standing_of(docid(2)).is_fresh_met());
     let run = stale(&assessment).again;
     assert_eq!(run, BTreeSet::from([docid(1)]));
     let held = held_back(&shelf, &assessment, docid(2), &run, &BTreeSet::new());

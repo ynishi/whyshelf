@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795240966948,
+  "expires": null,
+  "frame": [],
+  "id": "01a1fcb3-3d01-7725-af5c-ee51c02928ac",
+  "kind": "decision",
+  "reason": "Blind review of #105 (Opus, from the issue and the branch only) found no must-fix and no should-fix, its nits fixed: on the binary, with no rule, an approval read by one name shows one and is listed by --readers one, a second name makes it several, an edit approved by one makes it one again, lapsed readings are listed apart and counted by nobody; code review (no correctness bug) and rule-judge on the code; V-119 and V-120 name tests that exist and pass",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:bfb98ed672243880cba62041ce43c663e367874054455d328abcf0fda6527d16",
+  "seen_address": "f6b02786e96898acdbcc1298340b5a9809d40658",
+  "subject": "01a1fca1-6c0d-73c0-9ad9-7f5e5d9cb7d6",
+  "v": 1,
+  "verb": "approve"
+}

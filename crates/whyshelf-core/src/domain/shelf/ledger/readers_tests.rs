@@ -451,3 +451,187 @@ fn a_named_run_leaves_out_a_repeat_unless_again_and_a_chosen_run_a_second_readin
         }
     }
 }
+
+/// Who reads FR-1 at `now`, from the readers the records give.
+fn read_by(records: &[Record], now: i64) -> ReadBy {
+    ledger(records.to_vec())
+        .readers(docid(1), Before::Now)
+        .at(JudgedAt::new(now))
+}
+
+fn named(set: &BTreeSet<Actor>) -> Vec<&str> {
+    set.iter().map(Actor::as_str).collect()
+}
+
+#[test]
+fn one_name_reads_one_and_two_names_read_several() {
+    let a = titled("a");
+    let one = [approval(&a, 1, "ana", 10, None)];
+    let read = read_by(&one, 100);
+    assert_eq!(named(read.counted()), ["ana"]);
+    assert!(read.lapsed().is_empty());
+    assert_eq!(read.count(), ReaderCount::One);
+
+    let two = [one[0].clone(), approval(&a, 2, "bo", 20, None)];
+    let read = read_by(&two, 100);
+    assert_eq!(named(read.counted()), ["ana", "bo"]);
+    assert_eq!(read.count(), ReaderCount::Several);
+}
+
+#[test]
+fn a_name_counts_once_however_it_approves_again() {
+    let a = titled("a");
+    // ana again, with the same expiry (`--again`) and with another.
+    let records = [
+        approval(&a, 1, "ana", 10, None),
+        approval(&a, 2, "ana", 20, None),
+        approval(&a, 3, "ana", 30, Some(500)),
+    ];
+    let read = read_by(&records, 100);
+    assert_eq!(named(read.counted()), ["ana"]);
+    assert_eq!(read.count(), ReaderCount::One);
+}
+
+#[test]
+fn who_ran_the_command_is_no_reader() {
+    let a = titled("a");
+    let frame = frame_approve(&a, &ledger(vec![]), docid(1)).unwrap();
+    let ran = |judgement: u128, ran_by: Option<&str>, at: i64| {
+        let attribution = match ran_by {
+            Some(by) => Attribution::ran_for(who("ana"), who(by)).unwrap(),
+            None => Attribution::one(who("ana")),
+        };
+        Record::Decision(
+            Decision::approve(
+                jid(judgement),
+                frame.clone(),
+                None,
+                attribution,
+                JudgedAt::new(at),
+                None,
+            )
+            .unwrap(),
+        )
+    };
+    let records = [
+        ran(1, None, 10),
+        ran(2, Some("bot"), 20),
+        ran(3, Some("ci"), 30),
+    ];
+    let read = read_by(&records, 100);
+    assert_eq!(named(read.counted()), ["ana"]);
+    assert_eq!(read.count(), ReaderCount::One);
+}
+
+#[test]
+fn other_content_or_a_decision_that_is_no_approval_cuts_who_reads_it() {
+    let (x, y) = (titled("x"), titled("y"));
+    let records = [
+        approval(&x, 1, "ana", 10, None),
+        approval(&y, 2, "cy", 20, None),
+        approval(&x, 3, "bo", 30, None),
+    ];
+    assert_eq!(named(read_by(&records, 100).counted()), ["bo"]);
+    let denied = [approval(&x, 1, "ana", 10, None), deny(&x, 1, 2, 20)];
+    assert_eq!(read_by(&denied, 100).count(), ReaderCount::Nobody);
+}
+
+#[test]
+fn a_second_reading_that_is_revoked_reads_nothing() {
+    let a = titled("a");
+    let records = [
+        approval(&a, 1, "ana", 10, None),
+        approval(&a, 2, "bo", 20, None),
+        revoke(3, 2, 30),
+    ];
+    let read = read_by(&records, 100);
+    assert_eq!(named(read.counted()), ["ana"]);
+    assert_eq!(read.count(), ReaderCount::One);
+}
+
+#[test]
+fn a_name_whose_own_latest_reading_lapsed_is_told_apart_and_not_counted() {
+    let a = titled("a");
+    // ana until 50, then bo with none, whose approval stands.
+    let records = [
+        approval(&a, 1, "ana", 10, Some(50)),
+        approval(&a, 2, "bo", 20, None),
+    ];
+    assert_eq!(read_by(&records, 40).count(), ReaderCount::Several);
+    let read = read_by(&records, 50);
+    assert_eq!(named(read.counted()), ["bo"]);
+    assert_eq!(named(read.lapsed()), ["ana"]);
+    assert_eq!(read.count(), ReaderCount::One);
+    // A name is in one side only: ana renewing her own reading counts again.
+    let renewed = [
+        records[0].clone(),
+        records[1].clone(),
+        approval(&a, 3, "ana", 60, None),
+    ];
+    let read = read_by(&renewed, 70);
+    assert_eq!(named(read.counted()), ["ana", "bo"]);
+    assert!(read.lapsed().is_empty());
+}
+
+#[test]
+fn when_every_reading_lapsed_nobody_counts_while_the_quorum_counts_the_approval_that_stands() {
+    use crate::domain::shelf::fixtures_tests::{admitted, approve_as, asking, ruled_shelf};
+    let shelf = ruled_shelf(asking(2, None), vec![fr(1, &[])]);
+    let ana = approve_as(
+        &shelf,
+        &admitted(&shelf, vec![]),
+        1,
+        1001,
+        ("ana", 10, Some(50)),
+    );
+    let before = admitted(&shelf, vec![ana.clone()]);
+    let bo = approve_as(&shelf, &before, 1, 1002, ("bo", 20, Some(60)));
+    let ledger = admitted(&shelf, vec![ana, bo]);
+
+    let Reading { read_by, quorum } = ledger.reading(docid(1), JudgedAt::new(100));
+    assert!(read_by.counted().is_empty());
+    assert_eq!(named(read_by.lapsed()), ["ana", "bo"]);
+    assert_eq!(read_by.count(), ReaderCount::Nobody);
+    // The name of the approval that stands stands in for them in the quorum only.
+    let Quorum::Short { readers, need } = &quorum else {
+        panic!("short: {quorum:?}");
+    };
+    assert_eq!(
+        readers.iter().map(Actor::as_str).collect::<Vec<_>>(),
+        ["bo"]
+    );
+    assert_eq!(need.count(), 2);
+    // The one a caller of the quorum alone asks is the same.
+    assert_eq!(ledger.quorum(docid(1), JudgedAt::new(100)), quorum);
+}
+
+#[test]
+fn no_readers_are_read_by_nobody_and_their_quorum_is_met() {
+    use crate::domain::shelf::fixtures_tests::{admitted, asking, ruled_shelf};
+    let empty = ledger(vec![]);
+    let readers = empty.readers(docid(1), Before::Now);
+    assert!(readers.approvals().is_empty());
+    let read = readers.at(JudgedAt::new(100));
+    assert!(read.counted().is_empty() && read.lapsed().is_empty());
+    assert_eq!(read.count(), ReaderCount::Nobody);
+    let reading = empty.reading(docid(1), JudgedAt::new(100));
+    assert_eq!(reading.quorum, Quorum::Met);
+
+    let shelf = ruled_shelf(asking(2, None), vec![fr(1, &[])]);
+    let ruled = admitted(&shelf, vec![]);
+    assert_eq!(
+        ruled.reading(docid(1), JudgedAt::new(100)),
+        Reading {
+            read_by: read,
+            quorum: Quorum::Met
+        }
+    );
+}
+
+#[test]
+fn the_counts_are_listed_in_order() {
+    assert_eq!(
+        ReaderCount::ALL,
+        [ReaderCount::Nobody, ReaderCount::One, ReaderCount::Several]
+    );
+}

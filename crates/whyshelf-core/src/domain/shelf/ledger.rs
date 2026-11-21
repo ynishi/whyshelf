@@ -784,7 +784,9 @@ pub use frame::{
 pub use judgement::{JudgedAt, JudgementId};
 pub use pin::{ArtifactPin, FramePin, PATH_ONLY_SPACE, PinName, PinnedArtifact, Seen};
 use pin::{NameForm, StandsOn};
-pub use readers::{ApprovalKind, Asked, Before, LeaveOut, Quorum, Readers, Taking};
+pub use readers::{
+    ApprovalKind, Asked, Before, LeaveOut, Quorum, ReadBy, ReaderCount, Readers, Reading, Taking,
+};
 pub use record::{Record, RecordHash, Revocation};
 
 #[cfg(test)]

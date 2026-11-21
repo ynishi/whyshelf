@@ -1,0 +1,209 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "6903818e4ef099503c95e3ff2a2e0d15127c822d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c71bce08a6c01210eca31c2ab1eb0c09c9bf9ccdf084cfe5949310d033fb4c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/dispatch.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ebf342190216e41511626e74a92f2dd67b2ba906",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2ede198eadc864160d8ff170eadbeb1d2e1617fd9a746ff2a40f9eb13aace5f7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e487ef31061452a9cfec86ab5821b61d097e868",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add768ddd5406e06645e18dda7518815a659d1f748b4a8cb827a8c355216144d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "49b692c071996155224ff92bfc11f8e4659a502f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a472c3deabec95e56feb781dcbbc22670447bcf55afd8ad6d38389b5efe2b74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cbf493d1e5fb9b58f360fca70b02480e2b951ad8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3e7626283d128b61d7d97fd61d2dfe2b4e69dc9703598450cf3696e9ffd285cc",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "15438da9bc8d0cd40806c9bd31b33b6a1dff226e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94764bb140e397d0abc15683e76086bc530de516a33c9563da7755fa0dc4a899",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b477824f027d5c12b6d4982450f3458f282c7f61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ade3237bc3b00612988868b792584abd00c515c38fb9b3a4ddbec379098a296",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d4434193bddc5dbac32746c4e9207a8aea238930",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:142ecf3a74b7f00c15337d038f5f2970cb07d49037655dad3e4607d0ded24b93",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f1e5a83ec0a91fcb7f6a4bbadbb3040f4ea601d7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:82c9e9bbc08aaeb8f3eaf275f4acdf6dff2772cd089673a02b2e45125757ce9b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/registry.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f4e2311a8e217d9f1d1fdfae114f1abcd5d05186",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3f034a6cf5897bf485b279574db7f84bcc2281e528019b9225a13efeb3897701",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240972613,
+  "expires": null,
+  "frame": [
+    {
+      "address": "52742451b255b109683b0f4e72ddf784277cae6d",
+      "hash": "sha256:396dbbf0430120d2a819e65987bc767f28d271cb80461d7b41e40106d44a7099",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "44"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bb53-7733-93f1-bf8478b9df23"
+    },
+    {
+      "address": "c74b2ee2aed6c8bcfcc57f138bfa6926eb92d61f",
+      "hash": "sha256:1cce62a572259e1e57a23ec85cec8acc40c478dcedee3048d8120f97a37cd32a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bc99-7728-b8d7-deea06f9c49b"
+    },
+    {
+      "address": "e4894a2b3e0e23aa63e7a3936ccc1ddaf023bd48",
+      "hash": "sha256:728a8801003dacb50886f495ac9a9d364b391f894c9a8a5f95e67250e8a23e73",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "46"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bf0d-70d9-a6b0-d454e6662c4d"
+    }
+  ],
+  "id": "01a1fcb3-773d-71a1-b30e-cdb679c81e3f",
+  "kind": "decision",
+  "reason": "Re-read for #105: DEC-70 gained the readers kind of a status filter (DEC-95); the verifications' test files changed where Standing::FRESH became the test helpers fresh() and is_fresh_met(), and a Standing::Approved gained its readers; what each states still holds: cargo test --workspace passes (1697)",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:05512f35c7c53eec2f7d1284cd598ff0f74fbd4fac95c8692f019808978b4e09",
+  "seen_address": "9754ad0d826894a7ed27225b9cbb9b60c3baa66d",
+  "subject": "01a1c60b-c0d7-702a-9bc0-a229ded269d9",
+  "v": 1,
+  "verb": "approve"
+}

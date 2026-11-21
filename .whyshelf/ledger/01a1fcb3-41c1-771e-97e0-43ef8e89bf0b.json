@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "82f4d3b8059ee3c236298f4206c80775b4e05bfe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8efe119ea6620b346c00177afdb5eeab6607fe0c24c1eb73d2f86821dfabd6fc",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/read_by.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240966948,
+  "expires": null,
+  "frame": [
+    {
+      "address": "70a91830d2d7a9aa5514c6db26bd3e55f8426d8b",
+      "hash": "sha256:8a73f1aa4f2a908af17ffccb383085ba39d5c58e130b332baa59fe820f76fad3",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "95"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fca1-7324-77ae-ade6-30bb419c262e"
+    }
+  ],
+  "id": "01a1fcb3-41c1-771e-97e0-43ef8e89bf0b",
+  "kind": "decision",
+  "reason": "Blind review of #105 (Opus, from the issue and the branch only) found no must-fix and no should-fix, its nits fixed: on the binary, with no rule, an approval read by one name shows one and is listed by --readers one, a second name makes it several, an edit approved by one makes it one again, lapsed readings are listed apart and counted by nobody; code review (no correctness bug) and rule-judge on the code; V-119 and V-120 name tests that exist and pass",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:be2616114c7ce5d8c93d0c6d19f13f7f0b07532956dfb725e5d41401c35f262b",
+  "seen_address": "e4ac691d152f41bdba6ae1c98277b6b975499cb9",
+  "subject": "01a1fca1-cd62-7167-ad7f-9402fd9635fc",
+  "v": 1,
+  "verb": "approve"
+}

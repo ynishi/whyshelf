@@ -129,7 +129,7 @@ fn a_comment_added_keeps_the_approval_fresh_and_diff_says_unchanged() {
         b"// why it is fast\n    assert!(fast);   \n\n",
     );
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
     assert!(!file_changed(&app));
 
     app.ports().put_file("tests/a.rs", b"assert!(slow);\n");

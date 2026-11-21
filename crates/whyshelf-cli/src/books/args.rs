@@ -127,8 +127,8 @@ pub enum BooksCommand {
     /// no book reads as the field's type, a value left empty (`--where field=`), a
     /// field asked with a value (`--where`, `--with`) and with no value, no value
     /// asked of a field every
-    /// book that declares it requires, or a word that is no standing is a request
-    /// error (exit 2).
+    /// book that declares it requires, or a word that is no standing or no count of
+    /// readers is a request error (exit 2).
     Status {
         /// Only the documents of this book; repeat it for any of several books.
         #[arg(long = "book", value_name = "NAME")]
@@ -138,6 +138,11 @@ pub enum BooksCommand {
         /// are); repeat it for any of several.
         #[arg(long = "standing", value_name = "WORD")]
         standings: Vec<String>,
+        /// Only the approved documents read by this many names now, in the word an
+        /// answer gives as a document's `readers.count` (a word that is none is told
+        /// with the words there are); repeat it for any of several.
+        #[arg(long = "readers", value_name = "WORD")]
+        readers: Vec<String>,
         /// Only the documents of a book that declares the field, with the value
         /// given: equal to it, or for a list field holding it as an item; the text
         /// after the first `=` is the value. Repeat it for each condition a

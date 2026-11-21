@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9850630df27b99ca33c121cb11981e6749f27d35",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5b03233d77d4755652c360f34c6673aa500f2dbf039bce7a26b79d0eac5a4844",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b574a151a4541ffb93806d57ecb5cebed784641e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d79594431a6adeacc1d6782398e2d26549614389ffe645136f6b4df055a13519",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "43aefdfd645248be5e69894e9ed6aef30ad745e9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:28225bfcb259a96acf904e4973c21d91ce906c2c3020ed6f8a604dbd54b96504",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/quorum_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "319aa28360a9957fbcb3382f3ad1576bc8b6c9f3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0ad5282f20bee9c8d9787ac3879b66b28a8bf2b0c74305df6e203e22c31123b0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5b60927234b16f62f8b506e46661d411dbcc90ee",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d4c2034fcade023e84631bf85ac024fa6980878c798d4da0bea5e3a6606c219b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240966948,
+  "expires": null,
+  "frame": [
+    {
+      "address": "70a91830d2d7a9aa5514c6db26bd3e55f8426d8b",
+      "hash": "sha256:8a73f1aa4f2a908af17ffccb383085ba39d5c58e130b332baa59fe820f76fad3",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "95"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fca1-7324-77ae-ade6-30bb419c262e"
+    }
+  ],
+  "id": "01a1fcb3-401e-753e-85a1-500e0cf1c211",
+  "kind": "decision",
+  "reason": "Blind review of #105 (Opus, from the issue and the branch only) found no must-fix and no should-fix, its nits fixed: on the binary, with no rule, an approval read by one name shows one and is listed by --readers one, a second name makes it several, an edit approved by one makes it one again, lapsed readings are listed apart and counted by nobody; code review (no correctness bug) and rule-judge on the code; V-119 and V-120 name tests that exist and pass",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:b3f0a28a0bb2a20dbbdd28423d9def1b455256abca1021cea7da2af604945453",
+  "seen_address": "70bda8ab851b8240fc54d0b95c100dd994f90446",
+  "subject": "01a1fca1-c4e9-7428-ab53-50a6c1c58d62",
+  "v": 1,
+  "verb": "approve"
+}

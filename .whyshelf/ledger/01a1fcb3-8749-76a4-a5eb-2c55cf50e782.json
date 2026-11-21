@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e123da1759364d64c50f98cd2323dbe54a3943cf",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f66fb70c7b86450feab7561639c4cec5e983dbf2099456c524cad7b008e240c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1110aded6021c42b2cb43d7ad1e8896ef6813d07",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4c61dd7debff526a941e9e32fa1152075ad6c89bcd0f768b2642f1ac2df7a563",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5e0119b81f160ad01dec3c8e35f231bf907f4bc4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c21a04e09ab03e4d6c252545d5b60dffc9f1c2ffe23163d4e99d95b4dd465d15",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240972613,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ed2d8800e4e0b5b6488ba2e5aa64172a96750903",
+      "hash": "sha256:30e6e11b84fb90a5af811e25fa8637aa65f92e5f41c716515d5b686941f42254",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "59"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c912-1826-76a6-838e-509c842f7e41"
+    }
+  ],
+  "id": "01a1fcb3-8749-76a4-a5eb-2c55cf50e782",
+  "kind": "decision",
+  "reason": "Re-read for #105: DEC-70 gained the readers kind of a status filter (DEC-95); the verifications' test files changed where Standing::FRESH became the test helpers fresh() and is_fresh_met(), and a Standing::Approved gained its readers; what each states still holds: cargo test --workspace passes (1697)",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:a7899f6b54a3a23aa1ea3b99964b3f000a85ccef4d0181212b15cbae44596beb",
+  "seen_address": "b94861ec5d692d790288f3cf4f8542a4dae6db35",
+  "subject": "01a1c912-19c0-7572-98be-116b5c92ca97",
+  "v": 1,
+  "verb": "approve"
+}

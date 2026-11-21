@@ -100,8 +100,10 @@
 //! Beside its freshness, an approval that stands has a [`Quorum`]: whether as many
 //! different names read its content as the rule of who may decide asks for
 //! ([`Ledger::quorum`]; one name where no rule asks for more, so it is always met
-//! there). The two are apart: a [`Freshness`] is fresh or degraded by its causes
-//! alone, and a quorum short of its names is no cause of the approval itself. What
+//! there), and the names that read it ([`Standing::read_by`]), from the same walk
+//! ([`Ledger::reading`]). Freshness and quorum are apart: a [`Freshness`] is fresh or
+//! degraded by its causes alone, and a quorum short of its names is no cause of the
+//! approval itself. What
 //! is shown of both is [`Standing::kind`]'s: a fresh approval short of names is
 //! [`FreshnessLevel::Awaiting`]; a degraded one keeps the level of its causes, and
 //! its quorum is told beside it. Downstream, an upstream whose approval is short, at
@@ -121,7 +123,8 @@ use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
 use super::exemption::{ExemptionReading, Unneeded};
 use super::graph::{Cycle, CycleId};
 use super::ledger::{
-    DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, Quorum, ReadPin,
+    DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, Quorum, ReadBy,
+    ReadPin, Reading,
 };
 use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
 
@@ -590,12 +593,15 @@ pub enum Standing {
     /// Retired.
     Retired,
     /// Approved: whether it holds, and whether as many names read it as the rule
-    /// asks for, two facts apart (the module page says why).
+    /// asks for, two facts apart (the module page says why), and which names do.
     Approved {
         /// Whether it holds.
         freshness: Freshness,
         /// Whether enough different names read its content ([`Ledger::quorum`]).
         quorum: Quorum,
+        /// The names that read its content now, from the walk that told its quorum
+        /// ([`Ledger::reading`]).
+        read_by: ReadBy,
     },
 }
 
@@ -621,6 +627,7 @@ impl Standing {
             Self::Approved {
                 freshness: Freshness::Fresh,
                 quorum: Quorum::Short { .. },
+                ..
             } => StandingKind::Approved(FreshnessLevel::Awaiting),
             Self::Approved { freshness, .. } => StandingKind::Approved(freshness.level()),
         }
@@ -641,16 +648,43 @@ impl Standing {
             Self::Pending | Self::Denied | Self::Deprecated { .. } | Self::Retired => None,
         }
     }
+
+    /// The names that read the content of an approval now; none for a standing that
+    /// is no approval.
+    pub fn read_by(&self) -> Option<&ReadBy> {
+        match self {
+            Self::Approved { read_by, .. } => Some(read_by),
+            Self::Pending | Self::Denied | Self::Deprecated { .. } | Self::Retired => None,
+        }
+    }
 }
 
 #[cfg(test)]
 impl Standing {
-    /// An approval that holds and whose quorum is met: every approval that holds in a
-    /// project that declares no rule.
-    pub(crate) const FRESH: Self = Self::Approved {
-        freshness: Freshness::Fresh,
-        quorum: Quorum::Met,
-    };
+    /// An approval that holds and whose quorum is met, read by the actor of the
+    /// fixtures: the input of a test that needs one.
+    pub(crate) fn fresh() -> Self {
+        let counted =
+            std::collections::BTreeSet::from([crate::domain::shelf::fixtures_tests::actor()]);
+        Self::Approved {
+            freshness: Freshness::Fresh,
+            quorum: Quorum::Met,
+            read_by: ReadBy::of_counted(counted),
+        }
+    }
+
+    /// Whether this is an approval that holds and whose quorum is met, whoever read
+    /// it: how a test reads what `assess` gave.
+    pub(crate) fn is_fresh_met(&self) -> bool {
+        matches!(
+            self,
+            Self::Approved {
+                freshness: Freshness::Fresh,
+                quorum: Quorum::Met,
+                ..
+            }
+        )
+    }
 }
 
 impl From<&Standing> for Decided {
@@ -1231,22 +1265,27 @@ fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
                 frame,
                 expires,
                 ..
-            } => Standing::Approved {
-                freshness: freshness_of(
-                    cx,
-                    id,
-                    Pinned {
-                        seen,
-                        frame,
-                        // The artifacts as the ledger reads them now, through moves.
-                        artifacts: &ledger.read_pins(id),
-                    },
-                    *expires,
-                    &standings,
-                    &mut kept,
-                ),
-                quorum: ledger.quorum(id, cx.now),
-            },
+            } => {
+                // The one walk of its readers, for who reads it and whether enough do.
+                let Reading { read_by, quorum } = ledger.reading(id, cx.now);
+                Standing::Approved {
+                    freshness: freshness_of(
+                        cx,
+                        id,
+                        Pinned {
+                            seen,
+                            frame,
+                            // The artifacts as the ledger reads them now, through moves.
+                            artifacts: &ledger.read_pins(id),
+                        },
+                        *expires,
+                        &standings,
+                        &mut kept,
+                    ),
+                    quorum,
+                    read_by,
+                }
+            }
         };
         standings.insert(id, standing);
         statuses.insert(id, status);
@@ -1553,7 +1592,9 @@ fn standing_cause(pin: &FramePin, upstream: Option<&Standing>, same_cycle: bool)
         Some(Standing::Deprecated { successors }) => vec![declared(UpstreamStatus::Deprecated {
             successors: successors.clone(),
         })],
-        Some(Standing::Approved { freshness, quorum }) => {
+        Some(Standing::Approved {
+            freshness, quorum, ..
+        }) => {
             let mut causes = Vec::new();
             if let Quorum::Short { .. } = quorum {
                 causes.push(declared(UpstreamStatus::Unseconded));

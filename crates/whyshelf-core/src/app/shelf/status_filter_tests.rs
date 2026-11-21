@@ -149,6 +149,7 @@ fn the_kinds_of_filter_combine() {
             StandingKind::Approved(FreshnessLevel::Fresh),
         ]
         .into(),
+        readers: BTreeSet::new(),
         fields: vec![where_topic("#42")],
     };
     let report = block_on(app().status_filtered(&ask)).unwrap();

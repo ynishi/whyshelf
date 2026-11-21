@@ -6,7 +6,7 @@ use serde::Serialize;
 use whyshelf_core::app::shelf::StatusReport;
 use whyshelf_core::domain::shelf::filter::FieldWant;
 
-use super::{HealthOut, Namer, RowOut, standing};
+use super::{HealthOut, Namer, RowOut, readers, standing};
 
 /// The answer of `status`.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -28,6 +28,9 @@ pub struct FiltersOut {
     /// The standings asked, by word and in a fixed order; a document at any of them
     /// passes.
     pub standings: Vec<String>,
+    /// How many names read an approval, asked by the word of `readers.count`, in a
+    /// fixed order; an approved document read by any of them passes.
+    pub readers: Vec<String>,
     /// The field conditions on a value, in the order given; a document holds every
     /// one.
     #[serde(rename = "where")]
@@ -66,6 +69,12 @@ pub fn status(report: &StatusReport) -> StatusOut {
                 .standings
                 .iter()
                 .map(|kind| standing(*kind).to_owned())
+                .collect(),
+            readers: report
+                .filters
+                .readers
+                .iter()
+                .map(|count| readers(*count).to_owned())
                 .collect(),
             where_: report
                 .filters

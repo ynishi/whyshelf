@@ -184,7 +184,7 @@ fn a_pinned_name_that_later_cannot_be_told_is_a_notice_and_the_approval_stays_fr
     app.ports()
         .cannot_tell(&file_space(), "tests/a.rs", "the tree is not mounted");
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
     assert!(row.notices.iter().any(|n| matches!(
         n,
         Notice::ArtifactUnknown { link, artifact: named, why }

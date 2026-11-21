@@ -138,9 +138,11 @@ fn fmt_rewrites_a_file_not_in_the_form_and_leaves_the_rest() {
 fn fmt_changes_no_hash_and_no_approval() {
     let mut app = world();
     let before = hashes_and_standings(&app);
-    assert!(before.iter().any(|(id, hash, standing)| *id == docid(1)
-        && hash.is_some()
-        && *standing == Standing::FRESH));
+    assert!(
+        before.iter().any(|(id, hash, standing)| *id == docid(1)
+            && hash.is_some()
+            && standing.is_fresh_met())
+    );
     let report = block_on(app.fmt(&DropAsk::default())).unwrap();
     assert_eq!(report.rewritten.len(), 1);
     assert_eq!(hashes_and_standings(&app), before);

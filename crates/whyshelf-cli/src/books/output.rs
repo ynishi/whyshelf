@@ -288,7 +288,7 @@ pub use status::{StatusOut, status};
 pub use trace::{TraceOut, trace};
 pub use unlinked::{UnlinkedOut, unlinked};
 use words::shell_word;
-pub use words::standing;
+pub use words::{readers, standing};
 
 #[cfg(test)]
 use doc::artifact_target;

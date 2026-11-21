@@ -21,7 +21,7 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong (or `map`, `cover` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid, or an artifact when the names its link's selection takes cannot all be listed; one no file carries is a reference that names no document, exit 2; for `rekey`, files that could not be read and may write the key or link to it, a file `fmt` would leave alone, or files that would not read as planned, each listed in `problems`) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, a filter of `status` that is not a request (a `--book` that is no name or not declared, a `--standing` that is no standing, a `--where` with no `=`, a field no book declares, or a value no book that declares the field reads), `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `new --from`, the same for every line of the file at once (each problem says its line), a line that is no JSON object of the shape of `schema`'s `inputs."new --from"`, a name that stands for no line, or a file with no line to write, with nothing written; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`); for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it (with `--artifact`, a `--from` that is no link to artifacts with a cover, a name its selection does not take now, or one a document reaches); for `cover`, a `--link` that is no covering link to artifacts; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn; for `rekey`, a document no file carries or that is not one file with an identity and a key that read, a new key that is taken or that the book refuses, a word for a document that writes no key in a link or two words for one, a document that writes the old key in a link and that no approval and no word decides, or whose word is against its approval (every one listed in `problems`), a file already at the new file, or a file no longer what was read) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, a filter of `status` that is not a request (a `--book` that is no name or not declared, a `--standing` that is no standing, a `--readers` that is no count of readers, a `--where` with no `=`, a field no book declares, or a value no book that declares the field reads), `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `new --from`, the same for every line of the file at once (each problem says its line), a line that is no JSON object of the shape of `schema`'s `inputs."new --from"`, a name that stands for no line, or a file with no line to write, with nothing written; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`); for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it (with `--artifact`, a `--from` that is no link to artifacts with a cover, a name its selection does not take now, or one a document reaches); for `cover`, a `--link` that is no covering link to artifacts; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn; for `rekey`, a document no file carries or that is not one file with an identity and a key that read, a new key that is taken or that the book refuses, a word for a document that writes no key in a link or two words for one, a document that writes the old key in a link and that no approval and no word decides, or whose word is against its approval (every one listed in `problems`), a file already at the new file, or a file no longer what was read) |
 //! | 3 | the run failed (a file could not be read or written, the file of `new --from` among them (missing, unreadable, not UTF-8) with nothing written; for `init` and `rekey`, part way too, with the files written (for `rekey`, those not put back) listed in `problems`; or a template `init` ships cannot be read) |
 //!
 //! `init` writes the declaration and the documents of a template of
@@ -74,7 +74,7 @@ use whyshelf_core::domain::shelf::artifact::{ArtifactName, NamePrefix, PrefixMov
 use whyshelf_core::domain::shelf::build::DropAsk;
 use whyshelf_core::domain::shelf::filter::{FieldAsk, FieldWant, StatusFilterAsk};
 use whyshelf_core::domain::shelf::freshness::StandingKind;
-use whyshelf_core::domain::shelf::ledger::JudgementId;
+use whyshelf_core::domain::shelf::ledger::{JudgementId, ReaderCount};
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
 use whyshelf_infra::shelf::Project;
 use whyshelf_infra::shelf::init;
@@ -214,10 +214,11 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
         BooksCommand::Status {
             books,
             standings,
+            readers,
             wheres,
             withouts,
             withs,
-        } => match status_ask(&books, &standings, &wheres, &withouts, &withs) {
+        } => match status_ask(&books, &standings, &readers, &wheres, &withouts, &withs) {
             Ok(ask) => ShelfApp::new(project)
                 .status_filtered(&ask)
                 .await
@@ -750,7 +751,8 @@ fn unlinked_filter(
 }
 
 /// What a `status` command asks, or why its arguments are not a request: the books
-/// as names, the standings by the words [`output::standing`] prints, and each
+/// as names, the standings by the words [`output::standing`] prints, the counts of
+/// readers by the words [`output::readers`] prints, and each
 /// `--where` split at its first `=` into a field and a value, and each `--without`
 /// and `--with` a field. Whether the filter fits the declaration is the model's to say
 /// ([`StatusFilter::new`](whyshelf_core::domain::shelf::filter::StatusFilter::new));
@@ -758,6 +760,7 @@ fn unlinked_filter(
 fn status_ask(
     books: &[String],
     standings: &[String],
+    readers: &[String],
     wheres: &[String],
     withouts: &[String],
     withs: &[String],
@@ -769,19 +772,16 @@ fn status_ask(
     let standings = standings
         .iter()
         .map(|word| {
-            StandingKind::ALL
-                .into_iter()
-                .find(|kind| output::standing(*kind) == word)
-                .ok_or_else(|| {
-                    let known: Vec<&str> = StandingKind::ALL
-                        .into_iter()
-                        .map(output::standing)
-                        .collect();
-                    format!(
-                        "--standing `{word}`: not a standing, one of {}",
-                        known.join(", ")
-                    )
-                })
+            read_word(word, StandingKind::ALL, output::standing)
+                .map_err(|known| format!("--standing `{word}`: not a standing, one of {known}"))
+        })
+        .collect::<Result<_, _>>()?;
+    let readers = readers
+        .iter()
+        .map(|word| {
+            read_word(word, ReaderCount::ALL, output::readers).map_err(|known| {
+                format!("--readers `{word}`: not a count of readers, one of {known}")
+            })
         })
         .collect::<Result<_, _>>()?;
     let mut fields = wheres
@@ -817,8 +817,22 @@ fn status_ask(
     Ok(StatusFilterAsk {
         books,
         standings,
+        readers,
         fields,
     })
+}
+
+/// The one of `all` whose word (`word_of`, the word an answer prints) is `word`, or
+/// the words there are, joined, to tell what can be asked: how `status` reads a
+/// `--standing` and a `--readers` back.
+fn read_word<T: Copy, const N: usize>(
+    word: &str,
+    all: [T; N],
+    word_of: fn(T) -> &'static str,
+) -> Result<T, String> {
+    all.into_iter()
+        .find(|item| word_of(*item) == word)
+        .ok_or_else(|| all.map(word_of).join(", "))
 }
 
 /// What an `fmt` command is asked to drop, or why its arguments are not a request: each

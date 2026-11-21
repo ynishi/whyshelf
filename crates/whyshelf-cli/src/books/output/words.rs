@@ -1,10 +1,12 @@
 //! The words more than one answer writes the same way: a plural, a problem of the
 //! declaration, a text as a word of a shell, what an artifact is now, the word of
-//! a standing, and who ran the command that made a record.
+//! a standing, how many names read an approval, and who ran the command that made a
+//! record.
 
 use whyshelf_core::domain::actor::{Actor, Attribution};
 use whyshelf_core::domain::shelf::artifact::ArtifactState;
 use whyshelf_core::domain::shelf::freshness::{FreshnessLevel, StandingKind};
+use whyshelf_core::domain::shelf::ledger::ReaderCount;
 use whyshelf_core::domain::shelf::schema::SchemaProblem;
 
 /// Who ran the command that made a record, as every answer that shows the record's
@@ -71,5 +73,17 @@ pub fn standing(kind: StandingKind) -> &'static str {
         StandingKind::Approved(FreshnessLevel::Expired) => "expired",
         StandingKind::Approved(FreshnessLevel::Stale) => "stale",
         StandingKind::Approved(FreshnessLevel::Broken) => "broken",
+    }
+}
+
+/// The word of how many names read an approval: the one place the words are
+/// written. The match is exhaustive, so a new count does not build until it has a
+/// word. `status --readers` reads a word back over [`ReaderCount::ALL`], so what is
+/// printed is what can be asked.
+pub fn readers(count: ReaderCount) -> &'static str {
+    match count {
+        ReaderCount::Nobody => "nobody",
+        ReaderCount::One => "one",
+        ReaderCount::Several => "several",
     }
 }
