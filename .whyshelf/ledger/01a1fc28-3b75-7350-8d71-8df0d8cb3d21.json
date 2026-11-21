@@ -1,0 +1,96 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::judge_all",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::ApprovalKind",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::ApprovalKind::left_out",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Readers",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795231845033,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4b5a31ddf68247beac5adbfdac0d49c54eebbafd",
+      "hash": "sha256:ea8368aa501077c2e0cea390b65529bff01ca15907b002ae7145648367573375",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "21"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c847-f021-72d4-8a44-6048c2025c77"
+    },
+    {
+      "address": "34bfec41a835118e265c27083b0e034bf7e795ef",
+      "hash": "sha256:8c398025fb7334d3118b9951e88117e57c1267d89d397dfebdd45f51573c75f1",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "22"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c8cf-da4d-771d-9241-c0c21d994cfb"
+    }
+  ],
+  "id": "01a1fc28-3b75-7350-8d71-8df0d8cb3d21",
+  "kind": "decision",
+  "reason": "Re-read for #117: DEC-17, DEC-28, DEC-36, DEC-58, DEC-78, DEC-89, DEC-92 and V-52 were corrected to say who writes a key is one reading (KeyWriters) that also takes a file whose id does not read, check lists collisions and names the other files, a reference or link to a key only such a file writes is NoIdentity, a pinned upstream is named by its current key, the repeat rule no longer compares an upstream's key, and rekey (DEC-94) does the renumbering; the verifications' test files changed at call sites and wording and some gained cases, and what each states still holds: cargo test --workspace passes (1629)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:9d14da9916d17d8fcde903af0de472992e7d646fc471d1ce50ee033d319b7dbd",
+  "seen_address": "f26ff95e68f9361e0506d0ab8aa735d27ae4255e",
+  "subject": "01a1c8cf-dfdb-771f-bea4-6b65c56de737",
+  "v": 1,
+  "verb": "approve"
+}

@@ -49,7 +49,13 @@
 //! when the file still holds the bytes that were read, just before, and whole (a
 //! new file beside it, renamed over it), so the file is either as it was or in the
 //! form. It is the one write here that replaces a file; [`DocWrite::create`] never
-//! does.
+//! does. [`DocReplace::restore`] writes the bytes a file had back over the text that
+//! was written, in the same way and whether they are in the form or not, and
+//! [`DocRemove`] removes a file that still holds the bytes it is expected to: what
+//! `rekey` needs to move a document to a file of its own and to undo that when it stops.
+//! The text [`DocSource::render`] gives is the text [`DocWrite::create`] writes, byte for
+//! byte (a test holds the two together), so a file the latter made is told from another
+//! by comparing it with the former.
 //!
 //! # Where the content of a document is kept
 //!
@@ -74,7 +80,8 @@ use serde::de::{
 };
 use tokio::io::AsyncWriteExt;
 use whyshelf_core::app::shelf::{
-    Creation, DocReplace, DocSource, DocWrite, FileRead, Rendered, Replaceable, Replacement,
+    Creation, DocRemove, DocReplace, DocSource, DocWrite, FileRead, Removal, Rendered, Replaceable,
+    Replacement,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::id::DocId;
@@ -966,6 +973,9 @@ fn write_step(step: String) -> impl FnOnce(io::Error) -> DocsError {
 /// again. A read-only file and one with more than one link are never given here:
 /// [`DocSource::replaceable`] says so ([`Replaceable::ReadOnly`],
 /// [`Replaceable::Linked`]) and `fmt` leaves them alone.
+///
+/// [`DocReplace::restore`] puts a file back as it was by the same steps, from the text
+/// that was written to the bytes that were replaced.
 impl DocReplace for MarkdownDocs {
     type Error = DocsError;
 
@@ -975,9 +985,62 @@ impl DocReplace for MarkdownDocs {
         read: &[u8],
         text: &[u8],
     ) -> Result<Replacement, DocsError> {
+        self.replace_whole(path, read, text).await
+    }
+
+    async fn restore(
+        &self,
+        path: &RelPath,
+        written: &[u8],
+        before: &[u8],
+    ) -> Result<Replacement, DocsError> {
+        self.replace_whole(path, written, before).await
+    }
+}
+
+/// Removes a document's file after comparing it with the bytes it is expected to hold:
+/// a file that is not what was read is [`Removal::Changed`] and left as it is, and one that
+/// is gone is [`Removal::Gone`]. The comparison
+/// and the removal are two steps, so an edit saved in the short time between them is
+/// lost with the file. The directory is put on disk by
+/// [`FileSync::persist_gone`](whyshelf_core::app::shelf::FileSync::persist_gone).
+impl DocRemove for MarkdownDocs {
+    type Error = DocsError;
+
+    async fn remove_read(&self, path: &RelPath, read: &[u8]) -> Result<Removal, DocsError> {
         let file = self.root.join(path.as_str());
         match tokio::fs::read(&file).await {
             Ok(now) if now == read => {}
+            Ok(_) => return Ok(Removal::Changed),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok(Removal::Gone);
+            }
+            Err(source) => return Err(DocsError::Io { path: file, source }),
+        }
+        match tokio::fs::remove_file(&file).await {
+            Ok(()) => Ok(Removal::Removed),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Removal::Gone),
+            Err(source) => Err(DocsError::Write {
+                step: format!("remove {}", file.display()),
+                source,
+            }),
+        }
+    }
+}
+
+impl MarkdownDocs {
+    /// Replace the file at `path`, which must hold `expected` just before, by `text`,
+    /// whole: [`replace_read`](DocReplace::replace_read), and, with the text that was
+    /// written as `expected`, [`restore`](DocReplace::restore).
+    async fn replace_whole(
+        &self,
+        path: &RelPath,
+        expected: &[u8],
+        text: &[u8],
+    ) -> Result<Replacement, DocsError> {
+        let file = self.root.join(path.as_str());
+        match tokio::fs::read(&file).await {
+            Ok(now) if now == expected => {}
             Ok(_) => return Ok(Replacement::Changed),
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 return Ok(Replacement::Changed);
@@ -1846,6 +1909,98 @@ mod tests {
             panic!("one parsed file");
         };
         assert_eq!(*back, entries);
+    }
+
+    #[tokio::test]
+    async fn the_bytes_create_writes_are_the_text_render_gives() {
+        let root = tempfile::tempdir().unwrap();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        let mut entries = BTreeMap::new();
+        entries.insert("id".to_owned(), RawValue::Text(ID.to_owned()));
+        entries.insert("key".to_owned(), RawValue::Text("V-4".to_owned()));
+        for (i, text) in TRICKY.iter().enumerate() {
+            entries.insert(format!("t{i}"), RawValue::Text((*text).to_owned()));
+        }
+        for (n, body) in [
+            "Body.\n",
+            "",
+            "No final newline",
+            "Trailing white space.  \n\t\nMore.\t\n\n\n",
+            "Carriage\r\nreturns\r\n",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let at: RelPath = format!("books/{n}.md").parse().unwrap();
+            let form = all_of(&entries);
+            // Taken before the file is made, as `rekey` takes it.
+            let rendered = docs.render(&at, &form, body);
+            assert_eq!(
+                docs.create(&at, &form, body).await.unwrap(),
+                Creation::Created
+            );
+            assert_eq!(
+                tokio::fs::read(root.path().join(at.as_str()))
+                    .await
+                    .unwrap(),
+                rendered.text,
+                "{body:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_file_is_put_back_over_what_was_written_and_removed_only_as_it_was_read() {
+        let root = tempfile::tempdir().unwrap();
+        let docs = MarkdownDocs::new(root.path().to_path_buf());
+        let at: RelPath = "books/a.md".parse().unwrap();
+        let file = root.path().join(at.as_str());
+        tokio::fs::create_dir_all(file.parent().unwrap())
+            .await
+            .unwrap();
+        // Not in the form, as a person left it.
+        let before = b"id: x\nkey:   y   # a comment\n";
+        tokio::fs::write(&file, before).await.unwrap();
+
+        assert_eq!(
+            docs.replace_read(&at, before, b"written").await.unwrap(),
+            Replacement::Replaced
+        );
+        // A file that is not what was written is left as it is.
+        assert_eq!(
+            docs.restore(&at, b"other", before).await.unwrap(),
+            Replacement::Changed
+        );
+        assert_eq!(tokio::fs::read(&file).await.unwrap(), b"written");
+        assert_eq!(
+            docs.restore(&at, b"written", before).await.unwrap(),
+            Replacement::Replaced
+        );
+        assert_eq!(tokio::fs::read(&file).await.unwrap(), before);
+        // Nothing is left beside it.
+        let mut entries = tokio::fs::read_dir(file.parent().unwrap()).await.unwrap();
+        let mut names = Vec::new();
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            names.push(entry.file_name());
+        }
+        assert_eq!(names, ["a.md"]);
+
+        assert_eq!(
+            docs.remove_read(&at, b"other").await.unwrap(),
+            Removal::Changed
+        );
+        assert_eq!(tokio::fs::read(&file).await.unwrap(), before);
+        assert_eq!(
+            docs.remove_read(&at, before).await.unwrap(),
+            Removal::Removed
+        );
+        assert!(docs.current(&at).await.unwrap().is_none());
+        // Gone is told apart from changed, and is no error.
+        assert_eq!(docs.remove_read(&at, before).await.unwrap(), Removal::Gone);
+        assert_eq!(
+            docs.restore(&at, b"written", before).await.unwrap(),
+            Replacement::Changed
+        );
     }
 
     #[tokio::test]

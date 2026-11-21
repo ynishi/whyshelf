@@ -15,9 +15,9 @@ use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
-use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, SkippedFile};
+use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, NowNamed, SkippedFile};
 use crate::domain::shelf::coverage::{CoverAssessment, LinkCover};
-use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
+use crate::domain::shelf::doc::{Doc, DocKey, KeyCollision, UnresolvedLink};
 use crate::domain::shelf::exemption::Unneeded;
 use crate::domain::shelf::filter::StatusFilterAsk;
 use crate::domain::shelf::freshness::{
@@ -25,8 +25,8 @@ use crate::domain::shelf::freshness::{
 };
 use crate::domain::shelf::graph::Cycle;
 use crate::domain::shelf::ledger::{
-    Decision, DeclaredStatus, Exempt, FrameRefusal, JudgementId, LeaveOut, LedgerProblem,
-    MoveSuggestions, NotAdmitted, Record, ShortSameMeaning,
+    Decision, DeclaredStatus, Exempt, FramePin, FrameRefusal, JudgementId, LeaveOut, LedgerProblem,
+    MoveSuggestions, NotAdmitted, PinName, Record, ShortSameMeaning,
 };
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::HeldBack;
@@ -43,14 +43,30 @@ use crate::domain::location::RelPath;
 use super::ports::UnreadableRecord;
 
 /// The keys of the valid documents of the shelf, so that a surface can write a
-/// document by its key and not only by its identity.
+/// document by its key and not only by its identity, and what each upstream a record
+/// of the ledger pinned comes to now, so that it can name a pin by the key its
+/// upstream has.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Names(pub(super) BTreeMap<DocId, DocKey>);
+pub struct Names {
+    pub(super) keys: BTreeMap<DocId, DocKey>,
+    pub(super) pinned: BTreeMap<DocId, NowNamed>,
+}
 
 impl Names {
     /// The key of a valid document; none for one that is not valid or not there.
     pub fn key_of(&self, id: DocId) -> Option<&DocKey> {
-        self.0.get(&id)
+        self.keys.get(&id)
+    }
+
+    /// How an answer names the upstream a pin stands on: what that upstream comes to
+    /// now ([`Shelf::now_named`](crate::domain::shelf::build::Shelf::now_named)), read
+    /// by [`FramePin::named`]. An upstream these names hold nothing of (names made
+    /// for no ledger) is named as it was pinned.
+    pub fn pin_name(&self, pin: &FramePin) -> PinName {
+        match self.pinned.get(&pin.target()) {
+            Some(now) => pin.named(now),
+            None => PinName::Same(pin.key().clone()),
+        }
     }
 }
 
@@ -188,6 +204,13 @@ pub enum BooksCheck {
         /// ([`Ledger::same_meaning_short`](crate::domain::shelf::ledger::Ledger::same_meaning_short)).
         /// They leave the check clean too.
         same_meaning_short: Vec<ShortSameMeaning>,
+        /// The keys that two or more files write ([`Shelf::collisions`]), one for each
+        /// key, with every file and the identity of each that could be read. Each of
+        /// the files is invalid (it is in `health`), so they leave the check as it
+        /// was.
+        ///
+        /// [`Shelf::collisions`]: crate::domain::shelf::build::Shelf::collisions
+        collisions: Vec<KeyCollision>,
         /// The assessment of coverage the lists above and below are made from, for
         /// documents and for names of artifacts alike: what
         /// [`is_clean`](BooksCheck::is_clean) reads, and how complete the listing of
@@ -814,6 +837,11 @@ pub struct JudgedAll {
 }
 
 /// Why an approval asked for was not made.
+// A `Degradation` holds every cause inline (the enum is as large as that), and a run
+// leaves out few approvals: boxing it would add an allocation and a deref to each read
+// of it, to save copying a few words. (A link that cannot be followed shrank when its
+// collision of keys was boxed, which narrowed the other variants and so the lint.)
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LeftOutWhy {
     /// Of `judge approve --stale`: its approval is broken now.

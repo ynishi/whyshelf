@@ -38,6 +38,10 @@
 //!   appended to) and `sync_all`ed. A directory is not synced: its entries are
 //!   not covered there.
 //!
+//! [`persist_gone`] puts the removal of a file on disk, which is the directory it was in:
+//! on Unix that directory is opened and `fsync`ed (each once, with the same full flush
+//! on Apple systems); on Windows nothing is done, as no directory is synced there.
+//!
 //! The limits: on Linux (before 4.16, or on any kernel when the file left memory
 //! between its write and the end of the run) and on NFS, a failed write-back can be
 //! missed by an `fsync` made through a descriptor opened after it, so a file can be
@@ -336,6 +340,17 @@ async fn persist_with(
             .await
             .map_err(failed(format!("put the directory {shown} on disk")))?;
     }
+    flush_devices(devices, full_flush).await
+}
+
+/// The full flush of each device in `devices` (one open file of each), when the
+/// platform has one: asked once for a device, after every file on it was `fsync`ed. A
+/// device that cannot give one is left at `fsync`.
+#[cfg(unix)]
+async fn flush_devices(
+    devices: BTreeMap<u64, std::fs::File>,
+    full_flush: Option<FullFlush>,
+) -> Result<(), PersistFailed> {
     if let Some(flush) = full_flush {
         for open in devices.into_values() {
             let flush = std::sync::Arc::clone(&flush);
@@ -357,6 +372,60 @@ async fn persist_with(
             }
         }
     }
+    Ok(())
+}
+
+/// Put the removal of the files `files` (relative to `root`) on disk, so that they stay
+/// removed after a power loss: the directory each was in is put on disk, each once, by
+/// the rules of the module page (on Apple systems, with one full flush for each device).
+/// The first step that fails ends it.
+#[cfg(unix)]
+pub(crate) async fn persist_gone(root: &Path, files: &[RelPath]) -> Result<(), PersistFailed> {
+    persist_gone_with(root, files, platform_full_flush()).await
+}
+
+/// [`persist_gone`] on Unix, with the full flush given.
+#[cfg(unix)]
+async fn persist_gone_with(
+    root: &Path,
+    files: &[RelPath],
+    full_flush: Option<FullFlush>,
+) -> Result<(), PersistFailed> {
+    use std::os::unix::fs::MetadataExt;
+
+    let dirs: BTreeSet<&str> = files
+        .iter()
+        .map(|file| {
+            file.as_str()
+                .rsplit_once('/')
+                .map_or("", |(parent, _)| parent)
+        })
+        .collect();
+    let mut devices: BTreeMap<u64, std::fs::File> = BTreeMap::new();
+    for dir in dirs {
+        let path = under(root, dir);
+        let shown = path.display();
+        let open = File::open(&path).await.map_err(failed(format!(
+            "open the directory {shown} to put a removal on disk"
+        )))?;
+        // Written in full, as `persist_with` writes it, for the lint of blocking calls.
+        let device = File::metadata(&open)
+            .await
+            .map_err(failed(format!("look at the directory {shown}")))?
+            .dev();
+        let open = open.into_std().await;
+        let open = blocking(move || fsync(&open).map(|()| open))
+            .await
+            .map_err(failed(format!("put the directory {shown} on disk")))?;
+        devices.entry(device).or_insert(open);
+    }
+    flush_devices(devices, full_flush).await
+}
+
+/// Put the removal of the files `files` on disk: not told on Windows, where a directory
+/// is not synced (the module page), so there is nothing to do.
+#[cfg(not(unix))]
+pub(crate) async fn persist_gone(_root: &Path, _files: &[RelPath]) -> Result<(), PersistFailed> {
     Ok(())
 }
 
@@ -587,6 +656,34 @@ mod tests {
         // Putting files on disk changes none of them, and may be asked again.
         persist(root, &[rel("a/b/c.md")]).await.unwrap();
         assert_eq!(tokio::fs::read(&nested).await.unwrap(), b"nested");
+    }
+
+    #[tokio::test]
+    async fn the_removal_of_files_is_put_on_disk_by_their_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        create_new(&root.join("a/b/c.md"), b"nested").await.unwrap();
+        create_new(&root.join("d.md"), b"top").await.unwrap();
+        persist(root, &[rel("a/b/c.md"), rel("d.md")])
+            .await
+            .unwrap();
+        tokio::fs::remove_file(root.join("a/b/c.md")).await.unwrap();
+        tokio::fs::remove_file(root.join("d.md")).await.unwrap();
+        persist_gone(root, &[rel("a/b/c.md"), rel("d.md")])
+            .await
+            .unwrap();
+        // The directory the file was in is what is put on disk: one that is not there
+        // cannot be.
+        #[cfg(unix)]
+        {
+            let failed = persist_gone(root, &[rel("gone/x.md")]).await.unwrap_err();
+            assert!(
+                failed.step.starts_with("open the directory "),
+                "{}",
+                failed.step
+            );
+            assert_eq!(failed.source.kind(), io::ErrorKind::NotFound);
+        }
     }
 
     #[tokio::test]

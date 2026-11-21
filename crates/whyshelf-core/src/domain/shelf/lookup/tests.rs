@@ -80,6 +80,35 @@ fn a_document_whose_file_is_gone_is_still_named_by_the_ledger() {
 }
 
 #[test]
+fn a_key_only_a_file_with_no_identity_writes_names_the_file_not_a_document() {
+    use crate::domain::shelf::build::DocReading;
+    use crate::domain::shelf::fixtures_tests::{entries, path, text};
+
+    let no_id = DocReading::Parsed {
+        origin: path("findings/a.md"),
+        entries: entries(&[("key", text("FR-5")), ("title", text("t"))]),
+        body: "body\n".to_owned(),
+    };
+    let shelf = shelf(vec![fr(1, &[]), no_id]);
+    let ledger = ledger(vec![]);
+    let files = NonEmptyVec::new(path("findings/a.md"), Vec::new());
+    assert_eq!(
+        resolve(&shelf, &ledger, &r("finding:FR-5")),
+        Resolution::NoIdentity(files.clone())
+    );
+    // A key alone is told so as well, when no document of any book is found.
+    assert_eq!(
+        resolve(&shelf, &ledger, &r("FR-5")),
+        Resolution::NoIdentity(files)
+    );
+    // A document that is found is not hidden by it.
+    assert_eq!(
+        resolve(&shelf, &ledger, &r("FR-1")),
+        Resolution::Found(docid(1))
+    );
+}
+
+#[test]
 fn a_reference_is_read_into_one_of_four_shapes() {
     assert!(matches!(
         r("finding:FR-2"),

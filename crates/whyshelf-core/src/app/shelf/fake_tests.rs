@@ -27,9 +27,9 @@ use crate::domain::shelf::schema::{
 use super::adapter::CannotList;
 use super::ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileRead, FileSync,
-    FileWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Rendered,
-    Replaceable, Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
+    DeclarationText, DeclarationWrite, DocRemove, DocReplace, DocSource, DocWrite, FileRead,
+    FileSync, FileWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Removal,
+    Rendered, Replaceable, Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
 };
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::shelf::artifact::{
@@ -294,6 +294,23 @@ pub(super) struct FakeShelf {
     pub(super) persisted: Mutex<Vec<Vec<RelPath>>>,
     /// Why putting files on disk fails, when it does (none: it does not).
     pub(super) persist_failing: Mutex<Option<&'static str>>,
+    /// The text of each document's file the fake created, by path: what a file made is
+    /// compared with when it is removed again.
+    pub(super) made: Mutex<BTreeMap<RelPath, Vec<u8>>>,
+    /// What each file the fake wrote over was before, by path and the text written:
+    /// what it is put back to.
+    pub(super) before_replace: Mutex<BTreeMap<(RelPath, Vec<u8>), DocReading>>,
+    /// The files of each call to put removals on disk, in order.
+    pub(super) persisted_gone: Mutex<Vec<Vec<RelPath>>>,
+    /// Why putting removals on disk fails, when it does (none: it does not).
+    pub(super) persist_gone_failing: Mutex<Option<&'static str>>,
+    /// Why the next removal of a file fails, when one does (none: it does not); only the
+    /// next, so that the removal that undoes a write is not made to fail with it.
+    pub(super) remove_failing: Mutex<Option<&'static str>>,
+    /// Why putting a file back fails, when it does (none: it does not).
+    pub(super) restore_failing: Mutex<Option<&'static str>>,
+    /// The files someone removes after the reading and before the removal.
+    pub(super) gone_before_remove: Mutex<BTreeSet<RelPath>>,
     /// Where a prefix ends in a name of each space that takes prefixes; a space with
     /// none set takes none.
     pub(super) boundaries: Mutex<BTreeMap<Space, Vec<&'static str>>>,
@@ -388,6 +405,13 @@ impl FakeShelf {
             appear_before_create: Mutex::new(BTreeSet::new()),
             persisted: Mutex::new(Vec::new()),
             persist_failing: Mutex::new(None),
+            made: Mutex::new(BTreeMap::new()),
+            before_replace: Mutex::new(BTreeMap::new()),
+            persisted_gone: Mutex::new(Vec::new()),
+            persist_gone_failing: Mutex::new(None),
+            remove_failing: Mutex::new(None),
+            restore_failing: Mutex::new(None),
+            gone_before_remove: Mutex::new(BTreeSet::new()),
             boundaries: Mutex::new(BTreeMap::new()),
             listings: Mutex::new(BTreeMap::new()),
             listed: Mutex::new(Vec::new()),
@@ -419,6 +443,26 @@ impl FakeShelf {
     /// The files of each call to put files on disk, in order.
     pub(super) fn persist_calls(&self) -> Vec<Vec<RelPath>> {
         lock(&self.persisted).clone()
+    }
+
+    /// From now on putting removals on disk fails, for this reason.
+    pub(super) fn fail_persist_gone(&self, why: &'static str) {
+        *lock(&self.persist_gone_failing) = Some(why);
+    }
+
+    /// The files of each call to put removals on disk, in order.
+    pub(super) fn persist_gone_calls(&self) -> Vec<Vec<RelPath>> {
+        lock(&self.persisted_gone).clone()
+    }
+
+    /// The next removal of a file fails, for this reason.
+    pub(super) fn fail_remove(&self, why: &'static str) {
+        *lock(&self.remove_failing) = Some(why);
+    }
+
+    /// From now on putting a file back fails, for this reason.
+    pub(super) fn fail_restore(&self, why: &'static str) {
+        *lock(&self.restore_failing) = Some(why);
     }
 
     /// From now on the fake reads `text` as a declaration of `decl`.
@@ -812,12 +856,78 @@ impl DocReplace for FakeShelf {
             | DocReading::Unparsed { origin, .. }
             | DocReading::Unheld { origin, .. }) = &*reading;
             if origin == at {
+                lock(&self.before_replace).insert((at.clone(), text.to_vec()), reading.clone());
                 *reading = reads_as.clone();
             }
         }
         files.insert(at.clone(), text.to_vec());
         *lock(&self.replaced) += 1;
         Ok(Replacement::Replaced)
+    }
+
+    /// Puts the reading the file had before `written` was written back, and `before` as
+    /// the file's bytes; a file that is not `written` now is `Changed`.
+    async fn restore(
+        &self,
+        at: &RelPath,
+        written: &[u8],
+        before: &[u8],
+    ) -> Result<Replacement, FakeError> {
+        self.check()?;
+        if let Some(why) = *lock(&self.restore_failing) {
+            return Err(FakeError(why));
+        }
+        let mut files = lock(&self.files);
+        if files.get(at).map_or(&[][..], Vec::as_slice) != written {
+            return Ok(Replacement::Changed);
+        }
+        let Some(was) = lock(&self.before_replace)
+            .get(&(at.clone(), written.to_vec()))
+            .cloned()
+        else {
+            return Err(FakeError("a text that was never written was put back"));
+        };
+        for reading in lock(&self.readings).iter_mut() {
+            if reading.origin() == at {
+                *reading = was.clone();
+            }
+        }
+        files.insert(at.clone(), before.to_vec());
+        Ok(Replacement::Replaced)
+    }
+}
+
+impl DocRemove for FakeShelf {
+    type Error = FakeError;
+
+    /// Removes the file's reading and bytes when they are `read` (a file the fake
+    /// created is what it rendered it as); a file that is not is `Changed`, and one
+    /// with no reading is `Gone`.
+    async fn remove_read(&self, at: &RelPath, read: &[u8]) -> Result<Removal, FakeError> {
+        self.check()?;
+        if let Some(why) = lock(&self.remove_failing).take() {
+            return Err(FakeError(why));
+        }
+        let mut files = lock(&self.files);
+        let mut made = lock(&self.made);
+        let mut readings = lock(&self.readings);
+        if lock(&self.gone_before_remove).contains(at) {
+            files.remove(at);
+            made.remove(at);
+            readings.retain(|reading| reading.origin() != at);
+        }
+        // No reading of the file: it is gone.
+        if !readings.iter().any(|reading| reading.origin() == at) {
+            return Ok(Removal::Gone);
+        }
+        let now = files.get(at).or_else(|| made.get(at));
+        if now.map_or(&[][..], Vec::as_slice) != read {
+            return Ok(Removal::Changed);
+        }
+        readings.retain(|reading| reading.origin() != at);
+        files.remove(at);
+        made.remove(at);
+        Ok(Removal::Removed)
     }
 }
 
@@ -953,6 +1063,7 @@ impl DocWrite for FakeShelf {
             entries: entries.as_map().clone(),
             body: body.to_owned(),
         });
+        lock(&self.made).insert(at.clone(), fake_text(entries, body));
         *lock(&self.created) += 1;
         Ok(Creation::Created)
     }
@@ -981,6 +1092,24 @@ impl FileSync for FakeShelf {
             }
         }
         match *lock(&self.persist_failing) {
+            Some(why) => Err(FakeError(why)),
+            None => Ok(()),
+        }
+    }
+
+    /// Counts the call with its files, which must each be gone (no reading, no bytes):
+    /// a removal put on disk. Fails when a test said so, after counting.
+    async fn persist_gone(&self, files: &NonEmptyVec<RelPath>) -> Result<(), FakeError> {
+        self.check()?;
+        lock(&self.persisted_gone).push(files.iter().cloned().collect());
+        for at in files.iter() {
+            let there = lock(&self.readings).iter().any(|r| r.origin() == at)
+                || lock(&self.files).contains_key(at);
+            if there {
+                return Err(FakeError("put the removal of a file that is there on disk"));
+            }
+        }
+        match *lock(&self.persist_gone_failing) {
             Some(why) => Err(FakeError(why)),
             None => Ok(()),
         }
@@ -1253,6 +1382,7 @@ impl ShelfWrite for FakeShelf {
     type Revisions = Self;
     type DocWriter = Self;
     type DocReplacer = Self;
+    type DocRemover = Self;
     type DeclarationWriter = Self;
     type FileWriter = Self;
     type FileSyncer = Self;
@@ -1274,6 +1404,10 @@ impl ShelfWrite for FakeShelf {
     }
 
     fn doc_replacer(&self) -> &Self {
+        self
+    }
+
+    fn doc_remover(&self) -> &Self {
         self
     }
 

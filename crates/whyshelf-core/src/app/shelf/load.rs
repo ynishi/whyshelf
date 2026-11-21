@@ -37,7 +37,7 @@ use crate::domain::shelf::artifact::{
 };
 use crate::domain::shelf::build::Shelf;
 use crate::domain::shelf::freshness::{Assessment, assess};
-use crate::domain::shelf::ledger::{Admit, AdmittedRecord, JudgedAt, Ledger, Record};
+use crate::domain::shelf::ledger::{Admit, AdmittedRecord, DecisionVerb, JudgedAt, Ledger, Record};
 use crate::domain::shelf::schema::{Schema, SchemaProblem, ShelfDecl};
 
 use super::error::ShelfError;
@@ -196,15 +196,36 @@ impl Loaded {
         assess(&self.shelf, &self.ledger, self.now, listings)
     }
 
-    /// The keys of the valid documents.
+    /// The keys of the valid documents, and what each upstream a decision of the
+    /// ledger pinned comes to now ([`Shelf::now_named`]), so that an answer can name a
+    /// pin by the key its upstream has.
     pub(super) fn names(&self) -> Names {
-        Names(
-            self.shelf
+        // Each upstream once: many approvals pin the same one.
+        let upstreams: BTreeSet<DocId> = self
+            .ledger
+            .decisions()
+            .filter_map(|decision| match decision.verb() {
+                DecisionVerb::Approve { frame, .. } => Some(frame),
+                DecisionVerb::Deny { .. }
+                | DecisionVerb::Deprecate { .. }
+                | DecisionVerb::Retire { .. } => None,
+            })
+            .flatten()
+            .map(|pin| pin.target())
+            .collect();
+        let pinned = upstreams
+            .into_iter()
+            .map(|id| (id, self.shelf.now_named(id)))
+            .collect();
+        Names {
+            keys: self
+                .shelf
                 .docs()
                 .iter()
                 .map(|(id, doc)| (*id, doc.key().clone()))
                 .collect(),
-        )
+            pinned,
+        }
     }
 }
 

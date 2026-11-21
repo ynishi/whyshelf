@@ -395,7 +395,8 @@ impl Shelf {
     /// name tail is no number. What [`Shelf::next_key`] and the plan of a run count
     /// from.
     pub(super) fn highest_written(&self, book: &BookName) -> u64 {
-        self.written_keys
+        self.index
+            .writers
             .keys()
             .filter(|key| key.book == *book)
             .filter_map(key_number)
@@ -475,7 +476,7 @@ impl Shelf {
             book: book.clone(),
             form,
         };
-        if self.written_keys.contains_key(&key) {
+        if !self.key_writers(&key).writers().is_none() {
             return Err(ClaimKeyProblem::Taken { key });
         }
         let key = in_range(schema, key).map_err(ClaimKeyProblem::OutOfRange)?;
@@ -489,10 +490,28 @@ impl Shelf {
     /// of their paths: what makes the key taken ([`Shelf::claim_key`]). None for a
     /// key no file writes.
     pub fn files_writing(&self, key: &DocKey) -> Vec<RelPath> {
-        self.written_keys
-            .get(key)
-            .map(|files| files.iter().cloned().collect())
-            .unwrap_or_default()
+        self.key_writers(key).writers().files()
+    }
+
+    /// The file a document of `key` is written as, `<book dir>/<key>.md`: the one
+    /// place it is made (`file_of`), for the document [`Shelf::check_new`] judges and
+    /// for a command that gives a document a new key.
+    // The problem is the answer, read once per request; it is not a hot path.
+    #[allow(clippy::result_large_err)]
+    pub(in crate::domain::shelf) fn file_for(
+        &self,
+        key: &DocKey,
+    ) -> Result<RelPath, NewDocProblem> {
+        let book = self
+            .schema
+            .book(&key.book)
+            .ok_or_else(|| NewDocProblem::UnknownBook {
+                book: key.book.clone(),
+            })?;
+        file_of(book, key).map_err(|source| NewDocProblem::PathInvalid {
+            key: key.clone(),
+            source,
+        })
     }
 
     /// What the links to artifacts of the new documents of a run ask of the adapters,

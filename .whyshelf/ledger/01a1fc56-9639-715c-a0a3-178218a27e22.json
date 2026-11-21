@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "40b8243ddfeb85a4bc798e2e2310639c696454ec",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9896f21e2e01c20ddfbd2634579cd9b810b7c50068dcbf642a62101daf0c1c2c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fake_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "98520e67d194b774f73483879ba96d2a2f569667",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233575589895cb9050a96bf1d4c18508e26ff10284c0aacb54f78f71d72b45f5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a3e1d8977e8e8e6c827bb404f16fb7dc9c307a71",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ec6338493d2ffbf93e19fc90365f0c5ec6bc8713d188b21d9006478b4418ed64",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "79f8aa274d0d3e6523ca6a400a3351ccffc13f5c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f765d2a8b2b5c539bfcf2d80baeaf07b45beb3cd86e3f6277764854243754905",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4d92db33e38617bd5254f7448a6369595c18612a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d2635da08b0134817369f20e89c4a9abea941e1be1b8e19ed47e61ce346271a7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "437b392599f144c876286875457694fe846b7c0a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f75d378380f707f6d2a5e0d146c85186ad275088b6cd2dc4a6878ab4f4f9aace",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/project_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795234878353,
+  "expires": null,
+  "frame": [
+    {
+      "address": "fbcc6e0d325c707cb322ece5f42b03ce74b33d55",
+      "hash": "sha256:17c19b03e1169cc1c823545de8078bd69720ac3e0191752f308c1b7cb0816d13",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "79"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1efb4-5387-738e-92c2-897542094cc7"
+    }
+  ],
+  "id": "01a1fc56-9639-715c-a0a3-178218a27e22",
+  "kind": "decision",
+  "reason": "Re-read after merging main (#111, the cover over artifacts) into #117: the pinned rustdoc items (LinkKind, Notice, BookRange, BookScope and the others) and the test files now hold both changes side by side; what each document states still holds, and cargo test --workspace passes (1676)",
+  "revision": "4956951297fb48e913715a35960c32b4455e9438",
+  "seen": "sha256:5544baa07a9f7f2953520593cd33e8b1632c3424209f0064c6baebb94a6a91e3",
+  "seen_address": "0e398238de67adf6cab8b255ea7f6cd3b041c445",
+  "subject": "01a1efb4-acca-7266-a1c9-eaf0a9ce7b94",
+  "v": 1,
+  "verb": "approve"
+}

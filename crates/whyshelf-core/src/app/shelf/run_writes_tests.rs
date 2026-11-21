@@ -138,6 +138,7 @@ fn a_run_that_stops_part_way_and_cannot_put_what_it_wrote_on_disk_says_both() {
         failed,
         cause,
         not_durable,
+        undo_failed: false,
     } = &error
     else {
         panic!("{error:?}");
@@ -312,9 +313,11 @@ fn the_futures_of_the_use_cases_that_write_are_send() {
     is_send(&future);
 }
 
-/// A create port is called in `run_writes.rs` and nowhere else outside the tests and
-/// the ports' own page: the one way left to write a file the run does not know. A
-/// module added to the use cases is added to this list.
+/// A create port, and the ports that put a file back, remove one or put a removal on
+/// disk, are called in `run_writes.rs` and nowhere else outside the tests and the
+/// ports' own page: the one way left to write a file the run does not know. (`fmt`
+/// calls `replace_read` itself, one file at a time.) A module added to the use cases is
+/// added to this list.
 #[test]
 fn no_module_but_run_writes_calls_a_create_port() {
     let modules = [
@@ -331,29 +334,43 @@ fn no_module_but_run_writes_calls_a_create_port() {
         ("moves", include_str!("moves.rs")),
         ("new_doc", include_str!("new_doc.rs")),
         ("read", include_str!("read.rs")),
+        ("rekey", include_str!("rekey.rs")),
         ("report", include_str!("report.rs")),
         ("same_meaning", include_str!("same_meaning.rs")),
         ("unlinked", include_str!("unlinked.rs")),
         ("withdraw", include_str!("withdraw.rs")),
     ];
+    let calls = [
+        ("doc_writer()", ".create("),
+        ("declaration_writer()", ".create("),
+        ("file_writer()", ".create("),
+        ("doc_replacer()", ".restore("),
+        ("doc_remover()", ".remove_read("),
+        ("file_syncer()", ".persist_gone("),
+    ];
     for (name, source) in modules {
-        for writer in ["doc_writer()", "declaration_writer()", "file_writer()"] {
-            let call = format!("{writer}.create(");
+        for (writer, method) in calls {
+            let call = format!("{writer}{method}");
             let multi_line = format!("{writer}\n");
             assert!(
                 !source.contains(&call),
-                "{name}.rs calls a create port ({call}): write inside RunWrites::run"
+                "{name}.rs calls a write port ({call}): write inside RunWrites"
             );
-            // A call split over lines puts `.create(` on the line after the accessor.
+            // A call split over lines puts the method on the line after the accessor.
             for (at, _) in source.match_indices(&multi_line) {
                 let rest = source[at + multi_line.len()..].trim_start();
                 assert!(
-                    !rest.starts_with(".create("),
-                    "{name}.rs calls a create port ({writer}): write inside RunWrites::run"
+                    !rest.starts_with(method),
+                    "{name}.rs calls a write port ({writer}{method}): write inside RunWrites"
                 );
             }
         }
     }
     let run_writes = include_str!("run_writes.rs");
-    assert_eq!(run_writes.matches(".create(").count(), 3);
+    // `create`: the declaration, another file, a document, and the document of an edit.
+    assert_eq!(run_writes.matches(".create(").count(), 4);
+    assert_eq!(run_writes.matches(".restore(").count(), 1);
+    // The removal of an edit, and the removal that undoes its new file.
+    assert_eq!(run_writes.matches(".remove_read(").count(), 2);
+    assert_eq!(run_writes.matches(".persist_gone(").count(), 2);
 }

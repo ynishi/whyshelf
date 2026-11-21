@@ -162,6 +162,7 @@ fn check_with(severity: CoverSeverity) -> BooksCheck {
         repeated: Vec::new(),
         awaiting: Vec::new(),
         same_meaning_short: Vec::new(),
+        collisions: Vec::new(),
         cover: assessed(severity),
         artifacts: Default::default(),
         names: Default::default(),

@@ -1672,8 +1672,12 @@ fn already_said(unresolved: &UnresolvedLink, lost_here: &[(&FramePin, FailureTag
     };
     match unresolved.why() {
         UnresolvedWhy::TargetInvalid(t) => invalid_target(t),
-        UnresolvedWhy::Ambiguous(ts) => ts.iter().any(invalid_target),
-        UnresolvedWhy::Malformed(_) | UnresolvedWhy::Missing => false,
+        // The writers of a key that could be told apart by their identities; a file
+        // with no readable identity names no pin, so it says nothing of one.
+        UnresolvedWhy::Ambiguous(collision) => collision.ids().iter().any(invalid_target),
+        UnresolvedWhy::NoIdentity(_) | UnresolvedWhy::Malformed(_) | UnresolvedWhy::Missing => {
+            false
+        }
     }
 }
 

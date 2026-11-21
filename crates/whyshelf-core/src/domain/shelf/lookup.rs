@@ -7,7 +7,8 @@
 //!
 //! 1. `<book>:<key>`: a key in that book's grammar, looked up with
 //!    `Shelf::find_key`. A valid and an invalid document are both *found*; what
-//!    state the document is in is [`Shelf::state_of`]'s answer, not this one's.
+//!    state the document is in is [`Shelf::state_of`]'s answer, not this one's. A key
+//!    that only files with no readable identity write is [`Resolution::NoIdentity`].
 //! 2. A UUID in its one written form: a document of the shelf, or failing that, a
 //!    subject of the ledger.
 //! 3. A short id ([`ShortId::looks_like`]): matched against the end of the
@@ -187,6 +188,10 @@ pub enum Resolution {
     Missing,
     /// More than one document.
     Ambiguous(TwoOrMore<DocId>),
+    /// `<book>:<key>` (or a key alone) is written by these files, and none of them
+    /// carries an identity that could be read, so no document is known to have it:
+    /// the files are to be mended first.
+    NoIdentity(NonEmptyVec<RelPath>),
     /// `<book>:<key>` names a book the schema does not declare.
     UnknownBook(BookName),
     /// `<book>:<key>` writes a key the book's grammar refuses.
@@ -229,6 +234,7 @@ fn in_book(shelf: &Shelf, name: &BookName, key: &WrittenKey) -> Resolution {
     match shelf.find_key(book.name(), &form) {
         KeyHit::Valid(id) | KeyHit::Invalid(id) => Resolution::Found(id),
         KeyHit::Ambiguous(ids) => Resolution::Ambiguous(ids),
+        KeyHit::NoIdentity(files) => Resolution::NoIdentity(files),
         KeyHit::Missing => Resolution::Missing,
     }
 }
@@ -262,6 +268,7 @@ fn by_short_id(shelf: &Shelf, ledger: &Ledger, short: &ShortId) -> Resolution {
 
 fn in_any_book(shelf: &Shelf, key: &WrittenKey) -> Resolution {
     let mut hits: BTreeSet<DocId> = BTreeSet::new();
+    let mut no_identity: BTreeSet<RelPath> = BTreeSet::new();
     let mut read_by_some_book = false;
     for book in shelf.schema().books().values() {
         let Ok(form) = book.key().parse(key.as_str()) else {
@@ -273,14 +280,22 @@ fn in_any_book(shelf: &Shelf, key: &WrittenKey) -> Resolution {
                 hits.insert(id);
             }
             KeyHit::Ambiguous(ids) => hits.extend(ids.into_vec()),
+            KeyHit::NoIdentity(files) => no_identity.extend(files.into_vec()),
             KeyHit::Missing => {}
         }
     }
-    match Count::of(hits) {
-        Count::None if !read_by_some_book => Resolution::NotAKeyOfAnyBook,
-        Count::None => Resolution::Missing,
-        Count::One(id) => Resolution::Found(id),
-        Count::Many(ids) => Resolution::Ambiguous(ids),
+    // A file that writes the key and carries no identity that could be read is a hit
+    // with nothing to name: it is told only when no document is found, so that a
+    // document that is found is not hidden by it.
+    match (
+        Count::of(hits),
+        NonEmptyVec::from_vec(no_identity.into_iter().collect()),
+    ) {
+        (Count::None, Ok(files)) => Resolution::NoIdentity(files),
+        (Count::None, Err(_)) if !read_by_some_book => Resolution::NotAKeyOfAnyBook,
+        (Count::None, Err(_)) => Resolution::Missing,
+        (Count::One(id), _) => Resolution::Found(id),
+        (Count::Many(ids), _) => Resolution::Ambiguous(ids),
     }
 }
 

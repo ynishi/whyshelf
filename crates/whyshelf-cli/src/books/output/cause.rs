@@ -210,10 +210,16 @@ pub struct UnknownOut {
 }
 
 impl Namer<'_> {
+    /// How an upstream a pin stands on is named in a sentence: by the key it has now,
+    /// with the key it was pinned under beside it when that is another (P2).
+    fn pin_said(&self, pin: &FramePin) -> String {
+        self.0.pin_name(pin).to_string()
+    }
+
     fn pin(&self, pin: &FramePin) -> DocRef {
         DocRef {
             id: pin.target().to_string(),
-            key: Some(pin.key().to_string()),
+            key: Some(self.0.pin_name(pin).key().to_string()),
         }
     }
 
@@ -268,28 +274,28 @@ impl Namer<'_> {
                     FailureTag::Unknown => "upstream_unknown",
                 },
                 Some(pin),
-                failure.said_of(pin.key(), Detail::Short),
+                failure.said_of(&self.0.pin_name(pin), Detail::Short),
             ),
             Cause::UpstreamChanged { pin, now } => out(
                 "upstream_changed",
                 Some(pin),
                 format!(
                     "{} changed since the approval pinned it ({} -> {now})",
-                    pin.key(),
+                    self.pin_said(pin),
                     pin.hash()
                 ),
             ),
             Cause::UpstreamDeclared { pin, status } => out(
                 "upstream_declared",
                 Some(pin),
-                format!("{} is {}", pin.key(), upstream_status(status)),
+                format!("{} is {}", self.pin_said(pin), upstream_status(status)),
             ),
             Cause::Via { pin, severity } => out(
                 "via",
                 Some(pin),
                 format!(
                     "{} does not hold ({})",
-                    pin.key(),
+                    self.pin_said(pin),
                     self::severity(*severity)
                 ),
             ),
@@ -451,7 +457,7 @@ impl Namer<'_> {
                 why: None,
                 detail: format!(
                     "the approval of {} lapsed at {} (unix ms)",
-                    pin.key(),
+                    self.pin_said(pin),
                     since.millis()
                 ),
             },
@@ -487,7 +493,7 @@ impl Namer<'_> {
                 why: None,
                 detail: format!(
                     "{} was edited since it was pinned ({} -> {now}), and the edit was declared to keep the meaning",
-                    pin.key(),
+                    self.pin_said(pin),
                     pin.hash()
                 ),
             },

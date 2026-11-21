@@ -3,13 +3,14 @@
 //! of a retirement, and the one comparison of what two approvals stand on.
 
 use std::collections::BTreeSet;
+use std::fmt;
 
 use crate::domain::id::DocId;
 
 use super::super::artifact::{
     ArtifactHash, ArtifactKey, ArtifactName, ArtifactState, Comparison, ContentAddress, Space,
 };
-use super::super::build::FailureTag;
+use super::super::build::{FailureTag, NowNamed};
 use super::super::doc::{DocHash, DocKey};
 use super::super::schema::EntryName;
 
@@ -78,11 +79,100 @@ impl FramePin {
         &self.hash
     }
 
-    /// What the pin stands on: the link, the upstream, its key and its hash. The
-    /// address is left out, as freshness never reads it (rule A4), so two pins with
-    /// the same value here stand on the same.
-    fn stands_on(&self) -> (&EntryName, DocId, &DocKey, &DocHash) {
-        (&self.link, self.target, &self.key, &self.hash)
+    /// What the pin stands on: the link, the upstream and its hash. The address is
+    /// left out, as freshness never reads it (rule A4), and so is the key: it is the
+    /// name the upstream had when it was pinned, which a command that renumbers the
+    /// document changes and no approval stands on (P3), so two pins with the same
+    /// value here stand on the same, and an approval is repeated by one that pins the
+    /// upstream under its key now.
+    fn stands_on(&self) -> (&EntryName, DocId, &DocHash) {
+        (&self.link, self.target, &self.hash)
+    }
+
+    /// How an answer names the upstream of this pin, given what its identity comes
+    /// to now: by the key it has now when it has one, and the key it had when it was
+    /// pinned beside it when that is another.
+    ///
+    /// The one place a pin is named for an answer (P2): the key of a pin is the key
+    /// of a time that is gone once the document is renumbered, so an answer that
+    /// names a pin by it names a document that is not there under that key.
+    pub fn named(&self, now: &NowNamed) -> PinName {
+        let pinned = self.key.clone();
+        match now {
+            NowNamed::Valid(key) if *key == pinned => PinName::Same(pinned),
+            NowNamed::Valid(key) => PinName::Renamed {
+                now: key.clone(),
+                pinned,
+            },
+            NowNamed::Invalid(key) => PinName::Invalid {
+                now: key.clone(),
+                pinned,
+            },
+            NowNamed::Gone => PinName::Gone(pinned),
+            NowNamed::Unknown => PinName::Unknown(pinned),
+        }
+    }
+}
+
+/// How an answer names the upstream of a pin: what [`FramePin::named`] reads from
+/// what the identity comes to now ([`NowNamed`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PinName {
+    /// A valid document with the key it had when it was pinned.
+    Same(DocKey),
+    /// A valid document with another key now.
+    Renamed {
+        /// The key it has now.
+        now: DocKey,
+        /// The key it had when it was pinned.
+        pinned: DocKey,
+    },
+    /// Invalid now: with the key its files write now when they write one that is
+    /// told (they may write two), and the key it had when it was pinned.
+    Invalid {
+        /// The key it has now, when it can be told.
+        now: Option<DocKey>,
+        /// The key it had when it was pinned.
+        pinned: DocKey,
+    },
+    /// No file carries it: the key it had when it was pinned.
+    Gone(DocKey),
+    /// Not knowable now: the key it had when it was pinned.
+    Unknown(DocKey),
+}
+
+impl PinName {
+    /// The key to name the document by: the one it has now when there is one, else the
+    /// one it had when it was pinned.
+    pub fn key(&self) -> &DocKey {
+        match self {
+            Self::Same(key) | Self::Gone(key) | Self::Unknown(key) => key,
+            Self::Renamed { now, .. } => now,
+            Self::Invalid { now, pinned } => now.as_ref().unwrap_or(pinned),
+        }
+    }
+
+    /// The key it had when it was pinned, when that is not the key it has now.
+    pub fn was(&self) -> Option<&DocKey> {
+        match self {
+            Self::Renamed { pinned, .. } => Some(pinned),
+            Self::Invalid {
+                now: Some(now),
+                pinned,
+            } if now != pinned => Some(pinned),
+            Self::Same(_) | Self::Invalid { .. } | Self::Gone(_) | Self::Unknown(_) => None,
+        }
+    }
+}
+
+/// The name as a subject of a sentence: the key it has now, and `(pinned as K)` when
+/// it was pinned under another.
+impl fmt::Display for PinName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.was() {
+            Some(pinned) => write!(f, "{} (pinned as {pinned})", self.key()),
+            None => fmt::Display::fmt(self.key(), f),
+        }
     }
 }
 
@@ -214,7 +304,7 @@ impl ArtifactPin {
 #[derive(PartialEq, Eq)]
 pub(super) struct StandsOn<'a> {
     seen: &'a DocHash,
-    frame: BTreeSet<(&'a EntryName, DocId, &'a DocKey, &'a DocHash)>,
+    frame: BTreeSet<(&'a EntryName, DocId, &'a DocHash)>,
     artifacts: BTreeSet<(
         &'a EntryName,
         &'a ArtifactKey,

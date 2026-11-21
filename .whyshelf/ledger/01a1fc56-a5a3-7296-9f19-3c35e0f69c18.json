@@ -1,0 +1,133 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "da55b5fc419054e68a10bf0a2aa77cd43aa5f541",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f6c0a2cd7ea8c126207ac2a344c692a7c3263741d2dcb13f810f48257c4eaf5c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "67d63fc52dcc2c61826206d889115b234870d4dc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ebd357d1e965e40dccad4fa00a8627b32a56d6c54a312b3648859d4d9af4f498",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fc62088c1055be556a17b998e56022f5f760dd4f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e52a129d11123a002edf3bd549f13ab1032ed851369e845ca190d970a965eb54",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/actor.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d8fa33de8f502bf559ea3b55bc303617fa5a2d39",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:97b0dd470a16146fa1b0cda14ed378b4e1b184e5f7ad8da8b4a4bc4ae74b7dcd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "79e3d0f1a81bf1da899e196e8235c86c4b0b4822",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0437ad78f0efcaec3c2652fba76ce6e2ce9e26efdd75e360f4205a4eeeb1a06a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/attribution_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f4e2311a8e217d9f1d1fdfae114f1abcd5d05186",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3f034a6cf5897bf485b279574db7f84bcc2281e528019b9225a13efeb3897701",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c9058de5c53627c5b7d311075c3a93673bd4e279",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9c33d7ead0e073e4b0e19406c514d67530dcb0a435edba5be796bab80152bd71",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795234878353,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a9b2fd3c4ceba61ffda41404197124792b3fb23d",
+      "hash": "sha256:d1cbb29f21ce6cbdc780eea2f9611ecbb427d583290301d8825f4234a4b8981d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "91"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f9a4-bea7-7778-ac4a-a68538d58570"
+    }
+  ],
+  "id": "01a1fc56-a5a3-7296-9f19-3c35e0f69c18",
+  "kind": "decision",
+  "reason": "Re-read after merging main (#111, the cover over artifacts) into #117: the pinned rustdoc items (LinkKind, Notice, BookRange, BookScope and the others) and the test files now hold both changes side by side; what each document states still holds, and cargo test --workspace passes (1676)",
+  "revision": "4956951297fb48e913715a35960c32b4455e9438",
+  "seen": "sha256:efbe51e918a753d42e58f5833149ff6136feac35c02706bb0ece745bcbfac4ba",
+  "seen_address": "d9e158743b61313e9fab5895795512f80e9e1dfb",
+  "subject": "01a1f9a4-fe48-72ea-aeb6-1d9056f1690b",
+  "v": 1,
+  "verb": "approve"
+}

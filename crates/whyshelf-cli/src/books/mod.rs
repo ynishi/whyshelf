@@ -20,9 +20,9 @@
 //! | exit | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong (or `map`, `cover` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid, or an artifact when the names its link's selection takes cannot all be listed; one no file carries is a reference that names no document, exit 2) |
-//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, a filter of `status` that is not a request (a `--book` that is no name or not declared, a `--standing` that is no standing, a `--where` with no `=`, a field no book declares, or a value no book that declares the field reads), `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `new --from`, the same for every line of the file at once (each problem says its line), a line that is no JSON object of the shape of `schema`'s `inputs."new --from"`, a name that stands for no line, or a file with no line to write, with nothing written; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`); for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it (with `--artifact`, a `--from` that is no link to artifacts with a cover, a name its selection does not take now, or one a document reaches); for `cover`, a `--link` that is no covering link to artifacts; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn) |
-//! | 3 | the run failed (a file could not be read or written, the file of `new --from` among them (missing, unreadable, not UTF-8) with nothing written; for `init`, part way too, with the files written listed in `problems`; or a template `init` ships cannot be read) |
+//! | 1 | `check` found something wrong (or `map`, `cover` or `unlinked` a declaration that cannot be used), `stale --exit-code` found an approval that does not hold, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid, or an artifact when the names its link's selection takes cannot all be listed; one no file carries is a reference that names no document, exit 2; for `rekey`, files that could not be read and may write the key or link to it, a file `fmt` would leave alone, or files that would not read as planned, each listed in `problems`) |
+//! | 2 | the request is wrong (a reference that names nothing or several documents, a declaration that cannot be used, a `--book` of `unlinked` that is not declared, a filter of `status` that is not a request (a `--book` that is no name or not declared, a `--standing` that is no standing, a `--where` with no `=`, a field no book declares, or a value no book that declares the field reads), `get --approved` or `diff` of a document no approval stands about; for `new`, an unknown book, a key that is taken or malformed, a book of slugs with no `--key`, entries the book refuses, each listed in `problems`, or a file already at the path; for `new --from`, the same for every line of the file at once (each problem says its line), a line that is no JSON object of the shape of `schema`'s `inputs."new --from"`, a name that stands for no line, or a file with no line to write, with nothing written; for `init`, anything at the declaration's path or a document's, or a file that already writes a key the template gives, each listed in `problems`, a declaration template that is not sound, or a file that came to be at a path between the look and the write (the files written before are listed); for `judge same`, a path no document links, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name; for `judge moved`, two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`); for `judge exempt`, a `--from` that is no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it (with `--artifact`, a `--from` that is no link to artifacts with a cover, a name its selection does not take now, or one a document reaches); for `cover`, a `--link` that is no covering link to artifacts; for `judge withdraw`, an id that is no decision or declaration, or one already withdrawn; for `rekey`, a document no file carries or that is not one file with an identity and a key that read, a new key that is taken or that the book refuses, a word for a document that writes no key in a link or two words for one, a document that writes the old key in a link and that no approval and no word decides, or whose word is against its approval (every one listed in `problems`), a file already at the new file, or a file no longer what was read) |
+//! | 3 | the run failed (a file could not be read or written, the file of `new --from` among them (missing, unreadable, not UTF-8) with nothing written; for `init` and `rekey`, part way too, with the files written (for `rekey`, those not put back) listed in `problems`; or a template `init` ships cannot be read) |
 //!
 //! `init` writes the declaration and the documents of a template of
 //! `whyshelf_infra::shelf::init`, each where nothing is, or nothing at all.
@@ -31,8 +31,9 @@
 //! declaration, and the domain judges the document before anything is written.
 //! `new --from` writes a run of them from a file of JSON lines ([`new_lines`]), all
 //! or none, reading the shelf once.
-//! `fmt` is the one command that writes over a document's file, in the form `new`
-//! writes, and only when that changes no reading of it.
+//! `fmt` writes over a document's file, in the form `new` writes, and only when that
+//! changes no reading of it; `rekey` does so for the links it rewrites, makes the file
+//! of the document that takes a new key and removes the one it was in, all or none.
 
 // `ShelfError` and the refusals of the domain hold lists of problems; they are
 // returned once, at the end of a command, so their size costs nothing.
@@ -61,9 +62,9 @@ use std::process::ExitCode;
 use whyshelf_core::app::shelf::{
     ApproveChosenRequest, AttributionAsk, Choose, CoverLinkAsk, CoverReport, EntryInput,
     ErrorClass, ExemptAsk, ExemptRequest, JudgeRequest, Judgement, MapReport, MovedRequest,
-    NewDocRequest, PendingScope, PrefixMovedRequest, SameMeaningAbout, SameMeaningRequest,
-    ShelfApp, ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter, UnlinkedReport,
-    WithdrawRequest,
+    NewDocRequest, PendingScope, PrefixMovedRequest, RekeyRequest, SameMeaningAbout,
+    SameMeaningRequest, ShelfApp, ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter,
+    UnlinkedReport, WithdrawRequest,
 };
 use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::hash::ContentHash;
@@ -325,6 +326,24 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
                 }
             })
         }
+        BooksCommand::Rekey {
+            reference,
+            key,
+            follow,
+            stay,
+            both,
+            dry_run,
+        } => ShelfApp::new(project)
+            .rekey(RekeyRequest {
+                target: reference,
+                key,
+                follow,
+                stay,
+                both,
+                dry_run,
+            })
+            .await
+            .map(|r| print(&output::rekey(&r))),
         BooksCommand::New {
             from: Some(path), ..
         } => match new_lines::requests_from(&path).await {

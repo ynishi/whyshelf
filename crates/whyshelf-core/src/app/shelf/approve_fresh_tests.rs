@@ -348,7 +348,7 @@ fn an_upstream_whose_key_changed_is_pinned_again() {
     block_on(app.judge_all(vec![approve("FR-1"), approve("SP-2")])).unwrap();
     // The book of findings is renamed in the declaration: FR-1's key is now
     // `lesson:FR-1`, and neither file changes. (The hash of a document covers its
-    // key, so FR-1's hash moves too; the pin of the key is compared all the same.)
+    // book, so FR-1's hash moves; that, not the key, makes SP-2's approval new.)
     {
         let mut decls = app.ports().decls.lock().unwrap();
         for book in decls.iter_mut() {

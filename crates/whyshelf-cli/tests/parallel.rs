@@ -1,7 +1,8 @@
 //! Two branches that took the same keys, put together: the merge result is made by
 //! copying the files of one project into another (no Git). `check` finds the keys
-//! written twice before anything is merged, and renumbering the branch's documents
-//! keeps every approval, the manual's "Working from several branches".
+//! written twice before anything is merged, and `rekey` renumbers the branch's
+//! documents and keeps every approval, the manual's "Working from several branches".
+//! The other cases of `rekey` are in `rekey.rs`.
 
 mod common;
 
@@ -88,13 +89,6 @@ fn add_group(project: &Project, word: &str) -> [String; 3] {
     [req, dec, ver]
 }
 
-/// Rewrite `from` as `to` in the file at `path`.
-fn rewrite(path: &Path, from: &str, to: &str) {
-    let text = fs::read_to_string(path).unwrap();
-    assert!(text.contains(from), "{} holds {from}", path.display());
-    fs::write(path, text.replace(from, to)).unwrap();
-}
-
 #[test]
 fn keys_taken_on_two_branches_are_found_on_the_merge_result_and_renumbering_keeps_the_approvals() {
     // The main branch, and a branch cut from it.
@@ -157,7 +151,7 @@ fn keys_taken_on_two_branches_are_found_on_the_merge_result_and_renumbering_keep
                 .trim_end_matches("-b")
                 .to_owned();
             assert!(
-                problems.contains(&format!(":{key}` is also in")),
+                problems.contains(&format!(":{key}` is also written by")),
                 "{file}: {problems}"
             );
             file
@@ -165,33 +159,62 @@ fn keys_taken_on_two_branches_are_found_on_the_merge_result_and_renumbering_keep
         .collect();
     let expected: BTreeSet<String> = landed.iter().chain(&copied).cloned().collect();
     assert_eq!(invalid, expected, "{answer}");
+    // Each key two files write is told once, with both files and their identities.
+    let collisions = answer["collisions"].as_array().unwrap();
+    assert_eq!(collisions.len(), 3, "{answer}");
+    for collision in collisions {
+        let files = collision["files"].as_array().unwrap();
+        assert_eq!(files.len(), 2, "{collision}");
+        assert!(
+            files.iter().all(|file| file["id"].is_string()),
+            "{collision}"
+        );
+    }
 
-    // Renumber the branch's group: the keys `new` takes now (the number after the
-    // highest a file of the book writes, 2), the files where `new` puts them, their
-    // `key:` and the links of the group that mean them.
+    // Renumber the branch's group with `rekey`, the requirement first: the key `new` takes
+    // now (the number after the highest a file of the book writes, 2), the file where
+    // `new` puts it, the `key:`, and the links of the group that mean it. Which document a
+    // link meant is read from the approval of the document that wrote it (the decision
+    // on the main branch pinned the main branch's requirement, the branch's decision the
+    // branch's), so no word is given.
+    let id_of = |file: &str| -> String {
+        collisions
+            .iter()
+            .flat_map(|collision| collision["files"].as_array().unwrap())
+            .find(|candidate| candidate["path"] == file)
+            .unwrap_or_else(|| panic!("{file} is in no collision: {answer}"))["id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
     let renumbered = [
         ("REQ-2", "REQ-3", "books/requirement/REQ-3.md"),
         ("DEC-2", "DEC-3", "books/decision/DEC-3.md"),
         ("V-2", "V-3", "books/verification/V-3.md"),
     ];
     for ((old, new, to), from) in renumbered.iter().zip(&copied) {
-        fs::rename(main.0.join(from), main.0.join(to)).unwrap();
-        rewrite(
-            &main.0.join(to),
-            &format!("key: \"{old}\""),
-            &format!("key: \"{new}\""),
+        let answer = ok(&main, &["rekey", &id_of(from)]);
+        assert_eq!(answer["written"]["created"], *to, "{answer}");
+        assert_eq!(answer["written"]["removed"], from.as_str(), "{answer}");
+        assert!(
+            answer["moved"]["from_key"].as_str().unwrap().ends_with(old),
+            "{answer}"
         );
+        assert!(
+            answer["moved"]["to_key"].as_str().unwrap().ends_with(new),
+            "{answer}"
+        );
+        // The links that mean the document follow it; the other branch's stay.
+        for linked in answer["rewritten"].as_array().unwrap() {
+            assert_eq!(linked["why"], "pinned", "{answer}");
+        }
+        for linked in answer["stayed"].as_array().unwrap() {
+            assert_eq!(linked["why"], "pinned", "{answer}");
+        }
+        // The approval of the document that took the new key holds (the first row; those
+        // that link to it hold once their own key is renumbered, below).
+        assert_eq!(answer["approvals"][0]["standing"], "fresh", "{answer}");
     }
-    rewrite(
-        &main.0.join(renumbered[1].2),
-        "serves: [\"REQ-2\"]",
-        "serves: [\"REQ-3\"]",
-    );
-    rewrite(
-        &main.0.join(renumbered[2].2),
-        "checks: [\"DEC-2\"]",
-        "checks: [\"DEC-3\"]",
-    );
 
     ok(&main, &["check"]);
     ok(&main, &["fmt", "--check"]);

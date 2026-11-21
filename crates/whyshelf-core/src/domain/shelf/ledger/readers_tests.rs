@@ -5,7 +5,9 @@
 use std::collections::BTreeSet;
 
 use crate::domain::actor::{Actor, Attribution};
-use crate::domain::shelf::fixtures_tests::{deny, docid, fr_titled, jid, ledger, shelf};
+use crate::domain::shelf::fixtures_tests::{
+    actor, approve, deny, docid, fr, fr_titled, jid, ledger, reading, shelf, sp_testing, text,
+};
 
 use super::*;
 
@@ -345,6 +347,81 @@ fn before_a_record_reads_the_ledger_as_it_was_and_by_identity_at_one_time() {
         .map(|d| d.id())
         .collect();
     assert_eq!(before_cy, [jid(2), jid(1)]);
+}
+
+/// The key an upstream had when it was pinned is no part of what an approval stands on
+/// (P3): a command that renumbers the upstream does not make the next approval of the
+/// same reading another one.
+#[test]
+fn an_upstream_renumbered_since_it_was_pinned_is_the_same_upstream_to_a_repeat() {
+    let before = shelf(vec![fr(1, &[]), sp_testing(11, &["FR-1"], &[])]);
+    let first = approve(&before, &ledger(vec![]), 1, 1001, 10, None);
+    let so_far = ledger(vec![first.clone()]);
+    let second = approve(&before, &so_far, 11, 1011, 10, None);
+    let l = ledger(vec![first, second]);
+    // The finding 1 is `FR-2` now, as it is, and the spec writes the key it has.
+    let after = shelf(vec![
+        reading("findings/fr-1.md", 1, "FR-2", &[("title", text("title"))]),
+        sp_testing(11, &["FR-2"], &[]),
+    ]);
+    let frame = frame_approve(&after, &l, docid(11)).unwrap();
+    let by = actor();
+    let asked = Asked::frame(&frame, &by, None, JudgedAt::new(20));
+    assert_eq!(
+        l.kind_of(&asked, Before::Now),
+        ApprovalKind::Repeat {
+            standing: jid(1011)
+        }
+    );
+}
+
+/// A pin names its upstream by the key it has now (P2).
+#[test]
+fn a_pin_is_named_by_what_its_upstream_comes_to_now() {
+    let before = shelf(vec![fr(1, &[]), sp_testing(11, &["FR-1"], &[])]);
+    let first = approve(&before, &ledger(vec![]), 1, 1001, 10, None);
+    let so_far = ledger(vec![first.clone()]);
+    let second = approve(&before, &so_far, 11, 1011, 10, None);
+    let l = ledger(vec![first, second]);
+    let pin = match l.status_of(docid(11)) {
+        DeclaredStatus::Approved { frame, .. } => frame.into_iter().next().unwrap(),
+        other => panic!("{other:?}"),
+    };
+    let key = |written: &str| crate::domain::shelf::doc::DocKey {
+        book: pin.key().book.clone(),
+        form: crate::domain::shelf::fixtures_tests::schema()
+            .book("finding")
+            .unwrap()
+            .key()
+            .parse(written)
+            .unwrap(),
+    };
+    let now = |readings| shelf(readings).now_named(docid(1));
+    let same = now(vec![fr(1, &[])]);
+    assert_eq!(pin.named(&same), PinName::Same(pin.key().clone()));
+    assert_eq!(pin.named(&same).to_string(), "finding:FR-1");
+    let renamed = now(vec![reading(
+        "findings/fr-1.md",
+        1,
+        "FR-2",
+        &[("title", text("title"))],
+    )]);
+    let named = pin.named(&renamed);
+    assert_eq!(named.to_string(), "finding:FR-2 (pinned as finding:FR-1)");
+    assert_eq!(named.key(), &key("FR-2"));
+    assert_eq!(named.was(), Some(pin.key()));
+    // Invalid now, under the key its file writes: the key it has and the one pinned.
+    let invalid = now(vec![reading(
+        "findings/fr-1.md",
+        1,
+        "FR-3",
+        &[("title", text("title")), ("surprise", text("x"))],
+    )]);
+    assert!(matches!(
+        pin.named(&invalid),
+        PinName::Invalid { now: Some(_), .. }
+    ));
+    assert_eq!(pin.named(&now(vec![])), PinName::Gone(pin.key().clone()));
 }
 
 #[test]

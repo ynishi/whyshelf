@@ -5,6 +5,7 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 use whyshelf_core::app::shelf::{Awaiting, BooksCheck, Names};
+use whyshelf_core::domain::shelf::doc::KeyCollision;
 use whyshelf_core::domain::shelf::ledger::{SameMeaningEdge, ShortSameMeaning};
 use whyshelf_core::domain::shelf::schema::CoverSeverity;
 use whyshelf_core::domain::shelf::untold::untold_causes;
@@ -128,6 +129,48 @@ pub struct BooksCheckOut {
     /// takes no name, makes `clean` false: a gap cannot be ruled out, or the cover
     /// expects nothing.
     pub artifact_cover: Vec<CoverLinkOut>,
+    /// The keys that two or more files write, one entry for each key, with every
+    /// file and the identity of each that could be read. Each of the files is
+    /// invalid (`health.invalid` says so with a problem that names the others), so
+    /// the entries leave `clean` as it is. Which file is to take another key is not
+    /// said: it is for a person to decide. Left out when there is none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub collisions: Vec<CollisionOut>,
+}
+
+/// A key that two or more files write.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct CollisionOut {
+    /// The key (`book:KEY`).
+    pub key: String,
+    /// The files that write it, in the order of their paths.
+    pub files: Vec<CollisionFileOut>,
+    /// A sentence for a person.
+    pub detail: String,
+}
+
+/// A file that writes a key another file writes too.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct CollisionFileOut {
+    /// The file, relative to the project root.
+    pub path: String,
+    /// The identity (UUID v7) the file carries; null when it could not be read.
+    pub id: Option<String>,
+}
+
+/// The sentence of a key that two or more files write: the key, and every file with
+/// the identity it carries, or that it carries none that can be read.
+fn collision_detail(collision: &KeyCollision) -> String {
+    let files = collision.writers().iter().map(|writer| match writer.id() {
+        Some(id) => format!("{} (id {id})", writer.file()),
+        None => format!("{} (no identity that can be read)", writer.file()),
+    });
+    format!(
+        "the key `{}` is written by {} files: {}",
+        collision.key(),
+        collision.writers().len(),
+        listed(files, Mark::Plain, Join::Semicolon)
+    )
 }
 
 /// An approval whose content awaits the approvals of other names.
@@ -404,6 +447,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             exemption_repeated: Vec::new(),
             awaiting: Vec::new(),
             same_meaning_short: Vec::new(),
+            collisions: Vec::new(),
             artifact_uncovered: Vec::new(),
             artifact_exempt: Vec::new(),
             artifact_exemption_unneeded: Vec::new(),
@@ -422,6 +466,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             repeated,
             awaiting,
             same_meaning_short,
+            collisions,
             cover,
             artifacts,
             names,
@@ -565,6 +610,21 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                 same_meaning_short: same_meaning_short
                     .iter()
                     .map(|s| namer.same_meaning_short(s))
+                    .collect(),
+                collisions: collisions
+                    .iter()
+                    .map(|collision| CollisionOut {
+                        key: collision.key().to_string(),
+                        files: collision
+                            .writers()
+                            .iter()
+                            .map(|writer| CollisionFileOut {
+                                path: writer.file().to_string(),
+                                id: writer.id().map(|id| id.to_string()),
+                            })
+                            .collect(),
+                        detail: collision_detail(collision),
+                    })
                     .collect(),
                 artifact_uncovered: of_artifacts.uncovered,
                 artifact_exempt: of_artifacts.exempt,

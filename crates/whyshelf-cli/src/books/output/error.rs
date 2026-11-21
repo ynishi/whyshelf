@@ -7,6 +7,7 @@ use whyshelf_core::app::shelf::{ErrorClass, ShelfError};
 use whyshelf_core::domain::shelf::build::NewDocProblem;
 use whyshelf_core::domain::shelf::ledger::PrefixRefusal;
 
+use super::rekey::rekey_problems;
 use super::words::schema_problem;
 
 /// The answer when a command gives none.
@@ -22,7 +23,10 @@ pub struct ErrorOut {
     /// of a declaration that cannot be used, or of a new document that would be
     /// invalid; for `new --from`, each row refused (`row <n>: ...`, the line of the
     /// file) or each line that cannot be read; for `init`, each thing in the way, or
-    /// the files written before a failure part way and the one that was not.
+    /// the files written before a failure part way and the one that was not; for
+    /// `rekey`, each document that is not decided or whose word is against its
+    /// approval, each place that could not be read, or each difference of the files
+    /// that would be written from the plan.
     pub problems: Vec<String>,
     /// For `judge moved --prefix`, each name under the prefix that cannot be moved,
     /// with why (every one is listed, and none is moved); empty for any other error.
@@ -68,11 +72,18 @@ pub fn error(error: &ShelfError, messages: Vec<String>) -> ErrorOut {
             ShelfError::InTheWay { obstacles } => {
                 obstacles.iter().map(ToString::to_string).collect()
             }
+            ShelfError::Rekey(problem) => rekey_problems(problem),
+            ShelfError::PlanDiffers(differs) => differs
+                .differences
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
             ShelfError::PartWay {
                 written,
                 failed,
                 cause,
                 not_durable,
+                ..
             } => written
                 .iter()
                 .map(|path| format!("{path} was written"))

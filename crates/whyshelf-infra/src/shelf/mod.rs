@@ -31,8 +31,8 @@
 //! | `.whyshelf/books.toml` | [`BookSchemaSource`], [`DeclarationWrite`] | [`books`] |
 //! | the templates `init` writes (a declaration, and documents beside it) | none: data for [`InitRequest`] | [`init`] |
 //! | a file `init` writes beside the documents (a table a template's document names) | [`FileWrite`] | [`artifact::file`] |
-//! | the Markdown files of the books | [`DocSource`], [`DocWrite`], [`DocReplace`] | [`docs`] |
-//! | the files `new` and `init` wrote, put on disk together at the end of the run | [`FileSync`] | [`Project`], which holds the root |
+//! | the Markdown files of the books | [`DocSource`], [`DocWrite`], [`DocReplace`], [`DocRemove`] | [`docs`] |
+//! | the files `new`, `init` and `rekey` wrote, put on disk together at the end of the run, and the removals of `rekey` | [`FileSync`] | [`Project`], which holds the root |
 //! | `.whyshelf/ledger/<id>.json` | [`LedgerRead`], [`LedgerAppend`] | [`ledger`] |
 //! | what links to artifacts name, by space | [`ArtifactSource`] | [`artifact`] |
 //! | where a pinned artifact that is gone may have moved, by space | [`MoveSource`] | [`artifact`] (for `file`: the same content, Git's renames) |
@@ -54,15 +54,18 @@
 //! [`Project`] bundles them for a project root, as one value the command line hands
 //! to [`ShelfApp`](whyshelf_core::app::shelf::ShelfApp).
 //!
-//! Only `judge`, `new`, `init` and `fmt` write. `judge` writes one new file, a record;
+//! Only `judge`, `new`, `init`, `fmt` and `rekey` write. `judge` writes one new file, a record;
 //! `new` writes a document or, for a run of rows, many (create-only, never in place of
 //! a file that is there). `init` writes the declaration, the other files of its
 //! template and documents beside it, each create-only. The files of `new` and `init`
 //! are written whole and are put on disk together when the run ends ([`FileSync`]),
 //! not one at a time. `fmt` writes over documents' files that are there, each in the one form,
 //! after comparing it with what was read, and whole ([`DocReplace`]); an edit
-//! saved between the comparison and the write is overwritten. Reading never
-//! creates a directory or a file.
+//! saved between the comparison and the write is overwritten. `rekey` creates a
+//! document's file, writes over others as `fmt` does, and removes the file the document
+//! was in ([`DocRemove`], after the same comparison; the removal is put on disk by
+//! [`FileSync::persist_gone`]); when it stops it puts the files back as they were
+//! (the `restore` of [`DocReplace`]). Reading never creates a directory or a file.
 //!
 //! [`BookSchemaSource`]: whyshelf_core::app::shelf::BookSchemaSource
 //! [`DeclarationWrite`]: whyshelf_core::app::shelf::DeclarationWrite
@@ -72,6 +75,7 @@
 //! [`DocSource`]: whyshelf_core::app::shelf::DocSource
 //! [`DocWrite`]: whyshelf_core::app::shelf::DocWrite
 //! [`DocReplace`]: whyshelf_core::app::shelf::DocReplace
+//! [`DocRemove`]: whyshelf_core::app::shelf::DocRemove
 //! [`LedgerRead`]: whyshelf_core::app::shelf::LedgerRead
 //! [`LedgerAppend`]: whyshelf_core::app::shelf::LedgerAppend
 //! [`Clock`]: whyshelf_core::app::shelf::Clock
@@ -267,6 +271,12 @@ impl FileSync for Project {
         let files: Vec<RelPath> = files.iter().cloned().collect();
         create::persist(&self.root, &files).await
     }
+
+    /// The directory each file was in, put on disk (`create::persist_gone`).
+    async fn persist_gone(&self, files: &NonEmptyVec<RelPath>) -> Result<(), PersistFailed> {
+        let files: Vec<RelPath> = files.iter().cloned().collect();
+        create::persist_gone(&self.root, &files).await
+    }
 }
 
 impl ShelfWrite for Project {
@@ -276,6 +286,7 @@ impl ShelfWrite for Project {
     type Revisions = Git;
     type DocWriter = MarkdownDocs;
     type DocReplacer = MarkdownDocs;
+    type DocRemover = MarkdownDocs;
     type DeclarationWriter = BooksToml;
     type FileWriter = FileSpace;
     type FileSyncer = Self;
@@ -301,6 +312,10 @@ impl ShelfWrite for Project {
     }
 
     fn doc_replacer(&self) -> &MarkdownDocs {
+        &self.docs
+    }
+
+    fn doc_remover(&self) -> &MarkdownDocs {
         &self.docs
     }
 
