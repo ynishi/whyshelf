@@ -49,6 +49,26 @@ runs `just branch-check` to verify the base. Run it from the main checkout, and
 remove the worktree once the branch is merged. A branch in the checkout you
 already have is equally fine; that choice is your setup's.
 
+Each worktree builds into a `target` directory of its own, so builds in two
+worktrees neither wait on each other's lock nor rebuild each other's crates;
+one shared `CARGO_TARGET_DIR` would do both. A build directory is several
+gigabytes, so keep the number of worktrees down:
+
+```bash
+just worktree-disk              # the size of each build directory
+just worktree-remove <slug>     # once origin/main holds the branch
+```
+
+`worktree-disk` counts storage a directory clones from another in each, so its
+sum is an upper bound. `worktree-remove` refuses a worktree on no branch, a
+branch `origin/main` does not hold and a worktree with changes not committed;
+it removes the worktree with its build directory, and then the branch. With
+[cargo-shared-target](https://crates.io/crates/cargo-shared-target) installed
+(optional), `worktree-new` seeds the new `target` directory from the main
+checkout's, so the first build reuses what was built there and shares the
+storage where the filesystem allows it. Without it, the first build starts
+from nothing. `cargo clean` empties a build directory that has grown.
+
 ## Verification
 
 `just check` is the definition of green, and CI runs it and nothing else. It
