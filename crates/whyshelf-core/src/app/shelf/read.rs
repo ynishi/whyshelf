@@ -68,6 +68,10 @@ pub(super) fn identity(loaded: &Loaded, reference: &Reference) -> Result<DocId, 
             reference: reference.clone(),
             candidates,
         }),
+        Resolution::NoIdentity(files) => Err(ShelfError::NoIdentity {
+            reference: reference.clone(),
+            files,
+        }),
         Resolution::UnknownBook(book) => Err(ShelfError::UnknownBook {
             reference: Some(reference.clone()),
             book,
@@ -285,6 +289,7 @@ impl<P: ShelfRead> ShelfApp<P> {
             repeated,
             awaiting,
             same_meaning_short: loaded.ledger.same_meaning_short(),
+            collisions: loaded.shelf.collisions(),
             names: loaded.names(),
         })
     }

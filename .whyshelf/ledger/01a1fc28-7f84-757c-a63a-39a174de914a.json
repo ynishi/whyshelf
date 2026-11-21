@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "fd6e7cf963f9d63a90ce0118fb90b55488246825",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b268a560d82e3fc7cf0039c7993b432c46b3d409d1bad4e0a351fa534c42ed35",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/decide.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795231845033,
+  "expires": null,
+  "frame": [
+    {
+      "address": "07bddc734959b3305a09091555209ba787ad7e9b",
+      "hash": "sha256:5309e3acef0d51b8942f4734f82842e717d630ecd2b829c33707450d8cdd33f2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "89"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74"
+    }
+  ],
+  "id": "01a1fc28-7f84-757c-a63a-39a174de914a",
+  "kind": "decision",
+  "reason": "Re-read for #117: DEC-17, DEC-28, DEC-36, DEC-58, DEC-78, DEC-89, DEC-92 and V-52 were corrected to say who writes a key is one reading (KeyWriters) that also takes a file whose id does not read, check lists collisions and names the other files, a reference or link to a key only such a file writes is NoIdentity, a pinned upstream is named by its current key, the repeat rule no longer compares an upstream's key, and rekey (DEC-94) does the renumbering; the verifications' test files changed at call sites and wording and some gained cases, and what each states still holds: cargo test --workspace passes (1629)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:efa1472fa7db2ddfdd3ffd96842bd90680d0644f7cb65d9e7ccd4aa6eeda94fe",
+  "seen_address": "78f42b1afa77848bd46afd5abf9ee8e95e7c313b",
+  "subject": "01a1f6a0-2c42-7b6d-9e14-7c3a2f8d1b95",
+  "v": 1,
+  "verb": "approve"
+}

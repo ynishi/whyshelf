@@ -25,9 +25,11 @@ use crate::domain::shelf::ledger::{
 };
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::NotPending;
+use crate::domain::shelf::rekey::{PlanDiffers, RekeyProblem};
 use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
 use crate::domain::words::{Join, Mark, listed};
 
+use super::fmt::LeftAloneWhy;
 use super::ports::ShelfPort;
 
 /// Why a use case gave no answer.
@@ -69,6 +71,47 @@ pub enum ShelfError {
         reference: Reference,
         /// The documents it could be.
         candidates: TwoOrMore<DocId>,
+    },
+    /// The reference names a key that only files with no identity that could be read
+    /// write, so no document is known to have it: the files are to be mended first.
+    #[error(
+        "`{reference}` is written by {}, which carry no identity that can be read",
+        listed(files.iter(), Mark::Plain, Join::And)
+    )]
+    NoIdentity {
+        /// The reference.
+        reference: Reference,
+        /// The files that write the key.
+        files: NonEmptyVec<RelPath>,
+    },
+    /// A document cannot be given a new key, or the plan of it is not settled: the
+    /// problem says which, and every document that is not decided is in it.
+    #[error("the document cannot be given a new key")]
+    Rekey(#[from] RekeyProblem),
+    /// The files `rekey` would write do not read as the plan said, so none is written.
+    #[error(transparent)]
+    PlanDiffers(#[from] PlanDiffers),
+    /// A document is named twice to `rekey`, as one whose link means another thing.
+    #[error("{doc} is named twice")]
+    SaidTwice {
+        /// The document.
+        doc: DocId,
+    },
+    /// A file `rekey` would write cannot be written in the form (the rule of `fmt`):
+    /// nothing was written.
+    #[error("{file} cannot be written in the form: {why}; nothing was written")]
+    NotInForm {
+        /// The file.
+        file: RelPath,
+        /// Why.
+        why: LeftAloneWhy,
+    },
+    /// A file is no longer what was read: it changed, or it is gone, between the
+    /// reading and the write.
+    #[error("{file} is no longer what was read: it changed, or it is gone")]
+    Changed {
+        /// The file.
+        file: RelPath,
     },
     /// A book that is not declared is named: by a reference, or by its name alone.
     #[error(
@@ -290,14 +333,17 @@ pub enum ShelfError {
         /// The earlier.
         with: RelPath,
     },
-    /// A run of writes (`new`, `init`) wrote some files and then failed to write one:
-    /// those it wrote stay, each whole, in the order they were written (for `init`:
+    /// A run of writes (`new`, `init`, `rekey`) wrote some files and then failed to write
+    /// one: those it wrote stay, each whole, in the order they were written (for `init`:
     /// the declaration, its other files, then the documents), and
     /// the rest were not written. The files written were put on disk before this was
     /// answered; when that failed too, `not_durable` says why, and they may not
-    /// survive a power loss. The class is the cause's (a port that failed, or a file
+    /// survive a power loss. For `rekey`, which undoes what it wrote when it stops, the
+    /// files are those it could not put back as they were (or, when it put every one
+    /// back and could not put that on disk, every one it touched). The class is the cause's (a port that failed, or a file
     /// that came to be at a path between the check and the write), except that when
-    /// `not_durable` is there the run failed, whatever stopped it.
+    /// `not_durable` is there, or `undo_failed` is true, the run failed, whatever
+    /// stopped it.
     #[error(
         "{} written, then {failed} was not{}",
         and_list(.written.iter(), "was", "were"),
@@ -313,9 +359,16 @@ pub enum ShelfError {
         cause: Box<ShelfError>,
         /// Why putting the files written on disk failed, when it did.
         not_durable: Option<PersistProblem>,
+        /// Whether the run was an edit (`rekey`) that stopped and could not put back
+        /// every file it had written: the files listed are those not put back, and
+        /// the run failed, whatever stopped it. False for `new` and `init`, which
+        /// undo nothing.
+        undo_failed: bool,
     },
     /// A run of writes wrote every file, and then putting them on disk failed. The
     /// files are there, each whole, and are not removed; a power loss may lose them.
+    /// For `rekey`, which also removes a file, the removed file is named too: it may
+    /// come back.
     #[error(
         "{} written whole and left in place, but could not be put on disk: a power loss may lose what was written",
         and_list(.files.iter(), "was", "were")
@@ -466,6 +519,9 @@ impl ShelfError {
             | Self::Drop(_)
             | Self::NotFound { .. }
             | Self::Ambiguous { .. }
+            | Self::NoIdentity { .. }
+            | Self::SaidTwice { .. }
+            | Self::Changed { .. }
             | Self::UnknownBook { .. }
             | Self::NotAKeyOf { .. }
             | Self::NotAKeyOfAnyBook { .. }
@@ -528,14 +584,29 @@ impl ShelfError {
             )
             | Self::SameMeaning(_)
             | Self::ExemptRefused(ExemptRefusal::DocNotValid { .. }) => ErrorClass::Refused,
+            // As a judgement the model refuses what cannot be told or cannot be done now:
+            // files that could not be read, so that the writers of a key are not known
+            // whole, files that would not read as planned, and a file the form cannot
+            // hold. The rest of what `rekey` refuses is a request that names nothing, or
+            // that does not say enough.
+            Self::PlanDiffers(_)
+            | Self::NotInForm { .. }
+            | Self::Rekey(RekeyProblem::NotAllRead { .. } | RekeyProblem::Unknown { .. }) => {
+                ErrorClass::Refused
+            }
+            Self::Rekey(_) => ErrorClass::Request,
             Self::MovedRefused(refusal) => moved_class(refusal),
             Self::MovedPrefixRefused(refusal) => prefix_class(refusal),
             Self::Port { .. } | Self::Value(_) | Self::NotDurable { .. } => ErrorClass::Failed,
-            // What was written could not be put on disk: the run failed, whatever stopped
-            // it, so a caller does not take it for a request to mend and run again.
+            // What was written could not be put on disk, or an edit could not put back
+            // what it had written: the run failed, whatever stopped it, so a caller does
+            // not take it for a request to mend and run again.
             Self::PartWay {
                 not_durable: Some(_),
                 ..
+            }
+            | Self::PartWay {
+                undo_failed: true, ..
             } => ErrorClass::Failed,
             Self::PartWay { cause, .. } | Self::InRow { cause, .. } => cause.class(),
         }

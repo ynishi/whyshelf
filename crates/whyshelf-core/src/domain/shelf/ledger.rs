@@ -782,7 +782,7 @@ pub use frame::{
     frame_present, frame_retire,
 };
 pub use judgement::{JudgedAt, JudgementId};
-pub use pin::{ArtifactPin, FramePin, PATH_ONLY_SPACE, PinnedArtifact, Seen};
+pub use pin::{ArtifactPin, FramePin, PATH_ONLY_SPACE, PinName, PinnedArtifact, Seen};
 use pin::{NameForm, StandsOn};
 pub use readers::{ApprovalKind, Asked, Before, LeaveOut, Quorum, Readers, Taking};
 pub use record::{Record, RecordHash, Revocation};

@@ -1,0 +1,46 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795231845033,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4667cf411f7a099d6d5183bf17dd76362a06a5af",
+      "hash": "sha256:5d2dcf1f103326f534fac37140df3c22ea99da20a86668a860f9e9e62aa9a2e1",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "39"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1fb17-d9d0-7550-ba37-441b6e4286ab"
+    }
+  ],
+  "id": "01a1fc28-8b0c-716e-9629-aa06fb607886",
+  "kind": "decision",
+  "reason": "Re-read for #117: DEC-17, DEC-28, DEC-36, DEC-58, DEC-78, DEC-89, DEC-92 and V-52 were corrected to say who writes a key is one reading (KeyWriters) that also takes a file whose id does not read, check lists collisions and names the other files, a reference or link to a key only such a file writes is NoIdentity, a pinned upstream is named by its current key, the repeat rule no longer compares an upstream's key, and rekey (DEC-94) does the renumbering; the verifications' test files changed at call sites and wording and some gained cases, and what each states still holds: cargo test --workspace passes (1629)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:c15896c0c6ffe4d10dceb465872261cef38d08d76211ed9a418f3d3e824a8dae",
+  "seen_address": "31218213a9ce26d9397f23819f98647e0958b0e4",
+  "subject": "01a1fb17-df61-7261-b4ee-e0a9ecdf00fd",
+  "v": 1,
+  "verb": "approve"
+}

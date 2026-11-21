@@ -27,8 +27,9 @@
 //! | [`DocWrite`] | a new document's file, from its entries and body, never in place of a file that is there; and what is in the way of one at a path |
 //! | [`DeclarationWrite`] | the file of the declaration, from a text in its format, never in place of a file that is there; and what is in the way of it |
 //! | [`FileWrite`] | a new file of the project that is neither a document nor the declaration (one a template starts a project with, such as a table its documents name), from its bytes, never in place of a file that is there; and what is in the way of one at a path |
-//! | [`FileSync`] | the files [`DocWrite`], [`DeclarationWrite`], [`FileWrite`] and [`LedgerAppend`] made, put on disk together, once for a run, so that they survive a power loss |
-//! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten) |
+//! | [`FileSync`] | the files [`DocWrite`], [`DeclarationWrite`], [`FileWrite`], [`LedgerAppend`] and [`DocReplace`] wrote, put on disk together, once for a run, so that they survive a power loss; and the removal of a file ([`DocRemove`]), put on disk the same way |
+//! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten); and, to undo that, the bytes it had put back as they were |
+//! | [`DocRemove`] | a document's file that is there, removed after a comparison with what was read |
 //! | [`ActorSource`] | who is acting |
 //! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); for a move of a prefix, which names are under it and what each is under the new one, by the space's own grammar of names; and the bytes of an artifact now |
 //! | [`ContentStore`] | content read back by its [`ContentAddress`], by the adapter of the document or the space it is of, or "not readable" |
@@ -44,8 +45,8 @@
 //!        |      what `check`, `status`, `get`, `trace`, `stale`, `get --approved`,
 //!        |      `diff`, `moves` and `fmt --check` are generic over
 //!   ShelfWrite  + LedgerAppend  IdSource  ActorSource  RevisionSource  DocWrite  DocReplace
-//!               DeclarationWrite  FileWrite  FileSync
-//!               what `judge`, `new_doc`, `init` and `fmt` are generic over
+//!               DocRemove  DeclarationWrite  FileWrite  FileSync
+//!               what `judge`, `new_doc`, `init`, `fmt` and `rekey` are generic over
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -102,6 +103,8 @@ pub enum ShelfPort {
     DocWrite,
     /// [`DocReplace`].
     DocReplace,
+    /// [`DocRemove`].
+    DocRemove,
     /// [`MoveSource`].
     Moves,
     /// [`DeclarationWrite`].
@@ -127,6 +130,7 @@ impl fmt::Display for ShelfPort {
             Self::Revision => "revision",
             Self::DocWrite => "document write",
             Self::DocReplace => "document replace",
+            Self::DocRemove => "document remove",
             Self::Moves => "move suggestions",
             Self::DeclarationWrite => "declaration write",
             Self::FileWrite => "file write",
@@ -224,9 +228,12 @@ pub trait DocSource: Send + Sync {
     ) -> impl Future<Output = Result<Vec<FileRead>, Self::Error>> + Send;
 
     /// The text of a document in the one form its adapter writes (the form
-    /// [`DocWrite::create`] writes) from these entries and this body, and what that
-    /// text reads as when it is read as the file `origin`. Nothing is read or written:
-    /// the form is of the adapter's format only, and the entries are given as they are.
+    /// [`DocWrite::create`] writes, byte for byte: a use case that creates a file takes
+    /// this text before it does, so that it can tell the file it made from another when
+    /// it removes it again, [`DocRemove::remove_read`]) from these entries and this body,
+    /// and what that text reads as when it is read as the file `origin`. Nothing is read
+    /// or written: the form is of the adapter's format only, and the entries are given
+    /// as they are.
     fn render(&self, origin: &RelPath, entries: &FormEntries, body: &str) -> Rendered;
 
     /// Whether the file at `file` (relative to the project root) may be replaced by a
@@ -426,11 +433,12 @@ pub trait DocWrite: Send + Sync {
     ///
     /// Create-only: a file already at the path is never replaced, and is
     /// [`Creation::AlreadyThere`], not an error. Missing directories are made. Writing
-    /// over a file is another port, [`DocReplace`], which only `fmt` calls. The file
-    /// is written whole, and is not put on disk: that is [`FileSync::persist`], at
+    /// over a file is another port, [`DocReplace`], which `fmt` and `rekey` call. The
+    /// file is written whole, and is not put on disk: that is [`FileSync::persist`], at
     /// the end of the run. A write that fails after the file was made removes that
     /// file (and no other), so a failure leaves no part of a document behind. Only a
-    /// run of writes calls this, so that every file it made is put on disk.
+    /// run of writes calls this, so that every file it made is put on disk. The bytes
+    /// written are the text [`DocSource::render`] gives for the same entries and body.
     fn create(
         &self,
         path: &RelPath,
@@ -505,18 +513,28 @@ pub trait FileSync: Send + Sync {
 
     /// Put `files` on disk: each a path from the same project root as the paths
     /// [`DocWrite`], [`DeclarationWrite`] and [`FileWrite`] write at, of a file one
-    /// of them made whole, or the file of a ledger record ([`LedgerAppend::append`]
-    /// gives its path from the same root). When this is `Ok`, every one of them is on
-    /// disk; when it
+    /// of them made whole, a file [`DocReplace`] wrote over, or the file of a ledger
+    /// record ([`LedgerAppend::append`] gives its path from the same root). When this
+    /// is `Ok`, every one of them is on disk; when it
     /// is an error, some may be and some not, and none is removed (each is whole
     /// as it was written).
     fn persist(
         &self,
         files: &NonEmptyVec<RelPath>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Put the removal of `files` on disk: each a path from the same root as the paths
+    /// of [`persist`](Self::persist), of a file [`DocRemove`] removed, so that it stays
+    /// removed after a power loss (the directory it was in is put on disk; nothing is
+    /// opened at the path, which is not there). When this is `Ok`, every removal is on
+    /// disk; when it is an error, some may be and some not, and no file is made again.
+    fn persist_gone(
+        &self,
+        files: &NonEmptyVec<RelPath>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
-/// What [`DocReplace::replace_read`] did.
+/// What [`DocReplace::replace_read`] and [`DocReplace::restore`] did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Replacement {
     /// The file was replaced.
@@ -534,7 +552,7 @@ pub trait DocReplace: Send + Sync {
 
     /// Replace the file at `path` (relative to the project root), which a reading
     /// just read as `read`, by `text`, the text [`DocSource::render`] gave for it in
-    /// the form.
+    /// the form: what `fmt` and `rekey` write.
     ///
     /// The file is compared with `read` just before it is replaced: one that changed
     /// or is gone by then is [`Replacement::Changed`], not an error, and is left as
@@ -549,6 +567,61 @@ pub trait DocReplace: Send + Sync {
         read: &[u8],
         text: &[u8],
     ) -> impl Future<Output = Result<Replacement, Self::Error>> + Send;
+
+    /// Put the file at `path` back as it was: replace `written`, the text
+    /// [`replace_read`](Self::replace_read) wrote there, by `before`, the bytes it
+    /// replaced, whether they are in the form or not (the form is `replace_read`'s
+    /// promise about `text`; this writes the bytes of a file as a person left them, so
+    /// that the undo of a write leaves the file as it was).
+    ///
+    /// Compared and written as `replace_read` does it: a file that is not `written`
+    /// now (changed, or gone) is [`Replacement::Changed`], left as it is, and the
+    /// file is replaced whole. Only the undo of a run of writes calls this
+    /// (`RunWrites::edit`, which `rekey` uses); the file is put on
+    /// disk by [`FileSync::persist`] like any other.
+    fn restore(
+        &self,
+        path: &RelPath,
+        written: &[u8],
+        before: &[u8],
+    ) -> impl Future<Output = Result<Replacement, Self::Error>> + Send;
+}
+
+/// What [`DocRemove::remove_read`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Removal {
+    /// The file was removed.
+    Removed,
+    /// The file is there and is no longer what was read; nothing was removed.
+    Changed,
+    /// There is no file at the path (it was removed by someone else); nothing was
+    /// removed, and what a removal is for holds.
+    Gone,
+}
+
+/// Removing a document's file that is there: the one write that removes a file, kept
+/// apart from the others so that a run of writes that does not remove cannot.
+pub trait DocRemove: Send + Sync {
+    /// The adapter's error.
+    type Error: Error + Send + Sync + 'static;
+
+    /// Remove the file at `path` (relative to the project root), which holds `read`:
+    /// the bytes a reading read, or the text [`DocSource::render`] gave for a file
+    /// [`DocWrite::create`] made (the one this removes again).
+    ///
+    /// The file is compared with `read` just before it is removed: one that changed by
+    /// then is [`Removal::Changed`], and one that is gone [`Removal::Gone`], neither an
+    /// error, and a file is left as it is. The
+    /// comparison and the removal are two steps, so an edit saved in the short time
+    /// between them is lost with the file. A removal is the file gone or the file
+    /// there, never a part of one: when this is an error, the file is still there. The
+    /// removal is not put on disk: that is [`FileSync::persist_gone`]. Only a run of
+    /// writes calls this (`RunWrites::edit`, which `rekey` uses).
+    fn remove_read(
+        &self,
+        path: &RelPath,
+        read: &[u8],
+    ) -> impl Future<Output = Result<Removal, Self::Error>> + Send;
 }
 
 /// Who is acting.
@@ -738,8 +811,8 @@ pub trait ShelfRead: Send + Sync {
     fn moves(&self) -> &Self::Moves;
 }
 
-/// The ports that `judge`, `new_doc`, `init` and `fmt` are generic over: everything a
-/// read has, and the things only a write needs.
+/// The ports that `judge`, `new_doc`, `init`, `fmt` and `rekey` are generic over:
+/// everything a read has, and the things only a write needs.
 pub trait ShelfWrite: ShelfRead {
     /// The ledger, to append to.
     type Append: LedgerAppend;
@@ -753,6 +826,8 @@ pub trait ShelfWrite: ShelfRead {
     type DocWriter: DocWrite;
     /// The files of documents that are there, written over in the form.
     type DocReplacer: DocReplace;
+    /// The files of documents that are there, removed.
+    type DocRemover: DocRemove;
     /// The file of the declaration, written when a project is started.
     type DeclarationWriter: DeclarationWrite;
     /// The other files a project is started with.
@@ -766,6 +841,8 @@ pub trait ShelfWrite: ShelfRead {
     fn doc_writer(&self) -> &Self::DocWriter;
     /// The writer over documents' files that are there.
     fn doc_replacer(&self) -> &Self::DocReplacer;
+    /// The remover of documents' files that are there.
+    fn doc_remover(&self) -> &Self::DocRemover;
     /// The writer of the declaration's file.
     fn declaration_writer(&self) -> &Self::DeclarationWriter;
     /// The writer of the other files a project is started with.

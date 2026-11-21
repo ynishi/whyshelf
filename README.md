@@ -88,6 +88,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
 | `judge approve`, `deny`, `deprecate`, `retire`, `revoke` | decide about documents |
 | `judge same`, `moved` (`--prefix` for a renamed directory or module), `exempt`, `withdraw` | declare, and take back |
 | `fmt [--check]` | put every document in the one form |
+| `rekey <ref>` | give a document a new key (two branches took one), and rewrite the links that mean it |
 
 Every command prints one JSON document on stdout (`--help` and `--version` aside); warnings and errors also go to stderr.
 

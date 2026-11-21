@@ -42,7 +42,7 @@ use crate::domain::error::ValueError;
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::ArtifactReadings;
-use crate::domain::shelf::doc::DocKey;
+use crate::domain::shelf::doc::{DocKey, KeyWriter};
 use crate::domain::shelf::order::depends_of;
 use crate::domain::shelf::schema::BookName;
 
@@ -750,7 +750,7 @@ impl Shelf {
         loop {
             let key = numbered(schema, book, *next)?;
             *next = next.saturating_add(1);
-            if !asked.contains_key(&key.key) && !self.written_keys.contains_key(&key.key) {
+            if !asked.contains_key(&key.key) && self.key_writers(&key.key).writers().is_none() {
                 return Ok(key);
             }
         }
@@ -801,11 +801,10 @@ impl Shelf {
         let mut index = self.index.clone();
         for new in alone.iter().flatten().flatten() {
             let doc = new.doc();
-            index
-                .keys
-                .entry(doc.key().clone())
-                .or_default()
-                .insert(doc.id());
+            index.writers.add(
+                doc.key().clone(),
+                KeyWriter::new(doc.origin().clone(), Some(doc.id())),
+            );
             index.valid.insert(doc.id(), *doc.hash());
         }
         make(&index)

@@ -204,6 +204,7 @@ fn another_file_that_appears_before_its_write_stops_the_run_before_the_documents
         failed,
         cause,
         not_durable,
+        undo_failed: false,
     } = &error
     else {
         panic!("{error:?}");
@@ -357,6 +358,7 @@ fn a_write_that_fails_part_way_says_what_was_written_and_what_was_not() {
         failed,
         cause,
         not_durable,
+        undo_failed: false,
     } = &error
     else {
         panic!("{error:?}");

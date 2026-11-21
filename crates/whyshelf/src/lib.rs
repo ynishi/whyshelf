@@ -966,10 +966,20 @@
 //!   file after its key, so two runs of `new` that took one key wrote one file, and
 //!   Git stops the merge on it: put the main branch's side back in that file and the
 //!   branch's side in a file of its own, then renumber the branch's.
-//! - Renumbering a document gives it the key `new` would take now (`new`, under
-//!   Commands), puts its file where `new` would, and rewrites its `key:` and the
-//!   links that mean it. Its identity stays, and its approvals hold, for the reason
-//!   the document's hash gives under Books.
+//! - Renumbering a document is `rekey <ref>` (name it by its identity or the end of it:
+//!   its key is the one two files write). It gives the document the key `new` would take
+//!   now (`new`, under Commands; `--key` gives another), puts its file where `new` would,
+//!   rewrites its `key:` and the links that mean it, and removes its old file, all or
+//!   none. Its identity stays, and its approvals hold, for the reason the document's
+//!   hash gives under Books. A link writes a key as text, so after a merge nothing in a
+//!   file says which of the two documents it meant. The approval of the document that
+//!   wrote the link does (it pinned the identity it stood on), and a person does:
+//!   `--follow <ref>`, `--stay <ref>` or `--both <ref>` for a document whose link means
+//!   the one that is renumbered, the other, or both. `rekey` decides none by a default:
+//!   it lists every document that has neither, and writes nothing. `--dry-run` says
+//!   what it would write. The body of a document that names the old key is not changed
+//!   (the hash covers it); `mentions` lists those that are valid, and the document
+//!   renumbered.
 //! - Link only keys the main branch or this branch holds. A link names a key, so a
 //!   link to a document of another branch means another document once that one is
 //!   renumbered: a pending document says nothing of it, and an approved one is stale
@@ -1057,6 +1067,13 @@
 //!                             when a file is not in the form, or would be left alone;
 //!                             --drop also takes out the entry of that name where the
 //!                             file's book declares none (see "Retire a field")
+//!   rekey <ref> [--key <key>] [--follow <ref>]... [--stay <ref>]... [--both <ref>]... [--dry-run]
+//!                             give one document a new key (the book's next, or --key), put its
+//!                             file where `new` would, and rewrite the links that mean it; each
+//!                             document that writes the old key in a link is decided by its
+//!                             approval or by a --follow, --stay or --both, and one that is
+//!                             neither is refused with every such one listed (nothing is
+//!                             written); --dry-run writes nothing
 //!   schema                    the JSON Schema of the answer of every command
 //! ```
 //!
@@ -1281,11 +1298,40 @@
 //!   read or written: an empty name is an argument error, and `id`, `key` and a name
 //!   every book declares are request errors (exit 2), each told, nothing written.
 //!   The last is so that a name still declared everywhere is noticed.
-//! - Only `judge`, `new`, `init` and `fmt` write: `judge` one new file per decision
+//! - `rekey <ref>` gives one document a new key (the reasons and how a link is read are
+//!   under "Working from several branches"). The document is one file with an identity
+//!   and a key that read; the new key is `--key` (free, as for `new`) or the book's
+//!   next, and its file `<book dir>/<key>.md`. The documents that write the old key are
+//!   every file whose `key:` reads in the book's grammar, valid or not and whatever its
+//!   `id:`; the documents that write it in a link are every file that has it in a link,
+//!   valid or not. A file that could not be read at all and may write the key (any file
+//!   of the book of the key), or link to it (any file of a book that declares a link
+//!   into that book, and a link entry that is no list), stops `rekey` before it writes
+//!   anything, and is listed: a file that still holds a merge's conflict markers is one.
+//!   The document's file and the files whose links are rewritten are written in the one
+//!   form `fmt` writes, by the rule of `fmt`: one it would leave alone (a comment in its
+//!   front matter, read-only, a hard link) is refused with why. Before anything is
+//!   written the files are read back as the adapter says they read, built as the books
+//!   are built, and held against the plan: the document is one file with the new key,
+//!   each link is where its word puts it, and no file written has a problem it did not
+//!   have (a `--both` on a link whose count admits one key is one); any difference is
+//!   listed and nothing is written. Then the document's file is made, the others written
+//!   over (compared with what was read, as `fmt` does, and whole), those put on disk, the
+//!   old file removed, and that put on disk. A stop before the removal (a file in the
+//!   way, one no longer what was read, a port that failed) puts back what was written, in
+//!   reverse, and gives its cause as it is; when that cannot be done, or cannot be put on
+//!   disk, the files not put back are listed and the exit is 3. A removal that cannot be
+//!   put on disk leaves what was written, each file whole, lists it, and exits 3. The
+//!   ledger is not written: an approval pinned the identity of what it stood on, and an
+//!   identity stays. A power loss between the write and the removal leaves one identity
+//!   in two files, which `check` tells.
+//! - Only `judge`, `new`, `init`, `fmt` and `rekey` write: `judge` one new file per decision
 //!   or declaration, `new` one new document's file, never in place of a file that is
 //!   there, `init` the declaration, its other files and its documents, never in place of a file that
-//!   is there either, and `fmt` over documents' files that are there, as above; every other
-//!   command, `fmt --check` among them, only reads and creates nothing. Who judges
+//!   is there either, `fmt` over documents' files that are there, as above, and `rekey`
+//!   one new file, documents' files that are there written over, and one removed, as
+//!   above; every other
+//!   command, `fmt --check` and `rekey --dry-run` among them, only reads and creates nothing. Who judges
 //!   is `--actor`, else `WHYSHELF_ACTOR`, else Git's `user.name`; never a committed
 //!   file.
 //! - Who ran the command is told beside who judges, when it is another: a program (a
@@ -1337,9 +1383,9 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, and for `judge withdraw` an id that is no decision or declaration, or one already withdrawn |
-//! | 3 | the run failed: a file could not be read, written or put on disk (for `new` and `init`, part way too: the files written are listed), or a template `init` ships cannot be read |
+//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands; for `rekey`, files that could not be read and may write the key or link to it, a file whose identity cannot be told, a file `fmt` would leave alone, or files that would not read as planned, a file changed since the first reading among them, each listed in `problems`) |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, for `judge withdraw` an id that is no decision or declaration, or one already withdrawn, and for `rekey` a document no file carries or that is not one file with an identity and a key that read, a new key that is taken or that the book refuses, a book with no next key, a new file the range of the book does not take, a word for a document that writes no key in a link or two words for one, a document that writes the old key in a link and that no approval and no word decides, or whose word is against its approval (every one is listed in `problems`), a file already at the new file, or a file that is no longer what was read when it is written over (one changed before, between the two readings, is exit 1) |
+//! | 3 | the run failed: a file could not be read, written or put on disk (for `new`, `init` and `rekey`, part way too: the files written, or for `rekey` those not put back, are listed), or a template `init` ships cannot be read |
 //!
 //! `status` answers `{"docs", "filters", "health"}`: the documents that pass the
 //! filters (all of them when none is given), the filters as given (`books` by
@@ -1391,7 +1437,10 @@
 //! `exemption_unneeded` and `exemption_repeated` carry the `book` and the `link`;
 //! `exempt` and `exemption_unneeded` carry the exemption in `declared`, and
 //! `exemption_repeated` every one of them; `exemption_unneeded` carries the same
-//! `why`, and its `detail` names the document `it`.
+//! `why`, and its `detail` names the document `it`. `check`'s `collisions` (left
+//! out when there is none) lists each key that two or more files write, once, as
+//! `{"key", "files": [{"path", "id"}], "detail"}`, every file and its identity
+//! (null when it cannot be read), without saying which to renumber.
 //!
 //! `map` answers `{"schema_problems": [...], "books": [...], "links": [...],
 //! "diagram": ...}`: each book with its `name`, `dir`, `key` (`{"kind": "prefix",
@@ -1501,6 +1550,29 @@
 //! declaration that cannot be used is exit 2, as for every reading command, and a
 //! file that cannot be read or written exit 3.
 //!
+//! `rekey` answers `{"dry_run", "moved", "rewritten", "stayed", "both", "mentions",
+//! "approvals", "written"}`:
+//!
+//! | field | holds |
+//! |---|---|
+//! | `dry_run` | whether nothing was written (`--dry-run`) |
+//! | `moved` | the document that took the new key: `{"doc": {"id", "key"}, "from_key", "to_key", "from_file", "to_file"}`, the keys as `book:KEY` |
+//! | `rewritten` | each document whose links that wrote the old key now write the new one |
+//! | `stayed` | each document whose links keep the old key, which another document has now |
+//! | `both` | each document whose links keep the old key and gained the new one |
+//! | `mentions` | the valid documents `{"id", "key"}`, and the document that took the new key, whose body names the old key, not changed (the hash covers a body) |
+//! | `approvals` | the document that took the new key and each document of the three lists above, as `status` shows one, read from the files after the write; empty with `--dry-run` |
+//! | `written` | `{"created", "replaced": [...], "removed"}`, the files, or null with `--dry-run` |
+//!
+//! Each of `rewritten`, `stayed` and `both` is `{"doc", "file", "why", "items": [{"link",
+//! "written"}], "detail"}`: `items` the keys it wrote for the old key, `why` one of
+//! `only_writer` (no other file writes the old key), `pinned` (its approval pinned the
+//! document) or `asked` (a word said so), and `detail` a sentence that names `--both`
+//! where a document can have meant both. A document with no identity that can be read has
+//! a null `doc`. A refusal lists in `problems` each document that is not decided, each
+//! word against an approval, each file that could not be read, and each difference
+//! between the files and the plan; a refusal that lists none says all in `messages`.
+//!
 //! ## For implementers of the ports
 //!
 //! `ShelfRead` has a port more, `type Moves: MoveSource` with `fn moves()`, which
@@ -1508,6 +1580,15 @@
 //! until it names one: a breaking change of the library, before 1.0. A
 //! `MoveSource` that has no way to suggest answers `SpaceSuggestions::CannotSuggest`
 //! for every space.
+//!
+//! `rekey` needs three ports more: `ShelfWrite` has `type DocRemover: DocRemove` with
+//! `fn doc_remover()` (a file removed after a comparison with what was read),
+//! `DocReplace` has `restore` (the bytes a file had put back over the text written,
+//! whether or not they are in the form), and `FileSync` has `persist_gone` (a removal put
+//! on disk). `DocSource::render` must give the text `DocWrite::create` writes, byte for
+//! byte: `rekey` removes the file it made again, when it stops, by comparing it with the
+//! text it took before. A type of your own that implements these traits does not build
+//! until it implements them: a breaking change of the library, before 1.0.
 //!
 //! ## Not yet in books
 //!

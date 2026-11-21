@@ -33,6 +33,7 @@
 //! | [`init`](ShelfApp::init) | **yes** | [`Initialized`]: the file of the declaration it wrote, and the documents it made beside it, each as `new_doc` makes one |
 //! | [`fmt_check`](ShelfApp::fmt_check) | no | [`FmtReport`]: the documents' files not in the one form, those in it, and those `fmt` would leave as they are, each with why, and the names it would drop from each file it would write (those asked in a [`DropAsk`](crate::domain::shelf::build::DropAsk)); names that do not fit the declaration are [`ShelfError::Drop`] |
 //! | [`fmt`](ShelfApp::fmt) | **yes** | [`FmtReport`]: the files written over in the one form, those in it already, and those left as they are, each with why, and the names dropped from each file written; names that do not fit the declaration are [`ShelfError::Drop`], and nothing is written |
+//! | [`rekey`](ShelfApp::rekey) | **yes** | [`RekeyReport`]: the document that took a new key, the documents whose links were rewritten, those that stayed with the old key and those that keep both, the documents whose body names the old key, whether each approval holds after the write, and the files written (all or none); a link that is not decided is [`ShelfError::Rekey`], every one listed, and nothing is written |
 //!
 //! # Reading and writing
 //!
@@ -41,16 +42,19 @@
 //! [`approve_chosen`](ShelfApp::approve_chosen), [`approve_stale`](ShelfApp::approve_stale),
 //! [`same_meaning`](ShelfApp::same_meaning),
 //! [`moved`](ShelfApp::moved), [`moved_prefix`](ShelfApp::moved_prefix), [`exempt`](ShelfApp::exempt), [`withdraw`](ShelfApp::withdraw), [`new_doc`](ShelfApp::new_doc),
-//! [`new_docs`](ShelfApp::new_docs), [`init`](ShelfApp::init) and [`fmt`](ShelfApp::fmt) take `&mut self` and [`ShelfWrite`]: the writes of one
+//! [`new_docs`](ShelfApp::new_docs), [`init`](ShelfApp::init), [`fmt`](ShelfApp::fmt) and [`rekey`](ShelfApp::rekey) take `&mut self` and [`ShelfWrite`]: the writes of one
 //! program run one at a time, by the type. Two processes can still write at once;
 //! that is safe because a record is a file of its own named by its own identity, and
-//! no write but `fmt`'s replaces a file that is there (see the adapter). Two
+//! no write but `fmt`'s and `rekey`'s replaces or removes a file that is there (see the
+//! adapter). Two
 //! processes that make a new document of one book at once can be given the same next
 //! key: the second finds the file there, and writes nothing. `fmt` compares a file
 //! with what was read just before it replaces it, so an edit made after the reading
 //! is left as it is; one saved in the short time between that comparison and the
 //! replacement is overwritten, and a file removed in it is written again
-//! ([`DocReplace::replace_read`]).
+//! ([`DocReplace::replace_read`]); `rekey` does the same for the files it writes over,
+//! and for the file it removes (the file is compared with what was read just before, and
+//! an edit saved in the short time between is lost with it, [`DocRemove::remove_read`]).
 //!
 //! # Every answer carries what the model noticed
 //!
@@ -78,6 +82,7 @@ mod moves;
 mod new_doc;
 pub mod ports;
 mod read;
+mod rekey;
 mod report;
 mod run_writes;
 mod same_meaning;
@@ -121,6 +126,8 @@ mod new_many_tests;
 #[cfg(test)]
 mod preset_tests;
 #[cfg(test)]
+mod rekey_tests;
+#[cfg(test)]
 mod run_tests;
 #[cfg(test)]
 mod run_writes_tests;
@@ -158,11 +165,12 @@ pub use moved::{MovedPrefix, MovedRequest, PrefixMovedRequest};
 pub use new_doc::{Created, EntryInput, ItemInput, NewDocRequest, NewMany};
 pub use ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
-    DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileRead, FileSync,
-    FileWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Rendered,
-    Replaceable, Replacement, RevisionSource, ShelfPort, ShelfRead, ShelfWrite, UnreadableRecord,
-    UnreadableWhy,
+    DeclarationText, DeclarationWrite, DocRemove, DocReplace, DocSource, DocWrite, FileRead,
+    FileSync, FileWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Removal,
+    Rendered, Replaceable, Replacement, RevisionSource, ShelfPort, ShelfRead, ShelfWrite,
+    UnreadableRecord, UnreadableWhy,
 };
+pub use rekey::{RekeyReport, RekeyRequest, Rekeyed};
 pub use report::{
     Absent, ApprovedItem, ApprovedReport, Awaiting, BookCount, BooksCheck, DiffItem, DiffReport,
     DownstreamEdge, ExemptEntry, Gate, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy,
@@ -170,6 +178,7 @@ pub use report::{
     StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry,
     UnlinkedLists, UnlinkedReport, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
+pub use run_writes::Edited;
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
 pub use unlinked::{UnlinkedAsk, UnlinkedFilter};
 pub use withdraw::WithdrawRequest;

@@ -1,0 +1,156 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "49b692c071996155224ff92bfc11f8e4659a502f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a472c3deabec95e56feb781dcbbc22670447bcf55afd8ad6d38389b5efe2b74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8b75e355602bcbe905b921dd12c34c907af9a383",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:80b5d08a4bacedfa70e5b2580c33978ad7e7178941a0d8d34ad23aa0a6081405",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fcf9c5b89f70aaf252f26a6793f70b538da75363",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d237ab3f22c648d69945b76eeafb860836e172c968a6a78e6882d1b803c4584c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/unheld_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d3e35d474493bf723834608bea7d3e65acd873f8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3ab31767236012e95006924259f1f89164d5ec6eae7eac78a4c90746e70a131e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/doc.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "721d45736f278b2703712252edbbdc6fb72cf0e4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e194c62579423ad99facb22407397230155fa7d2a2fe6c5d9c26a34627d32366",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795231845033,
+  "expires": null,
+  "frame": [
+    {
+      "address": "77d6d5942adedba53467a0794565412517082ccc",
+      "hash": "sha256:e8610fc16a6715235ba2489ed9fc8c0b702686130cde98bd54f61a87d68ebb50",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    },
+    {
+      "address": "2a8f99d19aa38815bad6ac8870dd6d6a775c16a2",
+      "hash": "sha256:593bb90fa66a9a019321f887ebbf7ab6dbbe48980a8ea29e481fe74ab5816c64",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "36"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ea98-7060-acb2-b3c19c484a89"
+    },
+    {
+      "address": "9f352c6a4d92d536917018027df6979787312f66",
+      "hash": "sha256:526f2b3a0ece30d39f8c6e2dfa26c07f3820174b124fadfebbe1f192f255d681",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "37"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ede0-77df-9261-99dde9095582"
+    },
+    {
+      "address": "8296963d236b11cbfaa914fbec39151acd418a9f",
+      "hash": "sha256:1a7a5597ecc29d58f0d0ac18bd14b5a790cdf2bdfe46a015485e5fe970873439",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "38"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-f0b8-7358-973e-9c8cf9148148"
+    }
+  ],
+  "id": "01a1fc28-18c5-7528-992b-b76894ff2938",
+  "kind": "decision",
+  "reason": "Re-read for #117: DEC-17, DEC-28, DEC-36, DEC-58, DEC-78, DEC-89, DEC-92 and V-52 were corrected to say who writes a key is one reading (KeyWriters) that also takes a file whose id does not read, check lists collisions and names the other files, a reference or link to a key only such a file writes is NoIdentity, a pinned upstream is named by its current key, the repeat rule no longer compares an upstream's key, and rekey (DEC-94) does the renumbering; the verifications' test files changed at call sites and wording and some gained cases, and what each states still holds: cargo test --workspace passes (1629)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:7b0c37e86042e1db02f284434425558a48c59aa36f73661e458f948879624f6c",
+  "seen_address": "4718a8c456fc4de16ebfdb99e3ac2b0d356b05e1",
+  "subject": "01a1c4ba-1606-7681-90fb-0d70558c8701",
+  "v": 1,
+  "verb": "approve"
+}

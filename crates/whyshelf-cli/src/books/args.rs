@@ -210,8 +210,8 @@ pub enum BooksCommand {
         /// A key, an identifier or a short identifier.
         reference: Reference,
     },
-    /// Record a judgement about a document (it, `new`, `init` and `fmt` are the only
-    /// ones of these that write).
+    /// Record a judgement about a document (it, `new`, `init`, `fmt` and `rekey` are
+    /// the only ones of these that write).
     #[command(subcommand)]
     Judge(Verb),
     /// Create one new document, valid for its book, at `<book dir>/<key>.md` (never
@@ -270,6 +270,37 @@ pub enum BooksCommand {
         /// it for each name.
         #[arg(long = "drop", value_name = "NAME")]
         drops: Vec<String>,
+    },
+    /// Give one document a new key, and rewrite the links that mean it: for two
+    /// documents of one key after a merge, the one to renumber. The new key is the
+    /// book's next (or `--key`), the file is `<book dir>/<key>.md` and the identity
+    /// stays. Each document that writes the old key in a link is decided by the
+    /// approval that stands about it (what it pinned) or by `--follow`, `--stay` or
+    /// `--both`; one that is neither is refused with every such document listed, and
+    /// nothing is written. The files are written all or none, and the ledger is not
+    /// written.
+    Rekey {
+        /// The document that takes the new key: an identifier or a short identifier (a
+        /// key that two files write names two documents).
+        reference: Reference,
+        /// The new key (default: the book's next number); it must be free.
+        #[arg(long, value_name = "KEY")]
+        key: Option<String>,
+        /// A document whose link to the old key means the document that takes the new
+        /// key: it is rewritten to the new key. Repeat it for each.
+        #[arg(long = "follow", value_name = "REF")]
+        follow: Vec<Reference>,
+        /// A document whose link to the old key means the other document that writes
+        /// it: it is left as it is. Repeat it for each.
+        #[arg(long = "stay", value_name = "REF")]
+        stay: Vec<Reference>,
+        /// A document whose link to the old key means both: it keeps the old key and
+        /// gains the new one. Repeat it for each.
+        #[arg(long = "both", value_name = "REF")]
+        both: Vec<Reference>,
+        /// Plan and check as before a write, and write nothing.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// The JSON Schema of the answer of every command.
     Schema,

@@ -12,12 +12,14 @@
 //!   DocReading ──► 0  Unparsed, Unheld?    ──► InvalidDoc (Unreadable, Unheld)
 //!      │           1  Schema::membership   ──► InvalidDoc (OutsideBooks)
 //!      │           2  the form of the file:  id, key, entries, fields, links
-//!      │           3  same id twice, same key twice in a book
+//!      │           3  same id twice, same key written by two files of a book
+//!      │           3b who writes each key, and in which link: `KeyWriters`, `LinkSites`
+//!      │              (every file, valid or not; see the module `keys`)
 //!      │           4  each file judged, once: a valid one has its hash made
 //!      │              (DocDraft::new: book, fields, body), any other is an
 //!      │              InvalidDoc with every problem found above
-//!      │           5  index of keys        (valid and readable-invalid files), with
-//!      │                                   the hash of each valid one
+//!      │           5  index of keys        (the writers of each key, with the hash
+//!      │                                   of each valid document)
 //!      │           6  each valid Doc, once: every link the book declares, with its
 //!      │                                   kind, resolved through the index; every
 //!      │                                   name of a link to artifacts made an
@@ -36,10 +38,13 @@
 //! the space is a [`DocProblem::NotAnArtifactName`]: either makes the document
 //! invalid.
 //!
-//! Two questions about a shelf have one entry each, and everything else asks them:
-//! `Shelf::find_key` answers what a key in a book comes to (the build of a link
-//! reads the same index before the shelf exists, and the lookup of what a person
-//! typed calls it), and [`Shelf::state_of`] answers
+//! Three questions about a shelf have one entry each, and everything else asks them:
+//! `Shelf::key_writers` answers which files write a key and whether that is every
+//! file that may (`find_key`, the build of a link, `next_key`, `claim_key` and the
+//! duplicate-key check all read the one reading it comes from, [`Shelf::collisions`]
+//! says the keys that two files write); `Shelf::find_key` answers what a key in a
+//! book comes to (the build of a link reads the same index before the shelf exists,
+//! and the lookup of what a person typed calls it), and [`Shelf::state_of`] answers
 //! what an identity comes to now (a valid document, an invalid one, gone, or not
 //! knowable because some file could not even be read for its id).
 //!
@@ -79,10 +84,14 @@ use super::schema::{
 };
 
 mod drop_names;
+mod keys;
 mod new;
 mod plan;
 
 pub use drop_names::{DropAsk, DropNames, DropProblem};
+pub use keys::Unread;
+use keys::{KeyWriters, LinkSites};
+pub(super) use keys::{KeyWritersRead, LinkWriter, LinkWriters, Writers};
 pub use new::{
     ClaimKeyProblem, NEXT_KEY_TRIES, NewDoc, NewDocProblem, NewKey, NextKeyProblem, NoFreeKey,
     OutOfRange,
@@ -357,6 +366,16 @@ pub enum DocReading {
     },
 }
 
+impl DocReading {
+    /// The file, whatever the reading came to.
+    pub fn origin(&self) -> &RelPath {
+        let (Self::Parsed { origin, .. }
+        | Self::Unparsed { origin, .. }
+        | Self::Unheld { origin, .. }) = self;
+        origin
+    }
+}
+
 /// The entries a file of a book is written with: the entries of a document, less those
 /// the build reads as not written and the file need not hold, and those a caller asked
 /// to drop that the book does not declare.
@@ -499,12 +518,16 @@ pub enum DocProblem {
         /// The other files.
         others: NonEmptyVec<RelPath>,
     },
-    /// Another file of the book has the same key: all of them are invalid.
-    #[error("the key `{key}` is also in {} other file(s)", others.len())]
+    /// Another file of the book writes the same key, whether or not its identity could
+    /// be read: all of them are invalid. The sentence names the other files.
+    #[error(
+        "the key `{key}` is also written by {}",
+        listed(others.iter(), Mark::Plain, Join::And)
+    )]
     DuplicateKey {
         /// The key.
         key: DocKey,
-        /// The other files.
+        /// The other files that write it, in the order of their paths.
         others: NonEmptyVec<RelPath>,
     },
     /// An entry the book declares neither as a field nor as a link.
@@ -661,6 +684,9 @@ pub(super) enum KeyHit {
     Invalid(DocId),
     /// Several documents have it, valid or not.
     Ambiguous(TwoOrMore<DocId>),
+    /// The files that write it, and none of them carries an identity that could be
+    /// read: no document is known to have it.
+    NoIdentity(NonEmptyVec<RelPath>),
     /// None does.
     Missing,
 }
@@ -681,6 +707,22 @@ pub enum DocState<'a> {
         /// The files whose identity could not be read.
         unreadable: NonEmptyVec<RelPath>,
     },
+}
+
+/// What an identity is called now, in the four ways of [`DocState`]: what
+/// [`Shelf::now_named`] answers, and what a pin names its upstream against
+/// ([`FramePin::named`](super::ledger::FramePin::named)).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NowNamed {
+    /// A valid document, with its key.
+    Valid(DocKey),
+    /// One or more invalid files carry the identity: the key they write when it is
+    /// one, none when it cannot be told (they write two, or none that reads).
+    Invalid(Option<DocKey>),
+    /// No file carries it.
+    Gone,
+    /// No file is known to carry it, but some file's identity could not be read.
+    Unknown,
 }
 
 /// Why an identity is no valid document now: the owned form of a [`DocState`] that
@@ -1147,6 +1189,9 @@ struct Candidate {
     fields: BTreeMap<EntryName, FieldValue>,
     /// Every link into a book the book declares, with what the file wrote in it.
     links: BTreeMap<EntryName, WrittenLink>,
+    /// The links into a book whose entry is no list, so that the keys written in it
+    /// cannot be read (`LinkWriters` names them as places that were not read).
+    unread_links: Vec<EntryName>,
     /// Every link to artifacts the book declares, with the names the file wrote.
     artifact_links: BTreeMap<EntryName, WrittenArtifacts>,
     body: String,
@@ -1180,6 +1225,7 @@ impl Candidate {
             problems: Vec::new(),
             fields: BTreeMap::new(),
             links: BTreeMap::new(),
+            unread_links: Vec::new(),
             artifact_links: BTreeMap::new(),
             body: String::new(),
         }
@@ -1228,6 +1274,7 @@ impl Candidate {
         let Entries {
             fields,
             links: written,
+            unread_links,
             artifacts,
         } = read_entries(book, entries, found, &mut problems);
         check_required(book, entries, &mut problems);
@@ -1238,6 +1285,7 @@ impl Candidate {
             problems,
             fields,
             links: written_links(book, written),
+            unread_links,
             artifact_links: written_artifacts(book, artifacts),
             body,
         }
@@ -1253,6 +1301,7 @@ impl Candidate {
             problems,
             fields,
             links,
+            unread_links: _,
             artifact_links,
             body,
         } = self;
@@ -1287,8 +1336,12 @@ impl Candidate {
 /// What the entries of a front matter come to, beside the identity and the key.
 struct Entries {
     fields: BTreeMap<EntryName, FieldValue>,
-    /// The keys written in each link into a book.
+    /// The keys written in each link into a book, of every entry that is a list, whole
+    /// or not (a list that is not whole is a problem of the file, so only a valid
+    /// file's keys are resolved; the others are read for `LinkWriters`).
     links: BTreeMap<EntryName, Vec<String>>,
+    /// The links into a book whose entry is no list.
+    unread_links: Vec<EntryName>,
     /// The names written in each link to artifacts.
     artifacts: BTreeMap<EntryName, Vec<ArtifactName>>,
 }
@@ -1353,6 +1406,7 @@ fn read_entries(
 ) -> Entries {
     let mut fields = BTreeMap::new();
     let mut written = BTreeMap::new();
+    let mut unread_links = Vec::new();
     let mut artifacts = BTreeMap::new();
     for (name, raw) in entries {
         if name == ID_ENTRY || name == KEY_ENTRY {
@@ -1373,11 +1427,12 @@ fn read_entries(
                 }
             }
             Declared::Link(link, kind) => {
-                if let Some(items) = read_link(link, kind.cardinality, entry, problems)
-                    && items.whole
-                {
-                    let keys = items.said.into_iter().map(NonBlank::into_string).collect();
-                    written.insert(link.clone(), keys);
+                match read_link(link, kind.cardinality, entry, problems) {
+                    Some(items) => {
+                        let keys = items.said.into_iter().map(NonBlank::into_string).collect();
+                        written.insert(link.clone(), keys);
+                    }
+                    None => unread_links.push(link.clone()),
                 }
             }
             Declared::Artifacts(link, kind) => {
@@ -1415,6 +1470,7 @@ fn read_entries(
     Entries {
         fields,
         links: written,
+        unread_links,
         artifacts,
     }
 }
@@ -1591,44 +1647,37 @@ fn written_links(
         .collect()
 }
 
-/// Who holds a key, read once: the judgement both [`KeyHit`] and a link's state are
-/// made from.
-enum Holders {
-    /// No file.
-    None,
-    /// One file, with the hash of its document when the document is valid.
-    One(DocId, Option<DocHash>),
-    /// Several files, valid or not.
-    Many(TwoOrMore<DocId>),
-}
-
-/// The keys of every file whose identity and key could be read, valid or not, and
+/// The writers of every key a file writes, valid or not, its identity read or not, and
 /// the hash of each valid document: what a key in a book comes to is read from here,
 /// by the build (for a link) before any document is made, and by
-/// `Shelf::find_key` after.
+/// `Shelf::find_key` after. Who writes a key is [`KeyWriters`]'s reading, and is
+/// not decided again here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct KeyIndex {
-    keys: BTreeMap<DocKey, BTreeSet<DocId>>,
+    writers: KeyWriters,
     valid: BTreeMap<DocId, DocHash>,
 }
 
 impl KeyIndex {
-    /// The one reading of a key: more than one file with it is [`Holders::Many`]
-    /// whether their documents are valid or not.
-    fn holders(&self, key: &DocKey) -> Holders {
-        match Count::of(self.keys.get(key).into_iter().flatten().copied()) {
-            Count::None => Holders::None,
-            Count::One(id) => Holders::One(id, self.valid.get(&id).copied()),
-            Count::Many(ids) => Holders::Many(ids),
-        }
-    }
-
+    /// What a key comes to: the one writer's document when it is valid or invalid, the
+    /// one writer's file when its identity could not be read, and the identities of
+    /// the writers that could be read when there are several.
     fn find(&self, key: &DocKey) -> KeyHit {
-        match self.holders(key) {
-            Holders::None => KeyHit::Missing,
-            Holders::One(id, Some(_)) => KeyHit::Valid(id),
-            Holders::One(id, None) => KeyHit::Invalid(id),
-            Holders::Many(ids) => KeyHit::Ambiguous(ids),
+        match self.writers.writers(key) {
+            Writers::None => KeyHit::Missing,
+            Writers::One(writer) => match writer.id() {
+                Some(id) if self.valid.contains_key(&id) => KeyHit::Valid(id),
+                Some(id) => KeyHit::Invalid(id),
+                None => KeyHit::NoIdentity(NonEmptyVec::new(writer.file().clone(), Vec::new())),
+            },
+            // Every writer of a collision is invalid. Two identities are ambiguous;
+            // one is that document, which says it is invalid; none is a set of files
+            // with no identity.
+            Writers::Many(collision) => match Count::of(collision.ids()) {
+                Count::Many(ids) => KeyHit::Ambiguous(ids),
+                Count::One(id) => KeyHit::Invalid(id),
+                Count::None => KeyHit::NoIdentity(collision.file_list()),
+            },
         }
     }
 }
@@ -1652,9 +1701,20 @@ fn resolve_links(
         .collect()
 }
 
-/// What one key written in a link comes to: read once, in the grammar of the book
-/// the link points into (which the kind of the link carries), and looked up in the
-/// index.
+/// A key written in a link, read in the grammar of the book the link points into
+/// (which the kind of the link carries): the one reader of it, which the state of a
+/// link ([`link_state`]) and the list of the links that write a key
+/// ([`Shelf::link_writers`]) both use.
+fn read_link_key(kind: &LinkKind, written: &str) -> Result<DocKey, KeyProblem> {
+    kind.target_key.parse(written).map(|form| DocKey {
+        book: kind.target.clone(),
+        form,
+    })
+}
+
+/// What one key written in a link comes to: read once ([`read_link_key`]), and looked
+/// up in the index: through who writes it ([`Writers`]), whether their identities
+/// could be read or not.
 fn link_state(index: &KeyIndex, kind: &LinkKind, written: &str) -> LinkState {
     let target = &kind.target;
     let unresolved = |form, why| {
@@ -1665,19 +1725,26 @@ fn link_state(index: &KeyIndex, kind: &LinkKind, written: &str) -> LinkState {
             why,
         ))
     };
-    let form = match kind.target_key.parse(written) {
-        Ok(form) => form,
+    let key = match read_link_key(kind, written) {
+        Ok(key) => key,
         Err(problem) => return unresolved(None, UnresolvedWhy::Malformed(problem)),
     };
-    let key = DocKey {
-        book: target.clone(),
-        form,
-    };
-    match index.holders(&key) {
-        Holders::One(id, Some(hash)) => LinkState::Resolved(ResolvedLink::new(id, key, hash)),
-        Holders::One(id, None) => unresolved(Some(key.form), UnresolvedWhy::TargetInvalid(id)),
-        Holders::Many(ids) => unresolved(Some(key.form), UnresolvedWhy::Ambiguous(ids)),
-        Holders::None => unresolved(Some(key.form), UnresolvedWhy::Missing),
+    match index.writers.writers(&key) {
+        Writers::None => unresolved(Some(key.form), UnresolvedWhy::Missing),
+        Writers::Many(collision) => unresolved(
+            Some(key.form),
+            UnresolvedWhy::Ambiguous(Box::new(collision)),
+        ),
+        Writers::One(writer) => match writer.id() {
+            None => unresolved(
+                Some(key.form),
+                UnresolvedWhy::NoIdentity(writer.file().clone()),
+            ),
+            Some(id) => match index.valid.get(&id) {
+                Some(hash) => LinkState::Resolved(ResolvedLink::new(id, key, *hash)),
+                None => unresolved(Some(key.form), UnresolvedWhy::TargetInvalid(id)),
+            },
+        },
     }
 }
 
@@ -1794,11 +1861,13 @@ pub struct Shelf {
     unreadable: Vec<InvalidDoc>,
     anonymous: Vec<InvalidDoc>,
     skipped: Vec<SkippedFile>,
+    /// Who writes each key, valid file or not, identity read or not: the one reading
+    /// of it ([`Shelf::key_writers`]), which a link, the lookup, the next key and the
+    /// check of duplicates all use; with the hash of each valid document.
     index: KeyIndex,
-    /// Every key a file of a book writes in the book's grammar, valid file or not,
-    /// identity read or not: the keys a new document cannot take, and the numbers
-    /// the next key counts from; each with the files that write it.
-    written_keys: BTreeMap<DocKey, BTreeSet<RelPath>>,
+    /// The keys written in the links of every file, valid or not, and the places
+    /// that could not be read ([`Shelf::link_writers`]).
+    links: LinkSites,
     cycles: Vec<Cycle>,
 }
 
@@ -1887,21 +1956,17 @@ impl Shelf {
                 None => kept.push(reading),
             }
         }
-        let candidates = flag_duplicates(
-            kept.into_iter()
-                .map(|reading| Candidate::read(schema, reading, artifacts))
-                .collect(),
-        );
-        let keys = keys_of(&candidates);
-        let mut written_keys: BTreeMap<DocKey, BTreeSet<RelPath>> = BTreeMap::new();
-        for candidate in &candidates {
-            if let Some(key) = &candidate.written_key {
-                written_keys
-                    .entry(key.clone())
-                    .or_default()
-                    .insert(candidate.origin.clone());
-            }
-        }
+        let unread = keys::unread_files(&kept);
+        let candidates: Vec<Candidate> = kept
+            .into_iter()
+            .map(|reading| Candidate::read(schema, reading, artifacts))
+            .collect();
+        // Who writes each key, and who writes it in a link, are read from every
+        // candidate before any is judged: an invalid file writes a key and its links
+        // all the same.
+        let writers = KeyWriters::of(&candidates, unread.clone());
+        let links = LinkSites::of(schema, &candidates, unread);
+        let candidates = flag_duplicates(candidates, &writers);
         let Sorted {
             drafts,
             invalid,
@@ -1910,7 +1975,7 @@ impl Shelf {
         } = Sorted::of(candidates);
 
         let index = KeyIndex {
-            keys,
+            writers,
             valid: drafts
                 .iter()
                 .map(|(draft, _, _)| (draft.id(), *draft.hash()))
@@ -1934,7 +1999,7 @@ impl Shelf {
             anonymous,
             skipped,
             index,
-            written_keys,
+            links,
             cycles,
         }
     }
@@ -1997,9 +2062,11 @@ impl Shelf {
     ///
     /// The one place a key is looked up in a book: the lookup of what a person typed
     /// calls it, and the build of a link reads the same index before the shelf
-    /// exists. More than one document with the key is
-    /// [`Ambiguous`](KeyHit::Ambiguous) whether they are valid or not (a key written
-    /// twice makes every holder invalid).
+    /// exists. It reads who writes the key ([`Shelf::key_writers`]): a file whose
+    /// identity could not be read is a writer, so a key it writes is
+    /// [`NoIdentity`](KeyHit::NoIdentity), not missing. More than one document with
+    /// the key is [`Ambiguous`](KeyHit::Ambiguous) whether they are valid or not (a
+    /// key written twice makes every holder invalid).
     pub(super) fn find_key(&self, book: &BookName, form: &KeyForm) -> KeyHit {
         self.index.find(&DocKey {
             book: book.clone(),
@@ -2024,6 +2091,29 @@ impl Shelf {
         match NonEmptyVec::from_vec(origins) {
             Ok(unreadable) => DocState::Unknown { unreadable },
             Err(_) => DocState::Gone,
+        }
+    }
+
+    /// What an identity is called now, read from what it comes to ([`Shelf::state_of`]).
+    ///
+    /// The one place it is told, for an answer that names an upstream a record pinned
+    /// by the key it had then: a valid document by its key; an invalid one by the key
+    /// its files write when they write one (the files that carry its identity, read
+    /// through the one reading of who writes a key; an invalid file has no key of its
+    /// own, and two files that carry the identity may write two), else by none; and
+    /// one that is gone or not knowable by none.
+    pub fn now_named(&self, id: DocId) -> NowNamed {
+        match self.state_of(id) {
+            DocState::Valid(doc) => NowNamed::Valid(doc.key().clone()),
+            DocState::Invalid(_) => {
+                let mut keys = self.index.writers.keys_of(id).into_iter();
+                match (keys.next(), keys.next()) {
+                    (Some(key), None) => NowNamed::Invalid(Some(key.clone())),
+                    _ => NowNamed::Invalid(None),
+                }
+            }
+            DocState::Gone => NowNamed::Gone,
+            DocState::Unknown { .. } => NowNamed::Unknown,
         }
     }
 
@@ -2215,18 +2305,6 @@ impl Sorted {
     }
 }
 
-/// The identities that hold each key: every file whose identity and key could both
-/// be read, valid or not.
-fn keys_of(candidates: &[Candidate]) -> BTreeMap<DocKey, BTreeSet<DocId>> {
-    let mut keys: BTreeMap<DocKey, BTreeSet<DocId>> = BTreeMap::new();
-    for candidate in candidates {
-        if let Identity::Whole { id, key } = &candidate.identity {
-            keys.entry(key.clone()).or_default().insert(*id);
-        }
-    }
-    keys
-}
-
 /// The `Depends` links of the valid documents that resolved, as a graph of
 /// identities.
 fn depends_edges(docs: &BTreeMap<DocId, Doc>) -> BTreeMap<DocId, BTreeSet<DocId>> {
@@ -2244,16 +2322,14 @@ fn depends_edges(docs: &BTreeMap<DocId, Doc>) -> BTreeMap<DocId, BTreeSet<DocId>
 }
 
 /// Marks as invalid every file that shares its `id:` with another, and every file
-/// of a book that shares its key with another file of the book.
-fn flag_duplicates(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
+/// that writes a key another file of the book writes too, whether or not either
+/// identity could be read: the collisions are [`KeyWriters`]'s reading, and each
+/// file of one is told the others.
+fn flag_duplicates(mut candidates: Vec<Candidate>, writers: &KeyWriters) -> Vec<Candidate> {
     let mut by_id: BTreeMap<DocId, Vec<usize>> = BTreeMap::new();
-    let mut by_key: BTreeMap<DocKey, Vec<usize>> = BTreeMap::new();
     for (i, c) in candidates.iter().enumerate() {
         if let Some(id) = c.identity.id() {
             by_id.entry(id).or_default().push(i);
-        }
-        if let Identity::Whole { key, .. } = &c.identity {
-            by_key.entry(key.clone()).or_default().push(i);
         }
     }
 
@@ -2265,17 +2341,26 @@ fn flag_duplicates(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
             }
         }
     }
-    for (key, group) in by_key.iter().filter(|(_, g)| g.len() > 1) {
-        for &i in group {
-            if let Some(others) = origins_but(&candidates, group, i) {
-                flags.push((
-                    i,
-                    DocProblem::DuplicateKey {
-                        key: key.clone(),
-                        others,
-                    },
-                ));
-            }
+    for (i, candidate) in candidates.iter().enumerate() {
+        let Some(key) = &candidate.written_key else {
+            continue;
+        };
+        let Writers::Many(collision) = writers.writers(key) else {
+            continue;
+        };
+        let others: Vec<RelPath> = collision
+            .files()
+            .filter(|file| **file != candidate.origin)
+            .cloned()
+            .collect();
+        if let Ok(others) = NonEmptyVec::from_vec(others) {
+            flags.push((
+                i,
+                DocProblem::DuplicateKey {
+                    key: key.clone(),
+                    others,
+                },
+            ));
         }
     }
     for (i, problem) in flags {
@@ -2305,6 +2390,8 @@ mod comparison_tests;
 mod empty_tests;
 #[cfg(test)]
 mod form_tests;
+#[cfg(test)]
+mod keys_tests;
 #[cfg(test)]
 mod new_tests;
 #[cfg(test)]

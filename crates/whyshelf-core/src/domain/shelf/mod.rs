@@ -62,6 +62,9 @@
 //!   filter    ──► schema, doc, build, freshness        StatusFilter::new ──► StatusFilter;
 //!                                                      StatusFilter::admits ──► whether a document
 //!                                                        passes
+//!   rekey     ──► schema, doc, build, ledger           rekey::plan ──► RekeyPlan, or every
+//!                                                        RekeyProblem (a document takes a new key;
+//!                                                        what its old key's links mean)
 //! ```
 //!
 //! Each arrow points from a module to what it uses, and nothing points back: a
@@ -104,7 +107,12 @@
 //! | what an identity is now | [`Shelf::state_of`], and [`DocState::valid_or_failure`] / [`DocState::presence`] into an owned form | a [`DocState`], a [`DocFailure`] (the one "not valid", carried by refusals and causes; its [`FailureTag`] kept by a retirement), a [`DocPresence`] |
 //! | how many files each book holds | [`Shelf::tally_by_book`] (through `Schema::membership`) | a [`BookTally`] per book |
 //! | whether a filter of `status` fits the declaration, and which documents it admits | [`StatusFilter::new`](filter::StatusFilter::new) against the [`Schema`], then [`StatusFilter::admits`](filter::StatusFilter::admits) per document, read from the [`Shelf`](build::Shelf) | a [`StatusFilter`](filter::StatusFilter), or every [`FilterProblem`](filter::FilterProblem) (a field asked with a value, or any, and with no value, and no value asked of a field every declaring book requires, among them); whether one document passes, a condition of no value ([`FieldWant::NoValue`](filter::FieldWant::NoValue)) held where a value is not, and a condition of any value ([`FieldWant::AnyValue`](filter::FieldWant::AnyValue)) held where one is |
-//! | which keys of a book are taken | [`Shelf::build`], once: every key a file of the book writes in its grammar, valid or not, identity read or not | read by the two entries below only |
+//! | which files write a key, and whether that is every file that may | `KeyWriters` in `build/keys.rs` (private), made once by [`Shelf::build`] from every file that reads a key in its book's grammar, valid or not, identity read or not; asked through `Shelf::key_writers` (the files of the key's own book that could not be read at all may write it too, and are named when there are any) | the writers of the key (none, one, or a [`KeyCollision`](doc::KeyCollision)), and whether there may be more |
+//! | which keys two files write | [`Shelf::collisions`](build::Shelf::collisions), from the same reading; each file of one is invalid, with a [`DocProblem::DuplicateKey`](build::DocProblem::DuplicateKey) that names the others | the [`KeyCollision`](doc::KeyCollision)s, with every file and the identity of each that could be read |
+//! | which documents write a key in a link, and which places a link could not be read in | `Shelf::link_writers`, from every file read before any is judged (an invalid file's links are kept); the key of a link is read by the one reader `read_link_key` in `build.rs` (private), the same as the state of a link | the documents that write it, and the places that were not read ([`Unread`](build::Unread)) |
+//! | what an identity is called now, for an answer that names an upstream a record pinned | [`Shelf::now_named`](build::Shelf::now_named), from [`Shelf::state_of`], then [`FramePin::named`](ledger::FramePin::named) | a [`NowNamed`](build::NowNamed), a [`PinName`](ledger::PinName) |
+//! | which keys of a book are taken | `Shelf::key_writers`, through the two entries below | read by the two entries below only |
+//! | what the links of a key mean when a document takes a new key, and what to do | [`rekey::plan`], which asks for every writer and every link to be read (`gather`, which alone makes a [`Gathered`](rekey::Gathered)) and reads each document that writes the key in a link by [`rekey::meaning`] (the evidence, then the caller's words) | a [`RekeyPlan`](rekey::RekeyPlan), or every [`RekeyProblem`](rekey::RekeyProblem) |
 //! | the next key of a book | [`Shelf::next_key`]: the highest number taken plus one (`PREFIX-1` when none; a name tail is no number), the text read by [`KeyPattern::parse`] | a [`NewKey`], or a [`NextKeyProblem`] (a book of slugs has none) |
 //! | a key given for a new document | [`Shelf::claim_key`]: read by [`KeyPattern::parse`], and not taken | a [`NewKey`], or a [`ClaimKeyProblem`] |
 //! | a set of new documents: their keys, their names, whether each would be valid, and what each link comes to | [`Shelf::plan_new`], once, in the steps of its module page: the keys asked for by [`Shelf::claim_key`], the keys chosen as the numbers after the highest any file writes (passing over the keys asked for and the keys written, as [`Shelf::next_key`] counts), the name of a link replaced by the key of the row (in the book the link points into), each row made a [`NewDoc`] by the one function [`Shelf::check_new`] calls, and every link resolved in the shelf's index with the run in it | a [`NewPlan`] (the documents in the order to write them, and its [`NewPlan::heads`], by the rule `order::heads` reads), or every [`PlanProblem`], each with its row |
@@ -360,6 +368,7 @@ pub mod ledger;
 pub mod lookup;
 pub mod map;
 pub mod order;
+pub mod rekey;
 pub mod schema;
 pub mod settle;
 pub mod snapshot;

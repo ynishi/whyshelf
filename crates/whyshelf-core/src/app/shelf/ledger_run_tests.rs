@@ -274,6 +274,7 @@ fn a_write_that_fails_part_way_is_told_as_the_records_written() {
             failed,
             cause,
             not_durable,
+            undo_failed: false,
         } = &error
         else {
             panic!("{}: {error:?}", case.name);

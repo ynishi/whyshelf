@@ -163,6 +163,84 @@ impl FieldValue {
     }
 }
 
+/// A file that writes a key: the file, and the identity it carries when that could be
+/// read.
+///
+/// A file writes a key when its `key:` reads in the grammar of its book, whether or
+/// not the file is a valid document and whether or not its `id:` could be read: what
+/// makes a key taken is the file, not the document. It is the leaf of the one reading
+/// of who writes a key (`Shelf::key_writers`), which is why it lives here and not in
+/// the build: an [`UnresolvedWhy`] holds it.
+///
+/// Made by the build only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyWriter {
+    file: RelPath,
+    id: Option<DocId>,
+}
+
+impl KeyWriter {
+    pub(in crate::domain::shelf) fn new(file: RelPath, id: Option<DocId>) -> Self {
+        Self { file, id }
+    }
+
+    /// The file.
+    pub fn file(&self) -> &RelPath {
+        &self.file
+    }
+
+    /// The identity the file carries, when it could be read.
+    pub fn id(&self) -> Option<DocId> {
+        self.id
+    }
+}
+
+/// A key that two or more files write: its writers, in the order of their files.
+///
+/// Every file of a collision is invalid (each carries a
+/// [`DocProblem::DuplicateKey`](super::build::DocProblem::DuplicateKey) that names
+/// the others), so a collision says which files to look at, not which to keep: which
+/// of them is to take another key is for a person to say.
+///
+/// Made by the build only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyCollision {
+    key: DocKey,
+    writers: TwoOrMore<KeyWriter>,
+}
+
+impl KeyCollision {
+    pub(in crate::domain::shelf) fn new(key: DocKey, writers: TwoOrMore<KeyWriter>) -> Self {
+        Self { key, writers }
+    }
+
+    /// The key.
+    pub fn key(&self) -> &DocKey {
+        &self.key
+    }
+
+    /// The files that write it, in the order of their paths.
+    pub fn writers(&self) -> &TwoOrMore<KeyWriter> {
+        &self.writers
+    }
+
+    /// The files that write it, in the order of their paths.
+    pub fn files(&self) -> impl Iterator<Item = &RelPath> {
+        self.writers.iter().map(KeyWriter::file)
+    }
+
+    /// The files that write it, as a list that cannot be empty.
+    pub fn file_list(&self) -> NonEmptyVec<RelPath> {
+        NonEmptyVec::from(self.writers.clone()).map(|writer| writer.file().clone())
+    }
+
+    /// The identities of the files whose identity could be read, each once, in the
+    /// order of the identities.
+    pub fn ids(&self) -> std::collections::BTreeSet<DocId> {
+        self.writers.iter().filter_map(KeyWriter::id).collect()
+    }
+}
+
 /// Why a link could not be followed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnresolvedWhy {
@@ -170,8 +248,13 @@ pub enum UnresolvedWhy {
     Malformed(KeyProblem),
     /// No document of that book has the key.
     Missing,
-    /// More than one document of that book has the key.
-    Ambiguous(TwoOrMore<DocId>),
+    /// Two or more files of that book write the key, valid or not, whether or not
+    /// their identities could be read. (Boxed: the collision names every file, and
+    /// the other reasons are small.)
+    Ambiguous(Box<KeyCollision>),
+    /// The one file of that book that writes the key carries no identity that could
+    /// be read, so no document is known to have the key.
+    NoIdentity(RelPath),
     /// The one document with the key is invalid, so it cannot be stood on.
     TargetInvalid(DocId),
 }
@@ -241,24 +324,31 @@ impl UnresolvedLink {
 /// |---|---|
 /// | [`UnresolvedWhy::Malformed`] | `` `W` cannot be followed: not a key: <problem> `` |
 /// | [`UnresolvedWhy::Missing`] | `` `W` cannot be followed: no document has this key `` |
-/// | [`UnresolvedWhy::Ambiguous`] | `` `W` cannot be followed: it names 2 documents with the key `K`: <id> and <id> `` |
+/// | [`UnresolvedWhy::Ambiguous`] | `` `W` cannot be followed: the key `K` is written by 2 files: <file> and <file> `` |
+/// | [`UnresolvedWhy::NoIdentity`] | `` `W` cannot be followed: the file <file> writes the key `K` and carries no identity that can be read `` |
 /// | [`UnresolvedWhy::TargetInvalid`] | `` `W` cannot be followed: the document it names is invalid (K) `` |
 ///
-/// The documents that share a key are told apart by their identities, since their
-/// key is the same. The one that is invalid is told by the key the link read as, or
-/// by its identity when the link read as no key.
+/// The documents that share a key are told apart by their files, since their key is
+/// the same and the identity of one of them may not be readable. The one that is
+/// invalid is told by the key the link read as, or by its identity when the link read
+/// as no key.
 impl fmt::Display for UnresolvedLink {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "`{}` cannot be followed: ", self.written)?;
         match &self.why {
             UnresolvedWhy::Malformed(problem) => write!(f, "not a key: {problem}"),
             UnresolvedWhy::Missing => f.write_str("no document has this key"),
-            UnresolvedWhy::Ambiguous(ids) => write!(
+            UnresolvedWhy::Ambiguous(collision) => write!(
                 f,
-                "it names {} documents with the key `{}`: {}",
-                ids.len(),
+                "the key `{}` is written by {} files: {}",
                 self.said_key(),
-                listed(ids.iter(), Mark::Plain, Join::And)
+                collision.writers().len(),
+                listed(collision.files(), Mark::Plain, Join::And)
+            ),
+            UnresolvedWhy::NoIdentity(file) => write!(
+                f,
+                "the file {file} writes the key `{}` and carries no identity that can be read",
+                self.said_key()
             ),
             UnresolvedWhy::TargetInvalid(id) => {
                 let label = DocLabel::new(*id, self.key.clone());
@@ -786,10 +876,12 @@ mod tests {
 #[cfg(test)]
 mod wording_tests {
     use crate::domain::nonempty::TwoOrMore;
-    use crate::domain::shelf::fixtures_tests::docid;
+    use crate::domain::shelf::fixtures_tests::{docid, path};
     use crate::domain::shelf::schema::{KeyPattern, KeyPrefix, KeyProblem};
 
-    use super::{BookName, DocKey, DocLabel, UnresolvedLink, UnresolvedWhy};
+    use super::{
+        BookName, DocKey, DocLabel, KeyCollision, KeyWriter, UnresolvedLink, UnresolvedWhy,
+    };
 
     fn key(book: &str, text: &str) -> DocKey {
         let pattern = KeyPattern::Prefixed(KeyPrefix::new("SP").expect("a prefix"));
@@ -843,28 +935,58 @@ mod wording_tests {
         );
     }
 
+    fn writer(file: &str, id: Option<u128>) -> KeyWriter {
+        KeyWriter::new(path(file), id.map(docid))
+    }
+
     #[test]
-    fn a_link_to_a_key_of_several_documents_tells_them_apart_by_identity() {
+    fn a_link_to_a_key_of_several_files_names_the_files() {
         let sp1 = key("spec", "SP-1");
-        let two = TwoOrMore::new(docid(1), docid(2), vec![]);
-        assert_eq!(
-            link(UnresolvedWhy::Ambiguous(two), Some(&sp1)).to_string(),
-            format!(
-                "`SP-1` cannot be followed: it names 2 documents with the key `spec:SP-1`: {} and {}",
-                docid(1),
-                docid(2)
-            )
+        let two = KeyCollision::new(
+            sp1.clone(),
+            TwoOrMore::new(writer("a.md", Some(1)), writer("b.md", None), vec![]),
         );
-        let three = TwoOrMore::new(docid(1), docid(2), vec![docid(3)]);
         assert_eq!(
-            link(UnresolvedWhy::Ambiguous(three), Some(&sp1)).to_string(),
-            format!(
-                "`SP-1` cannot be followed: it names 3 documents with the key `spec:SP-1`: {}, {} and {}",
-                docid(1),
-                docid(2),
-                docid(3)
-            )
+            link(UnresolvedWhy::Ambiguous(Box::new(two)), Some(&sp1)).to_string(),
+            "`SP-1` cannot be followed: the key `spec:SP-1` is written by 2 files: a.md and b.md"
         );
+        let three = KeyCollision::new(
+            sp1.clone(),
+            TwoOrMore::new(
+                writer("a.md", Some(1)),
+                writer("b.md", Some(2)),
+                vec![writer("c.md", None)],
+            ),
+        );
+        assert_eq!(
+            link(UnresolvedWhy::Ambiguous(Box::new(three)), Some(&sp1)).to_string(),
+            "`SP-1` cannot be followed: the key `spec:SP-1` is written by 3 files: a.md, b.md and c.md"
+        );
+    }
+
+    #[test]
+    fn a_link_to_a_file_with_no_readable_identity_says_so() {
+        let sp1 = key("spec", "SP-1");
+        let file = path("a.md");
+        assert_eq!(
+            link(UnresolvedWhy::NoIdentity(file), Some(&sp1)).to_string(),
+            "`SP-1` cannot be followed: the file a.md writes the key `spec:SP-1` and carries no identity that can be read"
+        );
+    }
+
+    #[test]
+    fn a_collision_says_the_identities_it_could_read_once_each() {
+        let sp1 = key("spec", "SP-1");
+        let collision = KeyCollision::new(
+            sp1,
+            TwoOrMore::new(
+                writer("a.md", Some(2)),
+                writer("b.md", Some(2)),
+                vec![writer("c.md", None)],
+            ),
+        );
+        assert_eq!(collision.ids().into_iter().collect::<Vec<_>>(), [docid(2)]);
+        assert_eq!(collision.files().count(), 3);
     }
 
     #[test]

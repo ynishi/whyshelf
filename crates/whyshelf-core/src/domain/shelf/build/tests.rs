@@ -740,8 +740,18 @@ fn a_link_to_a_key_two_documents_have_is_ambiguous() {
     ]);
     match links(&s, 7, "base").as_slice() {
         [LinkState::Unresolved(u)] => match u.why() {
-            UnresolvedWhy::Ambiguous(ids) => {
-                assert_eq!(ids.clone().into_vec(), vec![docid(5), docid(6)]);
+            UnresolvedWhy::Ambiguous(collision) => {
+                assert_eq!(
+                    collision.ids().into_iter().collect::<Vec<_>>(),
+                    vec![docid(5), docid(6)]
+                );
+                assert_eq!(
+                    collision
+                        .files()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>(),
+                    ["findings/a.md", "findings/b.md"]
+                );
             }
             other => panic!("{other:?}"),
         },

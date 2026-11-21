@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "98520e67d194b774f73483879ba96d2a2f569667",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233575589895cb9050a96bf1d4c18508e26ff10284c0aacb54f78f71d72b45f5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "07fe9db207fe7541df5aa9b12a7b48385892c735",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:922b6690df494f5ac670c16aa3be7813b9adb9e42110d7125c252fdbb40ccf90",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8d94001612c8b1d13ef351bcc4a1d068c4f65090",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a454269f3bab538a8c585104808ed968a94f654c53ae5b73ef3d6025db3fb232",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795231845033,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b706870cbac06039fa6de0e42af08f4ba530dcb",
+      "hash": "sha256:a6fb5160c904b99530d18041760c34aafc39a0c6d75b4ca92f70e630f1c5f0bf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "67"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+    }
+  ],
+  "id": "01a1fc28-4d70-72dc-9903-38af09aa71e4",
+  "kind": "decision",
+  "reason": "Re-read for #117: DEC-17, DEC-28, DEC-36, DEC-58, DEC-78, DEC-89, DEC-92 and V-52 were corrected to say who writes a key is one reading (KeyWriters) that also takes a file whose id does not read, check lists collisions and names the other files, a reference or link to a key only such a file writes is NoIdentity, a pinned upstream is named by its current key, the repeat rule no longer compares an upstream's key, and rekey (DEC-94) does the renumbering; the verifications' test files changed at call sites and wording and some gained cases, and what each states still holds: cargo test --workspace passes (1629)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:82ea163ce150897b496b2f81e4802ffbb0bc32f7e2c0a04be4c08ae3e6220b2a",
+  "seen_address": "f24f6219288068f02a888970923262b023ec08a5",
+  "subject": "01a1cb50-ffb0-76e1-92c3-a31d7baca809",
+  "v": 1,
+  "verb": "approve"
+}

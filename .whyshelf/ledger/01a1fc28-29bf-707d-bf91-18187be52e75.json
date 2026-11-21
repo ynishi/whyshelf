@@ -1,0 +1,142 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d8c84af6018963911840fad10894782a608875c0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f98527f8b622b688df1ef002e985e653b18cc839e2ab5231b1b2907c7a7324b9",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1e1bf80ce6ce3c0b384d2d8c14a41ac6fd917641",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2a3dc2ff79d370d7cc3c6239455a774b9b213e677d6cd1adf8b96498974b6f62",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8a54bd6eac7c7226711f02d68381922b0a08a00f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:31c2e7510d395beb3130130eef7d1bcd1e41028e7fc65b914d25ed039b791201",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ff1cdf6195e3b5114c92ee21545b944758787762",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d8e8e47443ed435cd3d521d3d88bc334a32cd8032cbea3d4570dde50c5e50d3b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795231845033,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1b87bc28bf8099cb7ccbadd2a10c0f2bb5aec6c4",
+      "hash": "sha256:111d123a2acd3ae494e683d8addc65004213bf6be50aa4f7161f83c6ce4a6310",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "30"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d626-73e6-9e17-45d0aef14328"
+    },
+    {
+      "address": "a0fd6d7c9569173efcc54a424e59fc4fb1320f63",
+      "hash": "sha256:cf9125b01846eca0cd37787576126b89184375347877f62c68a93b275816df30",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d99a-72ad-86a3-e75931d0b50a"
+    },
+    {
+      "address": "ec2f4abc7c0b28d7a26689284802a8b803d178f6",
+      "hash": "sha256:2c015d02097e935ce6b0c7e74ce03fb6467536d1858d5e82a91f700d9c548a53",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "32"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dcde-76e2-a624-77aadb435255"
+    },
+    {
+      "address": "8ea9966b54a032c0bd52b4fa8d9ba4f612763c3e",
+      "hash": "sha256:0d9ebbcb94bc5a1af2d9dab8f06e4b89349ed39c7e025cac11ff3b01c70980ed",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce"
+    }
+  ],
+  "id": "01a1fc28-29bf-707d-bf91-18187be52e75",
+  "kind": "decision",
+  "reason": "Re-read for #117: DEC-17, DEC-28, DEC-36, DEC-58, DEC-78, DEC-89, DEC-92 and V-52 were corrected to say who writes a key is one reading (KeyWriters) that also takes a file whose id does not read, check lists collisions and names the other files, a reference or link to a key only such a file writes is NoIdentity, a pinned upstream is named by its current key, the repeat rule no longer compares an upstream's key, and rekey (DEC-94) does the renumbering; the verifications' test files changed at call sites and wording and some gained cases, and what each states still holds: cargo test --workspace passes (1629)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:c3c6a1fe7298e512e2c3c9f06d0c7a785e7fc0bb7d1d19f98aa95a3812adb33c",
+  "seen_address": "87ecbca78bddcf4962bfb803689e5c5b1d8669ff",
+  "subject": "01a1c4ba-1a9f-7201-9b7f-62a0f1be9e14",
+  "v": 1,
+  "verb": "approve"
+}

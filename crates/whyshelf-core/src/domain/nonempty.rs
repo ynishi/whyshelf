@@ -213,6 +213,21 @@ impl<T> TwoOrMore<T> {
     }
 }
 
+/// Two or more are at least one: the same items, in the same order.
+impl<T> From<TwoOrMore<T>> for NonEmptyVec<T> {
+    fn from(two: TwoOrMore<T>) -> Self {
+        let TwoOrMore {
+            first,
+            second,
+            rest,
+        } = two;
+        let mut tail = Vec::with_capacity(1 + rest.len());
+        tail.push(second);
+        tail.extend(rest);
+        Self::new(first, tail)
+    }
+}
+
 /// How many items there were, with the items kept: none, one, or two or more.
 ///
 /// Why: a lookup that finds nothing, one thing or several answers three different

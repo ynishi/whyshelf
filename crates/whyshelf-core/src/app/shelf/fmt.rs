@@ -68,12 +68,20 @@
 //! The files are written one at a time, each replaced whole. A port that fails part
 //! way leaves the first of them written, each a sound file of its own in the form,
 //! and the rest as they were.
+//!
+//! Whether a file may be written in the form is decided in one place, [`form_write`],
+//! which takes the entries to write: `fmt` gives the entries a file has, and
+//! [`rekey`](super::rekey) the entries it has with a new key, so a file `rekey` writes
+//! is held to the same rule and is refused for the same reasons.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
-use crate::domain::shelf::build::{DocReading, DropAsk, DropNames, RawProblem, Shelf, UnheldValue};
+use crate::domain::shelf::build::{
+    DocReading, DropAsk, DropNames, FormEntries, RawProblem, RawValue, Shelf, UnheldValue,
+};
 use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
@@ -155,6 +163,33 @@ pub enum LeftAloneWhy {
     Changed,
 }
 
+/// The reason as a sentence, for an error that names a file that cannot be written in
+/// the form (`rekey`).
+impl fmt::Display for LeftAloneWhy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unparsed(problem) => write!(f, "its front matter cannot be read: {problem}"),
+            Self::Unheld(values) => write!(
+                f,
+                "its front matter cannot be read: {}",
+                UnheldValue::told_all(values)
+            ),
+            Self::Comment { line } => write!(
+                f,
+                "its front matter holds a comment on line {line}, which the form would lose"
+            ),
+            Self::ReadsOtherwise => {
+                f.write_str("its text in the form would not read as the file does")
+            }
+            Self::ReadOnly => f.write_str("it cannot be written (read-only)"),
+            Self::Linked => f.write_str(
+                "it has more than one link (a hard link), which a file written in its place would not keep",
+            ),
+            Self::Changed => f.write_str("it changed after it was read"),
+        }
+    }
+}
+
 /// What to do with one file.
 enum Plan {
     InForm(RelPath),
@@ -187,8 +222,123 @@ fn leave(file: &RelPath, why: LeftAloneWhy) -> Plan {
     })
 }
 
-/// The one rule of which file is written: the plan for one file, decided in this
-/// order (the module page).
+/// A file's bytes as they were read, and the line of a comment in its front matter:
+/// what [`form_write`] holds the text in the form against.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Held<'a> {
+    /// The file the bytes are of.
+    pub(super) file: &'a RelPath,
+    /// The bytes now.
+    pub(super) read: &'a [u8],
+    /// The line of the first comment of its front matter, when it holds one.
+    pub(super) comment: Option<u32>,
+}
+
+/// The text of a document in the form, as the adapter renders it, and what it reads as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Written {
+    /// The text in the form.
+    pub(super) text: Vec<u8>,
+    /// What the text reads as, read as the file it is written as.
+    pub(super) reads_as: DocReading,
+    /// The entries the text holds, the ones `DocWrite::create` writes it from, with
+    /// the names it takes out ([`FormEntries::dropped`]).
+    pub(super) form: FormEntries,
+}
+
+/// What the rule of the form says of one file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum FormWrite {
+    /// The text in the form is the file as it is.
+    InForm(Written),
+    /// The file may be written as this text.
+    Write(Written),
+    /// The file is to be left as it is, and why.
+    Leave(LeftAloneWhy),
+}
+
+/// The one rule of whether a document may be written in the form, for `fmt`, which
+/// writes the entries a file has, and for `rekey`, which writes others (module page).
+///
+/// `held` is the file the bytes are of; `origin` the file the text is written as (the
+/// same file for `fmt`, the new file of a document `rekey` moves). The decisions, in
+/// this order: the file's book takes `origin`; the text in the form of `entries` and
+/// `body`; it is the bytes now ([`FormWrite::InForm`]); the front matter holds a
+/// comment; the file may be written ([`DocSource::replaceable`]); the text reads back
+/// as exactly the entries the form holds and `body`.
+pub(super) async fn form_write<D: DocSource>(
+    schema: &Schema,
+    drop: &DropNames,
+    docs: &D,
+    held: Held<'_>,
+    origin: &RelPath,
+    entries: &BTreeMap<String, RawValue>,
+    body: &str,
+) -> Result<FormWrite, ShelfError> {
+    // A file the books do not take is not read for `fmt`; were one handed over, it is
+    // not written.
+    let Some(book) = schema.book_of(origin) else {
+        return Ok(FormWrite::Leave(LeftAloneWhy::ReadsOtherwise));
+    };
+    let form = Shelf::form_entries(schema, book.name(), entries, drop);
+    let rendered = docs.render(origin, &form, body);
+    let written = Written {
+        text: rendered.text,
+        reads_as: rendered.reads_as,
+        form,
+    };
+    if written.text == held.read {
+        return Ok(FormWrite::InForm(written));
+    }
+    if let Some(line) = held.comment {
+        return Ok(FormWrite::Leave(LeftAloneWhy::Comment { line }));
+    }
+    match docs
+        .replaceable(held.file)
+        .await
+        .map_err(port(ShelfPort::Docs))?
+    {
+        Replaceable::Yes => {}
+        Replaceable::ReadOnly => return Ok(FormWrite::Leave(LeftAloneWhy::ReadOnly)),
+        Replaceable::Linked => return Ok(FormWrite::Leave(LeftAloneWhy::Linked)),
+    }
+    let wanted = DocReading::Parsed {
+        origin: origin.clone(),
+        entries: written.form.as_map().clone(),
+        body: body.to_owned(),
+    };
+    Ok(if written.reads_as == wanted {
+        FormWrite::Write(written)
+    } else {
+        FormWrite::Leave(LeftAloneWhy::ReadsOtherwise)
+    })
+}
+
+/// A file whose front matter was read: its file, its entries and its body.
+pub(super) type Parsed = (RelPath, BTreeMap<String, RawValue>, String);
+
+/// The file, entries and body of a reading whose front matter was read; else the file
+/// as it is left alone, and why: there is nothing to write it from.
+pub(super) fn parsed(schema: &Schema, reading: DocReading) -> Result<Parsed, LeftAlone> {
+    match reading {
+        DocReading::Parsed {
+            origin,
+            entries,
+            body,
+        } => Ok((origin, entries, body)),
+        DocReading::Unparsed { origin, why, .. } => {
+            let why = LeftAloneWhy::Unparsed(Shelf::told(schema, &origin, why));
+            Err(LeftAlone { file: origin, why })
+        }
+        DocReading::Unheld { origin, values, .. } => Err(LeftAlone {
+            file: origin,
+            why: LeftAloneWhy::Unheld(values),
+        }),
+    }
+}
+
+/// The plan for one file, decided in this order (the module page): a file whose front
+/// matter cannot be read is left alone ([`parsed`]), any other by [`form_write`].
 async fn plan<D: DocSource>(
     schema: &Schema,
     drop: &DropNames,
@@ -200,57 +350,27 @@ async fn plan<D: DocSource>(
         read,
         comment,
     } = found;
-    let (origin, entries, body) = match reading {
-        DocReading::Parsed {
-            origin,
-            entries,
-            body,
-        } => (origin, entries, body),
-        DocReading::Unparsed { origin, why, .. } => {
-            let why = LeftAloneWhy::Unparsed(Shelf::told(schema, &origin, why));
-            return Ok(leave(&origin, why));
-        }
-        DocReading::Unheld { origin, values, .. } => {
-            return Ok(leave(&origin, LeftAloneWhy::Unheld(values)));
-        }
+    let (origin, entries, body) = match parsed(schema, reading) {
+        Ok(parsed) => parsed,
+        Err(left) => return Ok(Plan::LeaveAlone(left)),
     };
-    // A file the books do not take is not read for `fmt`; were one handed over, it is
-    // not written.
-    let Some(book) = schema.book_of(&origin) else {
-        return Ok(leave(&origin, LeftAloneWhy::ReadsOtherwise));
+    let held = Held {
+        file: &origin,
+        read: &read,
+        comment,
     };
-    let form = Shelf::form_entries(schema, book.name(), &entries, drop);
-    let rendered = docs.render(&origin, &form, &body);
-    if rendered.text == read {
-        return Ok(Plan::InForm(origin));
-    }
-    if let Some(line) = comment {
-        return Ok(leave(&origin, LeftAloneWhy::Comment { line }));
-    }
-    match docs
-        .replaceable(&origin)
-        .await
-        .map_err(port(ShelfPort::Docs))?
-    {
-        Replaceable::Yes => {}
-        Replaceable::ReadOnly => return Ok(leave(&origin, LeftAloneWhy::ReadOnly)),
-        Replaceable::Linked => return Ok(leave(&origin, LeftAloneWhy::Linked)),
-    }
-    let wanted = DocReading::Parsed {
-        origin: origin.clone(),
-        entries: form.as_map().clone(),
-        body,
-    };
-    if rendered.reads_as == wanted {
-        Ok(Plan::Rewrite {
-            file: origin,
-            read,
-            text: rendered.text,
-            dropped: form.dropped().clone(),
-        })
-    } else {
-        Ok(leave(&origin, LeftAloneWhy::ReadsOtherwise))
-    }
+    Ok(
+        match form_write(schema, drop, docs, held, &origin, &entries, &body).await? {
+            FormWrite::InForm(_) => Plan::InForm(origin),
+            FormWrite::Leave(why) => leave(&origin, why),
+            FormWrite::Write(written) => Plan::Rewrite {
+                file: origin,
+                read,
+                text: written.text,
+                dropped: written.form.dropped().clone(),
+            },
+        },
+    )
 }
 
 /// The plan of every file of the books.

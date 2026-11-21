@@ -295,6 +295,7 @@ fn a_ring_of_names_goes_on_when_the_first_written_is_taken_and_stops_when_the_se
         failed,
         cause,
         not_durable,
+        undo_failed: false,
     } = &error
     else {
         panic!("{error:?}");
@@ -336,6 +337,7 @@ fn a_key_asked_for_that_is_taken_after_two_were_written_is_part_way() {
         failed,
         cause,
         not_durable,
+        undo_failed: false,
     } = &error
     else {
         panic!("{error:?}");
@@ -404,6 +406,7 @@ fn a_write_that_fails_after_the_first_is_part_way_with_what_was_written() {
         failed,
         cause,
         not_durable,
+        undo_failed: false,
     } = &error
     else {
         panic!("{error:?}");
