@@ -11,6 +11,7 @@ use crate::domain::shelf::fixtures_tests::{
 use crate::domain::shelf::ledger::{JudgedAt, Ledger, Record};
 use crate::domain::shelf::schema::{BookSchemaDecl, CoverDecl, CoverSeverity, Schema};
 
+use super::assess_unasked as assess;
 use super::*;
 
 /// The fixtures' schema with `cover = true` on these links, as (book, link).
@@ -77,6 +78,35 @@ fn a_covered_document_gets_no_notice() {
     assert!(not_covered(&shelf, &ledger(vec![]), 1).is_empty());
     let both = approved(&shelf, &[1, 2]);
     assert!(not_covered(&shelf, &both, 1).is_empty());
+}
+
+#[test]
+fn the_notices_are_made_from_the_gaps_of_the_assessment_of_coverage_it_returns() {
+    // FR-1 is reached by SP-2, FR-3 by nobody: the one gap is FR-3, and the notice is
+    // its gap told (the answer is the one `coverage::assess` gave, with no listing
+    // asked).
+    let shelf = shelf(vec![fr(1, &[]), sp(2, &["FR-1"]), fr(3, &[])]);
+    let ledger = ledger(vec![]);
+    let assessment = assess(&shelf, &ledger, JudgedAt::new(100));
+    let gaps: Vec<_> = assessment
+        .cover()
+        .gaps()
+        .map(|gap| (gap.target().clone(), gap.book().to_string(), gap.severity()))
+        .collect();
+    assert_eq!(
+        gaps,
+        [(
+            CoverTarget::Doc(docid(3)),
+            "spec".to_owned(),
+            CoverSeverity::Error
+        )]
+    );
+    assert!(not_covered(&shelf, &ledger, 1).is_empty());
+    assert_eq!(not_covered(&shelf, &ledger, 3), grounds());
+    assert_eq!(
+        assessment.cover(),
+        &crate::domain::shelf::coverage::assess(&shelf, &ledger, &Listings::NotAsked)
+    );
 }
 
 #[test]

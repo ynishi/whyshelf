@@ -8,7 +8,7 @@ use whyshelf_core::domain::actor::{Actor, Attribution};
 use whyshelf_core::domain::id::{DocId, EntityId};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactAsks, ArtifactReading, ArtifactReadings, Space,
+    ArtifactAsks, ArtifactReading, ArtifactReadings, Listings, Space,
 };
 use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
 use whyshelf_core::domain::shelf::freshness::assess;
@@ -129,7 +129,7 @@ const THEN: &[u8] = b"assert!(fast);\n";
 fn a_change_of_comparison_is_written_with_the_file_the_link_and_both_comparisons() {
     let ledger = approved(&shelf(&schema(None), THEN));
     let now = shelf(&schema(lines_without_slashes()), THEN);
-    let assessment = assess(&now, &ledger, JudgedAt::new(100));
+    let assessment = assess(&now, &ledger, JudgedAt::new(100), &Listings::NotAsked);
     let Standing::Approved {
         freshness: Freshness::Degraded(d),
         ..

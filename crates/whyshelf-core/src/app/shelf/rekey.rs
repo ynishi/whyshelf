@@ -257,7 +257,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
         .await?;
 
         let after = load(&self.ports).await?;
-        let assessment = after.assess();
+        // The answer tells approvals, not covers over artifacts: no listing is asked.
+        let assessment = after.assess(&crate::domain::shelf::artifact::Listings::NotAsked);
         let view = View {
             loaded: &after,
             assessment: &assessment,

@@ -17,7 +17,7 @@ use crate::domain::shelf::build::{
     ClaimKeyProblem, DropProblem, NewDocProblem, NextKeyProblem, NoFreeKey, PlanProblem,
 };
 use crate::domain::shelf::doc::DocKey;
-use crate::domain::shelf::exemption::ExemptRefusal;
+use crate::domain::shelf::exemption::{CoverMiss, ExemptRefusal};
 use crate::domain::shelf::filter::FilterProblem;
 use crate::domain::shelf::ledger::{
     DecisionProblem, FrameRefusal, MovedRefusal, NamedWhy, NotAdmitted, PrefixRefusal,
@@ -26,7 +26,7 @@ use crate::domain::shelf::ledger::{
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::NotPending;
 use crate::domain::shelf::rekey::{PlanDiffers, RekeyProblem};
-use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
+use crate::domain::shelf::schema::{BookName, EntryName, KeyProblem, SchemaProblem};
 use crate::domain::words::{Join, Mark, listed};
 
 use super::fmt::LeftAloneWhy;
@@ -171,6 +171,18 @@ pub enum ShelfError {
     /// decided against, or an exemption that stands already exempts it.
     #[error("the exemption is refused")]
     ExemptRefused(#[from] ExemptRefusal),
+    /// `cover` was asked about a link that is no covering link to artifacts: not
+    /// declared as one, or declared with no `cover`.
+    #[error("{book}.{link} is no covering link to artifacts")]
+    NotACoverLink {
+        /// The book named.
+        book: BookName,
+        /// The link named.
+        link: EntryName,
+        /// Why it is not one.
+        #[source]
+        miss: CoverMiss,
+    },
     /// A record named to be withdrawn is no decision or declaration, or is already
     /// withdrawn.
     #[error("the withdrawal is refused")]
@@ -544,7 +556,8 @@ impl ShelfError {
             | Self::FileTaken { .. }
             | Self::NoFreeKey(_)
             | Self::InTheWay { .. }
-            | Self::Overlapping { .. } => ErrorClass::Request,
+            | Self::Overlapping { .. }
+            | Self::NotACoverLink { .. } => ErrorClass::Request,
             // As a reference that names nothing and a revocation of nothing: a name of
             // an artifact no document links or that is linked in two spaces, a hash
             // that names nothing pinned, an earlier hash that cannot be told
@@ -583,7 +596,9 @@ impl ShelfError {
                 | SameMeaningRefusal::ArtifactUnknown { .. },
             )
             | Self::SameMeaning(_)
-            | Self::ExemptRefused(ExemptRefusal::DocNotValid { .. }) => ErrorClass::Refused,
+            | Self::ExemptRefused(
+                ExemptRefusal::DocNotValid { .. } | ExemptRefusal::CannotTell { .. },
+            ) => ErrorClass::Refused,
             // As a judgement the model refuses what cannot be told or cannot be done now:
             // files that could not be read, so that the writers of a key are not known
             // whole, files that would not read as planned, and a file the form cannot

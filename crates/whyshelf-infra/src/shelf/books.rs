@@ -34,6 +34,11 @@
 //! means = "depends"                # "depends" or "informs" (an artifact replaces nothing)
 //! compare = "lines"                # "bytes" (default), "lines" or "presence"
 //! ignore = ["//"]                  # for "lines": the lines it leaves out
+//! cover = { strength = "error", include = ["src/**/*.rs"], exclude = ["src/gen/**"] }
+//!                                  # optional: every name of the space the selection takes
+//!                                  # is expected to be reached by a document (a space that
+//!                                  # lists its names: `file`); `strength` "error" (default)
+//!                                  # or "warn"; `exclude` optional
 //!
 //! [[book.link]]
 //! name = "code"
@@ -549,18 +554,69 @@ struct LinkDto {
     /// For `compare = "lines"`: the prefixes of the lines left out.
     ignore: Option<Vec<String>>,
     /// For a link into a book: how strongly every document of the target book is
-    /// expected to be reached by it, a truth value or a word; checked by the domain.
+    /// expected to be reached by it, a truth value or a word; for a link to
+    /// artifacts, a table of a strength and a selection; checked by the domain.
     cover: Option<CoverDto>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(
     untagged,
-    expecting = "`cover` takes true, false, \"error\" or \"warn\""
+    expecting = "`cover` takes true, false, \"error\" or \"warn\" (for a link to artifacts, a table of `strength`, `include` and `exclude`)"
 )]
 enum CoverDto {
     Truth(bool),
     Word(String),
+    Table(CoverTableDto),
+}
+
+/// The `cover` of a link to artifacts: a strength (`error` when it is left out) and a
+/// selection, as written; the domain checks them. Only a table is one: a derived
+/// reader would take an array as the fields in order, which is no table.
+#[derive(Debug)]
+struct CoverTableDto {
+    strength: Option<String>,
+    include: Vec<String>,
+    exclude: Vec<String>,
+}
+
+impl<'de> Deserialize<'de> for CoverTableDto {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Fields {
+            strength: Option<String>,
+            #[serde(default)]
+            include: Vec<String>,
+            #[serde(default)]
+            exclude: Vec<String>,
+        }
+
+        struct OfAMap;
+
+        impl<'de> serde::de::Visitor<'de> for OfAMap {
+            type Value = Fields;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a table")
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, map: A) -> Result<Fields, A::Error> {
+                Fields::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+            }
+        }
+
+        let Fields {
+            strength,
+            include,
+            exclude,
+        } = deserializer.deserialize_map(OfAMap)?;
+        Ok(Self {
+            strength,
+            include,
+            exclude,
+        })
+    }
 }
 
 impl BookDto {
@@ -613,6 +669,15 @@ impl BookDto {
                     cover: l.cover.map(|cover| match cover {
                         CoverDto::Truth(truth) => CoverDecl::Truth(truth),
                         CoverDto::Word(word) => CoverDecl::Word(word),
+                        CoverDto::Table(CoverTableDto {
+                            strength,
+                            include,
+                            exclude,
+                        }) => CoverDecl::Table {
+                            strength,
+                            include,
+                            exclude,
+                        },
                     }),
                 })
                 .collect(),
@@ -760,7 +825,7 @@ means = "informs"
         decls: ShelfDecl,
     ) -> Result<Schema, whyshelf_core::domain::nonempty::NonEmptyVec<SchemaProblem>> {
         let builtins = crate::shelf::artifact::file::presets();
-        Schema::declared(decls, &builtins, &spaces())
+        Schema::declared(decls, &builtins, &spaces(), &Default::default())
     }
 
     #[test]
@@ -978,7 +1043,36 @@ means = "informs"
     }
 
     #[test]
-    fn a_cover_that_is_neither_a_truth_value_nor_a_word_is_refused() {
+    fn a_cover_table_is_read_as_written_onto_a_link_to_artifacts() {
+        let decls = parse(&tests_link(
+            "cover = { strength = 'warn', include = ['src/**/*.rs'], exclude = ['src/gen/**'] }\n",
+        ))
+        .unwrap();
+        assert_eq!(
+            decls.books[0].links[0].cover,
+            Some(CoverDecl::Table {
+                strength: Some("warn".to_owned()),
+                include: vec!["src/**/*.rs".to_owned()],
+                exclude: vec!["src/gen/**".to_owned()],
+            })
+        );
+        // The strength and the exclusions left out are not written, for the domain to
+        // read as `error` and none.
+        let decls = parse(&tests_link("cover = { include = ['a'] }\n")).unwrap();
+        assert_eq!(
+            decls.books[0].links[0].cover,
+            Some(CoverDecl::Table {
+                strength: None,
+                include: vec!["a".to_owned()],
+                exclude: Vec::new(),
+            })
+        );
+        // A key the table does not have is refused, as in every table of the file.
+        assert!(parse(&tests_link("cover = { include = ['a'], sometimes = 1 }\n")).is_err());
+    }
+
+    #[test]
+    fn a_cover_that_is_neither_a_truth_value_nor_a_word_nor_a_table_is_refused() {
         for value in ["1", "['yes']"] {
             let error = parse(&book_link(&format!("cover = {value}\n")))
                 .expect_err(value)

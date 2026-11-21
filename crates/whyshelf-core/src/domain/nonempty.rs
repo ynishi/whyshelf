@@ -306,6 +306,50 @@ impl std::borrow::Borrow<str> for NonBlank {
     }
 }
 
+/// A text written in the program, held to the rule of [`NonBlank`] when it is made:
+/// made in a `const` item, a literal that says nothing fails the build, so the
+/// [`NonBlank`] made of it needs no check at run time and no error.
+///
+/// The rule it holds is the stricter one a `const` can run: some ASCII character
+/// that is neither white space nor a control character, which a text that is blank
+/// never has.
+///
+/// ```
+/// use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
+/// const WHY: TextLiteral = TextLiteral::new("no adapter offers the space");
+/// assert_eq!(NonBlank::from(WHY).as_str(), "no adapter offers the space");
+/// ```
+///
+/// ```compile_fail
+/// use whyshelf_core::domain::nonempty::TextLiteral;
+/// const BLANK: TextLiteral = TextLiteral::new("   ");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextLiteral(&'static str);
+
+impl TextLiteral {
+    /// The literal, held to the rule above. Made in a `const` item, as it is meant to
+    /// be, a literal that breaks it fails the build; outside one it would stop the
+    /// program.
+    pub const fn new(text: &'static str) -> Self {
+        let bytes = text.as_bytes();
+        let mut i = 0;
+        let mut says_something = false;
+        while i < bytes.len() {
+            says_something = says_something || (bytes[i] > b' ' && bytes[i] < 0x7F);
+            i += 1;
+        }
+        assert!(says_something, "a text literal says something");
+        Self(text)
+    }
+}
+
+impl From<TextLiteral> for NonBlank {
+    fn from(literal: TextLiteral) -> Self {
+        Self(literal.0.to_owned())
+    }
+}
+
 /// A text of one line: not empty or only white space (as [`NonBlank`]), and with no
 /// line break (`\n` or `\r`).
 ///

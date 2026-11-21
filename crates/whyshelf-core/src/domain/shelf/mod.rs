@@ -38,13 +38,19 @@
 //!                                                        └─► ApproveFrame::addressed
 //!                                                        └─► Decision::approve / deny / deprecate / retire
 //!   lookup    ──► schema, build, ledger                resolve ──► Resolution  (what a person typed)
-//!   cover     ──► schema, doc, build, ledger           counts ──► whether a document stands;
-//!                                                      covering_reach ──► what a covering link
-//!                                                        reaches from those that do
-//!   exemption ──► schema, doc, build, ledger, cover    exemption_reading ──► needed or Unneeded;
+//!   cover     ──► schema, artifact, doc, build,        counts ──► whether a document stands;
+//!                 ledger                               covering_reach ──► what a covering link
+//!                                                        reaches (documents and artifacts) from
+//!                                                        those that stand
+//!   exemption ──► schema, artifact, doc, build,        exemption_reading ──► Needed, Unneeded or
+//!                 ledger, cover                          CannotTell;
 //!                                                      frame_exempt ──► ExemptOf (or a refusal)
-//!   freshness ──► schema, artifact, doc, graph,        assess ──► Assessment   (whether it still holds)
-//!                 build, ledger, cover, exemption
+//!   coverage  ──► schema, artifact, doc, build,        assess ──► CoverAssessment (what covering
+//!                 ledger, cover, exemption               links expect, what is missing, what is
+//!                                                        exempt, how complete each listing is)
+//!   freshness ──► schema, artifact, doc, graph,        assess ──► Assessment   (whether it still holds;
+//!                 build, ledger, cover, exemption,       its cover is coverage's answer)
+//!                 coverage
 //!   trace     ──► schema, artifact, doc, build,        trace ──► Trace         (the links, up and down)
 //!                 freshness                            linkage ──► Linkage     (linked at all, each way,
 //!                                                        and what the declaration lets be)
@@ -138,6 +144,7 @@
 //! | what a person typed | [`resolve`] | a [`Resolution`] (an identity only the ledger knows has an [`Absence`], which cannot be invalid) |
 //! | what a link that names a preset, or the default, declares | [`expand`](schema::expand), before [`Schema::validate`]; the presets of the adapters come as a value, as the spaces do | the declaration with the values put in, and the preset of each link for `map` alone |
 //! | which spaces a declaration may name | [`Schema::validate`], given the spaces the adapters offer as a value; a link to artifacts that names none, or one not offered, is a [`SchemaProblem::NoSpace`] or a [`SchemaProblem::UnknownSpace`] | an [`ArtifactLinkKind`] with its [`Space`] |
+//! | what a link's `cover` is, and which selections of a space to ask its adapter about | the one reader of a `cover` (a strength on a link into a book, a table of a strength and a selection on a link to artifacts), which [`Schema::validate`] and [`Schema::selection_asks`](schema::Schema::selection_asks) both read with; [`Schema::declared`](schema::Schema::declared) is given what the adapters answered, and refuses a selection a space does not read, a space that lists nothing, and one nobody asked about | an [`ArtifactCover`](schema::ArtifactCover), or a [`SchemaProblem`](schema::SchemaProblem) |
 //! | which names a document's links to artifacts write (A1) | [`Shelf::artifact_asks`], before the build, per space, and [`Shelf::build`], which makes each name an [`Artifact`] that is there, absent or unknown (never unresolved); a text that is no [`ArtifactName`] is a [`DocProblem::ArtifactNameInvalid`], one its adapter says is no name of the space a [`DocProblem::NotAnArtifactName`] | the names, with their comparisons; an [`Artifact`] |
 //! | whether a text is a name of its space, and what a name comes to now | the adapter of the space, through the port of the application, as an [`ArtifactReading`]: there, absent, cannot tell (why), or not a name (why) | an [`ArtifactReading`] |
 //! | what of an artifact counts, and which hashes are compared | [`Comparison`](artifact::Comparison), declared per link and kept in each pin; [`Comparison::fingerprint`](artifact::Comparison::fingerprint) is the one maker of an artifact's hash; pins of another comparison than the link's are [`Cause::ArtifactComparisonChanged`](freshness::Cause::ArtifactComparisonChanged), never compared | an [`ArtifactHash`](artifact::ArtifactHash) |
@@ -153,6 +160,8 @@
 //! | whether the content of an item came back (A6) | [`SnapshotItem::retrieval`] | a [`Retrieval`]: read, an address that cannot be read, or no address |
 //! | whether an item of a snapshot changed | [`SnapshotItem::changed_from`], by hash | a truth value |
 //! | the level of a freshness | [`Degradation::level`], computed from the causes; [`Freshness::from_causes`] is the only maker of a [`Degradation`] | a [`Severity`] |
+//! | which covering links expect which documents and names, which of them nobody reaches, which exemptions stand and read as needed, unneeded or cannot-tell, which are repeated, and how complete each listing of names is | [`coverage::assess`], once for an [`assess`], from the same shelf and ledger and the [`Listings`](artifact::Listings) the command asked for | a [`CoverAssessment`](coverage::CoverAssessment), which [`Assessment::cover`] returns |
+//! | whether an exemption is needed | [`exemption::exemption_reading`], and [`exemption::frame_exempt`] for one about to be written | an [`ExemptionReading`](exemption::ExemptionReading): needed, unneeded (why) or cannot tell (a listing that is not the whole) |
 //! | freshness, propagation, notices | [`assess`] | an [`Assessment`] |
 //! | where one identity stands, listed or not | [`Assessment::standing_of`] | a [`Standing`] |
 //! | where a degradation starts | [`Assessment::roots_of`] | [`RootCause`]s |
@@ -351,6 +360,7 @@
 //! [`Freshness`]: freshness::Freshness
 //! [`assess`]: freshness::assess
 //! [`Assessment`]: freshness::Assessment
+//! [`Assessment::cover`]: freshness::Assessment::cover
 //! [`Assessment::roots_of`]: freshness::Assessment::roots_of
 //! [`Assessment::standing_of`]: freshness::Assessment::standing_of
 //! [`Standing`]: freshness::Standing
@@ -359,6 +369,7 @@
 pub mod artifact;
 pub mod build;
 pub mod cover;
+pub mod coverage;
 pub mod doc;
 pub mod exemption;
 pub mod filter;

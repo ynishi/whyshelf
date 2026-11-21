@@ -26,7 +26,8 @@
 //! | [`moves`](ShelfApp::moves) | no | [`MovesReport`]: the names approvals that stand pinned something at that have nothing behind them now, each with the documents that pin it and the names its space's adapter suggests it moved to (by the same content, or by a rename in the space's history), and the spaces that cannot suggest |
 //! | [`moved`](ShelfApp::moved) | **yes** | [`Moved`](crate::domain::shelf::ledger::Moved): the declarations that an artifact moved from one name to another, after the space's adapter said the old name has nothing and the new one has something |
 //! | [`moved_prefix`](ShelfApp::moved_prefix) | **yes** | [`MovedPrefix`]: the declarations that every name approvals pin under one prefix moved to the same name under another (one declaration per name, in one run), the names each space's adapter built, and the spaces whose adapter takes no prefix |
-//! | [`exempt`](ShelfApp::exempt) | **yes** | [`Exempted`]: the declarations that a document is not expected to be reached by one covering link, each with the document's key |
+//! | [`cover`](ShelfApp::cover) | no | [`CoverReport`]: the problems of the declaration, or each covering link to artifacts with its selection, how complete the listing of the names it takes is, and each name reached, exempt or a gap |
+//! | [`exempt`](ShelfApp::exempt) | **yes** | [`Exempted`]: the declarations that a document, or an artifact, is not expected to be reached by one covering link, each with the document's key |
 //! | [`withdraw`](ShelfApp::withdraw) | **yes** | [`Record`](crate::domain::shelf::ledger::Record): the revocation that withdraws the records named by their identity |
 //! | [`new_doc`](ShelfApp::new_doc) | **yes** | [`Created`]: the new document's identity, key and file, with the links of it that cannot be followed yet |
 //! | [`new_docs`](ShelfApp::new_docs) | **yes** | [`NewMany`]: the documents of a run written, each as `new_doc` makes one, in the order they were written, and the ones no other stands on |
@@ -70,6 +71,7 @@ mod adapter;
 mod approve_chosen;
 mod approved;
 mod attribution;
+mod cover;
 mod dispatch;
 mod error;
 mod exempt;
@@ -97,6 +99,8 @@ mod approve_fresh_tests;
 mod approve_pending_tests;
 #[cfg(test)]
 mod approve_stale_tests;
+#[cfg(test)]
+mod artifact_cover_tests;
 #[cfg(test)]
 mod artifact_tests;
 #[cfg(test)]
@@ -147,17 +151,19 @@ mod tests;
 mod unlinked_tests;
 
 pub use adapter::{
-    Answers, AsyncVisit, CannotSuggest, NamePrefixes, NoPrefixes, NoReadBack, PrefixesWay,
-    ReadBackWay, SpaceAdapter, SpaceReadBack, SpaceSuggest, SuggestWay, Visit,
+    Answers, AsyncVisit, CannotList, CannotSuggest, ListWay, NameList, NamePrefixes, NoPrefixes,
+    NoReadBack, PrefixesWay, ReadBackWay, SpaceAdapter, SpaceReadBack, SpaceSuggest, SuggestWay,
+    Visit,
 };
 pub use approve_chosen::{
     ApproveChosenRequest, ApproveStaleRequest, Choose, ChosenApproved, ChosenJudged, ChosenLeftOut,
     PendingScope,
 };
 pub use attribution::AttributionAsk;
+pub use cover::CoverLinkAsk;
 pub use dispatch::{DispatchError, SpaceRegistry, Spaces};
 pub use error::{ErrorClass, Obstacle, PersistProblem, ShelfError};
-pub use exempt::{ExemptRequest, Exempted};
+pub use exempt::{ExemptAsk, ExemptRequest, Exempted};
 pub use fmt::{Dropped, FmtReport, LeftAlone, LeftAloneWhy};
 pub use init::{InitFile, InitRequest, Initialized};
 pub use judge::{JudgeRequest, Judgement};
@@ -172,11 +178,12 @@ pub use ports::{
 };
 pub use rekey::{RekeyReport, RekeyRequest, Rekeyed};
 pub use report::{
-    Absent, ApprovedItem, ApprovedReport, Awaiting, BookCount, BooksCheck, DiffItem, DiffReport,
-    DownstreamEdge, ExemptEntry, Gate, GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy,
-    MapReport, MovedAway, MovesReport, Names, RepeatedExemption, Row, SettledOrigin, StaleEntry,
-    StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown, UnlinkedEntry,
-    UnlinkedLists, UnlinkedReport, UnneededExemption, UpstreamEdge, UpstreamEnd,
+    Absent, ApprovedItem, ApprovedReport, ArtifactCoverLists, Awaiting, BookCount, BooksCheck,
+    CoverReport, DiffItem, DiffReport, DownstreamEdge, ExemptArtifact, ExemptEntry, Gate,
+    GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport, MovedAway, MovesReport,
+    Names, RepeatedArtifact, RepeatedExemption, Row, SettledOrigin, StaleEntry, StaleReport,
+    StatsReport, StatusReport, TraceReport, Uncovered, UncoveredArtifact, Unknown, UnlinkedEntry,
+    UnlinkedLists, UnlinkedReport, UnneededArtifact, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 pub use run_writes::Edited;
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};

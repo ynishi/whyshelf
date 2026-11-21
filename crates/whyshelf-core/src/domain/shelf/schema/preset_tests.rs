@@ -476,13 +476,19 @@ fn a_declaration_with_a_default_is_the_schema_of_one_that_writes_the_space() {
         shelf(vec![artifact("tests", None)], Vec::new(), Some("file")),
         &builtins(),
         &spaces,
+        &Default::default(),
     )
     .unwrap();
     let mut full = artifact("tests", None);
     full.space = Some("file".to_owned());
     full.means = Some("depends".to_owned());
-    let plain =
-        Schema::declared(shelf(vec![full], Vec::new(), None), &builtins(), &spaces).unwrap();
+    let plain = Schema::declared(
+        shelf(vec![full], Vec::new(), None),
+        &builtins(),
+        &spaces,
+        &Default::default(),
+    )
+    .unwrap();
     let (a, b) = (written.book("b").unwrap(), plain.book("b").unwrap());
     assert_eq!(a.all_links(), b.all_links());
     assert_eq!(
@@ -687,7 +693,7 @@ fn the_problems_of_expansion_and_of_the_books_are_told_at_once() {
         fields: Vec::new(),
         links: Vec::new(),
     });
-    let found = Schema::declared(decl, &builtins(), &spaces())
+    let found = Schema::declared(decl, &builtins(), &spaces(), &Default::default())
         .unwrap_err()
         .into_vec();
     assert!(

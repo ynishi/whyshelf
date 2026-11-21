@@ -410,7 +410,7 @@ pub(super) fn asking(approvals: i64, since: Option<i64>) -> DecideDecl {
 fn ruled_schema(decide: DecideDecl) -> Schema {
     let mut decl = ShelfDecl::of_books(decls());
     decl.decide = decide;
-    Schema::declared(decl, &BuiltinPresets::new(), &spaces()).unwrap()
+    Schema::declared(decl, &BuiltinPresets::new(), &spaces(), &Default::default()).unwrap()
 }
 
 /// A shelf of the three books and `readings`, under who may decide as `decide` says.

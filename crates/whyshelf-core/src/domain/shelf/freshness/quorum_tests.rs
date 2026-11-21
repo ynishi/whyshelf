@@ -13,6 +13,7 @@ use crate::domain::shelf::fixtures_tests::{
 use crate::domain::shelf::ledger::Record;
 use crate::domain::shelf::order::{Hold, held_back, stale};
 
+use super::assess_unasked as assess;
 use super::*;
 
 /// An approval of `subject` on `shelf` (who, when, until when), made after `before`.

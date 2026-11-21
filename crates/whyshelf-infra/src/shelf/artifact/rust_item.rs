@@ -238,7 +238,9 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use tokio::io::AsyncReadExt;
-use whyshelf_core::app::shelf::{Answers, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter};
+use whyshelf_core::app::shelf::{
+    Answers, CannotList, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter,
+};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
 use whyshelf_core::domain::nonempty::NonBlank;
@@ -412,12 +414,13 @@ pub enum RustItemError {
 }
 
 /// The space [`RUST_ITEM_SPACE`]: it answers a move of a prefix, cannot suggest where
-/// an item moved, and keeps nothing by address.
+/// an item moved, keeps nothing by address, and lists no names ([`CannotList`]).
 impl SpaceAdapter for RustItemSpace {
     type Error = RustItemError;
     type Prefixes = Answers;
     type Suggest = CannotSuggest;
     type ReadBack = NoReadBack;
+    type List = CannotList;
 
     fn space(&self) -> &str {
         RUST_ITEM_SPACE
@@ -2196,6 +2199,10 @@ mod tests {
         }
 
         fn walks_nesting(&self) -> bool {
+            false
+        }
+
+        fn lists(&self) -> bool {
             false
         }
 

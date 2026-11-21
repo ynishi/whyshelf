@@ -154,6 +154,7 @@ pub fn schemas() -> SchemasOut {
     };
     put("check", schema_for!(BooksCheckOut));
     put("map", schema_for!(MapOut));
+    put("cover", schema_for!(CoverOut));
     put("status", schema_for!(StatusOut));
     put("get", schema_for!(GetOut));
     put("get --approved", schema_for!(ApprovedOut));
@@ -236,6 +237,7 @@ pub enum NextRoot<'a> {
 
 mod cause;
 mod check;
+mod cover;
 mod diagram;
 mod doc;
 mod error;
@@ -263,6 +265,7 @@ pub use cause::{
     AbsentOut, CauseOut, ExemptOut, MovedNameOut, NoticeOut, RepeatedOut, UnknownOut, UnneededOut,
 };
 pub use check::{BooksCheckOut, books_check, check_notes, check_warnings};
+pub use cover::{CoverOut, cover};
 pub use doc::{HealthOut, LinkOut, LinkTargetOut, RootOut, RowOut};
 pub use error::{ErrorOut, error, failure, lines_refused, usage};
 pub use fmt::{FmtOut, fmt, fmt_warnings};

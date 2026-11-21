@@ -11,6 +11,7 @@ use crate::domain::shelf::fixtures_tests::{
 use crate::domain::shelf::ledger::{Exempt, ExemptOf, Record, Revocation};
 use crate::domain::shelf::schema::{BookSchemaDecl, CoverDecl, CoverSeverity, Schema};
 
+use super::assess_unasked as assess;
 use super::*;
 
 /// The exemption `judgement` of `doc` from the link `link` of `book`.

@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "98520e67d194b774f73483879ba96d2a2f569667",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:233575589895cb9050a96bf1d4c18508e26ff10284c0aacb54f78f71d72b45f5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d4434193bddc5dbac32746c4e9207a8aea238930",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:142ecf3a74b7f00c15337d038f5f2970cb07d49037655dad3e4607d0ded24b93",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "dac7228e8be0de1c65851d37fcfe0793ba3b5ab2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:100c97437a38f5d490cf6ac99f80453540088d1821905fb628347e67b46fb9c7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795234878353,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b706870cbac06039fa6de0e42af08f4ba530dcb",
+      "hash": "sha256:a6fb5160c904b99530d18041760c34aafc39a0c6d75b4ca92f70e630f1c5f0bf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "67"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+    }
+  ],
+  "id": "01a1fc56-79df-74c2-bf8c-7dfd620a7c14",
+  "kind": "decision",
+  "reason": "Re-read after merging main (#111, the cover over artifacts) into #117: the pinned rustdoc items (LinkKind, Notice, BookRange, BookScope and the others) and the test files now hold both changes side by side; what each document states still holds, and cargo test --workspace passes (1676)",
+  "revision": "4956951297fb48e913715a35960c32b4455e9438",
+  "seen": "sha256:82ea163ce150897b496b2f81e4802ffbb0bc32f7e2c0a04be4c08ae3e6220b2a",
+  "seen_address": "f24f6219288068f02a888970923262b023ec08a5",
+  "subject": "01a1cb50-ffb0-76e1-92c3-a31d7baca809",
+  "v": 1,
+  "verb": "approve"
+}

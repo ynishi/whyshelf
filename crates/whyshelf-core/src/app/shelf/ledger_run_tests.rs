@@ -19,9 +19,9 @@ use crate::domain::shelf::schema::{BookName, CoverDecl, EntryName};
 
 use super::fake_tests::{FakeShelf, aname, block_on, decls, file_space, fr, reason, sp, sp_tested};
 use super::{
-    ApproveChosenRequest, Choose, ErrorClass, ExemptRequest, JudgeRequest, Judgement, LedgerAppend,
-    MovedRequest, PendingScope, PrefixMovedRequest, SameMeaningAbout, SameMeaningRequest, ShelfApp,
-    ShelfError, ShelfPort, WithdrawRequest,
+    ApproveChosenRequest, Choose, ErrorClass, ExemptAsk, ExemptRequest, JudgeRequest, Judgement,
+    LedgerAppend, MovedRequest, PendingScope, PrefixMovedRequest, SameMeaningAbout,
+    SameMeaningRequest, ShelfApp, ShelfError, ShelfPort, WithdrawRequest,
 };
 
 fn r(text: &str) -> Reference {
@@ -108,7 +108,7 @@ fn covering() -> ShelfApp<FakeShelf> {
 
 fn exempt(reference: &str) -> ExemptRequest {
     ExemptRequest {
-        reference: r(reference),
+        subject: ExemptAsk::Doc(r(reference)),
         book: BookName::new("spec").unwrap(),
         link: EntryName::new("grounds").unwrap(),
         reason: NonBlank::new("kept on purpose").unwrap(),

@@ -24,6 +24,7 @@
 //! | [`Renamed`], [`SpacePrefixes`], [`PrefixAnswers`] | what a space's adapter says of a prefix move: per name, the same name under the new prefix, outside, or unbuildable (why); per space, whether the prefix is one of its names | the adapter, by its own grammar of names |
 //! | [`ContentAddress`] | where the content can be read back later; opaque, only compared | an adapter, after its own check ([`ContentAddress::from_validated`], A7) |
 //! | [`Revision`] | one point of the project's history, kept as a hint; opaque | the same ([`Revision::from_validated`]) |
+//! | [`Selection`], [`SelectionCheck`], [`NameListing`], [`Listings`], [`Completeness`], [`ListedNames`] | which names of a space a link expects to be reached, as a link declares them (opaque), what the adapter says of it, the names it lists, and how complete the listing is; read only through [`ListedNames::of`] (page of the module `listing`) | the declaration of a link; the adapter ([`NameList`](crate::app::shelf::NameList)) |
 //!
 //! ```text
 //!   Shelf::artifact_asks ──► ArtifactAsks (space -> name -> comparisons)
@@ -1015,6 +1016,12 @@ impl PrefixAnswers {
             .and_then(|(_, renamed)| renamed.get(name))
     }
 }
+
+mod listing;
+pub use listing::{
+    Completeness, ListedNames, Listings, NameListing, NotASelection, Selection, SelectionCheck,
+    SelectionChecks, SelectionList, SelectionProblem,
+};
 
 #[cfg(test)]
 mod comparison_tests;

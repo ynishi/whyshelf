@@ -25,6 +25,7 @@ fn declared(text: &str) -> Schema {
         parse(text).unwrap(),
         &artifacts.presets(),
         &artifacts.spaces(),
+        &Default::default(),
     )
     .unwrap_or_else(|problems| panic!("{problems:?}"))
 }

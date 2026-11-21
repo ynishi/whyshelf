@@ -23,6 +23,7 @@
 //! [`Linkage`]: crate::domain::shelf::trace::Linkage
 //! [`Standing::stands`]: crate::domain::shelf::freshness::Standing::stands
 
+use crate::domain::shelf::artifact::Listings;
 use crate::domain::shelf::schema::BookName;
 use crate::domain::shelf::trace::{Linkage, linkage};
 
@@ -121,7 +122,7 @@ impl<P: ShelfRead> ShelfApp<P> {
             });
         }
         let loaded = load_with(&self.ports, &schema).await?;
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,

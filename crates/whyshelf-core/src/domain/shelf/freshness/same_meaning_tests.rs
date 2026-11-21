@@ -14,6 +14,7 @@ use crate::domain::shelf::ledger::{
     JudgedAt, Record, Revocation, SameMeaning, SameMeaningOf, SameMeaningTarget, frame_same_meaning,
 };
 
+use super::assess_unasked as assess;
 use super::*;
 
 fn h(text: &str) -> ArtifactHash {

@@ -761,7 +761,7 @@ mod readers;
 mod record;
 mod same_meaning;
 
-pub use exempt::{Exempt, ExemptOf};
+pub use exempt::{Exempt, ExemptOf, ExemptSubject};
 use moved::moved_way;
 pub use moved::{
     FoundBy, GoneName, GoneNames, MoveCandidate, MoveNote, MoveSuggestion, MoveSuggestions, Moved,

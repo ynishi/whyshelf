@@ -6,6 +6,7 @@ use crate::domain::shelf::fixtures_tests::{
 };
 use crate::domain::shelf::ledger::{JudgedAt, Record};
 
+use super::assess_unasked as assess;
 use super::*;
 
 fn standing_of(assessment: &Assessment, n: u128) -> Standing {

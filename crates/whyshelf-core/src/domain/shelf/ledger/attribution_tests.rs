@@ -13,7 +13,7 @@ use crate::domain::id::DocId;
 use crate::domain::shelf::fixtures_tests::{
     actor, approve, docid, fr, jid, ledger, shelf, sp_testing,
 };
-use crate::domain::shelf::freshness::assess;
+use crate::domain::shelf::freshness::assess_unasked as assess;
 use crate::domain::shelf::stats;
 
 use super::*;

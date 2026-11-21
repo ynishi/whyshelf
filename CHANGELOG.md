@@ -32,6 +32,41 @@ and this project adheres to
   In the library, `ShelfApp::rekey` takes a `RekeyRequest` and gives a
   `RekeyReport`; the plan, its reading of each link and its check of the files
   are `domain::shelf::rekey`.
+- A cover over artifacts (#111). A link to artifacts may declare `cover = {
+  strength = "error", include = ["src/**/*.rs"], exclude = ["src/gen/**"] }`
+  (`strength` is `error` when left out): every name its selection takes in a
+  space that lists its names, and that is there now, is expected to be reached
+  by a pending or approved document that writes it in that link. Only the space
+  `file` lists its names (the regular files Git lists, tracked or untracked and
+  not ignored); a `cover` on a link to a space that does not, a strength alone
+  (`cover = true`) on a link to artifacts, a table on a link into a book, and a
+  selection the space does not read are problems of the declaration. `check`
+  lists a name no document reaches in `artifact_uncovered`, and each covering
+  link, with its selection and whether every name it takes is listed
+  (`completeness`), in `artifact_cover`; it fails (exit 1) for a gap of an
+  `error` link, and also for an `error` link whose listing is not the whole (too
+  many files, a file a reading cannot tell or whose path is no name, or no Git
+  work tree) or whose selection takes no name, since a gap
+  cannot be ruled out then; a `warn` link is listed, written on stderr and leaves
+  `check` clean. `map` and the diagram show a covering link's `selection` (an
+  added field; the answers' version stays 1), and `cover` is true of a covering
+  link to artifacts as of one into a book. `whyshelf cover [--link
+  <book>.<link>]` tells, for each covering link, its selection, whether the
+  listing is the whole and which names are reached, exempt or gaps; it fails
+  nothing (exit 1 only for a declaration that cannot be used, as `map`).
+- `judge exempt --artifact <name>... --from <book>.<link> --reason <text>`
+  records that an artifact is not expected to be reached by a covering link to
+  artifacts, by the rule of an exemption of a document: needed the moment it is
+  written, so a name the selection does not take now, one a document reaches, one
+  whose names cannot all be listed, and one already exempt are refused. It does
+  not move with the file: after `judge moved` it is no longer needed (`why` is
+  `not_listed`). `check` lists them in `artifact_exempt`,
+  `artifact_exemption_unneeded` and `artifact_exemption_repeated`, and warns on
+  stderr as it does for documents. The record is the exemption's, with the
+  subject a map of the `space` and the `name` instead of the document's identity;
+  a record of a document keeps its form and hash. A build from before this
+  cannot read an exemption of an artifact, and its `check` fails on it (its
+  other commands act as if the record were not there).
 - The manual has a section "Working from several branches" (#132): what to push
   together, when to fetch and run `check`, which document to renumber when two
   branches took one key and what renumbering rewrites, to link only keys the
@@ -241,6 +276,28 @@ and this project adheres to
   one), `UnresolvedWhy::NoIdentity`, `Resolution::NoIdentity`, `Shelf::now_named`
   (`NowNamed`), `FramePin::named` (`PinName`) and `Names::pin_name` are the reading
   of who writes a key and of what a pin names.
+- The contract of a space's adapter has a new optional ask for a library user
+  (#111): which names a selection takes. An adapter names `type List: ListWay<Self>`,
+  `Answers` (and implements `NameList`: `select`, whether it reads a selection and
+  does no I/O, and `list`, the names there now: all, some with why, or that none
+  can be listed) or `CannotList`; the dispatch answers `ArtifactSource::select` and
+  `ArtifactSource::list`, `CannotList` for a space no adapter names. The
+  adapter of `file` answers; the others name `CannotList`. In the library,
+  `Schema::declared` takes the answers to `Schema::selection_asks`
+  (`SelectionChecks`), and `Schema::validate`, which asks nothing, refuses a cover
+  of artifacts; the application builds a schema with one function for `load` and
+  `init`; `freshness::assess` and `Loaded::assess` take `&Listings`
+  (`Listings::NotAsked` for a command that reads no cover of artifacts), and
+  `Assessment::cover()` is the assessment of coverage
+  (`coverage::assess`), which decides a gap, a repeated exemption, how complete a
+  listing is and a selection that takes nothing for documents and artifacts
+  alike; `BooksCheck::Checked` has `cover` and `artifacts`, `BooksCheck::is_clean`
+  reads the assessment only, `ExemptRequest` holds an `ExemptAsk` (a document or
+  an artifact), `Exempted::doc` is an `Option`, `ExemptOf::doc` an `Option` and
+  `ExemptSubject` tells which, and `SchemaProblem::CoverOnArtifactLink` is gone
+  (`CoverNeedsSelection`, `SelectionOnBookLink`, `BadSelection`, `NotASelection`
+  and `SpaceCannotList` take its place). The glob grammar of a book's `include`
+  and `exclude` is `PathGlob`, which the adapter of `file` matches with too.
 - A build from before `ran_by` (#156) does not read a record that has the key,
   and its `check` fails on it; its other commands act as if the record were not
   there, so its `judge` can write over that decision with no warning. A CI that

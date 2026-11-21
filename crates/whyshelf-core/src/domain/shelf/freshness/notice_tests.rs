@@ -7,6 +7,7 @@ use crate::domain::shelf::fixtures_tests::{
 };
 use crate::domain::shelf::ledger::JudgedAt;
 
+use super::assess_unasked as assess;
 use super::*;
 
 /// A finding `FR-<n>` with identity `n` that informs of these findings (its

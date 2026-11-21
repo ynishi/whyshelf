@@ -184,9 +184,29 @@
 //! leaves it clean, for a hole that may stand a while, and is written by `check` as
 //! a line on stderr, `warning: <key> is reached by no <book>.<link> (cover =
 //! "warn")` (its identity when it has no key), so that a run which shows the answer only when it fails still shows
-//! it. Its freshness is unchanged either way. A link to artifacts takes no
-//! expectation, and a link into its own book is met only by another document of
-//! that book.
+//! it. Its freshness is unchanged either way. A link into its own book is met only
+//! by another document of that book.
+//!
+//! A link to artifacts may declare a `cover` over a *selection* of the names of its
+//! space: `cover = { strength = "error", include = ["src/**/*.rs"], exclude =
+//! ["src/gen/**"] }` (`strength` is `"error"` when left out, `include` holds at least
+//! one text, `exclude` is optional). Every name the selection takes that is there
+//! now is expected to be reached by a pending or approved document that writes it
+//! in that link, and one that none does is a gap of the strength, as a document is.
+//! Only a space whose adapter lists its names takes one (each adapter's page says
+//! whether it does, and how it reads a selection); for `file`, the regular files Git
+//! lists (tracked, or untracked and not ignored), named by their path under the
+//! root, with `include` and `exclude` as globs over the path (`*` and `?` within a
+//! segment, `**` across segments). A `cover` on a link to a space whose adapter
+//! lists nothing, a strength alone (`cover = true`, `cover = "warn"`) and a table on
+//! a link into a book are problems of the declaration. It fails closed: a listing
+//! that is not the whole (more names than the adapter lists, a name it cannot tell
+//! or cannot write, or no listing at all) proves no gap, so `check` of an `error`
+//! cover is not clean for it, and for a selection that takes no name; a `warn` cover
+//! says either on stderr and leaves `check` clean. `check` answers the gaps in
+//! `artifact_uncovered` and, for each covering link to artifacts, its selection and
+//! whether every name is listed in `artifact_cover`; `cover` tells it link by link
+//! and fails nothing (see its entry below).
 //!
 //! The rule stays declared for the whole book; one document can be exempt from it.
 //! `judge exempt <ref>... --from <book>.<link> --reason <text>` records, by an
@@ -230,6 +250,20 @@
 //! ```text
 //!   warning: 2 exemptions exempt <key> from `<book>.<link>` (<record id>, <record id>): one is enough, withdraw the others, with `judge withdraw <id>`
 //! ```
+//!
+//! `judge exempt --artifact <name>... --from <book>.<link> --reason <text>` does the
+//! same for a name of a link to artifacts (the space is the link's; not given with
+//! document references). It is accepted by the same rule, for an artifact: the link
+//! declares a `cover` over the names of a space, the selection takes the name now, no
+//! document reaches it, and the names the selection takes can all be listed (one
+//! that cannot is refused, as it cannot be told to be needed). The exemption does
+//! not move with the file: after `judge moved`, the exemption of the old name is no
+//! longer needed (`why` is `not_listed`: the selection does not list it now) and the
+//! new name is a gap to reach or exempt. `check` lists them apart in
+//! `artifact_exempt`, `artifact_exemption_unneeded` (`why` is `reached`,
+//! `not_declared`, `no_cover`, `other_space` or `not_listed`) and
+//! `artifact_exemption_repeated`, and warns on stderr as for a document, naming the
+//! artifact by its name and space.
 //!
 //! `unlinked` asks nothing of a cover, and lists an exempt document as it lists any
 //! other.
@@ -1003,7 +1037,13 @@
 //!   check                     the declaration, the documents and the ledger, what no covering
 //!                             link reaches, the names with nothing there and those that cannot
 //!                             be told now; exit 1 if anything is wrong (neither of those is;
-//!                             for what a covering link does not reach, see `cover` above)
+//!                             for what a covering link does not reach, see "Books" above)
+//!   cover [--link <book>.<link>]
+//!                             what the covering links to artifacts expect and how each stands:
+//!                             its selection, whether every name it takes is listed, and which
+//!                             names a document reaches, an exemption keeps out of the gaps, or
+//!                             are gaps; it fails nothing (`check` is the gate), and exits 1,
+//!                             as `map`, only when the declaration cannot be used
 //!   map                       what the declaration says: every book and every link, in its order,
 //!                             and a drawing of them; it reads no document and no ledger
 //!                             (exit 1, as check, when the declaration cannot be used)
@@ -1055,8 +1095,10 @@
 //!                             --prefix, every name under the old prefix, in any space, is
 //!                             now at the same name under the new one)
 //!   judge exempt <ref>... --from <book>.<link> --reason <text>
-//!                             the documents are not expected to be reached by that covering
-//!                             link: no `not_covered` for it, and `check` lists them apart
+//!   judge exempt --artifact <name>... --from <book>.<link> --reason <text>
+//!                             the documents, or the artifacts, are not expected to be reached
+//!                             by that covering link: no `not_covered` for it, and `check`
+//!                             lists them apart
 //!   judge withdraw <record id>... --reason <text>
 //!                             take back decisions or declarations by the id of their record
 //!   new <book> [--title <text>] [--key <key>] [<entry>=<value> | <entry>+=<item>]... [--body <text>]
@@ -1374,7 +1416,7 @@
 //! was given), or null while it is pending; `get --approved` shows `actor` and
 //! `ran_by` of the approval in the same way; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
-//! its `space`) and a `detail` sentence; every answer that reads the documents (`check` and
+//! its `space`) and a `detail` sentence; every answer that reads the documents (`check`, `cover` and
 //! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `stale`, `stats`, `moves`, `diff`) carries
 //! `health` (files that are no document, cycles, records that contradict one another
 //! or cannot be read). The answers of the writes, of `map` and of `schema` carry
@@ -1383,8 +1425,8 @@
 //! | status | meaning |
 //! |---|---|
 //! | 0 | the answer was given |
-//! | 1 | `check` found something wrong, `map` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands; for `rekey`, files that could not be read and may write the key or link to it, a file whose identity cannot be told, a file `fmt` would leave alone, or files that would not read as planned, a file changed since the first reading among them, each listed in `problems`) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it, for `judge withdraw` an id that is no decision or declaration, or one already withdrawn, and for `rekey` a document no file carries or that is not one file with an identity and a key that read, a new key that is taken or that the book refuses, a book with no next key, a new file the range of the book does not take, a word for a document that writes no key in a link or two words for one, a document that writes the old key in a link and that no approval and no word decides, or whose word is against its approval (every one is listed in `problems`), a file already at the new file, or a file that is no longer what was read when it is written over (one changed before, between the two readings, is exit 1) |
+//! | 1 | `check` found something wrong, `map`, `cover` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid, or an artifact when the names its link's selection takes cannot all be listed; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands; for `rekey`, files that could not be read and may write the key or link to it, a file whose identity cannot be told, a file `fmt` would leave alone, or files that would not read as planned, a file changed since the first reading among them, each listed in `problems`) |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it (with `--artifact`: a `--from` that is no link to artifacts with a `cover`, a name its selection does not take now, or one a document reaches or already exempt, and, with `--artifact` together with document references, bad arguments), for `cover` a `--link` that is no covering link to artifacts, for `judge withdraw` an id that is no decision or declaration, or one already withdrawn, and for `rekey` a document no file carries or that is not one file with an identity and a key that read, a new key that is taken or that the book refuses, a book with no next key, a new file the range of the book does not take, a word for a document that writes no key in a link or two words for one, a document that writes the old key in a link and that no approval and no word decides, or whose word is against its approval (every one is listed in `problems`), a file already at the new file, or a file that is no longer what was read when it is written over (one changed before, between the two readings, is exit 1) |
 //! | 3 | the run failed: a file could not be read, written or put on disk (for `new`, `init` and `rekey`, part way too: the files written, or for `rekey` those not put back, are listed), or a template `init` ships cannot be read |
 //!
 //! `status` answers `{"docs", "filters", "health"}`: the documents that pass the
@@ -1442,6 +1484,37 @@
 //! `{"key", "files": [{"path", "id"}], "detail"}`, every file and its identity
 //! (null when it cannot be read), without saying which to renumber.
 //!
+//! Beside them `check` answers, for the covering links to artifacts, five more lists
+//! (the answer's version stays 1: fields are only added). `artifact_uncovered` lists
+//! each name nobody reaches as `{"book", "link", "name", "space", "severity"}`;
+//! `artifact_exempt`, `artifact_exemption_unneeded` and `artifact_exemption_repeated`
+//! list the exemptions of artifacts as `exempt`, `exemption_unneeded` and
+//! `exemption_repeated` list those of documents, with `name` and `space` in the place
+//! of `doc` (and, for `artifact_exemption_unneeded`, `why` one of `reached`,
+//! `not_declared`, `no_cover`, `other_space` or `not_listed`); and `artifact_cover`
+//! lists each covering link as `{"book", "link", "space", "severity", "selection":
+//! {"include", "exclude"}, "completeness", "why", "selects_nothing", "selected",
+//! "reached", "exempt", "gaps", "detail"}`, with `completeness` `all`, `partial`,
+//! `cannot_list` or `not_asked` (`why` says why when it is not `all`) and the counts
+//! null unless it is `all`. A gap is told only of a listing that is `all`. `clean` is
+//! false for a gap of an `error` link, for such a link whose `completeness` is not
+//! `all`, and for such a link that `selects_nothing`. On stderr, for a `warn` link,
+//! `check` writes a line for each name nobody reaches (`warning: <name> in <space> is
+//! reached by no <book>.<link> (cover = "warn")`, the name and the space each in
+//! backticks), one for each such link whose listing is not `all` or that selects
+//! nothing, and one for each exemption of an artifact no longer needed (with its
+//! `judge withdraw`) or repeated, as it does for documents.
+//!
+//! `cover` answers `{"schema_problems": [...], "links": [...], "uncovered": [...],
+//! "exempt": [...], "exemption_unneeded": [...], "exemption_repeated": [...],
+//! "health": ...}`: each link is the entry of `artifact_cover` with `names`, each
+//! name the link takes (when `completeness` is `all`) as `{"name", "stands",
+//! "exemption"}` with `stands` `reached`, `exempt` (and the record id) or `gap`; the
+//! lists are those of `check`, of the link asked for with `--link` or of every one.
+//! A `--link` that is no covering link to artifacts is a request error (exit 2).
+//! `judge exempt --artifact` answers each exemption with `artifact` and `space` in
+//! the place of `doc`, null for the one that is not.
+//!
 //! `map` answers `{"schema_problems": [...], "books": [...], "links": [...],
 //! "diagram": ...}`: each book with its `name`, `dir`, `key` (`{"kind": "prefix",
 //! "prefix"}` or `{"kind": "slug"}`), `include`, `exclude` and
@@ -1451,7 +1524,9 @@
 //! `words` of an enum, `required`); each link with the book it is `from`, its
 //! `name`, its `target` (`{"kind": "book", "book"}` or `{"kind": "artifact",
 //! "space", "compare", "ignore"}`), `means`, `count`, `cover` (true for either
-//! strength), `cover_severity` (`warn`, `error`, or null when `cover` is false),
+//! strength, of a link into a book or to artifacts), `cover_severity` (`warn`,
+//! `error`, or null when `cover` is false), `selection` (`{"include", "exclude"}` of
+//! a link to artifacts that covers, as written; null for any other),
 //! `preset` (the preset a link to artifacts was expanded from, or null) and
 //! `preset_by_default` (whether that preset is the default), as the declaration
 //! writes them, its presets expanded, and in its order, with one exception: the
@@ -1459,7 +1534,8 @@
 //! sorted. `diagram` is the same as text, one block per book: a line of its name,
 //! key and description, then a line per link with its meaning, `cover` (`cover`, or
 //! `cover(warn)` for `warn`), count (`1`, `0..1`, `0..`, `1..`), preset
-//! (`preset=<name>`, or `preset=<name>(default)`) and target, every column aligned
+//! (`preset=<name>`, or `preset=<name>(default)`) and target (for a covering link to
+//! artifacts, ending in `include="..."` and `exclude="..."`), every column aligned
 //! across the drawing. It
 //! is null, and `books` and `links` are empty, when `schema_problems` lists why
 //! the declaration cannot be used, as `check` lists it.

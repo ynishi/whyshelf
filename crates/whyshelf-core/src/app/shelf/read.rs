@@ -34,6 +34,7 @@
 use std::collections::BTreeSet;
 
 use crate::domain::id::DocId;
+use crate::domain::shelf::artifact::Listings;
 use crate::domain::shelf::filter::{StatusFilter, StatusFilterAsk};
 use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing};
 use crate::domain::shelf::ledger::{JudgedAt, MovedTo, Quorum};
@@ -46,8 +47,9 @@ use crate::domain::shelf::stats;
 use crate::domain::shelf::trace::{LinkEnd, trace};
 
 use super::ShelfApp;
+use super::cover::artifact_lists;
 use super::error::ShelfError;
-use super::load::{Loaded, View, load, load_with, schema_of};
+use super::load::{Loaded, View, listings_of, load, load_with, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
     Absent, Awaiting, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, GetReport, MapReport,
@@ -101,7 +103,10 @@ impl<P: ShelfRead> ShelfApp<P> {
             Err(problems) => return Ok(BooksCheck::SchemaInvalid(problems)),
         };
         let loaded = load_with(&self.ports, &schema).await?;
-        let assessment = loaded.assess();
+        // `check` is the gate on a cover of artifacts, so it always asks the adapters
+        // for the names the selections take.
+        let listings = listings_of(self.ports.artifacts(), schema.cover_selections()).await?;
+        let assessment = loaded.assess(&listings);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,
@@ -290,6 +295,8 @@ impl<P: ShelfRead> ShelfApp<P> {
             awaiting,
             same_meaning_short: loaded.ledger.same_meaning_short(),
             collisions: loaded.shelf.collisions(),
+            artifacts: artifact_lists(&loaded.ledger, assessment.cover(), None),
+            cover: assessment.cover().clone(),
             names: loaded.names(),
         })
     }
@@ -327,7 +334,7 @@ impl<P: ShelfRead> ShelfApp<P> {
         let schema = schema_of(&self.ports).await?.map_err(ShelfError::Schema)?;
         let filter = StatusFilter::new(&schema, ask.clone()).map_err(ShelfError::Filter)?;
         let loaded = load_with(&self.ports, &schema).await?;
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,
@@ -351,7 +358,7 @@ impl<P: ShelfRead> ShelfApp<P> {
     pub async fn get(&self, reference: &Reference) -> Result<GetReport, ShelfError> {
         let loaded = load(&self.ports).await?;
         let id = identity(&loaded, reference)?;
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,
@@ -371,7 +378,7 @@ impl<P: ShelfRead> ShelfApp<P> {
     pub async fn trace(&self, reference: &Reference) -> Result<TraceReport, ShelfError> {
         let loaded = load(&self.ports).await?;
         let id = identity(&loaded, reference)?;
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,
@@ -420,7 +427,7 @@ impl<P: ShelfRead> ShelfApp<P> {
     /// where it starts to fail.
     pub async fn stale(&self) -> Result<StaleReport, ShelfError> {
         let loaded = load(&self.ports).await?;
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,
@@ -501,7 +508,7 @@ impl<P: ShelfRead> ShelfApp<P> {
     /// comes from, which changes no measure).
     pub async fn stats(&self, since: Option<JudgedAt>) -> Result<StatsReport, ShelfError> {
         let loaded = load(&self.ports).await?;
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,

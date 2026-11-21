@@ -1,12 +1,22 @@
 //! Tests of the JSON of coverage: the `uncovered` list of `check`, and the
 //! `not_covered` notice, each with the strength of the link.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde_json::{Value, json};
 use whyshelf_core::app::shelf::{BooksCheck, Health, Names, Uncovered};
 use whyshelf_core::domain::id::{DocId, EntityId};
-use whyshelf_core::domain::shelf::artifact::{ArtifactKey, ArtifactName, Space};
+use whyshelf_core::domain::shelf::artifact::{
+    ArtifactKey, ArtifactName, ArtifactReadings, Listings, Space,
+};
+use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
+use whyshelf_core::domain::shelf::coverage::{CoverAssessment, assess as assess_cover};
 use whyshelf_core::domain::shelf::freshness::Notice;
-use whyshelf_core::domain::shelf::schema::{BookName, CoverSeverity, EntryName};
+use whyshelf_core::domain::shelf::ledger::{Admit, Ledger};
+use whyshelf_core::domain::shelf::schema::{
+    BookName, BookSchemaDecl, Cardinality, CoverDecl, CoverSeverity, EntryName, KeyPatternDecl,
+    LinkEntryDecl, LinkTargetDecl, Propagation, Schema,
+};
 
 use super::*;
 
@@ -88,6 +98,51 @@ fn only_a_warn_gap_is_a_warning_line() {
     assert!(check_warnings(&check_with(CoverSeverity::Error)).is_empty());
 }
 
+/// The assessment of coverage of a shelf of one spec, SP-2, which `spec.grounds` (a
+/// link into its own book, of this strength) expects to be reached and no document
+/// reaches: the gap `check_with` lists.
+fn assessed(severity: CoverSeverity) -> CoverAssessment {
+    let schema = Schema::validate(
+        vec![BookSchemaDecl {
+            name: "spec".to_owned(),
+            dir: "specs".to_owned(),
+            scope: Default::default(),
+            key: KeyPatternDecl::Prefixed {
+                prefix: "SP".to_owned(),
+            },
+            description: None,
+            fields: Vec::new(),
+            links: vec![LinkEntryDecl {
+                name: "grounds".to_owned(),
+                target: LinkTargetDecl::Book("spec".to_owned()),
+                cardinality: Cardinality::Many,
+                propagation: Propagation::Depends,
+                space: None,
+                compare: None,
+                cover: Some(CoverDecl::Word(severity.word().to_owned())),
+            }],
+        }],
+        &BTreeSet::new(),
+    )
+    .unwrap();
+    let readings = vec![DocReading::Parsed {
+        origin: "specs/sp-2.md".parse().unwrap(),
+        entries: BTreeMap::from([
+            ("id".to_owned(), RawValue::Text(docid(2).to_string())),
+            ("key".to_owned(), RawValue::Text("SP-2".to_owned())),
+        ]),
+        body: "body\n".to_owned(),
+    }];
+    let shelf = Shelf::build(&schema, readings, &ArtifactReadings::new());
+    let cover = assess_cover(
+        &shelf,
+        &Ledger::build(Vec::new(), &Admit::unruled()),
+        &Listings::NotAsked,
+    );
+    assert_eq!(cover.gaps().count(), 1, "the shelf has the gap it tells");
+    cover
+}
+
 fn check_with(severity: CoverSeverity) -> BooksCheck {
     BooksCheck::Checked {
         books: Vec::new(),
@@ -108,6 +163,8 @@ fn check_with(severity: CoverSeverity) -> BooksCheck {
         awaiting: Vec::new(),
         same_meaning_short: Vec::new(),
         collisions: Vec::new(),
+        cover: assessed(severity),
+        artifacts: Default::default(),
         names: Default::default(),
     }
 }

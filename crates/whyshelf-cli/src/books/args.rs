@@ -107,6 +107,19 @@ pub enum BooksCommand {
     /// them; it reads nothing else, and exits 1 as `check` does when the
     /// declaration cannot be used.
     Map,
+    /// What the covering links to artifacts expect, and how each stands: for each
+    /// link that declares a `cover`, the selection of names it takes, whether every
+    /// name it takes is listed, and which names are reached by a document, exempt or
+    /// a gap. A gap, a listing that is not the whole and a selection that takes
+    /// nothing are told, not failed (`check` fails them); exit 1 only when the
+    /// declaration cannot be used, as for `map`.
+    Cover {
+        /// Only this link, as `<book>.<link>`: the book that declares it, and its
+        /// name. One that is no link to artifacts with a `cover` is a request error
+        /// (exit 2).
+        #[arg(long, value_name = "BOOK.LINK", value_parser = BookLink::from_str)]
+        link: Option<BookLink>,
+    },
     /// The documents, what was decided about each and whether it still holds; every
     /// document unless filtered. A document must pass every kind of filter given, and
     /// any one of the values of a kind repeated. `health` is of the whole project,
@@ -464,15 +477,23 @@ whyshelf judge approve <REFERENCES>... [--again] [--reason <REASON>] [--actor <A
         #[arg(long = "ran-by", value_name = "NAME")]
         ran_by: Option<String>,
     },
-    /// Declare that each document is not expected to be reached by one covering link
-    /// (needs --reason): it is not listed in `check`'s `uncovered` for that link, and
-    /// does not fail `check` under `cover = true`. The link is declared with a cover
-    /// and points into the document's book, does not reach the document now, and the
-    /// document is not decided against.
+    /// Declare that each document, or each artifact with `--artifact`, is not expected
+    /// to be reached by one covering link (needs --reason): it is not listed in
+    /// `check`'s `uncovered` (`artifact_uncovered`) for that link, and does not fail
+    /// `check` under `cover = true`. The link is declared with a cover and points
+    /// into the document's book (or to artifacts, for an artifact), does not reach
+    /// the subject now, and a document is not decided against; an artifact is one
+    /// the link's selection takes now.
     Exempt {
-        /// The documents, in order: keys, identifiers or short identifiers.
-        #[arg(required = true, num_args = 1..)]
+        /// The documents, in order: keys, identifiers or short identifiers. Not given
+        /// with `--artifact`.
+        #[arg(num_args = 0.., required_unless_present = "artifacts", conflicts_with = "artifacts")]
         references: Vec<Reference>,
+        /// An artifact, by its name as a link writes it (for the space `file`, its
+        /// path under the root), in the space of the link; may be repeated. Not given
+        /// with document references.
+        #[arg(long = "artifact", value_name = "NAME")]
+        artifacts: Vec<ArtifactName>,
         /// The covering link, as `<book>.<link>`: the book that declares it, and its
         /// name.
         #[arg(long, required = true, value_name = "BOOK.LINK", value_parser = BookLink::from_str)]

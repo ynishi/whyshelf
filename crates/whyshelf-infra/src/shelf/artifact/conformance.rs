@@ -28,6 +28,12 @@
 //!   the space built);
 //! - one name or root past each bound of bytes the hook declares, and none past an
 //!   undeclared one; a name past the depth for an adapter that walks nesting;
+//! - the listing of the names a selection takes, as the type of the adapter declares
+//!   it: an adapter that lists nothing says so for every selection (with no I/O for
+//!   whether it reads one, and the same fixed answer for its listing), and one that
+//!   lists reads a selection, refuses one that is none, lists names that `resolve`
+//!   answers as there, lists the same names asked again and over the tree written in
+//!   another place, and, past a bound of names, says some of them and never all;
 //! - the seven headings of the module page.
 //!
 //! It does not check that large inputs are worked on a blocking thread, that nothing
@@ -48,8 +54,9 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, ArtifactState, Comparison, ContentAddress, PrefixMove, Renamed,
-    Space, SpacePrefixes, SpaceReadings, SpaceRenamed, Untold,
+    ArtifactName, ArtifactReading, ArtifactState, Comparison, ContentAddress, NameListing,
+    PrefixMove, Renamed, Selection, SelectionCheck, Space, SpacePrefixes, SpaceReadings,
+    SpaceRenamed, Untold,
 };
 use whyshelf_core::domain::shelf::schema::BuiltinPresets;
 
@@ -101,6 +108,21 @@ pub(super) struct Tree {
     pub(super) unstored: Vec<ArtifactName>,
     /// A move of a prefix, a name under its `from`, and that name under its `to`.
     pub(super) prefix: Option<(PrefixMove, ArtifactName, ArtifactName)>,
+    /// What an adapter that lists names is asked, over this tree; none where the
+    /// adapter lists nothing, or cannot list here (no Git).
+    pub(super) listing: Option<ListCase>,
+}
+
+/// What an adapter that lists names is asked: a selection that takes at least two
+/// names of the tree that are there, a text that is no selection of the space, and the
+/// adapter over the same tree held to one name, past which the selection goes.
+pub(super) struct ListCase {
+    /// A selection of the space that takes two names there or more.
+    pub(super) selection: Selection,
+    /// A selection with a text that is no pattern of the space.
+    pub(super) bad: Selection,
+    /// The adapter over the tree with its bound of names at one.
+    pub(super) bounded: Adapter,
 }
 
 impl Tree {
@@ -119,6 +141,7 @@ impl Tree {
             spellings: None,
             unstored: Vec::new(),
             prefix: None,
+            listing: None,
         }
     }
 
@@ -235,6 +258,9 @@ pub(super) trait Hook {
     /// Whether the adapter walks a nesting of what it reads, and so holds it to a
     /// depth.
     fn walks_nesting(&self) -> bool;
+    /// Whether the adapter lists the names a selection takes (it names `Answers`
+    /// for the ask) or lists nothing (it names `CannotList`).
+    fn lists(&self) -> bool;
     /// The adapter over `dir`, with nothing written there.
     fn adapter_at(&self, dir: &Path) -> Adapter;
     /// Writes the tree into `dir`, which is empty, and says what it wrote.
@@ -340,6 +366,22 @@ mod ask {
             Err(e) => panic!("reading {address} back is an error: {e:?}"),
         }
     }
+
+    pub(super) fn select(adapter: &Adapter, selection: &Selection) -> SelectionCheck {
+        let (spaces, space) = dispatch(adapter);
+        match spaces.select(&space, selection) {
+            Ok(check) => check,
+            Err(e) => panic!("whether {selection:?} is read is an error: {e:?}"),
+        }
+    }
+
+    pub(super) async fn list(adapter: &Adapter, selection: &Selection) -> NameListing {
+        let (spaces, space) = dispatch(adapter);
+        match spaces.list(&space, selection).await {
+            Ok(listing) => listing,
+            Err(e) => panic!("the listing of {selection:?} is an error: {e:?}"),
+        }
+    }
 }
 
 /// What a reading says under every comparison: the hash, absence or why it cannot
@@ -383,6 +425,84 @@ fn unread_as(reading: &ArtifactReading, how: &Unread) -> bool {
             Comparison::Presence => matches!(reading.state(c), ArtifactState::Present(_)),
             _ => untold_under(reading, c),
         }),
+    }
+}
+
+/// Holds an adapter that lists names to the contract of the listing, over the tree
+/// `adapter` reads (`case`) and the same tree written in another place (`twin`, with
+/// its own `other` case).
+async fn check_listing(
+    space: &Space,
+    adapter: &Adapter,
+    case: &ListCase,
+    twin: &Adapter,
+    other: &ListCase,
+) {
+    assert_eq!(
+        ask::select(adapter, &case.selection),
+        SelectionCheck::Ok,
+        "{space}: the adapter reads its own selection"
+    );
+    assert!(
+        matches!(
+            ask::select(adapter, &case.bad),
+            SelectionCheck::NotASelection(_)
+        ),
+        "{space}: a text that is no pattern of the space is no selection of it"
+    );
+    assert!(
+        matches!(
+            ask::list(adapter, &case.bad).await,
+            NameListing::CannotList(_)
+        ),
+        "{space}: no listing of a selection that is none"
+    );
+
+    // The names a selection takes: all of them, and each is there under `resolve`.
+    let NameListing::All(listed) = ask::list(adapter, &case.selection).await else {
+        panic!("{space}: the selection of the hook is listed whole");
+    };
+    assert!(
+        listed.len() >= 2,
+        "{space}: the selection of the hook takes two names or more, not {listed:?}"
+    );
+    let names: Vec<ArtifactName> = listed.iter().cloned().collect();
+    let found = ask::resolve(adapter, &names).await;
+    for name in &names {
+        for state in told(&found[name]) {
+            assert!(
+                matches!(state, ArtifactState::Present(_)),
+                "{space}: {name} is listed and is not there: {state:?}"
+            );
+        }
+    }
+
+    // The same content gives the same names, again and in another place.
+    assert_eq!(
+        ask::list(adapter, &case.selection).await,
+        NameListing::All(listed.clone()),
+        "{space}: the listing again"
+    );
+    assert_eq!(
+        ask::list(twin, &other.selection).await,
+        NameListing::All(listed.clone()),
+        "{space}: the listing in another root"
+    );
+
+    // Past a bound of names, some of them are said, never all: every name is one
+    // the whole listing has.
+    match ask::list(&case.bounded, &case.selection).await {
+        NameListing::Some { found, .. } => {
+            assert!(
+                !found.is_empty() && found.len() < listed.len(),
+                "{space}: the names past the bound are some of {listed:?}, not {found:?}"
+            );
+            assert!(
+                found.is_subset(&listed),
+                "{space}: {found:?} is not among {listed:?}"
+            );
+        }
+        answer => panic!("{space}: past a bound of names it is not all of them: {answer:?}"),
     }
 }
 
@@ -650,6 +770,41 @@ pub(super) async fn check(hook: &impl Hook) {
     }
     if tree.outside.is_none() {
         unchecked.push("a name outside the root");
+    }
+
+    // The names a selection takes, as the type of the adapter declares.
+    let everything = match Selection::new(vec!["**".to_owned()], Vec::new()) {
+        Ok(selection) => selection,
+        Err(e) => panic!("{space}: no selection of everything: {e}"),
+    };
+    if hook.lists() {
+        match (&tree.listing, &twin.listing) {
+            (Some(case), Some(other)) => {
+                check_listing(&space, adapter, case, &twin.adapter, other).await;
+            }
+            _ => unchecked.push("a listing (the adapter cannot list here)"),
+        }
+    } else {
+        for over in [adapter, &bare] {
+            assert!(
+                matches!(
+                    ask::select(over, &everything),
+                    SelectionCheck::CannotList(_)
+                ),
+                "{space}: an adapter that lists nothing says so for a selection"
+            );
+            assert!(
+                matches!(
+                    ask::list(over, &everything).await,
+                    NameListing::CannotList(_)
+                ),
+                "{space}: an adapter that lists nothing says so for a listing"
+            );
+        }
+        assert!(
+            tree.listing.is_none(),
+            "{space}: the hook gives a listing for an adapter that lists nothing"
+        );
     }
 
     // The definition of the space, under the seven headings.

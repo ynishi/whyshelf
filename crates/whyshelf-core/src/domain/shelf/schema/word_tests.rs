@@ -308,12 +308,13 @@ fn a_word_that_is_none_is_a_problem_with_the_book_the_entry_and_the_words_it_tak
         books: vec![note("number", Some("several"), "leans")],
         ..ShelfDecl::default()
     };
-    let found: Vec<String> = Schema::declared(decl, &BuiltinPresets::new(), &spaces())
-        .unwrap_err()
-        .into_vec()
-        .iter()
-        .map(ToString::to_string)
-        .collect();
+    let found: Vec<String> =
+        Schema::declared(decl, &BuiltinPresets::new(), &spaces(), &Default::default())
+            .unwrap_err()
+            .into_vec()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
     assert_eq!(
         found,
         [
@@ -335,7 +336,7 @@ fn a_word_that_is_none_is_told_with_the_other_problems_of_the_declaration() {
         books: vec![note("number", Some("several"), "depends"), bad_book],
         ..ShelfDecl::default()
     };
-    let found = Schema::declared(decl, &BuiltinPresets::new(), &spaces())
+    let found = Schema::declared(decl, &BuiltinPresets::new(), &spaces(), &Default::default())
         .unwrap_err()
         .into_vec();
     let words = found

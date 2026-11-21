@@ -4,7 +4,7 @@
 //! cover its target ([`CoverSeverity`], [`CoverDecl`]), and the two in one
 //! ([`DeclaredLink`]).
 
-use super::super::artifact::{Comparison, Space};
+use super::super::artifact::{Comparison, Selection, SelectionProblem, Space};
 use super::word::find_word;
 use super::{BookName, DeclWord, KeyPattern, WordOf, Words};
 
@@ -169,6 +169,40 @@ pub struct ArtifactLinkKind {
     /// What of each artifact is compared (`compare` in the declaration; `bytes` when
     /// it says none).
     pub comparison: Comparison,
+    /// How strongly, and which, of the names in its space are expected to be reached
+    /// by this link from a pending or approved document; `None` when none is
+    /// expected. One that is not reached is a gap of the cover assessment, with the
+    /// strength.
+    pub cover: Option<ArtifactCover>,
+}
+
+/// What a link to artifacts expects to reach: the names of its space a [`Selection`]
+/// takes, with how strongly ([`CoverSeverity`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactCover {
+    severity: CoverSeverity,
+    selection: Selection,
+}
+
+impl ArtifactCover {
+    /// The names `selection` takes, expected with this strength.
+    pub fn new(severity: CoverSeverity, selection: Selection) -> Self {
+        Self {
+            severity,
+            selection,
+        }
+    }
+
+    /// How strongly the names are expected to be reached.
+    pub fn severity(&self) -> CoverSeverity {
+        self.severity
+    }
+
+    /// Which names of the space are expected to be reached: opaque to the domain,
+    /// read by the adapter of the space.
+    pub fn selection(&self) -> &Selection {
+        &self.selection
+    }
 }
 
 /// The name no book can have: the word a declaration uses for the target of a link to
@@ -219,16 +253,21 @@ impl CoverSeverity {
     /// | `true` or `"error"` | [`Error`](Self::Error) |
     /// | `"warn"` | [`Warn`](Self::Warn) |
     /// | any other word | refused: the word, as written |
+    /// | a table of a selection | refused here: only a link to artifacts takes one, and the reader of a link's `cover` reads it |
     pub fn read(decl: &CoverDecl) -> Result<Option<Self>, String> {
         match decl {
             CoverDecl::Truth(false) => Ok(None),
             CoverDecl::Truth(true) => Ok(Some(Self::Error)),
-            CoverDecl::Word(word) => [Self::Warn, Self::Error]
-                .into_iter()
-                .find(|s| s.word() == word)
-                .map(Some)
-                .ok_or_else(|| word.clone()),
+            CoverDecl::Word(word) => Self::of_word(word).map(Some).ok_or_else(|| word.clone()),
+            CoverDecl::Table { .. } => Err("a table".to_owned()),
         }
+    }
+
+    /// The strength a word names: `warn` or `error`.
+    fn of_word(word: &str) -> Option<Self> {
+        [Self::Warn, Self::Error]
+            .into_iter()
+            .find(|s| s.word() == word)
     }
 
     /// The word of the strength in a declaration and in the answers: `warn` or
@@ -241,7 +280,7 @@ impl CoverSeverity {
     }
 }
 
-/// `cover` on a link, as declared: a truth value or a word, read by
+/// `cover` on a link, as declared: a truth value, a word or a table, read by
 /// [`CoverSeverity::read`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoverDecl {
@@ -249,6 +288,105 @@ pub enum CoverDecl {
     Truth(bool),
     /// A word, as written.
     Word(String),
+    /// A table of a strength and a selection, for a link to artifacts: `{ strength,
+    /// include, exclude }`, as written.
+    Table {
+        /// The strength, as a word, when written (a strength not written is `error`).
+        strength: Option<String>,
+        /// The texts to include, as written.
+        include: Vec<String>,
+        /// The texts to leave out, as written.
+        exclude: Vec<String>,
+    },
+}
+
+/// What a link points at, as the reader of its `cover` needs to know it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CoverTo {
+    /// A book: `cover` is a strength.
+    Book,
+    /// Artifacts: `cover` is a table of a selection, with a strength when it is not
+    /// `error`.
+    Artifacts,
+}
+
+/// What the `cover` of a link comes to once read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ReadCover {
+    /// Not written, or `false`: nothing is expected.
+    Nothing,
+    /// A strength: every document of the book the link points into is expected.
+    Book(CoverSeverity),
+    /// A strength and a selection: the names the selection takes are expected.
+    Artifacts(ArtifactCover),
+}
+
+/// Why a `cover` is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum CoverRefusal {
+    /// A word that is no strength, as written.
+    Word(String),
+    /// A table of a selection on a link into a book.
+    SelectionOnBookLink,
+    /// `true` or a strength alone on a link to artifacts, which takes a selection.
+    NeedsSelection,
+    /// A selection that cannot be made.
+    Selection(SelectionProblem),
+}
+
+/// The `cover` of a link as declared, read for what the link points at.
+///
+/// The one reading of it: [`Schema::validate`](super::Schema::validate) reads every
+/// link's `cover` with it, and so does [`Schema::selection_asks`](super::Schema::selection_asks),
+/// which asks the adapters of the spaces about the selections it finds. A selection is
+/// kept as written ([`Selection`] is opaque here); whether a space reads it is the
+/// adapter's to say, not this reader's.
+///
+/// | `to` | `cover` | read as |
+/// |---|---|---|
+/// | any | not written, or `false` | [`ReadCover::Nothing`] |
+/// | a book | `true`, `"error"` or `"warn"` | [`ReadCover::Book`] ([`CoverSeverity::read`]) |
+/// | a book | a table | refused ([`CoverRefusal::SelectionOnBookLink`]) |
+/// | artifacts | a table (`strength` `error` when not written, `include`, `exclude`) | [`ReadCover::Artifacts`] |
+/// | artifacts | `true`, `"error"` or `"warn"` | refused ([`CoverRefusal::NeedsSelection`]) |
+/// | any | a word that is no strength, as the strength of a table or alone | refused ([`CoverRefusal::Word`]) |
+/// | artifacts | a table whose selection cannot be made | refused ([`CoverRefusal::Selection`]) |
+pub(super) fn read_cover(decl: Option<&CoverDecl>, to: CoverTo) -> Result<ReadCover, CoverRefusal> {
+    let Some(decl) = decl else {
+        return Ok(ReadCover::Nothing);
+    };
+    match (to, decl) {
+        (_, CoverDecl::Truth(false)) => Ok(ReadCover::Nothing),
+        (CoverTo::Book, CoverDecl::Table { .. }) => Err(CoverRefusal::SelectionOnBookLink),
+        (CoverTo::Book, decl) => Ok(CoverSeverity::read(decl)
+            .map_err(CoverRefusal::Word)?
+            .map_or(ReadCover::Nothing, ReadCover::Book)),
+        (CoverTo::Artifacts, CoverDecl::Truth(true)) => Err(CoverRefusal::NeedsSelection),
+        (CoverTo::Artifacts, CoverDecl::Word(word)) => match CoverSeverity::of_word(word) {
+            Some(_) => Err(CoverRefusal::NeedsSelection),
+            None => Err(CoverRefusal::Word(word.clone())),
+        },
+        (
+            CoverTo::Artifacts,
+            CoverDecl::Table {
+                strength,
+                include,
+                exclude,
+            },
+        ) => {
+            let severity = match strength {
+                None => CoverSeverity::Error,
+                Some(word) => {
+                    CoverSeverity::of_word(word).ok_or_else(|| CoverRefusal::Word(word.clone()))?
+                }
+            };
+            let selection = Selection::new(include.clone(), exclude.clone())
+                .map_err(CoverRefusal::Selection)?;
+            Ok(ReadCover::Artifacts(ArtifactCover::new(
+                severity, selection,
+            )))
+        }
+    }
 }
 
 /// A link of a book as declared, into a book or to artifacts.

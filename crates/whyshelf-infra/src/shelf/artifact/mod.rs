@@ -23,10 +23,12 @@
 //! | `rust-test` | [`rust_test::RustTestSpace`] | test functions by their file and path in it (`<file>.rs::<module>::<function>`), parsed from the source | `test`: `space = "rust-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest | the parts of a file's path, or a file and the first segments of a path in it ([`rust_test`](mod@rust_test#prefixes-of-the-names)) |
 //! | `js-test` | [`js_test::JsTestSpace`] | JavaScript and TypeScript tests by their file and titles (`<file>.ts::<describe>::<test>`), lexed from the source | `js-test`: `space = "js-test"`, `compare = "bytes"`, `means = "depends"` | cannot suggest | the parts of a file's path, or a file and the first titles of a path in it, titles with their escapes ([`js_test`](mod@js_test#prefixes-of-the-names)) |
 //!
-//! An adapter that cannot suggest names [`CannotSuggest`], and one that reads nothing
-//! back [`NoReadBack`]: the core gives their answers. Each answers a move of a prefix
-//! with its own grammar of names (the domain knows no boundary of a name, and builds
-//! none).
+//! An adapter that cannot suggest names [`CannotSuggest`], one that reads nothing
+//! back [`NoReadBack`], and one that lists no names [`CannotList`]: the core gives
+//! their answers. Each answers a move of a prefix with its own grammar of names (the
+//! domain knows no boundary of a name, and builds none). Only `file` lists the names a
+//! selection takes ([`NameList`], [`file`](mod@file#listing-the-names-of-a-selection)):
+//! the other spaces name [`CannotList`].
 //!
 //! Each adapter offers its presets of links to artifacts for its own space, as
 //! values ([`SpaceAdapter::presets`]); the domain knows none. A project may write
@@ -93,6 +95,8 @@
 //! [`NamePrefixes`]: whyshelf_core::app::shelf::NamePrefixes
 //! [`CannotSuggest`]: whyshelf_core::app::shelf::CannotSuggest
 //! [`NoReadBack`]: whyshelf_core::app::shelf::NoReadBack
+//! [`CannotList`]: whyshelf_core::app::shelf::CannotList
+//! [`NameList`]: whyshelf_core::app::shelf::NameList
 //! [`Spaces`]: whyshelf_core::app::shelf::Spaces
 //! [`ArtifactReading`]: whyshelf_core::domain::shelf::artifact::ArtifactReading
 

@@ -4,9 +4,11 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 use whyshelf_core::app::shelf::MapReport;
+use whyshelf_core::domain::shelf::artifact::Selection;
 use whyshelf_core::domain::shelf::map::MapTarget;
 use whyshelf_core::domain::shelf::schema::{
-    CoverSeverity, FieldPresence, FieldType, KeyPattern, PresetOrigin, WithoutFrontMatter,
+    ArtifactCover, CoverSeverity, FieldPresence, FieldType, KeyPattern, PresetOrigin,
+    WithoutFrontMatter,
 };
 
 use super::words::schema_problem;
@@ -93,12 +95,17 @@ pub struct MapLinkOut {
     /// How many a document writes, as the declaration writes it: `one`,
     /// `optional`, `many` or `at-least-one`.
     pub count: &'static str,
-    /// Whether every pending or approved document of the target book is expected
-    /// to be reached by it, of either strength; false for a link to artifacts.
+    /// Whether the link is expected to reach what it covers, of either strength:
+    /// every pending or approved document of the target book, or, for a link to
+    /// artifacts, every name its `selection` takes.
     pub cover: bool,
     /// How strongly it is expected, beside `cover`: `warn` or `error`; null when
     /// `cover` is false.
     pub cover_severity: Option<&'static str>,
+    /// For a link to artifacts with a `cover`, the selection of the names of its
+    /// space that it expects to reach, as the declaration writes it; null for any
+    /// other link.
+    pub selection: Option<SelectionOut>,
     /// The name of the preset a link to artifacts was expanded from, the one it
     /// names or the default; null when there is none, and for a link into a book.
     /// The values in `target` are the link's, whichever it is.
@@ -106,6 +113,27 @@ pub struct MapLinkOut {
     /// Whether `preset` is the default (`[defaults] artifact`), beside `preset`:
     /// false when the link names its preset, or has none.
     pub preset_by_default: bool,
+}
+
+/// The selection of the names a link to artifacts expects to reach, as the
+/// declaration writes it: the texts are of the grammar of the space (for `file`, a
+/// glob over the paths), and `map` keeps them as written.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct SelectionOut {
+    /// What takes names.
+    pub include: Vec<String>,
+    /// What leaves names out.
+    pub exclude: Vec<String>,
+}
+
+impl SelectionOut {
+    /// The selection `selection` is, as written.
+    pub(super) fn of(selection: &Selection) -> Self {
+        Self {
+            include: selection.include().to_vec(),
+            exclude: selection.exclude().to_vec(),
+        }
+    }
 }
 
 /// What a link of `map` points at.
@@ -190,9 +218,13 @@ pub fn map(report: &MapReport) -> MapOut {
             .links
             .iter()
             .map(|link| {
-                let (cover, preset) = match &link.target {
-                    MapTarget::Book { cover, .. } => (*cover, None),
-                    MapTarget::Artifact { preset, .. } => (None, preset.as_ref()),
+                let (cover, preset, selection) = match &link.target {
+                    MapTarget::Book { cover, .. } => (*cover, None, None),
+                    MapTarget::Artifact { preset, cover, .. } => (
+                        cover.as_ref().map(ArtifactCover::severity),
+                        preset.as_ref(),
+                        cover.as_ref().map(|c| SelectionOut::of(c.selection())),
+                    ),
                 };
                 MapLinkOut {
                     from: link.from.to_string(),
@@ -216,6 +248,7 @@ pub fn map(report: &MapReport) -> MapOut {
                     count: link.cardinality.word(),
                     cover: cover.is_some(),
                     cover_severity: cover.map(CoverSeverity::word),
+                    selection,
                     preset: preset.map(|p| p.name().to_string()),
                     preset_by_default: preset.is_some_and(PresetOrigin::is_default),
                 }

@@ -20,6 +20,8 @@
 //! | [`renamed`](ArtifactSource::renamed) | the answer of [`NoPrefixes`] |
 //! | [`suggest`](MoveSource::suggest) | the answer of [`CannotSuggest`] |
 //! | [`read_back`](Spaces::read_back) | the answer of [`NoReadBack`] |
+//! | [`select`](ArtifactSource::select) | [`SelectionCheck::CannotList`], "no adapter offers the space" |
+//! | [`list`](ArtifactSource::list) | [`NameListing::CannotList`], "no adapter offers the space" |
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
@@ -27,18 +29,18 @@ use std::error::Error;
 use std::future::Future;
 
 use crate::domain::error::ValueError;
-use crate::domain::nonempty::NonBlank;
+use crate::domain::nonempty::{NonBlank, TextLiteral};
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings, ContentAddress,
-    PrefixAnswers, PrefixAsks, PrefixMove, Space, SpaceAsks, SpacePrefixes, SpaceProblem,
-    SpaceReadings, SpaceRenamed,
+    NameListing, PrefixAnswers, PrefixAsks, PrefixMove, Selection, SelectionCheck, Space,
+    SpaceAsks, SpacePrefixes, SpaceProblem, SpaceReadings, SpaceRenamed,
 };
 use crate::domain::shelf::ledger::{GoneName, SpaceSuggestions};
 use crate::domain::shelf::schema::{BuiltinPresets, PresetName};
 
 use super::adapter::{
-    AsyncVisit, CannotSuggest, NoPrefixes, NoReadBack, PrefixesWay, ReadBackWay, SpaceAdapter,
-    SuggestWay, Visit,
+    AsyncVisit, CannotSuggest, ListWay, NoPrefixes, NoReadBack, PrefixesWay, ReadBackWay,
+    SpaceAdapter, SuggestWay, Visit,
 };
 use super::ports::{ArtifactSource, MoveSource};
 
@@ -242,7 +244,25 @@ impl<R: SpaceRegistry> ArtifactSource for Spaces<R> {
             None => Ok(None),
         }
     }
+
+    fn select(&self, space: &Space, selection: &Selection) -> Result<SelectionCheck, R::Error> {
+        match self.ask(space, Select { selection }) {
+            Some(check) => Ok(check),
+            None => Ok(SelectionCheck::CannotList(NonBlank::from(NO_ADAPTER))),
+        }
+    }
+
+    async fn list(&self, space: &Space, selection: &Selection) -> Result<NameListing, R::Error> {
+        match self.ask_reading(space, ListNames { selection }).await {
+            Some(listing) => listing,
+            None => Ok(NameListing::CannotList(NonBlank::from(NO_ADAPTER))),
+        }
+    }
 }
+
+/// The reason of the answers of a selection and a listing for a space no adapter
+/// names.
+const NO_ADAPTER: TextLiteral = TextLiteral::new("no adapter offers the space");
 
 impl<R: SpaceRegistry> MoveSource for Spaces<R> {
     type Error = R::Error;
@@ -340,6 +360,40 @@ impl<E: Send> AsyncVisit<E> for Suggest<'_> {
     }
 }
 
+/// Whether the adapter reads a selection.
+struct Select<'a> {
+    selection: &'a Selection,
+}
+
+impl<E> Visit<E> for Select<'_> {
+    type Output = SelectionCheck;
+
+    fn visit<A: SpaceAdapter>(self, adapter: &A) -> Self::Output
+    where
+        E: From<A::Error>,
+    {
+        A::List::select(adapter, self.selection)
+    }
+}
+
+/// The names of the adapter's space that a selection takes.
+struct ListNames<'a> {
+    selection: &'a Selection,
+}
+
+impl<E: Send> AsyncVisit<E> for ListNames<'_> {
+    type Output = Result<NameListing, E>;
+
+    async fn visit<A: SpaceAdapter>(self, adapter: &A) -> Self::Output
+    where
+        E: From<A::Error>,
+    {
+        A::List::list(adapter, self.selection)
+            .await
+            .map_err(E::from)
+    }
+}
+
 /// The content at an address the adapter gave.
 struct ReadBack<'a> {
     address: &'a ContentAddress,
@@ -360,8 +414,12 @@ impl<E: Send> AsyncVisit<E> for ReadBack<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::shelf::adapter::{Answers, NamePrefixes, SpaceReadBack, SpaceSuggest};
-    use crate::domain::shelf::artifact::{ArtifactState, Comparison, NamePrefix, Renamed, Untold};
+    use crate::app::shelf::adapter::{
+        Answers, CannotList, NameList, NamePrefixes, SpaceReadBack, SpaceSuggest,
+    };
+    use crate::domain::shelf::artifact::{
+        ArtifactState, Comparison, NamePrefix, NotASelection, Renamed, Untold,
+    };
     use crate::domain::shelf::ledger::NameSuggestions;
     use crate::domain::shelf::schema::{PresetValues, Propagation};
 
@@ -415,8 +473,16 @@ mod tests {
             .collect()
     }
 
+    /// The text a selection of the fakes is refused for.
+    const NOT_A_PATTERN: &str = "!";
+
+    fn selecting(include: &str) -> Selection {
+        Selection::new(vec![include.to_owned()], vec![]).unwrap()
+    }
+
     /// An adapter that answers every ask: a name is there with its text as content,
-    /// every name is outside a prefix, no name moved, and every address reads back.
+    /// every name is outside a prefix, no name moved, every address reads back, and a
+    /// selection takes the name "a.rs" (but for [`NOT_A_PATTERN`], which no selection is).
     struct Answering {
         space: &'static str,
         presets: Vec<(&'static str, Option<&'static str>)>,
@@ -427,6 +493,7 @@ mod tests {
         type Prefixes = Answers;
         type Suggest = Answers;
         type ReadBack = Answers;
+        type List = Answers;
 
         fn space(&self) -> &str {
             self.space
@@ -474,6 +541,24 @@ mod tests {
         }
     }
 
+    impl NameList for Answering {
+        fn select(&self, selection: &Selection) -> Result<(), NotASelection> {
+            match selection.include().iter().any(|text| text == NOT_A_PATTERN) {
+                true => Err(NotASelection::new(
+                    NonBlank::new("a bang is no pattern").unwrap(),
+                )),
+                false => Ok(()),
+            }
+        }
+
+        async fn list(&self, selection: &Selection) -> Result<NameListing, FakeError> {
+            Ok(match self.select(selection) {
+                Ok(()) => NameListing::All(BTreeSet::from([name("a.rs")])),
+                Err(not) => NameListing::CannotList(not.why().clone()),
+            })
+        }
+    }
+
     /// An adapter that names the not-answering type of each ask it may answer, and
     /// still has a way to answer each, which must never be called.
     struct Silent;
@@ -483,6 +568,7 @@ mod tests {
         type Prefixes = NoPrefixes;
         type Suggest = CannotSuggest;
         type ReadBack = NoReadBack;
+        type List = CannotList;
 
         fn space(&self) -> &str {
             "quiet"
@@ -523,6 +609,16 @@ mod tests {
     impl SpaceReadBack for Silent {
         async fn read_back(&self, _: &ContentAddress) -> Result<Option<Vec<u8>>, FakeError> {
             panic!("an adapter that names NoReadBack is asked to read back")
+        }
+    }
+
+    impl NameList for Silent {
+        fn select(&self, _: &Selection) -> Result<(), NotASelection> {
+            panic!("an adapter that names CannotList is asked whether it reads a selection")
+        }
+
+        async fn list(&self, _: &Selection) -> Result<NameListing, FakeError> {
+            panic!("an adapter that names CannotList is asked to list")
         }
     }
 
@@ -637,6 +733,15 @@ mod tests {
             block_on(spaces.read_back(&other, &address())).unwrap(),
             None
         );
+        let why = NonBlank::new("no adapter offers the space").unwrap();
+        assert_eq!(
+            spaces.select(&other, &selecting("*.rs")).unwrap(),
+            SelectionCheck::CannotList(why.clone())
+        );
+        assert_eq!(
+            block_on(spaces.list(&other, &selecting("*.rs"))).unwrap(),
+            NameListing::CannotList(why)
+        );
 
         let mut asks = PrefixAsks::new();
         asks.ask(other.clone(), name("src/a/x.rs"));
@@ -665,6 +770,18 @@ mod tests {
             block_on(spaces.read_back(&file, &address())).unwrap(),
             Some(b"kept".to_vec())
         );
+        assert_eq!(
+            spaces.select(&file, &selecting("*.rs")).unwrap(),
+            SelectionCheck::Ok
+        );
+        assert_eq!(
+            spaces.select(&file, &selecting(NOT_A_PATTERN)).unwrap(),
+            SelectionCheck::NotASelection(NonBlank::new("a bang is no pattern").unwrap())
+        );
+        assert_eq!(
+            block_on(spaces.list(&file, &selecting("*.rs"))).unwrap(),
+            NameListing::All(BTreeSet::from([name("a.rs")]))
+        );
     }
 
     #[test]
@@ -686,6 +803,15 @@ mod tests {
         assert_eq!(
             block_on(spaces.read_back(&quiet, &address())).unwrap(),
             None
+        );
+        // The fixed answers of the not-answering type, with no call of the adapter.
+        assert_eq!(
+            spaces.select(&quiet, &selecting("*.rs")).unwrap(),
+            CannotList::selection()
+        );
+        assert_eq!(
+            block_on(spaces.list(&quiet, &selecting("*.rs"))).unwrap(),
+            CannotList::listing()
         );
         // The asks every adapter answers still reach it.
         let mut asks = ArtifactAsks::new();

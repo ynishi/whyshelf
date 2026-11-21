@@ -14,8 +14,8 @@ use crate::domain::shelf::schema::{BookName, CoverDecl, CoverSeverity, EntryName
 
 use super::fake_tests::{FakeShelf, block_on, decls, docid, eid, fr, sp};
 use super::{
-    BooksCheck, ErrorClass, ExemptRequest, JudgeRequest, Judgement, ShelfApp, ShelfError,
-    WithdrawRequest,
+    BooksCheck, ErrorClass, ExemptAsk, ExemptRequest, JudgeRequest, Judgement, ShelfApp,
+    ShelfError, WithdrawRequest,
 };
 
 /// The fake's books with `cover = true` on the spec's `grounds`, over these files.
@@ -44,7 +44,7 @@ fn two_alone() -> ShelfApp<FakeShelf> {
 
 fn exempt_from(reference: &str, book: &str, link: &str) -> ExemptRequest {
     ExemptRequest {
-        reference: reference.parse::<Reference>().unwrap(),
+        subject: ExemptAsk::Doc(reference.parse::<Reference>().unwrap()),
         book: BookName::new(book).unwrap(),
         link: EntryName::new(link).unwrap(),
         reason: NonBlank::new("kept on purpose").unwrap(),
@@ -69,7 +69,7 @@ fn an_exemption_under_a_true_cover_makes_check_clean_and_is_listed_apart() {
     let done = block_on(app.exempt(vec![exempt("FR-2"), exempt("FR-4")])).unwrap();
     assert_eq!(done.len(), 2);
     assert_eq!(app.ports().append_count(), 2);
-    assert_eq!(done[0].doc(), docid(2));
+    assert_eq!(done[0].doc(), Some(docid(2)));
     assert_eq!(
         done[0].key.as_ref().map(ToString::to_string).as_deref(),
         Some("finding:FR-2")

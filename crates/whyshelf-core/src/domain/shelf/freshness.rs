@@ -113,14 +113,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
 
-use super::artifact::{ArtifactHash, ArtifactKey, ArtifactState, Comparison, Untold};
+use super::artifact::{ArtifactHash, ArtifactKey, ArtifactState, Comparison, Listings, Untold};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
-use super::cover::{Decided, Reached, counts, covering_reach};
+use super::cover::{Decided, counts};
+use super::coverage::{CoverAssessment, CoverTarget, ExemptionGroup, assess as assess_cover};
 use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
-use super::exemption::{Unneeded, by_subject, read_exemption};
+use super::exemption::{ExemptionReading, Unneeded};
 use super::graph::{Cycle, CycleId};
 use super::ledger::{
-    DeclaredStatus, Exempt, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, Quorum, ReadPin,
+    DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, Quorum, ReadPin,
 };
 use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
 
@@ -741,7 +742,7 @@ pub enum Notice {
         severity: CoverSeverity,
     },
     /// A covering link does not reach this document, and people declared it is not
-    /// expected to ([`Exempt`]): no [`Notice::NotCovered`] for that link, whatever
+    /// expected to ([`Exempt`](super::ledger::Exempt)): no [`Notice::NotCovered`] for that link, whatever
     /// its strength. Given in the place the `NotCovered` would be.
     Exempt {
         /// The book whose link would be expected to reach it.
@@ -899,9 +900,17 @@ pub struct Assessment {
     cycles: Vec<Cycle>,
     invalid: Vec<InvalidDoc>,
     ledger_problems: Vec<LedgerProblem>,
+    cover: CoverAssessment,
 }
 
 impl Assessment {
+    /// What the covering links expect and do not reach, as the one assessment of
+    /// coverage ([`coverage::assess`](super::coverage::assess)) decided it, for the
+    /// same shelf and ledger: the notices of documents about it are made from this.
+    pub fn cover(&self) -> &CoverAssessment {
+        &self.cover
+    }
+
     /// The standing of every document the ledger or the shelf knows: the ledger's
     /// subjects, and the identities of the shelf's valid and readable invalid files.
     pub fn standings(&self) -> &BTreeMap<DocId, Standing> {
@@ -1124,7 +1133,12 @@ struct Standings {
 ///
 /// The one entry of freshness: nothing is stored, so it is computed every time. See
 /// the module page for the graph it travels and the causes it finds.
-pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt) -> Assessment {
+///
+/// It calls [`coverage::assess`](super::coverage::assess) once, for this shelf and this
+/// ledger, with `listings` (what the command asked of the adapters; a command that
+/// reads no cover of artifacts passes [`Listings::NotAsked`]), makes the notices of
+/// documents from its answer and returns it as [`Assessment::cover`].
+pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt, listings: &Listings) -> Assessment {
     let graph = ledger.frame_graph();
     let mut cycles: Vec<Cycle> = shelf.cycles().to_vec();
     cycles.extend(graph.cycles());
@@ -1143,13 +1157,17 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt) -> Assessment {
         statuses,
         same_meaning,
     } = stand_in_order(&cx, order);
-    let notices = collect_notices(&cx, &standings, &statuses, same_meaning);
+    // The one assessment of coverage, from the same shelf and ledger: the notices of
+    // documents about it are made from its answer, and it is returned beside them.
+    let cover = assess_cover(shelf, ledger, listings);
+    let notices = collect_notices(&cx, &standings, &statuses, same_meaning, &cover);
     Assessment {
         standings,
         notices,
         cycles,
         invalid: invalid_files(shelf),
         ledger_problems: ledger.problems().to_vec(),
+        cover,
     }
 }
 
@@ -1663,16 +1681,6 @@ fn already_said(unresolved: &UnresolvedLink, lost_here: &[(&FramePin, FailureTag
     }
 }
 
-/// What the covering links of the books expect, and what they reach.
-struct ExpectedReach<'s> {
-    /// For each target book, the (book, link) pairs that declare they cover it, with
-    /// the strength each declares.
-    expectations: BTreeMap<&'s BookName, Vec<(&'s BookName, &'s EntryName, CoverSeverity)>>,
-    /// Each document a covering link reaches from a document that counts, by the
-    /// (book, link) it was reached through, with the documents it was reached from.
-    reached: Reached,
-}
-
 /// Whether the document `id` counts for coverage: its standing
 /// [stands](Standing::stands). What was denied, deprecated or retired neither
 /// reaches nor is expected to be reached.
@@ -1680,60 +1688,48 @@ fn counted(standings: &BTreeMap<DocId, Standing>, id: DocId) -> bool {
     standings.get(&id).is_some_and(Standing::stands)
 }
 
-/// The expectations of the covering links (a [`LinkKind::cover`] of some strength),
-/// and the documents they reach ([`covering_reach`]).
-///
-/// [`LinkKind::cover`]: super::schema::LinkKind::cover
-fn expected_reach<'s>(
-    shelf: &'s Shelf,
-    standings: &BTreeMap<DocId, Standing>,
-) -> ExpectedReach<'s> {
-    let mut expectations: BTreeMap<&BookName, Vec<(&BookName, &EntryName, CoverSeverity)>> =
-        BTreeMap::new();
-    for (book, schema) in shelf.schema().books() {
-        for (name, kind) in schema.links() {
-            if let Some(severity) = kind.cover {
-                expectations
-                    .entry(&kind.target)
-                    .or_default()
-                    .push((book, name, severity));
-            }
-        }
-    }
-    ExpectedReach {
-        expectations,
-        reached: covering_reach(shelf, |id| counted(standings, id)),
-    }
-}
-
-/// The notice of one exemption that stands, as
-/// [`exemption_reading`](super::exemption::exemption_reading) reads it: `Exempt`, in
-/// the place of a `NotCovered`, or `ExemptionUnneeded`.
-fn exemption_notice(
-    shelf: &Shelf,
-    standings: &BTreeMap<DocId, Standing>,
-    reached: &Reached,
-    exempt: &Exempt,
-) -> Notice {
-    let of = exempt.of();
-    match read_exemption(shelf, |id| counted(standings, id), reached, of) {
-        Ok(severity) => Notice::Exempt {
+/// The notices of the exemptions that stand of one document from one link, as the
+/// assessment of coverage read them: `Exempt`, in the place of a `NotCovered`, or
+/// `ExemptionUnneeded`, each; then `ExemptionRepeated` when two or more stand. An
+/// exemption that cannot be told (of an artifact, whose listing is not the whole) is
+/// no notice of a document.
+fn exemption_notices(group: &ExemptionGroup) -> Vec<Notice> {
+    let of = group.of();
+    let mut notices: Vec<Notice> = group
+        .reads()
+        .iter()
+        .filter_map(|read| match read.reading() {
+            ExemptionReading::Needed(severity) => Some(Notice::Exempt {
+                book: of.book().clone(),
+                link: of.link().clone(),
+                severity: *severity,
+                exemption: read.id(),
+            }),
+            ExemptionReading::Unneeded(why) => Some(Notice::ExemptionUnneeded {
+                book: of.book().clone(),
+                link: of.link().clone(),
+                exemption: read.id(),
+                why: why.clone(),
+            }),
+            ExemptionReading::CannotTell(_) => None,
+        })
+        .collect();
+    if let Some(repeated) = group.repeated() {
+        notices.push(Notice::ExemptionRepeated {
             book: of.book().clone(),
             link: of.link().clone(),
-            severity,
-            exemption: exempt.id(),
-        },
-        Err(why) => Notice::ExemptionUnneeded {
-            book: of.book().clone(),
-            link: of.link().clone(),
-            exemption: exempt.id(),
-            why,
-        },
+            exemptions: repeated.clone(),
+        });
     }
+    notices
 }
 
 /// The notices of the valid documents, and those of the exemptions. They change no
 /// freshness.
+///
+/// What the covering links expect and do not reach, and what each exemption reads as,
+/// is decided once, by [`coverage::assess`](super::coverage::assess); the notices
+/// about it are made from that answer, not decided again.
 ///
 /// | case | notice |
 /// |---|---|
@@ -1741,9 +1737,9 @@ fn exemption_notice(
 /// | an `Informs` link cannot be followed | `InformsUnresolved` |
 /// | a pinned upstream's causes include `Expired` | `UpstreamExpired` |
 /// | a `Replaces` link | none |
-/// | a pending or approved document of a book a covering link points into, that no pending or approved document reaches through it, and that no exemption exempts from it | `NotCovered` |
-/// | an exemption that stands, of a document a covering link does not reach | `Exempt` (see `exemption_notice`) |
-/// | an exemption that stands and is not needed now | `ExemptionUnneeded` (see `exemption_notice`) |
+/// | a gap of the assessment of coverage at a document: a pending or approved document of a book a covering link points into, that no pending or approved document reaches through it, and that no exemption exempts from it | `NotCovered` |
+/// | an exemption that stands, of a document a covering link does not reach | `Exempt` (see `exemption_notices`) |
+/// | an exemption that stands and is not needed now | `ExemptionUnneeded` (see `exemption_notices`) |
 /// | two or more exemptions that stand of one document from one link, after their own notices | `ExemptionRepeated` |
 /// | a pending or approved document whose link to artifacts writes a name with nothing there | `ArtifactAbsent` |
 /// | a pending or approved document whose link to artifacts writes a name its adapter cannot tell about now, pinned or not | `ArtifactUnknown` |
@@ -1759,51 +1755,40 @@ fn collect_notices(
     standings: &BTreeMap<DocId, Standing>,
     statuses: &BTreeMap<DocId, DeclaredStatus>,
     mut same_meaning: BTreeMap<DocId, Vec<Notice>>,
+    cover: &CoverAssessment,
 ) -> BTreeMap<DocId, Vec<Notice>> {
     let mut all: BTreeMap<DocId, Vec<Notice>> = BTreeMap::new();
-    let expected = expected_reach(cx.shelf, standings);
-    // Each exemption read once; those of a document with a valid file are told in
-    // the place of the `NotCovered` they take, the rest after every document. Two
-    // or more of one document and link are told as repeated, after their readings.
+    // The exemptions of documents that stand, each told from its reading; those of a
+    // document with a valid file that a covering link expects are told in the place
+    // of the `NotCovered` they take, the rest after every document. Two or more of
+    // one document and link are told as repeated, after their readings.
     let mut exemptions: BTreeMap<(DocId, BookName, EntryName), Vec<Notice>> = BTreeMap::new();
-    for (of, group) in by_subject(cx.ledger) {
-        let mut read: Vec<Notice> = group
-            .iter()
-            .map(|exempt| exemption_notice(cx.shelf, standings, &expected.reached, exempt))
-            .collect();
-        if let [first, second, rest @ ..] = group.as_slice() {
-            read.push(Notice::ExemptionRepeated {
-                book: of.book().clone(),
-                link: of.link().clone(),
-                exemptions: TwoOrMore::new(
-                    first.id(),
-                    second.id(),
-                    rest.iter().map(|e| e.id()).collect(),
-                ),
-            });
+    for group in cover.exemptions() {
+        let of = group.of();
+        if let Some(doc) = of.doc() {
+            exemptions.insert(
+                (doc, of.book().clone(), of.link().clone()),
+                exemption_notices(group),
+            );
         }
-        exemptions.insert((of.doc(), of.book().clone(), of.link().clone()), read);
     }
     for doc in cx.shelf.docs().values() {
         let mut notices = same_meaning.remove(&doc.id()).unwrap_or_default();
         if counted(standings, doc.id()) {
-            for (book, link, severity) in expected
-                .expectations
-                .get(&doc.key().book)
-                .into_iter()
-                .flatten()
-            {
-                let at = (doc.id(), (*book).clone(), (*link).clone());
-                let read = exemptions.remove(&at).unwrap_or_default();
-                let exempt = read.iter().any(|n| matches!(n, Notice::Exempt { .. }));
-                if !exempt && !expected.reached.contains_key(&at) {
+            for expecting in cover.expected_of(doc.id()) {
+                let at = (doc.id(), expecting.book().clone(), expecting.link().clone());
+                if let Some(gap) = cover.gap_of(
+                    &CoverTarget::Doc(doc.id()),
+                    expecting.book(),
+                    expecting.link(),
+                ) {
                     notices.push(Notice::NotCovered {
-                        book: (*book).clone(),
-                        link: (*link).clone(),
-                        severity: *severity,
+                        book: gap.book().clone(),
+                        link: gap.link().clone(),
+                        severity: gap.severity(),
                     });
                 }
-                notices.extend(read);
+                notices.extend(exemptions.remove(&at).unwrap_or_default());
             }
             for (link, artifact) in doc.absent_artifacts() {
                 notices.push(Notice::ArtifactAbsent {
@@ -1866,6 +1851,13 @@ fn collect_notices(
         all.entry(doc).or_default().extend(read);
     }
     all
+}
+
+/// [`assess`] for a test that reads no cover of artifacts: [`Listings::NotAsked`], as
+/// every command that does not ask the adapters for names passes it.
+#[cfg(test)]
+pub(crate) fn assess_unasked(shelf: &Shelf, ledger: &Ledger, now: JudgedAt) -> Assessment {
+    assess(shelf, ledger, now, &Listings::NotAsked)
 }
 
 #[cfg(test)]
