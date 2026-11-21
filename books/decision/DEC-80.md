@@ -3,8 +3,8 @@ id: "01a1f0ce-3040-7549-bf80-827e6a156a89"
 key: "DEC-80"
 issues: ["#103"]
 rejected: ["Expand the prefix in the command line from the ledger and pass the names to the move of one name: the boundary would be decided outside the adapters, the adapter would be asked once for each name, and a refusal would stop at the first one", "Keep a set of separators in the domain and join the new name as text: the domain would know the form of the names of every space, and take a colon escaped in a title, or a slash in a title, for a boundary", "Refuse the whole request when a space cannot read the prefix: a directory is no prefix of a Rust path, so a project with items and files could not rename a directory", "Suggest moves in the space rust-item in the same change (the second item of the issue): it reads every item of the built docs, an adapter's own work, and is left for its own issue", "Refuse a rename into itself (src/a to src/a/b): one reading of the old and new names already refuses one of two moves that overlap, and a rename that does not overlap stands"]
-related: ["DEC-79"]
-revisit: "When a space gains names whose boundaries the parts of a path, the segments of a Rust path and the titles of a test do not describe, or when moves suggests moves for rust-item"
+related: ["DEC-79", "DEC-96"]
+revisit: "When a space gains names whose boundaries the parts of a path, the segments of a Rust path and the titles of a test do not describe"
 rustdoc: ["whyshelf_core::app::shelf::ArtifactSource", "whyshelf_core::domain::shelf::artifact::Renamed", "whyshelf_core::domain::shelf::ledger::plan_prefix_moves", "whyshelf_core::domain::shelf::ledger::frame_prefix_moves", "whyshelf_core::domain::shelf::ledger::PinnedNames", "whyshelf_core::app::shelf::ShelfApp::moved_prefix"]
 serves: ["REQ-33"]
 title: "judge moved --prefix asks the adapter of each space which names are under the prefix and what each becomes, plans the moves in the domain, and holds them all against one reading, all or none"

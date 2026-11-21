@@ -876,7 +876,7 @@ impl std::str::FromStr for NamePrefix {
 }
 
 /// A move of every name under one prefix to the same name under another.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PrefixMove {
     from: NamePrefix,
     to: NamePrefix,

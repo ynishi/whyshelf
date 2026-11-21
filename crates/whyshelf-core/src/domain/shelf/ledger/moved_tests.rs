@@ -2,11 +2,15 @@
 //! ledger reads a pin through them, and the rule of a declaration
 //! ([`moved_space`], [`frame_moved`]).
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
-use crate::domain::shelf::artifact::{ArtifactHash, ArtifactReading};
+use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::shelf::artifact::{
+    ArtifactHash, ArtifactName, ArtifactReading, NamePrefix, PrefixMove,
+};
 use crate::domain::shelf::fixtures_tests::{
     actor, approve, by, docid, file_artifact, file_space, fr, jid, ledger, name, shelf_with,
     sp_testing,
@@ -753,4 +757,396 @@ fn a_name_read_in_two_spaces_names_the_spaces_in_words() {
         refused.to_string(),
         "pins are read as `a.rs` in more than one space: `file` and `rust-item`"
     );
+}
+
+// The order of the candidates, and the moves of a prefix they carry.
+
+fn found(n: &str, by: FoundBy) -> MoveCandidate {
+    MoveCandidate::new(name(n), by, true)
+}
+
+fn renamed_at(n: &str, percent: Option<u8>) -> MoveCandidate {
+    found(
+        n,
+        FoundBy::Renamed {
+            similarity: percent.map(|p| Similarity::new(p).unwrap()),
+        },
+    )
+}
+
+fn moving(from: &str, to: &str) -> PrefixMove {
+    PrefixMove::new(NamePrefix::new(from).unwrap(), NamePrefix::new(to).unwrap()).unwrap()
+}
+
+/// The names of `names`, all approved on and all gone now.
+fn gone_of(names: &[&str]) -> GoneNames {
+    let files: Vec<(&str, Option<ArtifactHash>)> = names
+        .iter()
+        .map(|n| (*n, Some(ArtifactHash::of_content(n.as_bytes()))))
+        .collect();
+    let then = spec_on(names, &files);
+    let l = crate::domain::shelf::fixtures_tests::approved(&then, &[1, 2]);
+    let mut readings = ArtifactReadings::new();
+    for n in names {
+        readings.insert(file_space(), name(n), ArtifactReading::absent());
+    }
+    PinnedNames::of(&l).gone(&readings)
+}
+
+/// What the space `file` answers for the gone name `of`: these candidates.
+fn answer_for(of: &str, candidates: Vec<MoveCandidate>) -> (ArtifactName, NameSuggestions) {
+    (
+        name(of),
+        NameSuggestions {
+            candidates,
+            notes: Vec::new(),
+        },
+    )
+}
+
+fn suggested(answers: Vec<(ArtifactName, NameSuggestions)>) -> BTreeMap<Space, SpaceSuggestions> {
+    BTreeMap::from([(
+        file_space(),
+        SpaceSuggestions::Suggested(answers.into_iter().collect()),
+    )])
+}
+
+#[test]
+fn candidates_are_in_the_order_of_how_they_were_found_and_not_of_their_names() {
+    let in_order = [
+        found("z", FoundBy::SameContent),
+        renamed_at("z", Some(90)),
+        renamed_at("a", Some(60)),
+        renamed_at("a", None),
+        found("a", FoundBy::SameEnd),
+    ];
+    for (at, one) in in_order.iter().enumerate() {
+        for (later, other) in in_order.iter().enumerate() {
+            assert_eq!(one.cmp_rank(other), at.cmp(&later), "{one:?} {other:?}");
+        }
+    }
+    // Rank is how a name was found: the name and the move of a prefix are not in it.
+    assert_eq!(
+        found("a", FoundBy::SameEnd)
+            .cmp_rank(&found("b", FoundBy::SameEnd).under(moving("p", "q"))),
+        Ordering::Equal
+    );
+}
+
+#[test]
+fn a_candidate_carries_the_moves_of_a_prefix_it_was_given_in_order_and_once_each() {
+    let plain = found("a/x", FoundBy::SameEnd);
+    assert!(plain.prefixes().is_empty());
+    let under = plain.clone().under(moving("a", "b"));
+    assert_eq!(under.prefixes(), [moving("a", "b")]);
+    assert_eq!(under.name(), plain.name());
+    assert_eq!(under.found(), FoundBy::SameEnd);
+    assert!(under.present());
+    // A second move is kept after the first, and one given again is not added.
+    let both = under
+        .clone()
+        .under(moving("a/x", "b/x"))
+        .under(moving("a", "b"));
+    assert_eq!(both.prefixes(), [moving("a", "b"), moving("a/x", "b/x")]);
+}
+
+#[test]
+fn a_name_given_twice_is_one_candidate_and_it_has_the_prefixes_both_had() {
+    let gone = gone_of(&["tests/a.rs", "tests/c.rs"]);
+    let (to_b, to_d) = (moving("tests", "b"), moving("tests", "d"));
+    let answers = suggested(vec![answer_for(
+        "tests/a.rs",
+        vec![
+            // The same name by its end, then by its history: the better one is kept,
+            // and the prefix the first had stays with it.
+            found("b/a.rs", FoundBy::SameEnd).under(to_b.clone()),
+            renamed_at("b/a.rs", Some(70)),
+            // Two of one rank, each with a move of its own: one candidate, with both,
+            // the earlier's first.
+            found("d/a.rs", FoundBy::SameEnd).under(to_d.clone()),
+            found("d/a.rs", FoundBy::SameEnd).under(to_b.clone()),
+            // Two of one rank, and only the later has a prefix.
+            found("e/a.rs", FoundBy::SameEnd),
+            found("e/a.rs", FoundBy::SameEnd).under(to_b.clone()),
+            // The better one has none, and the worse one has: the prefix is kept.
+            found("f/a.rs", FoundBy::SameContent),
+            found("f/a.rs", FoundBy::SameEnd).under(to_d.clone()),
+            // Two that carry the same move, one of them another too: each once.
+            found("g/a.rs", FoundBy::SameEnd).under(to_b.clone()),
+            found("g/a.rs", FoundBy::SameEnd)
+                .under(to_b.clone())
+                .under(to_d.clone()),
+            // The name itself and the other gone name are never candidates, of any kind.
+            found("tests/a.rs", FoundBy::SameEnd),
+            found("tests/c.rs", FoundBy::SameEnd).under(to_b.clone()),
+        ],
+    )]);
+    let out = gone.suggest(answers);
+    let got: Vec<(&str, FoundBy, &[PrefixMove])> = out.absent[0]
+        .candidates()
+        .iter()
+        .map(|c| (c.name().as_str(), c.found(), c.prefixes()))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("f/a.rs", FoundBy::SameContent, &[to_d.clone()][..]),
+            (
+                "b/a.rs",
+                renamed_at("b/a.rs", Some(70)).found(),
+                &[to_b.clone()][..]
+            ),
+            (
+                "d/a.rs",
+                FoundBy::SameEnd,
+                &[to_d.clone(), to_b.clone()][..]
+            ),
+            ("e/a.rs", FoundBy::SameEnd, &[to_b.clone()][..]),
+            (
+                "g/a.rs",
+                FoundBy::SameEnd,
+                &[to_b.clone(), to_d.clone()][..]
+            ),
+        ]
+    );
+    // The gone name nothing was said of has none.
+    assert!(out.absent[1].candidates().is_empty());
+}
+
+#[test]
+fn a_candidate_with_two_prefixes_counts_toward_both_for_the_gone_name_it_is_of() {
+    let gone = gone_of(&["g/1", "g/2", "g/3"]);
+    let (wide, narrow, lone) = (moving("a", "b"), moving("a/m", "b/m"), moving("c", "d"));
+    let answers = suggested(vec![
+        answer_for(
+            "g/1",
+            vec![
+                // One candidate reached by two moves, and a second of the same name
+                // under one of them: the name is one holder of each.
+                found("b/m/1", FoundBy::SameEnd)
+                    .under(wide.clone())
+                    .under(narrow.clone()),
+                found("b/m/1x", FoundBy::SameEnd).under(narrow.clone()),
+            ],
+        ),
+        answer_for(
+            "g/2",
+            vec![
+                found("b/m/2", FoundBy::SameEnd)
+                    .under(wide.clone())
+                    .under(narrow.clone()),
+            ],
+        ),
+        // The third is held by `narrow` alone, and by `lone` which only it has.
+        answer_for(
+            "g/3",
+            vec![
+                found("b/m/3", FoundBy::SameEnd).under(narrow.clone()),
+                found("d/3", FoundBy::SameEnd).under(lone),
+            ],
+        ),
+    ]);
+    let out = gone.suggest(answers);
+    // `narrow` has three gone names, `wide` two: both are tried, the most held first;
+    // `lone` has one only.
+    assert_eq!(out.prefix_trials(), [narrow, wide]);
+    assert_eq!(out.untried_prefixes, 0);
+}
+
+#[test]
+fn a_prefix_is_tried_when_gone_names_share_it_the_most_first() {
+    let gone = gone_of(&["g/1", "g/2", "g/3"]);
+    let (once, twice, thrice) = (moving("a", "b"), moving("c", "d"), moving("e", "f"));
+    let answers = suggested(vec![
+        answer_for(
+            "g/1",
+            vec![
+                found("b/1", FoundBy::SameEnd).under(once.clone()),
+                found("d/1", FoundBy::SameEnd).under(twice.clone()),
+                // Two candidates of one name under one prefix are one holder.
+                found("d/1x", FoundBy::SameEnd).under(twice.clone()),
+                found("f/1", FoundBy::SameEnd).under(thrice.clone()),
+                // No prefix: nothing to try.
+                found("z/1", FoundBy::SameEnd),
+            ],
+        ),
+        answer_for(
+            "g/2",
+            vec![
+                found("d/2", FoundBy::SameEnd).under(twice.clone()),
+                found("f/2", FoundBy::SameEnd).under(thrice.clone()),
+            ],
+        ),
+        answer_for(
+            "g/3",
+            vec![found("f/3", FoundBy::SameEnd).under(thrice.clone())],
+        ),
+    ]);
+    let out = gone.suggest(answers);
+    // `a` -> `b` is held by one gone name only, and two candidates of `g/1` under `c`
+    // are still one name.
+    assert_eq!(out.prefix_trials(), [thrice, twice]);
+    assert_eq!(out.untried_prefixes, 0);
+    assert!(out.prefixes.is_empty() && out.refused_prefixes.is_empty());
+
+    // Of equal holders, by the move.
+    let gone = gone_of(&["g/1", "g/2"]);
+    let (late, early) = (moving("x", "y"), moving("m", "n"));
+    let both = |at: &str| {
+        vec![
+            found(&format!("y/{at}"), FoundBy::SameEnd).under(late.clone()),
+            found(&format!("n/{at}"), FoundBy::SameEnd).under(early.clone()),
+        ]
+    };
+    let out = gone.suggest(suggested(vec![
+        answer_for("g/1", both("1")),
+        answer_for("g/2", both("2")),
+    ]));
+    assert_eq!(out.prefix_trials(), [early, late]);
+
+    // No candidate carries a prefix: none is tried.
+    let out = gone_of(&["g/1", "g/2"]).suggest(BTreeMap::new());
+    assert!(out.prefix_trials().is_empty());
+}
+
+#[test]
+fn the_prefixes_tried_are_bounded_and_the_rest_are_counted() {
+    const SHARED: usize = 35;
+    let gone = gone_of(&["g/1", "g/2", "g/3"]);
+    let prefix = |i: usize| moving(&format!("from{i:02}"), &format!("to{i:02}"));
+    let candidates = |skip: usize| -> Vec<MoveCandidate> {
+        (0..SHARED)
+            .map(|i| found(&format!("to{i:02}/x{skip}"), FoundBy::SameEnd).under(prefix(i)))
+            .collect()
+    };
+    // The last of them is held by a third name: it is tried first, and the ones that
+    // stay out are the last by the move of those held by two.
+    let mut third = candidates(3);
+    third.retain(|c| c.prefixes() == [prefix(SHARED - 1)]);
+    let out = gone.suggest(suggested(vec![
+        answer_for("g/1", candidates(1)),
+        answer_for("g/2", candidates(2)),
+        answer_for("g/3", third),
+    ]));
+    let tried = out.prefix_trials();
+    assert_eq!(tried.len(), 32);
+    assert_eq!(tried[0], prefix(SHARED - 1));
+    assert_eq!(tried[1..], (0..31).map(prefix).collect::<Vec<_>>());
+    assert_eq!(out.untried_prefixes, SHARED - 32);
+}
+
+#[test]
+fn a_prefix_of_the_same_content_is_tried_before_the_end_only_ones_when_the_bound_is_reached() {
+    const ENDS: usize = 33;
+    let gone = gone_of(&["g/1", "g/2", "g/3"]);
+    let prefix = |i: usize| moving(&format!("from{i:02}"), &format!("to{i:02}"));
+    // The move found by content is the last by the move, held by two gone names; the
+    // others, of the end only, are held by two as well, and the first by a third.
+    let content = moving("zz", "yy");
+    let ends = |skip: usize| -> Vec<MoveCandidate> {
+        (0..ENDS)
+            .map(|i| found(&format!("to{i:02}/x{skip}"), FoundBy::SameEnd).under(prefix(i)))
+            .collect()
+    };
+    let with_content = |skip: usize| {
+        let mut candidates = ends(skip);
+        candidates.push(found(&format!("yy/x{skip}"), FoundBy::SameContent).under(content.clone()));
+        candidates
+    };
+    let mut third = ends(3);
+    third.retain(|c| c.prefixes() == [prefix(0)]);
+    let out = gone.suggest(suggested(vec![
+        answer_for("g/1", with_content(1)),
+        answer_for("g/2", with_content(2)),
+        answer_for("g/3", third),
+    ]));
+    let tried = out.prefix_trials();
+    assert_eq!(tried.len(), 32);
+    // Held by two, but found by content: before `from00`, which three hold.
+    assert_eq!(tried[0], content);
+    assert_eq!(tried[1], prefix(0));
+    assert_eq!(tried[2..], (1..31).map(prefix).collect::<Vec<_>>());
+    assert_eq!(out.untried_prefixes, ENDS + 1 - 32);
+
+    // The best way any holder found it counts, not that of every holder: one holder
+    // that found it by content is enough.
+    let gone = gone_of(&["g/1", "g/2"]);
+    let (late, early) = (moving("x", "y"), moving("m", "n"));
+    let out = gone.suggest(suggested(vec![
+        answer_for(
+            "g/1",
+            vec![
+                found("y/1", FoundBy::SameEnd).under(late.clone()),
+                found("n/1", FoundBy::SameEnd).under(early.clone()),
+            ],
+        ),
+        answer_for(
+            "g/2",
+            vec![
+                found("y/2", FoundBy::SameContent).under(late.clone()),
+                found("n/2", FoundBy::SameEnd).under(early.clone()),
+            ],
+        ),
+    ]));
+    assert_eq!(out.prefix_trials(), [late, early]);
+}
+
+fn moved_of(from: &str, to: &str) -> MovedOf {
+    MovedOf::new(file_space(), name(from), name(to)).unwrap()
+}
+
+#[test]
+fn a_prefix_that_stands_is_offered_with_the_names_it_moves() {
+    let mut out = MoveSuggestions::default();
+    let of = moving("a", "b");
+    out.offer(
+        of.clone(),
+        Ok(NonEmptyVec::new(
+            moved_of("a/x", "b/x"),
+            vec![moved_of("a/y", "b/y")],
+        )),
+        vec![other_space()],
+    );
+    assert!(out.refused_prefixes.is_empty());
+    assert_eq!(out.prefixes.len(), 1);
+    assert_eq!(out.prefixes[0].of(), &of);
+    let moved: Vec<ArtifactKey> = out.prefixes[0].moved().iter().cloned().collect();
+    assert_eq!(moved, [file_artifact("a/x"), file_artifact("a/y")]);
+    // The spaces whose adapter takes no prefix are carried with it.
+    assert_eq!(out.prefixes[0].not_asked(), [other_space()]);
+}
+
+#[test]
+fn a_prefix_that_is_refused_is_offered_with_how_many_names_it_cannot_move() {
+    let mut out = MoveSuggestions::default();
+    let refusal = |at: &str| NamedRefusal {
+        name: name(at),
+        why: NamedWhy::Move(MovedRefusal::ToAbsent {
+            artifact: file_artifact(at),
+        }),
+    };
+    out.offer(
+        moving("a", "b"),
+        Err(PrefixRefusal::Names(NonEmptyVec::new(
+            refusal("a/x"),
+            vec![refusal("a/y")],
+        ))),
+        Vec::new(),
+    );
+    // Nothing under the prefix is refused too, with none that cannot be moved.
+    out.offer(
+        moving("c", "d"),
+        Err(PrefixRefusal::NothingUnder {
+            prefix: NamePrefix::new("c").unwrap(),
+            spaces: Vec::new(),
+        }),
+        Vec::new(),
+    );
+    assert!(out.prefixes.is_empty());
+    let refused: Vec<(&PrefixMove, usize)> = out
+        .refused_prefixes
+        .iter()
+        .map(|r| (r.of(), r.refused()))
+        .collect();
+    assert_eq!(refused, [(&moving("a", "b"), 2), (&moving("c", "d"), 0)]);
 }

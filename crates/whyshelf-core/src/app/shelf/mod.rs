@@ -23,7 +23,7 @@
 //! | [`approve_chosen`](ShelfApp::approve_chosen) | **yes** | [`ChosenApproved`]: the approvals made, upstream first and in one run, of every document the rules chosen take (expired or stale, pending, or both) that would hold once made, each with the rule that took it, and those left out, each with why |
 //! | [`approve_stale`](ShelfApp::approve_stale) | **yes** | [`ChosenApproved`]: `approve_chosen` with the stale rule alone |
 //! | [`same_meaning`](ShelfApp::same_meaning) | **yes** | [`Declared`]: the declaration that an edit keeps the meaning, with the earlier hashes it covers |
-//! | [`moves`](ShelfApp::moves) | no | [`MovesReport`]: the names approvals that stand pinned something at that have nothing behind them now, each with the documents that pin it and the names its space's adapter suggests it moved to (by the same content, or by a rename in the space's history), and the spaces that cannot suggest |
+//! | [`moves`](ShelfApp::moves) | no | [`MovesReport`]: the names approvals that stand pinned something at that have nothing behind them now, each with the documents that pin it and the names its space's adapter suggests it moved to (by the same content, by a rename in the space's history, or by the end of the name), the spaces that cannot suggest, and the moves of a prefix that several gone names share, each tried as `judge moved --prefix` would take it: those that stand, those refused, and how many were not tried |
 //! | [`moved`](ShelfApp::moved) | **yes** | [`Moved`](crate::domain::shelf::ledger::Moved): the declarations that an artifact moved from one name to another, after the space's adapter said the old name has nothing and the new one has something |
 //! | [`moved_prefix`](ShelfApp::moved_prefix) | **yes** | [`MovedPrefix`]: the declarations that every name approvals pin under one prefix moved to the same name under another (one declaration per name, in one run), the names each space's adapter built, and the spaces whose adapter takes no prefix |
 //! | [`cover`](ShelfApp::cover) | no | [`CoverReport`]: the problems of the declaration, or each covering link to artifacts with its selection, how complete the listing of the names it takes is, and each name reached, exempt or a gap |
@@ -83,6 +83,7 @@ mod moved;
 mod moves;
 mod new_doc;
 pub mod ports;
+mod prefix_trial;
 mod read;
 mod rekey;
 mod report;
@@ -127,6 +128,8 @@ mod moves_tests;
 mod new_doc_tests;
 #[cfg(test)]
 mod new_many_tests;
+#[cfg(test)]
+mod prefix_trial_tests;
 #[cfg(test)]
 mod preset_tests;
 #[cfg(test)]

@@ -10,6 +10,24 @@ and this project adheres to
 
 ### Added
 
+- `moves` suggests where a gone name of the space `rust-item` moved (#142), from
+  the names the built docs hold now: a candidate ends as the gone name does, in
+  the most segments of its crate, and is `same_content` when its promise hashes
+  to what was pinned, `same_end` otherwise; a member needs a type whose page has
+  it. A name keeps at most 16 candidates (`candidates_cut` says how many were
+  found), the search is held to bounds that are notes, and docs whose place is
+  not known are `search_unavailable`. A move of a prefix that two gone names or
+  more carry among their candidates is tried as `judge moved --prefix` would
+  plan and frame it, with no admission tried: `prefixes` lists those that stand
+  (`{"from", "to", "moved", "not_asked"}`), `refused_prefixes` those refused
+  (`{"from", "to", "refused"}`) and `untried_prefixes` how many were past the
+  bound of 32. The JSON stays version 1, with these fields added. In the
+  library, `FoundBy::SameEnd`, `MoveCandidate::under`, `prefixes` and
+  `cmp_rank`, `MoveSuggestions::prefix_trials` and `offer`, `PrefixSuggestion`,
+  `RefusedPrefix` and the notes `SearchUnavailable` and `CandidatesCut` are new,
+  and `PinnedNames::gone` takes `&self`. The notes of a search that stopped at
+  a bound or passed over an entry say entries (files, directories or pages)
+  rather than files.
 - Who read the content an approval stands on is answered for every approved
   document, in every project, and the approvals read by one name can be asked
   for (#105). A row of `status`, `get` and `trace` of an approved document carries

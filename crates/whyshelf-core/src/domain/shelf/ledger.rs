@@ -766,8 +766,9 @@ use moved::moved_way;
 pub use moved::{
     FoundBy, GoneName, GoneNames, MoveCandidate, MoveNote, MoveSuggestion, MoveSuggestions, Moved,
     MovedOf, MovedProblem, MovedRefusal, MovedTo, NameSuggestions, NamedRefusal, NamedWhy,
-    NoteKind, NothingWhy, PinnedNames, PinnedThere, PrefixPlan, PrefixRefusal, ReadPin, Similarity,
-    SpaceSuggestions, frame_moved, frame_prefix_moves, moved_space, plan_prefix_moves,
+    NoteKind, NothingWhy, PinnedNames, PinnedThere, PrefixPlan, PrefixRefusal, PrefixSuggestion,
+    ReadPin, RefusedPrefix, Similarity, SpaceSuggestions, frame_moved, frame_prefix_moves,
+    moved_space, plan_prefix_moves,
 };
 pub use same_meaning::{
     SameMeaning, SameMeaningEdge, SameMeaningOf, SameMeaningProblem, SameMeaningRefusal,

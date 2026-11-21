@@ -40,7 +40,7 @@
 //! `Expand description` of a toggle are rustdoc's, not the item's, and are left out;
 //! the mark of a deprecated item or of a feature (`span.item-info`) is left out too.
 
-use super::{MODULE_KIND, MemberKind, Place};
+use super::layout::{MODULE_KIND, MemberKind, Place};
 
 /// What an item promises.
 #[derive(Debug, Clone, PartialEq, Eq)]

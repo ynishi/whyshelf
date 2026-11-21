@@ -35,7 +35,7 @@
 //! | the files `new`, `init` and `rekey` wrote, put on disk together at the end of the run, and the removals of `rekey` | [`FileSync`] | [`Project`], which holds the root |
 //! | `.whyshelf/ledger/<id>.json` | [`LedgerRead`], [`LedgerAppend`] | [`ledger`] |
 //! | what links to artifacts name, by space | [`ArtifactSource`] | [`artifact`] |
-//! | where a pinned artifact that is gone may have moved, by space | [`MoveSource`] | [`artifact`] (for `file`: the same content, Git's renames) |
+//! | where a pinned artifact that is gone may have moved, by space | [`MoveSource`] | [`artifact`] (for `file`: the same content, Git's renames; for `rust-item`: the names in the docs that end as the gone one does) |
 //! | content kept by address, read back by the adapter of the documents or of the space | [`ContentStore`] | [`Project`], to [`docs`] or [`artifact`] |
 //! | the project's version control | [`RevisionSource`] | [`git`] |
 //! | none | [`Clock`], [`IdSource`], [`ActorSource`] | [`system`] |
