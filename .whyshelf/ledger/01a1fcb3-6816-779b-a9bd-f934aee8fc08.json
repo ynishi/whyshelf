@@ -1,0 +1,139 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7d8b65a4dc7868d6aed2f5cf95b87a9d2ca12bb7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c588f5b35398ba49efbe72e22486114b76a783552c1f641ac163623084ec159",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6c91b1a7ad626e068cb9a04845f292a4075c2e80",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6106b88862cca6e7e8c4083d7a2f3b0de10d0b8e5d2ef690610de256b6d64884",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7de763afba82d996c08a742a2a64c64fdf28328b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0ded651f36a592746982663febde19b63543622ec91fde6e408bdd40fe6ec3c3",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "721d45736f278b2703712252edbbdc6fb72cf0e4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e194c62579423ad99facb22407397230155fa7d2a2fe6c5d9c26a34627d32366",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f4e2311a8e217d9f1d1fdfae114f1abcd5d05186",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3f034a6cf5897bf485b279574db7f84bcc2281e528019b9225a13efeb3897701",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240972613,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d1d881bcfe383a435dc95a44292907393ab16dbc",
+      "hash": "sha256:b0d7183d426e1c555cd1199b5ace3d0a55ce10fd6f4a7b4d8cf1fa9ffd2e9c12",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "b2658e3ea467b40ba29fb5f907ece7c9fffb8c1b",
+      "hash": "sha256:4801f4277e4358483975f11c893726ace7decb09a0fc761397164c782163738e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ce54-705b-a4fb-17382395564a"
+    },
+    {
+      "address": "70a5dd9de54859341dbb149ca40373305205c37d",
+      "hash": "sha256:cd35831f4a42399efcdeb7bd78922f5392b0d77c54ab52fe052d07d73e6453b5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a1fcb3-6816-779b-a9bd-f934aee8fc08",
+  "kind": "decision",
+  "reason": "Re-read for #105: DEC-70 gained the readers kind of a status filter (DEC-95); the verifications' test files changed where Standing::FRESH became the test helpers fresh() and is_fresh_met(), and a Standing::Approved gained its readers; what each states still holds: cargo test --workspace passes (1697)",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:d62fa60dd298e63c294806ae4a292703e599438d10324162c2b31b39e5b73ffd",
+  "seen_address": "34f9a655305375885329cdbacec1b1458349b989",
+  "subject": "01a1c4ba-19a6-76f9-a7c1-40f9f8460ecf",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,13 +1,15 @@
 //! Who has read the content an approval stands on, and what a new approval of the
 //! document would be beside them: [`Ledger::readers`] and [`Ledger::kind_of`], the one
 //! place two approvals are matched for what they stand on and who made them; and
-//! whether enough of them did for the approval to settle, [`Ledger::quorum`]. The
-//! rules are on [`Readers`], [`ApprovalKind`], [`ApprovalKind::left_out`] and
+//! whether enough of them did for the approval to settle, [`Ledger::quorum`], from the
+//! same walk that tells who counts now, [`Ledger::reading`]. The rules are on
+//! [`Readers`], [`ReadBy`], [`ApprovalKind`], [`ApprovalKind::left_out`] and
 //! [`Quorum`].
 //!
 //! ```text
 //!   ledger ──► Readers  ◄── what an approval stands on (the one comparison)
 //!                 │
+//!                 ├── at(now) ──► ReadBy ──► count: Nobody / One / Several
 //!                 ├──────────────► Quorum (Met / Short): freshness, order, check read it
 //!                 ▼
 //!            ApprovalKind ──► left_out(taking, again)
@@ -82,10 +84,11 @@ impl Before {
 /// approved again by one actor starts a new list, and content approved again after
 /// other content is a new list too, not the readers it had before. What an approval
 /// stands on is the hash of the document, every pin of an upstream (link, identity,
-/// key, hash) and every pin of an artifact (link, space and name, comparison, what was
-/// there and its hash), compared as values; the addresses, the revision, the expiry,
-/// the actor and the reason are not, and freshness is not asked. The pins compared are
-/// the stored ones, never as read through a move: an approval made after a move pins
+/// hash; its key is not compared) and every pin of an artifact (link, space and name,
+/// comparison, what was there and its hash), compared as values; the addresses, the
+/// revision, the expiry, the actor and the reason are not, and freshness is not
+/// asked. The pins compared are the stored ones, never as read through a move: an
+/// approval made after a move pins
 /// the name it finds, and while a move reads a pin of the approval that stands, a new
 /// one of the same values is a renewal ([`Ledger::kind_of`]).
 ///
@@ -119,6 +122,99 @@ impl<'a> Readers<'a> {
     pub fn latest_of(&self, actor: &Actor) -> Option<&'a Decision> {
         self.approvals.iter().copied().find(|d| d.actor() == actor)
     }
+
+    /// The names that read the content, told by whether their own latest reading has
+    /// lapsed at `now` ([`JudgedAt::lapsed_by`]): the one place who reads it now is
+    /// decided, so a name counts once, however many of its approvals are among the
+    /// readers, and no other name stands in for one that lapsed. No readers, none
+    /// counted and none lapsed.
+    pub fn at(&self, now: JudgedAt) -> ReadBy {
+        let mut read_by = ReadBy {
+            counted: BTreeSet::new(),
+            lapsed: BTreeSet::new(),
+        };
+        for actor in self.actors() {
+            let alive = self
+                .latest_of(actor)
+                .is_some_and(|own| !expires_of(own).is_some_and(|e| e.lapsed_by(now)));
+            let side = if alive {
+                &mut read_by.counted
+            } else {
+                &mut read_by.lapsed
+            };
+            side.insert(actor.clone());
+        }
+        read_by
+    }
+}
+
+/// The names that read the content an approval stands on, at a time: those whose own
+/// latest reading has not lapsed, and those whose has ([`Readers::at`]). A name is in
+/// one of the two, never both. Both may be empty, and `counted` is empty when every
+/// reading lapsed: what the approval needs to settle is [`Quorum`]'s, which counts the
+/// approval that stands alone then, and nothing of that is here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadBy {
+    counted: BTreeSet<Actor>,
+    lapsed: BTreeSet<Actor>,
+}
+
+impl ReadBy {
+    /// Read by these names, none lapsed: the input of a test that needs a standing.
+    #[cfg(test)]
+    pub fn of_counted(counted: BTreeSet<Actor>) -> Self {
+        Self {
+            counted,
+            lapsed: BTreeSet::new(),
+        }
+    }
+
+    /// The names whose reading has not lapsed, each once.
+    pub fn counted(&self) -> &BTreeSet<Actor> {
+        &self.counted
+    }
+
+    /// The names whose own latest reading has lapsed, each once.
+    pub fn lapsed(&self) -> &BTreeSet<Actor> {
+        &self.lapsed
+    }
+
+    /// How many names count: the one place it is told, for the filter and the
+    /// answers.
+    pub fn count(&self) -> ReaderCount {
+        match self.counted.len() {
+            0 => ReaderCount::Nobody,
+            1 => ReaderCount::One,
+            _ => ReaderCount::Several,
+        }
+    }
+}
+
+/// How many names read the content an approval stands on now ([`ReadBy::count`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReaderCount {
+    /// No reading counts: every one lapsed (or no approval stands).
+    Nobody,
+    /// One name's reading counts.
+    One,
+    /// Two names' or more.
+    Several,
+}
+
+impl ReaderCount {
+    /// Every count, in order: the one list of them, so that a surface that names each
+    /// count reads them all from here and a word can be read back.
+    pub const ALL: [Self; 3] = [Self::Nobody, Self::One, Self::Several];
+}
+
+/// What one walk of the readers of a document gives ([`Ledger::reading`]): who reads
+/// its content now, and whether that is enough for the approval to settle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reading {
+    /// The names that read the content, told at the time asked.
+    pub read_by: ReadBy,
+    /// Whether enough of them did for the rule that reads the approval.
+    pub quorum: Quorum,
 }
 
 /// A new approval of a document, asked about: what it would stand on, who would make
@@ -357,9 +453,9 @@ impl Ledger {
 
     /// Whether the approval that stands about `subject` has, at `now`, as many
     /// different readers ([`Ledger::readers`]) as the rule that reads it asks for
-    /// (its need: the `approvals` of that rule; one when no rule reads it). The one
-    /// place approvals are counted for it, read by freshness, by the order of a run
-    /// and by `check`.
+    /// (its need: the `approvals` of that rule; one when no rule reads it): the
+    /// quorum of [`Ledger::reading`] alone, for a caller that needs no readers
+    /// (freshness takes both from [`Ledger::reading`]).
     ///
     /// A name counts once, however many of its approvals are among the readers, and
     /// only while its own latest reading has not lapsed at `now`
@@ -369,29 +465,49 @@ impl Ledger {
     /// freshness tells ([`Cause::Expired`](super::super::freshness::Cause::Expired)),
     /// and one that needs one name is never short. With no approval standing,
     /// nothing awaits: [`Quorum::Met`]. A project that declares no rule asks for one
-    /// name of every approval, so its quorum is met without reading the readers.
+    /// name of every approval, so its quorum is met whoever read it.
+    ///
+    /// The quorum alone, for a caller that asks nothing else: freshness takes it,
+    /// with the readers, from [`reading`](Self::reading), the one walk both come
+    /// from. It stays the public statement of the rule a decision names.
     pub fn quorum(&self, subject: DocId, now: JudgedAt) -> Quorum {
+        self.reading(subject, now).quorum
+    }
+
+    /// Who reads the content that stands about `subject` at `now` and whether that
+    /// is enough ([`Ledger::quorum`]), from one walk of its readers: the one place
+    /// they are read for either, by freshness.
+    pub fn reading(&self, subject: DocId, now: JudgedAt) -> Reading {
+        let readers = self.readers(subject, Before::Now);
+        let read_by = readers.at(now);
+        let quorum = self.quorum_of(&readers, &read_by);
+        Reading { read_by, quorum }
+    }
+
+    /// Whether the `read_by` of `readers` are as many as the rule that reads the
+    /// approval that stands asks for. Only [`Ledger::reading`] asks it, so that the
+    /// two are of the same readers and the same time: the name that stands in for
+    /// every reading lapsed is here only, never in what `read_by` says.
+    fn quorum_of(&self, readers: &Readers<'_>, read_by: &ReadBy) -> Quorum {
         if self.admit.is_unruled() {
             return Quorum::Met;
         }
-        let readers = self.readers(subject, Before::Now);
         let Some(standing) = readers.standing() else {
             return Quorum::Met;
         };
         let need = self.need(standing.id(), standing.at());
-        let mut counted = readers.actors().into_iter().filter(|actor| {
-            readers
-                .latest_of(actor)
-                .is_some_and(|own| !expires_of(own).is_some_and(|e| e.lapsed_by(now)))
-        });
-        let readers = match counted.next() {
+        let mut counted = read_by.counted.iter();
+        let names = match counted.next() {
             Some(first) => NonEmptySet::new(first.clone(), counted.cloned()),
             None => NonEmptySet::new(standing.actor().clone(), []),
         };
-        if readers.len() >= need.count() {
+        if names.len() >= need.count() {
             Quorum::Met
         } else {
-            Quorum::Short { readers, need }
+            Quorum::Short {
+                readers: names,
+                need,
+            }
         }
     }
 

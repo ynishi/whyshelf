@@ -5,7 +5,10 @@
 
 use schemars::JsonSchema;
 use serde::Serialize;
+use std::collections::BTreeSet;
+
 use whyshelf_core::app::shelf::{Health, Row};
+use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::shelf::artifact::Artifact;
 use whyshelf_core::domain::shelf::build::DocPresence;
 use whyshelf_core::domain::shelf::doc::LinkState;
@@ -13,7 +16,7 @@ use whyshelf_core::domain::shelf::freshness::{Freshness, RootCause, Standing, Su
 use whyshelf_core::domain::shelf::ledger::{DeclaredStatus, Quorum};
 
 use super::words::{ran_by, state_word};
-use super::{CauseOut, DocRef, Namer, NoticeOut, standing};
+use super::{CauseOut, DocRef, Namer, NoticeOut, readers, standing};
 
 /// What the shelf has for a document now.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -80,6 +83,10 @@ pub struct RowOut {
     /// left out otherwise, as it always is where no rule asks for more than one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub awaiting: Option<AwaitingOut>,
+    /// For an approval, at any freshness and in every project, the names that read
+    /// the content it stands on now; left out for a document with no approval.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readers: Option<ReadersOut>,
     /// For a deprecated document, what replaces it.
     pub successors: Vec<DocRef>,
     /// Why an approval does not hold.
@@ -91,7 +98,9 @@ pub struct RowOut {
 /// Who read the content of an approval that awaits the approvals of other names.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct AwaitingOut {
-    /// The names whose reading counts now, each once.
+    /// The names whose reading counts now, each once; when every reading lapsed, the
+    /// name of the approval that stands alone, which the row's `readers.counted` does
+    /// not have.
     pub readers: Vec<String>,
     /// How many different names the rule asks for.
     pub need: usize,
@@ -107,6 +116,30 @@ impl AwaitingOut {
                 need: need.count(),
             }),
         }
+    }
+}
+
+/// Who read the content an approval stands on, as `status --readers` asks it.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ReadersOut {
+    /// How many names count, as the word of `ReaderCount` (`output::readers`).
+    pub count: &'static str,
+    /// The names whose own latest reading has not lapsed, each once.
+    pub counted: Vec<String>,
+    /// The names whose own latest reading has lapsed, each once; they are not counted.
+    pub lapsed: Vec<String>,
+}
+
+impl ReadersOut {
+    /// The readers of `standing` when it is an approval; none otherwise.
+    pub(super) fn of(standing: &Standing) -> Option<Self> {
+        let read_by = standing.read_by()?;
+        let names = |set: &BTreeSet<Actor>| set.iter().map(|a| a.as_str().to_owned()).collect();
+        Some(Self {
+            count: readers(read_by.count()),
+            counted: names(read_by.counted()),
+            lapsed: names(read_by.lapsed()),
+        })
     }
 }
 
@@ -224,6 +257,7 @@ impl Namer<'_> {
             expires,
             standing: standing(row.standing.kind()),
             awaiting: AwaitingOut::of(&row.standing),
+            readers: ReadersOut::of(&row.standing),
             successors,
             causes,
             notices: row.notices.iter().map(|n| self.notice(n)).collect(),

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "09e2eafea40c7d3e6f98a469e7c70a222d655853",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b88464351a77a47856bfe0215ccf3a1574ab1ad4426e9e1503532dac04a193a3",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "767ecd56cb75c153bf0321721657b398258924f2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ade3f86e58a215d4b3250144c044249847efc58b1068ce9f574329b84a6170f3",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240972613,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8a417f9aeb881a0f28fe99b100dcfbe46f345e4b",
+      "hash": "sha256:afeb8ba63fbd85982166f075a580c4164d76f1f8a11b963b469acd3cda4dc1f6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "77"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e9bf-f4ea-76e3-8c9e-25d40627ad8e"
+    }
+  ],
+  "id": "01a1fcb3-9dd1-7418-bcb6-600047e2f2eb",
+  "kind": "decision",
+  "reason": "Re-read for #105: DEC-70 gained the readers kind of a status filter (DEC-95); the verifications' test files changed where Standing::FRESH became the test helpers fresh() and is_fresh_met(), and a Standing::Approved gained its readers; what each states still holds: cargo test --workspace passes (1697)",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:1a77f7581b0b514abac5438fa4c7bdbc682396c8422d332ee67570bee6c092e9",
+  "seen_address": "6a82d969a5613a0063eb0a46b36cb5afaaa3cefa",
+  "subject": "01a1e9c0-1efe-7398-be72-cd5fd3d27753",
+  "v": 1,
+  "verb": "approve"
+}

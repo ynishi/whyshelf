@@ -342,7 +342,7 @@ impl<P: ShelfRead> ShelfApp<P> {
         let rows = assessment
             .standings()
             .iter()
-            .filter(|(id, standing)| filter.admits(&loaded.shelf, **id, standing.kind()))
+            .filter(|(id, standing)| filter.admits(&loaded.shelf, **id, standing))
             .map(|(id, _)| view.row(*id))
             .collect();
         Ok(StatusReport {

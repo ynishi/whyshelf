@@ -118,7 +118,7 @@ fn outside_version_control_an_approval_keeps_no_address_and_holds_the_same() {
     };
     assert_eq!((seen_address, revision), (&None, &None));
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
 
     // The approved content cannot be read back, and says why.
     let shown = block_on(app.show_approved(&r("SP-2"))).unwrap();

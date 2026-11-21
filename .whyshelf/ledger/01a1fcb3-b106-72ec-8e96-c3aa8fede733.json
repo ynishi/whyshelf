@@ -1,0 +1,232 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "ef1b0c08e148d30810d8ccd03af06a634b9033c6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:66e5ae9740ab0901115af93879bd3cc36f1cadd1d4b28cdd15fe3128a07214b9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/rekey_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "79f8aa274d0d3e6523ca6a400a3351ccffc13f5c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f765d2a8b2b5c539bfcf2d80baeaf07b45beb3cd86e3f6277764854243754905",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c3ea4fbc29fa23bcebd1bd8f0ec85d6bc10e929b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5f4bbb17c9c6f52b5818a82868fade68a9052b886128093220ccd43a803e0f56",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/keys_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5b60927234b16f62f8b506e46661d411dbcc90ee",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d4c2034fcade023e84631bf85ac024fa6980878c798d4da0bea5e3a6606c219b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "118e9c413719be1a80a5e499f7b4f6787e272ca3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9b00bb69c6b3fe5efb2007456e6d80f1e47daef471e8ec2db82eac26c9ea303f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/lookup/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fc69aeb9d416a101f8d17c53f7722d0e457b58ad",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:675985836b94fa2eab20d431fc969d49f119bd1fae6f7e103b816890b6df6b14",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/rekey/rekey_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4d92db33e38617bd5254f7448a6369595c18612a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d2635da08b0134817369f20e89c4a9abea941e1be1b8e19ed47e61ce346271a7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "721d45736f278b2703712252edbbdc6fb72cf0e4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e194c62579423ad99facb22407397230155fa7d2a2fe6c5d9c26a34627d32366",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240972613,
+  "expires": null,
+  "frame": [
+    {
+      "address": "014b7fd938d651a0e82777b8b292528cd330d466",
+      "hash": "sha256:94dfb3915b3d8e52fde888846d2d6fcb958a36557c2eaa6b11a42c81a8cc53de",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "17"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-13c1-71ff-8447-3222d6d270df"
+    },
+    {
+      "address": "beb6d870d0240453c7f52dc4d936ac0234fe2721",
+      "hash": "sha256:27fe4581cf6ae81ea2bfd32631edb6a06bdc49cd7b6a92f40e71c03d2b74f90f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "28"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d0dc-701e-8908-afb6fafe946e"
+    },
+    {
+      "address": "2a8f99d19aa38815bad6ac8870dd6d6a775c16a2",
+      "hash": "sha256:593bb90fa66a9a019321f887ebbf7ab6dbbe48980a8ea29e481fe74ab5816c64",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "36"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ea98-7060-acb2-b3c19c484a89"
+    },
+    {
+      "address": "f26ff95e68f9361e0506d0ab8aa735d27ae4255e",
+      "hash": "sha256:9d14da9916d17d8fcde903af0de472992e7d646fc471d1ce50ee033d319b7dbd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "58"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8cf-dfdb-771f-bea4-6b65c56de737"
+    },
+    {
+      "address": "85629eafc387edd6202872ffa0e4951ad382e3d3",
+      "hash": "sha256:c9a462fc2e455ce9607e407158c3fc7d3f54466ef167f56990c0595d948c0708",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "78"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ef3c-6465-7073-b56b-81f10c2dfc24"
+    },
+    {
+      "address": "e2aed96b03458edf9098bce20af62add178aac0e",
+      "hash": "sha256:20c45ea5b73eef914c693eaf331d1db7dfe4c981757a65c5d0ba7063e8fc8625",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "94"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fc08-2361-765b-8902-8a5ae113e22a"
+    }
+  ],
+  "id": "01a1fcb3-b106-72ec-8e96-c3aa8fede733",
+  "kind": "decision",
+  "reason": "Re-read for #105: DEC-70 gained the readers kind of a status filter (DEC-95); the verifications' test files changed where Standing::FRESH became the test helpers fresh() and is_fresh_met(), and a Standing::Approved gained its readers; what each states still holds: cargo test --workspace passes (1697)",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:e3e416e69b0131f869f1916929bf3489fd4dc6112a43c21a6c23540277ecb164",
+  "seen_address": "d699e9ca016aabacb304f331e83333987c8bb41a",
+  "subject": "01a1fc08-72b9-73f2-829b-20c8844c0acb",
+  "v": 1,
+  "verb": "approve"
+}

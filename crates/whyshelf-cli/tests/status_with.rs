@@ -141,6 +141,7 @@ fn with_answers_the_documents_that_hold_a_value_and_the_filters_say_it() {
         value!({
             "books": [],
             "standings": [],
+            "readers": [],
             "where": [],
             "without": [],
             "with": ["size", "level"],

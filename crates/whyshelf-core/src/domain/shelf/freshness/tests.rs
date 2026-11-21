@@ -18,8 +18,8 @@ fn an_approval_of_what_is_unchanged_holds() {
     let at_approval = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
     let ledger = approved(&at_approval, &[1, 2]);
     let assessment = assess(&at_approval, &ledger, JudgedAt::new(100));
-    assert_eq!(standing_of(&assessment, 1), Standing::FRESH);
-    assert_eq!(standing_of(&assessment, 2), Standing::FRESH);
+    assert!(standing_of(&assessment, 1).is_fresh_met());
+    assert!(standing_of(&assessment, 2).is_fresh_met());
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn an_edit_approved_again_is_still_a_root_of_what_saw_the_older_text() {
     records.push(approve(&now, &ledger(records.clone()), 1, 1003, 20, None));
     let assessment = assess(&now, &ledger(records), JudgedAt::new(100));
 
-    assert_eq!(standing_of(&assessment, 1), Standing::FRESH);
+    assert!(standing_of(&assessment, 1).is_fresh_met());
     let roots = assessment.roots_of(docid(2));
     assert_eq!(roots.len(), 1, "{roots:?}");
     assert_eq!(roots[0].path, vec![docid(2)]);
@@ -121,7 +121,7 @@ fn an_approval_lapses_at_its_expiry_and_not_before() {
         Some(50),
     )]);
     let before = assess(&shelf, &ledger, JudgedAt::new(49));
-    assert_eq!(standing_of(&before, 1), Standing::FRESH);
+    assert!(standing_of(&before, 1).is_fresh_met());
     let at = assess(&shelf, &ledger, JudgedAt::new(50));
     let Standing::Approved {
         freshness: Freshness::Degraded(d),
@@ -255,7 +255,7 @@ fn standing_of_a_listed_id_is_its_standing_and_of_an_unknown_id_is_pending() {
     let s = shelf(vec![fr(1, &[])]);
     let ledger = approved(&s, &[1]);
     let assessment = assess(&s, &ledger, JudgedAt::new(100));
-    assert_eq!(assessment.standing_of(docid(1)), Standing::FRESH);
+    assert!(assessment.standing_of(docid(1)).is_fresh_met());
     assert!(!assessment.standings().contains_key(&docid(77)));
     assert_eq!(assessment.standing_of(docid(77)), Standing::Pending);
     assert!(assessment.notices_of(docid(77)).is_empty());

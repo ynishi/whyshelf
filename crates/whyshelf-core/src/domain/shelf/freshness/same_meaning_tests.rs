@@ -70,7 +70,7 @@ fn revoke(judgement: u128, target: u128) -> Record {
 
 fn causes_of(assessment: &Assessment, n: u128) -> Vec<Cause> {
     match assessment.standing_of(docid(n)) {
-        Standing::FRESH => Vec::new(),
+        fresh if fresh.is_fresh_met() => Vec::new(),
         Standing::Approved {
             freshness: Freshness::Degraded(d),
             ..
@@ -105,7 +105,7 @@ fn a_declared_edit_keeps_the_document_and_what_stands_on_it_fresh_with_notices()
     let assessment = assess(&now, &ledger(records), JudgedAt::new(100));
 
     for n in [1, 2, 3] {
-        assert_eq!(assessment.standing_of(docid(n)), Standing::FRESH, "FR-{n}");
+        assert!(assessment.standing_of(docid(n)).is_fresh_met(), "FR-{n}");
         assert!(assessment.roots_of(docid(n)).is_empty(), "FR-{n}");
     }
     let expected = NonEmptyVec::new(jid(2001), Vec::new());
@@ -159,7 +159,7 @@ fn a_rewrite_approved_again_then_a_declared_typo_fix_leaves_the_older_pin_a_root
     let records = declared(&at_c, records, SameMeaningTarget::Doc(docid(1)), 2001);
     let assessment = assess(&at_c, &ledger(records), JudgedAt::new(100));
 
-    assert_eq!(assessment.standing_of(docid(1)), Standing::FRESH);
+    assert!(assessment.standing_of(docid(1)).is_fresh_met());
     assert!(matches!(
         assessment.notices_of(docid(1)),
         [Notice::SelfSameMeaning { approved, .. }] if *approved == hash_of(&at_b, 1)
@@ -259,7 +259,7 @@ fn a_way_of_two_declarations_is_named_in_order() {
         ));
     }
     let assessment = assess(&now, &ledger(records), JudgedAt::new(100));
-    assert_eq!(assessment.standing_of(docid(2)), Standing::FRESH);
+    assert!(assessment.standing_of(docid(2)).is_fresh_met());
     let expected = NonEmptyVec::new(jid(2001), vec![jid(2002)]);
     assert!(
         matches!(assessment.notices_of(docid(2)), [Notice::UpstreamSameMeaning { declared, .. }] if *declared == expected),

@@ -11,8 +11,8 @@
 //! ```text
 //!   StatusFilterAsk ──► StatusFilter::new(&Schema) ──► StatusFilter
 //!    (books, standings,        │                          │
-//!     field=value, as given)   └─► every FilterProblem    └─► admits(&Shelf, id, standing)
-//!                                                              ──► whether a document passes
+//!     readers, field=value,    └─► every FilterProblem    └─► admits(&Shelf, id, &Standing)
+//!     as given)                                                 ──► whether a document passes
 //!
 //!   admits:  Shelf::state_of ──► DocState (valid, invalid, gone, unknown)
 //!            Schema::membership ──► the book of a file, through one private function
@@ -23,10 +23,10 @@
 //!
 //! - **Kinds of condition combine by AND, a kind repeated by OR.** A document passes
 //!   when it is in one of the books asked (if any), stands as one of the standings
-//!   asked (if any), and holds every field condition. A kind with nothing asked is
-//!   no condition, so an empty ask admits every document. `--book a --book b
-//!   --standing stale` is the stale documents of the books `a` and `b`; each
-//!   `--where` is a condition of its own.
+//!   asked (if any), is read by one of the counts asked (if any), and holds every
+//!   field condition. A kind with nothing asked is no condition, so an empty ask
+//!   admits every document. `--book a --book b --standing stale` is the stale
+//!   documents of the books `a` and `b`; each `--where` is a condition of its own.
 //! - **The book of a file is the one `Schema::membership` puts it in, valid or
 //!   not** (the rule [`Shelf::tally_by_book`] counts by). A file under no book's
 //!   directory has no book, so it passes no book condition and no field condition.
@@ -37,6 +37,10 @@
 //! - **The standing** is the [`StandingKind`] the caller gives, from
 //!   [`Standing::kind`](super::freshness::Standing::kind); any document has one,
 //!   whatever its state.
+//! - **The readers** are the [`ReaderCount`] of the names that read the content an
+//!   approval stands on now ([`ReadBy::count`](super::ledger::ReadBy::count)), from
+//!   the standing the caller gives. Only an approved document has any: a document at
+//!   another standing passes no readers condition.
 //! - **A field condition** `<field>=<value>` holds only for a valid document whose
 //!   book declares the field and writes a value that equals the condition. An
 //!   invalid document, a document of a book that does not declare the field, and a
@@ -84,7 +88,8 @@ use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 
 use super::build::{DocState, Shelf};
 use super::doc::{Doc, FieldValue};
-use super::freshness::StandingKind;
+use super::freshness::{Standing, StandingKind};
+use super::ledger::ReaderCount;
 use super::schema::{
     BookName, BookSchema, EntryName, FieldPresence, FieldType, ScalarType, Schema,
 };
@@ -100,6 +105,10 @@ pub struct StatusFilterAsk {
     /// The standings the documents are at; a document at any of them passes. Empty:
     /// every standing.
     pub standings: BTreeSet<StandingKind>,
+    /// How many names read the content the documents stand on ([`ReaderCount`]); an
+    /// approved document that is read by any of these passes, and no other does.
+    /// Empty: no condition.
+    pub readers: BTreeSet<ReaderCount>,
     /// The field conditions, each of which a document must hold, in the order given.
     /// Empty: no field condition.
     pub fields: Vec<FieldAsk>,
@@ -345,12 +354,20 @@ impl StatusFilter {
     /// The shelf is the one place that knows whether the identity is valid, invalid,
     /// gone or unknown, and which files it has, so the caller does not pass that in;
     /// it passes the standing the model gave the document.
-    pub fn admits(&self, shelf: &Shelf, id: DocId, standing: StandingKind) -> bool {
-        if !self.ask.standings.is_empty() && !self.ask.standings.contains(&standing) {
+    pub fn admits(&self, shelf: &Shelf, id: DocId, standing: &Standing) -> bool {
+        let kind = standing.kind();
+        if !self.ask.standings.is_empty() && !self.ask.standings.contains(&kind) {
             return false;
         }
-        // Nothing but the standing asked: the shelf need not be read (an empty ask,
-        // the plain `status`, passes every identity this way).
+        if !self.ask.readers.is_empty()
+            && !standing
+                .read_by()
+                .is_some_and(|read_by| self.ask.readers.contains(&read_by.count()))
+        {
+            return false;
+        }
+        // Nothing but the standing and the readers asked: the shelf need not be read
+        // (an empty ask, the plain `status`, passes every identity this way).
         if self.ask.books.is_empty() && self.conditions.is_empty() {
             return true;
         }
@@ -409,9 +426,11 @@ fn book_of<'a>(schema: &'a Schema, origin: &RelPath) -> Option<&'a BookName> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::actor::Actor;
     use crate::domain::shelf::build::{DocReading, RawProblem, RawValue, ReadId};
-    use crate::domain::shelf::fixtures_tests::{docid, list, path, reading, text};
-    use crate::domain::shelf::freshness::FreshnessLevel;
+    use crate::domain::shelf::fixtures_tests::{actor, docid, list, path, reading, text};
+    use crate::domain::shelf::freshness::{Cause, Freshness, FreshnessLevel};
+    use crate::domain::shelf::ledger::{Quorum, ReadBy};
     use crate::domain::shelf::schema::{
         BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl, KeyPatternDecl,
         LinkEntryDecl, LinkTargetDecl, Propagation,
@@ -583,8 +602,32 @@ mod tests {
         }
     }
 
+    /// A standing of this kind, for the kinds these tests ask: an approval is read by
+    /// one name.
+    fn standing_of(kind: StandingKind) -> Standing {
+        match kind {
+            StandingKind::Pending => Standing::Pending,
+            StandingKind::Denied => Standing::Denied,
+            StandingKind::Retired => Standing::Retired,
+            FRESH => Standing::fresh(),
+            STALE => {
+                let hash = *shelf_of(vec![dec(1, &[])]).doc(docid(1)).unwrap().hash();
+                let freshness = Freshness::from_causes(vec![Cause::SelfChanged {
+                    approved: hash,
+                    now: hash,
+                }]);
+                Standing::Approved {
+                    freshness,
+                    quorum: Quorum::Met,
+                    read_by: ReadBy::of_counted(BTreeSet::from([actor()])),
+                }
+            }
+            other => panic!("a kind these tests do not ask: {other:?}"),
+        }
+    }
+
     fn admits(filter: &StatusFilter, shelf: &Shelf, n: u128, standing: StandingKind) -> bool {
-        filter.admits(shelf, docid(n), standing)
+        filter.admits(shelf, docid(n), &standing_of(standing))
     }
 
     fn int(n: i64) -> RawValue {
@@ -632,6 +675,85 @@ mod tests {
         assert!(!admits(&some, &shelf, 1, StandingKind::Denied));
     }
 
+    /// An approval that holds, read by these names.
+    fn read_by(names: &[&str]) -> Standing {
+        Standing::Approved {
+            freshness: Freshness::Fresh,
+            quorum: Quorum::Met,
+            read_by: ReadBy::of_counted(names.iter().map(|n| Actor::new(n).unwrap()).collect()),
+        }
+    }
+
+    fn readers(counts: &[ReaderCount]) -> StatusFilter {
+        filter(StatusFilterAsk {
+            readers: counts.iter().copied().collect(),
+            ..ask()
+        })
+    }
+
+    #[test]
+    fn the_readers_asked_are_one_or_the_other() {
+        let shelf = shelf_of(vec![dec(1, &[])]);
+        let at =
+            |filter: &StatusFilter, standing: &Standing| filter.admits(&shelf, docid(1), standing);
+        let (nobody, one, several) = (
+            read_by(&[]),
+            read_by(&["ana"]),
+            read_by(&["ana", "bo", "cy"]),
+        );
+
+        let only_one = readers(&[ReaderCount::One]);
+        assert!(at(&only_one, &one));
+        assert!(
+            !at(&only_one, &nobody),
+            "an approval nobody counts is not one"
+        );
+        assert!(!at(&only_one, &several));
+
+        let either = readers(&[ReaderCount::Nobody, ReaderCount::Several]);
+        assert!(at(&either, &nobody));
+        assert!(at(&either, &several));
+        assert!(!at(&either, &one));
+
+        // Nothing asked is no condition.
+        let any = readers(&[]);
+        assert!(at(&any, &nobody) && at(&any, &one) && at(&any, &several));
+    }
+
+    #[test]
+    fn only_an_approval_passes_a_readers_condition() {
+        let shelf = shelf_of(vec![dec(1, &[])]);
+        let all = readers(&ReaderCount::ALL);
+        for standing in [Standing::Pending, Standing::Denied, Standing::Retired] {
+            assert!(!all.admits(&shelf, docid(1), &standing), "{standing:?}");
+        }
+        assert!(all.admits(&shelf, docid(1), &read_by(&["ana"])));
+        // An approval that is stale is still read.
+        assert!(all.admits(&shelf, docid(1), &standing_of(STALE)));
+    }
+
+    #[test]
+    fn the_readers_and_the_other_kinds_all_have_to_hold() {
+        let shelf = shelf_of(vec![dec(1, &[]), note(2, &[])]);
+        let both = filter(StatusFilterAsk {
+            books: books(&["decision"]),
+            readers: [ReaderCount::One].into(),
+            standings: [FRESH].into(),
+            ..ask()
+        });
+        let one = read_by(&["ana"]);
+        assert!(both.admits(&shelf, docid(1), &one));
+        assert!(!both.admits(&shelf, docid(2), &one), "the book");
+        assert!(
+            !both.admits(&shelf, docid(1), &read_by(&["ana", "bo"])),
+            "the readers"
+        );
+        assert!(
+            !both.admits(&shelf, docid(1), &standing_of(STALE)),
+            "the standing"
+        );
+    }
+
     #[test]
     fn kinds_of_condition_all_have_to_hold() {
         let shelf = shelf_of(vec![
@@ -642,6 +764,7 @@ mod tests {
         let all_three = filter(StatusFilterAsk {
             books: books(&["decision", "plain"]),
             standings: [STALE].into(),
+            readers: BTreeSet::new(),
             fields: vec![field_ask("topic", "#41")],
         });
         assert!(admits(&all_three, &shelf, 1, STALE));
@@ -686,7 +809,7 @@ mod tests {
                 fields: vec![field_ask(field, value)],
                 ..ask()
             })
-            .admits(&shelf, docid(n), FRESH)
+            .admits(&shelf, docid(n), &standing_of(FRESH))
         };
         // An integer is a number, not the text it is written as.
         assert!(admitted("count", "12", 1));
@@ -836,6 +959,7 @@ mod tests {
         let given = StatusFilterAsk {
             books: books(&["note", "decision"]),
             standings: [STALE].into(),
+            readers: [ReaderCount::Nobody, ReaderCount::One].into(),
             fields: vec![field_ask("topic", "x"), field_ask("count", "1")],
         };
         assert_eq!(filter(given.clone()).ask(), &given);
@@ -1040,6 +1164,7 @@ mod tests {
         let in_books = filter(StatusFilterAsk {
             books: books(&["decision"]),
             standings: [STALE].into(),
+            readers: BTreeSet::new(),
             fields: vec![without("flag")],
         });
         assert!(admits(&in_books, &shelf, 1, STALE));
@@ -1119,6 +1244,7 @@ mod tests {
         let in_books = filter(StatusFilterAsk {
             books: books(&["decision"]),
             standings: [STALE].into(),
+            readers: BTreeSet::new(),
             fields: vec![with("topic")],
         });
         assert!(admits(&in_books, &shelf, 1, STALE));
@@ -1331,8 +1457,8 @@ mod tests {
             &Default::default(),
         );
         let owned = StatusFilter::new(&some_require, ask_without("owner")).unwrap();
-        assert!(!owned.admits(&shelf, docid(1), FRESH));
-        assert!(owned.admits(&shelf, docid(2), FRESH));
+        assert!(!owned.admits(&shelf, docid(1), &standing_of(FRESH)));
+        assert!(owned.admits(&shelf, docid(2), &standing_of(FRESH)));
         // With `--book`, only the books asked count: in `decision` alone the field is
         // always written, while `note` alone, or both, can be without it.
         let in_books = |names: &[&str]| StatusFilterAsk {
@@ -1382,6 +1508,7 @@ mod tests {
         let all = problems(StatusFilterAsk {
             books: books(&["nothing", "decision", "zero"]),
             standings: [STALE].into(),
+            readers: BTreeSet::new(),
             fields: vec![
                 field_ask("nothing", "x"),
                 field_ask("count", "many"),

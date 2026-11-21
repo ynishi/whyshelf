@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7de763afba82d996c08a742a2a64c64fdf28328b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0ded651f36a592746982663febde19b63543622ec91fde6e408bdd40fe6ec3c3",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ed78081898f239099af12d9920d20d82165b84b3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0175bb57361579365c6f80650f2bf9051ecec2367fcd8f934356d11545e72f74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/id.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "118e9c413719be1a80a5e499f7b4f6787e272ca3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9b00bb69c6b3fe5efb2007456e6d80f1e47daef471e8ec2db82eac26c9ea303f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/lookup/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795240972613,
+  "expires": null,
+  "frame": [
+    {
+      "address": "014b7fd938d651a0e82777b8b292528cd330d466",
+      "hash": "sha256:94dfb3915b3d8e52fde888846d2d6fcb958a36557c2eaa6b11a42c81a8cc53de",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "17"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-13c1-71ff-8447-3222d6d270df"
+    }
+  ],
+  "id": "01a1fcb3-64d1-7237-95c9-438cbdb01152",
+  "kind": "decision",
+  "reason": "Re-read for #105: DEC-70 gained the readers kind of a status filter (DEC-95); the verifications' test files changed where Standing::FRESH became the test helpers fresh() and is_fresh_met(), and a Standing::Approved gained its readers; what each states still holds: cargo test --workspace passes (1697)",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:5fef89319cf556b0a98b45eb1472235f78da67dee6880a69cd16908ca841b3a4",
+  "seen_address": "0cd33547b0b36dee54c63cbfea4b0ffb379fd884",
+  "subject": "01a1c4ba-1878-7520-ab7b-54358c7ed69e",
+  "v": 1,
+  "verb": "approve"
+}

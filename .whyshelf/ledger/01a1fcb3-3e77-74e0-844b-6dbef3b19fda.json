@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::filter::StatusFilter::admits",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::freshness::Standing::read_by",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::reading",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::ReadBy",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::ReaderCount",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Readers::at",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795240966948,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f6b02786e96898acdbcc1298340b5a9809d40658",
+      "hash": "sha256:bfb98ed672243880cba62041ce43c663e367874054455d328abcf0fda6527d16",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1fca1-6c0d-73c0-9ad9-7f5e5d9cb7d6"
+    }
+  ],
+  "id": "01a1fcb3-3e77-74e0-844b-6dbef3b19fda",
+  "kind": "decision",
+  "reason": "Blind review of #105 (Opus, from the issue and the branch only) found no must-fix and no should-fix, its nits fixed: on the binary, with no rule, an approval read by one name shows one and is listed by --readers one, a second name makes it several, an edit approved by one makes it one again, lapsed readings are listed apart and counted by nobody; code review (no correctness bug) and rule-judge on the code; V-119 and V-120 name tests that exist and pass",
+  "revision": "8370b1118f8e9d8f7ee574d5bcdc839c95f1ff63",
+  "seen": "sha256:8a73f1aa4f2a908af17ffccb383085ba39d5c58e130b332baa59fe820f76fad3",
+  "seen_address": "70a91830d2d7a9aa5514c6db26bd3e55f8426d8b",
+  "subject": "01a1fca1-7324-77ae-ade6-30bb419c262e",
+  "v": 1,
+  "verb": "approve"
+}

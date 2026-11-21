@@ -1047,8 +1047,8 @@
 //!   map                       what the declaration says: every book and every link, in its order,
 //!                             and a drawing of them; it reads no document and no ledger
 //!                             (exit 1, as check, when the declaration cannot be used)
-//!   status [--book <name>]... [--standing <word>]... [--where <field>=<value>]...
-//!          [--without <field>]... [--with <field>]...
+//!   status [--book <name>]... [--standing <word>]... [--readers <word>]...
+//!          [--where <field>=<value>]... [--without <field>]... [--with <field>]...
 //!                             every document, or those that pass the filters: what was
 //!                             decided, and where it stands now (the filters are under
 //!                             "Output and exit status")
@@ -1426,19 +1426,36 @@
 //! |---|---|
 //! | 0 | the answer was given |
 //! | 1 | `check` found something wrong, `map`, `cover` or `unlinked` was given a declaration that cannot be used, `stale --exit-code` found an approval that does not hold or one that stands on a name that cannot be told now, `fmt --check` found a file not in the form (one it would write, or one it would leave alone), or a rule of the model refused the judgement (nothing was written; for `judge moved`, something still at the old name, nothing at the new one, or a name that cannot be told now (with `--prefix`, any name under the prefix of that kind, each listed in `refused`, and a name an adapter gave no answer for); for `judge exempt`, a document whose file is invalid, or an artifact when the names its link's selection takes cannot all be listed; a document no file carries is a reference that names no document, exit 2, even when an exemption of it stands; for `rekey`, files that could not be read and may write the key or link to it, a file whose identity cannot be told, a file `fmt` would leave alone, or files that would not read as planned, a file changed since the first reading among them, each listed in `problems`) |
-//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it (with `--artifact`: a `--from` that is no link to artifacts with a `cover`, a name its selection does not take now, or one a document reaches or already exempt, and, with `--artifact` together with document references, bad arguments), for `cover` a `--link` that is no covering link to artifacts, for `judge withdraw` an id that is no decision or declaration, or one already withdrawn, and for `rekey` a document no file carries or that is not one file with an identity and a key that read, a new key that is taken or that the book refuses, a book with no next key, a new file the range of the book does not take, a word for a document that writes no key in a link or two words for one, a document that writes the old key in a link and that no approval and no word decides, or whose word is against its approval (every one is listed in `problems`), a file already at the new file, or a file that is no longer what was read when it is written over (one changed before, between the two readings, is exit 1) |
+//! | 2 | the request is wrong: bad arguments, a reference that names nothing, more than one document, an unknown book (in a reference, `unlinked --book` or `status --book`) or a key its grammar refuses, a `status` filter that is no request (a `--standing` that is no standing, a `--readers` that is no count of readers, a `--where` with no `=` or with an empty value, a field no book declares, a value no book that declares the field reads, a field asked with `--where` or `--with` and with `--without`, or a `--without` of a field that every book declaring it requires, of the books asked when any are and one of them declares it), an `fmt --drop` with an empty name, with `id` or `key`, or with a name every book declares, a declaration that cannot be used, `get --approved` / `diff` of a document no approval stands about, a `--successor` that does not take the place of the document deprecated, for `new` a key that is taken, a book of slugs with no `--key`, entries the book refuses, a file already at the path, or a path the range of the book does not take (`include`, `exclude`), for `init` anything at the declaration's path, another file's of the template or a document's, a file that already writes a key the template gives, a declaration template that is not sound, or a file that came to be at a path between the look and the write, for `judge same` a name no document links or one linked in two spaces, a `--from` hash nothing pinned, several earlier hashes and none named, nothing to declare, or an edit the actor already declared, which awaits another name, for `judge moved` two names that are one, an old name no pin of an approval that stands is read as now (one only a link writes, or one already moved away), or pins read as it in two spaces (with `--prefix`, two prefixes that are one, a prefix no pinned name of any space is under, or only names no space can write under the new prefix, each listed in `refused`), for `judge exempt` a `--from` that is no `<book>.<link>` or no covering link into the document's book (not declared, declared with no cover, or into another book), a document the link reaches now or one decided against (an exemption unneeded at once), or a document an exemption already exempts from it (with `--artifact`: a `--from` that is no link to artifacts with a `cover`, a name its selection does not take now, or one a document reaches or already exempt, and, with `--artifact` together with document references, bad arguments), for `cover` a `--link` that is no covering link to artifacts, for `judge withdraw` an id that is no decision or declaration, or one already withdrawn, and for `rekey` a document no file carries or that is not one file with an identity and a key that read, a new key that is taken or that the book refuses, a book with no next key, a new file the range of the book does not take, a word for a document that writes no key in a link or two words for one, a document that writes the old key in a link and that no approval and no word decides, or whose word is against its approval (every one is listed in `problems`), a file already at the new file, or a file that is no longer what was read when it is written over (one changed before, between the two readings, is exit 1) |
 //! | 3 | the run failed: a file could not be read, written or put on disk (for `new`, `init` and `rekey`, part way too: the files written, or for `rekey` those not put back, are listed), or a template `init` ships cannot be read |
 //!
 //! `status` answers `{"docs", "filters", "health"}`: the documents that pass the
 //! filters (all of them when none is given), the filters as given (`books` by
 //! name and each once, `standings` in a fixed order, `where` as `{"field",
 //! "value"}` in the order given, and `without` and `with` as the field names in the
-//! order given, each empty when none was), and the `health` of
-//! the whole project, not of the documents listed. The filters are:
+//! order given, each empty when none was; `readers` by word, in a fixed order), and
+//! the `health` of the whole project, not of the documents listed. A row of an
+//! approved document
+//! also carries `readers`: `{"count", "counted", "lapsed"}`, the names that approved
+//! the content it stands on now, in every project whether or not it declares a rule
+//! (`count` is `nobody`, `one` or `several`; `counted` are the names whose own latest
+//! approval of that content has not lapsed, `lapsed` those whose has, so that an
+//! approval every reading of which lapsed has none counted); a row with no approval
+//! has none. The readers are those of the content the approval stands on, so a
+//! stale row keeps the readers of what was approved (`--standing fresh` with
+//! `--readers` asks what is read now), and `awaiting.readers` still names the last
+//! reader when `readers` counts nobody. The filters are:
 //!
 //! - `--book <name>`: the documents of this book;
 //! - `--standing <word>`: the documents at this standing, in the words of a
 //!   document's `standing` in the answers (above);
+//! - `--readers <word>`: the approved documents read by this many names now, in the
+//!   words of `readers.count` (`nobody`, `one`, `several`), as the answers show them;
+//!   `--readers one` lists what no second name reads now (one whose reading lapsed
+//!   is `lapsed`, not counted), and does not list an approval
+//!   every reading of which lapsed (that is `--readers nobody`). A document with no
+//!   approval passes none. A name is the actor declared, so one person who gives two
+//!   names reads as two;
 //! - `--where <field>=<value>`: the documents whose book declares the field and
 //!   whose value equals this one; for a list field, whose list holds it as an item.
 //!   The text after the first `=` is the value, read as the type of the field.
@@ -1454,9 +1471,10 @@
 //! documents of `a` or `b`), except that each `--where`, each `--without` and each
 //! `--with` is a condition it must hold. A book or a field that is not declared, a
 //! value no book that declares the field reads as its type, an empty value, a field
-//! asked with `--where` or `--with` and with `--without`, and a `--without` of a
+//! asked with `--where` or `--with` and with `--without`, a `--without` of a
 //! field that every book declaring it requires (of the books asked, when any are and
-//! one of them declares it) are a request error
+//! one of them declares it), and a `--standing` or a `--readers` that is no word of
+//! theirs are a request error
 //! (exit 2) that lists every problem. A document that is not valid passes the
 //! `--book` of any of its files and never a `--where`, a `--without` or a `--with`. The rule is on the page of [`domain::shelf::filter`].
 //!

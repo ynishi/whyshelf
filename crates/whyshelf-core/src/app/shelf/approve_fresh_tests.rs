@@ -127,7 +127,7 @@ fn a_run_leaves_out_the_fresh_one_and_writes_the_others() {
     assert_eq!(app.ports().record_count(), 2);
     // The spec stands on the approval of the finding that was left standing.
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn a_fresh_approval_with_a_name_pinned_as_absent_is_left_out() {
     let mut app = ShelfApp::new(fake);
     block_on(app.judge(approve("SP-2"))).unwrap();
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
     assert!(
         row.notices
             .iter()
@@ -204,7 +204,7 @@ fn a_fresh_approval_on_a_name_that_cannot_be_told_now_is_refused_as_before() {
         .cannot_tell(&file_space(), "tests/a.rs", "the adapter is offline");
     // Its freshness is unchanged by a name that cannot be told...
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
     // ...but an approval cannot be made on it: it is refused, not left out.
     let err = block_on(app.judge(approve("SP-2"))).unwrap_err();
     assert!(
@@ -230,7 +230,7 @@ fn an_edit_declared_to_keep_the_meaning_is_approved_on_the_hash_now() {
     }]))
     .unwrap();
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
     // A new approval would pin the hash now, which the standing one did not.
     let run = block_on(app.judge(approve("FR-1"))).unwrap();
     assert_eq!(subjects(&run), [docid(1)]);
@@ -253,7 +253,7 @@ fn an_upstream_edit_declared_to_keep_the_meaning_is_approved_on_the_hash_now() {
     .unwrap();
     // SP-2 is fresh, with a notice that its upstream is not the hash it pinned.
     let row = block_on(app.get(&r("SP-2"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
     assert!(
         matches!(row.notices.as_slice(), [Notice::UpstreamSameMeaning { .. }]),
         "{:?}",
@@ -533,7 +533,7 @@ fn another_actors_approval_of_the_same_content_is_written_and_a_readers_again_re
     assert_eq!(app.ports().record_count(), 2);
     // The document is fresh, as after one approval.
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;
-    assert_eq!(row.standing, Standing::FRESH);
+    assert!(row.standing.is_fresh_met());
 }
 
 #[test]

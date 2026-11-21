@@ -60,7 +60,7 @@ fn approved_on(at_approval: &Shelf, addressed: bool) -> Ledger {
 
 fn causes_of(assessment: &Assessment, n: u128) -> Vec<Cause> {
     match assessment.standing_of(docid(n)) {
-        Standing::FRESH => Vec::new(),
+        fresh if fresh.is_fresh_met() => Vec::new(),
         Standing::Approved {
             freshness: Freshness::Degraded(d),
             ..
