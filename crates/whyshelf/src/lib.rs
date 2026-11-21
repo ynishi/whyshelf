@@ -851,9 +851,74 @@
 //! inside the root (as every reading of a file does), each of at most
 //! 16 MiB, and stops at 20,000 files or 512 MiB; a name pins are read as in two
 //! spaces is listed with no candidate, as `judge moved` refuses it. What could not be
-//! looked at is a `note` of the name. A space that has no way to suggest
-//! (`rust-item`, `rust-test` and `js-test`, for now) is listed in `cannot_suggest`, and its names with no
-//! candidate.
+//! looked at is a `note` of the name.
+//!
+//! For `rust-item`, the docs keep no history, so a candidate is a name the built docs
+//! have now that ends as the gone one does: of the modules (a directory with an
+//! `index.html`) and the items (a page `<kind>.<Name>.html`) of the crates rustdoc
+//! wrote, those that end with the most segments in common with it, counted from the
+//! last, in each crate (`app::old::m::Foo` has `app::new::m::Foo`, and not
+//! `app::other::Foo` when it has the first; a dependency's `http::Error`, which ends alike in two
+//! segments with `myapp::http::Error`, does not hide `myapp::net::Error`, which does in
+//! one). A member `Type::m` has the members of that name of the types that
+//! end as `Type` does and whose page has the anchor of `m` (the most alike in each
+//! crate of those, so a type that ends alike in more segments and has no such member
+//! does not hide one that has it), and the names that end as the member does,
+//! as a whole (a function `m`, say), are candidates as any other, so that a member no
+//! type has the anchor of has those only. When an approval pinned content (a
+//! preset that compares more than presence, as `rustdoc-promise` does), a candidate
+//! whose promise, hashed as the pin was, is the hash pinned is `same_content`; any
+//! other is `same_end`, which is the form of a name and no evidence that it is the same
+//! thing. At most 16 candidates are kept for a name: `same_content` before `same_end`,
+//! and of one rank those in the crate of the gone name before the others, then by
+//! name; that order decides only which are kept, for the answer is in the order of
+//! candidates, then by name, and `candidates_cut` says how many were found. The bounds
+//! below are shared by every gone name, searched one after another; for one, the pages
+//! read for content are those of the candidates in its crate first, and a page read
+//! already (the page of a member's type) is used whatever the bound, so that a bound
+//! spent by the names before can leave a later one's candidate `same_end`, with
+//! `scan_truncated`. The search stops at 20,000 names, 64 modules deep, 2,000 pages or
+//! 512 MiB of them, and passes over a page of more than 32 MiB (`scan_truncated`,
+//! `unreadable_skipped`, `too_large_skipped`); when where the docs are built cannot be
+//! told, or they are not built, nothing is searched (`search_unavailable`). A name only
+//! a public re-export reaches is not a candidate, a name renamed where it stands
+//! (`m::Foo` to `m::Bar`) has none, and the docs are read as they are, so an item of
+//! docs an earlier build left is a candidate too. The crates of the gone names are
+//! walked first, and the others in the order of their names, so docs built with their
+//! dependencies can reach the bound of names before another crate of the project is
+//! walked: a candidate in a crate not walked is not found, and `scan_truncated` says
+//! the search stopped. A gone name counts toward a move of a prefix (below) only
+//! through the candidates kept, at most 16: one whose candidate was cut does not.
+//!
+//! A candidate carries every move of a prefix that leads from the gone name to it, the
+//! widest first: a leading part of each of the two names, or the whole of it, with the
+//! same segments after it in both. The two names end with some segments alike, and the
+//! segments left out of the parts are some of that end, down to none, when the parts are
+//! the whole of both names (`app::old::Foo` to `app::new::Foo` is moved by `app::old` to
+//! `app::new` and by the whole name; a candidate that ends alike in no segment has the
+//! whole name alone). For `app::x::Foo` and `domain::x::Foo` they are `app` to
+//! `domain`, `app::x` to `domain::x` and the whole name, so that a module that keeps its
+//! name under another parent is moved by the parent, by itself or by each name in it.
+//! When one name ends with all of the other (`app::parser::Token` and `parser::Token`),
+//! they are the leading parts that keep one segment of that end on each side
+//! (`app::parser` to `parser`) and the whole name.
+//! When two gone names or more have candidates carrying one such move, `moves` holds
+//! it as `judge moved --prefix <old> <new>` would, against what is there now, and does
+//! not try whether the actor is admitted to declare it. A move that stands is in
+//! `prefixes`, with the names it moves and `not_asked`, the spaces whose adapter takes
+//! no prefix (as for `judge moved --prefix`); one that does not stand (a name under it
+//! is still where it was, say) is in `refused_prefixes`, with how many names it cannot
+//! move. At most 32 moves are tried, and `untried_prefixes` counts the rest: the ones
+//! tried are first the moves a candidate found the best way carries (`same_content`
+//! before `same_end`), then those the most gone names have, then by the move. The moves
+//! that stand are alternatives, each held alone against what is there now, and not
+//! together: two of them may move the same names (`app` to `domain`, and `app::x` to
+//! `domain::x` when nothing else is left under `app`; or one prefix to two places), and
+//! after one is declared another that moves the same names has nothing under it (or
+//! only what the first did not move), as `judge moved --prefix` then holds it.
+//!
+//! A space that has no way to suggest (`rust-test` and `js-test`) is listed in
+//! `cannot_suggest`, and its names with no candidate.
 //!
 //! ## What settles an origin
 //!
@@ -1601,21 +1666,35 @@
 //!
 //! `moves` answers `{"absent": [{"space", "name", "pinned_by": [{"id", "key"}],
 //! "candidates": [{"name", "found", "similarity", "present"}], "notes": [{"kind",
-//! "detail"}]}], "cannot_suggest": [...], "health", "drawing"}`: the gone names by
+//! "detail"}]}], "cannot_suggest": [...], "prefixes": [{"from", "to", "moved":
+//! [{"space", "name"}], "not_asked": [...]}], "refused_prefixes": [{"from", "to",
+//! "refused"}],
+//! "untried_prefixes", "health", "drawing"}`: the gone names by
 //! space and then by name, each with the documents whose approvals pin it; its
 //! candidates `same_content` first, then `renamed` from the most alike
-//! (`similarity`, a percent, null when none was given), then by name, a candidate
+//! (`similarity`, a percent, null when none was given), then `same_end` (the name
+//! ends as the gone one does, and nothing more is known; `similarity` null), then by
+//! name, a candidate
 //! that is the name itself or another gone name left out, each a name as written on
 //! disk (a move in case only is one); `present` whether something is at the
 //! candidate now; `notes` what could not be looked at, each `kind` one of
 //! `in_two_spaces`, `no_repository`, `no_revision`, `unknown_revision`,
-//! `history_unreadable`, `scan_truncated`, `unreadable_skipped`, `too_large_skipped`,
+//! `history_unreadable`, `search_unavailable`, `scan_truncated`,
+//! `unreadable_skipped`, `too_large_skipped`, `candidates_cut`,
 //! `no_content` (every pin of it compares presence only, as the preset `code` does:
 //! there is no content to search for, and only Git's renames can suggest), in that
 //! order, each once, with a `detail` sentence; `cannot_suggest` the spaces
-//! of gone names whose adapter cannot suggest, sorted. `drawing` is the same as text
-//! (`jq -r .drawing`). A file or a directory that cannot be read, a history that
-//! cannot be read and a bound reached are notes, and the answer is given: exit 0. A
+//! of gone names whose adapter cannot suggest, sorted; `prefixes` and
+//! `refused_prefixes` the moves of a prefix that gone names share, those that stand
+//! against what is there now (with the names each moves, as they are now, and
+//! `not_asked`, the spaces whose adapter takes no prefix, as `judge moved --prefix`
+//! gives them) and those that do not (with how many names cannot be moved), each in
+//! the order the moves were tried: first a move that a candidate found the best way
+//! carries (`same_content` before `renamed` before `same_end`), then the one the most
+//! gone names share, then by the move (whether the actor is admitted to declare a move
+//! is not tried); `untried_prefixes` how many were not tried. `drawing` is the same as text
+//! (`jq -r .drawing`). A file or a directory or a page that cannot be read, a history
+//! that cannot be read and a bound reached are notes, and the answer is given: exit 0. A
 //! declaration that cannot be used is exit 2, as for every reading command, and a
 //! port that fails (a ledger or a document that cannot be read, Git that cannot be
 //! run or takes longer than 30 s for a listing) exit 3.

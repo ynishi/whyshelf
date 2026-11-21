@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "73054a5659559ddb4a0d18af9905c3a2a20e8fb2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:55b80612b14811d95fae8705a858e6b1af674d952d4c6858bf9fbce1e1039edc",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/moved_prefix.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795253320436,
+  "expires": null,
+  "frame": [
+    {
+      "address": "28de2319c7a40f142e802423b498ba15a506b3e2",
+      "hash": "sha256:916f6db637041e4b18ad98dc61c728af405ac00ccc952d12f5484c73c2b70453",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "80"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f0ce-3040-7549-bf80-827e6a156a89"
+    }
+  ],
+  "id": "01a1fd6f-c95c-7475-8da5-9784e507d71d",
+  "kind": "decision",
+  "reason": "Reviewed for #142: code review (medium), rule-judge (arch) twice, and four rounds of blind review (Opus, from the issue and the branch only) until no must-fix was left; the decision, its verifications and the decisions it corrects state what the code and the tests now do, and cargo test --workspace passes (1759)",
+  "revision": "5470fbabf52f5189681e25b8e46d01dffa0e0cae",
+  "seen": "sha256:5e54bb8d4d7b2244a692391abe68e1fed6e7eb4494d238862a3906ed75b5b6cb",
+  "seen_address": "2be2a7baedea51f7f2225e204ba3082e0a6d25ce",
+  "subject": "01a1f0ce-b650-7026-b44b-7c6703334ac0",
+  "v": 1,
+  "verb": "approve"
+}

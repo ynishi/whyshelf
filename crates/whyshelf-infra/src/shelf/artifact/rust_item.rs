@@ -5,6 +5,7 @@
 //! |---|---|---|
 //! | [`RustItemSpace::resolve`] | finds the build directory of the project, looks up each path in the HTML rustdoc wrote under it, and reads what the item promises from its page | `tokio::fs`, `toml` |
 //! | [`RustItemSpace::current`] | the text of what an item promises now | the same |
+//! | [`SpaceSuggest`] | for each gone name, the names there are now in the docs that end as it does, found by their content when an approval pinned some | the same |
 //! | [`presets`] | the presets `rustdoc` (the space, `compare = "presence"`, `means = "depends"`) and `rustdoc-promise` (the space, `compare = "lines"`, `means = "depends"`) | values |
 //!
 //! ```text
@@ -69,6 +70,103 @@
 //! path is no prefix of the space's names, and a `to` that is none makes each name
 //! under `from` unbuildable, with why. Nothing is read of the docs: the answer is of
 //! the names alone, and `resolve` tells whether each new name is there.
+//!
+//! # Suggesting moves
+//!
+//! `moves` asks where the names of approvals that nothing is behind now may have
+//! moved ([`SpaceSuggest`]). The docs have no history, so a candidate is found by the
+//! form of a name and, when an approval pinned content, by the content:
+//!
+//! 1. The names there are now are the modules and the items of the crates rustdoc
+//!    wrote, from the listing of their directories: a module is a directory with an
+//!    `index.html`, an item is a page `<kind>.<Name>.html` of a kind in
+//!    [`ITEM_KINDS`], each by the rules a name is looked up by (the same files, the
+//!    same order, the same places). No re-export, no page that only redirects and no
+//!    path that leaves the root of the project and the build directory is a name; the
+//!    crates of the gone names are walked first. Every name is one `resolve` tells is
+//!    there.
+//! 2. The candidates of a gone name are the names that end as it does: the most
+//!    segments, counted from the last, that any name of a crate has in common with it,
+//!    and those names alone, in each crate (`app::old::m::Foo` has `app::new::m::Foo`
+//!    and `app::new::sub::m::Foo`, and not `app::other::Foo`, when it has the first).
+//!    The count is of a crate, the first segment of a name, so that a name that ends
+//!    alike in more segments in a dependency (`http::Error` for `myapp::http::Error`)
+//!    does not hide one of the crate of the gone name that ends alike in fewer
+//!    (`myapp::net::Error`). A name is never a candidate of itself or of another gone
+//!    name.
+//! 3. A member (`old::Type::m`) has as candidates the members of that name of the types
+//!    that end as `old::Type` does, when the page of such a type has the anchor of the
+//!    member, as a lookup of the member reads one; and of those, the most segments in
+//!    common in each crate, as in 2 (counted among the types that have the anchor, so
+//!    a type that ends alike in more segments and has no such member does not hide one
+//!    that has it). The names that end as the member does, as a whole (a
+//!    function `m`, say, ends alike in one segment), are candidates as any other, by
+//!    the count of 2 together with these members; so when no type has the anchor of the
+//!    member, they are all the candidates it has.
+//! 4. A candidate is found by its content when an approval that pinned the gone name
+//!    compares more than presence and the promise of the candidate (what an item
+//!    promises, below), hashed as that approval hashed it, is the hash pinned: it is
+//!    the same content. Any other candidate is found by the end of its name only,
+//!    which is the form of a name and nothing more: it is no evidence that it is the
+//!    same thing.
+//! 5. A gone name keeps at most 16 candidates: the same content first, then the ones
+//!    of the end only, a name in the crate of the gone one before another, then by
+//!    name. That order decides only which candidates are kept within the bound; the
+//!    answer is in the order of candidates (how each was found), and of one rank by
+//!    name. The content of every candidate is looked at before any is cut, so one of
+//!    the same content is never lost to the sixteen; the pages are read within the
+//!    bounds below, shared by every gone name, the names searched one after another;
+//!    within one gone name, those of the candidates in its crate before the others, and
+//!    a page read already (the page of a member's type) is used whatever the bound. So a
+//!    bound spent on the names searched before can leave a later name's candidate found
+//!    by the end of its name only, with the note that the search stopped. More names
+//!    found than kept is said, with how many were found.
+//!
+//! Each candidate carries every move of a prefix that leads from the gone name to it,
+//! the widest first. A move is a leading part of each of the two names, or the whole of
+//! it, with the same segments after it in both: the two names end with some segments
+//! alike, and the segments left out of the parts are some of that end, from all of it
+//! (or as many as leave a segment in each part) down to none. Left out none, the parts
+//! are the whole of both names: the name moved as itself, which every candidate has,
+//! and the only move of a candidate that ends alike in no segment. So a module that
+//! keeps its name under another parent (`app::x::Foo` to `domain::x::Foo`) has the move
+//! of the parents (`app` to `domain`), the move of the module (`app::x` to
+//! `domain::x`) and the move of the name; the second stands where the first is refused
+//! because another pinned item is still under `app`, and for the module itself
+//! (`app::x` to `domain::x`) it is the move of its whole name. When one name ends with
+//! all of the other (`app::parser::Token` and `parser::Token`), the moves are the
+//! leading parts that keep one segment of that end on each side (`app::parser` to
+//! `parser`) and the whole name. Each is made by
+//! the rules a prefix of names is read by ([`NamePrefixes`], above) and kept only when
+//! those rules take the gone name to exactly the candidate. The use case tries the moves that
+//! more than one gone name has, the one a candidate found the best way carries first (a
+//! move of the same content before one of the end only), then the one the most names
+//! have, and suggests those that stand against what is there now: it does not try
+//! whether the actor is admitted to declare them.
+//!
+//! The search is held to bounds, and a bound is a note, never an error: no more than
+//! 20,000 names, 64 modules deep, 2,000 pages and 512 MiB of them in all, and a page
+//! of at most [`MAX_PAGE_BYTES`]. A search that stops at one says it stopped (and how
+//! many it had), a directory or a page that cannot be read is counted, and so is a
+//! page that is too large; the candidates found until then stand. When where the docs
+//! are cannot be told, or there is no directory of them, the note says so and nothing
+//! is searched. A pin of presence only has no content to look for, and every candidate
+//! of it is found by the end of its name.
+//!
+//! KNOWN LIMITATION: a name that was renamed where it stands (`m::Foo` to `m::Bar`) has
+//! no candidate, since no segment at the end is alike; a name that is only reachable
+//! by a public re-export (it has no page of its own, nor a module that holds it) is no
+//! candidate, though a lookup of it says it is there; and the docs are read as they are
+//! (below, "Where the docs are"), so an item of docs left by an earlier build is a
+//! candidate too. The crates of the gone names are walked first and the others in
+//! the order of their names, so docs built with their dependencies can reach the bound
+//! of names before another crate of the project is walked: a candidate in a crate not
+//! walked is not found, and the note `scan_truncated` says the search stopped. A gone
+//! name counts toward a move of a prefix only through the candidates kept (at most 16):
+//! one whose candidate was cut does not, and a move that fewer of them carry for that
+//! is not tried. This is
+//! a search for where a gone name moved and no list of the names there are: the space
+//! still lists none ([`CannotList`]).
 //!
 //! # Where the docs are
 //!
@@ -231,27 +329,37 @@
 //! [`Comparison::Presence`]: whyshelf_core::domain::shelf::artifact::Comparison::Presence
 //! [`ArtifactReading::of_bytes`]: whyshelf_core::domain::shelf::artifact::ArtifactReading::of_bytes
 
+mod catalog;
+#[cfg(test)]
+mod fixture;
+mod layout;
+mod lookup;
+mod moves;
+mod path;
 mod promise;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Component, Path, PathBuf};
-use std::sync::Arc;
+use std::path::PathBuf;
 
-use tokio::io::AsyncReadExt;
 use whyshelf_core::app::shelf::{
-    Answers, CannotList, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter,
+    Answers, CannotList, NamePrefixes, NoReadBack, SpaceAdapter, SpaceSuggest,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, PrefixMove, Renamed, SpaceAsks, SpacePrefixes,
-    SpaceReadings, SpaceRenamed,
+    ArtifactName, ArtifactReading, Comparison, PrefixMove, SpaceAsks, SpacePrefixes, SpaceReadings,
+    SpaceRenamed,
 };
+use whyshelf_core::domain::shelf::ledger::{GoneName, NameSuggestions};
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
 use super::file::{self, Bounded};
-use promise::{Promise, Unreadable, promise_of};
+use catalog::CatalogLimits;
+pub use layout::{GENERATOR_MARK, ITEM_KINDS, MEMBER_KINDS};
+use lookup::{Found, Lookup, list};
+use path::RustPath;
+use promise::{Promise, Unreadable};
 
 /// The name of the space this adapter resolves names in.
 pub const RUST_ITEM_SPACE: &str = "rust-item";
@@ -267,10 +375,6 @@ pub const RUSTDOC_PROMISE_PRESET: &str = "rustdoc-promise";
 /// names another.
 pub const TARGET_DIR_NAME: &str = "target";
 
-/// The mark rustdoc writes in the head of each page: an index without it is no
-/// docs this adapter reads.
-pub const GENERATOR_MARK: &str = "<meta name=\"generator\" content=\"rustdoc\">";
-
 /// The most bytes of a page this adapter reads; a larger one cannot be told.
 pub const MAX_PAGE_BYTES: u64 = 32 * 1024 * 1024;
 
@@ -279,101 +383,8 @@ pub const MAX_PAGE_BYTES: u64 = 32 * 1024 * 1024;
 /// is read and parsed where it is asked for.
 pub const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
 
-/// The kind of the place of a module, and of a crate (its index).
-const MODULE_KIND: &str = "module";
-
 /// What a reading asked of presence only says of any other comparison.
 const PRESENCE_ONLY: &str = "only presence was asked of the item, so what it promises was not read";
-
-/// The kinds of item rustdoc writes a page `<kind>.<Name>.html` for.
-pub const ITEM_KINDS: &[&str] = &[
-    "struct",
-    "enum",
-    "union",
-    "trait",
-    "traitalias",
-    "fn",
-    "type",
-    "constant",
-    "static",
-    "macro",
-    "attr",
-    "derive",
-    "primitive",
-    "keyword",
-    "foreigntype",
-];
-
-/// The kinds of item whose page has members a path can name.
-const TYPE_KINDS: &[&str] = &[
-    "struct",
-    "enum",
-    "union",
-    "trait",
-    "traitalias",
-    "primitive",
-    "foreigntype",
-];
-
-/// The kinds of member rustdoc writes an anchor `id="<kind>.<name>"` for in the page
-/// of a type, closed: the one table of them and of their anchor words is
-/// [`MemberKind::TABLE`], in the order a name is looked up in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MemberKind {
-    /// A method with a body, of an impl.
-    Method,
-    /// A method of a trait, with no body.
-    TyMethod,
-    /// A variant of an enum.
-    Variant,
-    /// A field of a struct or a union.
-    StructField,
-    /// An associated constant.
-    AssociatedConstant,
-    /// An associated type.
-    AssociatedType,
-}
-
-impl MemberKind {
-    /// Every kind with the word of its anchor (`method` in `id="method.new"`), the
-    /// one table of them: a name is looked up in this order.
-    const TABLE: [(Self, &'static str); 6] = [
-        (Self::Method, "method"),
-        (Self::TyMethod, "tymethod"),
-        (Self::Variant, "variant"),
-        (Self::StructField, "structfield"),
-        (Self::AssociatedConstant, "associatedconstant"),
-        (Self::AssociatedType, "associatedtype"),
-    ];
-
-    /// The word of the anchor of this kind.
-    fn word(self) -> &'static str {
-        Self::TABLE
-            .iter()
-            .find(|(kind, _)| *kind == self)
-            .map_or("", |(_, word)| word)
-    }
-
-    /// The kinds in the order a name is looked up in.
-    fn all() -> impl Iterator<Item = Self> {
-        Self::TABLE.iter().map(|(kind, _)| *kind)
-    }
-
-    /// The anchor words of [`Self::TABLE`], in its order.
-    const fn words() -> [&'static str; 6] {
-        let mut words = [""; 6];
-        let mut at = 0;
-        while at < words.len() {
-            words[at] = Self::TABLE[at].1;
-            at += 1;
-        }
-        words
-    }
-}
-
-/// The words of the anchors of the kinds of member rustdoc writes, made from the one
-/// table of the kinds of member: the lookup of a member reads the kinds in this order.
-pub const MEMBER_KINDS: &[&str] = &MemberKind::words();
 
 /// The presets this adapter offers, both `space` [`RUST_ITEM_SPACE`] and
 /// `means = "depends"`:
@@ -413,12 +424,14 @@ pub enum RustItemError {
     Reason(#[source] ValueError),
 }
 
-/// The space [`RUST_ITEM_SPACE`]: it answers a move of a prefix, cannot suggest where
-/// an item moved, keeps nothing by address, and lists no names ([`CannotList`]).
+/// The space [`RUST_ITEM_SPACE`]: it answers a move of a prefix, suggests where an
+/// item moved (the names there are now in the docs that end as a gone one does, see
+/// the module page, "Suggesting moves"), keeps nothing by address, and lists no names
+/// ([`CannotList`]).
 impl SpaceAdapter for RustItemSpace {
     type Error = RustItemError;
     type Prefixes = Answers;
-    type Suggest = CannotSuggest;
+    type Suggest = Answers;
     type ReadBack = NoReadBack;
     type List = CannotList;
 
@@ -445,7 +458,22 @@ impl NamePrefixes for RustItemSpace {
         names: &BTreeSet<ArtifactName>,
         of: &PrefixMove,
     ) -> Result<(SpacePrefixes, SpaceRenamed), RustItemError> {
-        renamed(names, of).map_err(RustItemError::Reason)
+        path::renamed(names, of).map_err(RustItemError::Reason)
+    }
+}
+
+impl SpaceSuggest for RustItemSpace {
+    async fn suggest(
+        &self,
+        gone: &[GoneName],
+    ) -> Result<BTreeMap<ArtifactName, NameSuggestions>, RustItemError> {
+        let limits = CatalogLimits {
+            page_bytes: self.max_page,
+            ..CatalogLimits::default()
+        };
+        moves::suggest(self.docs().await, &self.root, &limits, gone)
+            .await
+            .map_err(RustItemError::Reason)
     }
 }
 
@@ -641,553 +669,6 @@ async fn reading_of(
     }
 }
 
-/// A name of the space, read: the crate and the segments after it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RustPath {
-    krate: String,
-    rest: Vec<String>,
-}
-
-impl RustPath {
-    /// The one reader of the grammar of the names (on the page of the module).
-    fn parse(text: &str) -> Result<Self, String> {
-        let segments: Vec<&str> = text.split("::").collect();
-        let krate = segments[0];
-        if krate.contains('-') && segment_problem(&krate.replace('-', "_")).is_none() {
-            return Err(format!(
-                "no Rust path: a crate is named as rustdoc writes it, with `_` for `-` (`{}`)",
-                krate.replace('-', "_")
-            ));
-        }
-        for segment in &segments {
-            if let Some(why) = segment_problem(segment) {
-                return Err(format!("no Rust path (`crate::module::Item`): {why}"));
-            }
-        }
-        Ok(Self {
-            krate: krate.to_owned(),
-            rest: segments[1..].iter().map(|s| (*s).to_owned()).collect(),
-        })
-    }
-}
-
-impl RustPath {
-    /// The segments, the crate first: what a prefix is compared on.
-    fn segments(&self) -> Vec<&str> {
-        std::iter::once(self.krate.as_str())
-            .chain(self.rest.iter().map(String::as_str))
-            .collect()
-    }
-}
-
-/// What this adapter says of a move of a prefix, for the `names` of its space asked
-/// about: a prefix is a Rust path ([`RustPath::parse`]) of one segment or more, and a
-/// name is under it when its segments start with all of the prefix's, the same name
-/// under `to` being `to`'s segments and the rest of the name's. `from` that is no Rust
-/// path (a directory, say) is no prefix of the space's names; a `to` that is none
-/// makes each name under `from` unbuildable. A name that is no Rust path is not under
-/// it. Nothing is looked for in the text of a name.
-pub(super) fn renamed(
-    names: &BTreeSet<ArtifactName>,
-    of: &PrefixMove,
-) -> Result<(SpacePrefixes, SpaceRenamed), ValueError> {
-    let from = match RustPath::parse(of.from().as_str()) {
-        Ok(from) => from,
-        Err(why) => {
-            let why = NonBlank::new(format!(
-                "`{}` is no prefix of a Rust path: {why}",
-                of.from()
-            ))?;
-            return Ok((SpacePrefixes::NotUnder(why), SpaceRenamed::new()));
-        }
-    };
-    let to = RustPath::parse(of.to().as_str());
-    let from = from.segments();
-    let mut answers = SpaceRenamed::new();
-    for name in names {
-        let answer = match RustPath::parse(name.as_str()) {
-            Err(_) => Renamed::Outside,
-            Ok(path) => {
-                let segments = path.segments();
-                match (segments.strip_prefix(from.as_slice()), &to) {
-                    (None, _) => Renamed::Outside,
-                    (Some(_), Err(why)) => super::unbuildable(format!(
-                        "`{}` is no prefix of a Rust path: {why}",
-                        of.to()
-                    ))?,
-                    (Some(rest), Ok(to)) => {
-                        let joined: Vec<&str> = to
-                            .segments()
-                            .into_iter()
-                            .chain(rest.iter().copied())
-                            .collect();
-                        super::built(&joined.join("::"))?
-                    }
-                }
-            }
-        };
-        answers.insert(name.clone(), answer);
-    }
-    Ok((SpacePrefixes::Answered, answers))
-}
-
-/// Why a segment of a path is no identifier, if it is none.
-fn segment_problem(segment: &str) -> Option<String> {
-    if segment.is_empty() {
-        return Some("a segment between `::` is empty".to_owned());
-    }
-    if ["crate", "self", "super", "Self"].contains(&segment) {
-        return Some(format!(
-            "`{segment}` is relative: a path starts from the name of a crate"
-        ));
-    }
-    if segment.starts_with("r#") {
-        return Some(format!(
-            "`{segment}` is a raw identifier, which is no name of the space"
-        ));
-    }
-    let first = segment
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_alphabetic() || c == '_');
-    let rest = segment.chars().all(|c| c.is_alphanumeric() || c == '_');
-    if !first || !rest || segment == "_" {
-        return Some(format!("`{segment}` is no identifier"));
-    }
-    None
-}
-
-/// What a path comes to in the docs.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Found {
-    /// It is there, at this place.
-    There(Place),
-    /// It is there, and there is no page to read what it promises from, and why (a
-    /// re-export into docs that are not here).
-    Unread(String),
-    Absent,
-    CannotTell(String),
-}
-
-/// Where in the docs the thing a path names is told of: the one place
-/// `Lookup::find` hands over, for what its promise is read from. Only a member has
-/// an anchor, so it is the one variant that has it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Place {
-    /// A module, or a crate: the index of its directory ([`MODULE_KIND`]).
-    Module {
-        /// The `index.html` of the module.
-        page: PathBuf,
-    },
-    /// An item: its page.
-    Item {
-        page: PathBuf,
-        /// The kind of the page: a kind of [`ITEM_KINDS`].
-        kind: String,
-    },
-    /// A member of a type: the page of the type, the kind of the member and the
-    /// `id` of its element on the page (`method.new`).
-    Member {
-        page: PathBuf,
-        kind: MemberKind,
-        anchor: String,
-    },
-}
-
-impl Place {
-    /// The page the promise is read from.
-    fn page(&self) -> &Path {
-        match self {
-            Self::Module { page } | Self::Item { page, .. } | Self::Member { page, .. } => page,
-        }
-    }
-}
-
-impl From<At> for Found {
-    /// What a walk that ends at `at` comes to: the one place a [`Place`] is built.
-    fn from(at: At) -> Self {
-        match at {
-            At::Module(dir) => Self::There(Place::Module {
-                page: dir.join("index.html"),
-            }),
-            At::Item { page, kind } => Self::There(Place::Item { page, kind }),
-            At::Member { page, kind, anchor } => Self::There(Place::Member { page, kind, anchor }),
-            At::Unfollowed(why) => Self::Unread(why),
-        }
-    }
-}
-
-/// Where a walk along a path is.
-#[derive(Debug, Clone)]
-enum At {
-    /// The directory of a module (or of a crate).
-    Module(PathBuf),
-    /// The page of an item.
-    Item { page: PathBuf, kind: String },
-    /// A member of a type, found by its anchor on the page of the type: nothing is
-    /// under it.
-    Member {
-        page: PathBuf,
-        kind: MemberKind,
-        anchor: String,
-    },
-    /// A re-export whose link cannot be followed, and why: what is under it cannot
-    /// be told.
-    Unfollowed(String),
-}
-
-/// The docs, read for one resolution: each directory listed once, each page read
-/// once.
-struct Lookup {
-    docs: PathBuf,
-    /// The docs with every symbolic link resolved, when they can be.
-    real_docs: Option<PathBuf>,
-    /// The root of the project and the build directory (the parent of the docs),
-    /// each with every symbolic link resolved, when it can be: no page and no
-    /// directory of a module is read outside both.
-    real_places: Vec<PathBuf>,
-    max_page: u64,
-    listings: BTreeMap<PathBuf, Option<BTreeSet<String>>>,
-    pages: BTreeMap<PathBuf, Result<Arc<str>, String>>,
-}
-
-impl Lookup {
-    async fn new(root: &Path, docs: PathBuf, max_page: u64) -> Self {
-        let mut real_places = Vec::new();
-        for place in std::iter::once(root).chain(docs.parent()) {
-            if let Ok(real) = tokio::fs::canonicalize(place).await {
-                real_places.push(real);
-            }
-        }
-        Self {
-            real_docs: tokio::fs::canonicalize(&docs).await.ok(),
-            real_places,
-            docs,
-            max_page,
-            listings: BTreeMap::new(),
-            pages: BTreeMap::new(),
-        }
-    }
-
-    /// Why nothing is read at `path`, when it leads outside the root of the project
-    /// and the build directory once symbolic links are resolved, or is a link that
-    /// cannot be resolved.
-    async fn outside(&self, path: &Path) -> Option<String> {
-        let inside = match tokio::fs::canonicalize(path).await {
-            Ok(real) => self.real_places.iter().any(|place| real.starts_with(place)),
-            Err(_) => false,
-        };
-        (!inside).then(|| {
-            format!(
-                "{} leads outside the root of the project and the build directory once symbolic links are resolved, or cannot be resolved: nothing is read through it",
-                path.display()
-            )
-        })
-    }
-
-    /// The names of the entries of a directory, or none when it cannot be listed.
-    async fn listing(&mut self, dir: &Path) -> Option<&BTreeSet<String>> {
-        if !self.listings.contains_key(dir) {
-            let names = list(dir).await;
-            self.listings.insert(dir.to_path_buf(), names);
-        }
-        self.listings.get(dir).and_then(Option::as_ref)
-    }
-
-    /// Whether `name` is an entry of `dir`, as written; none when `dir` cannot be
-    /// listed.
-    async fn has(&mut self, dir: &Path, name: &str) -> Option<bool> {
-        self.listing(dir).await.map(|names| names.contains(name))
-    }
-
-    /// The text of a page, or why it cannot be read (one outside the root and the
-    /// build directory is not).
-    async fn page(&mut self, page: &Path) -> Result<Arc<str>, String> {
-        if !self.pages.contains_key(page) {
-            let text = match self.outside(page).await {
-                Some(why) => Err(why),
-                None => read(page, self.max_page).await.map(Arc::from),
-            };
-            self.pages.insert(page.to_path_buf(), text);
-        }
-        self.pages
-            .get(page)
-            .cloned()
-            .unwrap_or_else(|| Err(format!("{} cannot be read", page.display())))
-    }
-
-    async fn find(&mut self, path: &RustPath) -> Found {
-        let crate_dir = self.docs.join(&path.krate);
-        let built = match self.has(&self.docs.clone(), &path.krate).await {
-            Some(true) => {
-                // Before it is listed: nothing outside is read.
-                if let Some(why) = self.outside(&crate_dir).await {
-                    return Found::CannotTell(why);
-                }
-                self.has(&crate_dir, "index.html").await == Some(true)
-            }
-            Some(false) | None => false,
-        };
-        if !built {
-            return Found::CannotTell(format!(
-                "the docs of the crate `{}` are not built: {} has no index.html (build them with `cargo doc`, or the crate is no longer in the build)",
-                path.krate,
-                crate_dir.display()
-            ));
-        }
-        let index = crate_dir.join("index.html");
-        let html = match self.page(&index).await {
-            Ok(html) => html,
-            Err(why) => return Found::CannotTell(why),
-        };
-        match super::on_blocking(html.len(), move || html.contains(GENERATOR_MARK)).await {
-            Ok(true) => {}
-            Ok(false) => {
-                return Found::CannotTell(format!(
-                    "{} is not rustdoc's: it has no {GENERATOR_MARK}",
-                    index.display()
-                ));
-            }
-            Err(why) => return Found::CannotTell(stopped(&index, &why)),
-        }
-        let mut at = At::Module(crate_dir);
-        for segment in &path.rest {
-            at = match self.step(at, segment).await {
-                Ok(Some(next)) => next,
-                Ok(None) => return Found::Absent,
-                Err(why) => return Found::CannotTell(why),
-            };
-        }
-        Found::from(at)
-    }
-
-    /// What the thing at `place` promises, read from its page (parsed on a blocking
-    /// thread, as a page may be as large as its bound), or why it cannot be.
-    async fn promise(&mut self, place: &Place) -> Result<Promise, Unreadable> {
-        let html = self.page(place.page()).await.map_err(Unreadable::Page)?;
-        let at = place.clone();
-        super::on_blocking(html.len(), move || promise_of(&html, &at))
-            .await
-            .map_err(|why| Unreadable::Page(stopped(place.page(), &why)))?
-    }
-
-    /// The place `segment` names under `at`: none when it names nothing there.
-    async fn step(&mut self, at: At, segment: &str) -> Result<Option<At>, String> {
-        match at {
-            At::Module(dir) => self.in_module(&dir, segment).await,
-            At::Item { page, kind } => {
-                if !TYPE_KINDS.contains(&kind.as_str()) {
-                    return Ok(None);
-                }
-                let html = self.page(&page).await?;
-                let wanted = segment.to_owned();
-                let named = super::on_blocking(html.len(), move || {
-                    MemberKind::all()
-                        .find(|member| html.contains(&format!("id=\"{}.{wanted}\"", member.word())))
-                })
-                .await
-                .map_err(|why| stopped(&page, &why))?;
-                Ok(named.map(|member| At::Member {
-                    page,
-                    kind: member,
-                    anchor: format!("{}.{segment}", member.word()),
-                }))
-            }
-            At::Member { .. } => Ok(None),
-            At::Unfollowed(why) => Err(why),
-        }
-    }
-
-    /// The module or item `segment` names in the module at `dir`.
-    async fn in_module(&mut self, dir: &Path, segment: &str) -> Result<Option<At>, String> {
-        let Some(names) = self.listing(dir).await.cloned() else {
-            return Err(format!("{} cannot be listed", dir.display()));
-        };
-        if names.contains(segment) {
-            let module = dir.join(segment);
-            // Before it is listed: nothing outside is read.
-            if let Some(why) = self.outside(&module).await {
-                return Err(why);
-            }
-            if self.has(&module, "index.html").await == Some(true) {
-                return Ok(Some(At::Module(module)));
-            }
-        }
-        if let Some(kind) = ITEM_KINDS
-            .iter()
-            .find(|kind| names.contains(&format!("{kind}.{segment}.html")))
-        {
-            let page = dir.join(format!("{kind}.{segment}.html"));
-            if let Some(why) = self.outside(&page).await {
-                return Err(why);
-            }
-            return Ok(Some(At::Item {
-                page,
-                kind: (*kind).to_owned(),
-            }));
-        }
-        if !names.contains("index.html") {
-            return Ok(None);
-        }
-        let index = dir.join("index.html");
-        let html = self.page(&index).await?;
-        let wanted = segment.to_owned();
-        let Some(link) = super::on_blocking(html.len(), move || reexport_link(&html, &wanted))
-            .await
-            .map_err(|why| stopped(&index, &why))?
-        else {
-            return Ok(None);
-        };
-        Ok(Some(self.follow(dir, link.as_deref(), segment).await))
-    }
-
-    /// The place a re-export of `segment` in the module at `dir` leads to, through
-    /// its link (`href`, relative to `dir`). A re-export with no link, or whose link
-    /// leads outside the docs (symbolic links resolved) or to nothing readable, is
-    /// there, and nothing under it can be told.
-    async fn follow(&mut self, dir: &Path, link: Option<&str>, segment: &str) -> At {
-        let nowhere = || {
-            At::Unfollowed(format!(
-                "`{segment}` is re-exported in {} from docs that are not here",
-                dir.display()
-            ))
-        };
-        let Some(target) = link.and_then(|link| within(&self.docs, dir, link)) else {
-            return nowhere();
-        };
-        let inside = match (&self.real_docs, tokio::fs::canonicalize(&target).await) {
-            (Some(docs), Ok(real)) => real.starts_with(docs),
-            _ => false,
-        };
-        if !inside {
-            return nowhere();
-        }
-        let Some(file) = target
-            .file_name()
-            .and_then(|f| f.to_str())
-            .map(str::to_owned)
-        else {
-            return nowhere();
-        };
-        let parent = target.parent().map(Path::to_path_buf).unwrap_or_default();
-        if file == "index.html" {
-            return match self.has(&parent, "index.html").await {
-                Some(true) => At::Module(parent),
-                _ => nowhere(),
-            };
-        }
-        let kind = ITEM_KINDS
-            .iter()
-            .find(|kind| file.starts_with(&format!("{kind}.")) && file.ends_with(".html"));
-        match (kind, self.has(&parent, &file).await) {
-            (Some(kind), Some(true)) => At::Item {
-                page: target,
-                kind: (*kind).to_owned(),
-            },
-            _ => nowhere(),
-        }
-    }
-}
-
-/// The names of the entries of a directory that are UTF-8, or none when it cannot
-/// be listed.
-async fn list(dir: &Path) -> Option<BTreeSet<String>> {
-    let mut entries = tokio::fs::read_dir(dir).await.ok()?;
-    let mut names = BTreeSet::new();
-    loop {
-        match entries.next_entry().await {
-            Ok(Some(entry)) => {
-                if let Ok(name) = entry.file_name().into_string() {
-                    names.insert(name);
-                }
-            }
-            Ok(None) => return Some(names),
-            Err(_) => return None,
-        }
-    }
-}
-
-/// Why a page cannot be told, when the blocking thread it was read on stopped (a bug
-/// if it ever happens, or a runtime shutting down).
-fn stopped(page: &Path, why: &str) -> String {
-    format!("the reading of {} stopped: {why}", page.display())
-}
-
-/// The text of a page of at most `max` bytes, or why it cannot be read.
-async fn read(page: &Path, max: u64) -> Result<String, String> {
-    let cannot = |e: std::io::Error| format!("{} cannot be read: {e}", page.display());
-    let file = tokio::fs::File::open(page).await.map_err(cannot)?;
-    let mut bytes = Vec::new();
-    file.take(max.saturating_add(1))
-        .read_to_end(&mut bytes)
-        .await
-        .map_err(cannot)?;
-    if u64::try_from(bytes.len()).map_or(true, |len| len > max) {
-        return Err(format!(
-            "{} is larger than {max} bytes, and is not read",
-            page.display()
-        ));
-    }
-    // A page may be as large as the bound: a large one is decoded on a blocking
-    // thread.
-    super::on_blocking(bytes.len(), move || {
-        String::from_utf8_lossy(&bytes).into_owned()
-    })
-    .await
-    .map_err(|why| stopped(page, &why))
-}
-
-/// The re-export of `name` in the HTML of a module's index: none when there is
-/// none, and the link of its entry (the last `href` of it) when it has one.
-fn reexport_link(html: &str, name: &str) -> Option<Option<String>> {
-    let anchor = format!("id=\"reexport.{name}\"");
-    let start = html.find(&anchor)? + anchor.len();
-    let entry = &html[start..];
-    let entry = &entry[..entry.find("</dt>").unwrap_or(entry.len())];
-    let link = entry.rfind("href=\"").and_then(|at| {
-        let value = &entry[at + "href=\"".len()..];
-        value.find('"').map(|end| value[..end].to_owned())
-    });
-    Some(link)
-}
-
-/// The file a relative link of a page in `dir` names, when it stays inside `docs`
-/// as written; none for a link to elsewhere (a URL, an absolute path, one that
-/// climbs out). `/` and `\` both separate. Symbolic links are the caller's.
-fn within(docs: &Path, dir: &Path, link: &str) -> Option<PathBuf> {
-    if link.contains("://") || link.starts_with(['/', '\\', '#']) {
-        return None;
-    }
-    let link = link.split(['#', '?']).next()?;
-    let mut parts: Vec<String> = dir
-        .strip_prefix(docs)
-        .ok()?
-        .components()
-        .map(|c| match c {
-            Component::Normal(part) => part.to_str().map(str::to_owned),
-            _ => None,
-        })
-        .collect::<Option<_>>()?;
-    for part in link.split(['/', '\\']) {
-        match part {
-            "" | "." => {}
-            ".." => {
-                parts.pop()?;
-            }
-            part if part.contains(':') => return None,
-            part => parts.push(part.to_owned()),
-        }
-    }
-    if parts.is_empty() {
-        return None;
-    }
-    Some(
-        parts
-            .iter()
-            .fold(docs.to_path_buf(), |path, p| path.join(p)),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     //! The pages of these tests are written by hand, in the layout rustdoc 1.95
@@ -1198,6 +679,8 @@ mod tests {
     //! the tests of `promise` and of what an item promises below are laid out whole.
     //! The end-to-end tests of the command line run `cargo doc` on a crate and watch
     //! the layout of the real thing.
+
+    use std::path::Path;
 
     use whyshelf_core::domain::shelf::artifact::{ArtifactState, Comparison, NamePrefix, Untold};
 
@@ -1744,36 +1227,6 @@ mod tests {
             .await
             .unwrap();
         assert!(unknown_why(&found[&n("demo::Shelf")]).is_some());
-    }
-
-    #[test]
-    fn a_link_is_followed_only_inside_the_docs() {
-        let docs = Path::new("/t/doc");
-        let dir = docs.join("demo");
-        assert_eq!(
-            within(docs, &dir, "inner/struct.A.html#method.x"),
-            Some(docs.join("demo/inner/struct.A.html"))
-        );
-        assert_eq!(
-            within(docs, &dir, "inner\\struct.A.html"),
-            Some(docs.join("demo/inner/struct.A.html"))
-        );
-        assert_eq!(
-            within(docs, &dir, "../other/index.html"),
-            Some(docs.join("other/index.html"))
-        );
-        for outside in [
-            "../../x.html",
-            "..\\..\\x.html",
-            "/etc/passwd",
-            "\\x.html",
-            "C:\\x.html",
-            "https://docs.rs/x",
-            "#anchor",
-            "..",
-        ] {
-            assert_eq!(within(docs, &dir, outside), None, "{outside}");
-        }
     }
 
     /// A page laid out whole, as rustdoc lays out that of an item: a sidebar with a
