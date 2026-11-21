@@ -10,6 +10,28 @@ and this project adheres to
 
 ### Added
 
+- `rekey <ref> [--key <key>] [--follow <ref>]... [--stay <ref>]... [--both
+  <ref>]... [--dry-run]` gives one document a new key (#117), for two documents
+  of one key after a merge. The new key is the book's next (or `--key`, which
+  must be free), the file is where `new` would put it, the identity stays, and
+  the document's `key:` and the links that mean it are rewritten; its approvals
+  hold, as the ledger pins identities, and it is not written. A link writes the
+  old key as text, so which document it meant is read from the approval that
+  stands about the document that wrote it (what it pinned), or said with
+  `--follow` (the renumbered document), `--stay` (the other) or `--both` (the link
+  keeps the old key and gains the new one); a document with neither, or a word
+  against the approval, is refused with every such document listed, and
+  nothing is written. Files that could not be read and may write the key or link
+  to it (a file that still holds conflict markers) are listed and stop it too.
+  The files are written in the form `fmt` writes, held against the plan before
+  any is written, and all or none: a stop puts back what was written, and when
+  that cannot be done the files not put back are listed (exit 3). `--dry-run`
+  writes nothing. The answer lists what moved, rewrote, stayed and keeps both,
+  the documents whose body names the old key (not changed), whether each
+  approval holds after the write, and the files written; `schema` describes it.
+  In the library, `ShelfApp::rekey` takes a `RekeyRequest` and gives a
+  `RekeyReport`; the plan, its reading of each link and its check of the files
+  are `domain::shelf::rekey`.
 - The manual has a section "Working from several branches" (#132): what to push
   together, when to fetch and run `check`, which document to renumber when two
   branches took one key and what renumbering rewrites, to link only keys the
@@ -194,6 +216,31 @@ and this project adheres to
 
 ### Changed
 
+- Who writes a key is read in one way (#117). A file whose `key:` reads in the
+  book's grammar is a writer of that key whether or not its `id:` can be read, for
+  the next key, for what `check` says of a key written twice, and for a link
+  or a reference to it. A link to a key that such a file writes beside a
+  document with an identity is not followed to that document: the key is written
+  twice (`Ambiguous`). A link to a key that only such a file writes says why it
+  cannot be followed (`NoIdentity`: the file carries no identity that can be
+  read), and a reference to it is `ShelfError::NoIdentity`, not "names no
+  document". `check` lists each key two or more files write once, in
+  `collisions`, with every file and the identity of each that could be read, and the
+  sentence of each of those files names the other files, not only how many.
+- The repeat rule of `judge approve` no longer compares the key of an upstream
+  (#117): a key is a name, and a renumbered upstream is the same document, so
+  approving again after a renumber is a repeat (left out unless `--again`). An
+  answer names the upstream a record pinned by the key it has now, with the key
+  it was pinned under beside it when that is another, and says so when the
+  upstream is invalid, gone or cannot be told.
+- In the library, `rekey` adds: `DocRemove` (`ShelfWrite::DocRemover`,
+  `doc_remover`), `DocReplace::restore`, `FileSync::persist_gone`, `ShelfPort::DocRemove`;
+  `DocSource::render` must give the text `DocWrite::create` writes (a type that
+  implements these ports does not build until it does: a breaking change before
+  1.0). `Shelf::collisions`, `KeyWriter`, `KeyCollision` (`UnresolvedWhy::Ambiguous` holds
+  one), `UnresolvedWhy::NoIdentity`, `Resolution::NoIdentity`, `Shelf::now_named`
+  (`NowNamed`), `FramePin::named` (`PinName`) and `Names::pin_name` are the reading
+  of who writes a key and of what a pin names.
 - A build from before `ran_by` (#156) does not read a record that has the key,
   and its `check` fails on it; its other commands act as if the record were not
   there, so its `judge` can write over that decision with no warning. A CI that
