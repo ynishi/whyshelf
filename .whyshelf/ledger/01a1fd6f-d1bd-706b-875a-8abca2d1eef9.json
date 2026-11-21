@@ -1,0 +1,101 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::moves",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::FoundBy",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::MoveCandidate",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::MoveSuggestions",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795253320436,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8174854ca590a4ec6575d66b26b676d25ac35cfd",
+      "hash": "sha256:ff092ee86db4f8f3df11e4875803a3fc3820f18955fbf4a9580a5e7d11aac95c",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "23"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c912-1691-7698-adfe-26b7440a52ad"
+    }
+  ],
+  "id": "01a1fd6f-d1bd-706b-875a-8abca2d1eef9",
+  "kind": "decision",
+  "reason": "Reviewed for #142: code review (medium), rule-judge (arch) twice, and four rounds of blind review (Opus, from the issue and the branch only) until no must-fix was left; the decision, its verifications and the decisions it corrects state what the code and the tests now do, and cargo test --workspace passes (1759)",
+  "revision": "5470fbabf52f5189681e25b8e46d01dffa0e0cae",
+  "seen": "sha256:15e4de5579378addb80477b068aa86f5c3602279ad08664599ab7efef5e4c2e6",
+  "seen_address": "9d85c71fc6aa6e8f8680f15c8ff144a86a6d401b",
+  "subject": "01a1fd22-7aea-7470-903b-78df35942cc6",
+  "v": 1,
+  "verb": "approve"
+}

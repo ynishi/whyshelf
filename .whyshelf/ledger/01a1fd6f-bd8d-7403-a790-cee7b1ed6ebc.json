@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e123da1759364d64c50f98cd2323dbe54a3943cf",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f66fb70c7b86450feab7561639c4cec5e983dbf2099456c524cad7b008e240c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1110aded6021c42b2cb43d7ad1e8896ef6813d07",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4c61dd7debff526a941e9e32fa1152075ad6c89bcd0f768b2642f1ac2df7a563",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1f060fe8b8d6484e2d26acf6713648ef18365475",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:35f14b96ea492431f34eb89756cdb7263308707ecdaa729ce28cab46d13b6eea",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795253320436,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ed2d8800e4e0b5b6488ba2e5aa64172a96750903",
+      "hash": "sha256:30e6e11b84fb90a5af811e25fa8637aa65f92e5f41c716515d5b686941f42254",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "59"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c912-1826-76a6-838e-509c842f7e41"
+    }
+  ],
+  "id": "01a1fd6f-bd8d-7403-a790-cee7b1ed6ebc",
+  "kind": "decision",
+  "reason": "Reviewed for #142: code review (medium), rule-judge (arch) twice, and four rounds of blind review (Opus, from the issue and the branch only) until no must-fix was left; the decision, its verifications and the decisions it corrects state what the code and the tests now do, and cargo test --workspace passes (1759)",
+  "revision": "5470fbabf52f5189681e25b8e46d01dffa0e0cae",
+  "seen": "sha256:a7899f6b54a3a23aa1ea3b99964b3f000a85ccef4d0181212b15cbae44596beb",
+  "seen_address": "b94861ec5d692d790288f3cf4f8542a4dae6db35",
+  "subject": "01a1c912-19c0-7572-98be-116b5c92ca97",
+  "v": 1,
+  "verb": "approve"
+}

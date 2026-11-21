@@ -738,10 +738,14 @@ pub trait ArtifactSource: Send + Sync {
 /// A port of its own, beside [`ArtifactSource`] and not a method of it: that port
 /// answers what is at a name now, in four ways, for every reading of the project,
 /// and a space answers it whether or not it has any way to suggest; this one
-/// searches (the content of what is there, the space's history since an approval)
-/// and may say it has no way to. The domain decides which names are asked about
-/// ([`PinnedNames`](crate::domain::shelf::ledger::PinnedNames)) and orders what comes
-/// back ([`GoneNames::suggest`]); the adapter only looks.
+/// searches (the content of what is there, the space's history since an approval, the
+/// form of a name) and may say it has no way to. The domain decides which names are
+/// asked about ([`PinnedNames`](crate::domain::shelf::ledger::PinnedNames)) and orders
+/// what comes back ([`GoneNames::suggest`]); the adapter only looks. A candidate may
+/// carry the moves of a prefix that lead to it
+/// ([`MoveCandidate::under`](crate::domain::shelf::ledger::MoveCandidate::under)): the
+/// adapter names them, and which moves are tried, and whether each stands, are not its
+/// to say (they are `moves`', by the same steps `judge moved --prefix` takes).
 pub trait MoveSource: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;

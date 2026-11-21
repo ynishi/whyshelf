@@ -49,6 +49,12 @@
 //!                  +--> each space's adapter, once ---> SpaceSuggestions
 //!                  +--suggest--> MoveSuggestions (every gone name, its candidates in
 //!                                one order; the spaces that cannot suggest)
+//!                                   |  prefix_trials: the prefix moves candidates
+//!                                   |  carry that several gone names share
+//!                                   +--> plan_prefix_moves, resolve, frame_prefix_moves
+//!                                   |    (what `judge moved --prefix` does, one move
+//!                                   |    at a time) ---> offer: a PrefixSuggestion if
+//!                                   |    it stands, else a RefusedPrefix
 //! ```
 //!
 //! A person who moved a directory or renamed a module declares it once, for every name
@@ -72,7 +78,7 @@
 //!
 //! [`Ledger::moved_to`]: super::Ledger::moved_to
 
-use std::cmp::Reverse;
+use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, BTreeSet};
 
 use thiserror::Error;
@@ -84,8 +90,8 @@ use crate::domain::words::{Join, Mark, listed};
 
 use super::super::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReadings, ArtifactState,
-    Comparison, ContentAddress, NamePrefix, PrefixAnswers, PrefixAsks, Renamed, Revision, Space,
-    SpacePrefixes, Untold,
+    Comparison, ContentAddress, NamePrefix, PrefixAnswers, PrefixAsks, PrefixMove, Renamed,
+    Revision, Space, SpacePrefixes, Untold,
 };
 use super::{ArtifactPin, DecisionVerb, JudgedAt, JudgementId, Ledger, PinnedArtifact};
 
@@ -601,8 +607,9 @@ impl PinnedNames {
     /// an old name, by space and name. A name that cannot be told now is not among
     /// them. A name pins are read as in more than one space is among them, with
     /// those spaces ([`GoneName::in_spaces`]): [`moved_space`] refuses a move of it,
-    /// so no adapter is asked about it.
-    pub fn gone(self, readings: &ArtifactReadings) -> GoneNames {
+    /// so no adapter is asked about it. The names stay: a move of a prefix is held
+    /// against them after the suggestions are made.
+    pub fn gone(&self, readings: &ArtifactReadings) -> GoneNames {
         let in_spaces: BTreeMap<ArtifactName, BTreeSet<Space>> = self
             .spaces_by_name()
             .into_iter()
@@ -610,14 +617,14 @@ impl PinnedNames {
             .map(|(name, spaces)| (name.clone(), spaces.into_iter().cloned().collect()))
             .collect();
         let mut gone: BTreeMap<Space, Vec<GoneName>> = BTreeMap::new();
-        for (artifact, pins) in self.0 {
-            if matches!(now_at(readings, &artifact), Now::Nothing) {
+        for (artifact, pins) in &self.0 {
+            if matches!(now_at(readings, artifact), Now::Nothing) {
                 let in_spaces = in_spaces.get(artifact.name()).cloned().unwrap_or_default();
                 gone.entry(artifact.space().clone())
                     .or_default()
                     .push(GoneName {
-                        artifact,
-                        pins,
+                        artifact: artifact.clone(),
+                        pins: pins.clone(),
                         in_spaces,
                     });
             }
@@ -984,12 +991,15 @@ impl GoneNames {
     /// asked that has no answer cannot suggest). Every gone name is in the answer,
     /// with the candidates its space's adapter gave and none for a space that cannot
     /// suggest; a candidate that is the name itself or another gone name of its
-    /// space is left out, two of one name are one ([`FoundBy::SameContent`] over
-    /// [`FoundBy::Renamed`], the larger similarity over the smaller), and they are in
+    /// space is left out, two of one name are one (the one [`MoveCandidate::cmp_rank`]
+    /// puts first, the earlier of two that rank alike: [`FoundBy::SameContent`] over
+    /// [`FoundBy::Renamed`] over [`FoundBy::SameEnd`], the larger similarity over the
+    /// smaller; it has the moves of a prefix both of the two had), and they are in
     /// the order [`MoveCandidate`]'s page gives. A name pinned in more than one space
     /// has no candidate and the note [`NoteKind::InTwoSpaces`], so nothing is
     /// suggested that `judge moved` refuses. The notes of a name are in the order of
-    /// their kinds, each kind once.
+    /// their kinds, each kind once. The moves of a prefix to try are
+    /// [`MoveSuggestions::prefix_trials`]'s.
     pub fn suggest(self, mut answers: BTreeMap<Space, SpaceSuggestions>) -> MoveSuggestions {
         let mut absent = Vec::new();
         let mut cannot_suggest = BTreeSet::new();
@@ -1023,15 +1033,14 @@ impl GoneNames {
                     if gone.contains(&candidate.name) {
                         continue;
                     }
-                    match kept.get(&candidate.name) {
-                        Some(earlier) if earlier.rank() <= candidate.rank() => {}
-                        _ => {
-                            kept.insert(candidate.name.clone(), candidate);
-                        }
-                    }
+                    let kept_one = match kept.remove(&candidate.name) {
+                        Some(earlier) => earlier.or_better(candidate),
+                        None => candidate,
+                    };
+                    kept.insert(kept_one.name.clone(), kept_one);
                 }
                 let mut candidates: Vec<MoveCandidate> = kept.into_values().collect();
-                candidates.sort_by(|a, b| (a.rank(), &a.name).cmp(&(b.rank(), &b.name)));
+                candidates.sort_by(|a, b| a.cmp_rank(b).then_with(|| a.name.cmp(&b.name)));
                 let mut notes = suggested.notes;
                 notes.sort_by_key(MoveNote::kind);
                 notes.dedup_by_key(|n| n.kind());
@@ -1042,10 +1051,16 @@ impl GoneNames {
                 });
             }
         }
-        MoveSuggestions {
+        let mut suggestions = MoveSuggestions {
             absent,
             cannot_suggest,
-        }
+            ..MoveSuggestions::default()
+        };
+        suggestions.untried_prefixes = suggestions
+            .shared_prefixes()
+            .len()
+            .saturating_sub(MAX_PREFIX_TRIALS);
+        suggestions
     }
 }
 
@@ -1077,29 +1092,57 @@ pub enum FoundBy {
         /// How alike, when the history says.
         similarity: Option<Similarity>,
     },
+    /// The name ends as the gone one does (the space's own reading of an end), and
+    /// nothing tells more: neither the content nor the history says it is the same
+    /// thing. It is the form of a name only.
+    SameEnd,
 }
 
 /// A name a gone artifact may have moved to, as its space's adapter found it.
 ///
-/// Candidates are in one order: [`FoundBy::SameContent`] first, then
-/// [`FoundBy::Renamed`] from the most alike to the least (one with no similarity
-/// last); of one rank, by name. A candidate is a suggestion only: `judge moved`
-/// holds the move against what is there when it is declared.
+/// Candidates are in one order ([`MoveCandidate::cmp_rank`]): [`FoundBy::SameContent`]
+/// first, then [`FoundBy::Renamed`] from the most alike to the least (one with no
+/// similarity last), then [`FoundBy::SameEnd`]; of one rank, by name. A candidate is a
+/// suggestion only: `judge moved` holds the move against what is there when it is
+/// declared. It may carry the moves of a prefix that take the gone name to it
+/// ([`MoveCandidate::under`]), each of which `judge moved --prefix` may declare for
+/// every name under the prefix at once.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MoveCandidate {
     name: ArtifactName,
     found: FoundBy,
     present: bool,
+    prefixes: Vec<PrefixMove>,
 }
 
 impl MoveCandidate {
-    /// A candidate at `name`, found so, with whether something is there now.
+    /// A candidate at `name`, found so, with whether something is there now. It
+    /// carries no move of a prefix.
     pub fn new(name: ArtifactName, found: FoundBy, present: bool) -> Self {
         Self {
             name,
             found,
             present,
+            prefixes: Vec::new(),
         }
+    }
+
+    /// This candidate, reached also by the move of `prefix`, after those it already
+    /// carries (a move it carries is not added twice). More than one move of a prefix
+    /// may lead from a gone name to one name: a module that keeps its name under
+    /// another parent is moved by its parent, and by the module itself.
+    #[must_use]
+    pub fn under(mut self, prefix: PrefixMove) -> Self {
+        if !self.prefixes.contains(&prefix) {
+            self.prefixes.push(prefix);
+        }
+        self
+    }
+
+    /// The moves of a prefix that take the gone name to this one, in the order the
+    /// adapter gave them; none when it found none.
+    pub fn prefixes(&self) -> &[PrefixMove] {
+        &self.prefixes
     }
 
     /// The new name.
@@ -1122,7 +1165,32 @@ impl MoveCandidate {
         match self.found {
             FoundBy::SameContent => (0, Reverse(None)),
             FoundBy::Renamed { similarity } => (1, Reverse(similarity)),
+            FoundBy::SameEnd => (2, Reverse(None)),
         }
+    }
+
+    /// How this one stands to `other` in the order of candidates, by how each was
+    /// found and not by name: the one place the order is held.
+    pub fn cmp_rank(&self, other: &Self) -> Ordering {
+        self.rank().cmp(&other.rank())
+    }
+
+    /// Of two candidates at one name, the one that ranks first (this one when they
+    /// rank alike), with the moves of a prefix both had (this one's first, each
+    /// once).
+    fn or_better(self, other: Self) -> Self {
+        let mut prefixes = self.prefixes.clone();
+        for prefix in &other.prefixes {
+            if !prefixes.contains(prefix) {
+                prefixes.push(prefix.clone());
+            }
+        }
+        let better = if other.cmp_rank(&self) == Ordering::Less {
+            other
+        } else {
+            self
+        };
+        Self { prefixes, ..better }
     }
 }
 
@@ -1146,14 +1214,21 @@ pub enum MoveNote {
         /// What the adapter said.
         detail: NonBlank,
     },
-    /// The search for the same content stopped at its bound, after reading this
-    /// many things.
+    /// The space has nothing to search in here, for this reason (where its names are
+    /// kept cannot be told): no name was looked for.
+    SearchUnavailable {
+        /// What the adapter said.
+        detail: NonBlank,
+    },
+    /// The search stopped at its bound, after this many entries (the things the
+    /// adapter looks at: for files, the files read; for the items of docs, the names
+    /// found and the pages read).
     ScanTruncated {
-        /// How many were read.
+        /// How many were counted.
         read: usize,
     },
-    /// This many things could not be read, and were passed over by the search for
-    /// the same content.
+    /// This many things (files, directories, pages) could not be read, and were
+    /// passed over by the search.
     UnreadableSkipped {
         /// How many.
         count: usize,
@@ -1165,6 +1240,12 @@ pub enum MoveNote {
         count: usize,
         /// The bound.
         limit: u64,
+    },
+    /// More names were found than are kept: the candidates are the first of this
+    /// many, in the order of candidates.
+    CandidatesCut {
+        /// How many were found.
+        found: usize,
     },
     /// Pins are read as the name in these spaces, more than one: `judge moved`
     /// refuses a move of it, so nothing is suggested.
@@ -1191,12 +1272,16 @@ pub enum NoteKind {
     UnknownRevision,
     /// [`MoveNote::HistoryUnreadable`].
     HistoryUnreadable,
+    /// [`MoveNote::SearchUnavailable`].
+    SearchUnavailable,
     /// [`MoveNote::ScanTruncated`].
     ScanTruncated,
     /// [`MoveNote::UnreadableSkipped`].
     UnreadableSkipped,
     /// [`MoveNote::TooLargeSkipped`].
     TooLargeSkipped,
+    /// [`MoveNote::CandidatesCut`].
+    CandidatesCut,
     /// [`MoveNote::NoContent`].
     NoContent,
 }
@@ -1209,9 +1294,11 @@ impl MoveNote {
             Self::NoRevision => NoteKind::NoRevision,
             Self::UnknownRevision { .. } => NoteKind::UnknownRevision,
             Self::HistoryUnreadable { .. } => NoteKind::HistoryUnreadable,
+            Self::SearchUnavailable { .. } => NoteKind::SearchUnavailable,
             Self::ScanTruncated { .. } => NoteKind::ScanTruncated,
             Self::UnreadableSkipped { .. } => NoteKind::UnreadableSkipped,
             Self::TooLargeSkipped { .. } => NoteKind::TooLargeSkipped,
+            Self::CandidatesCut { .. } => NoteKind::CandidatesCut,
             Self::InTwoSpaces { .. } => NoteKind::InTwoSpaces,
             Self::NoContent => NoteKind::NoContent,
         }
@@ -1264,12 +1351,163 @@ impl MoveSuggestion {
     }
 }
 
-/// The answer of `moves`: every gone name, by space and then by name, and the spaces
-/// that cannot suggest.
+/// The fewest gone names that must share the move of a prefix for it to be tried: the
+/// one place that threshold is held ([`MoveSuggestions::prefix_trials`]).
+const MIN_PREFIX_HOLDERS: usize = 2;
+
+/// The most moves of a prefix tried in one answer; the rest are counted
+/// ([`MoveSuggestions::untried_prefixes`]).
+const MAX_PREFIX_TRIALS: usize = 32;
+
+/// A move of a prefix that stands against what is there now, for these names
+/// ([`frame_prefix_moves`] framed it; whether the actor is admitted to declare it is
+/// not tried). Made by [`MoveSuggestions::offer`] alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrefixSuggestion {
+    of: PrefixMove,
+    moved: NonEmptyVec<ArtifactKey>,
+    not_asked: Vec<Space>,
+}
+
+impl PrefixSuggestion {
+    /// The move of the prefix.
+    pub fn of(&self) -> &PrefixMove {
+        &self.of
+    }
+
+    /// The names it moves, as they are now (the old names), in the order of the
+    /// plan's moves.
+    pub fn moved(&self) -> &NonEmptyVec<ArtifactKey> {
+        &self.moved
+    }
+
+    /// The spaces pinned in whose adapter takes no prefix: names of them may be under
+    /// it, and are not moved ([`PrefixPlan::not_asked`]).
+    pub fn not_asked(&self) -> &[Space] {
+        &self.not_asked
+    }
+}
+
+/// A move of a prefix that candidates carry, and that does not stand against what is
+/// there now: told, so that a person sees why it is not suggested. Made by
+/// [`MoveSuggestions::offer`] alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefusedPrefix {
+    of: PrefixMove,
+    refused: usize,
+}
+
+impl RefusedPrefix {
+    /// The move of the prefix.
+    pub fn of(&self) -> &PrefixMove {
+        &self.of
+    }
+
+    /// How many names under the prefix cannot be moved.
+    pub fn refused(&self) -> usize {
+        self.refused
+    }
+}
+
+/// The answer of `moves`: every gone name, by space and then by name, the spaces
+/// that cannot suggest, and the moves of a prefix that candidates share, those that
+/// stand and those that are refused.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MoveSuggestions {
     /// The gone names, each with its candidates.
     pub absent: Vec<MoveSuggestion>,
     /// The spaces of gone names whose adapter has no way to suggest.
     pub cannot_suggest: BTreeSet<Space>,
+    /// The moves of a prefix that stand, in the order they were offered
+    /// ([`MoveSuggestions::offer`]).
+    pub prefixes: Vec<PrefixSuggestion>,
+    /// The moves of a prefix that were refused, in the order they were offered.
+    pub refused_prefixes: Vec<RefusedPrefix>,
+    /// How many moves of a prefix that candidates share were not tried, for the bound
+    /// of one answer ([`MoveSuggestions::prefix_trials`]).
+    pub untried_prefixes: usize,
+}
+
+impl MoveSuggestions {
+    /// The moves of a prefix to try, as `judge moved --prefix` would take each: those
+    /// that two gone names or more have a candidate carrying (so a prefix only one name
+    /// carries is not tried: it is that one name's move), the one a candidate found
+    /// the best way carries first (the order of candidates,
+    /// [`MoveCandidate::cmp_rank`], of the best of those that carry it, whichever gone
+    /// name holds it), then the one the most gone names have, then by the move; at most
+    /// `MAX_PREFIX_TRIALS`, and the rest are counted in
+    /// [`MoveSuggestions::untried_prefixes`]. The one place that threshold and that
+    /// order are held.
+    pub fn prefix_trials(&self) -> Vec<PrefixMove> {
+        let mut shared = self.shared_prefixes();
+        shared.truncate(MAX_PREFIX_TRIALS);
+        shared
+    }
+
+    /// Every move of a prefix that [`MIN_PREFIX_HOLDERS`] gone names or more have a
+    /// candidate carrying, in the order [`MoveSuggestions::prefix_trials`] tells. So a
+    /// move that candidates of the same content carry is tried before moves of the end
+    /// of a name only, however many names hold those, when the bound of one answer is
+    /// reached. A gone name counts once for a move, however many of its candidates
+    /// carry it, and for each move its candidates carry.
+    fn shared_prefixes(&self) -> Vec<PrefixMove> {
+        let mut holders: BTreeMap<&PrefixMove, (BTreeSet<&ArtifactKey>, &MoveCandidate)> =
+            BTreeMap::new();
+        for one in &self.absent {
+            for candidate in &one.candidates {
+                for prefix in candidate.prefixes() {
+                    let (names, best) = holders
+                        .entry(prefix)
+                        .or_insert_with(|| (BTreeSet::new(), candidate));
+                    names.insert(one.gone.artifact());
+                    if candidate.cmp_rank(best) == Ordering::Less {
+                        *best = candidate;
+                    }
+                }
+            }
+        }
+        let mut shared: Vec<(&PrefixMove, usize, &MoveCandidate)> = holders
+            .into_iter()
+            .map(|(prefix, (names, best))| (prefix, names.len(), best))
+            .filter(|(_, count, _)| *count >= MIN_PREFIX_HOLDERS)
+            .collect();
+        shared.sort_by(|(a, a_count, a_best), (b, b_count, b_best)| {
+            a_best
+                .cmp_rank(b_best)
+                .then_with(|| b_count.cmp(a_count))
+                .then_with(|| a.cmp(b))
+        });
+        shared
+            .into_iter()
+            .map(|(prefix, _, _)| prefix.clone())
+            .collect()
+    }
+
+    /// Take what holding a move of a prefix (one of [`MoveSuggestions::prefix_trials`])
+    /// against what is there came to, as [`frame_prefix_moves`] framed it: a move that
+    /// stands is a [`PrefixSuggestion`], with the names it moves and `not_asked`, the
+    /// spaces whose adapter takes no prefix ([`PrefixPlan::not_asked`]); one that is
+    /// refused is a [`RefusedPrefix`], with how many names under it cannot be moved
+    /// (none when nothing is under it).
+    pub fn offer(
+        &mut self,
+        of: PrefixMove,
+        framed: Result<NonEmptyVec<MovedOf>, PrefixRefusal>,
+        not_asked: Vec<Space>,
+    ) {
+        match framed {
+            Ok(moved) => self.prefixes.push(PrefixSuggestion {
+                of,
+                moved: moved.map(|one| one.from()),
+                not_asked,
+            }),
+            Err(PrefixRefusal::Names(names)) => self.refused_prefixes.push(RefusedPrefix {
+                of,
+                refused: names.len(),
+            }),
+            Err(PrefixRefusal::NothingUnder { .. }) => {
+                self.refused_prefixes.push(RefusedPrefix { of, refused: 0 })
+            }
+        }
+    }
 }

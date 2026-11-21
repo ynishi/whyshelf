@@ -26,10 +26,11 @@
 //! prefix moved at once, on one reading:
 //!
 //! ```text
-//!   load --> PinnedNames::prefix_asks --> ArtifactSource::renamed (each space's own grammar)
-//!        --> plan_prefix_moves (which names move, or NothingUnder)
-//!        --> ArtifactSource::resolve, once, every old and new name
-//!        --> frame_prefix_moves (every refusal of both steps in one answer)
+//!   load --> the trial of the move (the one `moves` runs for the moves it suggests):
+//!              PinnedNames::prefix_asks --> ArtifactSource::renamed (each space's own grammar)
+//!              --> plan_prefix_moves (which names move, or NothingUnder)
+//!              --> ArtifactSource::resolve, once, every old and new name
+//!              --> frame_prefix_moves (every refusal of both steps in one answer)
 //!        --> actor, once; id for each; the time of the load
 //!        --> RunWrites::run: every record, put on disk once
 //! ```
@@ -41,15 +42,17 @@
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactName, PrefixMove, Space};
 use crate::domain::shelf::ledger::{
-    Moved, MovedOf, MovedRefusal, PinnedNames, Record, frame_moved, frame_prefix_moves,
-    moved_space, plan_prefix_moves,
+    Moved, MovedOf, MovedRefusal, PinnedNames, PrefixRefusal, Record, frame_moved, moved_space,
 };
+#[cfg(doc)]
+use crate::domain::shelf::ledger::{frame_prefix_moves, plan_prefix_moves};
 
 use super::ShelfApp;
 use super::attribution::AttributionAsk;
 use super::error::ShelfError;
 use super::load::{Loaded, load};
 use super::ports::{ArtifactSource, IdSource, ShelfPort, ShelfWrite, port};
+use super::prefix_trial::FramedPrefix;
 
 /// A request to declare that an artifact moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,9 +128,9 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// with its own identity and the time of the load, by one actor.
     ///
     /// Refused (nothing written): nothing under the prefix in any space
-    /// ([`PrefixRefusal::NothingUnder`](crate::domain::shelf::ledger::PrefixRefusal::NothingUnder)),
+    /// ([`PrefixRefusal::NothingUnder`]),
     /// and any name under it that cannot be moved, every one listed
-    /// ([`PrefixRefusal::Names`](crate::domain::shelf::ledger::PrefixRefusal::Names)). The spaces whose adapter takes no
+    /// ([`PrefixRefusal::Names`]). The spaces whose adapter takes no
     /// prefix are told with the answer ([`MovedPrefix::not_asked`]).
     pub async fn moved_prefix(
         &mut self,
@@ -135,25 +138,21 @@ impl<P: ShelfWrite> ShelfApp<P> {
     ) -> Result<MovedPrefix, ShelfError> {
         let mut loaded = load(&self.ports).await?;
         let pinned = PinnedNames::of(&loaded.ledger);
-        let answers = self
-            .ports
-            .artifacts()
-            .renamed(&pinned.prefix_asks(), &request.of)
-            .map_err(port(ShelfPort::Artifacts))?;
-        let plan = plan_prefix_moves(&pinned, &answers)?;
-        let not_asked = plan.not_asked.clone();
-        let mut asks = ArtifactAsks::new();
-        for of in &plan.moves {
-            asks.ask_name(of.space().clone(), of.from_name().clone());
-            asks.ask_name(of.space().clone(), of.to_name().clone());
-        }
-        let readings = self
-            .ports
-            .artifacts()
-            .resolve(&asks)
-            .await
-            .map_err(port(ShelfPort::Artifacts))?;
-        let framed = frame_prefix_moves(plan, &readings)?;
+        let mut tried = self
+            .frame_prefixes(&pinned, std::slice::from_ref(&request.of))
+            .await?;
+        // One result for the one move; no result is no name under the prefix.
+        let FramedPrefix {
+            framed, not_asked, ..
+        } = tried.pop().unwrap_or_else(|| FramedPrefix {
+            of: request.of.clone(),
+            framed: Err(PrefixRefusal::NothingUnder {
+                prefix: request.of.from().clone(),
+                spaces: Vec::new(),
+            }),
+            not_asked: Vec::new(),
+        });
+        let framed = framed?;
         let by = self.attribution(request.by).await?;
         let mut moved = Vec::with_capacity(framed.len());
         let mut admitted = Vec::with_capacity(framed.len());
