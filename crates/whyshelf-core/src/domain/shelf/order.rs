@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn a_pending_or_left_out_upstream_holds_an_approval_back_and_a_stale_one_does_not() {
-        use crate::domain::shelf::freshness::assess;
+        use crate::domain::shelf::freshness::assess_unasked as assess;
         use crate::domain::shelf::ledger::JudgedAt;
         let then = shelf(vec![fr(1, &[]), fr(2, &["FR-1"]), fr(3, &[])]);
         let ledger = approved(&then, &[1, 2]);
@@ -497,7 +497,7 @@ mod tests {
     fn a_pending_document_is_one_valid_with_no_decision_standing_withdrawn_or_never_made() {
         use crate::domain::nonempty::{NonBlank, NonEmptySet};
         use crate::domain::shelf::fixtures_tests::{by, deny, jid};
-        use crate::domain::shelf::freshness::assess;
+        use crate::domain::shelf::freshness::assess_unasked as assess;
         use crate::domain::shelf::ledger::{JudgedAt, Record, Revocation};
         // FR-1 never decided; FR-2 approved then withdrawn; FR-3 approved; FR-4
         // denied; FR-5 has no valid file.
@@ -564,7 +564,7 @@ mod tests {
 
     #[test]
     fn the_pending_upstream_of_a_document_is_reached_through_depends_links_only() {
-        use crate::domain::shelf::freshness::assess;
+        use crate::domain::shelf::freshness::assess_unasked as assess;
         use crate::domain::shelf::ledger::JudgedAt;
         // FR-4 -> FR-3 (approved) -> FR-2 -> FR-1, and FR-6 apart; all pending but FR-3.
         let docs = shelf(vec![
@@ -593,7 +593,7 @@ mod tests {
     #[test]
     fn the_stale_rule_takes_the_expired_and_the_stale_and_tells_the_broken() {
         use crate::domain::shelf::fixtures_tests::deny;
-        use crate::domain::shelf::freshness::assess;
+        use crate::domain::shelf::freshness::assess_unasked as assess;
         use crate::domain::shelf::ledger::JudgedAt;
         // FR-1 edited (FR-1 and FR-2 stale); FR-3 expired; FR-5 on FR-4, which is
         // denied after both were approved (FR-5 broken); FR-6 fresh; FR-7 pending.

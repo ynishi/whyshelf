@@ -100,9 +100,12 @@ pub struct LinkEntryDecl {
     /// kind (`bytes`, `lines` or `presence`) and the prefixes of the lines `lines`
     /// leaves out. `None` is `bytes`.
     pub compare: Option<CompareDecl>,
-    /// For a link into a book: how strongly every document of the target book is
-    /// expected to be reached by it, as written; `None` when not written. Refused on
-    /// a link to artifacts, unless it declares no expectation.
+    /// What the link is expected to reach, as written; `None` when not written. For
+    /// a link into a book, how strongly every document of the target book is
+    /// expected to be reached by it (a truth value or a word); for a link to
+    /// artifacts, a table of the strength and of the selection of the names of its
+    /// space that are expected to be reached. One that is not of the kind the link
+    /// points at is refused.
     pub cover: Option<CoverDecl>,
 }
 

@@ -17,7 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::domain::shelf::artifact::ArtifactReadings;
+use crate::domain::shelf::artifact::{ArtifactReadings, Listings};
 #[cfg(doc)]
 use crate::domain::shelf::ledger::GoneNames;
 use crate::domain::shelf::ledger::PinnedNames;
@@ -64,7 +64,7 @@ impl<P: ShelfRead> ShelfApp<P> {
                 .map_err(port(ShelfPort::Moves))?;
             answers.insert(space.clone(), answer);
         }
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,

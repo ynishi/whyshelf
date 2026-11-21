@@ -1,0 +1,161 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7f78d898eaec548a2df83dfa5a17679b169588ef",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b78c911d7c739d1bb3c8bee759493d3ead634c69c40e89ac5be27c1d90f8412b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "696df22d882e885cb6514861fa87e5830eff08b3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:af5473d0486cb58d7ba9cc11aafaf80484868f1e77efb10ee4047802dd5f1366",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e487ef31061452a9cfec86ab5821b61d097e868",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add768ddd5406e06645e18dda7518815a659d1f748b4a8cb827a8c355216144d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3d81d12432bd413ff606fc1186baac4de452268f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0d2b31f38f3108a75ff8da317e5f0e32a8b470f7dc1809501681cfc5e02f2e71",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "90db9174197729a8065701c7fbf334c0b25c1187",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:04643e90f2962283609119a64501d80d962542368b056de44dbd8a43d4b1e2e5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9ab09115d28eab89e793ca6c234617e4ae97e576",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:10cde3508647333e07bd52f3e58b7a0185eab1d1dc3347db9aa5816ac1df3c17",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2e8ae01fff885b856d85e263d367e6061cdde083",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c179349b0ecf6e76e497108d64ba172b1ebc806be5d84b04853db8ed457f02a4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d4434193bddc5dbac32746c4e9207a8aea238930",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:142ecf3a74b7f00c15337d038f5f2970cb07d49037655dad3e4607d0ded24b93",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "930053cc4025ede17be8913da9dcde163b524915",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2416f9b778e58ec8014e887190e4fee136a08a6766a42775ad0ce207784957b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795228126149,
+  "expires": null,
+  "frame": [
+    {
+      "address": "29f85e7daad22edd540f8203d25570015c2f901e",
+      "hash": "sha256:0e28d87ef7fd94af64d800e7d7168dee93917e568ad032e8a4f62d70b9f904f9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c45a-279c-7672-ac87-9afd9c344dc8"
+    }
+  ],
+  "id": "01a1fbef-53ed-7352-bec3-0d3414de1909",
+  "kind": "decision",
+  "reason": "Re-read for #111: DEC-23, DEC-50, DEC-63, DEC-65 and DEC-84 were corrected to say a link to artifacts may declare a cover over a selection, PathGlob is the one glob of a book range and of the file selection, an artifact name can be exempted, and the adapter may answer a fourth ask (listing); the verifications' test files changed at call sites (freshness::assess and Loaded::assess take Listings, ExemptAsk, the answers' added fields) and some gained artifact cover cases, and what each states still holds: cargo test --workspace passes (1621)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:38d1ebdb1799195f4e7a078afb3ecb4dcfd6e89dcff18444255fafcf5405c286",
+  "seen_address": "c9ee0abf230a0c3d340519086554c780cc6c943a",
+  "subject": "01a1c45a-27fd-75bc-a433-f3e0233f0f72",
+  "v": 1,
+  "verb": "approve"
+}

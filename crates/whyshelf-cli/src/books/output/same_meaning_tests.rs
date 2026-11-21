@@ -9,7 +9,7 @@ use whyshelf_core::domain::id::{DocId, EntityId};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings, Space,
+    ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings, Listings, Space,
 };
 use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
 use whyshelf_core::domain::shelf::freshness::assess;
@@ -287,6 +287,7 @@ fn the_notices_of_a_declared_edit_name_the_declarations_and_the_file() {
         &now,
         &Ledger::build(all, &Admit::unruled()),
         JudgedAt::new(100),
+        &Listings::NotAsked,
     );
     let names = Names::default();
     let namer = Namer(&names);

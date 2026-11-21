@@ -30,7 +30,7 @@
 //! | [`FileSync`] | the files [`DocWrite`], [`DeclarationWrite`], [`FileWrite`] and [`LedgerAppend`] made, put on disk together, once for a run, so that they survive a power loss |
 //! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten) |
 //! | [`ActorSource`] | who is acting |
-//! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); for a move of a prefix, which names are under it and what each is under the new one, by the space's own grammar of names; and the bytes of an artifact now |
+//! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); for a move of a prefix, which names are under it and what each is under the new one, by the space's own grammar of names; whether a space reads a selection, and the names a selection takes there now (all, some, or that the space cannot list); and the bytes of an artifact now |
 //! | [`ContentStore`] | content read back by its [`ContentAddress`], by the adapter of the document or the space it is of, or "not readable" |
 //! | [`RevisionSource`] | the point of the project's history now, if there is one |
 //! | [`MoveSource`] | for the names of a space with nothing behind them now, the names each may have moved to, each with how it was found, or that the space cannot suggest |
@@ -60,8 +60,8 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::{
-    ArtifactAsks, ArtifactKey, ArtifactReadings, ContentAddress, PrefixAnswers, PrefixAsks,
-    PrefixMove, Revision, Space,
+    ArtifactAsks, ArtifactKey, ArtifactReadings, ContentAddress, NameListing, PrefixAnswers,
+    PrefixAsks, PrefixMove, Revision, Selection, SelectionCheck, Space,
 };
 #[cfg(doc)]
 use crate::domain::shelf::build::Shelf;
@@ -636,6 +636,27 @@ pub trait ArtifactSource: Send + Sync {
         &self,
         artifact: &ArtifactKey,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
+
+    /// Whether the adapter of `space` reads `selection` ([`SelectionCheck`]): yes, no
+    /// (a text of it is none of the space's grammar, with why), or the space lists no
+    /// names (with why; also a space no adapter names). It does no I/O, so it is a
+    /// plain function like [`presets`](Self::presets).
+    ///
+    /// The domain keeps the texts of a [`Selection`] and never reads them: only the
+    /// grammar of the space does.
+    fn select(&self, space: &Space, selection: &Selection) -> Result<SelectionCheck, Self::Error>;
+
+    /// The names of `space` that `selection` takes and that are there now
+    /// ([`NameListing`]): all of them, some of them (the listing was cut at a bound,
+    /// with why: never counted as all of them), or that none can be listed (the space
+    /// lists nothing, no adapter names it, or nothing here to list from, with why).
+    /// Every name of a listing is one [`resolve`](Self::resolve) answers as there. An
+    /// error is for what stops the whole ask.
+    fn list(
+        &self,
+        space: &Space,
+        selection: &Selection,
+    ) -> impl Future<Output = Result<NameListing, Self::Error>> + Send;
 }
 
 /// Where the artifacts that are gone may have moved to, as each space's adapter can

@@ -4,16 +4,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::nonempty::{Count, NonEmptySet};
+use crate::domain::nonempty::{Count, NonBlank, NonEmptySet, TextLiteral};
 
-use super::super::artifact::{Comparison, Space};
+use super::super::artifact::{Comparison, Selection, SelectionCheck, SelectionChecks, Space};
+use super::link::{CoverRefusal, CoverTo, ReadCover, read_cover};
 use super::{
-    ARTIFACT_TARGET, ArtifactLinkKind, ArtifactPropagation, BookDescription, BookDir, BookName,
-    BookRange, BookSchema, BookSchemaDecl, BookScope, Cardinality, CoverSeverity, Declared,
-    DeclaredLink, EntryName, FieldDecl, FieldEntryDecl, FieldType, FieldTypeDecl, FieldWord,
-    KeyPattern, KeyPatternDecl, KeyPrefix, KeyWord, LinkEntryDecl, LinkKind, LinkTargetDecl,
-    NamePlace, Origins, PresetOrigin, Propagation, SchemaProblem, WordAt, offered, read_book_word,
-    read_scope, read_word, report,
+    ARTIFACT_TARGET, ArtifactCover, ArtifactLinkKind, ArtifactPropagation, BookDescription,
+    BookDir, BookName, BookRange, BookSchema, BookSchemaDecl, BookScope, Cardinality,
+    CoverSeverity, Declared, DeclaredLink, EntryName, FieldDecl, FieldEntryDecl, FieldType,
+    FieldTypeDecl, FieldWord, KeyPattern, KeyPatternDecl, KeyPrefix, KeyWord, LinkEntryDecl,
+    LinkKind, LinkTargetDecl, NamePlace, Origins, PresetOrigin, Propagation, SchemaProblem, WordAt,
+    offered, read_book_word, read_scope, read_word, report,
 };
 
 /// What [`Schema::validate`](super::Schema::validate) learns of one declaration before it can be judged
@@ -52,6 +53,7 @@ impl Draft {
     pub(super) fn read(
         decl: BookSchemaDecl,
         spaces: &BTreeSet<Space>,
+        checks: &SelectionChecks,
         origins: &Origins,
         problems: &mut Vec<SchemaProblem>,
     ) -> Self {
@@ -63,7 +65,7 @@ impl Draft {
         let scope = read_scope(&label, decl.scope, problems);
         let description = read_description(&label, decl.description.as_deref(), problems);
         let fields = read_fields(&label, decl.fields, problems);
-        let links = read_links(&label, decl.links, &fields, spaces, problems);
+        let links = read_links(&label, decl.links, &fields, spaces, checks, problems);
         let presets = links
             .iter()
             .filter(|(_, entry)| matches!(entry, DraftEntry::Artifact(_)))
@@ -297,6 +299,7 @@ fn read_links(
     entries: Vec<LinkEntryDecl>,
     fields: &Declared<EntryName, FieldDecl>,
     spaces: &BTreeSet<Space>,
+    checks: &SelectionChecks,
     problems: &mut Vec<SchemaProblem>,
 ) -> Declared<EntryName, DraftEntry> {
     let mut links = Declared::default();
@@ -343,20 +346,24 @@ fn read_links(
                 name: name.clone(),
             });
         }
-        let cover = match entry.cover.as_ref().map(CoverSeverity::read) {
-            None => None,
-            Some(Ok(cover)) => cover,
-            Some(Err(value)) => {
-                problems.push(SchemaProblem::BadCover {
-                    book: book.to_owned(),
-                    link: name,
-                    value,
-                });
+        let to = if target.is_some() {
+            CoverTo::Book
+        } else {
+            CoverTo::Artifacts
+        };
+        let cover = match read_cover(entry.cover.as_ref(), to) {
+            Ok(cover) => cover,
+            Err(refusal) => {
+                problems.push(cover_problem(book, name, refusal));
                 continue;
             }
         };
         match target {
             Some(target) => {
+                let cover = match cover {
+                    ReadCover::Book(severity) => Some(severity),
+                    ReadCover::Nothing | ReadCover::Artifacts(_) => None,
+                };
                 if entry.compare.is_some() {
                     problems.push(SchemaProblem::CompareOnBookLink {
                         book: book.to_owned(),
@@ -380,16 +387,21 @@ fn read_links(
                 links.insert(name, DraftEntry::Book(link));
             }
             None => {
-                if cover.is_some() {
-                    problems.push(SchemaProblem::CoverOnArtifactLink {
-                        book: book.to_owned(),
-                        link: name,
-                    });
-                    continue;
-                }
                 let Some(space) = read_space(book, &name, entry.space.as_deref(), spaces, problems)
                 else {
                     continue;
+                };
+                let cover = match cover {
+                    ReadCover::Artifacts(cover) => {
+                        if let Some(problem) =
+                            selection_problem(book, &name, &space, &cover, checks)
+                        {
+                            problems.push(problem);
+                            continue;
+                        }
+                        Some(cover)
+                    }
+                    ReadCover::Nothing | ReadCover::Book(_) => None,
                 };
                 let comparison = match &entry.compare {
                     None => Comparison::Bytes,
@@ -421,12 +433,100 @@ fn read_links(
                     cardinality: entry.cardinality,
                     propagation,
                     comparison,
+                    cover,
                 };
                 links.insert(name, DraftEntry::Artifact(link));
             }
         }
     }
     links
+}
+
+/// The problem a `cover` that the reader refused is.
+fn cover_problem(book: &str, link: EntryName, refusal: CoverRefusal) -> SchemaProblem {
+    let book = book.to_owned();
+    match refusal {
+        CoverRefusal::Word(value) => SchemaProblem::BadCover { book, link, value },
+        CoverRefusal::SelectionOnBookLink => SchemaProblem::SelectionOnBookLink { book, link },
+        CoverRefusal::NeedsSelection => SchemaProblem::CoverNeedsSelection { book, link },
+        CoverRefusal::Selection(why) => SchemaProblem::BadSelection { book, link, why },
+    }
+}
+
+/// What a selection that nobody asked about is read as: a space that cannot list.
+const NOT_ASKED: TextLiteral = TextLiteral::new("not asked");
+
+/// The problem of a `cover` whose selection the space of its link does not read, as
+/// the adapters answered it (`checks`), or none when it reads it. A selection with no
+/// answer is read as an adapter that lists nothing: the refusal is the side it falls
+/// to.
+fn selection_problem(
+    book: &str,
+    link: &EntryName,
+    space: &Space,
+    cover: &ArtifactCover,
+    checks: &SelectionChecks,
+) -> Option<SchemaProblem> {
+    let (book, link, space) = (book.to_owned(), link.clone(), space.clone());
+    match checks.get(&(space.clone(), cover.selection().clone())) {
+        Some(SelectionCheck::Ok) => None,
+        Some(SelectionCheck::NotASelection(why)) => Some(SchemaProblem::NotASelection {
+            book,
+            link,
+            space,
+            why: why.clone(),
+        }),
+        Some(SelectionCheck::CannotList(why)) => Some(SchemaProblem::SpaceCannotList {
+            book,
+            link,
+            space,
+            why: why.clone(),
+        }),
+        None => Some(SchemaProblem::SpaceCannotList {
+            book,
+            link,
+            space,
+            why: NonBlank::from(NOT_ASKED),
+        }),
+    }
+}
+
+/// The (space, selection)s to ask the adapters about: the selection of the `cover` of
+/// each link to artifacts that [`read_links`] would read a selection of, by the same
+/// reader. A link that has a problem of its name, its `cover` or its space is not
+/// asked about, and its problem is told, once, by [`read_links`].
+pub(super) fn asked_selections(
+    books: &[BookSchemaDecl],
+    spaces: &BTreeSet<Space>,
+) -> BTreeSet<(Space, Selection)> {
+    let mut asks = BTreeSet::new();
+    // The problems are told by `read_links`: here only the links they leave out.
+    let mut told_elsewhere = Vec::new();
+    for book in books {
+        for entry in &book.links {
+            let Ok(name) = EntryName::new(&entry.name) else {
+                continue;
+            };
+            if !matches!(entry.target, LinkTargetDecl::Artifact) {
+                continue;
+            }
+            let Ok(ReadCover::Artifacts(cover)) =
+                read_cover(entry.cover.as_ref(), CoverTo::Artifacts)
+            else {
+                continue;
+            };
+            if let Some(space) = read_space(
+                &book.name,
+                &name,
+                entry.space.as_deref(),
+                spaces,
+                &mut told_elsewhere,
+            ) {
+                asks.insert((space, cover.selection().clone()));
+            }
+        }
+    }
+    asks
 }
 
 /// The space of a link to artifacts: written, a space, and one the adapters offer

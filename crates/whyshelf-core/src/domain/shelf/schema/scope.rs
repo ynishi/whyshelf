@@ -23,33 +23,17 @@
 //! directory, its path below the directory matches some `include` (every file when
 //! `include` is not written) and matches no `exclude`. The path matched is the one
 //! below the directory, with `/` between its segments, and a pattern is matched
-//! against it segment by segment:
-//!
-//! | written | matches |
-//! |---|---|
-//! | `**`, a whole segment | any number of segments, none included |
-//! | `*` in a segment | any characters of one segment, none included |
-//! | `?` in a segment | one character of one segment |
-//! | any other character | itself, byte for byte |
-//!
+//! against it segment by segment, in the grammar of [`PathGlob`] (`**`, `*` and `?`
+//! only; the table is on its page), which this module calls and does not copy.
 //! So `*.md` is the files of the directory itself, `**/*.md` every file below it,
-//! `archive/**` everything under `archive`. Case is matched as written (the ASCII
-//! case rule of the space `file`), and Unicode is compared byte for byte, so a
-//! pattern in NFC does not take a name in NFD.
+//! `archive/**` everything under `archive`.
 //!
-//! Every other form is refused, as a problem of the declaration
-//! ([`SchemaProblem::BadScopePattern`](super::SchemaProblem::BadScopePattern)), so
-//! that nothing is matched otherwise than it reads: an empty pattern, an absolute
-//! one (`/x`), a leading `!` (a negation elsewhere), a `\` (an escape or a separator
-//! elsewhere), `[`, `]`, `{` and `}` (the classes and alternatives of richer
-//! grammars, which could cross a `/`), an empty, `.` or `..` segment, a `**` inside
-//! a segment (`sub**`), and a pattern whose last segment has no `*` or `?` and does
-//! not end in `.md`, which names a directory or a file that is no document and so
-//! takes nothing (`archive` for `archive/**`).
-//!
-//! The matching is done by `globset` (the glob crate of ripgrep: pure, mature), held
-//! to this grammar: `*` and `?` stop at `/` (`literal_separator`), case as written,
-//! no escape.
+//! Every form [`PathGlob`] refuses is refused here, as a problem of the declaration
+//! ([`SchemaProblem::BadScopePattern`](super::SchemaProblem::BadScopePattern)), and
+//! so is one thing more, which is the book's own: a pattern whose last segment has
+//! no `*` or `?` and does not end in `.md`, which names a directory or a file that
+//! is no document and so takes nothing (`archive` for `archive/**`). A [`Pattern`]
+//! is a [`PathGlob`] with that rule.
 //!
 //! The range does not change which books may share a directory: two books whose
 //! directories are the same or nest are still refused
@@ -64,10 +48,9 @@
 
 use std::fmt;
 
-use globset::{Glob, GlobBuilder, GlobMatcher};
 use thiserror::Error;
 
-use crate::domain::location::RelPath;
+use crate::domain::location::{GlobProblem, PathGlob, RelPath};
 use crate::domain::words::{Join, Mark, listed};
 
 use super::{BookDir, BookEntry, BookWord, Words, read_book_word, report};
@@ -192,141 +175,64 @@ pub enum PatternProblem {
     },
 }
 
-/// The characters of the grammars of classes and alternatives, refused.
-const RESERVED: [char; 4] = ['[', ']', '{', '}'];
-
-/// A pattern of a book's range: a glob relative to the directory of the book,
-/// checked once.
-#[derive(Debug, Clone)]
-pub struct Pattern {
-    text: String,
-    matcher: GlobMatcher,
-    /// For a pattern that ends in a whole segment `**` (`archive/**`, `**`): the
-    /// matcher of what comes before it, which tells a directory everything under
-    /// which the pattern takes; none for an empty prefix (`**` alone).
-    under: Option<Under>,
-}
-
-/// What a pattern ending in `/**` takes everything under.
-#[derive(Debug, Clone)]
-enum Under {
-    /// `**`: every directory.
-    Everything,
-    /// `<prefix>/**`: every directory the prefix matches, and what is below it.
-    Prefix(GlobMatcher),
-}
-
-impl PartialEq for Pattern {
-    fn eq(&self, other: &Self) -> bool {
-        self.text == other.text
+impl From<GlobProblem> for PatternProblem {
+    /// The same refusal, in the words of a book's range.
+    fn from(problem: GlobProblem) -> Self {
+        match problem {
+            GlobProblem::Empty => Self::Empty,
+            GlobProblem::Absolute => Self::Absolute,
+            GlobProblem::ParentSegment => Self::ParentSegment,
+            GlobProblem::Negated => Self::Negated,
+            GlobProblem::Backslash => Self::Backslash,
+            GlobProblem::EmptySegment => Self::EmptySegment,
+            GlobProblem::Reserved { ch } => Self::Reserved { ch },
+            GlobProblem::SplitDoubleStar => Self::SplitDoubleStar,
+            GlobProblem::NotAGlob { why } => Self::NotAGlob { why },
+        }
     }
 }
 
-impl Eq for Pattern {}
+/// A pattern of a book's range: a [`PathGlob`] relative to the directory of the
+/// book, with the one rule that is the book's (its last segment names a `.md` file or
+/// has a wildcard), checked once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pattern {
+    glob: PathGlob,
+}
 
 impl Pattern {
     /// A pattern from text, refused when it is not a relative glob that stays in the
     /// directory.
     pub fn new(text: &str) -> Result<Self, PatternProblem> {
-        if text.is_empty() {
-            return Err(PatternProblem::Empty);
-        }
-        if text.starts_with('/') {
-            return Err(PatternProblem::Absolute);
-        }
-        if text.starts_with('!') {
-            return Err(PatternProblem::Negated);
-        }
-        if text.contains('\\') {
-            return Err(PatternProblem::Backslash);
-        }
-        if let Some(ch) = text.chars().find(|c| RESERVED.contains(c)) {
-            return Err(PatternProblem::Reserved { ch });
-        }
-        let segments: Vec<&str> = text.split('/').collect();
-        if segments.contains(&"..") {
-            return Err(PatternProblem::ParentSegment);
-        }
-        if segments
-            .iter()
-            .any(|segment| segment.is_empty() || *segment == ".")
-        {
-            return Err(PatternProblem::EmptySegment);
-        }
-        if segments
-            .iter()
-            .any(|segment| *segment != "**" && segment.contains("**"))
-        {
-            return Err(PatternProblem::SplitDoubleStar);
-        }
-        let last = segments.last().copied().unwrap_or(text);
+        let glob = PathGlob::new(text)?;
+        let last = text.rsplit('/').next().unwrap_or(text);
         if !last.contains(['*', '?']) && !last.ends_with(".md") {
             return Err(PatternProblem::NoFile {
                 text: text.to_owned(),
             });
         }
-        let under = match text.strip_suffix("**") {
-            Some("") => Some(Under::Everything),
-            Some(prefix) => match prefix.strip_suffix('/') {
-                Some(prefix) => Some(Under::Prefix(glob(prefix)?)),
-                None => None,
-            },
-            None => None,
-        };
-        Ok(Self {
-            text: text.to_owned(),
-            matcher: glob(text)?,
-            under,
-        })
+        Ok(Self { glob })
     }
 
     /// The pattern as written.
     pub fn as_str(&self) -> &str {
-        &self.text
+        self.glob.as_str()
     }
 
     fn matches(&self, below_dir: &str) -> bool {
-        self.matcher.is_match(below_dir)
+        self.glob.matches(below_dir)
     }
 
     /// Whether the pattern takes every path under the directory `dir` (below the
-    /// book's directory): it ends in a whole segment `**`, and what comes before
-    /// it matches `dir` or a directory above it. Since `*` and `?` stop at `/`, a
-    /// prefix that matches a directory takes it whole.
+    /// book's directory): [`PathGlob::takes_all_under`].
     fn takes_all_under(&self, dir: &str) -> bool {
-        match &self.under {
-            None => false,
-            Some(Under::Everything) => true,
-            Some(Under::Prefix(prefix)) => {
-                let mut end = 0;
-                dir.split('/').any(|segment| {
-                    end += segment.len();
-                    let above = &dir[..end];
-                    end += 1;
-                    prefix.is_match(above)
-                })
-            }
-        }
+        self.glob.takes_all_under(dir)
     }
-}
-
-/// The matcher of a text of the grammar: `*` and `?` stop at `/`, case as written,
-/// and `\` is no escape (it is refused before).
-fn glob(text: &str) -> Result<GlobMatcher, PatternProblem> {
-    let glob: Glob = GlobBuilder::new(text)
-        .literal_separator(true)
-        .case_insensitive(false)
-        .backslash_escape(false)
-        .build()
-        .map_err(|error| PatternProblem::NotAGlob {
-            why: error.kind().to_string(),
-        })?;
-    Ok(glob.compile_matcher())
 }
 
 impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.text)
+        fmt::Display::fmt(&self.glob, f)
     }
 }
 

@@ -1,0 +1,108 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d97e1c397c2961cb0698a4e52db8f6dd6464b427",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:951b3ab9179010202da20de2d007cae6c3c0253aa926b50a91285d588099f8c0",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6903818e4ef099503c95e3ff2a2e0d15127c822d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c71bce08a6c01210eca31c2ab1eb0c09c9bf9ccdf084cfe5949310d033fb4c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/dispatch.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "840dac5e37b9365b07a99492079fe9a6fabb977e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:eeb200b63d59384d0970849898757696bd7c14f346257bf9caba8cbb36ff1443",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f1e5a83ec0a91fcb7f6a4bbadbb3040f4ea601d7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:82c9e9bbc08aaeb8f3eaf275f4acdf6dff2772cd089673a02b2e45125757ce9b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/registry.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795228126149,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c864b73577160bc7d305fb4dcca21b87168522dc",
+      "hash": "sha256:91c2dbc6d6e088f5c0d29f714bfc963e4ce509710c05c95003d49b60fd7f9bd6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "84"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-16db-7158-a8f3-5fb875ef9cb6"
+    },
+    {
+      "address": "4a0eee9736f3aa2e091eff98eee22ecb509d9409",
+      "hash": "sha256:3005006e18997f519c125ea6a61a6889e15b2ec50afe75176be736a24329d282",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "86"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f44e-7ea5-700b-90ca-49a9faa991ca"
+    }
+  ],
+  "id": "01a1fbef-a868-7313-827a-9f35bff78c16",
+  "kind": "decision",
+  "reason": "Re-read for #111: DEC-23, DEC-50, DEC-63, DEC-65 and DEC-84 were corrected to say a link to artifacts may declare a cover over a selection, PathGlob is the one glob of a book range and of the file selection, an artifact name can be exempted, and the adapter may answer a fourth ask (listing); the verifications' test files changed at call sites (freshness::assess and Loaded::assess take Listings, ExemptAsk, the answers' added fields) and some gained artifact cover cases, and what each states still holds: cargo test --workspace passes (1621)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:d86099728e95d979843875a03f6a7dc4d41345662ad52782d3a758c929af21bc",
+  "seen_address": "bd981cdee20c2c1587052da7bcf9342bd5fcb562",
+  "subject": "01a1f44e-ba3e-7339-a475-d1d5a9a24315",
+  "v": 1,
+  "verb": "approve"
+}

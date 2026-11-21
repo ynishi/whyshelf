@@ -6,12 +6,13 @@ use std::error::Error as _;
 
 use crate::domain::actor::{Actor, Attribution};
 use crate::domain::nonempty::NonBlank;
-use crate::domain::shelf::artifact::ArtifactReadings;
+use crate::domain::shelf::artifact::{ArtifactReadings, Listings};
 use crate::domain::shelf::build::DocReading;
 use crate::domain::shelf::fixtures_tests::{
-    decls, deny, deprecate, docid, fr, jid, ledger, list, reading, retire, spaces, text,
+    decls, deny, deprecate, docid, file_artifact, fr, jid, ledger, list, reading, retire, spaces,
+    text,
 };
-use crate::domain::shelf::freshness::assess;
+use crate::domain::shelf::freshness::assess_unasked as assess;
 use crate::domain::shelf::ledger::{JudgedAt, Record};
 use crate::domain::shelf::schema::{CoverDecl, CoverSeverity, Schema};
 
@@ -82,7 +83,12 @@ fn frame(
 
 /// The reading of `of`.
 fn read(shelf: &Shelf, l: &Ledger, of: &ExemptOf) -> Result<CoverSeverity, Unneeded> {
-    exemption_reading(shelf, l, of)
+    // A document is read with no listing: none is asked of it.
+    match exemption_reading(shelf, l, of, &ListedNames::of(&Listings::NotAsked)) {
+        ExemptionReading::Needed(severity) => Ok(severity),
+        ExemptionReading::Unneeded(why) => Err(why),
+        ExemptionReading::CannotTell(why) => panic!("a document cannot be told: {why}"),
+    }
 }
 
 #[test]
@@ -214,6 +220,38 @@ fn an_exemption_from_a_link_that_covers_nothing_of_the_document_is_refused() {
     for (b, l, miss) in cases {
         assert_eq!(
             frame(&alone(), &ledger(vec![]), 1, b, l),
+            Err(ExemptRefusal::NotCovering {
+                book: book(b),
+                link: link(l),
+                miss,
+            }),
+            "{b}.{l}"
+        );
+    }
+}
+
+#[test]
+fn an_exemption_of_an_artifact_from_a_link_that_covers_no_names_is_unneeded_and_refused() {
+    // The fixtures' `tests` is a link to artifacts with no cover; `grounds` is a link
+    // into a book, and no link to artifacts.
+    let shelf = alone();
+    let listed = ListedNames::of(&Listings::NotAsked);
+    let cases = [
+        ("spec", "tests", CoverMiss::NoCover),
+        ("spec", "grounds", CoverMiss::NotDeclaredToArtifacts),
+        ("spec", "nope", CoverMiss::NotDeclaredToArtifacts),
+        ("nobook", "tests", CoverMiss::NotDeclaredToArtifacts),
+    ];
+    for (b, l, miss) in cases {
+        let artifact = file_artifact("src/a.rs");
+        let of = ExemptOf::of_artifact(artifact.clone(), book(b), link(l));
+        assert_eq!(
+            exemption_reading(&shelf, &ledger(vec![]), &of, &listed),
+            ExemptionReading::Unneeded(Unneeded::Cover(miss.clone())),
+            "{b}.{l}"
+        );
+        assert_eq!(
+            frame_exempt_artifact(&shelf, &ledger(vec![]), artifact, book(b), link(l), &listed),
             Err(ExemptRefusal::NotCovering {
                 book: book(b),
                 link: link(l),

@@ -7,6 +7,7 @@ use crate::domain::shelf::fixtures_tests::{
 use crate::domain::shelf::graph::CycleSource;
 use crate::domain::shelf::ledger::{DeclaredStatus, JudgedAt};
 
+use super::assess_unasked as assess;
 use super::*;
 
 /// The pin FR-2's approval keeps of FR-1, from a real approval.

@@ -24,9 +24,10 @@ use super::super::schema::{
     BookName, EntryName, KeyForm, KeyPrefix, KeyProblem, KeyTail, NameProblem, Slug, parse_tail,
 };
 use super::{
-    ArtifactPin, Decision, DecisionProblem, DecisionVerb, Exempt, ExemptOf, FramePin, JudgedAt,
-    JudgementId, Moved, MovedOf, MovedProblem, NameForm, PATH_ONLY_SPACE, PinnedArtifact, Record,
-    RecordHash, Revocation, SameMeaning, SameMeaningOf, SameMeaningProblem, Seen,
+    ArtifactPin, Decision, DecisionProblem, DecisionVerb, Exempt, ExemptOf, ExemptSubject,
+    FramePin, JudgedAt, JudgementId, Moved, MovedOf, MovedProblem, NameForm, PATH_ONLY_SPACE,
+    PinnedArtifact, Record, RecordHash, Revocation, SameMeaning, SameMeaningOf, SameMeaningProblem,
+    Seen,
 };
 
 /// The version of the canonical form of a record.
@@ -1116,12 +1117,40 @@ fn moved_from(map: &CanonMap) -> Result<Moved, RecordProblem> {
     Ok(Moved::new(id, of, by, at, reason))
 }
 
+/// The subject of an exemption: a document is its identity as a text, as it always
+/// was written; an artifact is a map of its space and its name, written as the
+/// artifact of a pin is.
+fn exempt_subject_canon(of: &ExemptOf) -> Canon {
+    match of.subject() {
+        ExemptSubject::Doc(id) => Canon::str(id.to_string()),
+        ExemptSubject::Artifact(artifact) => {
+            let mut subject = Vec::new();
+            push_artifact(&mut subject, artifact, NameForm::Spaced);
+            Canon::map(subject)
+        }
+    }
+}
+
+/// The subject of an exemption read back: a text is a document, a map is an artifact
+/// in its `space` and `name`. The old form of an artifact (a `path` and no `space`)
+/// is none: an exemption of an artifact is newer than the spaces.
+fn exempt_subject_from(map: &CanonMap) -> Result<ExemptSubject, RecordProblem> {
+    match entry(map, "subject")? {
+        Canon::Str(_) => Ok(ExemptSubject::Doc(doc_id(map, "subject")?)),
+        Canon::Map(subject) => match artifact_of(subject, &[], &[])? {
+            (artifact, NameForm::Spaced) => Ok(ExemptSubject::Artifact(artifact)),
+            (_, NameForm::PathOnly) => Err(wrong("subject", "a map of a space and a name")),
+        },
+        _ => Err(wrong("subject", "a text or a map")),
+    }
+}
+
 fn exempt_canon(e: &Exempt) -> Canon {
     let mut entries = vec![
         ("v", Canon::Int(VERSION)),
         ("kind", Canon::str(RecordKind::Exempt.as_str())),
         ("id", Canon::str(e.id.to_string())),
-        ("subject", Canon::str(e.of.doc().to_string())),
+        ("subject", exempt_subject_canon(&e.of)),
         ("book", Canon::str(e.of.book().as_str())),
         ("link", Canon::str(e.of.link().as_str())),
         ("at", Canon::Int(e.at.millis())),
@@ -1136,6 +1165,9 @@ fn exempt_from(map: &CanonMap) -> Result<Exempt, RecordProblem> {
     let Common { id, by, at, reason } = read_common(map, required_reason)?;
     let book = BookName::new(text(map, "book")?).map_err(RecordProblem::BadName)?;
     let link = EntryName::new(text(map, "link")?).map_err(RecordProblem::BadName)?;
-    let of = ExemptOf::new(doc_id(map, "subject")?, book, link);
+    let of = match exempt_subject_from(map)? {
+        ExemptSubject::Doc(doc) => ExemptOf::new(doc, book, link),
+        ExemptSubject::Artifact(artifact) => ExemptOf::of_artifact(artifact, book, link),
+    };
     Ok(Exempt::new(id, of, by, at, reason))
 }

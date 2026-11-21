@@ -1,0 +1,80 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d8fa33de8f502bf559ea3b55bc303617fa5a2d39",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:97b0dd470a16146fa1b0cda14ed378b4e1b184e5f7ad8da8b4a4bc4ae74b7dcd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "930053cc4025ede17be8913da9dcde163b524915",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2416f9b778e58ec8014e887190e4fee136a08a6766a42775ad0ce207784957b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795228126149,
+  "expires": null,
+  "frame": [
+    {
+      "address": "42bc14a58ddd5884e1cb511a4ac672a4a103060e",
+      "hash": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157"
+    },
+    {
+      "address": "9ace93bd6fff1be46a68ad5b488ded85fa507d0e",
+      "hash": "sha256:6599ee1d0b6414293d727c077a050734aa210b98e3b0fb8e0b64a6823ee85138",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "88"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c41-7b18-8d07-3f9a5e2b6c40"
+    }
+  ],
+  "id": "01a1fbef-aa67-723e-8909-e419a83dbdba",
+  "kind": "decision",
+  "reason": "Re-read for #111: DEC-23, DEC-50, DEC-63, DEC-65 and DEC-84 were corrected to say a link to artifacts may declare a cover over a selection, PathGlob is the one glob of a book range and of the file selection, an artifact name can be exempted, and the adapter may answer a fourth ask (listing); the verifications' test files changed at call sites (freshness::assess and Loaded::assess take Listings, ExemptAsk, the answers' added fields) and some gained artifact cover cases, and what each states still holds: cargo test --workspace passes (1621)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:be029a812eddc8b619055a8ac21f0257d987839bc61cec11abe650dbb5650612",
+  "seen_address": "0afc562f8c32d56f211370aac0296f2510543f7a",
+  "subject": "01a1f6a0-2c41-7d05-b6a1-9e4c2d7f3a63",
+  "v": 1,
+  "verb": "approve"
+}

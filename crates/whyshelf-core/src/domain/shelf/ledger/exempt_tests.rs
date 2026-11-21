@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
+use crate::domain::shelf::artifact::{ArtifactName, Space};
 use crate::domain::shelf::fixtures_tests::{actor, by, docid, jid, ledger};
 
 use super::*;
@@ -86,7 +87,7 @@ fn an_exemption_survives_its_canonical_form_with_exact_keys() {
         panic!("an exemption");
     };
     assert_eq!(back.id(), jid(2001));
-    assert_eq!(back.of().doc(), docid(1));
+    assert_eq!(back.of().doc(), Some(docid(1)));
     assert_eq!(back.of().book(), &book("spec"));
     assert_eq!(back.of().link(), &link("grounds"));
     assert_eq!(back.actor(), &actor());
@@ -161,6 +162,111 @@ fn the_records_of_the_other_kinds_read_as_they_did() {
         map_mut(&mut owned).get("kind"),
         Some(&Canon::str("revocation"))
     );
+}
+
+// The subject: a document as it always was written, an artifact as a map.
+
+fn artifact_exempt(judgement: u128) -> Record {
+    let artifact = ArtifactKey::new(
+        Space::new("file").unwrap(),
+        ArtifactName::new("src/a.rs").unwrap(),
+    );
+    Record::Exempt(Exempt::new(
+        jid(judgement),
+        ExemptOf::of_artifact(artifact, book("spec"), link("code")),
+        by(),
+        JudgedAt::new(50),
+        because(),
+    ))
+}
+
+#[test]
+fn the_bytes_of_an_exemption_of_a_document_are_what_they_were_before_artifacts_could_be_exempt() {
+    // The form written before an exemption could be of an artifact, key by key: the
+    // subject is the identity of the document, as a text.
+    let before = Canon::map([
+        ("v", Canon::Int(1)),
+        ("kind", Canon::str("exempt")),
+        ("id", Canon::str(jid(2001).to_string())),
+        ("subject", Canon::str(docid(1).to_string())),
+        ("book", Canon::str("spec")),
+        ("link", Canon::str("grounds")),
+        ("at", Canon::Int(50)),
+        ("reason", Canon::str(because().as_str())),
+        ("actor", Canon::str(actor().as_str())),
+    ]);
+    let record = exempt(2001, 1, 50);
+    assert_eq!(record.to_canon(), before);
+    assert_eq!(
+        record.hash(),
+        RecordHash(ContentHash::of(HashKind::ShelfJudgement, &before))
+    );
+    assert_eq!(Record::from_canon(&before).unwrap(), record);
+}
+
+#[test]
+fn an_exemption_of_an_artifact_survives_its_canonical_form_with_its_space_and_name() {
+    let record = artifact_exempt(2002);
+    let canon = record.to_canon();
+    let mut owned = canon.clone();
+    let map = map_mut(&mut owned);
+    // The same keys as of a document: only the subject is a map.
+    let keys: Vec<&str> = map.keys().map(String::as_str).collect();
+    assert_eq!(
+        keys,
+        [
+            "actor", "at", "book", "id", "kind", "link", "reason", "subject", "v"
+        ]
+    );
+    assert_eq!(
+        map.get("subject"),
+        Some(&Canon::map([
+            ("space", Canon::str("file")),
+            ("name", Canon::str("src/a.rs")),
+        ]))
+    );
+    let back = Record::from_canon(&canon).unwrap();
+    assert_eq!(back, record);
+    assert_eq!(back.to_canon(), canon);
+    let Record::Exempt(back) = &back else {
+        panic!("an exemption");
+    };
+    assert_eq!(back.of().doc(), None);
+    assert_eq!(
+        back.of().artifact().map(ToString::to_string).as_deref(),
+        Some("`src/a.rs` in `file`")
+    );
+    assert_eq!(back.of().link(), &link("code"));
+}
+
+#[test]
+fn a_subject_that_is_neither_a_document_nor_an_artifact_in_a_space_is_refused() {
+    let with_subject = |subject: Canon| {
+        let mut canon = artifact_exempt(2002).to_canon();
+        map_mut(&mut canon).insert("subject".to_owned(), subject);
+        Record::from_canon(&canon)
+    };
+    // The form of an artifact written before spaces existed is none here.
+    assert!(matches!(
+        with_subject(Canon::map([("path", Canon::str("src/a.rs"))])),
+        Err(RecordProblem::WrongType { key, .. }) if key == "subject"
+    ));
+    assert!(matches!(
+        with_subject(Canon::map([("space", Canon::str("file"))])),
+        Err(RecordProblem::MissingKey { .. })
+    ));
+    assert!(matches!(
+        with_subject(Canon::map([
+            ("space", Canon::str("file")),
+            ("name", Canon::str("a")),
+            ("extra", Canon::Null),
+        ])),
+        Err(RecordProblem::ExtraKey { key }) if key == "extra"
+    ));
+    assert!(matches!(
+        with_subject(Canon::Int(1)),
+        Err(RecordProblem::WrongType { key, .. }) if key == "subject"
+    ));
 }
 
 // Withdrawing.

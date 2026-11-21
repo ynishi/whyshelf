@@ -63,6 +63,8 @@ fn check_of(unknown: Vec<Unknown>) -> BooksCheck {
         repeated: Vec::new(),
         awaiting: Vec::new(),
         same_meaning_short: Vec::new(),
+        cover: Default::default(),
+        artifacts: Default::default(),
         names: Names::default(),
     }
 }

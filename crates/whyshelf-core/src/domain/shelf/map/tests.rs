@@ -186,6 +186,7 @@ fn the_links_are_mapped_as_declared_with_every_count() {
                 ignore: [LinePrefix::new("//").unwrap()].into(),
             },
             preset: None,
+            cover: None,
         }
     );
     assert_eq!(
@@ -252,7 +253,8 @@ fn a_link_to_artifacts_is_mapped_with_its_values_and_the_preset_it_came_from() {
         },
         decide: Default::default(),
     };
-    let map = ShelfMap::of(&Schema::declared(decl, &builtins, &spaces()).unwrap());
+    let map =
+        ShelfMap::of(&Schema::declared(decl, &builtins, &spaces(), &Default::default()).unwrap());
     let presets: Vec<Option<PresetOrigin>> = map
         .links
         .iter()

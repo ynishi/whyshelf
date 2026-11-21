@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "49ed1c4166bebe320bce2eed1871be9fd089cc33",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e63603bae01b839c87a6cb6b87ab46219f06e5ed61d5ff344fda955c915bc280",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0c5d60efe7bd3708eaf20b758a9395b2672f5446",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:64dc006655879075e4d38ceb7838c9e56ec40e0df46b43306c28e069b2385a61",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "326652d6ca14744f585174f628cba58b3d466335",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7a1773b46c21ccd48c9dac7a6d4d923f383f28392e8a6fd7ad6e8f04b630485f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "824243efcc292d3085ff9bcf50432b4acff1ca23",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:360508e991ce153764924df96b973265e28a7144fdc140333fccb8c941059f86",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d4434193bddc5dbac32746c4e9207a8aea238930",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:142ecf3a74b7f00c15337d038f5f2970cb07d49037655dad3e4607d0ded24b93",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "930053cc4025ede17be8913da9dcde163b524915",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2416f9b778e58ec8014e887190e4fee136a08a6766a42775ad0ce207784957b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795228126149,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b4b013c3072c7576e998eb74980d082fbbbb3fe",
+      "hash": "sha256:3e379866f327b70afe6acdbf819f6f9b6a902810c5855c79becb1bd1a19be061",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "53"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7e2-6f31-74e1-8aa9-4de2bd6986d2"
+    }
+  ],
+  "id": "01a1fbef-75ab-77d3-8af6-4d5641052939",
+  "kind": "decision",
+  "reason": "Re-read for #111: DEC-23, DEC-50, DEC-63, DEC-65 and DEC-84 were corrected to say a link to artifacts may declare a cover over a selection, PathGlob is the one glob of a book range and of the file selection, an artifact name can be exempted, and the adapter may answer a fourth ask (listing); the verifications' test files changed at call sites (freshness::assess and Loaded::assess take Listings, ExemptAsk, the answers' added fields) and some gained artifact cover cases, and what each states still holds: cargo test --workspace passes (1621)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:4fff836039815d80bd297e529a5fe506a514de3f56b81886db7efd092b08f941",
+  "seen_address": "f56aa84f441b058e2d794fd63dfecf8045c4d8ac",
+  "subject": "01a1c7e2-7061-7778-9bec-d92f955d4598",
+  "v": 1,
+  "verb": "approve"
+}

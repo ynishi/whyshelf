@@ -85,7 +85,9 @@ pub struct NoticeOut {
     /// declared now), `no_cover` (the link is declared with no cover), `other_book`
     /// (it points into another book than the document's), `not_valid` (the document
     /// is not valid now) or `decided_against` (it is denied, deprecated or retired);
-    /// null for any other kind.
+    /// null for any other kind. (An exemption of an artifact is told by `check` and
+    /// `cover` with the words `reached`, `not_declared`, `no_cover`, `other_space`
+    /// and `not_listed`, as their own lists give them.)
     pub why: Option<&'static str>,
     /// A sentence for a person.
     pub detail: String,
@@ -621,9 +623,13 @@ impl Namer<'_> {
 pub(super) fn unneeded_word(why: &Unneeded) -> &'static str {
     match why {
         Unneeded::Reached { .. } => "reached",
-        Unneeded::Cover(CoverMiss::NotDeclared) => "not_declared",
+        Unneeded::Cover(CoverMiss::NotDeclared | CoverMiss::NotDeclaredToArtifacts) => {
+            "not_declared"
+        }
         Unneeded::Cover(CoverMiss::NoCover) => "no_cover",
         Unneeded::Cover(CoverMiss::OtherBook { .. }) => "other_book",
+        Unneeded::Cover(CoverMiss::OtherSpace { .. }) => "other_space",
+        Unneeded::Cover(CoverMiss::NotListed) => "not_listed",
         Unneeded::NotValid(_) => "not_valid",
         Unneeded::DecidedAgainst => "decided_against",
     }
@@ -638,6 +644,21 @@ impl Namer<'_> {
     pub(super) fn unneeded(
         &self,
         doc: Option<DocId>,
+        book: &BookName,
+        link: &EntryName,
+        exemption: JudgementId,
+        why: &Unneeded,
+    ) -> String {
+        let doc = doc.map_or_else(|| "it".to_owned(), |id| self.label(id));
+        self.unneeded_of(&doc, book, link, exemption, why)
+    }
+
+    /// The sentence of an exemption that is not needed, of the subject `subject` as
+    /// the sentence names it (a document by its key, an artifact by its name in its
+    /// space).
+    pub(super) fn unneeded_of(
+        &self,
+        subject: &str,
         book: &BookName,
         link: &EntryName,
         exemption: JudgementId,
@@ -661,14 +682,25 @@ impl Namer<'_> {
             Unneeded::Cover(CoverMiss::OtherBook { target, doc_book }) => format!(
                 "`{book}.{link}` points into `{target}` now, and the document is of `{doc_book}`"
             ),
+            Unneeded::Cover(CoverMiss::NotDeclaredToArtifacts) => {
+                format!("no link `{book}.{link}` to artifacts is declared now")
+            }
+            Unneeded::Cover(CoverMiss::OtherSpace {
+                link_space,
+                artifact_space,
+            }) => format!(
+                "`{book}.{link}` covers the names of `{link_space}` now, and the artifact is in `{artifact_space}`"
+            ),
+            Unneeded::Cover(CoverMiss::NotListed) => {
+                format!("the selection of `{book}.{link}` does not list it now")
+            }
             Unneeded::NotValid(tag) => tag.said_of(&"the document"),
             Unneeded::DecidedAgainst => {
                 "the document is decided against, and no covering link expects to reach it"
                     .to_owned()
             }
         };
-        let doc = doc.map_or_else(|| "it".to_owned(), |id| self.label(id));
-        format!("{exemption} exempts {doc} from `{book}.{link}` and is not needed: {because}")
+        format!("{exemption} exempts {subject} from `{book}.{link}` and is not needed: {because}")
     }
 
     /// The sentence of two or more exemptions of one document from one link.
@@ -680,8 +712,19 @@ impl Namer<'_> {
         exemptions: &TwoOrMore<JudgementId>,
     ) -> String {
         let doc = doc.map_or_else(|| "it".to_owned(), |id| self.label(id));
+        Self::repeated_of(&doc, book, link, exemptions)
+    }
+
+    /// The sentence of two or more exemptions of one subject from one link, as the
+    /// sentence names it.
+    pub(super) fn repeated_of(
+        subject: &str,
+        book: &BookName,
+        link: &EntryName,
+        exemptions: &TwoOrMore<JudgementId>,
+    ) -> String {
         format!(
-            "{} exemptions exempt {doc} from `{book}.{link}` ({}): one is enough, withdraw the others",
+            "{} exemptions exempt {subject} from `{book}.{link}` ({}): one is enough, withdraw the others",
             exemptions.len(),
             listed(exemptions.iter(), Mark::Plain, Join::Comma)
         )

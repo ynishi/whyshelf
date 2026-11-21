@@ -4,7 +4,7 @@
 //!
 //! ```text
 //!   declaration text -- BookSchemaSource::declarations_in --> ShelfDecl
-//!   ShelfDecl -------- Schema::declared ----------------------> Schema, or every problem
+//!   ShelfDecl -------- declared_schema (as every read does) ---> Schema, or every problem
 //!   all requests ----- the steps of `new`, as one run ---------> a NewPlan (every key, id,
 //!                      on the shelf of the declaration alone      judgement and link)
 //!   in the way? ------ DeclarationWrite::in_the_way,
@@ -64,10 +64,11 @@ use crate::domain::shelf::schema::Schema;
 
 use super::ShelfApp;
 use super::error::{Obstacle, ShelfError};
+use super::load::declared_schema;
 use super::new_doc::{Created, NewDocRequest, plan_of, single_refusal};
 use super::ports::{
-    ArtifactSource, BookSchemaSource, DeclarationText, DeclarationWrite, DocSource, DocWrite,
-    FileWrite, ShelfPort, ShelfWrite, port,
+    BookSchemaSource, DeclarationText, DeclarationWrite, DocSource, DocWrite, FileWrite, ShelfPort,
+    ShelfWrite, port,
 };
 use super::run_writes::{RunWrites, Stop, Wrote};
 
@@ -130,9 +131,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .schemas()
             .declarations_in(&request.declaration)
             .map_err(port(ShelfPort::Schema))?;
-        let artifacts = ports.artifacts();
-        let schema = Schema::declared(decl, &artifacts.presets(), &artifacts.spaces())
-            .map_err(ShelfError::Schema)?;
+        let schema = declared_schema(decl, ports.artifacts())?.map_err(ShelfError::Schema)?;
 
         // The documents as one run, on the shelf of the declaration alone: what `new`
         // would make of them once they were written, every link among them resolved.

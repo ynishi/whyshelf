@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::location::RelPath;
 use crate::domain::shelf::artifact::{
-    ArtifactAsks, ArtifactReadings, ArtifactState, ContentAddress,
+    ArtifactAsks, ArtifactReadings, ArtifactState, ContentAddress, Listings,
 };
 use crate::domain::shelf::ledger::MovedTo;
 use crate::domain::shelf::snapshot::{
@@ -59,7 +59,7 @@ impl<P: ShelfRead> ShelfApp<P> {
                 retrieval: retrieval_of(item, &readable),
             })
             .collect();
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,
@@ -141,7 +141,7 @@ impl<P: ShelfRead> ShelfApp<P> {
             items.push(diff_item(item, &readable, now, file, current));
         }
 
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,
             assessment: &assessment,

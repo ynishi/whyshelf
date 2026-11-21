@@ -17,8 +17,10 @@
 //!
 //! A count is `1` (one), `0..1` (optional), `0..` (many) or `1..` (at least one).
 //! A covering link shows `cover` when its strength is `error` and `cover(warn)`
-//! when it is `warn`. The column of `cover` is in every block when any link of the
-//! declaration covers, and in none when none does. A link to artifacts expanded
+//! when it is `warn`; one to artifacts that covers also shows its selection after
+//! the comparison, `include="src/**/*.rs" exclude="src/gen/**"` (each text quoted,
+//! `exclude` only when there is one). The column of `cover` is in every block when
+//! any link of the declaration covers, and in none when none does. A link to artifacts expanded
 //! from a preset shows `preset=<name>`, and `preset=<name>(default)` when it is the
 //! default; its column, after the count, is likewise in every block or in none.
 //! The values after `artifact` are the link's, whichever preset gave them:
@@ -36,7 +38,9 @@
 //! link is its header alone.
 
 use whyshelf_core::domain::shelf::map::{LinkMap, MapTarget, ShelfMap};
-use whyshelf_core::domain::shelf::schema::{Cardinality, CoverSeverity, KeyPattern, KeyWord};
+use whyshelf_core::domain::shelf::schema::{
+    ArtifactCover, Cardinality, CoverSeverity, KeyPattern, KeyWord,
+};
 
 /// Between two columns.
 const GAP: &str = "  ";
@@ -67,16 +71,14 @@ pub(super) fn draw(map: &ShelfMap) -> String {
         .links
         .iter()
         .map(|link| {
-            let cover = match link.target {
-                MapTarget::Book {
-                    cover: Some(CoverSeverity::Error),
-                    ..
-                } => "cover",
-                MapTarget::Book {
-                    cover: Some(CoverSeverity::Warn),
-                    ..
-                } => "cover(warn)",
-                MapTarget::Book { cover: None, .. } | MapTarget::Artifact { .. } => "",
+            let cover = match &link.target {
+                MapTarget::Book { cover, .. } => *cover,
+                MapTarget::Artifact { cover, .. } => cover.as_ref().map(ArtifactCover::severity),
+            };
+            let cover = match cover {
+                Some(CoverSeverity::Error) => "cover",
+                Some(CoverSeverity::Warn) => "cover(warn)",
+                None => "",
             };
             let preset = match &link.target {
                 MapTarget::Artifact {
@@ -146,7 +148,10 @@ fn target(link: &LinkMap) -> String {
         MapTarget::Book { book, .. } if *book == link.from => format!("{book} (own book)"),
         MapTarget::Book { book, .. } => book.to_string(),
         MapTarget::Artifact {
-            space, comparison, ..
+            space,
+            comparison,
+            cover,
+            ..
         } => {
             let ignored: Vec<String> = comparison.ignored().map(|p| quoted(p.as_str())).collect();
             let mut text = format!(
@@ -157,6 +162,13 @@ fn target(link: &LinkMap) -> String {
                 text.push_str(" ignore=");
                 text.push_str(&ignored.join(","));
             }
+            if let Some(cover) = cover {
+                let selection = cover.selection();
+                text.push_str(&format!(" include={}", quoted_list(selection.include())));
+                if !selection.exclude().is_empty() {
+                    text.push_str(&format!(" exclude={}", quoted_list(selection.exclude())));
+                }
+            }
             text
         }
     }
@@ -165,6 +177,15 @@ fn target(link: &LinkMap) -> String {
 /// A text as a JSON string: in quotes, escaped as JSON escapes it.
 fn quoted(text: &str) -> String {
     serde_json::Value::from(text).to_string()
+}
+
+/// The texts of a selection, each quoted, joined by `,` in the order written.
+fn quoted_list(texts: &[String]) -> String {
+    texts
+        .iter()
+        .map(|text| quoted(text))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// A count, as drawn.

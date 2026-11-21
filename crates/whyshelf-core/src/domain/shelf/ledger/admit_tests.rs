@@ -61,7 +61,8 @@ fn rule(kinds: &[DecideKind], since: Option<i64>) -> DecideDecl {
 fn ruled(decide: DecideDecl) -> Shelf {
     let mut decl = ShelfDecl::of_books(decls());
     decl.decide = decide;
-    let schema = Schema::declared(decl, &BuiltinPresets::new(), &spaces()).unwrap();
+    let schema =
+        Schema::declared(decl, &BuiltinPresets::new(), &spaces(), &Default::default()).unwrap();
     Shelf::build(
         &schema,
         vec![fr(1, &[]), fr(2, &[])],

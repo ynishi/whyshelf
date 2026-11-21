@@ -138,8 +138,9 @@ pub struct WrittenLinkDecl {
     /// For a link to artifacts, the prefixes of the lines `lines` leaves out, when
     /// written.
     pub ignore: Option<Vec<String>>,
-    /// For a link into a book: how strongly every document of the target book is
-    /// expected to be reached by it, when written.
+    /// What the link is expected to reach, when written: for a link into a book, how
+    /// strongly every document of the target book is expected to be reached by it;
+    /// for a link to artifacts, a table of a strength and a selection.
     pub cover: Option<CoverDecl>,
 }
 

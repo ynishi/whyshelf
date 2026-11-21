@@ -11,6 +11,7 @@ use crate::domain::shelf::ledger::{JudgedAt, Record};
 use crate::domain::shelf::order;
 use crate::domain::shelf::settle::{Settlement, settlements};
 
+use super::assess_unasked as assess;
 use super::*;
 
 fn h(text: &str) -> ArtifactHash {

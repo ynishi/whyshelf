@@ -179,11 +179,16 @@ pub struct ExemptedAllOut {
 /// One exemption written.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct ExemptedOut {
-    /// The document.
-    pub doc: DocRef,
+    /// The document; null for an artifact.
+    pub doc: Option<DocRef>,
+    /// The name of the artifact (for the space `file`, a path under the root); null
+    /// for a document.
+    pub artifact: Option<String>,
+    /// The space of that artifact, beside `artifact`.
+    pub space: Option<String>,
     /// The book that declares the link.
     pub book: String,
-    /// The link whose cover the document is exempt from.
+    /// The link whose cover the document or the artifact is exempt from.
     pub link: String,
     /// The record written, as it is in the ledger (its `id` is what `judge withdraw`
     /// takes).
@@ -554,10 +559,12 @@ pub fn exempted(all: &[Exempted]) -> ExemptedAllOut {
         exempt: all
             .iter()
             .map(|one| ExemptedOut {
-                doc: DocRef {
-                    id: one.doc().to_string(),
+                doc: one.doc().map(|id| DocRef {
+                    id: id.to_string(),
                     key: one.key.as_ref().map(ToString::to_string),
-                },
+                }),
+                artifact: one.artifact().map(|a| a.name().to_string()),
+                space: one.artifact().map(|a| a.space().to_string()),
                 book: one.record.of().book().to_string(),
                 link: one.record.of().link().to_string(),
                 record: to_json(&Record::Exempt(one.record.clone()).to_canon()),

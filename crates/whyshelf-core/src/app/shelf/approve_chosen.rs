@@ -84,6 +84,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::shelf::artifact::Listings;
 use crate::domain::shelf::ledger::{JudgedAt, Taking};
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::{
@@ -232,7 +233,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
     ) -> Result<ChosenApproved, ShelfError> {
         let mut loaded = load(&self.ports).await?;
         expires_after_now(&loaded, request.until)?;
-        let assessment = loaded.assess();
+        let assessment = loaded.assess(&Listings::NotAsked);
         let names = loaded.names();
         let key_of = |id: DocId| names.key_of(id).cloned();
 
@@ -342,7 +343,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
             match decided {
                 Ok(Decided::Judged(one)) => match loaded.take(one.record.clone()) {
                     Ok(record) => {
-                        now = loaded.assess();
+                        now = loaded.assess(&Listings::NotAsked);
                         admitted.push(record);
                         judged.push(ChosenJudged { rule, judged: one });
                     }

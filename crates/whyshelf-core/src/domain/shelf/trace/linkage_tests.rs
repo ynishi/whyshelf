@@ -8,7 +8,7 @@ use crate::domain::shelf::build::{DocReading, Shelf};
 use crate::domain::shelf::fixtures_tests::{
     decls, docid, fr, ledger, list, reading, retire, shelf, shelf_reading, sp_testing, spaces, text,
 };
-use crate::domain::shelf::freshness::assess;
+use crate::domain::shelf::freshness::assess_unasked as assess;
 use crate::domain::shelf::ledger::{JudgedAt, Record};
 use crate::domain::shelf::schema::{LinkTargetDecl, Propagation, Schema};
 
