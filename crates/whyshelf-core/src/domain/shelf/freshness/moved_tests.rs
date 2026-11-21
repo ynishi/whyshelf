@@ -13,6 +13,7 @@ use crate::domain::shelf::ledger::{
     frame_same_meaning,
 };
 
+use super::assess_unasked as assess;
 use super::*;
 
 fn h(text: &str) -> ArtifactHash {

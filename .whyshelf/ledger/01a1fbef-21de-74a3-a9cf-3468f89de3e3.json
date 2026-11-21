@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f5c818fbb52cec479fda6624222959153f0415da",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c203741e679b66f6243e35b852cc7cf8692ecf2ff3e08bf8050db5922ab785ef",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795228113934,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3babf79ed490234acbfa7f51bcab2daffcaef1d5",
+      "hash": "sha256:743fd39805ca38ccc050c41275171545f9aed45c5b1ce6bc1a2c1b9206d8d6f9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "93"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fbcb-f119-7232-9db9-1d7c146688c7"
+    }
+  ],
+  "id": "01a1fbef-21de-74a3-a9cf-3468f89de3e3",
+  "kind": "decision",
+  "reason": "Blind review of #111 (Opus, from the issue and the branch only, two rounds: must-fix 1 then 0) and code review (9 found, 8 fixed): an error cover over src/**/*.rs fails check on an unlinked file and passes once it is linked or exempted, a warn cover lists and passes, a listing that is not the whole fails closed; V-115 and V-116 name tests that exist and pass (cargo test --workspace, 1621)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:7f5ccc059f309ecfd8543e1eda3d30f90e5575195e15651315c294ebe62e3d6a",
+  "seen_address": "7bd60a40717582ae2e5901f52f25222ad96b26ae",
+  "subject": "01a1fbcc-6c50-7638-b3dd-fdc86e5ff03c",
+  "v": 1,
+  "verb": "approve"
+}

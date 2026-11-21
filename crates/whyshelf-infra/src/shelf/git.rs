@@ -227,6 +227,9 @@ pub struct Listing {
     /// Whether the listing was cut at the bound it was read with, so files are
     /// missing from it.
     pub cut: bool,
+    /// How many entries Git listed that are no path of the project (not UTF-8, or
+    /// refused by [`RelPath`]): files that are there and are left out of `files`.
+    pub unnamed: usize,
 }
 
 /// The Git repository a project root is in, if it is in one.
@@ -477,13 +480,17 @@ impl Git {
         let cut = out.cut;
         // The listing may be as large as `cap`: it is cut into paths on a blocking
         // thread, not on the async ones.
-        let files = tokio::task::spawn_blocking(move || listed(&out.stdout, cut))
+        let (files, unnamed) = tokio::task::spawn_blocking(move || listed(&out.stdout, cut))
             .await
             .map_err(|e| GitError::Stopped {
                 command: "ls-files",
                 why: e.to_string(),
             })?;
-        Ok(Some(Listing { files, cut }))
+        Ok(Some(Listing {
+            files,
+            cut,
+            unnamed,
+        }))
     }
 
     /// What Git's rename detection pairs between the commit `revision` and the index
@@ -685,17 +692,26 @@ fn path_of_bytes(bytes: &[u8]) -> Option<RelPath> {
     std::str::from_utf8(bytes).ok()?.parse().ok()
 }
 
-/// The paths of a listing of `git ls-files -z`, sorted, each once; the last entry of
-/// a listing that was `cut` is left out, as it may be a part of a path.
-fn listed(stdout: &[u8], cut: bool) -> Vec<RelPath> {
+/// The paths of a listing of `git ls-files -z`, sorted, each once, and how many
+/// entries are no path of the project; the last entry of a listing that was `cut` is
+/// left out, as it may be a part of a path, and so is the empty one after the last
+/// separator.
+fn listed(stdout: &[u8], cut: bool) -> (Vec<RelPath>, usize) {
     let mut entries: Vec<&[u8]> = stdout.split(|b| *b == 0).collect();
     if cut {
         entries.pop();
     }
-    let mut files: Vec<RelPath> = entries.into_iter().filter_map(path_of_bytes).collect();
+    let mut files = Vec::new();
+    let mut unnamed = 0;
+    for entry in entries.into_iter().filter(|entry| !entry.is_empty()) {
+        match path_of_bytes(entry) {
+            Some(path) => files.push(path),
+            None => unnamed += 1,
+        }
+    }
     files.sort();
     files.dedup();
-    files
+    (files, unnamed)
 }
 
 /// Whether a text is an object name as Git writes it: 40 (SHA-1) or 64 (SHA-256)
@@ -743,6 +759,23 @@ impl RevisionSource for Git {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_listed_entry_that_is_no_path_is_counted_not_dropped_in_silence() {
+        // Not UTF-8, and not a relative path: both counted; the empty entry after
+        // the last separator is no entry.
+        let (files, unnamed) = listed(b"b.rs\0\xff.rs\0/abs\0a.rs\0", false);
+        assert_eq!(
+            files.iter().map(RelPath::as_str).collect::<Vec<_>>(),
+            ["a.rs", "b.rs"]
+        );
+        assert_eq!(unnamed, 2);
+        // A cut listing leaves out its last entry, which may be a part of a path,
+        // and does not count it.
+        let (files, unnamed) = listed(b"a.rs\0\xff", true);
+        assert_eq!(files.len(), 1);
+        assert_eq!(unnamed, 0);
+    }
 
     #[test]
     fn an_object_name_is_forty_or_sixty_four_lowercase_hex_digits() {

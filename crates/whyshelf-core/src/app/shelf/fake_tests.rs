@@ -24,6 +24,7 @@ use crate::domain::shelf::schema::{
     Propagation, Schema, ShelfDecl,
 };
 
+use super::adapter::CannotList;
 use super::ports::{
     ActorSource, ArtifactSource, BookSchemaSource, Clock, ContentOf, ContentStore, Creation,
     DeclarationText, DeclarationWrite, DocReplace, DocSource, DocWrite, FileRead, FileSync,
@@ -33,8 +34,8 @@ use super::ports::{
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings,
-    Comparison, ContentAddress, PrefixAnswers, PrefixAsks, PrefixMove, Renamed, Revision, Space,
-    SpacePrefixes,
+    Comparison, ContentAddress, NameListing, PrefixAnswers, PrefixAsks, PrefixMove, Renamed,
+    Revision, Selection, SelectionCheck, Space, SpacePrefixes,
 };
 use crate::domain::shelf::ledger::{GoneName, SpaceSuggestions};
 use std::collections::{BTreeMap, BTreeSet};
@@ -296,6 +297,11 @@ pub(super) struct FakeShelf {
     /// Where a prefix ends in a name of each space that takes prefixes; a space with
     /// none set takes none.
     pub(super) boundaries: Mutex<BTreeMap<Space, Vec<&'static str>>>,
+    /// The listing each space gives for any selection it is asked; a space with none
+    /// lists nothing.
+    pub(super) listings: Mutex<BTreeMap<Space, NameListing>>,
+    /// The (space, selection)s the fake was asked to list, in order.
+    pub(super) listed: Mutex<Vec<(Space, Selection)>>,
 }
 
 /// The space of the files.
@@ -383,7 +389,20 @@ impl FakeShelf {
             persisted: Mutex::new(Vec::new()),
             persist_failing: Mutex::new(None),
             boundaries: Mutex::new(BTreeMap::new()),
+            listings: Mutex::new(BTreeMap::new()),
+            listed: Mutex::new(Vec::new()),
         }
+    }
+
+    /// From now on the space reads every selection and lists `listing` for it.
+    pub(super) fn list_names(&self, space: &Space, listing: NameListing) {
+        lock(&self.listings).insert(space.clone(), listing);
+    }
+
+    /// The (space, selection)s listed so far, in order: one for each ask of the
+    /// adapter.
+    pub(super) fn listed(&self) -> Vec<(Space, Selection)> {
+        lock(&self.listed).clone()
     }
 
     /// From now on the space takes prefixes, ending where one of `edges` follows in
@@ -1114,6 +1133,27 @@ impl ArtifactSource for FakeShelf {
     async fn current(&self, artifact: &ArtifactKey) -> Result<Option<Vec<u8>>, FakeError> {
         self.check()?;
         Ok(self.bytes_of(artifact))
+    }
+
+    /// A space the fake was told to list ([`FakeShelf::list_names`]) reads every
+    /// selection; the others name [`CannotList`], as the adapters that list nothing do.
+    fn select(&self, space: &Space, _: &Selection) -> Result<SelectionCheck, FakeError> {
+        self.check()?;
+        Ok(match lock(&self.listings).contains_key(space) {
+            true => SelectionCheck::Ok,
+            false => CannotList::selection(),
+        })
+    }
+
+    /// The listing the fake was told to give for the space, whatever the selection
+    /// (each ask is kept: [`FakeShelf::listed`]); [`CannotList`] for any other.
+    async fn list(&self, space: &Space, selection: &Selection) -> Result<NameListing, FakeError> {
+        self.check()?;
+        lock(&self.listed).push((space.clone(), selection.clone()));
+        Ok(lock(&self.listings)
+            .get(space)
+            .cloned()
+            .unwrap_or_else(CannotList::listing))
     }
 }
 

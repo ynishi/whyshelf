@@ -7,6 +7,7 @@
 //! | [`FileSpace::current`] | the bytes of a named file now, the ones `resolve` hashes | `tokio::fs` |
 //! | [`FileSpace::read_back`] | the content of a blob, by its name, up to [`MAX_FILE_BYTES`] | [`Git::read_blob_within`] |
 //! | [`FileSpace::suggest`] | for each gone file, the files it may have moved to | [`Git::work_tree_files`], `tokio::fs`, [`Git::renames_since`] |
+//! | [`FileSpace::list`] | the files a selection takes that are there now (what `resolve` answers as there), or why none can be listed | [`Git::work_tree_files`], `tokio::fs`, [`PathGlob`] |
 //! | [`presets`] | the preset `file`: the space, `compare = "bytes"`, `means = "depends"`; and the preset `code`: the space, `compare = "presence"`, `means = "depends"` | values |
 //! | [`FileWrite`] for [`FileSpace`] | a new file at a path, where nothing is, for `init` | `tokio::fs` (`create_new`) |
 //!
@@ -136,6 +137,34 @@
 //! object a partial clone does not hold). How Git is run, and why nothing of the
 //! repository chooses a program, is on the page of [`git`](super::super::git).
 //!
+//! # Listing the names of a selection
+//!
+//! A selection of this space is patterns over the paths under the root, each text
+//! read by the one grammar of a segment glob ([`PathGlob`]: `**`, `*` and `?`; the
+//! same one the range of a book is read by, without the book's rule of `.md`): a path
+//! is taken when some `include` matches it and no `exclude` does. A text that is no
+//! pattern makes the selection no selection of the space, with why, and its listing
+//! [`NameListing::CannotList`] with the same why.
+//!
+//! The listing is the files Git lists (`git ls-files --cached --others
+//! --exclude-standard`, as the search for moves reads them), kept where `resolve`
+//! would answer *there*: a regular file (`place_of`, through a link only inside the
+//! root) of at most [`MAX_FILE_BYTES`], that opens, named as written (the rule of the
+//! case of a path). A file tracked and deleted, a directory and a submodule are not
+//! in it, so no name of it is absent under `resolve`. The same content gives the
+//! same names.
+//!
+//! Nothing is passed over in silence: a listing is [`NameListing::Some`] with why,
+//! and never all of them, when it takes more than [`ScanLimits::names`] names, when
+//! Git's listing is cut at [`ScanLimits::listing_bytes`], when Git lists a file whose
+//! path is not UTF-8 or no path of the project, when the selection takes a path too
+//! long for a name, or when it takes a file `resolve` cannot tell (past
+//! [`MAX_FILE_BYTES`], a link out of the root, one the file system will not read, or
+//! one there under another case than the name Git lists, on a file system that
+//! ignores case): a document can write such a name, so it is never left out as if
+//! it were not there. Outside a Git repository, or when Git cannot be run or fails,
+//! no listing can be made: [`NameListing::CannotList`] with why, and no error.
+//!
 //! # Symbolic links
 //!
 //! A link on the path of a name is followed by its canonical path while that stays
@@ -157,14 +186,15 @@ use std::path::PathBuf;
 
 use tokio::io::AsyncReadExt;
 use whyshelf_core::app::shelf::{
-    Answers, Creation, FileWrite, NamePrefixes, SpaceAdapter, SpaceReadBack, SpaceSuggest,
+    Answers, Creation, FileWrite, NameList, NamePrefixes, SpaceAdapter, SpaceReadBack, SpaceSuggest,
 };
 use whyshelf_core::domain::error::ValueError;
-use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::location::{PathGlob, RelPath};
+use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactHash, ArtifactName, ArtifactReading, Comparison, ContentAddress, NamePrefix,
-    PrefixMove, Renamed, Revision, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
+    ArtifactHash, ArtifactName, ArtifactReading, Comparison, ContentAddress, NameListing,
+    NamePrefix, NotASelection, PrefixMove, Renamed, Revision, Selection, SelectionList, SpaceAsks,
+    SpacePrefixes, SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::ledger::{
     FoundBy, GoneName, MoveCandidate, MoveNote, NameSuggestions, PATH_ONLY_SPACE, PinnedThere,
@@ -273,12 +303,14 @@ impl FileWrite for FileSpace {
 }
 
 /// The space [`FILE_SPACE`]: it answers a move of a prefix, suggests where a file
-/// moved, and reads content back by the name of its blob.
+/// moved, reads content back by the name of its blob, and lists the files a selection
+/// takes.
 impl SpaceAdapter for FileSpace {
     type Error = ArtifactError;
     type Prefixes = Answers;
     type Suggest = Answers;
     type ReadBack = Answers;
+    type List = Answers;
 
     fn space(&self) -> &str {
         FILE_SPACE
@@ -322,6 +354,59 @@ impl SpaceReadBack for FileSpace {
     }
 }
 
+impl NameList for FileSpace {
+    fn select(&self, selection: &Selection) -> Result<(), NotASelection> {
+        FileSelection::read(selection).map(|_| ())
+    }
+
+    async fn list(&self, selection: &Selection) -> Result<NameListing, ArtifactError> {
+        FileSpace::list(self, selection).await
+    }
+}
+
+/// What is said of a text of a selection that is no pattern, when what says which
+/// cannot be made (it never cannot: it is not blank).
+const NO_PATTERN: TextLiteral = TextLiteral::new("a text of the selection is no pattern of files");
+
+/// A [`Selection`] of the space `file`, read: each text is a [`PathGlob`], the one
+/// grammar of a segment glob, matched against a path under the root.
+struct FileSelection {
+    include: Vec<PathGlob>,
+    exclude: Vec<PathGlob>,
+}
+
+impl FileSelection {
+    /// The selection read, or the first text that is no pattern of the grammar, with
+    /// why. No I/O.
+    fn read(selection: &Selection) -> Result<Self, NotASelection> {
+        let globs = |list: SelectionList, texts: &[String]| {
+            texts
+                .iter()
+                .map(|text| {
+                    PathGlob::new(text).map_err(|why| {
+                        // What is said starts with a quoted text: it is never blank.
+                        let said = NonBlank::new(format!(
+                            "`{text}` of the {list} of a selection of files {why}"
+                        ));
+                        NotASelection::new(said.unwrap_or_else(|_| NonBlank::from(NO_PATTERN)))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        };
+        Ok(Self {
+            include: globs(SelectionList::Include, selection.include())?,
+            exclude: globs(SelectionList::Exclude, selection.exclude())?,
+        })
+    }
+
+    /// Whether the selection takes the path: some `include` matches it and no
+    /// `exclude` does.
+    fn takes(&self, path: &str) -> bool {
+        self.include.iter().any(|glob| glob.matches(path))
+            && !self.exclude.iter().any(|glob| glob.matches(path))
+    }
+}
+
 /// Why the files could not be read at all: a file that is there and cannot be read
 /// is no error, but a name that cannot be told.
 #[derive(Debug, thiserror::Error)]
@@ -345,8 +430,10 @@ pub struct FileSpace {
     max_file: u64,
 }
 
-/// The bounds of one search for the same content ([`FileSpace::suggest`]): a search
-/// that reaches one stops, or passes a file over, and a note says so.
+/// The bounds of one search for the same content ([`FileSpace::suggest`]) and of one
+/// listing of the files a selection takes ([`FileSpace::list`]): a search that reaches
+/// one stops, or passes a file over, and a note says so; a listing that reaches one is
+/// told as some of the names, never as all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScanLimits {
     /// The most files read.
@@ -358,23 +445,30 @@ pub struct ScanLimits {
     /// The most bytes of Git's listing of the work tree held, and of its answer of
     /// the renames since a revision.
     pub listing_bytes: usize,
+    /// The most names a listing of a selection holds: more than this is some of the
+    /// names ([`NameListing::Some`]). Unlike `files`, nothing of them is read.
+    pub names: usize,
 }
 
 impl Default for ScanLimits {
-    /// 20,000 files, 16 MiB a file, 512 MiB in all, and a listing of 16 MiB.
+    /// 20,000 files, 16 MiB a file, 512 MiB in all, a listing of 16 MiB, and 20,000
+    /// names a listing.
     ///
     /// Why these: what an approval pins is evidence a document stands on (source,
     /// tests, a small data file), and such files are far below 16 MiB, while a
     /// larger one (a build output, a data set, a media file) is rarely pinned and
     /// would cost the most to read; 512 MiB and 20,000 files bound the work of one
     /// answer in a work tree with many files Git does not ignore; a listing of
-    /// 16 MiB holds that many paths many times over.
+    /// 16 MiB holds that many paths many times over; a selection that takes more
+    /// than 20,000 names is one a person cannot hold a gate to, and it is told as
+    /// such (some of the names) rather than cut silently.
     fn default() -> Self {
         Self {
             files: 20_000,
             file_bytes: MAX_FILE_BYTES,
             total_bytes: 512 * 1024 * 1024,
             listing_bytes: 16 * 1024 * 1024,
+            names: 20_000,
         }
     }
 }
@@ -620,6 +714,145 @@ impl FileSpace {
     ) -> Result<Option<Vec<u8>>, ArtifactError> {
         let cap = usize::try_from(self.max_file).unwrap_or(usize::MAX);
         Ok(self.git.read_blob_within(address, cap).await?)
+    }
+
+    /// The files a selection takes that are there now (the rules on the module page,
+    /// "Listing the names of a selection"), or why no listing can be made: a text of
+    /// the selection that is no pattern, a project outside a Git repository, a Git
+    /// that cannot list. Those are told as [`NameListing::CannotList`], never as an
+    /// error; an error is for the reading of the filesystem that stops the whole ask.
+    pub async fn list(&self, selection: &Selection) -> Result<NameListing, ArtifactError> {
+        let cannot = |why: String| {
+            NonBlank::new(why)
+                .map(NameListing::CannotList)
+                .map_err(ArtifactError::Reason)
+        };
+        let chosen = match FileSelection::read(selection) {
+            Ok(chosen) => chosen,
+            Err(not) => return Ok(NameListing::CannotList(not.why().clone())),
+        };
+        let listing = match self.git.work_tree_files(self.limits.listing_bytes).await {
+            Ok(Some(listing)) => listing,
+            Ok(None) => {
+                return cannot(
+                    "the files of the project cannot be listed: it is not in a Git repository, or no Git can be run"
+                        .to_owned(),
+                );
+            }
+            Err(error) => {
+                return cannot(format!(
+                    "the files of the project cannot be listed: {}",
+                    first_line(&error.to_string())
+                ));
+            }
+        };
+        let mut found = BTreeSet::new();
+        let mut past_names = false;
+        // Files the selection takes whose path is too long for a name: there, but no
+        // document can name them, so the listing is not all of them.
+        let mut unnameable = 0usize;
+        // Files the selection takes of which a reading could not tell whether they
+        // are there: never left out as if they were not.
+        let mut untold = 0usize;
+        // Each directory is read once for the whole listing, not once per file under it.
+        let mut dirs = DirNames::new();
+        for path in &listing.files {
+            if !chosen.takes(path.as_str()) {
+                continue;
+            }
+            match self.seen(path, &mut dirs).await {
+                Seen::There => {}
+                Seen::NotThere => continue,
+                Seen::CannotTell => {
+                    untold += 1;
+                    continue;
+                }
+            }
+            let Ok(name) = ArtifactName::new(path.as_str()) else {
+                unnameable += 1;
+                continue;
+            };
+            if found.len() == self.limits.names {
+                past_names = true;
+                break;
+            }
+            found.insert(name);
+        }
+        if past_names {
+            let why = format!(
+                "the selection takes more than {} names, and the listing stops there",
+                self.limits.names
+            );
+            return NonBlank::new(why)
+                .map(|why| NameListing::Some { found, why })
+                .map_err(ArtifactError::Reason);
+        }
+        if listing.cut {
+            let why = format!(
+                "Git's listing of the files was cut at {} bytes",
+                self.limits.listing_bytes
+            );
+            return NonBlank::new(why)
+                .map(|why| NameListing::Some { found, why })
+                .map_err(ArtifactError::Reason);
+        }
+        // Nothing is passed over in silence: a file Git lists whose path cannot be
+        // read (whether the selection takes it cannot be told), one the selection
+        // takes whose path is no name, or one a reading cannot tell, keeps the
+        // listing from being all of them. Only the causes that apply are said.
+        let causes: Vec<String> = [
+            (
+                listing.unnamed,
+                "Git lists with a path that is not UTF-8 or no path of the project",
+            ),
+            (unnameable, "the selection takes with a path too long for a name"),
+            (
+                untold,
+                "the selection takes that a reading cannot tell (past the bound of bytes, leading out of the project, or not readable)",
+            ),
+        ]
+        .into_iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, what)| format!("{count} file(s) {what}"))
+        .collect();
+        if !causes.is_empty() {
+            return NonBlank::new(causes.join("; "))
+                .map(|why| NameListing::Some { found, why })
+                .map_err(ArtifactError::Reason);
+        }
+        Ok(NameListing::All(found))
+    }
+
+    /// What a listing takes the path to be, as [`resolve`](Self::resolve) would
+    /// answer it: there (a regular file ([`place_of`]) of at most the bound of bytes,
+    /// that opens, named as written; the names of each directory read once, in
+    /// `dirs`), not there (no file), or what a reading cannot tell (past the bound
+    /// of bytes, a link that leads out of the root, an error looking at the path, a
+    /// file that does not open, or a file there under a name that differs from the
+    /// one Git lists by case only), which is never taken for not there: a document
+    /// can write such a name.
+    async fn seen(&self, path: &RelPath, dirs: &mut DirNames) -> Seen {
+        match place_of(&self.root, path).await {
+            Ok(Place::File { len }) if len <= self.max_file => {}
+            Ok(Place::NoFile) => return Seen::NotThere,
+            // A document can write the name, and a reading cannot tell it: never
+            // left out as if it were not there.
+            Ok(Place::File { .. } | Place::Outside) | Err(_) => return Seen::CannotTell,
+        }
+        if tokio::fs::File::open(self.root.join(path.as_str()))
+            .await
+            .is_err()
+        {
+            return Seen::CannotTell;
+        }
+        if named_as_written_in(&self.root, path, dirs).await {
+            Seen::There
+        } else {
+            // A file system that ignores case found a file under another case than
+            // the one Git lists (a rename by case only): a document can write the
+            // name on disk, which this listing does not hold.
+            Seen::CannotTell
+        }
     }
 
     /// For each gone name, the files it may have moved to (the rules on the module
@@ -917,6 +1150,19 @@ enum Place {
     Outside,
 }
 
+/// What a listing takes a file it lists to be: what [`FileSpace::resolve`] would
+/// answer of it, in the three ways a listing needs.
+enum Seen {
+    /// A reading would answer it as there.
+    There,
+    /// No file is there.
+    NotThere,
+    /// A reading cannot tell: past the bound of bytes, a link out of the root, an
+    /// error looking at the path, a file that does not open, or a file there under
+    /// another case than the name Git lists.
+    CannotTell,
+}
+
 /// The one place a path of the space meets the file system, for every reading of a
 /// file ([`FileSpace::resolve`], [`FileSpace::current`], the search for moves),
 /// looked at part by part. A part that is a symbolic link is followed by its
@@ -1121,15 +1367,34 @@ async fn written_on_disk(root: &std::path::Path, path: &RelPath) -> Option<RelPa
 /// in another ASCII case only. A directory that cannot be listed says nothing against
 /// the path, which opened.
 async fn named_as_written(root: &std::path::Path, path: &RelPath) -> bool {
+    named_as_written_in(root, path, &mut DirNames::new()).await
+}
+
+/// The names of the directories read while paths are held to the rule of the case,
+/// by directory; none for one that cannot be listed. A listing of many files reads
+/// each directory once through it.
+type DirNames = BTreeMap<PathBuf, Option<Vec<std::ffi::OsString>>>;
+
+/// [`named_as_written`], reading each directory at most once into `dirs`.
+async fn named_as_written_in(root: &std::path::Path, path: &RelPath, dirs: &mut DirNames) -> bool {
     let mut dir = root.to_path_buf();
     for part in path.as_str().split('/') {
-        let Ok(mut entries) = tokio::fs::read_dir(&dir).await else {
+        if !dirs.contains_key(&dir) {
+            let names = match tokio::fs::read_dir(&dir).await {
+                Ok(mut entries) => {
+                    let mut names = Vec::new();
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        names.push(entry.file_name());
+                    }
+                    Some(names)
+                }
+                Err(_) => None,
+            };
+            dirs.insert(dir.clone(), names);
+        }
+        let Some(Some(names)) = dirs.get(&dir) else {
             return true;
         };
-        let mut names = Vec::new();
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            names.push(entry.file_name());
-        }
         if part_names_entry(part, names.iter().map(|n| n.as_os_str())) == PartName::OtherCase {
             return false;
         }
@@ -1275,6 +1540,10 @@ mod tests {
             false
         }
 
+        fn lists(&self) -> bool {
+            true
+        }
+
         fn adapter_at(&self, dir: &std::path::Path) -> super::super::Adapter {
             super::super::Adapter::File(FileSpace {
                 max_file: MAX_TEST_FILE,
@@ -1313,6 +1582,30 @@ mod tests {
                 p("dir/b.txt"),
                 p("moved/b.txt"),
             ));
+            // Files are listed through Git: with none here, no listing is made.
+            if git_installed().await {
+                let one_name = ScanLimits {
+                    names: 1,
+                    ..ScanLimits::default()
+                };
+                tree.listing = Some(conformance::ListCase {
+                    // The file that cannot be read and the one past the bound make a
+                    // listing `Some`; the whole is listed of the others.
+                    selection: Selection::new(
+                        vec!["**/*.txt".to_owned()],
+                        vec!["locked.txt".to_owned(), "big.txt".to_owned()],
+                    )
+                    .unwrap(),
+                    bad: Selection::new(vec!["/a.txt".to_owned()], vec![]).unwrap(),
+                    bounded: super::super::Adapter::File(
+                        FileSpace {
+                            max_file: MAX_TEST_FILE,
+                            ..FileSpace::new(root.clone())
+                        }
+                        .with_limits(one_name),
+                    ),
+                });
+            }
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -1398,7 +1691,13 @@ mod tests {
              [[book.link]]\nname='code'\ntarget='artifact'\npreset='code'\n",
         )
         .unwrap();
-        let schema = Schema::declared(decls, &presets(), &BTreeSet::from([space])).unwrap();
+        let schema = Schema::declared(
+            decls,
+            &presets(),
+            &BTreeSet::from([space]),
+            &Default::default(),
+        )
+        .unwrap();
         let book = schema.book("a").unwrap();
         let kind = book.artifact_links().get("code").unwrap();
         assert_eq!(kind.space.as_str(), "file");
@@ -2422,5 +2721,240 @@ mod tests {
         assert_eq!(gone.len(), 1);
         let found = source.suggest(&gone).await.unwrap();
         assert!(found[&p("src/a.rs")].candidates.is_empty(), "{found:?}");
+    }
+
+    // Listing the names of a selection.
+
+    fn selecting(include: &[&str], exclude: &[&str]) -> Selection {
+        let texts = |texts: &[&str]| texts.iter().map(|t| (*t).to_owned()).collect();
+        Selection::new(texts(include), texts(exclude)).unwrap()
+    }
+
+    fn names(listing: NameListing) -> BTreeSet<String> {
+        match listing {
+            NameListing::All(found) | NameListing::Some { found, .. } => {
+                found.iter().map(|n| n.as_str().to_owned()).collect()
+            }
+            NameListing::CannotList(why) => panic!("no listing: {why}"),
+        }
+    }
+
+    #[test]
+    fn a_selection_is_read_by_the_grammar_of_a_segment_glob() {
+        let space = FileSpace::new(PathBuf::from("."));
+        assert_eq!(
+            space.select(&selecting(&["src/**/*.rs", "?.md"], &["src/gen/**"])),
+            Ok(())
+        );
+        for text in [
+            "", "/a.rs", "../a.rs", "a//b", "!a", "a\\b", "{a,b}", "sub**",
+        ] {
+            // The empty text is no text of a selection at all.
+            let Ok(selection) = Selection::new(vec![text.to_owned()], vec![]) else {
+                continue;
+            };
+            let Err(not) = space.select(&selection) else {
+                panic!("`{text}` is read as a pattern");
+            };
+            assert!(not.why().as_str().contains(text), "{}", not.why());
+        }
+        // A text of `exclude` is read as one of `include`.
+        assert!(
+            space
+                .select(&selecting(&["a.rs"], &["/b.rs"]))
+                .unwrap_err()
+                .why()
+                .as_str()
+                .contains("exclude")
+        );
+    }
+
+    #[tokio::test]
+    async fn the_listing_is_the_files_a_selection_takes_that_resolve_answers_as_there() {
+        if !git_installed().await {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for at in [
+            "a.rs",
+            "src/b.rs",
+            "src/gen/c.rs",
+            "gone.rs",
+            "notes.md",
+            "src/big.rs",
+        ] {
+            write(root, at, "fn x() {}\n").await;
+        }
+        write(root, "src/big.rs", &"x".repeat(2000)).await;
+        run(root, &["init", "-q"]).await;
+        run(root, &["add", "-A"]).await;
+        // A gitlink (a submodule), registered with no repository behind it.
+        run(
+            root,
+            &[
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                &format!("160000,{},sub.rs", "a".repeat(40)),
+            ],
+        )
+        .await;
+        // Tracked and deleted, and untracked.
+        tokio::fs::remove_file(root.join("gone.rs")).await.unwrap();
+        write(root, "src/new.rs", "fn n() {}\n").await;
+        #[cfg(unix)]
+        {
+            let outside = tempfile::tempdir().unwrap();
+            write(outside.path(), "x.rs", "fn o() {}\n").await;
+            tokio::fs::symlink(outside.path().join("x.rs"), root.join("out.rs"))
+                .await
+                .unwrap();
+            tokio::fs::symlink("a.rs", root.join("alias.rs"))
+                .await
+                .unwrap();
+        }
+        let space = FileSpace {
+            max_file: 1000,
+            ..FileSpace::new(root.to_path_buf())
+        };
+        // A file past the bound of bytes, and a link out of the root, are names a
+        // document can write that a reading cannot tell: the listing that takes them
+        // is never all of them.
+        let taking = space
+            .list(&selecting(&["**/*.rs"], &["src/gen/**"]))
+            .await
+            .unwrap();
+        let NameListing::Some { found, why } = &taking else {
+            panic!("a listing that takes a file a reading cannot tell is not all: {taking:?}");
+        };
+        assert!(why.as_str().contains("cannot tell"), "{why}");
+        let leaving_out = ["src/gen/**", "src/big.rs", "out.rs"];
+        let listing = space
+            .list(&selecting(&["**/*.rs"], &leaving_out))
+            .await
+            .unwrap();
+        assert!(matches!(listing, NameListing::All(_)), "{listing:?}");
+        let listed = names(listing);
+        assert_eq!(
+            found
+                .iter()
+                .map(|n| n.as_str().to_owned())
+                .collect::<BTreeSet<_>>(),
+            listed
+        );
+        // Not the ones a pattern leaves out, one deleted, a gitlink, or a file that
+        // is no `.rs`.
+        let mut expected = BTreeSet::from(["a.rs".to_owned(), "src/b.rs".to_owned()]);
+        expected.insert("src/new.rs".to_owned());
+        #[cfg(unix)]
+        expected.insert("alias.rs".to_owned());
+        assert_eq!(listed, expected);
+        // Each is there, as `resolve` reads it.
+        let asks: SpaceAsks = listed
+            .iter()
+            .map(|n| (p(n), BTreeSet::from([Comparison::Bytes])))
+            .collect();
+        for (name, reading) in space.resolve(&asks).await.unwrap() {
+            assert!(reading.is_present(), "{name}");
+        }
+        // The same files, listed again.
+        assert_eq!(
+            names(
+                space
+                    .list(&selecting(&["**/*.rs"], &leaving_out))
+                    .await
+                    .unwrap()
+            ),
+            listed
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_renamed_by_case_only_keeps_the_listing_from_being_all() {
+        if !git_installed().await {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(root, "a.rs", "fn a() {}\n").await;
+        write(root, "C.rs", "fn c() {}\n").await;
+        // Only a file system that ignores case finds `C.rs` as `c.rs`; elsewhere
+        // there is nothing to check.
+        if tokio::fs::metadata(root.join("c.rs")).await.is_err() {
+            return;
+        }
+        run(root, &["init", "-q"]).await;
+        run(root, &["add", "-A"]).await;
+        run(root, &["commit", "-q", "-m", "x"]).await;
+        tokio::fs::rename(root.join("C.rs"), root.join("c.rs"))
+            .await
+            .unwrap();
+        let listing = FileSpace::new(root.to_path_buf())
+            .list(&selecting(&["*.rs"], &[]))
+            .await
+            .unwrap();
+        assert!(
+            matches!(listing, NameListing::Some { .. }),
+            "a file there under another case than Git lists is not passed over: {listing:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_listing_that_cannot_be_made_or_is_cut_is_never_all_of_them() {
+        if !git_installed().await {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for at in ["a.rs", "b.rs", "c.rs"] {
+            write(root, at, "fn x() {}\n").await;
+        }
+        let selection = selecting(&["*.rs"], &[]);
+        // Outside a repository there is nothing to list from: no listing, no error.
+        let space = FileSpace::new(root.to_path_buf());
+        assert!(
+            matches!(space.list(&selection).await, Ok(NameListing::CannotList(_))),
+            "{:?}",
+            space.list(&selection).await
+        );
+        // A text that is no pattern: no listing, with the reason of `select`.
+        let bad = selecting(&["/a.rs"], &[]);
+        assert_eq!(
+            space.list(&bad).await.unwrap(),
+            NameListing::CannotList(space.select(&bad).unwrap_err().why().clone())
+        );
+
+        run(root, &["init", "-q"]).await;
+        run(root, &["add", "-A"]).await;
+        assert_eq!(names(space.list(&selection).await.unwrap()).len(), 3);
+        // Three names where two are held: two of them, and a reason.
+        let two = space.clone().with_limits(ScanLimits {
+            names: 2,
+            ..ScanLimits::default()
+        });
+        let listing = two.list(&selection).await.unwrap();
+        assert!(
+            matches!(&listing, NameListing::Some { found, .. } if found.len() == 2),
+            "{listing:?}"
+        );
+        // Exactly as many as held is all of them.
+        let three = space.clone().with_limits(ScanLimits {
+            names: 3,
+            ..ScanLimits::default()
+        });
+        assert!(matches!(
+            three.list(&selection).await.unwrap(),
+            NameListing::All(found) if found.len() == 3
+        ));
+        // A listing of Git cut at its bound.
+        let cut = space.with_limits(ScanLimits {
+            listing_bytes: 8,
+            ..ScanLimits::default()
+        });
+        assert!(matches!(
+            cut.list(&selection).await.unwrap(),
+            NameListing::Some { .. }
+        ));
     }
 }

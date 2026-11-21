@@ -11,6 +11,7 @@ use crate::domain::shelf::fixtures_tests::{
 };
 use crate::domain::shelf::ledger::{Decision, FrameRefusal, JudgedAt, Record, frame_approve};
 
+use super::assess_unasked as assess;
 use super::*;
 
 fn h(text: &str) -> ArtifactHash {

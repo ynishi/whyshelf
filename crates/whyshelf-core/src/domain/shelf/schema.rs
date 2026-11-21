@@ -25,10 +25,12 @@ use thiserror::Error;
 use crate::domain::actor::Actor;
 use crate::domain::error::ValueError;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{NonEmptyVec, TwoOrMore};
+use crate::domain::nonempty::{NonBlank, NonEmptyVec, TwoOrMore};
 use crate::domain::words::{Join, Mark, listed};
 
-use super::artifact::{ComparisonProblem, Space, SpaceProblem};
+use super::artifact::{
+    ComparisonProblem, Selection, SelectionChecks, SelectionProblem, Space, SpaceProblem,
+};
 
 /// What a word of a declaration says: the part of a problem that tells which word
 /// was refused, and the words it could have been.
@@ -489,16 +491,70 @@ pub enum SchemaProblem {
         /// The link.
         link: EntryName,
     },
-    /// `cover` with a strength on a link to artifacts: only a document can be
-    /// expected to be reached.
+    /// `cover` with a strength alone (`true`, `"error"` or `"warn"`) on a link to
+    /// artifacts: the names it expects to be reached are those a selection takes, so
+    /// the cover of such a link is a table with an `include`.
     #[error(
-        "book `{book}`: the link `{link}` points at artifacts, and a link to artifacts takes no cover expectation (only `cover = false`)"
+        "book `{book}`: the link `{link}` points at artifacts, and its `cover` is a table of a selection (`cover = {{ strength = \"error\", include = [..], exclude = [..] }}`), not a strength alone"
     )]
-    CoverOnArtifactLink {
+    CoverNeedsSelection {
         /// The book, as written.
         book: String,
         /// The link.
         link: EntryName,
+    },
+    /// `cover` as a table of a selection on a link into a book: only a link to
+    /// artifacts takes a selection, and a book is covered whole.
+    #[error(
+        "book `{book}`: the link `{link}` points into a book, and only a link to artifacts takes a selection in its `cover` (a link into a book takes true, false, \"error\" or \"warn\")"
+    )]
+    SelectionOnBookLink {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+    },
+    /// The selection of a `cover` on a link to artifacts that cannot be made: none to
+    /// include, or an empty text.
+    #[error("book `{book}`: the selection of the `cover` of the link `{link}`: {why}")]
+    BadSelection {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+        /// Why (said in the message, so it is no source as well).
+        why: SelectionProblem,
+    },
+    /// The selection of a `cover` that the adapter of the space does not read: a text
+    /// of it is none of the grammar of the space.
+    #[error(
+        "book `{book}`: the selection of the `cover` of the link `{link}` is not one of the space `{space}`: {why}"
+    )]
+    NotASelection {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+        /// The space of the link.
+        space: Space,
+        /// Why, as the adapter says it.
+        why: NonBlank,
+    },
+    /// A `cover` on a link whose space lists no names (so that what the cover expects
+    /// is not known), or whose selection was not asked about: refused, never taken as
+    /// a cover of nothing.
+    #[error(
+        "book `{book}`: the link `{link}` in the space `{space}` takes no `cover` over a selection: {why}"
+    )]
+    SpaceCannotList {
+        /// The book, as written.
+        book: String,
+        /// The link.
+        link: EntryName,
+        /// The space of the link.
+        space: Space,
+        /// Why, as the adapter says it (`not asked` when nobody asked).
+        why: NonBlank,
     },
     /// A `cover` that is no strength ([`CoverSeverity::read`]).
     #[error(
@@ -818,14 +874,36 @@ impl Schema {
     /// order the declaration writes them, once ([`Declared`]).
     ///
     /// It takes declarations with no preset left in them: those of a project come
-    /// through [`Schema::declared`], which [`expand`]s them first.
+    /// through [`Schema::declared`], which [`expand`]s them first. Nothing here has
+    /// asked an adapter whether it reads a selection, so a `cover` of a link to
+    /// artifacts is refused, as the problem of a space that cannot list
+    /// ([`SchemaProblem::SpaceCannotList`]); [`Schema::declared`] is given the answers.
     // The problems are the answer, read once per run; it is not a hot path.
     #[allow(clippy::result_large_err)]
     pub fn validate(
         decls: Vec<BookSchemaDecl>,
         spaces: &BTreeSet<Space>,
     ) -> Result<Self, NonEmptyVec<SchemaProblem>> {
-        Self::validate_expanded(Expanded::plain(decls), spaces)
+        Self::validate_expanded(Expanded::plain(decls), spaces, &SelectionChecks::new())
+    }
+
+    /// The selections of the `cover` of the links to artifacts of a declaration, as
+    /// the (space, selection)s the adapters are to be asked about before
+    /// [`declared`](Self::declared) can check them.
+    ///
+    /// The declaration is read as `declared` reads it: [`expand`]ed first (the
+    /// problems of the expansion are dropped here, and told once by `declared`), and
+    /// each link's `cover` read by the same reader `validate` uses. A link whose space
+    /// is not one the adapters offer, or whose `cover` is refused for another reason,
+    /// is not asked about (`declared` tells that problem, and one cause is not told
+    /// twice). Two links that declare one selection in one space ask one question.
+    pub fn selection_asks(
+        decl: &ShelfDecl,
+        spaces: &BTreeSet<Space>,
+        builtins: &BuiltinPresets,
+    ) -> BTreeSet<(Space, Selection)> {
+        let (expanded, _told_by_declared) = expand_all(decl.clone(), builtins, spaces);
+        asked_selections(expanded.books(), spaces)
     }
 
     /// The declaration of a project as it is written, with its presets and its
@@ -837,6 +915,13 @@ impl Schema {
     /// for each link to artifacts, the preset it came from
     /// ([`BookSchema::preset_of`]).
     ///
+    /// `selection_checks` is what the adapters answered for each
+    /// [`selection_asks`](Self::selection_asks): a `cover` on a link to artifacts is
+    /// kept only when its space reads its selection; one it does not read, a space that
+    /// lists no names, and a selection that has no answer (read as "not asked") are
+    /// problems, so that a cover that cannot be evaluated is never taken as one of
+    /// nothing.
+    ///
     /// Who may decide ([`DecideDecl`]) is read with it, against the books the
     /// declaration writes, and its problems come last ([`Authority`]).
     #[allow(clippy::result_large_err)]
@@ -844,11 +929,12 @@ impl Schema {
         mut decl: ShelfDecl,
         builtins: &BuiltinPresets,
         spaces: &BTreeSet<Space>,
+        selection_checks: &SelectionChecks,
     ) -> Result<Self, NonEmptyVec<SchemaProblem>> {
         let decide = std::mem::take(&mut decl.decide);
         let written: BTreeSet<String> = decl.books.iter().map(|b| b.name.clone()).collect();
         let (expanded, problems) = expand_all(decl, builtins, spaces);
-        let checked = Self::validate_expanded(expanded, spaces);
+        let checked = Self::validate_expanded(expanded, spaces, selection_checks);
         let mut ruled = Vec::new();
         let authority = read_authority(decide, &written, &mut ruled);
         let checked = match (NonEmptyVec::from_vec(problems), checked) {
@@ -868,6 +954,20 @@ impl Schema {
         }
     }
 
+    /// The (space, selection)s of the `cover` of the links to artifacts the books
+    /// declare: what a command that reads an artifact cover asks the adapters to list.
+    /// Two links that declare one selection in one space are one.
+    pub fn cover_selections(&self) -> BTreeSet<(Space, Selection)> {
+        self.books
+            .values()
+            .flat_map(|book| book.artifact_links().values())
+            .filter_map(|kind| {
+                let cover = kind.cover.as_ref()?;
+                Some((kind.space.clone(), cover.selection().clone()))
+            })
+            .collect()
+    }
+
     /// Who may decide about the documents of the books ([`Authority`]); unruled
     /// when the declaration says nothing of it.
     pub fn authority(&self) -> &Authority {
@@ -878,12 +978,13 @@ impl Schema {
     fn validate_expanded(
         expanded: Expanded,
         spaces: &BTreeSet<Space>,
+        selection_checks: &SelectionChecks,
     ) -> Result<Self, NonEmptyVec<SchemaProblem>> {
         let (decls, origins) = expanded.into_parts();
         let mut problems = Vec::new();
         let drafts: Vec<Draft> = decls
             .into_iter()
-            .map(|decl| Draft::read(decl, spaces, &origins, &mut problems))
+            .map(|decl| Draft::read(decl, spaces, selection_checks, &origins, &mut problems))
             .collect();
 
         let declared = declared_names(&drafts, &mut problems);
@@ -992,15 +1093,15 @@ pub use field::{FieldDecl, FieldPresence, FieldType, ScalarType};
 pub(super) use key::parse_tail;
 pub use key::{KeyForm, KeyName, KeyPattern, KeyPrefix, KeyProblem, KeyTail, KeyWord, Slug};
 pub use link::{
-    ARTIFACT_TARGET, ArtifactLinkKind, ArtifactPropagation, Cardinality, CoverDecl, CoverSeverity,
-    DeclaredLink, LinkKind, Propagation,
+    ARTIFACT_TARGET, ArtifactCover, ArtifactLinkKind, ArtifactPropagation, Cardinality, CoverDecl,
+    CoverSeverity, DeclaredLink, LinkKind, Propagation,
 };
 pub use name::{
     BookDescription, BookDir, BookName, DescriptionProblem, EntryName, FieldWord, GroupName,
     NameProblem, PresetName,
 };
 pub(super) use name::{ID_ENTRY, KEY_ENTRY};
-use validate::{Draft, check_dirs, check_links, check_prefixes, declared_names};
+use validate::{Draft, asked_selections, check_dirs, check_links, check_prefixes, declared_names};
 pub use word::{BookWord, DeclWord, Words, read_book_word, read_word};
 use word::{quoted, report};
 

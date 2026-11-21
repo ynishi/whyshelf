@@ -339,12 +339,15 @@
 //! - The file is read whether or not the runner runs it: a test in a file no
 //!   configuration includes, or under a condition never met, reads as there.
 //! - Moves are not suggested: the adapter names [`CannotSuggest`].
+//! - Names are not listed: the adapter names [`CannotList`].
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::path::PathBuf;
 
-use whyshelf_core::app::shelf::{Answers, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter};
+use whyshelf_core::app::shelf::{
+    Answers, CannotList, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter,
+};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
@@ -562,6 +565,7 @@ impl SpaceAdapter for JsTestSpace {
     type Prefixes = Answers;
     type Suggest = CannotSuggest;
     type ReadBack = NoReadBack;
+    type List = CannotList;
 
     fn space(&self) -> &str {
         JS_TEST_SPACE
@@ -3011,6 +3015,10 @@ mod tests {
 
         fn walks_nesting(&self) -> bool {
             true
+        }
+
+        fn lists(&self) -> bool {
+            false
         }
 
         fn adapter_at(&self, dir: &Path) -> super::super::Adapter {

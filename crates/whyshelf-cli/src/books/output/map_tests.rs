@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use whyshelf_core::domain::nonempty::NonEmptyVec;
-use whyshelf_core::domain::shelf::artifact::Space;
+use whyshelf_core::domain::shelf::artifact::{Selection, SelectionCheck, SelectionChecks, Space};
 use whyshelf_core::domain::shelf::map::ShelfMap;
 use whyshelf_core::domain::shelf::schema::{Schema, SchemaProblem};
 use whyshelf_infra::shelf::books::parse;
@@ -72,7 +72,13 @@ key = "slug"
 fn schema_of(books: &str) -> Schema {
     let space = Space::new("file").unwrap();
     let builtins = whyshelf_infra::shelf::artifact::file::presets();
-    Schema::declared(parse(books).unwrap(), &builtins, &BTreeSet::from([space])).unwrap()
+    Schema::declared(
+        parse(books).unwrap(),
+        &builtins,
+        &BTreeSet::from([space]),
+        &Default::default(),
+    )
+    .unwrap()
 }
 
 fn schema() -> Schema {
@@ -197,6 +203,7 @@ fn the_json_holds_the_books_and_links_as_data() {
             "count": "many",
             "cover": false,
             "cover_severity": null,
+            "selection": null,
             "preset": null,
             "preset_by_default": false,
         })
@@ -211,6 +218,7 @@ fn the_json_holds_the_books_and_links_as_data() {
             "count": "at-least-one",
             "cover": true,
             "cover_severity": "error",
+            "selection": null,
             "preset": null,
             "preset_by_default": false,
         })
@@ -288,6 +296,7 @@ fn the_json_tells_the_expanded_values_and_the_preset_of_each_link() {
             "count": "many",
             "cover": false,
             "cover_severity": null,
+            "selection": null,
             "preset": "file",
             "preset_by_default": true,
         })
@@ -302,6 +311,51 @@ fn the_json_tells_the_expanded_values_and_the_preset_of_each_link() {
     assert_eq!(links[2]["preset"], serde_json::Value::Null);
     assert_eq!(links[3]["preset"], serde_json::Value::Null);
     assert_eq!(links[3]["preset_by_default"], false);
+}
+
+/// A link to artifacts that covers the names a selection takes.
+const SELECTING: &str = r##"
+[[book]]
+name = "verification"
+dir = "books/verification"
+key = { prefix = "V" }
+[[book.link]]
+name = "code"
+target = "artifact"
+space = "file"
+means = "depends"
+cover = { strength = "warn", include = ["src/**/*.rs", "build.rs"], exclude = ["src/gen/**"] }
+"##;
+
+#[test]
+fn a_link_to_artifacts_that_covers_shows_its_selection_in_the_json_and_the_drawing() {
+    let selection = Selection::new(
+        vec!["src/**/*.rs".to_owned(), "build.rs".to_owned()],
+        vec!["src/gen/**".to_owned()],
+    )
+    .unwrap();
+    let space = Space::new("file").unwrap();
+    let schema = Schema::declared(
+        parse(SELECTING).unwrap(),
+        &whyshelf_infra::shelf::artifact::file::presets(),
+        &BTreeSet::from([space.clone()]),
+        &SelectionChecks::from([((space, selection), SelectionCheck::Ok)]),
+    )
+    .unwrap();
+    let drawn = map(&MapReport::Mapped(ShelfMap::of(&schema)));
+    let links = serde_json::to_value(&drawn).unwrap()["links"].clone();
+    // The word of the cover stands as for a link into a book, and the selection is new.
+    assert_eq!(links[0]["cover"], true);
+    assert_eq!(links[0]["cover_severity"], "warn");
+    assert_eq!(
+        links[0]["selection"],
+        serde_json::json!({"include": ["src/**/*.rs", "build.rs"], "exclude": ["src/gen/**"]})
+    );
+    let expected = "\
+verification  V-
+└─ code  depends  cover(warn)  0..  ──► artifact space=file  compare=bytes include=\"src/**/*.rs\",\"build.rs\" exclude=\"src/gen/**\"
+";
+    assert_eq!(drawn.diagram.as_deref(), Some(expected));
 }
 
 #[test]
@@ -331,8 +385,13 @@ fn a_problem_of_the_declaration_says_its_reason() {
          compare='bytes'\nignore=['//']\n";
     let space = Space::new("file").unwrap();
     let builtins = whyshelf_infra::shelf::artifact::file::presets();
-    let problems =
-        Schema::declared(parse(books).unwrap(), &builtins, &BTreeSet::from([space])).unwrap_err();
+    let problems = Schema::declared(
+        parse(books).unwrap(),
+        &builtins,
+        &BTreeSet::from([space]),
+        &Default::default(),
+    )
+    .unwrap_err();
     let answer = map(&MapReport::SchemaInvalid(problems));
     assert_eq!(
         answer.schema_problems,

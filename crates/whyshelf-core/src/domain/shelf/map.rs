@@ -10,8 +10,8 @@
 
 use super::artifact::{Comparison, Space};
 use super::schema::{
-    BookDescription, BookDir, BookName, BookScope, Cardinality, CoverSeverity, DeclaredLink,
-    EntryName, FieldDecl, KeyPattern, PresetOrigin, Propagation, Schema,
+    ArtifactCover, BookDescription, BookDir, BookName, BookScope, Cardinality, CoverSeverity,
+    DeclaredLink, EntryName, FieldDecl, KeyPattern, PresetOrigin, Propagation, Schema,
 };
 
 /// Every book and every link of a declaration, in the order it writes them.
@@ -78,6 +78,10 @@ pub enum MapTarget {
         /// ([`BookSchema::preset_of`](super::schema::BookSchema::preset_of)). The
         /// values above are the link's, whichever it is.
         preset: Option<PresetOrigin>,
+        /// How strongly, and which, of the names of the space are expected to be
+        /// reached, or `None`
+        /// ([`ArtifactLinkKind::cover`](super::schema::ArtifactLinkKind::cover)).
+        cover: Option<ArtifactCover>,
     },
 }
 
@@ -119,6 +123,7 @@ impl ShelfMap {
                                 space: kind.space.clone(),
                                 comparison: kind.comparison.clone(),
                                 preset: book.preset_of(name).cloned(),
+                                cover: kind.cover.clone(),
                             },
                             kind.propagation.propagation(),
                             kind.cardinality,

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795228113934,
+  "expires": null,
+  "frame": [],
+  "id": "01a1fbef-1db8-7654-b361-a5d6a34910d6",
+  "kind": "decision",
+  "reason": "Blind review of #111 (Opus, from the issue and the branch only, two rounds: must-fix 1 then 0) and code review (9 found, 8 fixed): an error cover over src/**/*.rs fails check on an unlinked file and passes once it is linked or exempted, a warn cover lists and passes, a listing that is not the whole fails closed; V-115 and V-116 name tests that exist and pass (cargo test --workspace, 1621)",
+  "revision": "63697e794debc7e85da295b29b1512d7f36f8668",
+  "seen": "sha256:b46560fec898e7deffa76683965adb2424fe4687ace26c296ce6a2d0bbf2a4a2",
+  "seen_address": "5c51c37383a61c588b20929963fa55d46b17cc17",
+  "subject": "01a1fbcb-ad29-72b5-abcc-3f913aa58d51",
+  "v": 1,
+  "verb": "approve"
+}

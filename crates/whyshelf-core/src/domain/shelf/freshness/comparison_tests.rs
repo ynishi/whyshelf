@@ -18,6 +18,7 @@ use crate::domain::shelf::schema::{
     Cardinality, LinkEntryDecl, LinkTargetDecl, Propagation, Schema,
 };
 
+use super::assess_unasked as assess;
 use super::*;
 
 const CODE: &[u8] = b"fn a() {\n    one();\n}\n";

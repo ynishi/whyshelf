@@ -16,6 +16,7 @@ use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, SkippedFile};
+use crate::domain::shelf::coverage::{CoverAssessment, LinkCover};
 use crate::domain::shelf::doc::{Doc, DocKey, UnresolvedLink};
 use crate::domain::shelf::exemption::Unneeded;
 use crate::domain::shelf::filter::StatusFilterAsk;
@@ -187,10 +188,84 @@ pub enum BooksCheck {
         /// ([`Ledger::same_meaning_short`](crate::domain::shelf::ledger::Ledger::same_meaning_short)).
         /// They leave the check clean too.
         same_meaning_short: Vec<ShortSameMeaning>,
+        /// The assessment of coverage the lists above and below are made from, for
+        /// documents and for names of artifacts alike: what
+        /// [`is_clean`](BooksCheck::is_clean) reads, and how complete the listing of
+        /// each covering link to artifacts is.
+        cover: CoverAssessment,
+        /// What the covering links to artifacts expect to reach and do not, and
+        /// the exemptions of artifacts, each read as for documents.
+        artifacts: ArtifactCoverLists,
         /// The keys of the valid documents, for the documents the entries name
         /// (such as those an unneeded exemption's link reaches it from).
         names: Names,
     },
+}
+
+/// A name of an artifact a covering link expects to reach and nobody does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UncoveredArtifact {
+    /// The book that declares the link.
+    pub book: BookName,
+    /// The link.
+    pub link: EntryName,
+    /// The space and the name.
+    pub artifact: ArtifactKey,
+    /// How strongly the link expects to reach it.
+    pub severity: CoverSeverity,
+}
+
+/// An exemption of an artifact that stands and takes the place of a gap.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExemptArtifact {
+    /// The space and the name.
+    pub artifact: ArtifactKey,
+    /// How strongly the link expects to reach the names of its selection.
+    pub severity: CoverSeverity,
+    /// The exemption, with the book and the link, who, when and why.
+    pub record: Exempt,
+}
+
+/// An exemption of an artifact that stands and is no longer needed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnneededArtifact {
+    /// The space and the name.
+    pub artifact: ArtifactKey,
+    /// The exemption, with the book and the link, who, when and why.
+    pub record: Exempt,
+    /// Why it is not needed.
+    pub why: Unneeded,
+}
+
+/// Two or more exemptions that stand of one artifact from one link.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepeatedArtifact {
+    /// The space and the name.
+    pub artifact: ArtifactKey,
+    /// The book the exemptions name.
+    pub book: BookName,
+    /// The link they name.
+    pub link: EntryName,
+    /// The exemptions, in the order of identity.
+    pub exemptions: TwoOrMore<JudgementId>,
+}
+
+/// What the covering links to artifacts and the exemptions of artifacts come to,
+/// as the assessment of coverage read them: for `check` and for `cover`.
+///
+/// An exemption that cannot be told (its link's listing is not the whole) is in none
+/// of the lists: the completeness of the link says it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ArtifactCoverLists {
+    /// The names a covering link expects and nobody reaches, of either strength,
+    /// in the order of the links, then of the names.
+    pub uncovered: Vec<UncoveredArtifact>,
+    /// The exemptions that stand and take the place of a gap.
+    pub exempt: Vec<ExemptArtifact>,
+    /// The exemptions that stand and are no longer needed.
+    pub unneeded: Vec<UnneededArtifact>,
+    /// The (artifact, link)s two or more exemptions that stand are of.
+    pub repeated: Vec<RepeatedArtifact>,
 }
 
 /// An approval whose content awaits the approvals of other names.
@@ -327,25 +402,61 @@ pub struct Uncovered {
 
 impl BooksCheck {
     /// Whether the check found nothing wrong: a sound declaration, a clean health,
-    /// and no document a covering link of strength
-    /// [`Error`](CoverSeverity::Error) fails to reach. A document a link of
-    /// strength [`Warn`](CoverSeverity::Warn) fails to reach is listed in
-    /// `uncovered` with its strength and leaves the check clean, as `absent` and
-    /// `unknown` do. A document exempt from a link is not a gap of it, whatever the
+    /// and nothing the covering links of strength [`Error`](CoverSeverity::Error)
+    /// fail at. It reads the assessment of coverage only, not what the adapters
+    /// listed:
+    ///
+    /// | an `error` cover | is clean when |
+    /// |---|---|
+    /// | of documents, or of names of artifacts | no document and no name is a gap of it |
+    /// | of names of artifacts | the listing of the names its selection takes is the whole ([`Completeness::All`](crate::domain::shelf::artifact::Completeness::All)): a listing that is partial, cannot be made or was not asked proves no absence of a gap, so it fails |
+    /// | of names of artifacts | its selection takes at least one name: one that takes none expects nothing, which is a mistake of the declaration more than a fulfilled one |
+    ///
+    /// A document or a name a link of strength [`Warn`](CoverSeverity::Warn) fails
+    /// to reach is listed in `uncovered` (`artifacts.uncovered` for a name) with its
+    /// strength and leaves the check clean, as `absent` and `unknown` do, and so do
+    /// a `warn` cover that selects nothing or whose listing is not the whole. A
+    /// document or a name exempt from a link is not a gap of it, whatever the
     /// strength, and an exemption no longer needed leaves the check clean too.
     pub fn is_clean(&self) -> bool {
         match self {
             Self::SchemaInvalid(_) => false,
-            Self::Checked {
-                health, uncovered, ..
-            } => {
+            Self::Checked { health, cover, .. } => {
                 health.is_clean()
-                    && uncovered
+                    && cover
+                        .gaps()
+                        .all(|gap| gap.severity() != CoverSeverity::Error)
+                    && cover
+                        .links()
                         .iter()
-                        .all(|gap| gap.severity != CoverSeverity::Error)
+                        .filter(|link| link.severity() == CoverSeverity::Error)
+                        .all(|link| link.completeness().is_all() && !link.selects_nothing())
             }
         }
     }
+}
+
+/// The result of `cover`: what the covering links to artifacts expect, and how each
+/// stands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CoverReport {
+    /// The declaration of the books is not sound, as `check` answers it. Nothing was
+    /// read through it.
+    SchemaInvalid(NonEmptyVec<SchemaProblem>),
+    /// The declaration is sound; the documents, the ledger and the listings were read.
+    Covered {
+        /// Each covering link to artifacts (the one asked for, when one was), in the
+        /// order the declaration writes the books and their links, with its
+        /// selection, how complete the listing is and, when it is the whole, each
+        /// name with how it stands.
+        links: Vec<LinkCover>,
+        /// The gaps and the exemptions of those links.
+        lists: ArtifactCoverLists,
+        /// The keys of the valid documents.
+        names: Names,
+        /// What is wrong around them.
+        health: Health,
+    },
 }
 
 /// The result of `map`: what the declaration says, or why it cannot be used.

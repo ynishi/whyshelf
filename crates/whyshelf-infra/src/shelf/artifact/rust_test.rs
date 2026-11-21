@@ -272,6 +272,7 @@
 //! - A text is the tokens as `proc-macro2` prints them; an update of it that prints
 //!   them otherwise would make every approval of a test stale once.
 //! - Moves are not suggested: the adapter names [`CannotSuggest`].
+//! - Names are not listed: the adapter names [`CannotList`].
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -279,7 +280,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, TokenStream, TokenTree};
-use whyshelf_core::app::shelf::{Answers, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter};
+use whyshelf_core::app::shelf::{
+    Answers, CannotList, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter,
+};
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
@@ -402,6 +405,7 @@ impl SpaceAdapter for RustTestSpace {
     type Prefixes = Answers;
     type Suggest = CannotSuggest;
     type ReadBack = NoReadBack;
+    type List = CannotList;
 
     fn space(&self) -> &str {
         RUST_TEST_SPACE
@@ -1785,6 +1789,10 @@ mod tests {
 
         fn walks_nesting(&self) -> bool {
             true
+        }
+
+        fn lists(&self) -> bool {
+            false
         }
 
         fn adapter_at(&self, dir: &Path) -> super::super::Adapter {

@@ -7,8 +7,9 @@
 //! [`Row`], with what the model said about it, and shows no more than the model said.
 //!
 //! ```text
-//!   BookSchemaSource -> Schema::declared <- ArtifactSource::presets, ::spaces
-//!                          |  (expand, then validate)
+//!   BookSchemaSource -> declared_schema --Schema::selection_asks--> ArtifactSource::select
+//!                          |  (the answers, then Schema::declared: expand, then validate,
+//!                          |   with ArtifactSource::presets, ::spaces)
 //!                          |  dirs of the books
 //!   DocSource <------------+
 //!        |
@@ -27,13 +28,17 @@
 //!   (no name written in a link to artifacts: the ArtifactSource is not asked to resolve)
 //! ```
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::domain::id::DocId;
 use crate::domain::nonempty::NonEmptyVec;
-use crate::domain::shelf::artifact::ArtifactReadings;
+use crate::domain::shelf::artifact::{
+    ArtifactReadings, Listings, Selection, SelectionChecks, Space,
+};
 use crate::domain::shelf::build::Shelf;
 use crate::domain::shelf::freshness::{Assessment, assess};
 use crate::domain::shelf::ledger::{Admit, AdmittedRecord, JudgedAt, Ledger, Record};
-use crate::domain::shelf::schema::{Schema, SchemaProblem};
+use crate::domain::shelf::schema::{Schema, SchemaProblem, ShelfDecl};
 
 use super::error::ShelfError;
 use super::ports::{
@@ -79,12 +84,54 @@ pub(super) async fn schema_of<P: ShelfRead>(
         .declarations()
         .await
         .map_err(port(ShelfPort::Schema))?;
-    let artifacts = ports.artifacts();
-    Ok(Schema::declared(
-        decl,
-        &artifacts.presets(),
-        &artifacts.spaces(),
-    ))
+    declared_schema(decl, ports.artifacts())
+}
+
+/// The schema of a declaration, or all its problems: the one way a declaration
+/// becomes a [`Schema`] in the application, for `load` and for `init`.
+///
+/// The selections of the `cover` of its links to artifacts
+/// ([`Schema::selection_asks`]) are put to the adapters of their spaces
+/// ([`ArtifactSource::select`], which does no I/O), and what they answered is handed
+/// to [`Schema::declared`], which refuses a `cover` whose selection its space does
+/// not read. The asks and the check read the same declaration the same way (the
+/// domain's, once), so no selection is left without an answer; one that was would be
+/// read as a space that cannot list, and refused.
+// The problems are the answer, read once per run; it is not a hot path.
+#[allow(clippy::result_large_err)]
+pub(super) fn declared_schema<A: ArtifactSource>(
+    decl: ShelfDecl,
+    artifacts: &A,
+) -> Result<Result<Schema, NonEmptyVec<SchemaProblem>>, ShelfError> {
+    let (presets, spaces) = (artifacts.presets(), artifacts.spaces());
+    let mut checks = SelectionChecks::new();
+    for (space, selection) in Schema::selection_asks(&decl, &spaces, &presets) {
+        let check = artifacts
+            .select(&space, &selection)
+            .map_err(port(ShelfPort::Artifacts))?;
+        checks.insert((space, selection), check);
+    }
+    Ok(Schema::declared(decl, &presets, &spaces, &checks))
+}
+
+/// What the adapters list of each (space, selection) in `asks`, once for each: the
+/// listings a command that reads an artifact cover reads it with. `check` asks every
+/// selection the `cover` of a link to artifacts declares
+/// ([`Schema::cover_selections`]); a command about some links asks theirs only. A
+/// command that reads none passes [`Listings::NotAsked`] and asks no adapter.
+pub(super) async fn listings_of<A: ArtifactSource>(
+    artifacts: &A,
+    asks: BTreeSet<(Space, Selection)>,
+) -> Result<Listings, ShelfError> {
+    let mut asked = BTreeMap::new();
+    for (space, selection) in asks {
+        let listing = artifacts
+            .list(&space, &selection)
+            .await
+            .map_err(port(ShelfPort::Artifacts))?;
+        asked.insert((space, selection), listing);
+    }
+    Ok(Listings::Asked(asked))
 }
 
 /// Read the documents and the ledger and build the shelf and the ledger.
@@ -142,9 +189,11 @@ impl Loaded {
         Ok(admitted)
     }
 
-    /// The freshness of everything, at the time of the load.
-    pub(super) fn assess(&self) -> Assessment {
-        assess(&self.shelf, &self.ledger, self.now)
+    /// The freshness of everything, at the time of the load, with the assessment of
+    /// coverage made from `listings`: [`Listings::NotAsked`] for a use case that reads
+    /// no cover of artifacts, what [`listings_of`] returned for one that does.
+    pub(super) fn assess(&self, listings: &Listings) -> Assessment {
+        assess(&self.shelf, &self.ledger, self.now, listings)
     }
 
     /// The keys of the valid documents.

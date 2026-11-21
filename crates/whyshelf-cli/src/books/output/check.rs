@@ -11,6 +11,10 @@ use whyshelf_core::domain::shelf::untold::untold_causes;
 use whyshelf_core::domain::words::{Join, Mark, listed};
 
 use super::cause::{absent_detail, moved_detail, unneeded_word};
+use super::cover::{
+    CoverLinkOut, ExemptArtifactOut, RepeatedArtifactOut, UncoveredArtifactOut,
+    UnneededArtifactOut, artifact_lists, cover_link, exemption_lines, warn_lines,
+};
 use super::untold::{CHECK_UNTOLD, untold_line};
 use super::words::{plural, ran_by, schema_problem};
 use super::{
@@ -100,6 +104,30 @@ pub struct BooksCheckOut {
     /// none.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub same_meaning_short: Vec<SameMeaningShortOut>,
+    /// The names of artifacts a covering link to artifacts is expected to reach and
+    /// nobody does, each with the strength of the link (the artifact counterpart of
+    /// `uncovered`); which strength makes `clean` false is [`BooksCheck::is_clean`]'s
+    /// rule.
+    pub artifact_uncovered: Vec<UncoveredArtifactOut>,
+    /// The exemptions of artifacts that stand and take the place of a gap
+    /// (`judge exempt --artifact`), each with who, when and why: an exempt name is
+    /// not in `artifact_uncovered` for that link, and leaves `clean` as it is
+    /// whatever the strength.
+    pub artifact_exempt: Vec<ExemptArtifactOut>,
+    /// The exemptions of artifacts that stand and are no longer needed, each with
+    /// why (`reached`, `not_declared`, `no_cover`, `other_space`, `not_listed`); they
+    /// leave `clean` as it is. A name that `judge moved` moved is `not_listed` under
+    /// the exemption of its old name.
+    pub artifact_exemption_unneeded: Vec<UnneededArtifactOut>,
+    /// The artifacts two or more exemptions that stand exempt from one link; they
+    /// leave `clean` as it is.
+    pub artifact_exemption_repeated: Vec<RepeatedArtifactOut>,
+    /// Each covering link to artifacts: its selection, and whether the listing of the
+    /// names it takes is the whole (`completeness`: `all`, `partial`, `cannot_list`).
+    /// A link of strength `error` whose listing is not the whole, or whose selection
+    /// takes no name, makes `clean` false: a gap cannot be ruled out, or the cover
+    /// expects nothing.
+    pub artifact_cover: Vec<CoverLinkOut>,
 }
 
 /// An approval whose content awaits the approvals of other names.
@@ -163,8 +191,12 @@ pub struct UncoveredOut {
 /// that was declared moved since an approval pinned it, in the order of `moved`,
 /// then one per exemption no longer needed, in the order of `exemption_unneeded`,
 /// then one per document exempt from one link more than once, in the order of
-/// `exemption_repeated`. A gap of strength `error` has none: it fails the check,
-/// and the answer is shown. None of them changes the exit.
+/// `exemption_repeated`; and, for the covering links to artifacts, one per name a
+/// link of strength `warn` does not reach, one per such link whose listing is not the
+/// whole or whose selection takes no name, then one per exemption of an artifact no
+/// longer needed (with the `judge withdraw` that withdraws it) and one per artifact
+/// exempt from one link more than once. A gap of strength `error` has none: it fails
+/// the check, and the answer is shown. None of them changes the exit.
 pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
     let BooksCheck::Checked {
         uncovered,
@@ -174,6 +206,8 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
         unneeded,
         repeated,
         names,
+        cover,
+        artifacts,
         ..
     } = check
     else {
@@ -234,11 +268,15 @@ pub fn check_warnings(check: &BooksCheck) -> Vec<String> {
             namer.repeated(Some(r.doc), &r.book, &r.link, &r.exemptions)
         )
     });
+    let artifact_gaps = warn_lines(artifacts, cover.links());
+    let artifact_exemptions = exemption_lines(artifacts, &namer);
     gaps.chain(untold)
         .chain(nothing)
         .chain(moved_away)
         .chain(not_needed)
         .chain(twice)
+        .chain(artifact_gaps)
+        .chain(artifact_exemptions)
         .collect()
 }
 
@@ -366,6 +404,11 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             exemption_repeated: Vec::new(),
             awaiting: Vec::new(),
             same_meaning_short: Vec::new(),
+            artifact_uncovered: Vec::new(),
+            artifact_exempt: Vec::new(),
+            artifact_exemption_unneeded: Vec::new(),
+            artifact_exemption_repeated: Vec::new(),
+            artifact_cover: Vec::new(),
         },
         BooksCheck::Checked {
             books,
@@ -379,9 +422,12 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
             repeated,
             awaiting,
             same_meaning_short,
+            cover,
+            artifacts,
             names,
         } => {
             let namer = Namer(names);
+            let of_artifacts = artifact_lists(artifacts, &namer);
             BooksCheckOut {
                 clean: check.is_clean(),
                 schema_problems: Vec::new(),
@@ -520,6 +566,11 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                     .iter()
                     .map(|s| namer.same_meaning_short(s))
                     .collect(),
+                artifact_uncovered: of_artifacts.uncovered,
+                artifact_exempt: of_artifacts.exempt,
+                artifact_exemption_unneeded: of_artifacts.unneeded,
+                artifact_exemption_repeated: of_artifacts.repeated,
+                artifact_cover: cover.links().iter().map(cover_link).collect(),
             }
         }
     }

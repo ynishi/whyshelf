@@ -17,7 +17,7 @@ use crate::domain::shelf::build::{
     ClaimKeyProblem, DropProblem, NewDocProblem, NextKeyProblem, NoFreeKey, PlanProblem,
 };
 use crate::domain::shelf::doc::DocKey;
-use crate::domain::shelf::exemption::ExemptRefusal;
+use crate::domain::shelf::exemption::{CoverMiss, ExemptRefusal};
 use crate::domain::shelf::filter::FilterProblem;
 use crate::domain::shelf::ledger::{
     DecisionProblem, FrameRefusal, MovedRefusal, NamedWhy, NotAdmitted, PrefixRefusal,
@@ -25,7 +25,7 @@ use crate::domain::shelf::ledger::{
 };
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::NotPending;
-use crate::domain::shelf::schema::{BookName, KeyProblem, SchemaProblem};
+use crate::domain::shelf::schema::{BookName, EntryName, KeyProblem, SchemaProblem};
 use crate::domain::words::{Join, Mark, listed};
 
 use super::ports::ShelfPort;
@@ -128,6 +128,18 @@ pub enum ShelfError {
     /// decided against, or an exemption that stands already exempts it.
     #[error("the exemption is refused")]
     ExemptRefused(#[from] ExemptRefusal),
+    /// `cover` was asked about a link that is no covering link to artifacts: not
+    /// declared as one, or declared with no `cover`.
+    #[error("{book}.{link} is no covering link to artifacts")]
+    NotACoverLink {
+        /// The book named.
+        book: BookName,
+        /// The link named.
+        link: EntryName,
+        /// Why it is not one.
+        #[source]
+        miss: CoverMiss,
+    },
     /// A record named to be withdrawn is no decision or declaration, or is already
     /// withdrawn.
     #[error("the withdrawal is refused")]
@@ -488,7 +500,8 @@ impl ShelfError {
             | Self::FileTaken { .. }
             | Self::NoFreeKey(_)
             | Self::InTheWay { .. }
-            | Self::Overlapping { .. } => ErrorClass::Request,
+            | Self::Overlapping { .. }
+            | Self::NotACoverLink { .. } => ErrorClass::Request,
             // As a reference that names nothing and a revocation of nothing: a name of
             // an artifact no document links or that is linked in two spaces, a hash
             // that names nothing pinned, an earlier hash that cannot be told
@@ -527,7 +540,9 @@ impl ShelfError {
                 | SameMeaningRefusal::ArtifactUnknown { .. },
             )
             | Self::SameMeaning(_)
-            | Self::ExemptRefused(ExemptRefusal::DocNotValid { .. }) => ErrorClass::Refused,
+            | Self::ExemptRefused(
+                ExemptRefusal::DocNotValid { .. } | ExemptRefusal::CannotTell { .. },
+            ) => ErrorClass::Refused,
             Self::MovedRefused(refusal) => moved_class(refusal),
             Self::MovedPrefixRefused(refusal) => prefix_class(refusal),
             Self::Port { .. } | Self::Value(_) | Self::NotDurable { .. } => ErrorClass::Failed,
