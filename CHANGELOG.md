@@ -10,6 +10,24 @@ and this project adheres to
 
 ### Added
 
+- Who read the content an approval stands on is answered for every approved
+  document, in every project, and the approvals read by one name can be asked
+  for (#105). A row of `status`, `get` and `trace` of an approved document carries
+  `readers`: `{"count", "counted", "lapsed"}`, the names that approved the
+  content it stands on now, each once. A name counts while its own latest
+  approval of that content has not lapsed and is `lapsed` otherwise, so
+  `count` is `nobody`, `one` or `several`, and an approval every reading of which
+  lapsed is `nobody`. `status --readers <word>` (repeatable, any of the words)
+  lists the approved documents read by that many names: `--readers one` is the
+  approvals no second name reads now (a lapsed reading is not counted), after an
+  edit approved again by one name too. A project needs no rule of who may decide for it: a second name's
+  approval of the same content is written whether or not it declares one. In the
+  library, `Ledger::reading` gives the readers (`ReadBy`) and the `Quorum` from
+  one walk, `Standing::read_by` reads them, and `StatusFilterAsk::readers` asks
+  for a `ReaderCount`; `StatusFilter::admits` takes the `Standing` of the
+  document. The documentation of `Readers` no longer says the key of an upstream
+  is compared: the content an approval stands on is the pin's link, identity and
+  hash.
 - `rekey <ref> [--key <key>] [--follow <ref>]... [--stay <ref>]... [--both
   <ref>]... [--dry-run]` gives one document a new key (#117), for two documents
   of one key after a merge. The new key is the book's next (or `--key`, which
