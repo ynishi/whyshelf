@@ -27,7 +27,7 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::build::{
-    DocProblem, DocReading, DocState, LinkWriters, NowNamed, RawValue, Shelf, Writers,
+    DocProblem, DocReading, LinkWriters, NowNamed, RawValue, Shelf, Writers,
 };
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::schema::{EntryName, KEY_ENTRY};
@@ -317,16 +317,15 @@ impl RekeyPlan {
 
         let old = &self.target.key;
         let new = self.new_key.key();
-        let on_new_file = |doc_file: &RelPath| *doc_file == self.new_file;
-        let one_document = match after.state_of(self.target.id) {
-            DocState::Valid(doc) => on_new_file(doc.origin()) && doc.key() == new,
-            DocState::Invalid(docs) => {
-                docs.len() == 1
-                    && on_new_file(docs.first().origin())
-                    && after.now_named(self.target.id) == NowNamed::Invalid(Some(new.clone()))
-            }
-            DocState::Gone | DocState::Unknown { .. } => false,
-        };
+        // One document: the identity is carried by the new file alone, and it is
+        // named by the new key, whether it is valid or invalid there (an invalid
+        // file has no key of its own: the one its files write is what `now_named`
+        // says).
+        let one_document = after.state_of(self.target.id).files() == [&self.new_file]
+            && matches!(
+                after.now_named(self.target.id),
+                NowNamed::Valid(key) | NowNamed::Invalid(Some(key)) if key == *new
+            );
         let new_by_target = matches!(
             after.key_writers(new).writers(),
             Writers::One(writer)

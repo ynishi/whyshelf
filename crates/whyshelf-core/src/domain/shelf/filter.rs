@@ -396,11 +396,7 @@ impl StatusFilter {
         let in_asked = |origin: &RelPath| {
             book_of(schema, origin).is_some_and(|book| self.ask.books.contains(book))
         };
-        match state {
-            DocState::Valid(doc) => in_asked(doc.origin()),
-            DocState::Invalid(files) => files.iter().any(|file| in_asked(file.origin())),
-            DocState::Gone | DocState::Unknown { .. } => false,
-        }
+        state.files().into_iter().any(in_asked)
     }
 }
 

@@ -89,7 +89,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
 
-use super::artifact::{ArtifactKey, ArtifactState, Comparison};
+use super::artifact::{ArtifactKey, ArtifactSeen, Comparison};
 use super::build::Shelf;
 use super::doc::{DocHash, DocKey};
 use super::ledger::{ApprovalKind, Asked, Before, Decision, DecisionVerb, JudgedAt, Ledger};
@@ -428,7 +428,7 @@ fn changed_pins(ledger: &Ledger, before: &Decision, after: &Decision) -> BTreeSe
         .map(|pin| (pin.target(), pin.hash()))
         .collect();
     let read_before = ledger.pins_read_now(before);
-    let mut artifacts_before: BTreeMap<(&ArtifactKey, &Comparison), BTreeSet<ArtifactState>> =
+    let mut artifacts_before: BTreeMap<(&ArtifactKey, &Comparison), BTreeSet<ArtifactSeen>> =
         BTreeMap::new();
     for read in &read_before {
         artifacts_before

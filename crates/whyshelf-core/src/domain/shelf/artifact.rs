@@ -18,6 +18,7 @@
 //! | [`ArtifactName`] | a name in a space, as a link writes it; opaque | the build, from the text written (rule A1) |
 //! | [`ArtifactReading`] | the adapter's answer for one name: there (a hash per comparison asked, an address?), absent, cannot tell now (why), or not a name of the space (why) | the adapter, through [`ArtifactReading::of_bytes`] and its siblings |
 //! | [`Artifact`] | a space, a name, and whether the thing is there now with which [`ArtifactHash`], absent, or unknown | the build of a shelf, from an [`ArtifactReading`] |
+//! | [`ArtifactSeen`] | what an approval can pin of a name: there with a hash, or absent; a name that cannot be told is not one, and is told apart from both in one place, `ArtifactState::told` | the split of an [`ArtifactState`] (`told`), and what a pin kept of a name |
 //! | [`ArtifactHash`] | the hash of the content as its link's [`Comparison`] counts it: the only thing freshness compares (A3, A4) | [`Comparison::fingerprint`], over the bytes the adapter read |
 //! | [`Comparison`] | what counts: that the thing is there, every byte, or the lines with their white space collapsed, without blank lines and without the lines a prefix marks | a book's declaration of the link; kept in each pin |
 //! | [`NamePrefix`], [`PrefixMove`] | a prefix of names as a person writes it, opaque like a name, and the move of every name under one prefix to the same name under another | the command line |
@@ -488,6 +489,11 @@ pub enum ArtifactState {
     Absent,
     /// It cannot be told now, for the reason [`Untold`] gives. An approval cannot
     /// stand on it, and freshness does not change for it: it is a notice.
+    ///
+    /// It is told apart from the other two in one place (`ArtifactState::told` of
+    /// this module), so that no pin holds one: what an approval can pin is an
+    /// [`ArtifactSeen`]. It is not read as absent, which an approval can pin: an
+    /// index not built would read as evidence gone (DEC-45).
     Unknown(Untold),
 }
 
@@ -528,6 +534,49 @@ impl ArtifactState {
         match self {
             Self::Present(hash) => Some(hash),
             Self::Absent | Self::Unknown(_) => None,
+        }
+    }
+
+    /// What an approval can pin of this name, or why it cannot be told: the one
+    /// place a reading is split into the two (the artifact side of what
+    /// `DocState::valid_or_failure` does for a document).
+    ///
+    /// A name there and a name with nothing there are told, as an [`ArtifactSeen`];
+    /// a name that cannot be told is told apart from both, with its [`Untold`]. A
+    /// reader that asks what can be pinned matches this result, so which readings
+    /// cannot be told is decided here alone; what each reader does with one that
+    /// cannot be told stays its own.
+    pub(crate) fn told(&self) -> Result<ArtifactSeen, &Untold> {
+        match self {
+            Self::Present(hash) => Ok(ArtifactSeen::Present(*hash)),
+            Self::Absent => Ok(ArtifactSeen::Absent),
+            Self::Unknown(why) => Err(why),
+        }
+    }
+}
+
+/// What an approval can pin of a name of an artifact: the thing is there, with the
+/// hash of its content, or nothing is there.
+///
+/// A name that cannot be told now ([`ArtifactState::Unknown`]) is not here: no pin
+/// holds one, and two approvals are compared on what they pinned alone. The reading
+/// is split into a pin and a reason in one place, `ArtifactState::told` of this
+/// module. A pin is compared by this alone: the address it keeps is never read
+/// (rule A4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ArtifactSeen {
+    /// The thing is there, with the hash of its content.
+    Present(ArtifactHash),
+    /// Nothing is there (rule A1).
+    Absent,
+}
+
+impl ArtifactSeen {
+    /// The hash, when the thing is there.
+    pub fn hash(&self) -> Option<&ArtifactHash> {
+        match self {
+            Self::Present(hash) => Some(hash),
+            Self::Absent => None,
         }
     }
 }

@@ -651,3 +651,51 @@ fn files_that_changed_since_the_plan_was_made_are_refused() {
     assert_eq!(differs.differences.len(), 1);
     assert_eq!(*differs.differences.first(), Difference::Read);
 }
+
+/// Whether a plan for `readings`, the target being the document 1, is confirmed by
+/// `written` in place of the target's file and the files that follow.
+fn confirmed(
+    readings: Vec<DocReading>,
+    written: impl FnOnce(&RekeyPlan) -> Vec<DocReading>,
+) -> bool {
+    let s = shelf(readings.clone());
+    let plan = plan(&s, &ledger(Vec::new()), &ask(1, &[])).unwrap();
+    let written = written(&plan);
+    match plan.confirm(&s, readings, written, &ArtifactReadings::new()) {
+        Ok(_) => true,
+        Err(differs) => {
+            assert!(
+                differs
+                    .differences
+                    .iter()
+                    .any(|difference| matches!(difference, Difference::Target { .. })),
+                "{differs}"
+            );
+            false
+        }
+    }
+}
+
+#[test]
+fn a_target_is_one_document_on_the_new_file_whether_it_reads_valid_or_invalid_there() {
+    // A valid target: its key on the new file is the new key, said by what the shelf
+    // calls it, as it is for a target that stays invalid.
+    let valid = vec![fr(1, &[])];
+    assert!(confirmed(valid.clone(), |plan| planned(plan, &valid)));
+    // An invalid target (no title) is the same document on the new file while it
+    // writes the new key.
+    let invalid = vec![reading("findings/fr-1.md", 1, "FR-1", &[])];
+    assert!(confirmed(invalid.clone(), |plan| planned(plan, &invalid)));
+}
+
+#[test]
+fn a_target_that_is_gone_or_cannot_be_told_on_the_new_file_is_not_the_document_planned() {
+    let readings = vec![fr(1, &[])];
+    // Nothing written: no file carries the identity.
+    assert!(!confirmed(readings.clone(), |_| Vec::new()));
+    // A file at the new place whose identity cannot be read: it may carry it, and the
+    // shelf cannot say it does.
+    assert!(!confirmed(readings, |plan| {
+        vec![unclosed(plan.new_file().as_str())]
+    }));
+}

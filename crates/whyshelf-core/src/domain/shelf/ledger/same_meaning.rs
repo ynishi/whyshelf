@@ -40,7 +40,8 @@ use crate::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec};
 use crate::domain::words::{Join, Mark, listed};
 
 use super::super::artifact::{
-    Artifact, ArtifactHash, ArtifactKey, ArtifactName, ArtifactState, Comparison, Space, Untold,
+    Artifact, ArtifactHash, ArtifactKey, ArtifactName, ArtifactSeen, ArtifactState, Comparison,
+    Space, Untold,
 };
 use super::super::build::{FailureTag, Shelf};
 use super::super::doc::DocHash;
@@ -361,23 +362,22 @@ pub fn frame_same_meaning(
             // An artifact's hash is made by a comparison, so the hash now and the
             // earlier hashes are taken under one comparison at a time: the hash now of
             // each comparison a link declares for it now.
-            let mut now_of: BTreeMap<Comparison, ArtifactState> = BTreeMap::new();
+            let mut now_of: BTreeMap<Comparison, &ArtifactState> = BTreeMap::new();
             for doc in shelf.docs().values() {
                 for link in doc.artifact_links().values() {
                     for found in link.artifacts().iter().filter(|a| *a.key() == artifact) {
-                        now_of.insert(link.kind().comparison.clone(), found.state().clone());
+                        now_of.insert(link.kind().comparison.clone(), found.state());
                     }
                 }
             }
-            let unknown = now_of.values().find_map(|state| match state {
-                ArtifactState::Unknown(why) => Some(why.clone()),
-                ArtifactState::Present(_) | ArtifactState::Absent => None,
-            });
+            let unknown = now_of
+                .values()
+                .find_map(|state| state.told().err().cloned());
             let now_of: BTreeMap<Comparison, ArtifactHash> = now_of
                 .into_iter()
-                .filter_map(|(c, state)| match state {
-                    ArtifactState::Present(hash) => Some((c, hash)),
-                    ArtifactState::Absent | ArtifactState::Unknown(_) => None,
+                .filter_map(|(c, state)| match state.told() {
+                    Ok(ArtifactSeen::Present(hash)) => Some((c, hash)),
+                    Ok(ArtifactSeen::Absent) | Err(_) => None,
                 })
                 .collect();
             if now_of.is_empty() {

@@ -215,7 +215,11 @@
 //!   an identity no readable file carries is [`DocState::Unknown`], not
 //!   [`DocState::Gone`], and what stands on it is [`Cause::SelfNotValid`] or
 //!   [`Cause::UpstreamNotValid`] of [`DocFailure::Unknown`]: the model does not
-//!   claim a document is gone when it may be in a file it could not read.
+//!   claim a document is gone when it may be in a file it could not read. A
+//!   snapshot keeps it apart too: the [`FailureTag`] of a document it cannot tell is
+//!   `Unknown`, not `Gone`. That it is broken, and not a notice as a name of an
+//!   artifact that cannot be told is ([`ArtifactState::Unknown`]), is because the
+//!   files it may be in are the shelf's own and invalid.
 //! - **Incremental reading is out of scope.** [`Shelf::build`] takes every file.
 //! - **A key in a file that cannot be parsed is not seen.** A file whose front
 //!   matter is no mapping shows no key, so [`Shelf::next_key`] and
@@ -306,6 +310,7 @@
 //! [`DocFailure`]: build::DocFailure
 //! [`DocFailure::Unknown`]: build::DocFailure::Unknown
 //! [`FailureTag`]: build::FailureTag
+//! [`ArtifactState::Unknown`]: artifact::ArtifactState::Unknown
 //! [`DocPresence`]: build::DocPresence
 //! [`Shelf::tally_by_book`]: build::Shelf::tally_by_book
 //! [`BookTally`]: build::BookTally
@@ -389,3 +394,5 @@ pub mod untold;
 
 #[cfg(test)]
 mod fixtures_tests;
+#[cfg(test)]
+mod now_tests;

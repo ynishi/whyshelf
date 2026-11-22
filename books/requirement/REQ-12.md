@@ -1,7 +1,7 @@
 ---
 id: "01a1c4d3-a2e6-7651-a588-ca95e98cfe67"
 key: "REQ-12"
-grounds: ["F-5", "F-10", "F-19"]
+grounds: ["F-5", "F-10", "F-19", "F-61"]
 issues: ["#13"]
 title: "A hole in the chain of reasons is reported"
 ---

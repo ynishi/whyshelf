@@ -703,6 +703,13 @@ pub enum DocState<'a> {
     Gone,
     /// No file is known to have it, but some file's identity could not be read, so
     /// it may be in one of them.
+    ///
+    /// What stands on it is broken, not a notice as a name of an artifact that
+    /// cannot be told is (DEC-12): the files whose identity could not be read are
+    /// the shelf's own and are invalid files, which an assessment lists with the
+    /// other invalid files, so the books that hold the document are not sound, and
+    /// an approval cannot read as holding over them. A name of an artifact cannot
+    /// be told for a reason outside the books.
     Unknown {
         /// The files whose identity could not be read.
         unreadable: NonEmptyVec<RelPath>,
@@ -742,7 +749,8 @@ pub enum DocFailure {
 }
 
 /// Which of the three a [`DocFailure`] is, without what it carries: what a record
-/// keeps of a document it retired.
+/// keeps of a document it retired, and what a snapshot says a document that is not
+/// valid is now. [`DocFailure::tag`] makes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailureTag {
     /// [`DocFailure::Invalid`].
@@ -791,6 +799,10 @@ pub enum Detail {
 
 impl DocFailure {
     /// Which of the three it is.
+    ///
+    /// The one place the tag of a document that is not valid is made: a retirement
+    /// keeps it in its record and a snapshot reads it as what a document is now, both
+    /// through [`DocState::valid_or_failure`] and this, with no match of their own.
     pub fn tag(&self) -> FailureTag {
         match self {
             Self::Invalid(_) => FailureTag::Invalid,
@@ -883,9 +895,11 @@ impl<'a> DocState<'a> {
     /// The valid document, or the owned form of why there is none.
     ///
     /// The one place a [`DocState`] becomes a [`DocFailure`]; the frames of the
-    /// ledger and freshness take it from here. A caller that only asks which of the
-    /// four a state is (and would drop what a failure carries) matches the
-    /// [`DocState`] itself, so no problem is cloned for nothing.
+    /// ledger and freshness take it from here, and a retirement and a snapshot take
+    /// the tag of a document that is not valid from it, through
+    /// [`DocFailure::tag`]. A caller on a hot path that only asks which of the four a
+    /// state is (and would drop what a failure carries) matches the [`DocState`]
+    /// itself, so no problem is cloned for nothing.
     // `assess` asks this for every approved document and every pin, so the cost was
     // weighed: the failure is the answer, kept as it is by a refusal or a cause, and
     // boxing it would add an allocation to each failure and a deref to each match, to
@@ -900,8 +914,32 @@ impl<'a> DocState<'a> {
         }
     }
 
+    /// The files that carry the identity now: a valid document's file, every file of
+    /// an invalid one in the order of its [`NonEmptyVec`], and none when it is gone
+    /// or cannot be told (the files whose identity could not be read are not known
+    /// to carry it).
+    ///
+    /// The one entry for a reader that asks only whether a file carries the identity
+    /// or which one does (a book filter, a rekey that checks one document is left on
+    /// the new file, the file of a snapshot's document). Which file carries which
+    /// identity is decided by [`Shelf::state_of`]; this is that answer for the
+    /// question.
+    pub(super) fn files(&self) -> Vec<&'a RelPath> {
+        match self {
+            Self::Valid(doc) => vec![doc.origin()],
+            Self::Invalid(docs) => docs.iter().map(InvalidDoc::origin).collect(),
+            Self::Gone | Self::Unknown { .. } => Vec::new(),
+        }
+    }
+
     /// The owned form of the whole state, with the files: the one place an answer
     /// takes what to show of a document from.
+    ///
+    /// It is not made from the list of files the state keeps for a reader that asks
+    /// a yes or no (`DocState::files`): an invalid document's files are kept as a
+    /// [`NonEmptyVec`] (a [`DocPresence::Invalid`] always has one), and the problems
+    /// and the files that could not be read go with them, so it writes the four arms
+    /// of the state itself, as the rekey of a target does.
     pub fn presence(&self) -> DocPresence {
         match self {
             Self::Valid(doc) => DocPresence::Valid {

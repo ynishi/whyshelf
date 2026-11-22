@@ -12,9 +12,9 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 
 use super::super::artifact::{
-    ArtifactKey, ArtifactReading, ArtifactReadings, ArtifactState, ContentAddress, Revision, Untold,
+    ArtifactKey, ArtifactReading, ArtifactReadings, ArtifactSeen, ContentAddress, Revision, Untold,
 };
-use super::super::build::{Detail, DocFailure, DocState, FailureTag, Shelf};
+use super::super::build::{Detail, DocFailure, Shelf};
 use super::super::doc::{DocHash, DocKey, LinkState, UnresolvedLink};
 use super::super::graph::{Cycle, LabelledCycle};
 use super::super::schema::{ArtifactPropagation, BookName, EntryName, Propagation};
@@ -254,13 +254,13 @@ pub fn frame_approve(
     for (name, link) in depends {
         let comparison = &link.kind().comparison;
         for artifact in link.artifacts() {
-            let seen = match artifact.state() {
-                ArtifactState::Present(hash) => PinnedArtifact::Present {
-                    hash: *hash,
+            let seen = match artifact.state().told() {
+                Ok(ArtifactSeen::Present(hash)) => PinnedArtifact::Present {
+                    hash,
                     address: None,
                 },
-                ArtifactState::Absent => PinnedArtifact::Absent,
-                ArtifactState::Unknown(why) => {
+                Ok(ArtifactSeen::Absent) => PinnedArtifact::Absent,
+                Err(why) => {
                     return Err(FrameRefusal::ArtifactUnknown {
                         link: name.clone(),
                         artifact: artifact.key().clone(),
@@ -323,11 +323,11 @@ pub fn frame_present(shelf: &Shelf, id: DocId) -> Result<PresentFrame, FrameRefu
 /// The frame of a retirement of `id`: what is seen of the document now, whatever it
 /// is. It does not fail: a document can be retired after its file is gone.
 pub fn frame_retire(shelf: &Shelf, id: DocId) -> RetireFrame {
-    let seen = match shelf.state_of(id) {
-        DocState::Valid(doc) => Seen::At(*doc.hash()),
-        DocState::Invalid(_) => Seen::Not(FailureTag::Invalid),
-        DocState::Gone => Seen::Not(FailureTag::Gone),
-        DocState::Unknown { .. } => Seen::Not(FailureTag::Unknown),
+    // The tag of a document that is not valid is `DocFailure::tag`, the one place
+    // that makes it; a retirement is not a hot path.
+    let seen = match shelf.state_of(id).valid_or_failure() {
+        Ok(doc) => Seen::At(*doc.hash()),
+        Err(failure) => Seen::Not(failure.tag()),
     };
     RetireFrame {
         subject: id,

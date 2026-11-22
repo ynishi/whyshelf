@@ -29,7 +29,7 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec, OneLine, TwoOrMore};
 use crate::domain::words::{Join, Mark, listed};
 
-use super::artifact::{Artifact, ArtifactKey, ArtifactState, Untold};
+use super::artifact::{Artifact, ArtifactKey, ArtifactSeen, Untold};
 use super::schema::{
     ArtifactLinkKind, ArtifactPropagation, BookName, EntryName, FieldType, FieldWord, KeyForm,
     KeyProblem, LinkKind, Propagation, ScalarType,
@@ -690,7 +690,7 @@ impl Doc {
             .flat_map(|(name, link)| {
                 link.artifacts()
                     .iter()
-                    .filter(|artifact| matches!(artifact.state(), ArtifactState::Absent))
+                    .filter(|artifact| matches!(artifact.state().told(), Ok(ArtifactSeen::Absent)))
                     .map(move |artifact| (name, artifact.key()))
             })
             .collect()
@@ -703,12 +703,10 @@ impl Doc {
         self.artifact_links
             .iter()
             .flat_map(|(name, link)| {
-                link.artifacts()
-                    .iter()
-                    .filter_map(move |artifact| match artifact.state() {
-                        ArtifactState::Unknown(why) => Some((name, artifact.key(), why)),
-                        ArtifactState::Present(_) | ArtifactState::Absent => None,
-                    })
+                link.artifacts().iter().filter_map(move |artifact| {
+                    let why = artifact.state().told().err()?;
+                    Some((name, artifact.key(), why))
+                })
             })
             .collect()
     }
