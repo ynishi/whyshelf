@@ -1,0 +1,125 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "753816c9876549ba6318119afda3986665c9038a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e9728765fe14ee98599071013ed2805b801ee6f94acc84c1db7bdfb9cf898b5b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moves_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1f060fe8b8d6484e2d26acf6713648ef18365475",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:35f14b96ea492431f34eb89756cdb7263308707ecdaa729ce28cab46d13b6eea",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d4434193bddc5dbac32746c4e9207a8aea238930",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:142ecf3a74b7f00c15337d038f5f2970cb07d49037655dad3e4607d0ded24b93",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0033f0c6242c592dea887d5935e166ba3a6eb7b5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d69cf4ea0afd929bf4f8b0b3c5487a92ea3d167fb21defad7f782e5bebbee9f8",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/git.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795308250470,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7b851de2655aeec6ed6d7f8845f16438a7968ab8",
+      "hash": "sha256:f87f51b8bd50ed101be705f87f2cdc0cdb37eef87c02a532672312696010a175",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    },
+    {
+      "address": "5e1c17298ddd8bb542797aba6eb0d5290479c9a7",
+      "hash": "sha256:a16bbcf75527d6ddc5de0d1a09d38e3463e3138a4b8465865cc117582afe941f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bc99-7728-b8d7-deea06f9c49b"
+    },
+    {
+      "address": "a62ae7682e25304886acc68cd237b34b358453ec",
+      "hash": "sha256:ca489565a7c7318de8e62eeca652efad4af7d092e73feac3582753b85dfd058b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "60"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6"
+    }
+  ],
+  "id": "01a200b5-f8ef-7165-978a-12bf6bc47ff1",
+  "kind": "decision",
+  "reason": "Reviewed for #152: code review (medium; no correctness bug, one false doc sentence fixed), rule-judge (arch) with no violation, and a blind review (Opus, from the issue and the branch only) with no must-fix, its should-fix book and doc sentences fixed; behaviour, JSON and stored records are unchanged, three test lines change only their variant path as the owner allowed, and cargo test --workspace passes (1776)",
+  "revision": "3e0c04df1a95a246ed460882419093944acbc0d6",
+  "seen": "sha256:6ae92222abf041166e3a6578db83d7fc371feb73d70ad4b3b9a2d5e43c887063",
+  "seen_address": "d52809895bef57a7db569c0a8781840bdebccd6f",
+  "subject": "01a1c952-60fb-7278-821f-98cf49e06403",
+  "v": 1,
+  "verb": "approve"
+}

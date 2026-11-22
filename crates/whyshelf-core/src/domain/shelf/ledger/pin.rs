@@ -8,7 +8,7 @@ use std::fmt;
 use crate::domain::id::DocId;
 
 use super::super::artifact::{
-    ArtifactHash, ArtifactKey, ArtifactName, ArtifactState, Comparison, ContentAddress, Space,
+    ArtifactHash, ArtifactKey, ArtifactName, ArtifactSeen, Comparison, ContentAddress, Space,
 };
 use super::super::build::{FailureTag, NowNamed};
 use super::super::doc::{DocHash, DocKey};
@@ -198,10 +198,10 @@ pub enum PinnedArtifact {
 
 impl PinnedArtifact {
     /// What was there, without the address: what freshness compares (rule A4).
-    pub fn state(&self) -> ArtifactState {
+    pub fn state(&self) -> ArtifactSeen {
         match self {
-            Self::Present { hash, .. } => ArtifactState::Present(*hash),
-            Self::Absent => ArtifactState::Absent,
+            Self::Present { hash, .. } => ArtifactSeen::Present(*hash),
+            Self::Absent => ArtifactSeen::Absent,
         }
     }
 
@@ -287,7 +287,7 @@ impl ArtifactPin {
     /// what was there (a hash, or nothing). The address is left out (rule A4), and so
     /// is how the record wrote the name: a record of before spaces names the same
     /// artifact in [`PATH_ONLY_SPACE`].
-    fn stands_on(&self) -> (&EntryName, &ArtifactKey, &Comparison, ArtifactState) {
+    fn stands_on(&self) -> (&EntryName, &ArtifactKey, &Comparison, ArtifactSeen) {
         (
             &self.link,
             &self.artifact,
@@ -305,12 +305,7 @@ impl ArtifactPin {
 pub(super) struct StandsOn<'a> {
     seen: &'a DocHash,
     frame: BTreeSet<(&'a EntryName, DocId, &'a DocHash)>,
-    artifacts: BTreeSet<(
-        &'a EntryName,
-        &'a ArtifactKey,
-        &'a Comparison,
-        ArtifactState,
-    )>,
+    artifacts: BTreeSet<(&'a EntryName, &'a ArtifactKey, &'a Comparison, ArtifactSeen)>,
 }
 
 impl<'a> StandsOn<'a> {

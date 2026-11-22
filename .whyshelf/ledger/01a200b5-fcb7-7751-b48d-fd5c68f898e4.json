@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8c830d4882a185cb3911628de94c7d8220f0f4a8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:408353f86a415be87d5627628d7deeefb1858ab31b90c71bb8b080669f3b6119",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "68bf4888cc871abee94b675af97bda0253ea6d03",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:dca5116cf5e4d4d7f06f7d9abf05cb42dc25d0ef0f7b2575f39c21c4a6b17dbf",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795308250470,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1fd5b557b46c1b09e744fd348b145595f1078bd5",
+      "hash": "sha256:8ad46af5101b0517cee87c54e3b4343b7b611aaacb28f10841550b8946bbd88e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    }
+  ],
+  "id": "01a200b5-fcb7-7751-b48d-fd5c68f898e4",
+  "kind": "decision",
+  "reason": "Reviewed for #152: code review (medium; no correctness bug, one false doc sentence fixed), rule-judge (arch) with no violation, and a blind review (Opus, from the issue and the branch only) with no must-fix, its should-fix book and doc sentences fixed; behaviour, JSON and stored records are unchanged, three test lines change only their variant path as the owner allowed, and cargo test --workspace passes (1776)",
+  "revision": "3e0c04df1a95a246ed460882419093944acbc0d6",
+  "seen": "sha256:88b4f0dab9fab350a7831ab545d07a095a4bc5d2e120880183e1a6f69e238c13",
+  "seen_address": "a48c1ce442920d277dd7c62c16a289536c011525",
+  "subject": "01a1cc04-8636-721f-a251-50df70adcd68",
+  "v": 1,
+  "verb": "approve"
+}

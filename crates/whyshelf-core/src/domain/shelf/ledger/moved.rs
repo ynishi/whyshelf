@@ -89,7 +89,7 @@ use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::words::{Join, Mark, listed};
 
 use super::super::artifact::{
-    ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReadings, ArtifactState,
+    ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReadings, ArtifactSeen,
     Comparison, ContentAddress, NamePrefix, PrefixAnswers, PrefixAsks, PrefixMove, Renamed,
     Revision, Space, SpacePrefixes, Untold,
 };
@@ -442,10 +442,10 @@ enum Now {
 fn now_at(readings: &ArtifactReadings, artifact: &ArtifactKey) -> Now {
     match readings.of(artifact) {
         Some(reading) if reading.is_present() => Now::There,
-        _ => match readings.state_of(artifact, &Comparison::Bytes) {
-            ArtifactState::Absent => Now::Nothing,
-            ArtifactState::Present(_) => Now::There,
-            ArtifactState::Unknown(why) => Now::Untold(why),
+        _ => match readings.state_of(artifact, &Comparison::Bytes).told() {
+            Ok(ArtifactSeen::Absent) => Now::Nothing,
+            Ok(ArtifactSeen::Present(_)) => Now::There,
+            Err(why) => Now::Untold(why.clone()),
         },
     }
 }

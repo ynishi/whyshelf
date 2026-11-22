@@ -519,6 +519,12 @@ fn laid_beside(evidence: Evidence, asked: Option<Side>) -> Reading {
 /// The key and the file of the document that takes the new key: one file, with an
 /// identity and a key that were read (R2). An invalid document is a target too (two
 /// files that write one key are both invalid, and one of them is the one to renumber).
+///
+/// It matches the four arms of the state itself, and does not read the files the
+/// state lists (`DocState::files`): it needs the files of an invalid document as a
+/// [`NonEmptyVec`] (more than one is [`RekeyProblem::InSeveralFiles`]), and says why
+/// a document that is gone or cannot be told is no target. It is not a yes or no on
+/// which file carries the identity.
 fn target_of(shelf: &Shelf, id: DocId) -> Result<Retargeted, RekeyProblem> {
     match shelf.state_of(id) {
         DocState::Valid(doc) => Ok(Retargeted {

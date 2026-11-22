@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795308250470,
+  "expires": null,
+  "frame": [],
+  "id": "01a200b6-2672-725d-a560-82d8018e40e5",
+  "kind": "decision",
+  "reason": "Reviewed for #152: code review (medium; no correctness bug, one false doc sentence fixed), rule-judge (arch) with no violation, and a blind review (Opus, from the issue and the branch only) with no must-fix, its should-fix book and doc sentences fixed; behaviour, JSON and stored records are unchanged, three test lines change only their variant path as the owner allowed, and cargo test --workspace passes (1776)",
+  "revision": "3e0c04df1a95a246ed460882419093944acbc0d6",
+  "seen": "sha256:d4348198dea5b8f2bd534670a79f2df663437bfe525753e9cc798c329c69ea36",
+  "seen_address": "8d5042817b505076577a54198275290db6fda26b",
+  "subject": "01a20085-f3c7-7178-bfa0-d8d3b8d77c74",
+  "v": 1,
+  "verb": "approve"
+}

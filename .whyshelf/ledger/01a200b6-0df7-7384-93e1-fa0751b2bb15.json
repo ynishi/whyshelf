@@ -1,0 +1,217 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "49ed1c4166bebe320bce2eed1871be9fd089cc33",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e63603bae01b839c87a6cb6b87ab46219f06e5ed61d5ff344fda955c915bc280",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5cad57024ab2365d8f82c3ee4f9172cffa18dd75",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f9a77a461a6b5a0fa4c6c7169c7ee293c6a0619646b8c040e49bf22380a800c6",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/said_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "41f5514cb6728f7cee5a8ab7f50bd72911c990cb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ffb369d6721bbbcaca4b04dd9a5166aa26d55901cefad6de30f53e2a2a063f4e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/doc.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "50cd3081a38c7569f98366158772c7474282600e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5827cec46bfbc63a6cca93bbdcf8ee2ab3808be8bbb2354382fbbc5a613be801",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/exemption/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9c8373b0f5542e64b65437b6b95e0bc83c2de764",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8a583422094c305e1ae5958748bff808dd3e14efecf2d8b37ad869fbc4c7fc27",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/graph.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "98a65974a92c685a60574a711e722b7b96c31abd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fd60285a93e7870ad243dcab3ac7f87b14cb7baa3c9dab8df37a2ed8432367c8",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/frame_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1f060fe8b8d6484e2d26acf6713648ef18365475",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:35f14b96ea492431f34eb89756cdb7263308707ecdaa729ce28cab46d13b6eea",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "94440d859ab1998ecdeb0fed03c4ac373b201072",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4441c0d657dcfdc421bcec8397505f91ea041da279ae57dd36a9ba26f6761318",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5f67e5844c8b26e2d1c323610599fab48a9ca505",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2d59769c28998a6d327194e8935e65a9a988d3e51a43bfeceba6ff64e528cf7b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b477824f027d5c12b6d4982450f3458f282c7f61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ade3237bc3b00612988868b792584abd00c515c38fb9b3a4ddbec379098a296",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "45b59648cfd2f87c9e15f6b1bdce3500b609c269",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6659070796b261566da29e5cd8206eab3426ee57c8935b22f8ef23d0906d439f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/word_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "25941bebd37b8c03c8c8df274057254763f57793",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7c82f138a96bf2b38ee8950094a62dec93dad61142a6c46396ffc5e305ee3cb1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/words.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "930053cc4025ede17be8913da9dcde163b524915",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b2416f9b778e58ec8014e887190e4fee136a08a6766a42775ad0ce207784957b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795308250470,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9193e2db45e7147a833b130def660507119b2297",
+      "hash": "sha256:bd33674244776dfaca1ea52173249f486ebbd6e475075203bb60643bff40983d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "78"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ef3c-6465-7073-b56b-81f10c2dfc24"
+    }
+  ],
+  "id": "01a200b6-0df7-7384-93e1-fa0751b2bb15",
+  "kind": "decision",
+  "reason": "Reviewed for #152: code review (medium; no correctness bug, one false doc sentence fixed), rule-judge (arch) with no violation, and a blind review (Opus, from the issue and the branch only) with no must-fix, its should-fix book and doc sentences fixed; behaviour, JSON and stored records are unchanged, three test lines change only their variant path as the owner allowed, and cargo test --workspace passes (1776)",
+  "revision": "3e0c04df1a95a246ed460882419093944acbc0d6",
+  "seen": "sha256:92f9b6dfc8fb69877fd3253e59ccdbb55094d48acf41f4b0211e891fb9e2c784",
+  "seen_address": "86e277662c3fe05d8d965b94706b1f05b9addf99",
+  "subject": "01a1ef3c-9496-7053-90da-99fb7b7aa3fa",
+  "v": 1,
+  "verb": "approve"
+}

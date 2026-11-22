@@ -34,8 +34,10 @@ use crate::domain::actor::{Actor, Attribution};
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 
-use super::artifact::{ArtifactKey, ArtifactState, Comparison, ContentAddress, Revision};
-use super::build::{DocState, Shelf};
+use super::artifact::{
+    ArtifactKey, ArtifactSeen, ArtifactState, Comparison, ContentAddress, Revision,
+};
+use super::build::{FailureTag, Shelf};
 use super::doc::{DocHash, DocKey};
 use super::ledger::{DecisionVerb, JudgedAt, JudgementId, Ledger, MovedTo};
 use super::schema::EntryName;
@@ -73,8 +75,8 @@ pub enum ItemRole {
 pub enum SeenHash {
     /// A document, with this hash.
     Doc(DocHash),
-    /// An artifact, there with this hash or not there.
-    Artifact(ArtifactState),
+    /// An artifact, there with this hash or not there: what an approval can pin.
+    Artifact(ArtifactSeen),
 }
 
 /// One item of what an approval saw.
@@ -106,8 +108,10 @@ pub enum Retrieval {
 /// What an item is now, for a comparison with what was approved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ItemNow {
-    /// A document: its hash now, when it is valid.
-    Doc(Option<DocHash>),
+    /// A document: its hash now when it is valid, else in which way it is not
+    /// ([`FailureTag`]): invalid, gone, or not told. A document that cannot be told
+    /// is not read as one that is gone.
+    Doc(Result<DocHash, FailureTag>),
     /// An artifact: there with this hash, not there, or not told now.
     Artifact(ArtifactState),
 }
@@ -158,8 +162,8 @@ impl SnapshotItem {
     /// what a diff shows) while freshness tells it as a notice.
     pub fn changed_from(&self, now: &ItemNow) -> bool {
         match (&self.seen, now) {
-            (SeenHash::Doc(then), ItemNow::Doc(now)) => now.as_ref() != Some(then),
-            (SeenHash::Artifact(then), ItemNow::Artifact(now)) => then != now,
+            (SeenHash::Doc(then), ItemNow::Doc(now)) => now.as_ref().ok() != Some(then),
+            (SeenHash::Artifact(then), ItemNow::Artifact(now)) => now.told() != Ok(*then),
             (SeenHash::Doc(_), ItemNow::Artifact(_)) | (SeenHash::Artifact(_), ItemNow::Doc(_)) => {
                 true
             }
@@ -281,9 +285,9 @@ impl Snapshot {
     }
 }
 
-/// What a document of a snapshot is now: its hash when it is valid, and the file it
-/// is in when one carries it (a valid document's file, or the first invalid file
-/// with its identity).
+/// What a document of a snapshot is now: its hash when it is valid, or the tag of
+/// how it is not, and the file it is in when one carries it (a valid document's
+/// file, or the first invalid file with its identity).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocNow {
     /// What it is now, for [`SnapshotItem::changed_from`].
@@ -294,19 +298,17 @@ pub struct DocNow {
 
 /// What a document is now in the shelf: the one place a snapshot asks the shelf.
 pub fn doc_now(shelf: &Shelf, id: DocId) -> DocNow {
-    match shelf.state_of(id) {
-        DocState::Valid(doc) => DocNow {
-            now: ItemNow::Doc(Some(*doc.hash())),
-            file: Some(doc.origin().clone()),
-        },
-        DocState::Invalid(files) => DocNow {
-            now: ItemNow::Doc(None),
-            file: Some(files.first().origin().clone()),
-        },
-        DocState::Gone | DocState::Unknown { .. } => DocNow {
-            now: ItemNow::Doc(None),
-            file: None,
-        },
+    let state = shelf.state_of(id);
+    DocNow {
+        // The tag of a document that is not valid is `DocFailure::tag`, the one place
+        // that makes it; a diff reads a few items, so it is not a hot path.
+        now: ItemNow::Doc(
+            state
+                .valid_or_failure()
+                .map(|doc| *doc.hash())
+                .map_err(|failure| failure.tag()),
+        ),
+        file: state.files().first().map(|file| (*file).clone()),
     }
 }
 
@@ -388,7 +390,7 @@ mod tests {
             .unwrap();
         // Absent when pinned: no address, whatever the adapter answers now.
         assert_eq!(absent.address(), None);
-        assert_eq!(absent.seen(), &SeenHash::Artifact(ArtifactState::Absent));
+        assert_eq!(absent.seen(), &SeenHash::Artifact(ArtifactSeen::Absent));
         assert_eq!(snap.addresses().len(), 3);
     }
 
@@ -435,7 +437,7 @@ mod tests {
                 artifact: ArtifactKey::new(file_space(), name("t.rs")),
                 comparison: Comparison::Bytes,
             },
-            seen: SeenHash::Artifact(ArtifactState::Absent),
+            seen: SeenHash::Artifact(ArtifactSeen::Absent),
             address: None,
             moved: None,
         };

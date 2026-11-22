@@ -228,7 +228,7 @@ pub fn diff(report: &DiffReport) -> DiffOut {
 pub(super) fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
     let out = namer.item(&item.item);
     let current_hash = match &item.now {
-        ItemNow::Doc(hash) => hash.map(|h| h.to_string()),
+        ItemNow::Doc(hash) => hash.as_ref().ok().map(|h| h.to_string()),
         ItemNow::Artifact(state) => state.hash().map(ToString::to_string),
     };
     let approved_text = match &item.approved {

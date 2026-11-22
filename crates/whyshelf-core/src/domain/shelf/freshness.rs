@@ -115,7 +115,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
 
-use super::artifact::{ArtifactHash, ArtifactKey, ArtifactState, Comparison, Listings, Untold};
+use super::artifact::{
+    ArtifactHash, ArtifactKey, ArtifactSeen, ArtifactState, Comparison, Listings, Untold,
+};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
 use super::cover::{Decided, counts};
 use super::coverage::{CoverAssessment, CoverTarget, ExemptionGroup, assess as assess_cover};
@@ -1398,7 +1400,7 @@ fn valid_causes(
 /// The causes the pinned artifacts of a valid document add (rule A3), and the change
 /// of what its `Depends` links to artifacts name.
 ///
-/// Only the [`ArtifactState`] is compared: an address in a pin is never read (A4).
+/// Only the [`ArtifactSeen`] is compared: an address in a pin is never read (A4).
 /// A pin is taken by the name it is read as ([`ReadPin::read_as`]): the name it
 /// wrote, or the one a declared move took it to, with the hash and state it pinned.
 /// An artifact still named under the link it was pinned for is compared with what
@@ -1438,10 +1440,9 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &[ReadPin], found: Found<
         let Some(now) = current.get(&(pin.link(), read.read_as())) else {
             continue;
         };
-        let now = match now {
-            ArtifactState::Unknown(_) => continue,
-            ArtifactState::Present(hash) => ArtifactState::Present(*hash),
-            ArtifactState::Absent => ArtifactState::Absent,
+        // A name that cannot be told now is no cause: the notice says so.
+        let Ok(now) = now.told() else {
+            continue;
         };
         // Two hashes are compared only when they were made the same way: when an
         // artifact is there then and now and the link's declared comparison changed
@@ -1453,7 +1454,7 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &[ReadPin], found: Found<
             .map(|link| &link.kind().comparison);
         let changed_comparison = declared.filter(|d| *d != pin.comparison());
         match (pin.seen().state(), now) {
-            (ArtifactState::Present(_), ArtifactState::Present(_))
+            (ArtifactSeen::Present(_), ArtifactSeen::Present(_))
                 if changed_comparison.is_some() =>
             {
                 if let Some(declared) = changed_comparison {
@@ -1463,7 +1464,7 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &[ReadPin], found: Found<
                     });
                 }
             }
-            (ArtifactState::Present(then), ArtifactState::Present(now)) if then != now => {
+            (ArtifactSeen::Present(then), ArtifactSeen::Present(now)) if then != now => {
                 match ledger.pin_same_meaning(read, &then, &now) {
                     Some(declared) => kept.push(Notice::ArtifactSameMeaning {
                         pin: read.clone(),
@@ -1476,21 +1477,17 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &[ReadPin], found: Found<
                     }),
                 }
             }
-            (ArtifactState::Present(_), ArtifactState::Absent) => {
+            (ArtifactSeen::Present(_), ArtifactSeen::Absent) => {
                 causes.push(Cause::ArtifactGone { pin: read.clone() });
             }
-            (ArtifactState::Absent, ArtifactState::Present(now)) => {
+            (ArtifactSeen::Absent, ArtifactSeen::Present(now)) => {
                 causes.push(Cause::ArtifactArrived {
                     pin: read.clone(),
                     now,
                 });
             }
-            // A pin is never of an unknown artifact (an approval on one is refused),
-            // and one unknown now was passed over above.
-            (ArtifactState::Present(_), ArtifactState::Present(_))
-            | (ArtifactState::Absent, ArtifactState::Absent)
-            | (ArtifactState::Unknown(_), _)
-            | (_, ArtifactState::Unknown(_)) => {}
+            (ArtifactSeen::Present(_), ArtifactSeen::Present(_))
+            | (ArtifactSeen::Absent, ArtifactSeen::Absent) => {}
         }
     }
 

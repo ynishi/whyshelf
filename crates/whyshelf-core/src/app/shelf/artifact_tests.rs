@@ -174,7 +174,7 @@ fn a_test_edited_after_the_approval_makes_it_stale_and_diff_shows_both_contents(
     let subject = &diff.items[0];
     assert!(matches!(subject.item.role(), ItemRole::Subject { .. }));
     assert!(!subject.changed);
-    assert!(matches!(subject.now, ItemNow::Doc(Some(_))));
+    assert!(matches!(subject.now, ItemNow::Doc(Ok(_))));
     assert_eq!(app.ports().append_count(), 2);
 }
 

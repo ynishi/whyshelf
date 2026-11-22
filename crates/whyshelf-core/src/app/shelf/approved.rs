@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::location::RelPath;
 use crate::domain::shelf::artifact::{
-    ArtifactAsks, ArtifactReadings, ArtifactState, ContentAddress, Listings,
+    ArtifactAsks, ArtifactReadings, ArtifactSeen, ContentAddress, Listings,
 };
 use crate::domain::shelf::ledger::MovedTo;
 use crate::domain::shelf::snapshot::{
@@ -126,14 +126,14 @@ impl<P: ShelfRead> ShelfApp<P> {
                 } => {
                     let artifact = item.moved().map_or(artifact, MovedTo::artifact);
                     let state = artifacts_now.state_of(artifact, comparison);
-                    let current = match state {
-                        ArtifactState::Present(_) => self
+                    let current = match state.told() {
+                        Ok(ArtifactSeen::Present(_)) => self
                             .ports
                             .artifacts()
                             .current(artifact)
                             .await
                             .map_err(port(ShelfPort::Artifacts))?,
-                        ArtifactState::Absent | ArtifactState::Unknown(_) => None,
+                        Ok(ArtifactSeen::Absent) | Err(_) => None,
                     };
                     (ItemNow::Artifact(state), None, current)
                 }
