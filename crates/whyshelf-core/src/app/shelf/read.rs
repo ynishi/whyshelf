@@ -293,7 +293,7 @@ impl<P: ShelfRead> ShelfApp<P> {
             unneeded,
             repeated,
             awaiting,
-            same_meaning_short: loaded.ledger.same_meaning_short(),
+            same_meaning_short: loaded.ledger.same_meaning_short(&loaded.shelf),
             collisions: loaded.shelf.collisions(),
             artifacts: artifact_lists(&loaded.ledger, assessment.cover(), None),
             cover: assessment.cover().clone(),

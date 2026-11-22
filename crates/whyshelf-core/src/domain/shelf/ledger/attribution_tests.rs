@@ -8,10 +8,9 @@ use std::collections::BTreeMap;
 use crate::domain::actor::{Actor, Attribution};
 use crate::domain::canon::Canon;
 use crate::domain::error::ValueError;
-use crate::domain::hash::ContentHash;
-use crate::domain::id::DocId;
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, docid, fr, jid, ledger, shelf, sp_testing,
+    actor, admitted, approve, approve_as, asking, docid, fr, fr_titled, jid, ledger, ruled_shelf,
+    shelf, sp_testing,
 };
 use crate::domain::shelf::freshness::assess_unasked as assess;
 use crate::domain::shelf::stats;
@@ -390,28 +389,68 @@ fn no_judgement_reads_ran_by() {
 }
 
 #[test]
-fn who_ran_the_command_is_no_name_that_declared_the_edit() {
-    let id: DocId = SUBJECT.parse().unwrap();
-    let hash = |text: &str| DocHash::restore(text.parse::<ContentHash>().unwrap());
-    let edge = || SameMeaningOf::Doc {
-        id,
-        from: NonEmptySet::new(hash(EARLIER), []),
-        to: hash(SEEN),
-    };
+fn a_declaration_reads_back_with_who_ran_it() {
     let declared = written()
         .into_iter()
         .find(|one| one.name == "same_meaning")
         .unwrap();
-    let (alone, ran) = alone_and_ran_by_bot(vec![Record::from_canon(&declared.canon).unwrap()]);
+    let record = Record::from_canon(&declared.canon).unwrap();
+    let id = record.id();
+    let (alone, ran) = alone_and_ran_by_bot(vec![record]);
 
-    // The actor declared it already, with or without who ran the command.
+    let alone = alone.same_meaning(id).unwrap();
+    assert_eq!(alone.actor(), &named("Alice"));
+    assert_eq!(alone.attribution().ran_by(), None);
+    let ran = ran.same_meaning(id).unwrap();
+    assert_eq!(ran.actor(), &named("Alice"));
+    assert_eq!(ran.attribution().ran_by(), Some(&named("bot")));
+}
+
+#[test]
+fn who_ran_the_command_is_no_name_that_declared_the_edit() {
+    // A rule that asks for two names, so that one declaration leaves the edge short
+    // and the second step of `judge same` is reached.
+    let at = |title: &str| ruled_shelf(asking(2, None), vec![fr_titled(1, title, &[])]);
+    let (then, now) = (at("a"), at("b"));
+    let hash = |shelf: &Shelf| *shelf.doc(docid(1)).unwrap().hash();
+    let approval = approve_as(&then, &admitted(&then, vec![]), 1, 1001, ("ana", 10, None));
+    let edit = SameMeaningOf::Doc {
+        id: docid(1),
+        from: NonEmptySet::new(hash(&then), []),
+        to: hash(&now),
+    };
+    let declaration = |by: Attribution| {
+        Record::SameMeaning(
+            SameMeaning::new(
+                jid(2001),
+                edit.clone(),
+                by,
+                JudgedAt::new(30),
+                NonBlank::new("a typo fixed").unwrap(),
+            )
+            .unwrap(),
+        )
+    };
+    let alone = admitted(
+        &now,
+        vec![
+            approval.clone(),
+            declaration(Attribution::one(named("ana"))),
+        ],
+    );
+    let ran_by_bot = Attribution::ran_for(named("ana"), named("bot")).unwrap();
+    let ran = admitted(&now, vec![approval, declaration(ran_by_bot)]);
+
     for ledger in [&alone, &ran] {
+        let framed =
+            || frame_same_meaning(&now, ledger, SameMeaningTarget::Doc(docid(1)), None).unwrap();
+        assert_eq!(framed().of(), edit);
+        // The actor declared it already, with or without who ran the command.
         assert!(matches!(
-            ledger.not_declared_by(edge(), &named("Alice")),
+            framed().not_declared_by(&named("ana")),
             Err(SameMeaningRefusal::AlreadyDeclaredBy { .. })
         ));
+        // Who ran the command declared nothing.
+        assert_eq!(framed().not_declared_by(&named("bot")), Ok(edit.clone()));
     }
-    // Who ran the command declared nothing.
-    assert!(ran.not_declared_by(edge(), &named("bot")).is_ok());
-    assert!(alone.not_declared_by(edge(), &named("bot")).is_ok());
 }

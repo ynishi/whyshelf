@@ -100,7 +100,7 @@ pub struct BooksCheckOut {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub awaiting: Vec<AwaitingEntryOut>,
     /// The edits declared to keep the meaning by fewer different names than they
-    /// need, that a pin of an approval that stands meets: they join nothing until
+    /// need, that a pin that stale reads now meets: they join nothing until
     /// more names declare them. They leave `clean` as it is. Left out when there is
     /// none.
     #[serde(skip_serializing_if = "Vec::is_empty")]

@@ -6,7 +6,7 @@
 //! latest reading has not lapsed; an approval no rule reads needs one name; an edit
 //! is joined once two names declare it, counted per edge over every name freshness
 //! reads for a pin, with the least need of its declarations; and an edge short of
-//! names is told only where a pin of an approval that stands meets it.
+//! names is told only where a pin that stale reads now meets it.
 
 use std::slice::from_ref;
 
@@ -176,7 +176,7 @@ fn an_edit_is_joined_once_as_many_names_declare_it_as_its_rule_asks_for() {
     assert_eq!(ledger.doc_same_meaning(docid(1), &a, &b), None);
     // The approval that stands pins `a`, and meets the edge.
     assert_eq!(
-        ledger.same_meaning_short(),
+        ledger.same_meaning_short(&now),
         [short_edge(a, b, &[2001], &["ana"])]
     );
 
@@ -187,7 +187,7 @@ fn an_edit_is_joined_once_as_many_names_declare_it_as_its_rule_asks_for() {
         ledger.doc_same_meaning(docid(1), &a, &b),
         Some(NonEmptyVec::new(jid(2001), vec![jid(2003)]))
     );
-    assert!(ledger.same_meaning_short().is_empty());
+    assert!(ledger.same_meaning_short(&now).is_empty());
 
     // With no rule, one name joins it, as before, and nothing is counted.
     let plain = shelf(vec![fr_titled(1, "edited", &[])]);
@@ -196,7 +196,7 @@ fn an_edit_is_joined_once_as_many_names_declare_it_as_its_rule_asks_for() {
         ledger.doc_same_meaning(docid(1), &a, &b),
         Some(NonEmptyVec::new(jid(2001), Vec::new()))
     );
-    assert!(ledger.same_meaning_short().is_empty());
+    assert!(ledger.same_meaning_short(&plain).is_empty());
 }
 
 #[test]
@@ -210,7 +210,7 @@ fn the_names_are_counted_per_edge_not_per_way() {
     let ledger = admitted(&now, records.clone());
     assert_eq!(ledger.doc_same_meaning(docid(1), &a, &c), None);
     assert_eq!(
-        ledger.same_meaning_short(),
+        ledger.same_meaning_short(&now),
         [short_edge(a, b, &[2001], &["ana"])]
     );
 
@@ -220,7 +220,7 @@ fn the_names_are_counted_per_edge_not_per_way() {
     assert!(ledger.doc_same_meaning(docid(1), &a, &b).is_some());
     assert_eq!(ledger.doc_same_meaning(docid(1), &a, &c), None);
     assert_eq!(
-        ledger.same_meaning_short(),
+        ledger.same_meaning_short(&now),
         [short_edge(b, c, &[2002], &["bo"])]
     );
 
@@ -229,7 +229,7 @@ fn the_names_are_counted_per_edge_not_per_way() {
     let ledger = admitted(&now, records);
     let way = NonEmptyVec::new(jid(2001), vec![jid(2003), jid(2002), jid(2004)]);
     assert_eq!(ledger.doc_same_meaning(docid(1), &a, &c), Some(way));
-    assert!(ledger.same_meaning_short().is_empty());
+    assert!(ledger.same_meaning_short(&now).is_empty());
 }
 
 #[test]
@@ -248,35 +248,73 @@ fn an_edge_needs_the_least_its_declarations_need_so_a_declaration_added_takes_no
     let again = same_at(2002, "ana", (a, b), 200);
     let ledger = admitted(&now, vec![pinned, before, again]);
     assert_eq!(ledger.doc_same_meaning(docid(1), &a, &b), joined);
-    assert!(ledger.same_meaning_short().is_empty());
+    assert!(ledger.same_meaning_short(&now).is_empty());
+}
+
+/// FR-1 titled `title` and FR-2 on it, on a shelf that asks for two names.
+fn with_downstream(title: &str) -> Shelf {
+    ruled_shelf(
+        asking(2, None),
+        vec![fr_titled(1, title, &[]), fr(2, &["FR-1"])],
+    )
 }
 
 #[test]
 fn a_name_that_declared_an_edge_adds_nothing_by_declaring_it_again() {
-    let now = ruled_shelf(asking(2, None), vec![fr_titled(1, "edited", &[])]);
-    let (a, b) = (hash_titled("title"), hash_titled("edited"));
-    let c = hash_titled("c");
-    let ledger = admitted(&now, vec![same(2001, "ana", a, b)]);
+    let (a, b, c) = (hash_titled("a"), hash_titled("b"), hash_titled("c"));
+    // FR-2 pins FR-1 at `c`; FR-1's own approval, made after, saw `a`; FR-1 is `b` now.
+    let at_c = with_downstream("c");
+    let first = approve_as(&at_c, &admitted(&at_c, vec![]), 1, 1001, ("ana", 10, None));
+    let so_far = admitted(&at_c, vec![first.clone()]);
+    let downstream = approve_as(&at_c, &so_far, 2, 1002, ("ana", 10, None));
+    let at_a = with_downstream("a");
+    let so_far = admitted(&at_a, vec![first.clone(), downstream.clone()]);
+    let own = approve_as(&at_a, &so_far, 1, 1003, ("ana", 20, None));
+    // ana's a -> b is one name, short; bo's and cy's c -> a are two, and count.
+    let declared = vec![
+        same(2001, "ana", a, b),
+        same(2002, "bo", c, a),
+        same(2003, "cy", c, a),
+    ];
+    let now = with_downstream("b");
     let edit = |from: &[DocHash]| SameMeaningOf::Doc {
         id: docid(1),
         from: NonEmptySet::from_set(from.iter().copied().collect()).unwrap(),
         to: b,
     };
-    let ana = Actor::new("ana").unwrap();
+    let (ana, bo) = (Actor::new("ana").unwrap(), Actor::new("bo").unwrap());
+    let target = || SameMeaningTarget::Doc(docid(1));
+
+    let records = [
+        vec![first.clone(), downstream, own.clone()],
+        declared.clone(),
+    ]
+    .concat();
+    let ledger = admitted(&now, records);
+    assert_eq!(ledger.doc_same_meaning(docid(1), &a, &b), None);
+    assert!(ledger.doc_same_meaning(docid(1), &c, &a).is_some());
+    let framed = || frame_same_meaning(&now, &ledger, target(), None).unwrap();
+    // The own approval's `a`, and `c`, which the declarations of FR-1 join to it.
+    assert_eq!(framed().of(), edit(&[a, c]));
+    // Beside an edge ana has not declared, only that one is left.
+    assert_eq!(framed().not_declared_by(&ana), Ok(edit(&[c])));
+    // Another name's declaration is its own: bo declared c -> a, not an edge to `b`.
+    assert_eq!(framed().not_declared_by(&bo), Ok(edit(&[a, c])));
+
+    // With no approval of FR-2, `a` alone is offered.
+    let ledger = admitted(&now, [vec![first, own], declared].concat());
+    let framed = || frame_same_meaning(&now, &ledger, target(), None).unwrap();
+    assert_eq!(framed().of(), edit(&[a]));
     // The edge does not count yet, and ana declared it: it awaits another name.
     assert_eq!(
-        ledger.not_declared_by(edit(&[a]), &ana),
+        framed().not_declared_by(&ana),
         Err(SameMeaningRefusal::AlreadyDeclaredBy { actor: ana.clone() })
     );
-    // Beside an edge ana has not declared, only that one is left.
-    assert_eq!(ledger.not_declared_by(edit(&[a, c]), &ana), Ok(edit(&[c])));
-    // Another name's declaration is its own.
-    let bo = Actor::new("bo").unwrap();
-    assert_eq!(ledger.not_declared_by(edit(&[a]), &bo), Ok(edit(&[a])));
+    assert_eq!(framed().not_declared_by(&bo), Ok(edit(&[a])));
 }
 
 #[test]
-fn an_edge_no_approval_that_stands_meets_is_not_told() {
+fn an_edge_no_pin_that_stale_reads_now_meets_is_not_told() {
     let (a, b) = (hash_titled("a"), hash_titled("b"));
     let at_c = ruled_shelf(asking(2, None), vec![fr_titled(1, "c", &[])]);
     let pinned = approved_titled(asking(2, None), "a");
@@ -285,7 +323,7 @@ fn an_edge_no_approval_that_stands_meets_is_not_told() {
     let records = vec![pinned, again, same(2001, "ana", a, b)];
     let ledger = admitted(&at_c, records);
     assert_eq!(ledger.doc_same_meaning(docid(1), &a, &b), None);
-    assert!(ledger.same_meaning_short().is_empty());
+    assert!(ledger.same_meaning_short(&at_c).is_empty());
 }
 
 /// The hashes of `tests/a.rs` an approval pinned, and the one after the edit.
@@ -318,6 +356,15 @@ fn moved_spec() -> (Shelf, Vec<Record>) {
     (then, vec![finding, spec, moved])
 }
 
+/// The shelf after [`moved_spec`]: SP-2's `tests` writes `tests/b.rs`, which holds `two`.
+fn moved_now() -> Shelf {
+    ruled_shelf_with(
+        asking(2, None),
+        vec![fr(1, &[]), sp_testing(2, &["FR-1"], &["tests/b.rs"])],
+        &[("tests/b.rs", one_two().1)],
+    )
+}
+
 /// The edit of the artifact at the name `at` from `one` to `two`.
 fn artifact_edit(at: &str) -> SameMeaningOf {
     let (one, two) = one_two();
@@ -344,42 +391,54 @@ fn artifact_same(judgement: u128, by: &str, at: &str) -> Record {
 
 #[test]
 fn a_name_that_declared_an_artifact_edit_under_its_old_name_adds_nothing_under_the_new() {
-    let (then, mut records) = moved_spec();
+    let (_, mut records) = moved_spec();
     records.push(artifact_same(2001, "ana", "tests/a.rs"));
-    let ledger = admitted(&then, records);
+    let now = moved_now();
+    let ledger = admitted(&now, records);
+    let framed = || {
+        frame_same_meaning(
+            &now,
+            &ledger,
+            SameMeaningTarget::Artifact(name("tests/b.rs")),
+            None,
+        )
+        .unwrap()
+    };
+    let edit = artifact_edit("tests/b.rs");
+    assert_eq!(framed().of(), edit);
     // ana declares the same edit under the name the file moved to: the names of the
     // way are one thing, as counting reads them.
     let ana = Actor::new("ana").unwrap();
     assert_eq!(
-        ledger.not_declared_by(artifact_edit("tests/b.rs"), &ana),
+        framed().not_declared_by(&ana),
         Err(SameMeaningRefusal::AlreadyDeclaredBy { actor: ana })
     );
     let bo = Actor::new("bo").unwrap();
-    let edit = artifact_edit("tests/b.rs");
-    assert_eq!(ledger.not_declared_by(edit.clone(), &bo), Ok(edit));
+    assert_eq!(framed().not_declared_by(&bo), Ok(edit));
 }
 
 #[test]
 fn an_artifact_edge_is_counted_over_every_name_of_the_pins_way_as_freshness_reads_it() {
     let (one, two) = one_two();
-    let (then, mut records) = moved_spec();
+    let (_, mut records) = moved_spec();
+    let now = moved_now();
     // ana declares the edit under the old name, bo under the new one.
     let of = artifact_same;
     records.push(of(2001, "ana", "tests/a.rs"));
 
     // ana's alone is short, and the pin meets it.
-    let ledger = admitted(&then, records.clone());
-    let [found] = ledger.same_meaning_short().try_into().unwrap();
+    let ledger = admitted(&now, records.clone());
+    let [found] = ledger.same_meaning_short(&now).try_into().unwrap();
     assert_eq!(found.declared, NonEmptyVec::new(jid(2001), Vec::new()));
 
     // With bo's under the new name, the two are one edge of two names, as freshness
     // reads the pin: it is joined, and not told.
     let both = [records, vec![of(2002, "bo", "tests/b.rs")]].concat();
-    let ledger = admitted(&then, both);
+    let ledger = admitted(&now, both);
     let pin = read_pins(&ledger, docid(2)).remove(0);
     assert_eq!(
         ledger.pin_same_meaning(&pin, &one, &two),
         Some(NonEmptyVec::new(jid(2001), vec![jid(2002)]))
     );
-    assert!(ledger.same_meaning_short().is_empty());
+    assert!(ledger.same_meaning_short(&now).is_empty());
 }

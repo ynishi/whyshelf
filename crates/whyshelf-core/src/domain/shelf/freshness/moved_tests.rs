@@ -183,7 +183,8 @@ fn an_edit_with_a_move_can_be_declared_to_keep_the_meaning_at_the_new_name() {
         SameMeaningTarget::Artifact(name("tests/b.rs")),
         None,
     )
-    .unwrap();
+    .unwrap()
+    .of();
     assert!(
         matches!(&of, SameMeaningOf::Artifact { artifact, .. } if *artifact == file_artifact("tests/b.rs"))
     );
