@@ -287,6 +287,14 @@ and this project adheres to
 
 ### Changed
 
+- What an approval can pin of an artifact is told apart from a name that cannot
+  be told in one place, and a snapshot keeps a document that cannot be told apart
+  from one that is gone (#152). No answer, JSON or stored record changes. In the
+  library, `ArtifactSeen` (there or absent) is new: `PinnedArtifact::state` returns
+  it and `SeenHash::Artifact` holds it, so a pin cannot hold "cannot tell";
+  `ItemNow::Doc` holds `Result<DocHash, FailureTag>` in place of an `Option`, so a
+  document that cannot be told is no longer read as gone.
+
 - Who writes a key is read in one way (#117). A file whose `key:` reads in the
   book's grammar is a writer of that key whether or not its `id:` can be read, for
   the next key, for what `check` says of a key written twice, and for a link
