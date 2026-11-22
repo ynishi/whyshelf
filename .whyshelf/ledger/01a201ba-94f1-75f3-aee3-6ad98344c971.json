@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795325334713,
+  "expires": null,
+  "frame": [],
+  "id": "01a201ba-94f1-75f3-aee3-6ad98344c971",
+  "kind": "decision",
+  "reason": "Reviewed for #150: the design passed an independent Design Review; code review (high; no correctness bug, three cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no correctness bug, its must-fix book sentences (DEC-15, DEC-97) and should-fix doc rows fixed; the new e2e words test is its own verification by method. cargo fmt, clippy, doc and test pass with two jobs, and every reading of an upstream answers as before.",
+  "revision": "db691d1bc307b726e1e019edbbc0909f24d2ef3a",
+  "seen": "sha256:30a65a75abbb7fa253c92c944b0ae81fbacf11feb83f4014c340d4e08d91ecb4",
+  "seen_address": "b937cb0a85f1922b8ec00a98796279badaf948cd",
+  "subject": "01a2018b-4b21-7360-8455-f8569d780138",
+  "v": 1,
+  "verb": "approve"
+}

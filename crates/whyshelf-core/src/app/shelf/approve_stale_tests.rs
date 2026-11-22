@@ -380,6 +380,49 @@ fn a_stale_approval_on_a_deprecated_upstream_is_refused_and_the_rest_is_written(
 }
 
 #[test]
+fn an_upstream_the_frame_refuses_does_not_end_the_search_for_one_that_holds_back() {
+    // FR-2 stands on FR-1 and then on FR-5, in that order. FR-1 is deprecated with a
+    // successor, so the frame would refuse an approval on it, and a run holds nothing
+    // back for that; the next link, to FR-5, which is pending and not in the run,
+    // holds FR-2 back all the same. The links are read in order and the first that
+    // holds back answers, whatever a link before it is.
+    let fake = FakeShelf::new().with_files(vec![
+        fr(1, "old", &[]),
+        fr(2, "on both", &["FR-1", "FR-5"]),
+        file(
+            "findings/fr-3.md",
+            3,
+            "FR-3",
+            "new",
+            &[("supersedes", &["FR-1"])],
+        ),
+        fr(5, "undecided", &[]),
+    ]);
+    fake.decls.lock().unwrap()[0]
+        .links
+        .push(super::fake_tests::link(
+            "supersedes",
+            "finding",
+            crate::domain::shelf::schema::Propagation::Replaces,
+        ));
+    let mut app = ShelfApp::new(fake);
+    block_on(app.judge_all(vec![approve("FR-1", None), approve("FR-2", None)])).unwrap();
+    block_on(app.judge(JudgeRequest {
+        judgement: Judgement::Deprecate {
+            successor: None,
+            reason: None,
+        },
+        reference: "FR-1".parse().unwrap(),
+        by: Default::default(),
+    }))
+    .unwrap();
+
+    let done = again(&mut app).unwrap();
+    assert!(done.judged.is_empty());
+    assert_eq!(held_of(&done, 2), (docid(5), Hold::Pending));
+}
+
+#[test]
 fn a_stale_approval_on_a_pending_upstream_is_left_out_until_that_is_approved() {
     let mut app = ShelfApp::new(FakeShelf::new().with_files(vec![
         fr(1, "slow", &[]),

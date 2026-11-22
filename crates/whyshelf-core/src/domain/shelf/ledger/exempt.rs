@@ -1,22 +1,23 @@
 //! Declarations that a document or an artifact is not expected to be reached by one
 //! covering link: [`Exempt`], the record.
 //!
-//! A link declared with `cover` expects every pending or approved document of its
-//! target book to be reached by it ([`LinkKind::cover`]), and a link to artifacts
-//! with `cover` expects every name of its space its selection takes
-//! ([`ArtifactLinkKind::cover`]). A person may say, for one document or one name and
-//! one such link, that it is meant to stay unreached, and why (a finding kept on
-//! purpose that grounds no requirement). The rule stays declared for the whole book;
-//! the exception is a record of its own, by an actor, at a time, for a reason, read
-//! on every assessment like every other record ([`Ledger::exemptions`]), and
-//! withdrawn by a [`Revocation`](super::Revocation), as a decision is. Its canonical
-//! form is the ledger's, beside the other records': the subject is a text (the
-//! identity of a document) or a map of the space and the name (an artifact).
+//! A link declared with `cover` expects every document of its target book that no
+//! decision went against ([`NotStanding`]) to be reached by it ([`LinkKind::cover`]),
+//! and a link to artifacts with `cover` expects every name of its space its selection
+//! takes ([`ArtifactLinkKind::cover`]). A person may say, for one document or one
+//! name and one such link, that it is meant to stay unreached, and why (a finding
+//! kept on purpose that grounds no requirement). The rule stays declared for the
+//! whole book; the exception is a record of its own, by an actor, at a time, for a
+//! reason, read on every assessment like every other record ([`Ledger::exemptions`]),
+//! and withdrawn by a [`Revocation`](super::Revocation), as a decision is. Its
+//! canonical form is the ledger's, beside the other records': the subject is a text
+//! (the identity of a document) or a map of the space and the name (an artifact).
 //!
 //! What an exemption may be made of, and how one reads now, is the module
 //! [`exemption`](super::super::exemption): it reads both the ledger and the
 //! documents, so it is above both, and the ledger knows nothing of it.
 //!
+//! [`NotStanding`]: super::NotStanding
 //! [`LinkKind::cover`]: super::super::schema::LinkKind::cover
 //! [`ArtifactLinkKind::cover`]: super::super::schema::ArtifactLinkKind::cover
 //! [`Ledger::exemptions`]: super::Ledger::exemptions

@@ -259,7 +259,10 @@ fn a_kind_the_rule_neither_names_nor_defaults_is_open() {
     assert!(ledger.problems().is_empty());
     assert!(matches!(
         ledger.status_of(docid(1)),
-        DeclaredStatus::Denied { .. }
+        DeclaredStatus::Against {
+            status: NotStanding::Denied,
+            ..
+        }
     ));
 }
 

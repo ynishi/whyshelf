@@ -535,9 +535,10 @@ pub enum UnlinkedReport {
     /// The declaration is sound; the documents and the ledger were read.
     Answered {
         /// The documents that [stand](crate::domain::shelf::freshness::Standing::stands):
-        /// pending or approved.
+        /// those no decision went against.
         standing: UnlinkedLists,
-        /// The documents decided against (denied, deprecated, retired), apart, so
+        /// The documents decided against
+        /// ([`NotStanding`](crate::domain::shelf::ledger::NotStanding)), apart, so
         /// that they do not crowd out the ones that stand.
         decided_against: UnlinkedLists,
         /// The keys of the valid documents.

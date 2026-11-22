@@ -4,7 +4,7 @@ key: "DEC-65"
 issues: ["#78"]
 rejected: ["Accept an exemption that is unneeded at once: it adds nothing to the ledger, as an approval that repeats does not (DEC-58)", "Write an exemption as a field of the document: a document cannot speak for a person's decision about it (REQ-9)"]
 related: ["DEC-23", "DEC-50", "DEC-9", "DEC-59"]
-rustdoc: ["whyshelf_core::domain::shelf::exemption::exemption_reading", "whyshelf_core::domain::shelf::exemption::frame_exempt", "whyshelf_core::domain::shelf::exemption::cover_of", "whyshelf_core::domain::shelf::exemption::Unneeded", "whyshelf_core::domain::shelf::cover::covering_reach", "whyshelf_core::domain::shelf::cover::counts", "whyshelf_core::app::shelf::ShelfApp::exempt"]
+rustdoc: ["whyshelf_core::domain::shelf::exemption::exemption_reading", "whyshelf_core::domain::shelf::exemption::frame_exempt", "whyshelf_core::domain::shelf::exemption::cover_of", "whyshelf_core::domain::shelf::exemption::Unneeded", "whyshelf_core::domain::shelf::ledger::NotStanding", "whyshelf_core::app::shelf::ShelfApp::exempt"]
 serves: ["REQ-28", "REQ-12", "REQ-9"]
 title: "judge exempt records an exemption of one document from one covering link, read by one rule beside the cover"
 ---

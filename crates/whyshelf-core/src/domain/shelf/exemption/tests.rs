@@ -106,7 +106,7 @@ fn what_counts_is_one_statement_for_the_ledger_and_the_standing() {
         for n in [1, 2] {
             assert_eq!(
                 assessment.standing_of(docid(n)).stands(),
-                counts(Decided::from(&l.status_of(docid(n)))),
+                crate::domain::shelf::cover::counts(decided_of(&l, docid(n))),
                 "{n}"
             );
         }
@@ -363,10 +363,10 @@ fn a_reaching_document_denied_deprecated_or_invalid_reaches_nothing() {
 #[test]
 fn an_exemption_of_a_document_decided_against_is_refused() {
     let shelf = alone();
-    for decided in [
-        deny(&shelf, 1, 1001, 10),
-        deprecate(&shelf, 1, 1001, 10),
-        retire(&shelf, 1, 1001, 10),
+    for (decided, status) in [
+        (deny(&shelf, 1, 1001, 10), NotStanding::Denied),
+        (deprecate(&shelf, 1, 1001, 10), NotStanding::Deprecated),
+        (retire(&shelf, 1, 1001, 10), NotStanding::Retired),
     ] {
         let refused = frame(&shelf, &ledger(vec![decided]), 1, "spec", "grounds");
         assert_eq!(
@@ -374,6 +374,7 @@ fn an_exemption_of_a_document_decided_against_is_refused() {
             Err(ExemptRefusal::DecidedAgainst {
                 id: docid(1),
                 key: shelf.doc(docid(1)).map(|d| d.key().clone()),
+                status,
             })
         );
         // Named by its key, as the other messages name a document.

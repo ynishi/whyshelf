@@ -6,7 +6,7 @@
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::build::DocReading;
 use crate::domain::shelf::freshness::Successors;
-use crate::domain::shelf::ledger::{DeclaredStatus, Record};
+use crate::domain::shelf::ledger::{DeclaredStatus, NotStanding, Record};
 use crate::domain::shelf::lookup::Reference;
 
 use super::fake_tests::{FakeShelf, block_on, docid, file, sp};
@@ -75,7 +75,10 @@ fn a_deprecation_naming_a_successor_is_written_and_says_its_successors() {
     );
     assert!(matches!(
         ledger.status_of(docid(1)),
-        DeclaredStatus::Deprecated { .. }
+        DeclaredStatus::Against {
+            status: NotStanding::Deprecated,
+            ..
+        }
     ));
 }
 

@@ -309,9 +309,9 @@ fn a_downstream_of_a_document_whose_artifact_changed_is_stale_through_it() {
     let now = design(&[("tests/a.rs", Some(h("b")))]);
     let causes = causes_of(&assess(&now, &records, JudgedAt::new(100)), 3);
     assert!(
-        causes
-            .iter()
-            .any(|c| matches!(c, Cause::Via { pin, severity: Severity::Stale } if pin.target() == docid(2))),
+        causes.iter().any(
+            |c| matches!(c, Cause::Via { pin, carried: Carried::Stale } if pin.target() == docid(2))
+        ),
         "{causes:?}"
     );
 }

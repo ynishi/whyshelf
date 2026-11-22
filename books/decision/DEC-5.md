@@ -8,4 +8,4 @@ rustdoc: ["whyshelf_core::domain::shelf::ledger::frame_approve", "whyshelf_core:
 serves: ["REQ-2", "REQ-3"]
 title: "An approval cannot stand on an upstream that people decided does not stand"
 ---
-What a decision already says about an upstream (denied, deprecated, retired) refuses an approval that pins it; a deprecated upstream is to be replaced, so the person links to its successor instead and approves on that. How the upstream stands now (only pending, or approved and itself degraded) does not refuse, since it can change without a decision about this document; freshness says it.
+What a decision already says against an upstream (NotStanding, read once from the record, DEC-97) refuses an approval that pins it; a deprecated upstream is to be replaced, so the person links to its successor instead and approves on that. How the upstream stands now (only pending, or approved and itself degraded) does not refuse, since it can change without a decision about this document; freshness says it.

@@ -119,14 +119,14 @@ use super::artifact::{
     ArtifactHash, ArtifactKey, ArtifactSeen, ArtifactState, Comparison, Listings, Untold,
 };
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
-use super::cover::{Decided, counts};
+use super::cover::{Decided, counts, decided_of};
 use super::coverage::{CoverAssessment, CoverTarget, ExemptionGroup, assess as assess_cover};
 use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
 use super::exemption::{ExemptionReading, Unneeded};
 use super::graph::{Cycle, CycleId};
 use super::ledger::{
-    DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, Quorum, ReadBy,
-    ReadPin, Reading,
+    DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, NotStanding, Quorum,
+    ReadBy, ReadPin, Reading,
 };
 use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
 
@@ -143,20 +143,15 @@ impl Successors {
     /// The successors of `id`.
     ///
     /// The one place a successor is decided: a document that [`Shelf::replacers_of`]
-    /// names, and that is pending or approved. A denied, retired or deprecated one is
-    /// not counted, and the chain is not followed (a successor that is itself
-    /// deprecated has none of its own counted here). It depends on declared statuses
-    /// only, so no order of travel and no cycle can change it.
+    /// names, and that no decision went against ([`NotStanding`]). One that was is not
+    /// counted, and the chain is not followed (a successor that is itself deprecated
+    /// has none of its own counted here). It depends on declared statuses only, so no
+    /// order of travel and no cycle can change it.
     pub fn of(shelf: &Shelf, ledger: &Ledger, id: DocId) -> Self {
         let candidates: Vec<DocId> = shelf
             .replacers_of(id)
             .into_iter()
-            .filter(|c| {
-                matches!(
-                    ledger.status_of(*c),
-                    DeclaredStatus::Pending | DeclaredStatus::Approved { .. }
-                )
-            })
+            .filter(|c| counts(decided_of(ledger, *c)))
             .collect();
         match NonEmptyVec::from_vec(candidates) {
             Ok(successors) => Self::Some(successors),
@@ -177,23 +172,120 @@ pub enum Severity {
 }
 
 /// The status of an upstream, when it does not stand as a settled approval.
+///
+/// The two groups a person can tell apart in what they do about it: no approval of it
+/// stands ([`Unapproved`]), or one does and awaits other names ([`UpstreamStatus::Unseconded`]).
+/// Each [`Cause::UpstreamDeclared`] of one is an event ([`Cause::located`]) and a
+/// strength ([`Cause::severity`]), one for one with the variants here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpstreamStatus {
-    /// No decision stands about it.
-    Pending,
+    /// No approval of it stands.
+    Unapproved(Unapproved),
     /// Its approval stands with fewer different names than the rule of who may decide
     /// asks for ([`Quorum::Short`]), at any freshness, an expired one included: it
     /// awaits the approvals of other names, and what stands on it waits with it.
     Unseconded,
+}
+
+/// Why no approval of an upstream stands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Unapproved {
+    /// No decision stands about it.
+    Pending,
+    /// It was deprecated, and these take its place: what stands on it is to move to
+    /// them.
+    Superseded {
+        /// The successors.
+        successors: NonEmptyVec<DocId>,
+    },
+    /// It was decided against with nothing in its place.
+    Refused(Refused),
+}
+
+/// How an upstream was decided against with nothing in its place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refused {
     /// It was denied.
     Denied,
     /// It was retired.
     Retired,
-    /// It was deprecated, and these take its place.
-    Deprecated {
-        /// The successors, if any.
-        successors: Successors,
+    /// It was deprecated, and nothing takes its place.
+    Unreplaced,
+}
+
+/// The degradation of a pinned upstream's approval that passes to what stands on it:
+/// that it is stale or broken. An approval that only expired passes none, so there is
+/// no value of it here ([`Cause::Via`] holds one of these, never an expiry).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Carried {
+    /// The upstream's approval is stale.
+    Stale,
+    /// The upstream's approval is broken.
+    Broken,
+}
+
+impl From<Carried> for Severity {
+    fn from(carried: Carried) -> Self {
+        match carried {
+            Carried::Stale => Severity::Stale,
+            Carried::Broken => Severity::Broken,
+        }
+    }
+}
+
+/// What the standing of a pinned upstream is to an approval that stands on it: read
+/// from the upstream alone, by [`UpstreamReading::of`], the one place it is made. What
+/// the cause of the approval says of it ([`standing_cause`], with the one condition of
+/// a cycle) and what holds a run back ([`held_back`](super::order::held_back)) are
+/// read from it.
+///
+/// An approval is not [`Unapproved`], and so has no group of that kind to carry, and an
+/// upstream with no approval carries no degradation: the type holds no such pair.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum UpstreamReading {
+    /// No approval of it stands.
+    Unapproved(Unapproved),
+    /// An approval of it stands.
+    Approval {
+        /// Whether its quorum is short ([`Quorum::Short`]), at any freshness.
+        awaiting: bool,
+        /// What of its degradation passes to what stands on it, if any.
+        carried: Option<Carried>,
     },
+}
+
+impl UpstreamReading {
+    /// What `standing`, of an upstream, is to what stands on it.
+    pub(super) fn of(standing: &Standing) -> Self {
+        match standing {
+            Standing::Pending => Self::Unapproved(Unapproved::Pending),
+            Standing::Against(Against::Denied) => {
+                Self::Unapproved(Unapproved::Refused(Refused::Denied))
+            }
+            Standing::Against(Against::Retired) => {
+                Self::Unapproved(Unapproved::Refused(Refused::Retired))
+            }
+            Standing::Against(Against::Deprecated { successors }) => match successors {
+                Successors::Some(successors) => Self::Unapproved(Unapproved::Superseded {
+                    successors: successors.clone(),
+                }),
+                Successors::None => Self::Unapproved(Unapproved::Refused(Refused::Unreplaced)),
+            },
+            Standing::Approved {
+                freshness, quorum, ..
+            } => Self::Approval {
+                awaiting: matches!(quorum, Quorum::Short { .. }),
+                carried: match freshness {
+                    Freshness::Fresh => None,
+                    Freshness::Degraded(degradation) => match degradation.level() {
+                        Severity::Expired => None,
+                        Severity::Stale => Some(Carried::Stale),
+                        Severity::Broken => Some(Carried::Broken),
+                    },
+                },
+            },
+        }
+    }
 }
 
 /// One fact that makes an approval not hold.
@@ -235,8 +327,8 @@ pub enum Cause {
     Via {
         /// The pin.
         pin: FramePin,
-        /// How strong the upstream's level is, which this takes.
-        severity: Severity,
+        /// What of the upstream's degradation this takes.
+        carried: Carried,
     },
     /// What a `Depends` link names now is not what the approval pinned for it.
     LinksChanged {
@@ -342,7 +434,7 @@ pub enum OriginEvent {
     /// [`Cause::ArtifactMoved`].
     LinkBehindMove,
     /// A pinned upstream has no decision: [`Cause::UpstreamDeclared`] of
-    /// [`UpstreamStatus::Pending`].
+    /// [`Unapproved::Pending`].
     UpstreamPending,
     /// A pinned upstream's approval awaits the approvals of other names:
     /// [`Cause::UpstreamDeclared`] of [`UpstreamStatus::Unseconded`]. Only a name
@@ -350,11 +442,10 @@ pub enum OriginEvent {
     /// reading.
     UpstreamAwaiting,
     /// A pinned upstream was deprecated and others take its place:
-    /// [`Cause::UpstreamDeclared`] of [`UpstreamStatus::Deprecated`] with successors.
+    /// [`Cause::UpstreamDeclared`] of [`Unapproved::Superseded`].
     UpstreamSuperseded,
     /// A pinned upstream was decided against with nothing in its place:
-    /// [`Cause::UpstreamDeclared`] of [`UpstreamStatus::Denied`],
-    /// [`UpstreamStatus::Retired`], or [`UpstreamStatus::Deprecated`] with none.
+    /// [`Cause::UpstreamDeclared`] of [`Unapproved::Refused`].
     UpstreamRefused,
     /// A document is no valid document now: [`Cause::SelfNotValid`],
     /// [`Cause::UpstreamNotValid`].
@@ -372,9 +463,8 @@ impl Cause {
     ///
     /// The one match over the kinds of cause for both answers, so that the origin a
     /// cause is under and the event it is cannot come apart: a new kind of cause is
-    /// not built until it says both. An `UpstreamDeclared` is split by its
-    /// [`UpstreamStatus`] as [`Cause::severity`] splits it, and its successors are
-    /// read the same way.
+    /// not built until it says both. An `UpstreamDeclared` is one event for each
+    /// variant of its [`UpstreamStatus`] and of the [`Unapproved`] in it.
     pub fn located(&self, holder: DocId) -> Option<(Origin, OriginEvent)> {
         match self {
             Self::Via { .. } => None,
@@ -394,16 +484,14 @@ impl Cause {
             Self::UpstreamDeclared { pin, status } => Some((
                 Origin::Doc(pin.target()),
                 match status {
-                    UpstreamStatus::Pending => OriginEvent::UpstreamPending,
+                    UpstreamStatus::Unapproved(Unapproved::Pending) => OriginEvent::UpstreamPending,
                     UpstreamStatus::Unseconded => OriginEvent::UpstreamAwaiting,
-                    UpstreamStatus::Deprecated {
-                        successors: Successors::Some(_),
-                    } => OriginEvent::UpstreamSuperseded,
-                    UpstreamStatus::Denied
-                    | UpstreamStatus::Retired
-                    | UpstreamStatus::Deprecated {
-                        successors: Successors::None,
-                    } => OriginEvent::UpstreamRefused,
+                    UpstreamStatus::Unapproved(Unapproved::Superseded { .. }) => {
+                        OriginEvent::UpstreamSuperseded
+                    }
+                    UpstreamStatus::Unapproved(Unapproved::Refused(_)) => {
+                        OriginEvent::UpstreamRefused
+                    }
                 },
             )),
             // The name the pin is read as: an edit after a move is of the new name,
@@ -439,9 +527,9 @@ impl Cause {
     /// | `SelfChanged`, `UpstreamChanged` | `Stale` |
     /// | `SelfNotValid` (invalid, gone or unknown) | `Broken` |
     /// | `UpstreamNotValid` (invalid, gone or unknown) | `Broken` |
-    /// | `UpstreamDeclared` of `Pending` or `Unseconded`, or of `Deprecated` with successors | `Stale` |
-    /// | `UpstreamDeclared` of `Denied`, `Retired`, or of `Deprecated` with none | `Broken` |
-    /// | `Via` | the strength it carries (`Stale` or `Broken`; an upstream that is only `Expired` makes no `Via`) |
+    /// | `UpstreamDeclared` of `Unseconded`, or of `Unapproved` as `Pending` or `Superseded` | `Stale` |
+    /// | `UpstreamDeclared` of `Unapproved` as `Refused` | `Broken` |
+    /// | `Via` | the strength of the [`Carried`] it holds (`Stale` or `Broken`; an upstream that is only `Expired` carries nothing, so makes no `Via`) |
     /// | `LinksChanged` | `Broken` when some key cannot be followed, otherwise `Stale` |
     /// | `ArtifactChanged`, `ArtifactArrived`, `ArtifactComparisonChanged`, `ArtifactLinksChanged`, `ArtifactMoved` | `Stale` |
     /// | `ArtifactGone` | `Broken` |
@@ -464,18 +552,13 @@ impl Cause {
                 Severity::Broken
             }
             Self::UpstreamDeclared { status, .. } => match status {
-                UpstreamStatus::Pending
-                | UpstreamStatus::Unseconded
-                | UpstreamStatus::Deprecated {
-                    successors: Successors::Some(_),
-                } => Severity::Stale,
-                UpstreamStatus::Denied
-                | UpstreamStatus::Retired
-                | UpstreamStatus::Deprecated {
-                    successors: Successors::None,
-                } => Severity::Broken,
+                UpstreamStatus::Unseconded
+                | UpstreamStatus::Unapproved(Unapproved::Pending | Unapproved::Superseded { .. }) => {
+                    Severity::Stale
+                }
+                UpstreamStatus::Unapproved(Unapproved::Refused(_)) => Severity::Broken,
             },
-            Self::Via { severity, .. } => *severity,
+            Self::Via { carried, .. } => (*carried).into(),
             Self::LinksChanged { unresolved, .. } => {
                 if unresolved.is_empty() {
                     Severity::Stale
@@ -585,15 +668,9 @@ pub enum FreshnessLevel {
 pub enum Standing {
     /// No decision stands.
     Pending,
-    /// Denied.
-    Denied,
-    /// Deprecated, with its successors.
-    Deprecated {
-        /// The documents that take its place.
-        successors: Successors,
-    },
-    /// Retired.
-    Retired,
+    /// A decision against it stands ([`NotStanding`] names them; [`Against`] adds the
+    /// successors of a deprecated one).
+    Against(Against),
     /// Approved: whether it holds, and whether as many names read it as the rule
     /// asks for, two facts apart (the module page says why), and which names do.
     Approved {
@@ -607,10 +684,38 @@ pub enum Standing {
     },
 }
 
+/// A decision against a document that stands, as [`Standing`] has it: the
+/// [`NotStanding`] of it, and for a deprecated document its successors, which only that
+/// decision has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Against {
+    /// Denied.
+    Denied,
+    /// Deprecated, with its successors.
+    Deprecated {
+        /// The documents that take its place.
+        successors: Successors,
+    },
+    /// Retired.
+    Retired,
+}
+
+impl Against {
+    /// Which decision against the document this is, without what only some carry: the
+    /// one place a standing is turned back to a [`NotStanding`].
+    pub fn status(&self) -> NotStanding {
+        match self {
+            Self::Denied => NotStanding::Denied,
+            Self::Deprecated { .. } => NotStanding::Deprecated,
+            Self::Retired => NotStanding::Retired,
+        }
+    }
+}
+
 impl Standing {
-    /// Whether no decision went against it: pending, or approved at any freshness.
-    /// Denied, deprecated and retired are decided against. It is
-    /// [`counts`] of the standing, the one statement of it.
+    /// Whether no decision went against it ([`NotStanding`]): pending, or approved at
+    /// any freshness. The statement coverage reads of what the ledger declares, read
+    /// of the standing, not a second one.
     pub fn stands(&self) -> bool {
         counts(Decided::from(self))
     }
@@ -623,9 +728,7 @@ impl Standing {
     pub fn kind(&self) -> StandingKind {
         match self {
             Self::Pending => StandingKind::Pending,
-            Self::Denied => StandingKind::Denied,
-            Self::Deprecated { .. } => StandingKind::Deprecated,
-            Self::Retired => StandingKind::Retired,
+            Self::Against(against) => against.status().into(),
             Self::Approved {
                 freshness: Freshness::Fresh,
                 quorum: Quorum::Short { .. },
@@ -639,7 +742,7 @@ impl Standing {
     pub fn freshness(&self) -> Option<&Freshness> {
         match self {
             Self::Approved { freshness, .. } => Some(freshness),
-            Self::Pending | Self::Denied | Self::Deprecated { .. } | Self::Retired => None,
+            Self::Pending | Self::Against(_) => None,
         }
     }
 
@@ -647,7 +750,7 @@ impl Standing {
     pub fn quorum(&self) -> Option<&Quorum> {
         match self {
             Self::Approved { quorum, .. } => Some(quorum),
-            Self::Pending | Self::Denied | Self::Deprecated { .. } | Self::Retired => None,
+            Self::Pending | Self::Against(_) => None,
         }
     }
 
@@ -656,7 +759,7 @@ impl Standing {
     pub fn read_by(&self) -> Option<&ReadBy> {
         match self {
             Self::Approved { read_by, .. } => Some(read_by),
-            Self::Pending | Self::Denied | Self::Deprecated { .. } | Self::Retired => None,
+            Self::Pending | Self::Against(_) => None,
         }
     }
 }
@@ -694,9 +797,7 @@ impl From<&Standing> for Decided {
         match standing {
             Standing::Pending => Self::Pending,
             Standing::Approved { .. } => Self::Approved,
-            Standing::Denied => Self::Denied,
-            Standing::Deprecated { .. } => Self::Deprecated,
-            Standing::Retired => Self::Retired,
+            Standing::Against(against) => Self::Against(against.status()),
         }
     }
 }
@@ -717,6 +818,19 @@ pub enum StandingKind {
     Retired,
     /// Approved, at this level.
     Approved(FreshnessLevel),
+}
+
+impl From<NotStanding> for StandingKind {
+    /// The kind of a standing decided against, which the decision alone says: the one
+    /// place a [`NotStanding`] is turned to a kind, for a standing and for a declared
+    /// status alike.
+    fn from(status: NotStanding) -> Self {
+        match status {
+            NotStanding::Denied => Self::Denied,
+            NotStanding::Deprecated => Self::Deprecated,
+            NotStanding::Retired => Self::Retired,
+        }
+    }
 }
 
 impl StandingKind {
@@ -1257,11 +1371,17 @@ fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
         let mut kept = Vec::new();
         let standing = match &status {
             DeclaredStatus::Pending => Standing::Pending,
-            DeclaredStatus::Denied { .. } => Standing::Denied,
-            DeclaredStatus::Deprecated { .. } => Standing::Deprecated {
-                successors: Successors::of(cx.shelf, ledger, id),
-            },
-            DeclaredStatus::Retired { .. } => Standing::Retired,
+            // The one carrying of a decision against to the standing: which one is
+            // read already, and only a deprecated document has successors.
+            DeclaredStatus::Against {
+                status: against, ..
+            } => Standing::Against(match against {
+                NotStanding::Denied => Against::Denied,
+                NotStanding::Deprecated => Against::Deprecated {
+                    successors: Successors::of(cx.shelf, ledger, id),
+                },
+                NotStanding::Retired => Against::Retired,
+            }),
             DeclaredStatus::Approved {
                 seen,
                 frame,
@@ -1573,36 +1693,32 @@ fn pin_causes<'p>(
     }
 }
 
-/// What the standing of a pinned upstream makes of an approval: its declared status
-/// when that is not an approval; for an approval, [`UpstreamStatus::Unseconded`]
-/// when its quorum is short, at any freshness, and a `Via` when it is itself stale or
-/// broken (not across a cycle both are in, where no `Via` passes), each that applies.
+/// What the standing of a pinned upstream makes of an approval, as
+/// [`UpstreamReading::of`] reads it: the group an upstream with no approval is in; for
+/// an approval, [`UpstreamStatus::Unseconded`] when its quorum is short, at any
+/// freshness, and a `Via` of what it carries when it is itself stale or broken (not
+/// across a cycle both are in, where no `Via` passes: the one condition of the
+/// relation this adds), each that applies.
 fn standing_cause(pin: &FramePin, upstream: Option<&Standing>, same_cycle: bool) -> Vec<Cause> {
     let declared = |status| Cause::UpstreamDeclared {
         pin: pin.clone(),
         status,
     };
-    match upstream {
-        Some(Standing::Pending) => vec![declared(UpstreamStatus::Pending)],
-        Some(Standing::Denied) => vec![declared(UpstreamStatus::Denied)],
-        Some(Standing::Retired) => vec![declared(UpstreamStatus::Retired)],
-        Some(Standing::Deprecated { successors }) => vec![declared(UpstreamStatus::Deprecated {
-            successors: successors.clone(),
-        })],
-        Some(Standing::Approved {
-            freshness, quorum, ..
-        }) => {
+    match upstream.map(UpstreamReading::of) {
+        Some(UpstreamReading::Unapproved(unapproved)) => {
+            vec![declared(UpstreamStatus::Unapproved(unapproved))]
+        }
+        Some(UpstreamReading::Approval { awaiting, carried }) => {
             let mut causes = Vec::new();
-            if let Quorum::Short { .. } = quorum {
+            if awaiting {
                 causes.push(declared(UpstreamStatus::Unseconded));
             }
-            if let Freshness::Degraded(degradation) = freshness
-                && degradation.level() >= Severity::Stale
+            if let Some(carried) = carried
                 && !same_cycle
             {
                 causes.push(Cause::Via {
                     pin: pin.clone(),
-                    severity: degradation.level(),
+                    carried,
                 });
             }
             causes
@@ -1720,7 +1836,7 @@ fn already_said(unresolved: &UnresolvedLink, lost_here: &[(&FramePin, FailureTag
 }
 
 /// Whether the document `id` counts for coverage: its standing
-/// [stands](Standing::stands). What was denied, deprecated or retired neither
+/// [stands](Standing::stands). What was decided against ([`NotStanding`]) neither
 /// reaches nor is expected to be reached.
 fn counted(standings: &BTreeMap<DocId, Standing>, id: DocId) -> bool {
     standings.get(&id).is_some_and(Standing::stands)
@@ -1775,19 +1891,20 @@ fn exemption_notices(group: &ExemptionGroup) -> Vec<Notice> {
 /// | an `Informs` link cannot be followed | `InformsUnresolved` |
 /// | a pinned upstream's causes include `Expired` | `UpstreamExpired` |
 /// | a `Replaces` link | none |
-/// | a gap of the assessment of coverage at a document: a pending or approved document of a book a covering link points into, that no pending or approved document reaches through it, and that no exemption exempts from it | `NotCovered` |
+/// | a gap of the assessment of coverage at a document: a document no decision went against, of a book a covering link points into, that no such document reaches through it, and that no exemption exempts from it | `NotCovered` |
 /// | an exemption that stands, of a document a covering link does not reach | `Exempt` (see `exemption_notices`) |
 /// | an exemption that stands and is not needed now | `ExemptionUnneeded` (see `exemption_notices`) |
 /// | two or more exemptions that stand of one document from one link, after their own notices | `ExemptionRepeated` |
-/// | a pending or approved document whose link to artifacts writes a name with nothing there | `ArtifactAbsent` |
-/// | a pending or approved document whose link to artifacts writes a name its adapter cannot tell about now, pinned or not | `ArtifactUnknown` |
+/// | a document no decision went against whose link to artifacts writes a name with nothing there | `ArtifactAbsent` |
+/// | a document no decision went against whose link to artifacts writes a name its adapter cannot tell about now, pinned or not | `ArtifactUnknown` |
 ///
 /// They are given whatever the document's own standing is, except `NotCovered`,
-/// `ArtifactAbsent` and `ArtifactUnknown`: a document denied, deprecated or retired
-/// is not expected to be reached, nor its evidence to be kept. To them are added, first,
-/// the notices of an approval's edits that a declaration kept from being causes
-/// (`SelfSameMeaning`, `UpstreamSameMeaning`, `ArtifactSameMeaning`): those are made
-/// where the hashes are compared, so only an approved document has them.
+/// `ArtifactAbsent` and `ArtifactUnknown`: a document decided against
+/// ([`NotStanding`]) is not expected to be reached, nor its evidence to be kept. To
+/// them are added, first, the notices of an approval's edits that a declaration kept
+/// from being causes (`SelfSameMeaning`, `UpstreamSameMeaning`,
+/// `ArtifactSameMeaning`): those are made where the hashes are compared, so only an
+/// approved document has them.
 fn collect_notices(
     cx: &Cx<'_>,
     standings: &BTreeMap<DocId, Standing>,
@@ -1924,3 +2041,5 @@ mod severity_tests;
 mod successor_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod upstream_tests;

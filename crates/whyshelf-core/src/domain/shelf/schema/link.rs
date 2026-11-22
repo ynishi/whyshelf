@@ -170,7 +170,7 @@ pub struct ArtifactLinkKind {
     /// it says none).
     pub comparison: Comparison,
     /// How strongly, and which, of the names in its space are expected to be reached
-    /// by this link from a pending or approved document; `None` when none is
+    /// by this link from a document no decision went against; `None` when none is
     /// expected. One that is not reached is a gap of the cover assessment, with the
     /// strength.
     pub cover: Option<ArtifactCover>,
@@ -222,10 +222,10 @@ pub struct LinkKind {
     pub cardinality: Cardinality,
     /// What the link means for freshness.
     pub propagation: Propagation,
-    /// How strongly every pending or approved document of the target book is
-    /// expected to be reached by this link from a pending or approved document;
-    /// `None` when it is not expected ([`CoverSeverity::read`] says how `cover` is
-    /// read). One that is not reached is a
+    /// How strongly every document of the target book that no decision went against
+    /// ([`NotStanding`](super::super::ledger::NotStanding)) is expected to be reached
+    /// by this link from such a document; `None` when it is not expected
+    /// ([`CoverSeverity::read`] says how `cover` is read). One that is not reached is a
     /// [`Notice::NotCovered`](super::super::freshness::Notice::NotCovered) on it, with the
     /// strength, and is listed by a check of the books; its freshness is unchanged. A
     /// link into its own book is met only by another document of that book, so the

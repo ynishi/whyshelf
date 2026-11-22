@@ -94,7 +94,7 @@ pub fn trace(shelf: &Shelf, start: DocId) -> Trace {
 /// | a link that `holder` holds | `incoming` of what it names | `outgoing` of `holder` |
 /// |---|---|---|
 /// | resolves to another valid document, and `holder` [stands](super::freshness::Standing::stands) | yes | yes |
-/// | resolves to another valid document, and `holder` is decided against (denied, deprecated, retired) | no | yes |
+/// | resolves to another valid document, and `holder` is decided against ([`NotStanding`](super::ledger::NotStanding)) | no | yes |
 /// | resolves to `holder` itself | no | yes |
 /// | cannot be followed (a key that names no valid document) | none is reached | yes |
 /// | to artifacts, with a name written | none is reached | yes |

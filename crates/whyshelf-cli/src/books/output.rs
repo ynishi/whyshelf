@@ -308,6 +308,8 @@ use whyshelf_core::domain::shelf::schema::{BookName, KeyPattern};
 use whyshelf_core::domain::shelf::snapshot::{ItemNow, ItemRole, Retrieval};
 
 #[cfg(test)]
+mod cause_tests;
+#[cfg(test)]
 mod comparison_tests;
 #[cfg(test)]
 mod cover_tests;

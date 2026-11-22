@@ -373,7 +373,7 @@
 
 pub mod artifact;
 pub mod build;
-pub mod cover;
+pub(crate) mod cover;
 pub mod coverage;
 pub mod doc;
 pub mod exemption;

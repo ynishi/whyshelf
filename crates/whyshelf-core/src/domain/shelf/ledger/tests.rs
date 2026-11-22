@@ -52,8 +52,9 @@ fn an_approval_keeps_the_hash_it_saw_and_the_latest_decision_stands() {
     let later = ledger(vec![approval, deny(&shelf, 1, 1002, 20)]);
     assert_eq!(
         later.status_of(docid(1)),
-        DeclaredStatus::Denied {
-            judgement: jid(1002)
+        DeclaredStatus::Against {
+            judgement: jid(1002),
+            status: NotStanding::Denied,
         }
     );
 }
@@ -73,8 +74,9 @@ fn a_retirement_needs_no_file() {
     let record = retire(&shelf, 7, 1001, 10);
     assert_eq!(
         ledger(vec![record]).status_of(docid(7)),
-        DeclaredStatus::Retired {
-            judgement: jid(1001)
+        DeclaredStatus::Against {
+            judgement: jid(1001),
+            status: NotStanding::Retired,
         }
     );
 }

@@ -7,4 +7,4 @@ rustdoc: ["whyshelf_core::domain::shelf::freshness::Successors::of", "whyshelf_c
 serves: ["REQ-2", "REQ-3"]
 title: "A successor is a fact of replaces links, judged on every read"
 ---
-The successors of a deprecated document are the pending or approved documents with a replaces link to it; the chain is not followed. A deprecation records only that the document is to be replaced. A successor named with a deprecation is a check against that set and nothing more.
+The successors of a deprecated document are the documents with a replaces link to it that count (DEC-65, DEC-97); the chain is not followed. A deprecation records only that the document is to be replaced. A successor named with a deprecation is a check against that set and nothing more.

@@ -2,8 +2,8 @@
 
 use crate::domain::canon::Canon;
 use crate::domain::nonempty::NonBlank;
-use crate::domain::shelf::freshness::{Cause, Freshness, Severity, Standing};
-use crate::domain::shelf::ledger::{DeclaredStatus, JudgedAt, Record};
+use crate::domain::shelf::freshness::{Against, Cause, Freshness, Severity, Standing};
+use crate::domain::shelf::ledger::{DeclaredStatus, JudgedAt, NotStanding, Record};
 
 use super::fake_tests::{FakeShelf, block_on, decls, docid, fr, sp};
 use super::{BooksCheck, ErrorClass, JudgeRequest, Judgement, MapReport, ShelfApp, ShelfError};
@@ -318,8 +318,14 @@ fn a_denial_and_a_retirement_are_recorded_with_their_reasons() {
     }))
     .unwrap();
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;
-    assert_eq!(row.standing, Standing::Denied);
-    assert!(matches!(row.declared, DeclaredStatus::Denied { .. }));
+    assert_eq!(row.standing, Standing::Against(Against::Denied));
+    assert!(matches!(
+        row.declared,
+        DeclaredStatus::Against {
+            status: NotStanding::Denied,
+            ..
+        }
+    ));
     let records = app.ports().records();
     assert_eq!(records.len(), 1);
     assert!(matches!(&records[0], Record::Decision(_)));
@@ -359,9 +365,10 @@ fn a_row_carries_the_decision_that_stands_with_who_when_and_why() {
     let decision = row.decision.expect("denied: a decision");
     assert_eq!(decision.id(), denied.record.id());
     assert_eq!(decision.reason(), None);
-    assert!(
-        matches!(row.declared, DeclaredStatus::Denied { judgement } if judgement == decision.id())
-    );
+    assert!(matches!(
+        row.declared,
+        DeclaredStatus::Against { judgement, status: NotStanding::Denied } if judgement == decision.id()
+    ));
     assert!(
         block_on(app.status())
             .unwrap()

@@ -1,0 +1,108 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "3b38c8d19b76418ab530c1bcbb0ac0602df32eb1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6dae2b386d93e93d442bb912cc682f6816c491aff112da097e137d049ce1cd7e",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6903818e4ef099503c95e3ff2a2e0d15127c822d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c71bce08a6c01210eca31c2ab1eb0c09c9bf9ccdf084cfe5949310d033fb4c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/dispatch.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2cd9f50e971d2eae1fcbd22e5e0a9cb4bfb21580",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2d56f8fdbbcec203af17aa4ee3316d18c21f6cc414cf7075521d1c09c516c4a6",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f1e5a83ec0a91fcb7f6a4bbadbb3040f4ea601d7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:82c9e9bbc08aaeb8f3eaf275f4acdf6dff2772cd089673a02b2e45125757ce9b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/registry.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795325343324,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6ac789f4206f53b9868b8c88a78417b2d6f8bf36",
+      "hash": "sha256:4d28cc474757c4a32ddb34dad2deaed05f1f17d6ef631a9d378470fda2c38121",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "84"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-16db-7158-a8f3-5fb875ef9cb6"
+    },
+    {
+      "address": "4a0eee9736f3aa2e091eff98eee22ecb509d9409",
+      "hash": "sha256:3005006e18997f519c125ea6a61a6889e15b2ec50afe75176be736a24329d282",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "86"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f44e-7ea5-700b-90ca-49a9faa991ca"
+    }
+  ],
+  "id": "01a201ba-fc72-725f-a51c-679495144030",
+  "kind": "decision",
+  "reason": "Approved again for #150: the edits that made these stale are the change reviewed for #150 (Design Review, code review high with no correctness bug, rule-judge arch with no violation, blind review with its must-fix fixed): one value of what was decided against a document, one reading of an upstream, the ledger's own arch-lint rule and its fixture, and docs aligned; the claims of each document still hold, as cargo test (two jobs) shows.",
+  "revision": "db691d1bc307b726e1e019edbbc0909f24d2ef3a",
+  "seen": "sha256:d86099728e95d979843875a03f6a7dc4d41345662ad52782d3a758c929af21bc",
+  "seen_address": "bd981cdee20c2c1587052da7bcf9342bd5fcb562",
+  "subject": "01a1f44e-ba3e-7339-a475-d1d5a9a24315",
+  "v": 1,
+  "verb": "approve"
+}

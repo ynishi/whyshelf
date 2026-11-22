@@ -21,8 +21,9 @@ fn revoke(judgement: u128, targets: &[u128], at: i64) -> Record {
 }
 
 fn denied(judgement: u128) -> DeclaredStatus {
-    DeclaredStatus::Denied {
+    DeclaredStatus::Against {
         judgement: jid(judgement),
+        status: NotStanding::Denied,
     }
 }
 

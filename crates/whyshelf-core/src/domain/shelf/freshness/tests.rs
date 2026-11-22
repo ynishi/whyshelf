@@ -240,14 +240,20 @@ fn the_other_decisions_are_standings_without_a_freshness() {
         retire(&shelf, 3, 1003, 10),
     ]);
     let assessment = assess(&shelf, &ledger, JudgedAt::new(100));
-    assert_eq!(standing_of(&assessment, 1), Standing::Denied);
+    assert_eq!(
+        standing_of(&assessment, 1),
+        Standing::Against(Against::Denied)
+    );
     assert_eq!(
         standing_of(&assessment, 2),
-        Standing::Deprecated {
+        Standing::Against(Against::Deprecated {
             successors: Successors::None
-        }
+        })
     );
-    assert_eq!(standing_of(&assessment, 3), Standing::Retired);
+    assert_eq!(
+        standing_of(&assessment, 3),
+        Standing::Against(Against::Retired)
+    );
 }
 
 #[test]

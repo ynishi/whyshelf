@@ -2,9 +2,10 @@
 //! for documents and for artifacts alike.
 //!
 //! A link declared with `cover` expects its targets to be reached by a document that
-//! counts: every pending or approved document of the book a link into a book points
-//! into ([`LinkKind::cover`]), and every name its selection takes in the space of a
-//! link to artifacts ([`ArtifactLinkKind::cover`]). [`assess`] is the one place that
+//! counts: every document of the book a link into a book points into that no
+//! decision went against ([`LinkKind::cover`]), and every name its selection takes in
+//! the space of a link to artifacts ([`ArtifactLinkKind::cover`]). [`assess`] is the
+//! one place that
 //! says which of them nobody reaches, which exemptions stand and what each reads as,
 //! which are repeated, and how complete each listing of names is:
 //!
@@ -24,9 +25,10 @@
 //! The rules, each decided here and nowhere else:
 //!
 //! - **Gap.** A target a covering link expects, that no document that counts reaches
-//!   through that link ([`Reached`](super::cover::Reached)), and that no exemption that stands exempts it
+//!   through that link, and that no exemption that stands exempts it
 //!   from ([`ExemptionReading::Needed`]). A document is a target of every link into
-//!   its book when it counts ([`counts`]); a name is a target of a link to artifacts
+//!   its book when it counts (no decision was made against it, as the module `cover`
+//!   reads it); a name is a target of a link to artifacts
 //!   when the listing of its selection is the whole ([`Completeness::All`]) and
 //!   holds it. A listing that is not the whole proves no gap and no absence of one:
 //!   it is told as its [`Completeness`], and a gate on it is the report's.
@@ -52,7 +54,7 @@ use super::artifact::{
     ArtifactKey, ArtifactName, Completeness, ListedNames, Listings, Selection, Space,
 };
 use super::build::Shelf;
-use super::cover::{Decided, counts, covering_reach};
+use super::cover::{counts, covering_reach, decided_of};
 use super::exemption::{ExemptionReading, by_subject, read_exemption};
 use super::ledger::{ExemptOf, JudgementId, Ledger};
 use super::schema::{BookName, CoverSeverity, EntryName};
@@ -324,12 +326,12 @@ impl CoverAssessment {
 ///
 /// The one place a gap, a repeated exemption, the completeness of a listing and a
 /// selection that takes nothing are decided (the rules are on the module page). It
-/// reads what the covering links reach with [`covering_reach`] and each exemption as
-/// [`exemption_reading`](super::exemption::exemption_reading) does, once, from the same
-/// shelf and ledger.
+/// reads what the covering links reach from the documents that count, and each
+/// exemption as [`exemption_reading`](super::exemption::exemption_reading) does,
+/// once, from the same shelf and ledger.
 pub fn assess(shelf: &Shelf, ledger: &Ledger, listings: &Listings) -> CoverAssessment {
-    let counted = |id| counts(Decided::from(&ledger.status_of(id)));
-    let reached = covering_reach(shelf, counted);
+    let decided = |id| decided_of(ledger, id);
+    let reached = covering_reach(shelf, decided);
     let listed = ListedNames::of(listings);
 
     // Each exemption that stands, read once, with whether it is repeated.
@@ -337,7 +339,7 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, listings: &Listings) -> CoverAsses
         .into_iter()
         .map(|(of, group)| {
             // The reading is of the subject and the link, the same for each record.
-            let reading = read_exemption(shelf, counted, &reached, &listed, of);
+            let reading = read_exemption(shelf, decided, &reached, &listed, of);
             let reads = group
                 .iter()
                 .map(|exempt| ReadExemption {
@@ -381,7 +383,7 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, listings: &Listings) -> CoverAsses
     }
     let mut expected: BTreeMap<DocId, Vec<CoverLink>> = BTreeMap::new();
     for doc in shelf.docs().values() {
-        if !counted(doc.id()) {
+        if !counts(decided(doc.id())) {
             continue;
         }
         for (book, link, severity) in covering.get(&doc.key().book).into_iter().flatten() {

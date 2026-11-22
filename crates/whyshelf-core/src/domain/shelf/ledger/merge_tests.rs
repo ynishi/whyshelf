@@ -70,15 +70,17 @@ fn two_branches_that_judged_separately_merge_with_every_record_and_no_problem() 
     ));
     assert_eq!(
         merged.status_of(docid(4)),
-        DeclaredStatus::Denied {
-            judgement: jid(3001)
+        DeclaredStatus::Against {
+            judgement: jid(3001),
+            status: NotStanding::Denied,
         }
     );
     // Both judged FR-2: the later decision stands.
     assert_eq!(
         merged.status_of(docid(2)),
-        DeclaredStatus::Deprecated {
-            judgement: jid(3002)
+        DeclaredStatus::Against {
+            judgement: jid(3002),
+            status: NotStanding::Deprecated,
         }
     );
 
@@ -95,8 +97,9 @@ fn of_two_decisions_at_one_time_the_larger_id_stands() {
     assert!(merged.problems().is_empty(), "{:?}", merged.problems());
     assert_eq!(
         merged.status_of(docid(2)),
-        DeclaredStatus::Deprecated {
-            judgement: jid(3002)
+        DeclaredStatus::Against {
+            judgement: jid(3002),
+            status: NotStanding::Deprecated,
         }
     );
 
@@ -105,8 +108,9 @@ fn of_two_decisions_at_one_time_the_larger_id_stands() {
     let other = branch(&common, vec![deny(&shelf, 2, 2002, 31)]);
     assert_eq!(
         ledger(merge(&one, &other)).status_of(docid(2)),
-        DeclaredStatus::Denied {
-            judgement: jid(2002)
+        DeclaredStatus::Against {
+            judgement: jid(2002),
+            status: NotStanding::Denied,
         }
     );
 }

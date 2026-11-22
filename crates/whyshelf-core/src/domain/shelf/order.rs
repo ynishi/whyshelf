@@ -13,10 +13,11 @@ use crate::domain::id::DocId;
 use super::build::Shelf;
 use super::doc::{Doc, LinkState};
 use super::freshness::{
-    Assessment, Degradation, Freshness, FreshnessLevel, Severity, Standing, StandingKind,
+    Assessment, Carried, Degradation, Freshness, FreshnessLevel, Severity, Standing, StandingKind,
+    Unapproved, UpstreamReading,
 };
 use super::graph::components;
-use super::ledger::{DeclaredStatus, FramePin, Ledger, Quorum};
+use super::ledger::{DeclaredStatus, FramePin, Ledger};
 use super::schema::{EntryName, Propagation};
 
 /// The rule that took a document into a run of approvals. The two take apart sets: a
@@ -146,7 +147,8 @@ impl fmt::Display for NotPending {
 /// document now and no decision stands about it ([`Standing::Pending`], which is read
 /// from [`Ledger::status_of`]: never decided, or every decision about it withdrawn).
 /// A document whose files are invalid, or that has none, is not, though the ledger
-/// says nothing of it; nor is one approved, denied, deprecated or retired.
+/// says nothing of it; nor is one approved, or decided against
+/// ([`NotStanding`](super::ledger::NotStanding)).
 ///
 /// The ledger knows no standing "superseded": a pending document another replaces
 /// (a `Replaces` link to it) is pending, and taken as any other.
@@ -241,7 +243,8 @@ pub enum Hold {
     Pending,
     /// The upstream's approval is stale and not in the run: approve it again first.
     Stale,
-    /// The upstream's approval awaits the approvals of other names ([`Quorum::Short`]),
+    /// The upstream's approval awaits the approvals of other names
+    /// ([`Quorum::Short`](super::ledger::Quorum::Short)),
     /// at any freshness, an expired one included, in the run or not: an approval on
     /// it would be stale from the start, as on a pending one, until another name
     /// approves it.
@@ -264,9 +267,9 @@ pub struct HeldBack {
 /// The first upstream that keeps `id` from being approved so that it holds, if one
 /// does: a document a `Depends` link of `id` resolves to now that is broken, pending
 /// and not in `run`, stale and not in `run`, approved with a quorum short of names
-/// ([`Quorum::Short`], at any freshness), or in `left_out` (the documents of the same
-/// run already left out), in that order of precedence, the links in the order the
-/// document holds them. `run` is every document the run takes; one of it is decided
+/// ([`Quorum::Short`](super::ledger::Quorum::Short), at any freshness), or in
+/// `left_out` (the documents of the same run already left out), in that order of
+/// precedence, the links in the order the document holds them. `run` is every document the run takes; one of it is decided
 /// before what stands on it ([`upstream_first`]), approved or left out, so one of it
 /// left out is told as `LeftOut`, not by its standing.
 ///
@@ -275,12 +278,15 @@ pub struct HeldBack {
 /// short: an approval on it is a notice, not a staleness. A short quorum is read
 /// before that, as it is no level of the freshness, and an expired approval that
 /// awaits other names would otherwise let what stands on it through. What a
-/// decision says against an upstream (denied,
-/// deprecated, retired), a link that cannot be followed and a cycle are refusals of
-/// the frame ([`frame_approve`](super::ledger::frame_approve)), not this. Standings
-/// are read from `assessment`, which the caller makes of the ledger as the approvals
-/// already decided in the run left it: an upstream stale only through one the run
-/// has approved since holds nothing back.
+/// decision says against an upstream
+/// ([`NotStanding`](super::ledger::NotStanding)), a link that cannot be followed and a
+/// cycle are refusals of the frame
+/// ([`frame_approve`](super::ledger::frame_approve)), not this. What an upstream is to
+/// the approval on it is read from its standing once (`UpstreamReading` of the
+/// module `freshness`), and a reading that holds nothing back is then asked only
+/// whether the upstream was left out. Standings are read from `assessment`, which the
+/// caller makes of the ledger as the approvals already decided in the run left it: an
+/// upstream stale only through one the run has approved since holds nothing back.
 pub fn held_back(
     shelf: &Shelf,
     assessment: &Assessment,
@@ -298,23 +304,26 @@ pub fn held_back(
             };
             let upstream = target.id();
             let in_run = run.contains(&upstream);
-            let hold = match assessment.standing_of(upstream) {
-                Standing::Approved {
-                    freshness: Freshness::Degraded(d),
-                    ..
-                } if d.level() == Severity::Broken => Some(Hold::Broken),
-                Standing::Pending if !in_run => Some(Hold::Pending),
-                Standing::Approved {
-                    freshness: Freshness::Degraded(d),
-                    ..
-                } if !in_run && d.level() == Severity::Stale => Some(Hold::Stale),
-                Standing::Approved {
-                    quorum: Quorum::Short { .. },
-                    ..
-                } => Some(Hold::Awaiting),
-                _ if left_out.contains(&upstream) => Some(Hold::LeftOut),
-                _ => None,
-            }?;
+            // What the upstream is to an approval on it is read once, from its
+            // standing; here only what holds a run back of that.
+            let hold = match UpstreamReading::of(&assessment.standing_of(upstream)) {
+                UpstreamReading::Approval { awaiting, carried } => match carried {
+                    Some(Carried::Broken) => Some(Hold::Broken),
+                    Some(Carried::Stale) if !in_run => Some(Hold::Stale),
+                    Some(Carried::Stale) | None => awaiting.then_some(Hold::Awaiting),
+                },
+                UpstreamReading::Unapproved(Unapproved::Pending) if !in_run => Some(Hold::Pending),
+                // Holds nothing back: a pending upstream in the run is decided
+                // before this one, and refusing an approval on an upstream decided
+                // against is the frame's (`frame_approve`), not the run's.
+                UpstreamReading::Unapproved(Unapproved::Pending) => None,
+                UpstreamReading::Unapproved(
+                    Unapproved::Superseded { .. } | Unapproved::Refused(_),
+                ) => None,
+            };
+            // The same after every arm that holds nothing back: the upstream was
+            // itself left out of the run.
+            let hold = hold.or_else(|| left_out.contains(&upstream).then_some(Hold::LeftOut))?;
             Some(HeldBack {
                 link: link.clone(),
                 upstream,

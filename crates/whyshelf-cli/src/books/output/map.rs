@@ -96,8 +96,9 @@ pub struct MapLinkOut {
     /// `optional`, `many` or `at-least-one`.
     pub count: &'static str,
     /// Whether the link is expected to reach what it covers, of either strength:
-    /// every pending or approved document of the target book, or, for a link to
-    /// artifacts, every name its `selection` takes.
+    /// every document of the target book that no decision went against (not denied,
+    /// deprecated or retired), or, for a link to artifacts, every name its
+    /// `selection` takes.
     pub cover: bool,
     /// How strongly it is expected, beside `cover`: `warn` or `error`; null when
     /// `cover` is false.

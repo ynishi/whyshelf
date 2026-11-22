@@ -64,8 +64,9 @@ pub enum MapTarget {
     Book {
         /// The book.
         book: BookName,
-        /// How strongly every pending or approved document of it is expected to be
-        /// reached, or `None` ([`LinkKind::cover`](super::schema::LinkKind::cover)).
+        /// How strongly every document of it that no decision went against
+        /// ([`NotStanding`](super::ledger::NotStanding)) is expected to be reached, or
+        /// `None` ([`LinkKind::cover`](super::schema::LinkKind::cover)).
         cover: Option<CoverSeverity>,
     },
     /// Artifacts, by name in a space.

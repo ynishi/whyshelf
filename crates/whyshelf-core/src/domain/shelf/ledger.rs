@@ -74,21 +74,37 @@ pub enum DeclaredStatus {
         /// When it lapses.
         expires: Option<JudgedAt>,
     },
-    /// The latest decision denies it.
-    Denied {
+    /// The latest decision is against it: it denies, deprecates or retires it.
+    ///
+    /// The one place a record is read as going against a document:
+    /// [`Ledger::status_of`] reads the verb of the decision once, and what each reader
+    /// does with a document decided against is read from here, not decided again.
+    Against {
         /// The decision.
         judgement: JudgementId,
+        /// Which of the decisions against it.
+        status: NotStanding,
     },
-    /// The latest decision deprecates it.
-    Deprecated {
-        /// The decision.
-        judgement: JudgementId,
-    },
-    /// The latest decision retires it.
-    Retired {
-        /// The decision.
-        judgement: JudgementId,
-    },
+}
+
+/// A decision against a document: it denies, deprecates or retires it. Nothing can
+/// be approved on such a document, and it counts for nothing: no covering link
+/// expects it, and none of what it writes reaches.
+///
+/// The one statement of which decisions go against a document: a decision of another
+/// kind does not, and a new kind of decision against one is a variant here (and of
+/// [`DecisionVerb`]), which every match over it then has to read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum NotStanding {
+    /// Refused.
+    #[error("denied")]
+    Denied,
+    /// To be replaced.
+    #[error("deprecated")]
+    Deprecated,
+    /// No longer kept.
+    #[error("retired")]
+    Retired,
 }
 
 /// A contradiction among the records, which the ledger sets aside.
@@ -635,9 +651,18 @@ impl Ledger {
                     artifacts: artifacts.clone(),
                     expires: *expires,
                 },
-                DecisionVerb::Deny { .. } => DeclaredStatus::Denied { judgement: d.id() },
-                DecisionVerb::Deprecate { .. } => DeclaredStatus::Deprecated { judgement: d.id() },
-                DecisionVerb::Retire { .. } => DeclaredStatus::Retired { judgement: d.id() },
+                DecisionVerb::Deny { .. } => DeclaredStatus::Against {
+                    judgement: d.id(),
+                    status: NotStanding::Denied,
+                },
+                DecisionVerb::Deprecate { .. } => DeclaredStatus::Against {
+                    judgement: d.id(),
+                    status: NotStanding::Deprecated,
+                },
+                DecisionVerb::Retire { .. } => DeclaredStatus::Against {
+                    judgement: d.id(),
+                    status: NotStanding::Retired,
+                },
             },
         }
     }
@@ -779,8 +804,8 @@ pub use admit::{Admit, AdmittedRecord, NotAdmitted, RecordBook};
 pub use canon::RecordProblem;
 pub use decision::{Decision, DecisionProblem, DecisionVerb};
 pub use frame::{
-    ApproveFrame, FrameRefusal, NotStanding, PresentFrame, RetireFrame, frame_approve,
-    frame_present, frame_retire,
+    ApproveFrame, FrameRefusal, PresentFrame, RetireFrame, frame_approve, frame_present,
+    frame_retire,
 };
 pub use judgement::{JudgedAt, JudgementId};
 pub use pin::{ArtifactPin, FramePin, PATH_ONLY_SPACE, PinName, PinnedArtifact, Seen};
