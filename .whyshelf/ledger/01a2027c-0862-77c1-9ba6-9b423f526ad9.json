@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8c7a3c38cf31e4c58d3d431ea7b4dddc95a31815",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:57d36f913ea7b3fba5a7721e703ba0dcb6a2b81e1df5826eb634223e282124a7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/next.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4335d1b837d0caa8804813674f6a22fed844edf7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d85e7fe582db25a7f39130eda180f2eeb1ff83b38f805631beda045359f53ed9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "91cf6689fd2c99098737ad12c7bf490f1718ffad",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:432cb134a061bf5403c7d7786ded334dec4ced04d9e1bbf2f52903cf8e82e9e0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "369878eafcdf9a0b59332c36af7892b37cf9d4b8",
+      "hash": "sha256:4fb39b6f592196a204751b68ab47391db5b686a7a3a9473eaf161ff8d5cd4801",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a2027c-0862-77c1-9ba6-9b423f526ad9",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:cde05d80b1c3a2ab1edabc2715507320075b2e35f76050fd9085b82da44bcbbc",
+  "seen_address": "774f5954aa64cfec89dffa9aa28ea6c238ce66f0",
+  "subject": "01a1db32-2f0d-760c-b870-8844f72644d6",
+  "v": 1,
+  "verb": "approve"
+}

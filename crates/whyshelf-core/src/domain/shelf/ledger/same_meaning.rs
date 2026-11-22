@@ -7,8 +7,9 @@
 //! the edit keeps the meaning, and why, stays readable.
 //!
 //! Nothing is guessed. Two hashes mean the same only through declarations, read on
-//! every assessment like every other record ([`Ledger::doc_same_meaning`],
-//! [`Ledger::artifact_same_meaning`]); a declaration is withdrawn by a
+//! every assessment like every other record ([`Ledger::doc_same_meaning`], and for a
+//! pin of an artifact as it is read now the declarations of every name of its way,
+//! `Ledger::pin_same_meaning`); a declaration is withdrawn by a
 //! [`Revocation`](super::Revocation), as a decision is.
 //!
 //! ```text
@@ -25,7 +26,6 @@
 //! before any record exists.
 //!
 //! [`Ledger::doc_same_meaning`]: super::Ledger::doc_same_meaning
-//! [`Ledger::artifact_same_meaning`]: super::Ledger::artifact_same_meaning
 //!
 //! How many different names an edit needs before it is joined is on [`SameMeaning`].
 
@@ -46,9 +46,7 @@ use super::super::artifact::{
 use super::super::build::{FailureTag, Shelf};
 use super::super::doc::DocHash;
 use super::super::schema::{Approvals, BookName};
-use super::{
-    DeclaredStatus, JudgedAt, JudgementId, Ledger, NameForm, PinnedArtifact, ReadPin, way_names,
-};
+use super::{JudgedAt, JudgementId, Ledger, NameForm, PinnedArtifact, ReadPin, way_names};
 
 /// What a declaration is about, and the hashes it says mean the same.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -302,6 +300,11 @@ pub enum SameMeaningRefusal {
 /// [`SameMeaningRefusal::SeveralEarlier`]), with the hash now under that comparison.
 ///
 /// The one place the earlier hashes are chosen.
+///
+/// Known limitation: it reads what is there now and which declarations join on its
+/// own, apart from the pins stale compares (F-63): it may offer an edit that stale
+/// already tells as kept, or one of a pin stale does not compare. Making it read the
+/// pins stale compares is left for #175.
 pub fn frame_same_meaning(
     shelf: &Shelf,
     ledger: &Ledger,
@@ -319,17 +322,15 @@ pub fn frame_same_meaning(
             let now = *doc.hash();
             let mut pinned = BTreeSet::new();
             let mut own = None;
-            for subject in ledger.subjects() {
-                let DeclaredStatus::Approved { seen, frame, .. } = ledger.status_of(*subject)
-                else {
-                    continue;
-                };
-                if *subject == id {
+            for standing in ledger.approvals_that_stand() {
+                let view = standing.view();
+                let seen = *view.seen();
+                if view.subject() == id {
                     pinned.insert(seen);
                     own = Some(seen);
                 }
                 pinned.extend(
-                    frame
+                    view.frame()
                         .iter()
                         .filter(|pin| pin.target() == id)
                         .map(|pin| *pin.hash()),
@@ -391,10 +392,10 @@ pub fn frame_same_meaning(
             // nothing to declare.
             let mut pinned: BTreeMap<Comparison, BTreeSet<ArtifactHash>> = BTreeMap::new();
             let mut under_other: BTreeSet<ArtifactHash> = BTreeSet::new();
-            for subject in ledger.subjects() {
+            for standing in ledger.approvals_that_stand() {
                 // A pin is taken by the name it is read as, so an edit made with a
                 // move is declared at the new name.
-                let read = ledger.read_pins(*subject);
+                let read = standing.view().read_pins();
                 for pin in read
                     .iter()
                     .filter(|p| *p.read_as() == artifact)
@@ -479,7 +480,7 @@ impl Ledger {
     /// hashes that `by` already declared to mean what its hash means, in a
     /// declaration not revoked among those counting reads for it: of the document, or
     /// of every name of the artifact's way through its moves, as for each pin read as
-    /// that artifact ([`Ledger::pin_same_meaning`]). That edge has `by`'s name
+    /// that artifact, as the declarations of a pin read now are read. That edge has `by`'s name
     /// already, and one name counts once, so a second declaration of it adds nothing
     /// (as an approval that repeats its actor's own reading writes nothing). Where the
     /// ledger joins the edit already, the frame refuses it first; this is for one
@@ -498,9 +499,8 @@ impl Ledger {
             }
             SameMeaningOf::Artifact { artifact, from, to } => {
                 let pins: Vec<ReadPin> = self
-                    .subjects
-                    .iter()
-                    .flat_map(|subject| self.read_pins(*subject))
+                    .approvals_that_stand()
+                    .flat_map(|standing| standing.view().read_pins())
                     .filter(|pin| *pin.read_as() == artifact)
                     .collect();
                 let mut names = BTreeSet::from([&artifact]);

@@ -32,22 +32,16 @@ fn an_approval_keeps_the_hash_it_saw_and_the_latest_decision_stands() {
     let none = ledger(vec![]);
     let approval = approve(&shelf, &none, 1, 1001, 10, None);
     let seen = *shelf.doc(docid(1)).unwrap().hash();
-    match ledger(vec![approval.clone()]).status_of(docid(1)) {
-        DeclaredStatus::Approved {
-            judgement,
-            seen: approved,
-            frame,
-            artifacts,
-            expires,
-        } => {
-            assert!(artifacts.is_empty());
-            assert_eq!(judgement, jid(1001));
-            assert_eq!(approved, seen);
-            assert!(frame.is_empty());
-            assert_eq!(expires, None);
-        }
-        other => panic!("expected an approval, got {other:?}"),
-    }
+    let l = ledger(vec![approval.clone()]);
+    let DeclaredNow::Approved(standing) = l.declared(docid(1)) else {
+        panic!("expected an approval, got {:?}", l.declared(docid(1)));
+    };
+    let view = standing.view();
+    assert!(view.artifacts().is_empty());
+    assert_eq!(view.judgement(), jid(1001));
+    assert_eq!(*view.seen(), seen);
+    assert!(view.frame().is_empty());
+    assert_eq!(view.expires(), None);
 
     let later = ledger(vec![approval, deny(&shelf, 1, 1002, 20)]);
     assert_eq!(

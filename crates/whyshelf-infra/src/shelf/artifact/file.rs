@@ -2352,7 +2352,7 @@ mod tests {
     #[tokio::test]
     async fn a_converted_text_file_is_named_as_git_stores_it_and_reads_back() {
         use whyshelf_core::app::shelf::ShelfApp;
-        use whyshelf_core::domain::shelf::snapshot::{ItemRole, Retrieval};
+        use whyshelf_core::domain::shelf::snapshot::{ItemKind, Retrieval};
         if !git_installed().await {
             return;
         }
@@ -2391,7 +2391,7 @@ mod tests {
         let item = approved
             .items
             .iter()
-            .find(|i| matches!(i.item.role(), ItemRole::Artifact { .. }))
+            .find(|i| matches!(i.item.kind(), ItemKind::Artifact(_)))
             .unwrap();
         assert_eq!(item.retrieval, Retrieval::Read(CODE.as_bytes().to_vec()));
     }

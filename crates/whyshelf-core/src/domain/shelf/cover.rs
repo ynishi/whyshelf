@@ -52,7 +52,7 @@ impl From<&DeclaredStatus> for Decided {
     fn from(status: &DeclaredStatus) -> Self {
         match status {
             DeclaredStatus::Pending => Self::Pending,
-            DeclaredStatus::Approved { .. } => Self::Approved,
+            DeclaredStatus::Approved(_) => Self::Approved,
             DeclaredStatus::Against { status, .. } => Self::Against(*status),
         }
     }

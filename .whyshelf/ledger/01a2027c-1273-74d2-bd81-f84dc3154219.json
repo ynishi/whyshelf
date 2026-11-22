@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d3b54e2d1394a4f464a446791080143a49e3fcf5",
+      "hash": "sha256:92fd35fba0f1ffc5648180e6c1987e371327771b5dd2d0e6932c463a4c83edd8",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "87"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f4bf-5189-737a-a97c-8476d0a93246"
+    }
+  ],
+  "id": "01a2027c-1273-74d2-bd81-f84dc3154219",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:85cdfe9cce37b05215d43816227d750ea70e71053de061bda46e085d375c355e",
+  "seen_address": "89a79208b6840963bdf4e6a2e2b447ba6e11ed68",
+  "subject": "01a1f4c1-6506-7136-8b23-45b071dd81c5",
+  "v": 1,
+  "verb": "approve"
+}

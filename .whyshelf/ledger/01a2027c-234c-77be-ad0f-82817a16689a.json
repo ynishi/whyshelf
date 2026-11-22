@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "82f4d3b8059ee3c236298f4206c80775b4e05bfe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8efe119ea6620b346c00177afdb5eeab6607fe0c24c1eb73d2f86821dfabd6fc",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/read_by.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "90747d92b8360fa7dc4f064c890706f6e8e2ec27",
+      "hash": "sha256:c10d93847e5782b68ece8109b8d09fdd6594f5524f60279c046f6ef5f7ff9659",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "95"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fca1-7324-77ae-ade6-30bb419c262e"
+    }
+  ],
+  "id": "01a2027c-234c-77be-ad0f-82817a16689a",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:be2616114c7ce5d8c93d0c6d19f13f7f0b07532956dfb725e5d41401c35f262b",
+  "seen_address": "e4ac691d152f41bdba6ae1c98277b6b975499cb9",
+  "subject": "01a1fca1-cd62-7167-ad7f-9402fd9635fc",
+  "v": 1,
+  "verb": "approve"
+}

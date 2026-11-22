@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9850630df27b99ca33c121cb11981e6749f27d35",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5b03233d77d4755652c360f34c6673aa500f2dbf039bce7a26b79d0eac5a4844",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "87fc7cc46ca5c4d3815d44df476abd74a05f27a7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f12019dc300847e65a866317120673f1a563e47902de0cd6631feae55d4f7c7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "635bc6304b005cba73015bcf52eaee984eba2a23",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:84ea4093ca763a535f208524406ca4fb822f5177411fed3b439ee7b224c64ff9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/quorum_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "bc033bafebce8a408074e0ef1a161da3ae106497",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:eb15de3bddc62342ccfe74fabd80b7fb6a2676da15cbd734c5f68f59cf8f6a01",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "08232fae8e23c8137b65bdd08269e138cf27abbe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e9a82c73f352913725b99315e9e5f16d41eeb4096646a920729e97852fa6c0f0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "90747d92b8360fa7dc4f064c890706f6e8e2ec27",
+      "hash": "sha256:c10d93847e5782b68ece8109b8d09fdd6594f5524f60279c046f6ef5f7ff9659",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "95"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fca1-7324-77ae-ade6-30bb419c262e"
+    }
+  ],
+  "id": "01a2027c-219e-71fb-b12a-188acf902977",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:b3f0a28a0bb2a20dbbdd28423d9def1b455256abca1021cea7da2af604945453",
+  "seen_address": "70bda8ab851b8240fc54d0b95c100dd994f90446",
+  "subject": "01a1fca1-c4e9-7428-ab53-50a6c1c58d62",
+  "v": 1,
+  "verb": "approve"
+}

@@ -305,7 +305,7 @@ use whyshelf_core::domain::shelf::ledger::Record;
 #[cfg(test)]
 use whyshelf_core::domain::shelf::schema::{BookName, KeyPattern};
 #[cfg(test)]
-use whyshelf_core::domain::shelf::snapshot::{ItemNow, ItemRole, Retrieval};
+use whyshelf_core::domain::shelf::snapshot::{ItemKind, Retrieval};
 
 #[cfg(test)]
 mod cause_tests;

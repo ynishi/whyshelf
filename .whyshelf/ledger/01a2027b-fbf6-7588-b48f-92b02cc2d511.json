@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "2a709ee6c1c55f331a09dd902a6be1a3e016ccad",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:40633ed1875cc07b3c473044271870487d47f4208b8f7b4ac7cfc7574cfd26fa",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_fresh_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "08232fae8e23c8137b65bdd08269e138cf27abbe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e9a82c73f352913725b99315e9e5f16d41eeb4096646a920729e97852fa6c0f0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f26ff95e68f9361e0506d0ab8aa735d27ae4255e",
+      "hash": "sha256:9d14da9916d17d8fcde903af0de472992e7d646fc471d1ce50ee033d319b7dbd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "58"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8cf-dfdb-771f-bea4-6b65c56de737"
+    }
+  ],
+  "id": "01a2027b-fbf6-7588-b48f-92b02cc2d511",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:fa301de0eeccc93d9da31c3359e146106e9f733b8c409fbe20d6ff5485378123",
+  "seen_address": "2590f6a20a0ea8df4115e9af13c9b78c73b4ed0b",
+  "subject": "01a1c8cf-e3a9-72bd-ba84-6cac2acc3365",
+  "v": 1,
+  "verb": "approve"
+}

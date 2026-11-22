@@ -4,7 +4,7 @@ key: "DEC-59"
 issues: ["#42"]
 rejected: ["Rewrite the pins of the old approvals: a record is never changed, and the approval would claim to have seen a name it never saw", "Require the content to be unchanged: a move with an edit is a move and a change, and naming the change is what a reader needs", "Detect moves from Git's renames in the core: that is an answer of a space's adapter, for its own change"]
 related: ["DEC-9", "DEC-27", "DEC-58"]
-rustdoc: ["whyshelf_core::domain::shelf::ledger::Moved", "whyshelf_core::domain::shelf::ledger::ReadPin", "whyshelf_core::domain::shelf::ledger::Ledger::moved_to", "whyshelf_core::domain::shelf::ledger::Ledger::read_pins", "whyshelf_core::app::shelf::ShelfApp::moved"]
+rustdoc: ["whyshelf_core::domain::shelf::ledger::Moved", "whyshelf_core::domain::shelf::ledger::ReadPin", "whyshelf_core::domain::shelf::ledger::Ledger::moved_to", "whyshelf_core::domain::shelf::ledger::ApprovalView::read_pins", "whyshelf_core::app::shelf::ShelfApp::moved"]
 serves: ["REQ-23", "REQ-13"]
 title: "judge moved records a declaration, and every pin made before it is read through it as a separate value"
 ---

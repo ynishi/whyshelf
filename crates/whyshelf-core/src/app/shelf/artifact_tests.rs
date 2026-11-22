@@ -5,13 +5,18 @@
 use crate::domain::shelf::freshness::{Cause, Freshness, Standing};
 use crate::domain::shelf::ledger::{DecisionVerb, PinnedArtifact, Record};
 use crate::domain::shelf::lookup::Reference;
-use crate::domain::shelf::snapshot::{ItemNow, ItemRole, Retrieval};
+use crate::domain::shelf::snapshot::{DocRole, ItemKind, ItemView, Retrieval};
 
 use super::fake_tests::{FakeShelf, block_on, docid, fake_address, fr, sp, sp_tested};
 use super::{ErrorClass, JudgeRequest, Judgement, ShelfApp, ShelfError};
 
 fn r(text: &str) -> Reference {
     text.parse().unwrap()
+}
+
+/// Whether `kind` is the artifact pinned as `name`.
+fn artifact_named(kind: &ItemKind, name: &str) -> bool {
+    matches!(kind, ItemKind::Artifact(read) if read.pin().artifact().name().as_str() == name)
 }
 
 fn approve(reference: &str) -> JudgeRequest {
@@ -156,25 +161,31 @@ fn a_test_edited_after_the_approval_makes_it_stale_and_diff_shows_both_contents(
     let a = diff
         .items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() =="tests/a.rs"))
+        .find(|i| artifact_named(i.compared.item().kind(), "tests/a.rs"))
         .unwrap();
-    assert!(a.changed);
+    assert!(a.compared.changed());
     assert_eq!(a.approved, Retrieval::Read(b"assert!(fast);\n".to_vec()));
     assert_eq!(a.current.as_deref(), Some(&b"assert!(faster);\n"[..]));
 
     let b = diff
         .items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() =="tests/b.rs"))
+        .find(|i| artifact_named(i.compared.item().kind(), "tests/b.rs"))
         .unwrap();
-    assert!(!b.changed);
+    assert!(!b.compared.changed());
     assert_eq!(b.approved, Retrieval::NoAddress);
     assert_eq!(b.current, None);
 
     let subject = &diff.items[0];
-    assert!(matches!(subject.item.role(), ItemRole::Subject { .. }));
-    assert!(!subject.changed);
-    assert!(matches!(subject.now, ItemNow::Doc(Ok(_))));
+    assert!(matches!(
+        subject.compared.item().kind(),
+        ItemKind::Doc(DocRole::Subject { .. })
+    ));
+    assert!(!subject.compared.changed());
+    assert!(matches!(
+        subject.compared.view(),
+        ItemView::Doc { drift: Ok(_), .. }
+    ));
     assert_eq!(app.ports().append_count(), 2);
 }
 
@@ -187,7 +198,7 @@ fn content_approved_and_never_committed_is_an_address_that_cannot_be_read() {
     let a = shown
         .items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() =="tests/a.rs"))
+        .find(|i| artifact_named(i.item.kind(), "tests/a.rs"))
         .unwrap();
     assert!(matches!(a.retrieval, Retrieval::AddressNotReadable(_)));
 }
@@ -240,7 +251,7 @@ fn show_approved_reads_back_the_upstream_as_it_was_pinned() {
     let upstream = shown
         .items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Upstream { .. }))
+        .find(|i| matches!(i.item.kind(), ItemKind::Doc(DocRole::Upstream(_))))
         .unwrap();
     assert_eq!(
         upstream.retrieval,

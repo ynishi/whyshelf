@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8fe3420a5e36b603e8a755532bef6debd68128e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1aa36a7cd4418c1a1e85902f24e872c6fd95141647f83bc6df254b88a091cc19",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/canon.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "15438da9bc8d0cd40806c9bd31b33b6a1dff226e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94764bb140e397d0abc15683e76086bc530de516a33c9563da7755fa0dc4a899",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e73f11625395bcc79d17daebd7146b4ca2bed434",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3ebcd4c444c522416cc30f31ad058455530bb8b29b52e5e006fac48464f40d29",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/revocation_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d2eb06a8bfae7ccd1ced694a974b4d71fc8c8be9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1be0f62902aef165ae85915d5e707c41b0d84c2dc5bb76846372220a78e527f6",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f4e2311a8e217d9f1d1fdfae114f1abcd5d05186",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3f034a6cf5897bf485b279574db7f84bcc2281e528019b9225a13efeb3897701",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d740648a9acdbdb54f9fde12cf6df661af4b0dd9",
+      "hash": "sha256:95d308839ddd82cd6b2e8b1255d3783207eda53bcf1e3098ac3385e4212504c6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3b83-7c08-aeeb-5c338057481e"
+    },
+    {
+      "address": "74372b578812f77ad232998a3ae6850437d50c0a",
+      "hash": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157"
+    }
+  ],
+  "id": "01a2027b-e21c-720a-aa5b-15a79975a06f",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:5288180a9d999e8da35bc3173f952d4fa0b4afeaa2eea4d3707767a96fbc5c60",
+  "seen_address": "03c38e6e673ee8347772b3d669de47d7acb9bc65",
+  "subject": "01a1c4ba-1664-702d-af36-26cafd3b5594",
+  "v": 1,
+  "verb": "approve"
+}

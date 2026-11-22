@@ -12,8 +12,8 @@ use crate::domain::shelf::artifact::{
     ArtifactHash, ArtifactName, ArtifactReading, NamePrefix, PrefixMove,
 };
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, by, docid, file_artifact, file_space, fr, jid, ledger, name, shelf_with,
-    sp_testing,
+    actor, approve, by, docid, file_artifact, file_space, fr, jid, ledger, name, read_pins,
+    shelf_with, sp_testing, standing,
 };
 
 use super::*;
@@ -170,7 +170,7 @@ fn a_ledger_of_old_records_reads_every_pin_as_written() {
         approve(&s, &ledger(vec![first]), 2, 1002, 10, None),
     ];
     let l = ledger(records);
-    let read = l.read_pins(docid(2));
+    let read = read_pins(&l, docid(2));
     let pin = read.first().unwrap();
     assert_eq!(pin.moved(), None);
     assert_eq!(pin.read_as(), pin.pin().artifact());
@@ -316,7 +316,7 @@ fn a_pin_of_a_record_written_before_spaces_is_read_through_a_move() {
         old,
         moved(2001, "tests/a.rs", "tests/b.rs", 50),
     ]);
-    let read = l.read_pins(docid(2));
+    let read = read_pins(&l, docid(2));
     let [pin] = read.as_slice() else {
         panic!("one pin: {read:?}");
     };
@@ -375,7 +375,7 @@ fn each_pin_is_read_at_the_time_of_its_approval_and_the_status_keeps_it_as_writt
         second,
         moved(2001, "tests/a.rs", "tests/b.rs", 50),
     ]);
-    let read = l.read_pins(docid(2));
+    let read = read_pins(&l, docid(2));
     let pin = read.first().unwrap();
     assert_eq!(pin.pin().artifact(), &file_artifact("tests/a.rs"));
     assert_eq!(pin.read_as(), &file_artifact("tests/b.rs"));
@@ -383,10 +383,8 @@ fn each_pin_is_read_at_the_time_of_its_approval_and_the_status_keeps_it_as_writt
         pin.moved().map(|m| m.declared().into_vec()),
         Some(vec![jid(2001)])
     );
-    // The status and the record keep the pin as it was made.
-    let DeclaredStatus::Approved { artifacts, .. } = l.status_of(docid(2)) else {
-        panic!("approved");
-    };
+    // The view of the approval and the record keep the pin as it was made.
+    let artifacts = standing(&l, docid(2)).view().artifacts();
     assert_eq!(artifacts.first(), Some(pin.pin()));
     let Some(decision) = l.standing_decision(docid(2)) else {
         panic!("a decision");
@@ -396,7 +394,7 @@ fn each_pin_is_read_at_the_time_of_its_approval_and_the_status_keeps_it_as_writt
     };
     assert_eq!(artifacts.first(), Some(pin.pin()));
     // No approval stands about FR-9: nothing to read.
-    assert!(l.read_pins(docid(9)).is_empty());
+    assert!(matches!(l.declared(docid(9)), DeclaredNow::Pending));
 }
 
 // The rule of a declaration.
@@ -463,7 +461,7 @@ fn a_name_pinned_only_as_absent_after_a_move_cannot_be_moved_again() {
     let again = approve(&now, &ledger(records.clone()), 2, 1003, 60, None);
     records.push(again);
     let l = ledger(records);
-    let read = l.read_pins(docid(2));
+    let read = read_pins(&l, docid(2));
     assert_eq!(read.len(), 1);
     assert!(matches!(read[0].pin().seen(), PinnedArtifact::Absent));
     // a -> c would say that a moved twice: no pin of something there reads as a.

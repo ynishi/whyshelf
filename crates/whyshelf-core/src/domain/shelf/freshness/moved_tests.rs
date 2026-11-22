@@ -6,7 +6,8 @@ use std::collections::BTreeSet;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::artifact::{ArtifactHash, Space};
 use crate::domain::shelf::fixtures_tests::{
-    approve, by, docid, file_artifact, file_space, fr, jid, ledger, name, shelf_with, sp_testing,
+    approve, by, docid, file_artifact, file_space, fr, jid, ledger, name, read_pins, shelf_with,
+    sp_testing,
 };
 use crate::domain::shelf::ledger::{
     JudgedAt, Moved, MovedOf, Record, SameMeaning, SameMeaningOf, SameMeaningTarget,
@@ -124,7 +125,7 @@ fn a_pin_of_a_name_as_absent_is_read_as_written() {
     let mut records = approvals(&then, 10);
     records.push(moved(2001, "tests/a.rs", "tests/b.rs", 50));
     let l = ledger(records.clone());
-    let read = l.read_pins(docid(2));
+    let read = read_pins(&l, docid(2));
     let [pin] = read.as_slice() else {
         panic!("one pin: {read:?}");
     };

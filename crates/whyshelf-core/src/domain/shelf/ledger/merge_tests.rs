@@ -62,11 +62,11 @@ fn two_branches_that_judged_separately_merge_with_every_record_and_no_problem() 
 
     assert!(matches!(
         merged.status_of(docid(1)),
-        DeclaredStatus::Approved { judgement, .. } if judgement == jid(1001)
+        DeclaredStatus::Approved(approval) if approval.judgement() == jid(1001)
     ));
     assert!(matches!(
         merged.status_of(docid(3)),
-        DeclaredStatus::Approved { judgement, .. } if judgement == jid(2001)
+        DeclaredStatus::Approved(approval) if approval.judgement() == jid(2001)
     ));
     assert_eq!(
         merged.status_of(docid(4)),
@@ -129,7 +129,7 @@ fn the_same_record_written_on_both_branches_is_one_record_not_a_conflict() {
     assert_eq!(merged.decisions.len(), 4);
     assert!(matches!(
         merged.status_of(docid(3)),
-        DeclaredStatus::Approved { judgement, .. } if judgement == jid(2001)
+        DeclaredStatus::Approved(approval) if approval.judgement() == jid(2001)
     ));
     assert_eq!(
         merged,

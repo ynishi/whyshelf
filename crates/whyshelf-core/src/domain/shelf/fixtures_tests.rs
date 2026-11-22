@@ -26,8 +26,8 @@ use super::artifact::{
 };
 use super::build::{DocReading, RawValue, Shelf};
 use super::ledger::{
-    Admit, Decision, JudgedAt, JudgementId, Ledger, Record, frame_approve, frame_present,
-    frame_retire,
+    Admit, Decision, DeclaredNow, JudgedAt, JudgementId, Ledger, ReadPin, Record, StandingApproval,
+    frame_approve, frame_present, frame_retire,
 };
 use super::schema::{
     BookRuleDecl, BookSchemaDecl, BuiltinPresets, Cardinality, CompareDecl, DecideDecl,
@@ -338,6 +338,19 @@ pub(super) fn shelf_reading(
 /// decide reads it.
 pub(super) fn ledger(records: Vec<Record>) -> Ledger {
     Ledger::build(records, &Admit::unruled())
+}
+
+/// The approval that stands about `id` in `ledger`, which the test made stand.
+pub(super) fn standing(ledger: &Ledger, id: DocId) -> StandingApproval<'_> {
+    match ledger.declared(id) {
+        DeclaredNow::Approved(standing) => standing,
+        other => panic!("an approval stands about {id}, got {other:?}"),
+    }
+}
+
+/// The artifact pins of the approval that stands about `id`, each as it is read now.
+pub(super) fn read_pins(ledger: &Ledger, id: DocId) -> Vec<ReadPin> {
+    standing(ledger, id).view().read_pins()
 }
 
 /// An approval of `subject` (a small number) that the shelf's frame allows.

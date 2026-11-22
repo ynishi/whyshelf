@@ -17,7 +17,7 @@ use super::freshness::{
     Unapproved, UpstreamReading,
 };
 use super::graph::components;
-use super::ledger::{DeclaredStatus, FramePin, Ledger};
+use super::ledger::{DeclaredNow, FramePin, Ledger};
 use super::schema::{EntryName, Propagation};
 
 /// The rule that took a document into a run of approvals. The two take apart sets: a
@@ -372,8 +372,10 @@ pub fn upstream_first(shelf: &Shelf, ledger: &Ledger, among: &BTreeSet<DocId>) -
                     .collect()
             })
             .unwrap_or_default();
-        let pinned: BTreeSet<DocId> = match ledger.status_of(*id) {
-            DeclaredStatus::Approved { frame, .. } => frame
+        let pinned: BTreeSet<DocId> = match ledger.declared(*id) {
+            DeclaredNow::Approved(standing) => standing
+                .view()
+                .frame()
                 .iter()
                 .map(FramePin::target)
                 .filter(|target| among.contains(target))

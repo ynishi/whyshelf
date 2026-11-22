@@ -1,0 +1,100 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "6d4daa536ba907c0470620bbf89f12094a6a1210",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3ac2c2a64313ade396f53f27675c4812e26c99896baabdbed3d9408e49e5ad44",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/upstream_words.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "525343890867ccef51b5ad13d2cbb8bd114c090d",
+      "hash": "sha256:95ddf2961bb70764cb66bf788e055d497050b669b6c6f2ccd3e7dbab9f6ede02",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c333-d435-7f4d-abb6-036e89451d8b"
+    },
+    {
+      "address": "56d14a79192f6a254551c86a1d3832ac79361bba",
+      "hash": "sha256:07622dcbe7f5d6b212e1eee0b7c6389ea29b214ce3272b38c3415482d1c4d1ab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "15"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-131c-70e3-ae5e-e8e75931bc90"
+    },
+    {
+      "address": "369878eafcdf9a0b59332c36af7892b37cf9d4b8",
+      "hash": "sha256:4fb39b6f592196a204751b68ab47391db5b686a7a3a9473eaf161ff8d5cd4801",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    },
+    {
+      "address": "bb8c093d59832d8f64362051ff7f391df994292d",
+      "hash": "sha256:c2cee05f98ced03368eb7fe4d450b2b86fde70d63abf2e62c4c768ca63a48fd7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "97"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2018b-8730-7780-ae0d-cbfe389fed66"
+    }
+  ],
+  "id": "01a2027c-2c82-77ab-8189-fbe95726bbf8",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:260d6e28dcb65b8229ac4ffb739e88668d2ba33789b2852be6bf3dfa1273e433",
+  "seen_address": "e94873ff339da463e81fcbe34f765b07ff0f3503",
+  "subject": "01a201b8-dccf-73e5-90ca-3c5513de3822",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,125 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "98f88281c87e0fd658b722fd9f7e50d90f098a05",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:acecdc7f06564e1c713561f056da9349ad5a4898bef529057b8b54a145b9fb59",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/notice_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "25fd65e1c8151e2a120fd381de494f479a679770",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c676d8bbbba99e6e258f1990ec9522c2a991234e3e65cfec4988456db3825cba",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/severity_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "503776d22c9db8e403cb084376b50576472f223b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fd021860a4225c034e067b33e4a2de8c21344414f9334118bd672259352b3112",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9c8373b0f5542e64b65437b6b95e0bc83c2de764",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8a583422094c305e1ae5958748bff808dd3e14efecf2d8b37ad869fbc4c7fc27",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/graph.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8ba3c117fdb4a0d0ceb43d04396fe74d06e7c223",
+      "hash": "sha256:d05433fd80e351ae6c08f5298c9109dc5cc36c482844ba6313fd7d12665ac88a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3c29-7041-9ec8-42f8da38f9c3"
+    },
+    {
+      "address": "56d14a79192f6a254551c86a1d3832ac79361bba",
+      "hash": "sha256:07622dcbe7f5d6b212e1eee0b7c6389ea29b214ce3272b38c3415482d1c4d1ab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "15"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-131c-70e3-ae5e-e8e75931bc90"
+    },
+    {
+      "address": "ebfe8f023d1fee99c00a0b3d28b0dc8ed50e7aae",
+      "hash": "sha256:e56a942298044c37c1b8a4f9330354562eefcca2ac5690d8f825d292bf1c65da",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "39"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-f3b7-72cf-8b09-aa059e4584fe"
+    }
+  ],
+  "id": "01a2027b-e569-7469-b8a1-7c45d51ed167",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:b085ac9b15cf1efebdb3cc412c20aeb26cd4f795fa131f9aefe7bd05f231e9a4",
+  "seen_address": "648975fd77eef7c85fecf11f471f198bd1d68ab3",
+  "subject": "01a1c4ba-1730-7609-bdae-758e470e1909",
+  "v": 1,
+  "verb": "approve"
+}

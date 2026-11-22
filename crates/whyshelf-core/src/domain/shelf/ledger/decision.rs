@@ -92,6 +92,23 @@ pub enum DecisionProblem {
     },
 }
 
+/// Where a record is in the order of the records of a ledger: by time, and of one time
+/// by identity. The one key of that order, for a decision and a declaration of a move
+/// alike: the decision that stands about a document is the latest in it
+/// ([`Ledger::standing_decision`](super::Ledger::standing_decision)), and a cut
+/// ([`Before`](super::Before)) keeps the records before one.
+///
+/// Only the ledger makes one, from a record; what it holds is not read apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RecordOrder(JudgedAt, JudgementId);
+
+impl RecordOrder {
+    /// The place of a record made at `at` with the identity `id`.
+    pub(in crate::domain::shelf) fn of(at: JudgedAt, id: JudgementId) -> Self {
+        Self(at, id)
+    }
+}
+
 /// A decision about a document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decision {
@@ -245,6 +262,11 @@ impl Decision {
     /// When.
     pub fn at(&self) -> JudgedAt {
         self.at
+    }
+
+    /// Where it is in the order of the records ([`RecordOrder`]).
+    pub(in crate::domain::shelf) fn order(&self) -> RecordOrder {
+        RecordOrder::of(self.at, self.id)
     }
 
     /// Why, as it was given, if it was.

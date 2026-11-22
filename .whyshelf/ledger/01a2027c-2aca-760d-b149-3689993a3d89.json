@@ -1,0 +1,204 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "45e42505306e446cda549b2f9169d7da4af10707",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5c7db1abdb648df19b60bb45cce0e43146367a242c3988a72edb975f4a5ab244",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "94e65ddd0696800981e0fe41c072bae9282f2d81",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7cf62ebdc14152ed4e9561995f2f9f740c4bd6fafd97cdd6a0ba3b8564bce357",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cause.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "145aa1916ce2e144948983cca3b2e12256f45661",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4d72404aa770e38758f5f7f690636c1ac4cb90b9ee41d1baf7a03f699a0e8711",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cause_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "45b0bf8ce521a1850be43d622fbd35f8078b29be",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6f80327318dc76d0ece3d4bc457f9503ca89be6ceb92bb43ffdeda017a38dc2a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a7e9e64823540d9607a9bdeb52e8d99932f44e28",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bc63c2c3692d978de22def08de0a15d298150cd106cd836e76f01f23412071fc",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/upstream_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2e9a7af02b17693388bbac308e85a5f741177056",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4d0ff5dd41befe5292e8de703e939df958dd8273124afe6c91bb7e3d70ae6fe1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "525343890867ccef51b5ad13d2cbb8bd114c090d",
+      "hash": "sha256:95ddf2961bb70764cb66bf788e055d497050b669b6c6f2ccd3e7dbab9f6ede02",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c333-d435-7f4d-abb6-036e89451d8b"
+    },
+    {
+      "address": "56d14a79192f6a254551c86a1d3832ac79361bba",
+      "hash": "sha256:07622dcbe7f5d6b212e1eee0b7c6389ea29b214ce3272b38c3415482d1c4d1ab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "15"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-131c-70e3-ae5e-e8e75931bc90"
+    },
+    {
+      "address": "b9f7bf18c2f806edf8706eb024654596741e2927",
+      "hash": "sha256:8d5c07353d2285bcbe95f0fa4f772221dd3ad68c3d8b51cb99429bd1e8e0957f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    },
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    },
+    {
+      "address": "369878eafcdf9a0b59332c36af7892b37cf9d4b8",
+      "hash": "sha256:4fb39b6f592196a204751b68ab47391db5b686a7a3a9473eaf161ff8d5cd4801",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    },
+    {
+      "address": "bb8c093d59832d8f64362051ff7f391df994292d",
+      "hash": "sha256:c2cee05f98ced03368eb7fe4d450b2b86fde70d63abf2e62c4c768ca63a48fd7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "97"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2018b-8730-7780-ae0d-cbfe389fed66"
+    }
+  ],
+  "id": "01a2027c-2aca-760d-b149-3689993a3d89",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:5b9902461b68c99b4aa43de5284cf17eb42de8afa4d17bde774b915b594c483c",
+  "seen_address": "abc16d331c9d6188f760effa1a94fc8fda83e25b",
+  "subject": "01a2018b-cea2-707b-891b-8a7e19cacd2e",
+  "v": 1,
+  "verb": "approve"
+}

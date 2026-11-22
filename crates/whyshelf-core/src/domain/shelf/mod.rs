@@ -21,6 +21,8 @@
 //!                                                        (opaque), Artifact (a name in a space)
 //!   doc       ──► schema, artifact                     DocDraft, Doc::new ──► Doc, with its Links
 //!                                                        and its ArtifactLinks
+//!   drift     ──► artifact, doc                        Edit, DocDrift, ArtifactChange (what a pinned
+//!                                                        content comes to now)
 //!   graph                                              cycles_of ──► Cycle; components
 //!   build     ──► schema, artifact, doc, graph         Shelf::artifact_asks ──► the names to resolve
 //!                                                      Shelf::build ──► Shelf
@@ -32,8 +34,11 @@
 //!                                                      Shelf::plan_new ──► NewPlan, or every
 //!                                                        PlanProblem (a run of new documents)
 //!                                                      Shelf::replan_after_taken ──► PlanAfterTaken
-//!   ledger    ──► schema, artifact, doc, graph, build  Ledger::build ──► Ledger, FrameGraph
-//!                                                        (Record in; what people decided)
+//!   ledger    ──► schema, artifact, doc, graph, build, Ledger::build ──► Ledger, FrameGraph
+//!                 drift                                  (Record in; what people decided)
+//!                                                      Ledger::declared ──► DeclaredNow (the
+//!                                                        approval that stands, as a view of its
+//!                                                        record; what its pins come to now)
 //!                                                      frame_approve / frame_present / frame_retire
 //!                                                        └─► ApproveFrame::addressed
 //!                                                        └─► Decision::approve / deny / deprecate / retire
@@ -54,8 +59,9 @@
 //!   trace     ──► schema, artifact, doc, build,        trace ──► Trace         (the links, up and down)
 //!                 freshness                            linkage ──► Linkage     (linked at all, each way,
 //!                                                        and what the declaration lets be)
-//!   snapshot  ──► artifact, doc, build, ledger         Snapshot::of ──► Snapshot (what an approval saw),
-//!                                                        SnapshotItem::retrieval ──► Retrieval
+//!   snapshot  ──► artifact, doc, build, ledger, drift  Snapshot::of ──► Snapshot (what an approval saw),
+//!                                                        SnapshotItem::retrieval ──► Retrieval,
+//!                                                        SnapshotItem::compared ──► ItemCompared
 //!   order     ──► schema, doc, graph, build, ledger,   stale, pending ──► the documents a run takes;
 //!                 freshness                            upstream_first ──► the order approvals are
 //!                                                        judged in again
@@ -140,7 +146,11 @@
 //! | a contradiction among records | [`Ledger::build`] | [`LedgerProblem`]s |
 //! | what a rule of who may decide says of a name | [`Authority::permission`](schema::Authority::permission) | a [`Permission`](schema::Permission) |
 //! | whether a record is admitted by who may decide, and the book it is read with | `Admit::admission` in `ledger/admit.rs`, asked by [`Ledger::build`] of every record and by [`Ledger::accept`](ledger::Ledger::accept) of every record to be written; the book is `Admit::book_of`, from the key `book` or [`Shelf::book_of`](build::Shelf::book_of) | used or a [`LedgerProblem::NotAdmitted`](ledger::LedgerProblem::NotAdmitted); an [`AdmittedRecord`](ledger::AdmittedRecord), the one thing a write takes, or a [`NotAdmitted`](ledger::NotAdmitted) |
-//! | what was decided | [`Ledger::status_of`] | a [`DeclaredStatus`] |
+//! | the order of the records, and the decision that stands | [`RecordOrder`](ledger::RecordOrder), by time and then by identity, for a decision and a move alike; [`Ledger::standing_decision`] is the latest in it | a [`Decision`] |
+//! | what an approval is | the view of its record ([`ApprovalView`](ledger::ApprovalView)), the one reading of the verb of a decision for every reader of the ledger | an [`ApprovalView`](ledger::ApprovalView), or the [`NotStanding`](ledger::NotStanding) it is |
+//! | what was decided | [`Ledger::declared`], and its owned copy [`Ledger::status_of`] | a [`DeclaredNow`](ledger::DeclaredNow) (the [`StandingApproval`](ledger::StandingApproval)), a [`DeclaredStatus`] |
+//! | what a pinned content comes to now, by its kind (a document, an artifact) | [`drift`]: an edit is one unless a declaration joins it | an [`Edit`](drift::Edit), a [`DocDrift`](drift::DocDrift), an [`ArtifactChange`](drift::ArtifactChange) |
+//! | what the pins of the approval that stands come to now | `StandingApproval::compared` (visible to the shelf's modules only), each pin once by the kind of its content | an `ApprovalPins`, told in causes by [`assess`] |
 //! | what a person typed | [`resolve`] | a [`Resolution`] (an identity only the ledger knows has an [`Absence`], which cannot be invalid) |
 //! | what a link that names a preset, or the default, declares | [`expand`](schema::expand), before [`Schema::validate`]; the presets of the adapters come as a value, as the spaces do | the declaration with the values put in, and the preset of each link for `map` alone |
 //! | which spaces a declaration may name | [`Schema::validate`], given the spaces the adapters offer as a value; a link to artifacts that names none, or one not offered, is a [`SchemaProblem::NoSpace`] or a [`SchemaProblem::UnknownSpace`] | an [`ArtifactLinkKind`] with its [`Space`] |
@@ -155,10 +165,10 @@
 //! | which records keep addresses and a revision, and how a record without them reads (A5) | [`Record::to_canon`] / [`Record::from_canon`]: optional keys, left out when empty | a [`Record`] |
 //! | how a record names an artifact, and how one written before spaces reads | [`Record::to_canon`] / [`Record::from_canon`]: `space` and `name`; a `path` with no `space` is a name in the space `file`, and the record is written again as it was stored | a [`Record`] |
 //! | how strong a cause is | [`Cause::severity`] | a [`Severity`] |
-//! | what a pinned artifact makes of an approval (A3), with hashes only (A4) | `artifact_causes` in `freshness.rs`, called by [`assess`] | [`Cause::ArtifactChanged`], [`Cause::ArtifactGone`], [`Cause::ArtifactArrived`], [`Cause::ArtifactLinksChanged`]; none for one that cannot be told now, which is a [`Notice::ArtifactUnknown`] |
-//! | what an approval that stands saw | [`Snapshot::of`], from [`Ledger::standing_decision`] (which [`Ledger::status_of`] reads too) | a [`Snapshot`] of [`SnapshotItem`]s |
+//! | what a pinned artifact makes of an approval (A3), with hashes only (A4) | `artifact_causes` in `freshness.rs`, called by [`assess`], from what the pin comes to now (`StandingApproval::compared`) | [`Cause::ArtifactChanged`], [`Cause::ArtifactGone`], [`Cause::ArtifactArrived`], [`Cause::ArtifactLinksChanged`]; none for one that cannot be told now, which is a [`Notice::ArtifactUnknown`] |
+//! | what an approval that stands saw | [`Snapshot::of`], from the [`StandingApproval`](ledger::StandingApproval) that [`Ledger::declared`] gives, its pins read by [`ApprovalView::read_pins`](ledger::ApprovalView::read_pins) | a [`Snapshot`] of [`SnapshotItem`]s |
 //! | whether the content of an item came back (A6) | [`SnapshotItem::retrieval`] | a [`Retrieval`]: read, an address that cannot be read, or no address |
-//! | whether an item of a snapshot changed | [`SnapshotItem::changed_from`], by hash | a truth value |
+//! | whether an item of a snapshot changed, and its hash now | [`SnapshotItem::compared`], by hash, the way it was pinned, and no declaration asked | an [`ItemCompared`](snapshot::ItemCompared) |
 //! | the level of a freshness | [`Degradation::level`], computed from the causes; [`Freshness::from_causes`] is the only maker of a [`Degradation`] | a [`Severity`] |
 //! | which covering links expect which documents and names, which of them nobody reaches, which exemptions stand and read as needed, unneeded or cannot-tell, which are repeated, and how complete each listing of names is | [`coverage::assess`], once for an [`assess`], from the same shelf and ledger and the [`Listings`](artifact::Listings) the command asked for | a [`CoverAssessment`](coverage::CoverAssessment), which [`Assessment::cover`] returns |
 //! | whether an exemption is needed | [`exemption::exemption_reading`], and [`exemption::frame_exempt`] for one about to be written | an [`ExemptionReading`](exemption::ExemptionReading): needed, unneeded (why) or cannot tell (a listing that is not the whole) |
@@ -260,7 +270,8 @@
 //! [`Snapshot::of`]: snapshot::Snapshot::of
 //! [`SnapshotItem`]: snapshot::SnapshotItem
 //! [`SnapshotItem::retrieval`]: snapshot::SnapshotItem::retrieval
-//! [`SnapshotItem::changed_from`]: snapshot::SnapshotItem::changed_from
+//! [`SnapshotItem::compared`]: snapshot::SnapshotItem::compared
+//! [`Ledger::declared`]: ledger::Ledger::declared
 //! [`Retrieval`]: snapshot::Retrieval
 //! [`ShelfMap::of`]: map::ShelfMap::of
 //! [`ShelfMap`]: map::ShelfMap
@@ -376,6 +387,7 @@ pub mod build;
 pub(crate) mod cover;
 pub mod coverage;
 pub mod doc;
+pub mod drift;
 pub mod exemption;
 pub mod filter;
 pub mod freshness;
