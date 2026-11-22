@@ -287,6 +287,24 @@ and this project adheres to
 
 ### Changed
 
+- What was decided against a document is read once from its record, and what an
+  upstream is to what stands on it is one reading (#150). No decision, count,
+  strength, event or run changes. The words of a cause of an approval on an
+  upstream no decision stands about change: `pending (its approval was
+  withdrawn)` says `pending (no decision stands about it)`, since the value says
+  only that. In the library, `DeclaredStatus` has `Pending`, `Approved` and
+  `Against { judgement, status: NotStanding }`; `Standing` has `Pending`,
+  `Against(Against)` (`Denied`, `Deprecated { successors }` and `Retired`, with
+  `Against::status`) and `Approved`; `UpstreamStatus` is `Unapproved(Unapproved)`
+  (`Pending`, `Superseded { successors }` and `Refused(Refused)`, which is
+  `Denied`, `Retired` or `Unreplaced`) or `Unseconded`; `Cause::Via` holds
+  `carried: Carried` (`Stale` or `Broken`) in place of `severity`, so that no
+  `Via` holds an expiry; `Unneeded::DecidedAgainst` and
+  `ExemptRefusal::DecidedAgainst` say which decision it was. `NotStanding` moved
+  to the ledger's module and keeps its path `ledger::NotStanding`. The module
+  `cover` (`cover::Decided`, `cover::counts`, `cover::covering_reach` and
+  `cover::Reached`) is no longer public: nothing outside the crate read it.
+
 - What an approval can pin of an artifact is told apart from a name that cannot
   be told in one place, and a snapshot keeps a document that cannot be told apart
   from one that is gone (#152). No answer, JSON or stored record changes. In the
