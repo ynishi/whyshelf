@@ -10,6 +10,9 @@ and this project adheres to
 
 ### Added
 
+- In the library (#175): `ledger::Framed`, the edit `judge same` frames, which
+  tells a second declaration by the same name (`Framed::not_declared_by`), and
+  `ledger::NotComparedWhy`, why a pin is not compared now.
 - In the library, the view of an approval tied to its ledger and what a pinned
   content comes to (#153): `ledger::Ledger::declared` and `ledger::DeclaredNow`,
   `ledger::StandingApproval` (`view`, `reading`, `quorum`), `ledger::ApprovalView`
@@ -298,6 +301,20 @@ and this project adheres to
 
 ### Changed
 
+- `check` lists as short only the declarations a pin that `stale` reads now
+  meets: no longer one met only by a pin of an approval whose document is not
+  valid (its own hash included), by an artifact's pin under a link that no
+  longer writes the name, or by one whose comparison changed; the order is as
+  before (#175).
+- `judge same` tells nothing behind a name, or a name that cannot be told, by
+  the pins that hold a hash of it: a name no pin holds a hash of is nothing to
+  declare (exit 2), where it was refused as not there or not told (exit 1); a
+  pin `stale` does not compare now is refused, saying why: a link that no
+  longer writes the name or a document that is not valid (exit 1), or a
+  comparison that changed (exit 2, as before) (#175). In the library,
+  `frame_same_meaning` returns a `Framed`, `Ledger::same_meaning_short` takes
+  the shelf, and `SameMeaningRefusal::PinnedUnderOtherComparison` is
+  `SameMeaningRefusal::NotComparedNow`.
 - What a pinned content comes to now is decided once for each kind of content,
   from the approval that stands, and `stale` and `diff` read it (#153). No
   freshness, cause, notice, answer or record changes. In the library,
@@ -589,6 +606,8 @@ and this project adheres to
 
 ### Removed
 
+- In the library (#175): `Ledger::artifact_same_meaning` and
+  `Ledger::not_declared_by` (the frame has it: `Framed::not_declared_by`).
 - In the library (#153): `Ledger::read_pins`, `Ledger::reading` and
   `Ledger::quorum` (the approval that stands has them:
   `ApprovalView::read_pins`, `StandingApproval::reading` and
@@ -600,6 +619,13 @@ and this project adheres to
 
 ### Fixed
 
+- `judge same` offers only an edit that `stale` tells as a change: of an
+  approval whose document is valid, of a document or of a name under a Depends
+  link that still writes it, with the comparison that link declares, and not
+  one a declaration made before a move already keeps. It joins pinned hashes
+  along each pin's own moves, tells a second declaration by the same name by
+  each pin's own way, and its refusals follow the same pins, in one order
+  (#175).
 - No problem or refusal prints a value as Rust debug output: books clashing on
   a key prefix ("the books `a` and `b` use the key prefix `X`"), a refused
   approval of a document that is not valid, of a link that cannot be followed
