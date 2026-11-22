@@ -115,15 +115,15 @@ fn the_chain_of_successors_is_not_followed() {
     let assessment = assess(&shelf, &ledger, JudgedAt::new(100));
     assert_eq!(
         assessment.standing_of(docid(1)),
-        Standing::Deprecated {
+        Standing::Against(Against::Deprecated {
             successors: Successors::None
-        }
+        })
     );
     assert_eq!(
         assessment.standing_of(docid(2)),
-        Standing::Deprecated {
+        Standing::Against(Against::Deprecated {
             successors: some(&[3])
-        }
+        })
     );
 }
 
@@ -155,8 +155,9 @@ fn a_downstream_of_a_deprecation_with_a_successor_is_stale() {
             c,
             Cause::UpstreamDeclared {
                 pin,
-                status: UpstreamStatus::Deprecated { successors },
-            } if pin.target() == docid(1) && *successors == some(&[3])
+                status: UpstreamStatus::Unapproved(Unapproved::Superseded { successors }),
+            } if pin.target() == docid(1)
+                && Successors::Some(successors.clone()) == some(&[3])
         )),
         "{causes:?}"
     );
@@ -171,9 +172,7 @@ fn a_downstream_of_a_deprecation_with_no_successor_is_broken() {
             c,
             Cause::UpstreamDeclared {
                 pin,
-                status: UpstreamStatus::Deprecated {
-                    successors: Successors::None
-                },
+                status: UpstreamStatus::Unapproved(Unapproved::Refused(Refused::Unreplaced)),
             } if pin.target() == docid(1)
         )),
         "{causes:?}"

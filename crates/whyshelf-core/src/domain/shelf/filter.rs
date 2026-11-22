@@ -425,7 +425,7 @@ mod tests {
     use crate::domain::actor::Actor;
     use crate::domain::shelf::build::{DocReading, RawProblem, RawValue, ReadId};
     use crate::domain::shelf::fixtures_tests::{actor, docid, list, path, reading, text};
-    use crate::domain::shelf::freshness::{Cause, Freshness, FreshnessLevel};
+    use crate::domain::shelf::freshness::{Against, Cause, Freshness, FreshnessLevel};
     use crate::domain::shelf::ledger::{Quorum, ReadBy};
     use crate::domain::shelf::schema::{
         BookSchemaDecl, Cardinality, FieldEntryDecl, FieldPresence, FieldTypeDecl, KeyPatternDecl,
@@ -603,8 +603,8 @@ mod tests {
     fn standing_of(kind: StandingKind) -> Standing {
         match kind {
             StandingKind::Pending => Standing::Pending,
-            StandingKind::Denied => Standing::Denied,
-            StandingKind::Retired => Standing::Retired,
+            StandingKind::Denied => Standing::Against(Against::Denied),
+            StandingKind::Retired => Standing::Against(Against::Retired),
             FRESH => Standing::fresh(),
             STALE => {
                 let hash = *shelf_of(vec![dec(1, &[])]).doc(docid(1)).unwrap().hash();
@@ -720,7 +720,11 @@ mod tests {
     fn only_an_approval_passes_a_readers_condition() {
         let shelf = shelf_of(vec![dec(1, &[])]);
         let all = readers(&ReaderCount::ALL);
-        for standing in [Standing::Pending, Standing::Denied, Standing::Retired] {
+        for standing in [
+            Standing::Pending,
+            Standing::Against(Against::Denied),
+            Standing::Against(Against::Retired),
+        ] {
             assert!(!all.admits(&shelf, docid(1), &standing), "{standing:?}");
         }
         assert!(all.admits(&shelf, docid(1), &read_by(&["ana"])));

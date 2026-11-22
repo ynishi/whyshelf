@@ -219,7 +219,7 @@ fn an_exemption_of_a_document_decided_against_or_not_valid_is_unneeded() {
     let denied = ledger(vec![deny(&shelf, 1, 1001, 10), exempt(1)]);
     assert_eq!(
         notices(&shelf, &denied, 1),
-        [unneeded(Unneeded::DecidedAgainst)]
+        [unneeded(Unneeded::DecidedAgainst(NotStanding::Denied))]
     );
     // 9 has no file and no decision: its notice is told all the same.
     let assessment = assess(&shelf, &ledger(vec![exempt(9)]), JudgedAt::new(100));

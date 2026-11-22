@@ -12,7 +12,9 @@ use whyshelf_core::domain::actor::Actor;
 use whyshelf_core::domain::shelf::artifact::Artifact;
 use whyshelf_core::domain::shelf::build::DocPresence;
 use whyshelf_core::domain::shelf::doc::LinkState;
-use whyshelf_core::domain::shelf::freshness::{Freshness, RootCause, Standing, Successors};
+use whyshelf_core::domain::shelf::freshness::{
+    Against, Freshness, RootCause, Standing, StandingKind, Successors,
+};
 use whyshelf_core::domain::shelf::ledger::{DeclaredStatus, Quorum};
 
 use super::words::{ran_by, state_word};
@@ -233,7 +235,9 @@ impl Namer<'_> {
     pub(super) fn row(&self, row: &Row) -> RowOut {
         let (declared, expires) = declared(&row.declared);
         let (successors, causes) = match &row.standing {
-            Standing::Deprecated { successors } => (self.successors(successors), Vec::new()),
+            Standing::Against(Against::Deprecated { successors }) => {
+                (self.successors(successors), Vec::new())
+            }
             Standing::Approved {
                 freshness: Freshness::Degraded(degradation),
                 ..
@@ -345,9 +349,8 @@ fn declared(status: &DeclaredStatus) -> (&'static str, Option<i64>) {
     match status {
         DeclaredStatus::Pending => ("pending", None),
         DeclaredStatus::Approved { expires, .. } => ("approved", expires.map(|e| e.millis())),
-        DeclaredStatus::Denied { .. } => ("denied", None),
-        DeclaredStatus::Deprecated { .. } => ("deprecated", None),
-        DeclaredStatus::Retired { .. } => ("retired", None),
+        // A decision against it is told in the word of its standing, written once.
+        DeclaredStatus::Against { status, .. } => (standing(StandingKind::from(*status)), None),
     }
 }
 

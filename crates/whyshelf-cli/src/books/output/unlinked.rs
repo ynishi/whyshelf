@@ -17,8 +17,8 @@ pub struct UnlinkedEntryOut {
     pub row: RowOut,
 }
 
-/// The documents decided against (denied, deprecated, retired) that `unlinked`
-/// lists, apart from the others.
+/// The documents a decision went against (they are denied, deprecated or retired)
+/// that `unlinked` lists, apart from the others.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct DecidedAgainstOut {
     /// Those linked neither way.

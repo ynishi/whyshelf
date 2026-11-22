@@ -40,9 +40,9 @@ use crate::domain::words::{Join, Mark, listed};
 
 use super::artifact::{ArtifactKey, Completeness, ListedNames, Space};
 use super::build::{FailureTag, Shelf};
-use super::cover::{Decided, Reached, counts, covering_reach};
+use super::cover::{Decided, Reached, covering_reach, decided_of};
 use super::doc::{DocKey, DocLabel};
-use super::ledger::{Exempt, ExemptOf, ExemptSubject, JudgementId, Ledger};
+use super::ledger::{Exempt, ExemptOf, ExemptSubject, JudgementId, Ledger, NotStanding};
 use super::schema::{ArtifactCover, BookName, CoverSeverity, EntryName, Schema};
 
 /// Why a link of a book is no covering link of a document's book, or of an artifact
@@ -159,9 +159,9 @@ pub enum Unneeded {
     Cover(CoverMiss),
     /// The document is no valid document now: no book of it can be told.
     NotValid(FailureTag),
-    /// The document was decided against (denied, deprecated or retired): no
+    /// The document was decided against ([`NotStanding`], which says how): no
     /// covering link expects to reach it.
-    DecidedAgainst,
+    DecidedAgainst(NotStanding),
 }
 
 /// How an exemption of `of` reads now: needed, with the strength of the link;
@@ -195,7 +195,7 @@ impl ExemptionReading {
 /// |---|---|---|
 /// | a document | the link is no covering link into the document's book now ([`cover_of`]; of a document not valid, only whether the link is declared with a cover) | [`Unneeded::Cover`] |
 /// | | the document is no valid document now | [`Unneeded::NotValid`] |
-/// | | the document does not count ([`counts`]: it is denied, deprecated or retired) | [`Unneeded::DecidedAgainst`] |
+/// | | the document was decided against ([`NotStanding`]: it does not count) | [`Unneeded::DecidedAgainst`] |
 /// | | the link reaches the document now, from a document that counts | [`Unneeded::Reached`], with those documents |
 /// | | otherwise | [`ExemptionReading::Needed`] |
 /// | an artifact | the link is no covering link of the names of the artifact's space now ([`artifact_cover_of`]) | [`Unneeded::Cover`] |
@@ -212,22 +212,22 @@ pub fn exemption_reading(
     of: &ExemptOf,
     listed: &ListedNames,
 ) -> ExemptionReading {
-    let counted = |id| counts(Decided::from(&ledger.status_of(id)));
-    read_exemption(shelf, counted, &covering_reach(shelf, counted), listed, of)
+    let decided = |id| decided_of(ledger, id);
+    read_exemption(shelf, decided, &covering_reach(shelf, decided), listed, of)
 }
 
-/// [`exemption_reading`], on what counts and what the covering links reach, as an
-/// assessment has them already.
+/// [`exemption_reading`], on what was decided of each document and what the covering
+/// links reach, as an assessment has them already.
 pub(super) fn read_exemption(
     shelf: &Shelf,
-    counted: impl Fn(DocId) -> bool,
+    decided: impl Fn(DocId) -> Decided,
     reached: &Reached,
     listed: &ListedNames,
     of: &ExemptOf,
 ) -> ExemptionReading {
     match of.subject() {
         ExemptSubject::Doc(id) => {
-            match read_doc(shelf, counted, reached, *id, of.book(), of.link()) {
+            match read_doc(shelf, decided, reached, *id, of.book(), of.link()) {
                 Ok(severity) => ExemptionReading::Needed(severity),
                 Err(why) => ExemptionReading::Unneeded(why),
             }
@@ -250,7 +250,7 @@ pub(super) fn read_exemption(
 /// The reading of an exemption of a document.
 fn read_doc(
     shelf: &Shelf,
-    counted: impl Fn(DocId) -> bool,
+    decided: impl Fn(DocId) -> Decided,
     reached: &Reached,
     id: DocId,
     book: &BookName,
@@ -262,8 +262,8 @@ fn read_doc(
     if let Err(failure) = doc {
         return Err(Unneeded::NotValid(failure.tag()));
     }
-    if !counted(id) {
-        return Err(Unneeded::DecidedAgainst);
+    if let Decided::Against(status) = decided(id) {
+        return Err(Unneeded::DecidedAgainst(status));
     }
     let from = reached
         .doc_from(id, book, link)
@@ -346,8 +346,8 @@ pub enum ExemptRefusal {
         #[source]
         miss: CoverMiss,
     },
-    /// The document is denied, deprecated or retired: no covering link expects to
-    /// reach it, so there is nothing to exempt it from.
+    /// The document was decided against ([`NotStanding`], which says how): no
+    /// covering link expects to reach it, so there is nothing to exempt it from.
     #[error("{} is decided against: no covering link expects to reach it", DocLabel::new(*id, key.clone()))]
     DecidedAgainst {
         /// The document.
@@ -355,6 +355,10 @@ pub enum ExemptRefusal {
         /// Its key, by which the message names it; the identity names it when it has
         /// none.
         key: Option<DocKey>,
+        /// How it was decided against. The message does not say it (the refusal is the
+        /// same whichever decision it was); the field is for a library caller that
+        /// reads the refusal.
+        status: NotStanding,
     },
     /// The link reaches the document now: the exemption would be unneeded at once.
     #[error("{book}.{link} reaches it now, from {}", listed(.by.iter(), Mark::Plain, Join::Comma))]
@@ -431,11 +435,11 @@ pub fn frame_exempt(
         });
     }
     let of = ExemptOf::new(id, book, link);
-    let counted = |id| counts(Decided::from(&ledger.status_of(id)));
+    let decided = |id| decided_of(ledger, id);
     let refusal = match read_doc(
         shelf,
-        counted,
-        &covering_reach(shelf, counted),
+        decided,
+        &covering_reach(shelf, decided),
         id,
         of.book(),
         of.link(),
@@ -443,9 +447,10 @@ pub fn frame_exempt(
         Ok(_) => None,
         Err(Unneeded::Cover(miss)) => Some(not_covering(&of, miss)),
         Err(Unneeded::NotValid(tag)) => Some(ExemptRefusal::DocNotValid { id, tag }),
-        Err(Unneeded::DecidedAgainst) => Some(ExemptRefusal::DecidedAgainst {
+        Err(Unneeded::DecidedAgainst(status)) => Some(ExemptRefusal::DecidedAgainst {
             id,
             key: shelf.doc(id).map(|doc| doc.key().clone()),
+            status,
         }),
         Err(Unneeded::Reached { by }) => Some(reached_refusal(shelf, &of, &by)),
     };
@@ -471,10 +476,9 @@ pub fn frame_exempt_artifact(
     listed: &ListedNames,
 ) -> Result<ExemptOf, ExemptRefusal> {
     let of = ExemptOf::of_artifact(artifact.clone(), book, link);
-    let counted = |id| counts(Decided::from(&ledger.status_of(id)));
     let refusal = match read_artifact(
         shelf,
-        &covering_reach(shelf, counted),
+        &covering_reach(shelf, |id| decided_of(ledger, id)),
         listed,
         &artifact,
         of.book(),

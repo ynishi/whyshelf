@@ -18,7 +18,9 @@ use super::super::build::{Detail, DocFailure, Shelf};
 use super::super::doc::{DocHash, DocKey, LinkState, UnresolvedLink};
 use super::super::graph::{Cycle, LabelledCycle};
 use super::super::schema::{ArtifactPropagation, BookName, EntryName, Propagation};
-use super::{ArtifactPin, DeclaredStatus, FramePin, Ledger, NameForm, PinnedArtifact, Seen};
+use super::{
+    ArtifactPin, DeclaredStatus, FramePin, Ledger, NameForm, NotStanding, PinnedArtifact, Seen,
+};
 
 /// The facts an approval stands on, taken by [`frame_approve`].
 ///
@@ -129,9 +131,9 @@ pub enum FrameRefusal {
     /// approvals, which this approval would close. Which one the cycle says.
     #[error("the document is in {0}")]
     InCycle(LabelledCycle),
-    /// A `Depends` link names a document people decided does not stand. An approval
-    /// pinned to it would not hold from the start; a deprecated one is to be
-    /// replaced, so pin its successor.
+    /// A `Depends` link names a document people decided against
+    /// ([`NotStanding`]). An approval pinned to it would not hold from the start; a
+    /// deprecated one is to be replaced, so pin its successor.
     #[error("the link `{link}` names {key}, which is {status}: an approval cannot stand on it")]
     UpstreamNotStanding {
         /// The link.
@@ -158,26 +160,12 @@ pub enum FrameRefusal {
     },
 }
 
-/// A decision that leaves a document not standing, so nothing can be approved on it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum NotStanding {
-    /// Refused.
-    #[error("denied")]
-    Denied,
-    /// To be replaced.
-    #[error("deprecated")]
-    Deprecated,
-    /// No longer kept.
-    #[error("retired")]
-    Retired,
-}
-
 /// The frame of an approval of `id`: the facts it would stand on.
 ///
 /// Refuses when the document is not valid, when a `Depends` link cannot be followed
 /// (a link to a document that is not valid is one: the build leaves it unresolved),
-/// when it names a document people decided does not stand (denied, deprecated or
-/// retired: an approval on it would not hold from the start), when the document is
+/// when it names a document people decided against ([`NotStanding`]: an approval on
+/// it would not hold from the start), when the document is
 /// in a cycle of links, and when the approval would close a cycle among the frames
 /// of approvals. A resolved link carries the key and hash of what it names, and the
 /// pin is taken from it as it is.
@@ -212,13 +200,8 @@ pub fn frame_approve(
                 }
                 LinkState::Resolved(upstream) => {
                     let target = upstream.id();
-                    let not_standing = match ledger.status_of(target) {
-                        DeclaredStatus::Denied { .. } => Some(NotStanding::Denied),
-                        DeclaredStatus::Deprecated { .. } => Some(NotStanding::Deprecated),
-                        DeclaredStatus::Retired { .. } => Some(NotStanding::Retired),
-                        DeclaredStatus::Pending | DeclaredStatus::Approved { .. } => None,
-                    };
-                    if let Some(status) = not_standing {
+                    // The one refusal of an approval on what was decided against.
+                    if let DeclaredStatus::Against { status, .. } = ledger.status_of(target) {
                         return Err(FrameRefusal::UpstreamNotStanding {
                             link: link.clone(),
                             target,

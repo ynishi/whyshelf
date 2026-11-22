@@ -40,7 +40,11 @@ fn names(set: &BTreeSet<Actor>) -> Vec<&str> {
 
 #[test]
 fn only_an_approval_has_readers() {
-    for standing in [Standing::Pending, Standing::Denied, Standing::Retired] {
+    for standing in [
+        Standing::Pending,
+        Standing::Against(Against::Denied),
+        Standing::Against(Against::Retired),
+    ] {
         assert_eq!(standing.read_by(), None, "{standing:?}");
     }
     let fresh = Standing::fresh();

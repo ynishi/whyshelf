@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7d8b65a4dc7868d6aed2f5cf95b87a9d2ca12bb7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c588f5b35398ba49efbe72e22486114b76a783552c1f641ac163623084ec159",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "93a089f691926e22fe89ed95078432b2852dc501",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:aba142a73a3fdcd3b3b8f5b9f72d370b573f9b8450cc99758d6f2095ac019e05",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "abceb4e93b1cdd3a893e28c4e2d4367cb0710b61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c738a47b70b40fc0db1c682a8e6cd0d8817d75bcd7335993dee8d25c9978a8dd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/scope_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "721d45736f278b2703712252edbbdc6fb72cf0e4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e194c62579423ad99facb22407397230155fa7d2a2fe6c5d9c26a34627d32366",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795325343324,
+  "expires": null,
+  "frame": [
+    {
+      "address": "317875fca9349eb4ffeba4368823e91ed90e677b",
+      "hash": "sha256:8c09c8abb00416dc3aa924e1806b349a35d04e200d084a802ccb81822ca66a34",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "63"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
+    }
+  ],
+  "id": "01a201ba-e474-73a3-90b0-80efb19a9613",
+  "kind": "decision",
+  "reason": "Approved again for #150: the edits that made these stale are the change reviewed for #150 (Design Review, code review high with no correctness bug, rule-judge arch with no violation, blind review with its must-fix fixed): one value of what was decided against a document, one reading of an upstream, the ledger's own arch-lint rule and its fixture, and docs aligned; the claims of each document still hold, as cargo test (two jobs) shows.",
+  "revision": "db691d1bc307b726e1e019edbbc0909f24d2ef3a",
+  "seen": "sha256:be3985bc5f56363af8f9d6db37cde00d4ba75a6ebc4cfeb216c513965b9d53c1",
+  "seen_address": "c80cacfc3438e5b5f5763d703b90e8fe018b6232",
+  "subject": "01a1ca93-506a-7227-95d5-fba4474cfc64",
+  "v": 1,
+  "verb": "approve"
+}

@@ -159,7 +159,10 @@ fn notices_are_given_whatever_the_documents_own_standing_is() {
         "{notices:?}"
     );
 
-    assert_eq!(assessment.standing_of(docid(3)), Standing::Denied);
+    assert_eq!(
+        assessment.standing_of(docid(3)),
+        Standing::Against(Against::Denied)
+    );
     assert_eq!(
         informs_not_fresh(assessment.notices_of(docid(3))),
         vec![(docid(1), StandingKind::Pending)]

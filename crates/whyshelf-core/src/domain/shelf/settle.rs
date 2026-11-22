@@ -23,7 +23,8 @@
 //! | `Expired` | `ApproveUntil(d)` | no: `--stale` approves with no expiry unless told one, so a lapsed approval is approved again with `ApproveUntil` |
 //! | `UpstreamPending` | `ApprovePending(d)`, the upstream | no: until the upstream is decided, approving again changes nothing and is left out as repeated |
 //! | `UpstreamAwaiting` | `ApproveAsAnother(d)`, the upstream, by a name that has not approved it | no: until another name approves the upstream, `--stale` holds back what stands on it (`stands_on`, `upstream_is` `awaiting`) |
-//! | `UpstreamSuperseded`, `LinkBehindMove` | none: write the link to the successor, or to the new name, and the change of the link is a stale approval of its own | no: as above, repeated |
+//! | `UpstreamSuperseded` | none: write the link to the successor, and the change of the link is a stale approval of its own | no: the frame refuses an approval on an upstream decided against, a deprecated one with successors included, so `--stale` leaves it out as refused |
+//! | `LinkBehindMove` | none: write the link to the new name, and the change of the link is a stale approval of its own | no: as above, repeated |
 //! | `UpstreamRefused`, `NotValid`, `Cycle` | none: mend the file, or look at the decision again, until there is something to say | no: it is broken |
 //!
 //! The third column is one private function over the events, so an event cannot be
@@ -203,9 +204,10 @@ fn of_event(event: OriginEvent, origin: &Origin, read: Option<DocId>) -> Vec<Set
 /// Whether approving again settles the event: the third column of the table.
 ///
 /// An approval of an event that stays (an upstream not decided, a link that writes an
-/// old name) is repeated by one made now, which `--stale` leaves out; a broken one
-/// is left out; an expired one is approved again by `--stale` without its expiry,
-/// which is not what settles it.
+/// old name) is repeated by one made now, which `--stale` leaves out; one on an
+/// upstream that was deprecated is refused by the frame, which `--stale` leaves out
+/// with that refusal; a broken one is left out; an expired one is approved again by
+/// `--stale` without its expiry, which is not what settles it.
 fn approving_again_settles(event: OriginEvent) -> bool {
     match event {
         OriginEvent::Edited | OriginEvent::Arrived | OriginEvent::Relinked => true,

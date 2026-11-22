@@ -26,6 +26,10 @@ fn declared(status: UpstreamStatus) -> Cause {
     }
 }
 
+fn refused(refused: Refused) -> UpstreamStatus {
+    UpstreamStatus::Unapproved(Unapproved::Refused(refused))
+}
+
 /// The degradation of a standing that is a degraded approval.
 fn degraded(d: Standing) -> Degradation {
     match d {
@@ -53,15 +57,15 @@ fn a_cycle_is_broken() {
 #[test]
 fn an_upstream_denied_or_retired_is_broken_and_one_pending_is_stale() {
     assert_eq!(
-        declared(UpstreamStatus::Denied).severity(),
+        declared(refused(Refused::Denied)).severity(),
         Severity::Broken
     );
     assert_eq!(
-        declared(UpstreamStatus::Retired).severity(),
+        declared(refused(Refused::Retired)).severity(),
         Severity::Broken
     );
     assert_eq!(
-        declared(UpstreamStatus::Pending).severity(),
+        declared(UpstreamStatus::Unapproved(Unapproved::Pending)).severity(),
         Severity::Stale
     );
 }
@@ -72,11 +76,15 @@ fn a_denied_or_retired_upstream_breaks_what_stands_on_it() {
     let first = approve(&shelf, &ledger(vec![]), 1, 1001, 10, None);
     let second = approve(&shelf, &ledger(vec![first.clone()]), 2, 1002, 10, None);
     for (what, decision, status) in [
-        ("denied", deny(&shelf, 1, 1003, 20), UpstreamStatus::Denied),
+        (
+            "denied",
+            deny(&shelf, 1, 1003, 20),
+            refused(Refused::Denied),
+        ),
         (
             "retired",
             retire(&shelf, 1, 1003, 20),
-            UpstreamStatus::Retired,
+            refused(Refused::Retired),
         ),
     ] {
         let ledger = ledger(vec![first.clone(), second.clone(), decision]);
@@ -102,7 +110,7 @@ fn an_approval_on_a_pending_upstream_is_stale_from_the_start() {
     assert!(d.causes().iter().any(|c| matches!(
         c,
         Cause::UpstreamDeclared {
-            status: UpstreamStatus::Pending,
+            status: UpstreamStatus::Unapproved(Unapproved::Pending),
             ..
         }
     )));
@@ -110,12 +118,16 @@ fn an_approval_on_a_pending_upstream_is_stale_from_the_start() {
 
 #[test]
 fn a_via_takes_the_strength_it_carries() {
-    for severity in [Severity::Stale, Severity::Broken] {
+    for (carried, severity) in [
+        (Carried::Stale, Severity::Stale),
+        (Carried::Broken, Severity::Broken),
+    ] {
         let cause = Cause::Via {
             pin: pin_of_fr1(),
-            severity,
+            carried,
         };
         assert_eq!(cause.severity(), severity);
+        assert_eq!(Severity::from(carried), severity);
     }
 }
 
@@ -135,7 +147,7 @@ fn a_via_of_a_broken_upstream_is_broken() {
     assert!(
         d.causes().iter().any(|c| matches!(
             c,
-            Cause::Via { pin, severity: Severity::Broken } if pin.target() == docid(2)
+            Cause::Via { pin, carried: Carried::Broken } if pin.target() == docid(2)
         )),
         "{:?}",
         d.causes()

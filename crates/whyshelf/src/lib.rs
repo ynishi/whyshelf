@@ -173,9 +173,9 @@
 //! | `informs` | the target is worth reading: one that does not hold is a notice, never a staleness |
 //! | `replaces` | the document takes the place of the target, and is its successor when the target is deprecated |
 //!
-//! A link into a book may also say `cover`: every pending or approved document of
-//! the target book is expected to be reached by it, from a pending or approved
-//! document. A project uses it to see a hole in its chain of reasons (a requirement
+//! A link into a book may also say `cover`: every document of the target book that no
+//! decision went against ([`NotStanding`](domain::shelf::ledger::NotStanding)) is
+//! expected to be reached by it, from such a document. A project uses it to see a hole in its chain of reasons (a requirement
 //! no decision serves, a decision no verification checks). `cover` has a strength:
 //! `"error"` (or `true`) or `"warn"`; `false`, or no `cover`, expects nothing, and
 //! any other value is a problem of the declaration. A document no covering link
@@ -191,8 +191,8 @@
 //! space: `cover = { strength = "error", include = ["src/**/*.rs"], exclude =
 //! ["src/gen/**"] }` (`strength` is `"error"` when left out, `include` holds at least
 //! one text, `exclude` is optional). Every name the selection takes that is there
-//! now is expected to be reached by a pending or approved document that writes it
-//! in that link, and one that none does is a gap of the strength, as a document is.
+//! now is expected to be reached by a document no decision went against that writes
+//! it in that link, and one that none does is a gap of the strength, as a document is.
 //! Only a space whose adapter lists its names takes one (each adapter's page says
 //! whether it does, and how it reads a selection); for `file`, the regular files Git
 //! lists (tracked, or untracked and not ignored), named by their path under the
@@ -214,8 +214,8 @@
 //! by that link (a finding kept on purpose that grounds no requirement). It is
 //! accepted only when it would be needed the moment it is written: the document is
 //! valid now, the link is declared with a cover (of either strength) and points
-//! into the document's book, the document is not denied, deprecated or retired (no
-//! cover expects it), and the link does not reach it now (the refusal names the
+//! into the document's book, the document is not decided against (no cover expects
+//! it), and the link does not reach it now (the refusal names the
 //! documents it is reached from); and when no exemption that stands already exempts
 //! the document from the link (a second is refused, not repeated: withdraw the
 //! first to say it again). An exemption is accepted and read by the one rule, so
@@ -568,7 +568,7 @@
 //! evidence not written yet, not a broken link. A path names a file only as written,
 //! ASCII case included, on every system: where the file system does not tell case
 //! apart, `justfile` still names no file `Justfile`, as for Git. Every name of a
-//! pending or approved document with nothing there is told, since a wrong name is
+//! document no decision went against with nothing there is told, since a wrong name is
 //! pinned as absent too: `check` lists it under `absent` (the check stays clean),
 //! `judge approve` under each judgement's `absent`, and its row has an
 //! `artifact_absent` notice. A name its adapter cannot tell about now is listed under
@@ -1224,8 +1224,8 @@
 //!   decided, since what an approval is depends on who makes it: with no name the
 //!   run fails (exit 3), even one that would only leave out repeats, which exited 0
 //!   before second readings were written. One whose `depends` link names an
-//!   artifact that cannot be told now is refused as before. A denied, deprecated or
-//!   retired document, a pending one, and one whose approval was withdrawn with
+//!   artifact that cannot be told now is refused as before. A document decided
+//!   against, a pending one, and one whose approval was withdrawn with
 //!   nothing before it are approved as before; withdrawing a later approval leaves
 //!   the earlier one standing, and it is that one that is compared. `--again` makes
 //!   the approval anyway, for a person who read the document again and wants that
@@ -1283,7 +1283,7 @@
 //!   about, never approved or with every decision about it withdrawn (`status` says
 //!   `"declared": "pending"` of it). An invalid one (its `presence` there has
 //!   `"state": "invalid"`, though it is pending in the ledger) is not taken, nor one
-//!   approved, denied, deprecated or retired. The ledger knows no standing
+//!   approved or decided against. The ledger knows no standing
 //!   "superseded": a pending document another replaces is pending, and is approved
 //!   with its replacement. With references, it takes the documents named, each
 //!   pending, and every pending document they stand on through `depends` links,
@@ -1309,7 +1309,7 @@
 //! - An approval is refused when the document is not valid, a `depends` link cannot
 //!   be followed, it would close a cycle, a `depends` link names an artifact its
 //!   adapter cannot tell about now, or a `depends` link names a document people
-//!   decided does not stand (denied, deprecated or retired: pin the successor). An
+//!   decided against (pin the successor of a deprecated one). An
 //!   upstream that is only pending is accepted, and the approval is stale from the
 //!   start.
 //! - `new` takes the book's next key (`V-4` after `V-3`, counting every key a file
@@ -1632,8 +1632,8 @@
 //! holds those no link reaches, and `no_outgoing` those that hold none. What the
 //! declaration makes inevitable is left out, and a document decided against reaches
 //! nothing; the rule is on [`Linkage`](domain::shelf::trace::Linkage). The documents
-//! decided against (denied, deprecated, retired) are listed in `decided_against`,
-//! the pending and approved ones at the top. Lists are in the order the declaration
+//! decided against ([`NotStanding`](domain::shelf::ledger::NotStanding)) are listed
+//! in `decided_against`, the pending and approved ones at the top. Lists are in the order the declaration
 //! writes the books, then by identity. `--no-incoming` or `--no-outgoing` asks for
 //! one of the two one-way lists, and the other is null; `isolated` is always
 //! answered. Files that are no document are in `health`, not in a list. When

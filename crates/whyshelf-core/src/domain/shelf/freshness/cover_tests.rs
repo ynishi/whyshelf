@@ -1,5 +1,5 @@
 //! Tests of `Notice::NotCovered`: a document of a book a covering link (`cover =
-//! true`) points into, that no pending or approved document reaches through it.
+//! true`) points into, that no document no decision went against reaches through it.
 
 use std::collections::BTreeSet;
 

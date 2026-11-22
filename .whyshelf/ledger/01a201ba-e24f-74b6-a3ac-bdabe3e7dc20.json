@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "49780d581c32bc3d55e0ab3677f2f4134f9ad2b2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f2620e8f60a6267a7ec31d1d4c404d3243033163072d675fa40ef8345d1cd943",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "db35923424991ccb1dd6857f471e0b109ff8128e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:67603424386b1c71841c407335390a76173360e8ccd0b4e852d9f7bb00673562",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795325343324,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ea65505cd15e7247347a1239fbc02e9f0f4c1986",
+      "hash": "sha256:3816927150bad7efa5e8e105e6f178a4a598ca68b6277726b76c540a341c6bef",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a201ba-e24f-74b6-a3ac-bdabe3e7dc20",
+  "kind": "decision",
+  "reason": "Approved again for #150: the edits that made these stale are the change reviewed for #150 (Design Review, code review high with no correctness bug, rule-judge arch with no violation, blind review with its must-fix fixed): one value of what was decided against a document, one reading of an upstream, the ledger's own arch-lint rule and its fixture, and docs aligned; the claims of each document still hold, as cargo test (two jobs) shows.",
+  "revision": "db691d1bc307b726e1e019edbbc0909f24d2ef3a",
+  "seen": "sha256:5b1c2f7ab122b40b82fda145d65666ad2572b1bc4857745be1c93d22d6f6559c",
+  "seen_address": "fa1da8c7bf4098f7dd3fcfb641b049e127490913",
+  "subject": "01a1c9f3-b108-73b3-b1df-7e62e073cb0b",
+  "v": 1,
+  "verb": "approve"
+}

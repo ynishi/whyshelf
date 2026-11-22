@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9850630df27b99ca33c121cb11981e6749f27d35",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5b03233d77d4755652c360f34c6673aa500f2dbf039bce7a26b79d0eac5a4844",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "439f1f18814a4bf4d3c513c6d95bd65b29376e6a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:af96d4ef8cdb675115d437e0466cd68a0212dd127426d25662439308c266b9b7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "87fc7cc46ca5c4d3815d44df476abd74a05f27a7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f12019dc300847e65a866317120673f1a563e47902de0cd6631feae55d4f7c7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795325343324,
+  "expires": null,
+  "frame": [
+    {
+      "address": "15dfdba4725af3eb8f621da3e306486ff0032390",
+      "hash": "sha256:78bb4bbd2b5111d439eec7a9cc1ca14d83756fd758164f7234c161103a50b1dc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a201ba-eb16-7725-9e58-5ae94ceba232",
+  "kind": "decision",
+  "reason": "Approved again for #150: the edits that made these stale are the change reviewed for #150 (Design Review, code review high with no correctness bug, rule-judge arch with no violation, blind review with its must-fix fixed): one value of what was decided against a document, one reading of an upstream, the ledger's own arch-lint rule and its fixture, and docs aligned; the claims of each document still hold, as cargo test (two jobs) shows.",
+  "revision": "db691d1bc307b726e1e019edbbc0909f24d2ef3a",
+  "seen": "sha256:f45b99cb2ad0d8e32a212023e18a7053e3ce1d418cde9b46de61272dea4d41d8",
+  "seen_address": "ba3d6a68dc7a5d6e94896d18bf9931e1fbeed05f",
+  "subject": "01a1da61-c7c5-7789-ac4f-8edd5fa71741",
+  "v": 1,
+  "verb": "approve"
+}

@@ -12,7 +12,7 @@ use whyshelf_core::domain::shelf::build::{Detail, FailureTag};
 use whyshelf_core::domain::shelf::doc::DocLabel;
 use whyshelf_core::domain::shelf::exemption::{CoverMiss, Unneeded};
 use whyshelf_core::domain::shelf::freshness::{
-    Cause, Notice, Severity, Successors, UpstreamStatus,
+    Cause, Notice, Refused, Severity, Unapproved, UpstreamStatus,
 };
 use whyshelf_core::domain::shelf::ledger::{ArtifactPin, FramePin, JudgementId, ReadPin};
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
@@ -84,8 +84,9 @@ pub struct NoticeOut {
     /// link reaches the document now), `not_declared` (no such link into a book is
     /// declared now), `no_cover` (the link is declared with no cover), `other_book`
     /// (it points into another book than the document's), `not_valid` (the document
-    /// is not valid now) or `decided_against` (it is denied, deprecated or retired);
-    /// null for any other kind. (An exemption of an artifact is told by `check` and
+    /// is not valid now) or `decided_against` (a decision went against it: it is
+    /// denied, deprecated or retired; `unlinked` lists such documents apart); null
+    /// for any other kind. (An exemption of an artifact is told by `check` and
     /// `cover` with the words `reached`, `not_declared`, `no_cover`, `other_space`
     /// and `not_listed`, as their own lists give them.)
     pub why: Option<&'static str>,
@@ -290,13 +291,13 @@ impl Namer<'_> {
                 Some(pin),
                 format!("{} is {}", self.pin_said(pin), upstream_status(status)),
             ),
-            Cause::Via { pin, severity } => out(
+            Cause::Via { pin, carried } => out(
                 "via",
                 Some(pin),
                 format!(
                     "{} does not hold ({})",
                     self.pin_said(pin),
-                    self::severity(*severity)
+                    self::severity(Severity::from(*carried))
                 ),
             ),
             Cause::LinksChanged {
@@ -637,7 +638,7 @@ pub(super) fn unneeded_word(why: &Unneeded) -> &'static str {
         Unneeded::Cover(CoverMiss::OtherSpace { .. }) => "other_space",
         Unneeded::Cover(CoverMiss::NotListed) => "not_listed",
         Unneeded::NotValid(_) => "not_valid",
-        Unneeded::DecidedAgainst => "decided_against",
+        Unneeded::DecidedAgainst(_) => "decided_against",
     }
 }
 
@@ -701,7 +702,7 @@ impl Namer<'_> {
                 format!("the selection of `{book}.{link}` does not list it now")
             }
             Unneeded::NotValid(tag) => tag.said_of(&"the document"),
-            Unneeded::DecidedAgainst => {
+            Unneeded::DecidedAgainst(_) => {
                 "the document is decided against, and no covering link expects to reach it"
                     .to_owned()
             }
@@ -771,20 +772,22 @@ fn severity(severity: Severity) -> &'static str {
     }
 }
 
+/// The words of a pinned upstream that does not stand as a settled approval: one for
+/// each variant of its status (the words are the surface's, the groups the model's).
 fn upstream_status(status: &UpstreamStatus) -> &'static str {
     match status {
-        UpstreamStatus::Pending => "pending (its approval was withdrawn)",
+        UpstreamStatus::Unapproved(Unapproved::Pending) => "pending (no decision stands about it)",
         UpstreamStatus::Unseconded => {
             "unseconded (its approval awaits the approvals of other names its rule asks for)"
         }
-        UpstreamStatus::Denied => "denied",
-        UpstreamStatus::Retired => "retired",
-        UpstreamStatus::Deprecated {
-            successors: Successors::None,
-        } => "deprecated with no successor",
-        UpstreamStatus::Deprecated {
-            successors: Successors::Some(_),
-        } => "deprecated; follow its successor",
+        UpstreamStatus::Unapproved(Unapproved::Refused(Refused::Denied)) => "denied",
+        UpstreamStatus::Unapproved(Unapproved::Refused(Refused::Retired)) => "retired",
+        UpstreamStatus::Unapproved(Unapproved::Refused(Refused::Unreplaced)) => {
+            "deprecated with no successor"
+        }
+        UpstreamStatus::Unapproved(Unapproved::Superseded { .. }) => {
+            "deprecated; follow its successor"
+        }
     }
 }
 
@@ -808,5 +811,46 @@ fn comparison(comparison: &Comparison) -> String {
             comparison.kind_word(),
             ignored.join(" ")
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use whyshelf_core::domain::id::EntityId;
+    use whyshelf_core::domain::nonempty::NonEmptyVec;
+
+    use super::*;
+
+    /// Each way an upstream does not stand as a settled approval has words of its own,
+    /// as the model tells the groups apart: no two alike.
+    #[test]
+    fn each_way_an_upstream_does_not_stand_as_a_settled_approval_has_its_own_words() {
+        let id: EntityId = "01900000-0000-7000-8000-000000000001".parse().unwrap();
+        let successors = NonEmptyVec::new(DocId::new(id), vec![]);
+        let refused = |r| UpstreamStatus::Unapproved(Unapproved::Refused(r));
+        let words = [
+            (
+                UpstreamStatus::Unapproved(Unapproved::Pending),
+                "pending (no decision stands about it)",
+            ),
+            (
+                UpstreamStatus::Unseconded,
+                "unseconded (its approval awaits the approvals of other names its rule asks for)",
+            ),
+            (
+                UpstreamStatus::Unapproved(Unapproved::Superseded { successors }),
+                "deprecated; follow its successor",
+            ),
+            (refused(Refused::Unreplaced), "deprecated with no successor"),
+            (refused(Refused::Denied), "denied"),
+            (refused(Refused::Retired), "retired"),
+        ];
+        for (status, word) in &words {
+            assert_eq!(upstream_status(status), *word, "{status:?}");
+        }
+        let mut told: Vec<&str> = words.iter().map(|(_, word)| *word).collect();
+        told.sort_unstable();
+        told.dedup();
+        assert_eq!(told.len(), words.len());
     }
 }

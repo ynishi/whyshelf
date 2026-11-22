@@ -350,9 +350,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 let standing = match loaded.ledger.status_of(subject) {
                     DeclaredStatus::Pending => return Err(ShelfError::NothingToRevoke { subject }),
                     DeclaredStatus::Approved { judgement, .. }
-                    | DeclaredStatus::Denied { judgement }
-                    | DeclaredStatus::Deprecated { judgement }
-                    | DeclaredStatus::Retired { judgement } => judgement,
+                    | DeclaredStatus::Against { judgement, .. } => judgement,
                 };
                 let targets = NonEmptySet::from_set(BTreeSet::from([standing]))?;
                 (Plan::Revoke(targets, reason), None)

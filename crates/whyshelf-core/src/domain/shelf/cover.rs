@@ -2,8 +2,9 @@
 //! and the rule of an exemption both read.
 //!
 //! ```text
-//!   cover     ──► schema, artifact, doc,    counts ──► whether a document counts
-//!                 build, ledger               covering_reach ──► Reached { docs, artifacts }
+//!   cover     ──► schema, artifact, doc,    decided_of ──► what was decided of a document
+//!                 build, ledger               counts ──► whether a document counts
+//!                                             covering_reach ──► Reached { docs, artifacts }
 //!   exemption ──► cover, ledger, ...         reads it, to accept and to read an exemption
 //!   coverage  ──► cover, exemption, ...      gaps, exemptions, repeated: what a covering link
 //!                                            expects and does not reach (CoverAssessment)
@@ -16,10 +17,11 @@
 //! [`exemption`](super::exemption) reads, freshness tells the notices from what
 //! [`coverage`](super::coverage) decided, and the exemption reads nothing of either.
 //! Which documents count is [`counts`], the one statement of it: what the ledger
-//! declares and a [`Standing`](super::freshness::Standing) each come to a
-//! [`Decided`], and [`Standing::stands`] is `counts` of its own. What a covering link
-//! reaches is [`covering_reach`], the one walker, for documents and for artifacts
-//! alike ([`Reached`]).
+//! declares ([`decided_of`]) and a [`Standing`](super::freshness::Standing) each come
+//! to a [`Decided`], and [`Standing::stands`] is `counts` of its own. What a covering
+//! link reaches is [`covering_reach`], the one walker, for documents and for artifacts
+//! alike ([`Reached`]). Which decisions go against a document is not said here: it is
+//! [`NotStanding`]'s, which a [`Decided`] only carries.
 //!
 //! [`Standing::stands`]: super::freshness::Standing::stands
 
@@ -30,23 +32,20 @@ use crate::domain::id::DocId;
 use super::artifact::ArtifactName;
 use super::build::Shelf;
 use super::doc::LinkState;
-use super::ledger::DeclaredStatus;
+use super::ledger::{DeclaredStatus, Ledger, NotStanding};
 use super::schema::{BookName, EntryName};
 
 /// What was decided about a document, without what each decision carries: the one
-/// shape that a declared status and a standing both come to.
+/// shape that a declared status and a standing both come to. A decision against it
+/// carries which one ([`NotStanding`]); this says no more of which decisions those are.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Decided {
+pub(crate) enum Decided {
     /// No decision stands.
     Pending,
     /// An approval stands, at whatever freshness.
     Approved,
-    /// A denial stands.
-    Denied,
-    /// A deprecation stands.
-    Deprecated,
-    /// A retirement stands.
-    Retired,
+    /// A decision against it stands.
+    Against(NotStanding),
 }
 
 impl From<&DeclaredStatus> for Decided {
@@ -54,22 +53,26 @@ impl From<&DeclaredStatus> for Decided {
         match status {
             DeclaredStatus::Pending => Self::Pending,
             DeclaredStatus::Approved { .. } => Self::Approved,
-            DeclaredStatus::Denied { .. } => Self::Denied,
-            DeclaredStatus::Deprecated { .. } => Self::Deprecated,
-            DeclaredStatus::Retired { .. } => Self::Retired,
+            DeclaredStatus::Against { status, .. } => Self::Against(*status),
         }
     }
 }
 
+/// What the ledger declares of the document `id`, as a [`Decided`]: the one place that
+/// is made of a ledger, for what reads it of any document (the assessment of
+/// coverage, the rule of an exemption).
+pub(crate) fn decided_of(ledger: &Ledger, id: DocId) -> Decided {
+    Decided::from(&ledger.status_of(id))
+}
+
 /// Whether a document counts for coverage (and stands): no decision went against
-/// it, it is pending or approved. What was denied, deprecated or retired neither
-/// reaches nor is expected to be reached. The one statement of it:
-/// [`Standing::stands`] is this of the standing, and an exemption reads it of what
-/// the ledger declares.
+/// it. What was decided against neither reaches nor is expected to be reached. The one
+/// statement of it: [`Standing::stands`] is this of the standing, and an exemption
+/// reads it of what the ledger declares.
 ///
 /// [`Standing::stands`]: super::freshness::Standing::stands
-pub fn counts(decided: Decided) -> bool {
-    matches!(decided, Decided::Pending | Decided::Approved)
+pub(crate) fn counts(decided: Decided) -> bool {
+    !matches!(decided, Decided::Against(_))
 }
 
 /// What the covering links reach: each document, by (document, book of the link,
@@ -80,7 +83,7 @@ pub fn counts(decided: Decided) -> bool {
 /// link (the names are equal, [`ArtifactName`]); the space is the link's, so it is not
 /// part of the key.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Reached {
+pub(crate) struct Reached {
     docs: BTreeMap<(DocId, BookName, EntryName), BTreeSet<DocId>>,
     artifacts: BTreeMap<(BookName, EntryName, ArtifactName), BTreeSet<DocId>>,
 }
@@ -88,7 +91,7 @@ pub struct Reached {
 impl Reached {
     /// The documents that reach the document `target` through the link `link` of the
     /// book `book`, when some does.
-    pub fn doc_from(
+    pub(crate) fn doc_from(
         &self,
         target: DocId,
         book: &BookName,
@@ -99,7 +102,7 @@ impl Reached {
 
     /// The documents that reach the name `name` through the link `link` of the book
     /// `book`, when some does.
-    pub fn artifact_from(
+    pub(crate) fn artifact_from(
         &self,
         book: &BookName,
         link: &EntryName,
@@ -112,14 +115,15 @@ impl Reached {
 
 /// What the covering links (a [`LinkKind::cover`] or an
 /// [`ArtifactLinkKind::cover`] of some strength) reach from the valid documents
-/// `counted` says count ([`counts`]): the one place a covering link is followed.
+/// that count (`decided` says what was decided of each, and [`counts`] reads it): the
+/// one place a covering link is followed.
 ///
 /// [`LinkKind::cover`]: super::schema::LinkKind::cover
 /// [`ArtifactLinkKind::cover`]: super::schema::ArtifactLinkKind::cover
-pub fn covering_reach(shelf: &Shelf, counted: impl Fn(DocId) -> bool) -> Reached {
+pub(crate) fn covering_reach(shelf: &Shelf, decided: impl Fn(DocId) -> Decided) -> Reached {
     let mut reached = Reached::default();
     for doc in shelf.docs().values() {
-        if !counted(doc.id()) {
+        if !counts(decided(doc.id())) {
             continue;
         }
         for (name, link) in doc.links() {

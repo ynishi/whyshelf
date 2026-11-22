@@ -64,7 +64,7 @@ fn a_document_lists_the_paths_that_name_no_file_as_written() {
 }
 
 #[test]
-fn a_pending_or_approved_document_has_a_notice_for_each_and_a_denied_one_none() {
+fn a_document_no_decision_went_against_has_a_notice_for_each_and_one_decided_against_none() {
     let s = the_shelf();
     let pending = assess(&s, &ledger(Vec::new()), JudgedAt::new(100));
     assert_eq!(absent_notices(&pending, 2).len(), 2);

@@ -302,7 +302,8 @@ fn every_cause_is_located_at_its_origin_with_the_event_that_happened_there() {
         pin: up.clone(),
         status,
     };
-    let deprecated = |successors| UpstreamStatus::Deprecated { successors };
+    let superseded = |successors| UpstreamStatus::Unapproved(Unapproved::Superseded { successors });
+    let refused = |refused| UpstreamStatus::Unapproved(Unapproved::Refused(refused));
     let cycle = CycleId {
         source: CycleSource::Frames,
         min: docid(1),
@@ -336,32 +337,29 @@ fn every_cause_is_located_at_its_origin_with_the_event_that_happened_there() {
         // The three ways an upstream is declared, which `Cause::severity` splits the
         // same way.
         (
-            declared(UpstreamStatus::Pending),
+            declared(UpstreamStatus::Unapproved(Unapproved::Pending)),
             upstream(OriginEvent::UpstreamPending),
         ),
         (
-            declared(deprecated(Successors::Some(NonEmptyVec::new(
-                docid(9),
-                vec![],
-            )))),
+            declared(superseded(NonEmptyVec::new(docid(9), vec![]))),
             upstream(OriginEvent::UpstreamSuperseded),
         ),
         (
-            declared(deprecated(Successors::None)),
+            declared(refused(Refused::Unreplaced)),
             upstream(OriginEvent::UpstreamRefused),
         ),
         (
-            declared(UpstreamStatus::Denied),
+            declared(refused(Refused::Denied)),
             upstream(OriginEvent::UpstreamRefused),
         ),
         (
-            declared(UpstreamStatus::Retired),
+            declared(refused(Refused::Retired)),
             upstream(OriginEvent::UpstreamRefused),
         ),
         (
             Cause::Via {
                 pin: up.clone(),
-                severity: Severity::Stale,
+                carried: Carried::Stale,
             },
             None,
         ),
