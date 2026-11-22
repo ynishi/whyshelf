@@ -13,13 +13,13 @@ use whyshelf_core::domain::shelf::artifact::{
 use whyshelf_core::domain::shelf::build::{DocReading, RawValue, Shelf};
 use whyshelf_core::domain::shelf::freshness::assess;
 use whyshelf_core::domain::shelf::ledger::{
-    Admit, Decision, JudgedAt, JudgementId, Ledger, frame_approve,
+    Admit, Decision, JudgedAt, JudgementId, Ledger, ReadPin, frame_approve,
 };
 use whyshelf_core::domain::shelf::schema::{
     BookSchemaDecl, Cardinality, CompareDecl, FieldEntryDecl, FieldPresence, FieldTypeDecl,
     KeyPatternDecl, LinkEntryDecl, LinkTargetDecl, Propagation, Schema,
 };
-use whyshelf_core::domain::shelf::snapshot::Snapshot;
+use whyshelf_core::domain::shelf::snapshot::{Snapshot, SnapshotItem};
 
 use super::*;
 
@@ -151,34 +151,40 @@ fn a_change_of_comparison_is_written_with_the_file_the_link_and_both_comparisons
     assert_eq!(json["space"], "file");
 }
 
+/// The item of the artifact of `snapshot`, with the pin it is.
+fn artifact_of(snapshot: &Snapshot) -> (&SnapshotItem, &ReadPin) {
+    snapshot
+        .items()
+        .iter()
+        .find_map(|item| match item.kind() {
+            ItemKind::Artifact(read) => Some((item, read)),
+            ItemKind::Doc(_) => None,
+        })
+        .unwrap()
+}
+
 /// The diff item of `tests/a.rs` for an approval of `then` and the file `now`, both
 /// compared by the lines without `//`.
 fn diff_of(then: &[u8], now: &[u8]) -> DiffItemOut {
     let lines = schema(lines_without_slashes());
-    let ledger = approved(&shelf(&lines, then));
+    let shelf = shelf(&lines, then);
+    let ledger = approved(&shelf);
     let snapshot = Snapshot::of(&ledger, DocId::new(eid(1))).unwrap();
-    let item = snapshot
-        .items()
-        .iter()
-        .find(|i| matches!(i.role(), ItemRole::Artifact { .. }))
-        .unwrap()
-        .clone();
-    let state = shelf(&lines, now)
-        .doc(DocId::new(eid(1)))
-        .unwrap()
-        .artifact_links()["tests"]
-        .artifacts()[0]
-        .state()
-        .clone();
-    let now_item = ItemNow::Artifact(state);
-    let changed = item.changed_from(&now_item);
+    let (item, read) = artifact_of(&snapshot);
+    let mut readings = ArtifactReadings::new();
+    readings.insert(
+        read.read_as().space().clone(),
+        read.read_as().name().clone(),
+        ArtifactReading::of_bytes(
+            now,
+            &BTreeSet::from([read.pin().comparison().clone()]),
+            None,
+        ),
+    );
     let diff = DiffItem {
-        item,
+        compared: item.compared(&shelf, &readings),
         approved: Retrieval::Read(then.to_vec()),
-        now: now_item,
-        file: Some(rel("tests/a.rs")),
         current: Some(now.to_vec()),
-        changed,
     };
     let names = Names::default();
     diff_item(&Namer(&names), &diff)
@@ -193,6 +199,7 @@ fn the_diff_of_a_file_whose_lines_are_the_same_is_empty() {
     let other = diff_of(THEN, b"assert!(slow);\n");
     assert!(other.changed);
     assert_eq!(other.now, Some("present"));
+    assert_eq!(other.file.as_deref(), Some("tests/a.rs"));
     let text = other.diff.unwrap();
     assert!(text.contains("-assert!(fast);"), "{text}");
     assert!(text.contains("+assert!(slow);"), "{text}");
@@ -200,22 +207,14 @@ fn the_diff_of_a_file_whose_lines_are_the_same_is_empty() {
 
 #[test]
 fn an_artifact_that_cannot_be_told_is_unknown_and_not_absent_in_diff_and_trace() {
-    use whyshelf_core::domain::shelf::artifact::{ArtifactState, Untold};
-    let ledger = approved(&shelf(&schema(None), THEN));
+    let shelf = shelf(&schema(None), THEN);
+    let ledger = approved(&shelf);
     let snapshot = Snapshot::of(&ledger, DocId::new(eid(1))).unwrap();
-    let item = snapshot
-        .items()
-        .iter()
-        .find(|i| matches!(i.role(), ItemRole::Artifact { .. }))
-        .unwrap()
-        .clone();
-    let now = ItemNow::Artifact(ArtifactState::Unknown(Untold::NoAnswer));
+    let (item, _) = artifact_of(&snapshot);
+    // No answer for the name: it cannot be told, which is not read as absent.
     let diff = DiffItem {
-        changed: item.changed_from(&now),
-        item,
+        compared: item.compared(&shelf, &ArtifactReadings::new()),
         approved: Retrieval::Read(THEN.to_vec()),
-        now,
-        file: None,
         current: None,
     };
     let names = Names::default();
@@ -223,6 +222,7 @@ fn an_artifact_that_cannot_be_told_is_unknown_and_not_absent_in_diff_and_trace()
     assert!(out.changed);
     assert_eq!(out.now, Some("unknown"));
     assert_eq!(out.current_hash, None);
+    assert_eq!(out.file, None);
     let json = serde_json::to_value(&out).unwrap();
     assert_eq!(json["now"], "unknown");
     assert_eq!(json["item"]["name"], "tests/a.rs");

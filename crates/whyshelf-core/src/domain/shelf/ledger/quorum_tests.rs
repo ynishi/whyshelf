@@ -1,5 +1,6 @@
 //! Tests of how many names an approval and a declaration of the same meaning count
-//! ([`Ledger::quorum`], [`Ledger::doc_same_meaning`], [`Ledger::same_meaning_short`]):
+//! ([`StandingApproval::quorum`], [`Ledger::doc_same_meaning`],
+//! [`Ledger::same_meaning_short`]):
 //! under a rule that asks for two names, one approval is short and another name's
 //! approval of the same content meets it; a name counts once, and only while its own
 //! latest reading has not lapsed; an approval no rule reads needs one name; an edit
@@ -13,7 +14,7 @@ use crate::domain::actor::{Actor, Attribution};
 use crate::domain::shelf::artifact::ArtifactHash;
 use crate::domain::shelf::fixtures_tests::{
     admitted, approve_as, asking, docid, file_artifact, file_space, fr, fr_titled, jid, name,
-    ruled_shelf, ruled_shelf_with, shelf, sp_testing,
+    read_pins, ruled_shelf, ruled_shelf_with, shelf, sp_testing, standing,
 };
 use crate::domain::shelf::schema::{Approvals, DecideDecl};
 
@@ -32,6 +33,11 @@ fn approval(
     read: (&str, i64, Option<i64>),
 ) -> Record {
     approve_as(shelf, &admitted(shelf, before.to_vec()), 1, judgement, read)
+}
+
+/// The quorum of the approval that stands about FR-1 in `ledger`, at `now`.
+fn quorum(ledger: &Ledger, now: JudgedAt) -> Quorum {
+    standing(ledger, docid(1)).quorum(now)
 }
 
 /// A quorum short of `need`, with these names counting.
@@ -75,23 +81,24 @@ fn hash_titled(title: &str) -> DocHash {
 #[test]
 fn an_approval_is_short_until_another_name_approves_the_same_content() {
     let shelf = ruled_shelf(asking(2, None), vec![fr(1, &[])]);
+    // With no approval standing, nothing awaits names: there is no approval to ask.
     let nothing = admitted(&shelf, Vec::new());
-    assert_eq!(nothing.quorum(docid(1), now()), Quorum::Met);
+    assert!(matches!(nothing.declared(docid(1)), DeclaredNow::Pending));
 
     let first = approval(&shelf, &[], 1001, ("ana", 10, None));
     let ledger = admitted(&shelf, vec![first.clone()]);
-    assert_eq!(ledger.quorum(docid(1), now()), short(&["ana"], 2));
+    assert_eq!(quorum(&ledger, now()), short(&["ana"], 2));
 
     // The same name again, with another expiry, renews its reading: one name still.
     let again = approval(&shelf, from_ref(&first), 1002, ("ana", 20, Some(500)));
     let records = vec![first, again];
     let ledger = admitted(&shelf, records.clone());
-    assert_eq!(ledger.quorum(docid(1), now()), short(&["ana"], 2));
+    assert_eq!(quorum(&ledger, now()), short(&["ana"], 2));
 
     // Another name's reading of the same content meets it.
     let second = approval(&shelf, &records, 1003, ("bo", 30, Some(500)));
     let ledger = admitted(&shelf, [records, vec![second]].concat());
-    assert_eq!(ledger.quorum(docid(1), now()), Quorum::Met);
+    assert_eq!(quorum(&ledger, now()), Quorum::Met);
 }
 
 #[test]
@@ -101,8 +108,8 @@ fn a_reader_whose_own_latest_reading_lapsed_counts_no_more_whoever_approved_last
     let ana = approval(&shelf, &[], 1001, ("ana", 10, Some(50)));
     let bo = approval(&shelf, from_ref(&ana), 1002, ("bo", 20, None));
     let ledger = admitted(&shelf, vec![ana, bo]);
-    assert_eq!(ledger.quorum(docid(1), JudgedAt::new(40)), Quorum::Met);
-    let lapsed = ledger.quorum(docid(1), JudgedAt::new(50));
+    assert_eq!(quorum(&ledger, JudgedAt::new(40)), Quorum::Met);
+    let lapsed = quorum(&ledger, JudgedAt::new(50));
     assert_eq!(lapsed, short(&["bo"], 2));
 
     // The other way round: ana with none, then bo until 50, whose approval stands
@@ -110,15 +117,15 @@ fn a_reader_whose_own_latest_reading_lapsed_counts_no_more_whoever_approved_last
     let ana = approval(&shelf, &[], 1001, ("ana", 10, None));
     let bo = approval(&shelf, from_ref(&ana), 1002, ("bo", 20, Some(50)));
     let ledger = admitted(&shelf, vec![ana, bo]);
-    assert_eq!(ledger.quorum(docid(1), JudgedAt::new(40)), Quorum::Met);
-    let lapsed = ledger.quorum(docid(1), JudgedAt::new(60));
+    assert_eq!(quorum(&ledger, JudgedAt::new(40)), Quorum::Met);
+    let lapsed = quorum(&ledger, JudgedAt::new(60));
     assert_eq!(lapsed, short(&["ana"], 2));
 
     // Both lapsed: the reader of the approval that stands is told alone.
     let ana = approval(&shelf, &[], 1001, ("ana", 10, Some(50)));
     let bo = approval(&shelf, from_ref(&ana), 1002, ("bo", 20, Some(50)));
     let ledger = admitted(&shelf, vec![ana, bo]);
-    let lapsed = ledger.quorum(docid(1), JudgedAt::new(60));
+    let lapsed = quorum(&ledger, JudgedAt::new(60));
     assert_eq!(lapsed, short(&["bo"], 2));
 }
 
@@ -128,16 +135,16 @@ fn an_approval_no_rule_reads_needs_one_name_lapsed_or_not() {
     let plain = shelf(vec![fr(1, &[])]);
     let lapsing = approval(&plain, &[], 1001, ("ana", 10, Some(50)));
     let ledger = admitted(&plain, vec![lapsing]);
-    assert_eq!(ledger.quorum(docid(1), now()), Quorum::Met);
+    assert_eq!(quorum(&ledger, now()), Quorum::Met);
 
     // A record made before the rule's `since` is unruled; one made from it is not.
     let ruled = ruled_shelf(asking(2, Some(100)), vec![fr(1, &[])]);
     let later = JudgedAt::new(200);
     let before = admitted(&ruled, vec![approval(&ruled, &[], 1001, ("ana", 99, None))]);
-    assert_eq!(before.quorum(docid(1), later), Quorum::Met);
+    assert_eq!(quorum(&before, later), Quorum::Met);
     let from = approval(&ruled, &[], 1001, ("ana", 100, None));
     let from = admitted(&ruled, vec![from]);
-    assert_eq!(from.quorum(docid(1), later), short(&["ana"], 2));
+    assert_eq!(quorum(&from, later), short(&["ana"], 2));
 }
 
 /// ana's approval of FR-1 with this title, under `decide`, at 10: the pin of its hash.
@@ -369,7 +376,7 @@ fn an_artifact_edge_is_counted_over_every_name_of_the_pins_way_as_freshness_read
     // reads the pin: it is joined, and not told.
     let both = [records, vec![of(2002, "bo", "tests/b.rs")]].concat();
     let ledger = admitted(&then, both);
-    let pin = ledger.read_pins(docid(2)).remove(0);
+    let pin = read_pins(&ledger, docid(2)).remove(0);
     assert_eq!(
         ledger.pin_same_meaning(&pin, &one, &two),
         Some(NonEmptyVec::new(jid(2001), vec![jid(2002)]))

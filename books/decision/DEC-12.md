@@ -4,7 +4,7 @@ key: "DEC-12"
 issues: ["#152"]
 rejected: ["Stop at the first broken file: one bad file would hide the state of every other", "Call an identity gone while some file's identity cannot be read: it may be in that file", "Make a document that cannot be told a notice, as a name of an artifact that cannot be told is: the file it may be in is the shelf's own and cannot be read, so an approval would read as holding over books that are not sound"]
 related: ["DEC-4"]
-rustdoc: ["whyshelf_core::domain::shelf::build::Shelf::build", "whyshelf_core::domain::shelf::build::DocProblem", "whyshelf_core::domain::shelf::build::DocState", "whyshelf_core::domain::shelf::doc::UnresolvedWhy", "whyshelf_core::domain::shelf::snapshot::ItemNow"]
+rustdoc: ["whyshelf_core::domain::shelf::build::Shelf::build", "whyshelf_core::domain::shelf::build::DocProblem", "whyshelf_core::domain::shelf::build::DocState", "whyshelf_core::domain::shelf::doc::UnresolvedWhy", "whyshelf_core::domain::shelf::snapshot::ItemView"]
 serves: ["REQ-3", "REQ-8"]
 title: "The build never fails; a file it cannot trust is an invalid document with every problem"
 ---

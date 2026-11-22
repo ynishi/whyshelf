@@ -105,7 +105,7 @@ fn the_rules_of_the_artifacts_ports_catch_what_they_are_written_for() {
 /// a glob import of the shelf (`super::super::*`, whose candidate files are all of
 /// `shelf/*.rs`); and to leave alone a file of tests (`tests.rs`, `*_tests.rs`), a link
 /// of a doc comment (which is no path to the rule), a module of the ledger's own
-/// ground (`schema`) and the ledger's own children.
+/// ground (`schema`, `drift`) and the ledger's own children.
 ///
 /// It does not see a path inside the arguments of a macro (`matches!(d,
 /// super::super::cover::X)`: tokens, not a path), a path through an alias of a module
@@ -139,6 +139,7 @@ fn the_rule_of_the_ledgers_ground_catches_what_it_is_written_for() {
         ),
         ("ledger/tests.rs", "use super::super::freshness::assess;\n"),
         ("ledger/admit.rs", "use super::super::schema::BookName;\n"),
+        ("ledger/compared.rs", "use super::super::drift::Edit;\n"),
         ("ledger/record.rs", "use super::Decision;\n"),
         (
             "ledger/decision.rs",
@@ -165,6 +166,57 @@ fn the_rule_of_the_ledgers_ground_catches_what_it_is_written_for() {
             format!("{SHELF}/ledger/frame.rs:1"),
             format!("{SHELF}/ledger/pin.rs:1"),
             format!("{SHELF}/ledger/readers.rs:1"),
+        ]
+    );
+}
+
+/// The rule `drift-reads-only-its-ground` catches what it is written for, run as
+/// `arch-lint.toml` declares it over a tree of fixtures written to a directory of its
+/// own. drift reads nothing it denies, so the rule passes in the tree without showing
+/// that it works: here it is shown to catch a `use` of the ledger (`super::ledger::X`),
+/// of a module that reads the ledger (stats), a path written in full in code
+/// (freshness) and a `use` through `crate::` (snapshot); and to leave alone a module of
+/// its own ground (`doc`, `artifact`) and a file of tests (`tests.rs`), which reads the
+/// ledger to build its cases. What it does not see is what the ledger's rule does not
+/// (a path inside a macro, a module through an alias, a re-export), and a review reads
+/// those.
+///
+/// The fixture writes a `Cargo.toml` with a `[package]` table, as `super::` is resolved
+/// from the module path of a file in its package.
+#[test]
+fn the_rule_of_drifts_ground_catches_what_it_is_written_for() {
+    const SHELF: &str = "crates/whyshelf-core/src/domain/shelf";
+    let fixtures = [
+        (
+            "drift.rs",
+            "use super::ledger::JudgementId;\n\
+             use super::stats::Stats;\n\
+             fn f() { let _ = super::freshness::assess; }\n\
+             use crate::domain::shelf::snapshot::ItemCompared;\n\
+             use super::doc::DocHash;\n\
+             use super::artifact::Comparison;\n",
+        ),
+        ("drift/tests.rs", "use super::super::ledger::JudgementId;\n"),
+    ];
+    let package = (
+        "crates/whyshelf-core/Cargo.toml".to_owned(),
+        "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\n",
+    );
+    let files: Vec<(String, &str)> = std::iter::once(package)
+        .chain(
+            fixtures
+                .into_iter()
+                .map(|(path, text)| (format!("{SHELF}/{path}"), text)),
+        )
+        .collect();
+    let caught = caught_over("whyshelf-arch-lint-drift-fixtures", &files);
+    assert_eq!(
+        caught("drift-reads-only-its-ground"),
+        [
+            format!("{SHELF}/drift.rs:1"),
+            format!("{SHELF}/drift.rs:2"),
+            format!("{SHELF}/drift.rs:3"),
+            format!("{SHELF}/drift.rs:4"),
         ]
     );
 }

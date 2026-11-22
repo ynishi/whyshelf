@@ -37,7 +37,7 @@
 //!    writes it means the target. [`Gathered`] says so, since it is made only from
 //!    writers that were all read.
 //! 2. The approval that stands about the document that writes the link
-//!    (`Ledger::standing_decision`; one that is not an approval is no evidence)
+//!    (`Ledger::declared`; one that is not an approval is no evidence)
 //!    pinned, for that link, a document that writes the old key: the target
 //!    ([`Evidence::Pinned`] of [`Side::Follow`]), another writer ([`Side::Stay`]), or
 //!    both ([`Side::Both`]).
@@ -66,7 +66,7 @@ use crate::domain::shelf::build::{
     Writers,
 };
 use crate::domain::shelf::doc::DocKey;
-use crate::domain::shelf::ledger::{DecisionVerb, Ledger};
+use crate::domain::shelf::ledger::{DeclaredNow, Ledger};
 use crate::domain::shelf::schema::EntryName;
 use crate::domain::words::{Join, Mark, listed};
 
@@ -406,7 +406,7 @@ impl RekeyPlan {
 ///
 /// 1. The evidence: nobody but `target` writes the key
 ///    ([`Evidence::OnlyWriter`]); else the approval that stands about the document
-///    (`Ledger::standing_decision`), when it is an approval, read for the links of the
+///    (`Ledger::declared`), when it is an approval, read for the links of the
 ///    document that write the key, and only the pins whose upstream writes the key.
 ///    A document with no identity has none.
 /// 2. The word is laid beside it (`Reading`'s page): the evidence is not dropped for
@@ -470,13 +470,12 @@ fn evidence(
     let Some(id) = id else {
         return Found::Nothing(Hints::NoIdentity);
     };
-    let Some(decision) = ledger.standing_decision(id) else {
+    let DeclaredNow::Approved(standing) = ledger.declared(id) else {
         return Found::Nothing(Hints::NoApproval);
     };
-    let DecisionVerb::Approve { frame, .. } = decision.verb() else {
-        return Found::Nothing(Hints::NoApproval);
-    };
-    let pinned: Vec<DocId> = frame
+    let pinned: Vec<DocId> = standing
+        .view()
+        .frame()
         .iter()
         .filter(|pin| links.contains(&pin.link()) && writers.contains(&pin.target()))
         .map(|pin| pin.target())

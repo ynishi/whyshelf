@@ -394,7 +394,7 @@ fn a_row_carries_the_decision_that_stands_with_who_when_and_why() {
         "the approval stands again"
     );
     assert!(
-        matches!(row.declared, DeclaredStatus::Approved { judgement, .. } if judgement == approved.record.id())
+        matches!(&row.declared, DeclaredStatus::Approved(approval) if approval.judgement() == approved.record.id())
     );
     block_on(app.judge(revoke())).unwrap();
     let row = block_on(app.get(&r("FR-1"))).unwrap().row;

@@ -111,12 +111,13 @@ deny = [
 message = "the registry hands an ask to an adapter and answers none itself: the answers for a space with no adapter and for an ask not answered are the dispatch's, in the core."
 
 # The ledger reads the shelf's modules of what a document is (artifact, build, doc, graph,
-# schema) and nothing that reads the ledger: a module that reads it (freshness, cover,
-# exemption, order, ...) is read by what is above it, never by the ledger, so what was
-# decided against a document is read once, from the records. The rule is written from the
-# side that is allowed: `ledger-reads-not` is every module of the shelf but the ledger and
-# the five it reads, so a module added to the shelf is out of the ledger's reach until this
-# list says otherwise (books/decision/DEC-97.md). It is a rule of `[[deny-scope-dep]]`
+# schema), and drift, what a pinned content comes to now, and nothing that reads the
+# ledger: a module that reads it (freshness, cover, exemption, order, ...) is read by what
+# is above it, never by the ledger, so what was decided against a document is read once,
+# from the records. The rule is written from the side that is allowed: `ledger-reads-not`
+# is every module of the shelf but the ledger and the six it reads, so a module added to
+# the shelf is out of the ledger's reach until this list says otherwise
+# (books/decision/DEC-97.md, books/decision/DEC-98.md). It is a rule of `[[deny-scope-dep]]`
 # because that one resolves `super::` and `super::super::`, the way a file of the ledger
 # writes the path of a sibling module; a rule of `[[restrict-use]]` compares a path as it is
 # written. A file of tests only is left out, as it asks through the assessment.
@@ -135,6 +136,7 @@ exclude = [
     "crates/whyshelf-core/src/domain/shelf/artifact.rs", "crates/whyshelf-core/src/domain/shelf/artifact/**",
     "crates/whyshelf-core/src/domain/shelf/build.rs", "crates/whyshelf-core/src/domain/shelf/build/**",
     "crates/whyshelf-core/src/domain/shelf/doc.rs", "crates/whyshelf-core/src/domain/shelf/doc/**",
+    "crates/whyshelf-core/src/domain/shelf/drift.rs", "crates/whyshelf-core/src/domain/shelf/drift/**",
     "crates/whyshelf-core/src/domain/shelf/graph.rs", "crates/whyshelf-core/src/domain/shelf/graph/**",
     "crates/whyshelf-core/src/domain/shelf/schema.rs", "crates/whyshelf-core/src/domain/shelf/schema/**",
 ]
@@ -145,6 +147,32 @@ from = "ledger-not-tests"
 to = ["ledger-reads-not"]
 message = "ledger reads only the modules of the shelf left out of the scope ledger-reads-not"
 doc = "books/decision/DEC-97.md"
+
+# What a pinned content comes to now (drift) reads the two modules of what a content is
+# (artifact, doc) and nothing else of the shelf: not the build (a document that is not
+# valid comes to it as a failure of a type it does not name), and not the ledger, which
+# reads it, nor what reads either. It is written from the side that is allowed, as the
+# ledger's rule is (books/decision/DEC-98.md). A file of tests only is left out.
+[[scopes]]
+name = "drift-not-tests"
+paths = ["crates/whyshelf-core/src/domain/shelf/drift.rs", "crates/whyshelf-core/src/domain/shelf/drift/**"]
+exclude = ["crates/whyshelf-core/src/domain/shelf/drift/**/tests.rs", "crates/whyshelf-core/src/domain/shelf/drift/**/*_tests.rs"]
+
+[[scopes]]
+name = "drift-reads-not"
+paths = ["crates/whyshelf-core/src/domain/shelf/**"]
+exclude = [
+    "crates/whyshelf-core/src/domain/shelf/drift.rs", "crates/whyshelf-core/src/domain/shelf/drift/**",
+    "crates/whyshelf-core/src/domain/shelf/artifact.rs", "crates/whyshelf-core/src/domain/shelf/artifact/**",
+    "crates/whyshelf-core/src/domain/shelf/doc.rs", "crates/whyshelf-core/src/domain/shelf/doc/**",
+]
+
+[[deny-scope-dep]]
+name = "drift-reads-only-its-ground"
+from = "drift-not-tests"
+to = ["drift-reads-not"]
+message = "drift reads only the modules of the shelf left out of the scope drift-reads-not"
+doc = "books/decision/DEC-98.md"
 
 [[restrict-use]]
 name = "async-infra"

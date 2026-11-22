@@ -1,0 +1,118 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::build",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::check_withdraw",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::standing_decision",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Ledger::status_of",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::LedgerProblem",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Record::from_canon",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "07522f832291156bffbc20595ddc6f91106498f5",
+      "hash": "sha256:80dd8e3530c23c4e6c67f631d9dc9386855de8f87b8bad91373fae4af50df750",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-378a-756b-a5b1-fd2da76f8d8c"
+    },
+    {
+      "address": "38cd861bcfe3307a43e18ea96a18fd5fe7575a28",
+      "hash": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    }
+  ],
+  "id": "01a2027b-ded7-7520-920e-c59c370fc21b",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+  "seen_address": "74372b578812f77ad232998a3ae6850437d50c0a",
+  "subject": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157",
+  "v": 1,
+  "verb": "approve"
+}

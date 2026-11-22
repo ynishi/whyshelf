@@ -348,7 +348,7 @@ fn presence(presence: &DocPresence) -> PresenceOut {
 fn declared(status: &DeclaredStatus) -> (&'static str, Option<i64>) {
     match status {
         DeclaredStatus::Pending => ("pending", None),
-        DeclaredStatus::Approved { expires, .. } => ("approved", expires.map(|e| e.millis())),
+        DeclaredStatus::Approved(approval) => ("approved", approval.expires().map(|e| e.millis())),
         // A decision against it is told in the word of its standing, written once.
         DeclaredStatus::Against { status, .. } => (standing(StandingKind::from(*status)), None),
     }

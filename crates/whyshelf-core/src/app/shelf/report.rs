@@ -34,11 +34,9 @@ use crate::domain::shelf::schema::{
     Approvals, BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
 };
 use crate::domain::shelf::settle::Settlement;
-use crate::domain::shelf::snapshot::{ItemNow, Retrieval, Snapshot, SnapshotItem};
+use crate::domain::shelf::snapshot::{ItemCompared, Retrieval, Snapshot, SnapshotItem};
 use crate::domain::shelf::stats::Stats;
 use crate::domain::shelf::untold::UntoldName;
-
-use crate::domain::location::RelPath;
 
 use super::ports::UnreadableRecord;
 
@@ -777,20 +775,15 @@ pub struct ApprovedReport {
 /// of a difference is the surface's work).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffItem {
-    /// The item as it was approved.
-    pub item: SnapshotItem,
+    /// The item as it was approved, beside what it is now: its hash now, whether it
+    /// changed, and for a document the file that holds it now
+    /// ([`SnapshotItem::compared`]).
+    pub compared: ItemCompared,
     /// The content as it was approved, or why it could not be read back.
     pub approved: Retrieval,
-    /// What it is now, by hash.
-    pub now: ItemNow,
-    /// For a document, the file that holds it now, if one does; none for an
-    /// artifact (its space and name are in the item).
-    pub file: Option<RelPath>,
     /// The bytes of the document's file, or of the artifact, now; none when nothing
     /// is there.
     pub current: Option<Vec<u8>>,
-    /// Whether it is not what was approved ([`SnapshotItem::changed_from`]).
-    pub changed: bool,
 }
 
 /// The result of `diff`: each item of the approval that stands, then and now.

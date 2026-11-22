@@ -93,7 +93,7 @@ use super::super::artifact::{
     Comparison, ContentAddress, NamePrefix, PrefixAnswers, PrefixAsks, PrefixMove, Renamed,
     Revision, Space, SpacePrefixes, Untold,
 };
-use super::{ArtifactPin, DecisionVerb, JudgedAt, JudgementId, Ledger, PinnedArtifact};
+use super::{ArtifactPin, JudgedAt, JudgementId, Ledger, PinnedArtifact, RecordOrder};
 
 /// What a declaration says moved: in one space, from one name to another.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,6 +204,11 @@ impl Moved {
         self.at
     }
 
+    /// Where it is in the order of the records ([`RecordOrder`]), as a decision is.
+    pub(in crate::domain::shelf) fn order(&self) -> RecordOrder {
+        RecordOrder::of(self.at, self.id)
+    }
+
     /// Why.
     pub fn reason(&self) -> &NonBlank {
         &self.reason
@@ -243,10 +248,9 @@ impl MovedTo {
 ///
 /// Two values, kept apart: the [`ArtifactPin`] is what was pinned (what a record
 /// writes and what [`Readers`](super::Readers) compares), and the reading is
-/// derived from the ledger on every assessment, never stored. Made by
-/// [`Ledger::pins_read_now`] alone.
-///
-/// [`Ledger::pins_read_now`]: super::Ledger::pins_read_now
+/// derived from the ledger on every assessment, never stored. Made by the one rule
+/// that reads pins through the moves, which the view of an approval reads
+/// ([`ApprovalView::read_pins`](super::ApprovalView::read_pins)).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ReadPin {
     pub(super) pin: ArtifactPin,
@@ -296,6 +300,14 @@ impl ReadPin {
 /// before (at or after `made` for the first), the earliest, and of those at one time
 /// the one of the larger identity; each move is taken once. None when no move
 /// applies.
+///
+/// Whether a move reaches a pin is a question of time alone: a move reaches the pins of
+/// an approval made at or before it, an approval of the same millisecond included,
+/// whatever the two identities. The identity orders records of one time so that they
+/// make one list, and says nothing of what an approval read. Which moves are read at
+/// all is another rule, the cut of a reading ([`Before`](super::Before)), which keeps
+/// the records before one in the order of the records ([`RecordOrder`]): the moves
+/// handed in here are those it kept.
 ///
 /// The rule of [`Ledger::moved_to`], kept apart so it is the one place a move is
 /// followed.
@@ -524,17 +536,15 @@ impl PinnedNames {
     /// order of the documents and then of the record.
     pub fn of(ledger: &Ledger) -> Self {
         let mut names: BTreeMap<ArtifactKey, NonEmptyVec<PinnedThere>> = BTreeMap::new();
-        for subject in ledger.subjects() {
-            let revision = match ledger.standing_decision(*subject).map(|d| d.verb()) {
-                Some(DecisionVerb::Approve { revision, .. }) => revision.clone(),
-                _ => None,
-            };
-            for read in ledger.read_pins(*subject) {
+        for standing in ledger.approvals_that_stand() {
+            let view = standing.view();
+            let revision = view.revision().cloned();
+            for read in view.read_pins() {
                 let PinnedArtifact::Present { hash, address } = read.pin().seen() else {
                     continue;
                 };
                 let there = PinnedThere {
-                    subject: *subject,
+                    subject: view.subject(),
                     written: read.pin().artifact().clone(),
                     comparison: read.pin().comparison().clone(),
                     hash: *hash,

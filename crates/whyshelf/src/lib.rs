@@ -1017,7 +1017,8 @@
 //!
 //! A rule's `approvals` (1, the default, to 10) is how many different names approve
 //! the same content before an approval of its book settles
-//! ([`Ledger::quorum`](domain::shelf::ledger::Ledger::quorum)). A name counts once,
+//! ([`StandingApproval::quorum`](domain::shelf::ledger::StandingApproval::quorum)). A
+//! name counts once,
 //! and only while its own latest approval of that content has not lapsed, whoever
 //! approved last, so a document waits again once any reading it needed lapses (with
 //! every reading lapsed, the approval is `expired`, its last reader told alone). Until there

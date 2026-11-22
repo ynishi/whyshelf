@@ -1,0 +1,107 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::DocProblem",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::DocState",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::Shelf::build",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::doc::UnresolvedWhy",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::snapshot::ItemView",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0ac26888521ea255b8586bbf12bbccbfe8eaec1e",
+      "hash": "sha256:47590abbdbc9d25aad5eb6e15b5dab769a95fc6d35ecea687cd208b08df8395f",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "3"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c332-382f-717a-938e-9014e2c69bed"
+    },
+    {
+      "address": "38cd861bcfe3307a43e18ea96a18fd5fe7575a28",
+      "hash": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    }
+  ],
+  "id": "01a2027b-dd34-7668-bea6-8ced31ec0946",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:8ad46af5101b0517cee87c54e3b4343b7b611aaacb28f10841550b8946bbd88e",
+  "seen_address": "0ced39a5f1260a35d1e8baa2643b39f64e43ae8e",
+  "subject": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46",
+  "v": 1,
+  "verb": "approve"
+}

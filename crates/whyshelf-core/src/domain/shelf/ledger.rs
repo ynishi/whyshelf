@@ -18,10 +18,23 @@
 //! [`Ledger::build`] takes every record and sets aside what contradicts itself
 //! (two records of one id that differ, a revocation of something that is not there,
 //! of a revocation, or of a conflict), and what the rules of who may decide do not
-//! admit ([`Admit`]), as [`LedgerProblem`]s. [`Ledger::status_of`]
-//! then reads the *declared* status of a document from the latest decision about it
-//! that is not revoked. The declared status says what people decided; whether the
-//! decision still holds is [`freshness`](super::freshness)'s question.
+//! admit ([`Admit`]), as [`LedgerProblem`]s. [`Ledger::declared`]
+//! then reads what the records say of a document from the latest decision about it
+//! that is not revoked, an approval as a view of its record tied to the ledger
+//! ([`ApprovalView`]), and [`Ledger::status_of`] is its owned copy, the *declared*
+//! status. The declared status says what people decided; whether the decision still
+//! holds is [`freshness`](super::freshness)'s question.
+//!
+//! ```text
+//!   records ──► RecordOrder (time, then identity) ──► the latest decision of a document
+//!                                                        │ ApprovalView::of: the one
+//!                                                        │ reading of an approval's record
+//!   Ledger::declared ──► DeclaredNow: Pending | Approved(StandingApproval) | Against
+//!                          │                     │ reading, quorum: its readers
+//!                          │                     │ what its pins come to now
+//!                          │                     └ view(): ApprovalView ──► read_pins
+//!                          └ Ledger::status_of: the owned copy, DeclaredStatus
+//! ```
 //!
 //! # Making a record
 //!
@@ -42,18 +55,21 @@
 //! and an expiry need. It is a number of milliseconds, not a text. The domain has no
 //! clock of its own: the caller passes in each time.
 
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
 use thiserror::Error;
 
+use crate::domain::actor::{Actor, Attribution};
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{Count, NonEmptyVec, TwoOrMore};
 
-use super::artifact::{ArtifactHash, ArtifactKey};
+use super::artifact::{ArtifactHash, ArtifactKey, ContentAddress, Revision};
 use super::doc::DocHash;
 use super::graph::{Cycle, CycleSource, components, cycles_of};
 
-/// What the records of a ledger say about one document: the declared status.
+/// What the records of a ledger say about one document: the declared status, an owned
+/// copy of what [`Ledger::declared`] says.
 ///
 /// It says what people decided, not whether it still holds: that is what
 /// [`assess`](super::freshness::assess) adds.
@@ -62,23 +78,13 @@ pub enum DeclaredStatus {
     /// No decision stands about the document.
     Pending,
     /// The latest decision approves it.
-    Approved {
-        /// The decision.
-        judgement: JudgementId,
-        /// The hash that was approved.
-        seen: DocHash,
-        /// What the approval stands on.
-        frame: BTreeSet<FramePin>,
-        /// The artifacts the approval stands on.
-        artifacts: BTreeSet<ArtifactPin>,
-        /// When it lapses.
-        expires: Option<JudgedAt>,
-    },
+    Approved(Approval),
     /// The latest decision is against it: it denies, deprecates or retires it.
     ///
-    /// The one place a record is read as going against a document:
-    /// [`Ledger::status_of`] reads the verb of the decision once, and what each reader
-    /// does with a document decided against is read from here, not decided again.
+    /// The one place a record is read as going against a document: the verb of the
+    /// decision is read once, by the view of an approval ([`ApprovalView`]), and what
+    /// each reader does with a document decided against is read from here, not decided
+    /// again.
     Against {
         /// The decision.
         judgement: JudgementId,
@@ -105,6 +111,293 @@ pub enum NotStanding {
     /// No longer kept.
     #[error("retired")]
     Retired,
+}
+
+/// The approval that stands about a document, as an owned copy of its view
+/// ([`ApprovalView`]): what a reader that keeps the declared status reads of it, and no
+/// more.
+///
+/// It is a value of the record alone: what the approval's pins are read as now, and who
+/// ran the command, are not in it, so two copies are equal when the approval is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Approval {
+    judgement: JudgementId,
+    frame: BTreeSet<FramePin>,
+    expires: Option<JudgedAt>,
+}
+
+impl Approval {
+    /// The decision.
+    pub fn judgement(&self) -> JudgementId {
+        self.judgement
+    }
+
+    /// The upstreams the approval stands on.
+    pub fn frame(&self) -> &BTreeSet<FramePin> {
+        &self.frame
+    }
+
+    /// When it lapses.
+    pub fn expires(&self) -> Option<JudgedAt> {
+        self.expires
+    }
+}
+
+/// An approval of the ledger `'l`, read from its record: what it stands on, when it
+/// lapses and who made it, tied to the ledger it is read in, so that what its pins are
+/// read as now is that ledger's.
+///
+/// What an approval is, is read from its record once, by the view: the one match of the
+/// verb of a decision for what it stands on, lapses at and was made by, for every reader
+/// of the ledger. The approval that stands ([`StandingApproval`]), each of the readers
+/// of a content ([`Readers::approvals`]), an approval stats sets beside an earlier one,
+/// and a recorded approval asked about, are each one. A decision of another verb is no
+/// approval: it goes against its document ([`NotStanding`]).
+///
+/// Nothing of it takes a ledger, so it cannot be read with another, and a view of a
+/// ledger dropped or replaced cannot be kept. It has no equality: two views of one
+/// record in two ledgers may read its pins differently. Its `Debug` shows the record.
+#[derive(Clone, Copy)]
+pub struct ApprovalView<'l> {
+    ledger: &'l Ledger,
+    decision: &'l Decision,
+    seen: &'l DocHash,
+    seen_address: Option<&'l ContentAddress>,
+    frame: &'l BTreeSet<FramePin>,
+    artifacts: &'l BTreeSet<ArtifactPin>,
+    expires: Option<JudgedAt>,
+    revision: Option<&'l Revision>,
+}
+
+impl std::fmt::Debug for ApprovalView<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApprovalView")
+            .field("decision", self.decision)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'l> ApprovalView<'l> {
+    /// The view of `decision`, of `ledger`, when it approves; else which decision
+    /// against its document it is. The one match of the verb of a decision for what an
+    /// approval is: a new verb is an arm here, and a new decision against a document a
+    /// variant of [`NotStanding`] too.
+    fn of(ledger: &'l Ledger, decision: &'l Decision) -> Result<Self, NotStanding> {
+        match decision.verb() {
+            DecisionVerb::Approve {
+                seen,
+                frame,
+                artifacts,
+                expires,
+                seen_address,
+                revision,
+            } => Ok(Self {
+                ledger,
+                decision,
+                seen,
+                seen_address: seen_address.as_ref(),
+                frame,
+                artifacts,
+                expires: *expires,
+                revision: revision.as_ref(),
+            }),
+            DecisionVerb::Deny { .. } => Err(NotStanding::Denied),
+            DecisionVerb::Deprecate { .. } => Err(NotStanding::Deprecated),
+            DecisionVerb::Retire { .. } => Err(NotStanding::Retired),
+        }
+    }
+
+    /// The approved document.
+    pub fn subject(&self) -> DocId {
+        self.decision.subject()
+    }
+
+    /// The decision.
+    pub fn judgement(&self) -> JudgementId {
+        self.decision.id()
+    }
+
+    /// When it was made.
+    pub fn at(&self) -> JudgedAt {
+        self.decision.at()
+    }
+
+    /// Where it is in the order of the records.
+    pub(in crate::domain::shelf) fn order(&self) -> RecordOrder {
+        self.decision.order()
+    }
+
+    /// Who approved.
+    pub fn actor(&self) -> &'l Actor {
+        self.decision.actor()
+    }
+
+    /// Who approved, and who ran the command when it was another. No judgement reads
+    /// who ran it.
+    pub fn attribution(&self) -> Attribution {
+        self.decision.attribution().clone()
+    }
+
+    /// The hash that was approved.
+    pub fn seen(&self) -> &'l DocHash {
+        self.seen
+    }
+
+    /// Where the content of the approved document's file, as it was approved, can be
+    /// read back.
+    pub fn seen_address(&self) -> Option<&'l ContentAddress> {
+        self.seen_address
+    }
+
+    /// The upstreams it stands on.
+    pub fn frame(&self) -> &'l BTreeSet<FramePin> {
+        self.frame
+    }
+
+    /// The artifacts it stands on, as the record keeps them.
+    pub fn artifacts(&self) -> &'l BTreeSet<ArtifactPin> {
+        self.artifacts
+    }
+
+    /// When it lapses.
+    pub fn expires(&self) -> Option<JudgedAt> {
+        self.expires
+    }
+
+    /// The point of the history it was made at, when the record keeps one.
+    pub fn revision(&self) -> Option<&'l Revision> {
+        self.revision
+    }
+
+    /// Its artifact pins, each as it is read now, in the order of the record: a pin of
+    /// something that was there through the moves declared at or after the approval
+    /// was made ([`Ledger::moved_to`]), a pin of a name as absent as written, since a
+    /// move is of something that was there. Derived from the ledger each time it is
+    /// asked, never kept. The one rule of what a pin is read as now, and the one maker
+    /// of a [`ReadPin`].
+    pub fn read_pins(&self) -> Vec<ReadPin> {
+        self.ledger
+            .read_pins_under(self.artifacts, self.at(), Before::Now)
+    }
+
+    /// What it stands on, as two approvals are compared.
+    fn stands_on(&self) -> StandsOn<'l> {
+        StandsOn::of(self.seen, self.frame, self.artifacts)
+    }
+
+    /// Whether a pin of it is read through a move the cut `before` keeps.
+    fn read_through_a_move(&self, before: Before) -> bool {
+        self.ledger
+            .read_pins_under(self.artifacts, self.at(), before)
+            .iter()
+            .any(|read| read.moved().is_some())
+    }
+
+    /// The owned copy of what a declared status keeps of it.
+    fn to_approval(self) -> Approval {
+        Approval {
+            judgement: self.judgement(),
+            frame: self.frame.clone(),
+            expires: self.expires,
+        }
+    }
+}
+
+/// The approval that stands about a document ([`Ledger::declared`]): its view, and the
+/// questions only the approval that stands answers, who reads its content now and
+/// whether enough do ([`StandingApproval::reading`], [`StandingApproval::quorum`]),
+/// and what its pins come to now.
+///
+/// A reader of a content that is not the one that stands, and an approval before a
+/// cut, are views ([`ApprovalView`]) and answer none of these. A standing approval is
+/// tied to its ledger as its view is, so it is not kept past it:
+///
+/// ```compile_fail
+/// use whyshelf_core::domain::id::DocId;
+/// use whyshelf_core::domain::shelf::ledger::{DeclaredNow, JudgedAt, Ledger};
+///
+/// fn f(ledger: Ledger, id: DocId, now: JudgedAt) {
+///     let standing = match ledger.declared(id) {
+///         DeclaredNow::Approved(s) => s,
+///         _ => return,
+///     };
+///     drop(ledger);
+///     let _ = standing.reading(now);
+/// }
+/// ```
+///
+/// The same without the `drop` is read:
+///
+/// ```
+/// use whyshelf_core::domain::id::DocId;
+/// use whyshelf_core::domain::shelf::ledger::{DeclaredNow, JudgedAt, Ledger};
+///
+/// fn f(ledger: Ledger, id: DocId, now: JudgedAt) {
+///     let standing = match ledger.declared(id) {
+///         DeclaredNow::Approved(s) => s,
+///         _ => return,
+///     };
+///     let _ = standing.reading(now);
+/// }
+/// ```
+///
+/// A reader of a content is a view, which asks no reading:
+///
+/// ```compile_fail
+/// use whyshelf_core::domain::shelf::ledger::{JudgedAt, Readers};
+///
+/// fn g(readers: Readers<'_>, now: JudgedAt) {
+///     let _ = readers.approvals()[0].reading(now);
+/// }
+/// ```
+///
+/// while what a view reads is read:
+///
+/// ```
+/// use whyshelf_core::domain::shelf::ledger::{JudgedAt, Readers};
+///
+/// fn g(readers: Readers<'_>, _now: JudgedAt) {
+///     let _ = readers.approvals()[0].read_pins();
+/// }
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct StandingApproval<'l>(ApprovalView<'l>);
+
+impl<'l> StandingApproval<'l> {
+    /// Its view: what it stands on, when it lapses and who made it.
+    pub fn view(&self) -> ApprovalView<'l> {
+        self.0
+    }
+}
+
+/// What the records of a ledger say about one document now, tied to the ledger
+/// ([`Ledger::declared`]): pending, the approval that stands, or the decision against it.
+/// [`DeclaredStatus`] is its owned copy.
+#[derive(Debug, Clone, Copy)]
+pub enum DeclaredNow<'l> {
+    /// No decision stands about the document.
+    Pending,
+    /// The latest decision approves it.
+    Approved(StandingApproval<'l>),
+    /// The latest decision is against it ([`DeclaredStatus::Against`]).
+    Against {
+        /// The decision.
+        judgement: JudgementId,
+        /// Which of the decisions against it.
+        status: NotStanding,
+    },
+}
+
+impl DeclaredNow<'_> {
+    /// The owned copy: each variant as it is, the approval as what a declared status
+    /// keeps of it ([`Approval`]).
+    pub(in crate::domain::shelf) fn to_status(self) -> DeclaredStatus {
+        match self {
+            Self::Pending => DeclaredStatus::Pending,
+            Self::Approved(standing) => DeclaredStatus::Approved(standing.view().to_approval()),
+            Self::Against { judgement, status } => DeclaredStatus::Against { judgement, status },
+        }
+    }
 }
 
 /// A contradiction among the records, which the ledger sets aside.
@@ -415,7 +708,7 @@ impl Ledger {
     /// As [`Ledger::artifact_same_meaning`], for a pin as it is read now: the
     /// declarations about each name of its way count (the name it wrote, and each
     /// name a move took it to), since what moved is one thing under each of them.
-    pub fn pin_same_meaning(
+    pub(in crate::domain::shelf::ledger) fn pin_same_meaning(
         &self,
         pin: &ReadPin,
         a: &ArtifactHash,
@@ -427,8 +720,8 @@ impl Ledger {
     /// The edits declared to keep the meaning by fewer different names than they
     /// need, which join nothing until more names declare them, that a pin of an
     /// approval that stands meets: the edges among the declarations freshness reads
-    /// for that pin (of its document, or of every name of its artifact's way, as
-    /// [`Ledger::pin_same_meaning`] reads them) of which one end is the hash pinned, or
+    /// for that pin (of its document, or of every name of its artifact's way, as the
+    /// declarations of a pin read now are read) of which one end is the hash pinned, or
     /// is joined to it by edges that count. Those of the approvals by the identity of
     /// their document, each pin's in the order of the record (the document's own hash
     /// first, then its upstreams, then its artifacts), each edge once. An edge no
@@ -446,19 +739,17 @@ impl Ledger {
                 }
             }
         };
-        for subject in &self.subjects {
-            let DeclaredStatus::Approved { seen, frame, .. } = self.status_of(*subject) else {
-                continue;
-            };
-            let docs = std::iter::once((*subject, seen))
-                .chain(frame.iter().map(|pin| (pin.target(), *pin.hash())));
+        for standing in self.approvals_that_stand() {
+            let view = standing.view();
+            let docs = std::iter::once((view.subject(), *view.seen()))
+                .chain(view.frame().iter().map(|pin| (pin.target(), *pin.hash())));
             for (id, hash) in docs {
                 let edges = self.counted_edges(self.doc_declared(id));
                 add(same_meaning::short_from(&edges, hash, |_, a, b| {
                     SameMeaningEdge::Doc { id, a, b }
                 }));
             }
-            for pin in self.read_pins(*subject) {
+            for pin in view.read_pins() {
                 let PinnedArtifact::Present { hash, .. } = pin.pin().seen() else {
                     continue;
                 };
@@ -553,8 +844,9 @@ impl Ledger {
     /// now: through the declarations of moves, not revoked, of its space, made at or
     /// after `made`, in the order of time, each from the name the ones before it led
     /// to; of two moves of one name at one time, the larger identity, as for a
-    /// decision. None when no move applies. The one place a pin is read through moves
-    /// (see [`Moved`]).
+    /// decision. None when no move applies. The way one name is followed through the
+    /// moves (see [`Moved`]); which moves are read, and which pins, is the rule of the
+    /// view of an approval ([`ApprovalView::read_pins`]).
     pub fn moved_to(&self, artifact: &ArtifactKey, made: JudgedAt) -> Option<MovedTo> {
         moved_way(self.moveds.values(), artifact, made)
     }
@@ -576,25 +868,17 @@ impl Ledger {
         self.exempts.get(&id)
     }
 
-    /// The artifact pins of the approval that stands about `id`, each as it is read
-    /// now ([`Ledger::pins_read_now`]); none when no approval stands. What freshness,
-    /// a declaration and a snapshot compare with what is there now.
-    pub fn read_pins(&self, id: DocId) -> Vec<ReadPin> {
-        self.standing_decision(id)
-            .map(|decision| self.pins_read_now(decision))
-            .unwrap_or_default()
-    }
-
-    /// The artifact pins of the approval `decision`, each as it is read now
-    /// ([`Ledger::moved_to`], at the time of that approval), in the order of the
-    /// record; none when it is no approval. A move is of something that was there,
-    /// so a pin that pinned its name as absent is read as written. The one maker of
-    /// a [`ReadPin`], for the approval that stands ([`Ledger::read_pins`]) and for
-    /// an earlier one that stats compares with it.
-    pub fn pins_read_now(&self, decision: &Decision) -> Vec<ReadPin> {
-        let DecisionVerb::Approve { artifacts, .. } = decision.verb() else {
-            return Vec::new();
-        };
+    /// The pins `artifacts` of an approval made at `at`, each as it is read now: a pin
+    /// of something that was there, through the moves the cut `before` keeps (in the
+    /// order of the records) that reach it (by time, [`moved_way`]); a pin of a name as
+    /// absent as written. The one rule of a pin read through moves, which the view of
+    /// an approval reads.
+    fn read_pins_under(
+        &self,
+        artifacts: &BTreeSet<ArtifactPin>,
+        at: JudgedAt,
+        before: Before,
+    ) -> Vec<ReadPin> {
         artifacts
             .iter()
             .map(|pin| ReadPin {
@@ -602,7 +886,11 @@ impl Ledger {
                 // A move is of something that was there: a pin of a name with nothing
                 // behind it held no content to move, and is read as written.
                 moved: match pin.seen {
-                    PinnedArtifact::Present { .. } => self.moved_to(&pin.artifact, decision.at()),
+                    PinnedArtifact::Present { .. } => moved_way(
+                        self.moveds.values().filter(|m| before.keeps_move(m)),
+                        &pin.artifact,
+                        at,
+                    ),
                     PinnedArtifact::Absent => None,
                 },
             })
@@ -629,53 +917,89 @@ impl Ledger {
         }
     }
 
-    /// The declared status of a document.
+    /// What the records say about the document `id` now, tied to this ledger: pending
+    /// when no decision stands about it, else what the decision that stands is
+    /// ([`Ledger::standing_decision`]): the approval that stands, read from its record
+    /// once ([`ApprovalView`]), or the decision against it.
     ///
-    /// The one place it is read: from the decisions about the document that are not
-    /// revoked, the latest, by time and then by the larger id. A revocation is never
-    /// a candidate, because only decisions are kept as such.
-    pub fn status_of(&self, id: DocId) -> DeclaredStatus {
+    /// The one place it is read. Who reads the approval that stands, whether enough
+    /// do, and what its pins come to now are asked of it ([`StandingApproval`]).
+    pub fn declared(&self, id: DocId) -> DeclaredNow<'_> {
         match self.standing_decision(id) {
-            None => DeclaredStatus::Pending,
-            Some(d) => match d.verb() {
-                DecisionVerb::Approve {
-                    seen,
-                    frame,
-                    artifacts,
-                    expires,
-                    ..
-                } => DeclaredStatus::Approved {
-                    judgement: d.id(),
-                    seen: *seen,
-                    frame: frame.clone(),
-                    artifacts: artifacts.clone(),
-                    expires: *expires,
-                },
-                DecisionVerb::Deny { .. } => DeclaredStatus::Against {
-                    judgement: d.id(),
-                    status: NotStanding::Denied,
-                },
-                DecisionVerb::Deprecate { .. } => DeclaredStatus::Against {
-                    judgement: d.id(),
-                    status: NotStanding::Deprecated,
-                },
-                DecisionVerb::Retire { .. } => DeclaredStatus::Against {
-                    judgement: d.id(),
-                    status: NotStanding::Retired,
+            None => DeclaredNow::Pending,
+            Some(decision) => match ApprovalView::of(self, decision) {
+                Ok(view) => DeclaredNow::Approved(StandingApproval(view)),
+                Err(status) => DeclaredNow::Against {
+                    judgement: decision.id(),
+                    status,
                 },
             },
         }
     }
 
+    /// The declared status of a document: an owned copy of [`Ledger::declared`].
+    pub fn status_of(&self, id: DocId) -> DeclaredStatus {
+        self.declared(id).to_status()
+    }
+
     /// The decision that stands about a document: the latest of those about it that
-    /// are not revoked, by time and then by the larger id. The one place it is
-    /// chosen: what [`Ledger::status_of`] says is read from it, and so is every
-    /// other answer that names the decision about a document.
+    /// are not revoked, by time and then by the larger id (the order of the records). A
+    /// revocation is never a candidate, because only decisions are kept as such. The
+    /// one place it is chosen: what [`Ledger::declared`] says is read from it, and so
+    /// is every other answer that names the decision about a document.
     pub fn standing_decision(&self, id: DocId) -> Option<&Decision> {
+        // The first of `decisions_latest_first`, taken without sorting the rest.
+        self.decisions_of(id, Before::Now).max_by_key(|d| d.order())
+    }
+
+    /// The decisions about `id` that are not revoked and that `before` keeps, the
+    /// latest first in the order of the records: the one list the decision that stands
+    /// and the readers of a content are read from.
+    fn decisions_latest_first(&self, id: DocId, before: Before) -> impl Iterator<Item = &Decision> {
+        let mut decisions: Vec<&Decision> = self.decisions_of(id, before).collect();
+        decisions.sort_by_key(|d| Reverse(d.order()));
+        decisions.into_iter()
+    }
+
+    /// The decisions about `id` that are not revoked and that `before` keeps, by
+    /// identity.
+    fn decisions_of(&self, id: DocId, before: Before) -> impl Iterator<Item = &Decision> {
+        self.decisions.values().filter(move |d| {
+            d.subject() == id && !self.revoked.contains(&d.id()) && before.keeps(d)
+        })
+    }
+
+    /// The approval of the identity `id`, of this ledger, revoked or not; none for a
+    /// decision of another verb, or no decision of the ledger.
+    #[cfg(test)]
+    pub(in crate::domain::shelf) fn approval(&self, id: JudgementId) -> Option<ApprovalView<'_>> {
         self.decisions
-            .values()
-            .filter(|d| d.subject() == id && !self.revoked.contains(&d.id()))
-            .max_by_key(|d| (d.at(), d.id()))
+            .get(&id)
+            .and_then(|decision| ApprovalView::of(self, decision).ok())
+    }
+
+    /// Every approval of the ledger, revoked or not, by identity: each decision that
+    /// approves, as its view.
+    pub(in crate::domain::shelf) fn approvals(&self) -> impl Iterator<Item = ApprovalView<'_>> {
+        self.decisions()
+            .filter_map(|decision| ApprovalView::of(self, decision).ok())
+    }
+
+    /// The upstreams every approval of the ledger pinned, revoked or not, each once.
+    pub(crate) fn upstreams_pinned(&self) -> BTreeSet<DocId> {
+        self.approvals()
+            .flat_map(|view| view.frame().iter().map(FramePin::target))
+            .collect()
+    }
+
+    /// The approvals that stand, by the identity of their documents.
+    fn approvals_that_stand(&self) -> impl Iterator<Item = StandingApproval<'_>> {
+        self.subjects
+            .iter()
+            .filter_map(|subject| match self.declared(*subject) {
+                DeclaredNow::Approved(standing) => Some(standing),
+                DeclaredNow::Pending | DeclaredNow::Against { .. } => None,
+            })
     }
 
     /// The documents some decision is about, revoked or not. A declaration of the
@@ -708,13 +1032,12 @@ impl Ledger {
     /// and [`frame_approve`] asks it whether a new approval would close a cycle.
     pub(super) fn frame_graph(&self) -> FrameGraph {
         let mut edges: BTreeMap<DocId, BTreeSet<DocId>> = BTreeMap::new();
-        for subject in &self.subjects {
-            if let DeclaredStatus::Approved { frame, .. } = self.status_of(*subject) {
-                edges
-                    .entry(*subject)
-                    .or_default()
-                    .extend(frame.iter().map(FramePin::target));
-            }
+        for standing in self.approvals_that_stand() {
+            let view = standing.view();
+            edges
+                .entry(view.subject())
+                .or_default()
+                .extend(view.frame().iter().map(FramePin::target));
         }
         FrameGraph { edges }
     }
@@ -776,6 +1099,7 @@ pub enum WithdrawRefusal {
 
 mod admit;
 mod canon;
+mod compared;
 mod decision;
 mod exempt;
 mod frame;
@@ -802,7 +1126,8 @@ pub use same_meaning::{
 
 pub use admit::{Admit, AdmittedRecord, NotAdmitted, RecordBook};
 pub use canon::RecordProblem;
-pub use decision::{Decision, DecisionProblem, DecisionVerb};
+pub(in crate::domain::shelf) use compared::{ApprovalPins, PinNow, SubjectPins};
+pub use decision::{Decision, DecisionProblem, DecisionVerb, RecordOrder};
 pub use frame::{
     ApproveFrame, FrameRefusal, PresentFrame, RetireFrame, frame_approve, frame_present,
     frame_retire,
@@ -846,6 +1171,8 @@ mod merge_tests;
 mod moved_prefix_tests;
 #[cfg(test)]
 mod moved_tests;
+#[cfg(test)]
+mod order_tests;
 #[cfg(test)]
 mod quorum_tests;
 #[cfg(test)]

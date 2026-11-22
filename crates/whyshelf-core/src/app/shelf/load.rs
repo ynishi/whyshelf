@@ -37,7 +37,7 @@ use crate::domain::shelf::artifact::{
 };
 use crate::domain::shelf::build::Shelf;
 use crate::domain::shelf::freshness::{Assessment, assess};
-use crate::domain::shelf::ledger::{Admit, AdmittedRecord, DecisionVerb, JudgedAt, Ledger, Record};
+use crate::domain::shelf::ledger::{Admit, AdmittedRecord, JudgedAt, Ledger, Record};
 use crate::domain::shelf::schema::{Schema, SchemaProblem, ShelfDecl};
 
 use super::error::ShelfError;
@@ -201,19 +201,9 @@ impl Loaded {
     /// pin by the key its upstream has.
     pub(super) fn names(&self) -> Names {
         // Each upstream once: many approvals pin the same one.
-        let upstreams: BTreeSet<DocId> = self
+        let pinned = self
             .ledger
-            .decisions()
-            .filter_map(|decision| match decision.verb() {
-                DecisionVerb::Approve { frame, .. } => Some(frame),
-                DecisionVerb::Deny { .. }
-                | DecisionVerb::Deprecate { .. }
-                | DecisionVerb::Retire { .. } => None,
-            })
-            .flatten()
-            .map(|pin| pin.target())
-            .collect();
-        let pinned = upstreams
+            .upstreams_pinned()
             .into_iter()
             .map(|id| (id, self.shelf.now_named(id)))
             .collect();

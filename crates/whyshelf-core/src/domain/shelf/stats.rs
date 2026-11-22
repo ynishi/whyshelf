@@ -2,7 +2,7 @@
 //! decisions and the documents, and from nothing else.
 //!
 //! Every time is one a record or an identity carries: a decision's
-//! [`at`](Decision::at), and the time a document's identity was made
+//! [`at`](super::ledger::Decision::at), and the time a document's identity was made
 //! ([`DocId::made_at_millis`]). Nothing reads a clock, so the same ledger and the
 //! same documents always give the same answer, the order of every list included.
 //!
@@ -39,7 +39,7 @@
 //!   both frames hold whose hash differs is an *origin* of that approval made again:
 //!   an upstream by its identity, an artifact by its space and the name it is read
 //!   as now through the declared moves, as freshness reads it
-//!   ([`Ledger::pins_read_now`]), so a pin of the old name before a move and one of
+//!   ([`ApprovalView::read_pins`]), so a pin of the old name before a move and one of
 //!   the new name after it are one pin (an artifact that came or went counts, as
 //!   its hash differs from none). A pin of an artifact
 //!   is compared only with a pin of the same comparison: when the comparison
@@ -92,7 +92,7 @@ use crate::domain::id::DocId;
 use super::artifact::{ArtifactKey, ArtifactSeen, Comparison};
 use super::build::Shelf;
 use super::doc::{DocHash, DocKey};
-use super::ledger::{ApprovalKind, Asked, Before, Decision, DecisionVerb, JudgedAt, Ledger};
+use super::ledger::{ApprovalKind, ApprovalView, JudgedAt, Ledger};
 use super::schema::BookName;
 
 /// How many of the largest runs [`Runs::largest`] lists.
@@ -238,21 +238,19 @@ pub fn of(ledger: &Ledger, shelf: &Shelf, since: Option<JudgedAt>) -> Stats {
     let kept = |at: JudgedAt| since.is_none_or(|since| at >= since);
     let key_of = |id: DocId| shelf.doc(id).map(|doc| doc.key().clone());
 
-    let mut by_doc: BTreeMap<DocId, Vec<&Decision>> = BTreeMap::new();
-    for decision in ledger.decisions() {
-        if matches!(decision.verb(), DecisionVerb::Approve { .. }) {
-            by_doc.entry(decision.subject()).or_default().push(decision);
-        }
+    let mut by_doc: BTreeMap<DocId, Vec<ApprovalView<'_>>> = BTreeMap::new();
+    for approval in ledger.approvals() {
+        by_doc.entry(approval.subject()).or_default().push(approval);
     }
 
     let mut docs = Vec::new();
     let mut pending: BTreeMap<Option<BookName>, Vec<i64>> = BTreeMap::new();
     let mut origins: BTreeMap<OriginKey, usize> = BTreeMap::new();
     for (id, approvals) in &mut by_doc {
-        approvals.sort_by_key(|d| (d.at(), d.id()));
+        approvals.sort_by_key(ApprovalView::order);
         let key = key_of(*id);
         let book = key.as_ref().map(|key| key.book.clone());
-        if let Some(first) = approvals.iter().find(|d| !ledger.is_revoked(d.id()))
+        if let Some(first) = approvals.iter().find(|v| !ledger.is_revoked(v.judgement()))
             && kept(first.at())
         {
             pending
@@ -268,25 +266,25 @@ pub fn of(ledger: &Ledger, shelf: &Shelf, since: Option<JudgedAt>) -> Stats {
             revoked: 0,
         };
         // The latest earlier approval that is not revoked.
-        let mut standing: Option<&Decision> = None;
-        for approval in approvals.iter() {
-            let revoked = ledger.is_revoked(approval.id());
+        let mut earlier: Option<ApprovalView<'_>> = None;
+        for approval in approvals.iter().copied() {
+            let revoked = ledger.is_revoked(approval.judgement());
             if kept(approval.at()) {
                 counted.approvals += 1;
                 if revoked {
                     counted.revoked += 1;
                 }
-                if let Some(before) = standing
-                    && !second_reading(ledger, approval)
+                if let Some(before) = earlier
+                    && !second_reading(approval)
                 {
                     counted.again += 1;
-                    for origin in changed_pins(ledger, before, approval) {
+                    for origin in changed_pins(before, approval) {
                         *origins.entry(origin).or_default() += 1;
                     }
                 }
             }
             if !revoked {
-                standing = Some(approval);
+                earlier = Some(approval);
             }
         }
         if counted.approvals > 0 {
@@ -387,15 +385,10 @@ pub fn of(ledger: &Ledger, shelf: &Shelf, since: Option<JudgedAt>) -> Stats {
     }
 }
 
-/// Whether the approval `approval` was a second reading, asked of the ledger as it was
+/// Whether the approval `approval` was a second reading, asked of its ledger as it was
 /// before it ([`Ledger::kind_of`]).
-fn second_reading(ledger: &Ledger, approval: &Decision) -> bool {
-    Asked::decision(approval).is_some_and(|asked| {
-        matches!(
-            ledger.kind_of(&asked, Before::decision(approval)),
-            ApprovalKind::SecondReading { .. }
-        )
-    })
+fn second_reading(approval: ApprovalView<'_>) -> bool {
+    matches!(approval.kind_before(), ApprovalKind::SecondReading { .. })
 }
 
 /// What a changed pin names, before it is named.
@@ -407,27 +400,17 @@ enum OriginKey {
 
 /// The pins both approvals hold whose hash differs, an artifact's only under the
 /// same comparison, each once. An artifact's pin is matched, and counted, by the
-/// name it is read as now through the declared moves ([`Ledger::pins_read_now`]),
-/// as freshness reads it: a pin of the old name before a move and one of the new
-/// name after it are one pin. When moves bring two pins of the earlier frame to one
-/// name, each is compared, as freshness compares each: it is an origin when either
-/// differs.
-fn changed_pins(ledger: &Ledger, before: &Decision, after: &Decision) -> BTreeSet<OriginKey> {
-    let (
-        DecisionVerb::Approve {
-            frame: frame_before,
-            ..
-        },
-        DecisionVerb::Approve { frame, .. },
-    ) = (before.verb(), after.verb())
-    else {
-        return BTreeSet::new();
-    };
-    let docs_before: BTreeMap<DocId, &DocHash> = frame_before
+/// name it is read as now through the declared moves (the view's read pins), as
+/// freshness reads it: a pin of the old name before a move and one of the new name
+/// after it are one pin. When moves bring two pins of the earlier frame to one name,
+/// each is compared, as freshness compares each: it is an origin when either differs.
+fn changed_pins(before: ApprovalView<'_>, after: ApprovalView<'_>) -> BTreeSet<OriginKey> {
+    let docs_before: BTreeMap<DocId, &DocHash> = before
+        .frame()
         .iter()
         .map(|pin| (pin.target(), pin.hash()))
         .collect();
-    let read_before = ledger.pins_read_now(before);
+    let read_before = before.read_pins();
     let mut artifacts_before: BTreeMap<(&ArtifactKey, &Comparison), BTreeSet<ArtifactSeen>> =
         BTreeMap::new();
     for read in &read_before {
@@ -436,7 +419,8 @@ fn changed_pins(ledger: &Ledger, before: &Decision, after: &Decision) -> BTreeSe
             .or_default()
             .insert(read.pin().seen().state());
     }
-    let docs = frame
+    let docs = after
+        .frame()
         .iter()
         .filter(|pin| {
             docs_before
@@ -444,7 +428,7 @@ fn changed_pins(ledger: &Ledger, before: &Decision, after: &Decision) -> BTreeSe
                 .is_some_and(|h| *h != pin.hash())
         })
         .map(|pin| OriginKey::Doc(pin.target()));
-    let read_after = ledger.pins_read_now(after);
+    let read_after = after.read_pins();
     let artifacts = read_after
         .iter()
         .filter(|read| {

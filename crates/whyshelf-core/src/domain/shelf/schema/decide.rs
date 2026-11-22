@@ -62,7 +62,8 @@
 //!   approve the same content, and a declaration that an edit keeps the meaning counts
 //!   once that many different names declare it ([`Authority::approvals`] says how many
 //!   a record needs; whether they are there is the ledger's,
-//!   [`Ledger::quorum`](crate::domain::shelf::ledger::Ledger::quorum)). The names
+//!   [`StandingApproval::quorum`](crate::domain::shelf::ledger::StandingApproval::quorum)).
+//!   The names
 //!   that may approve under it (the members of the groups of `approve`, else of the
 //!   default, whatever their times), and those that may declare the same meaning (of
 //!   `same`, else as `approve`), are at least that many: a time when fewer of them

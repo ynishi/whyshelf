@@ -29,7 +29,7 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec, OneLine, TwoOrMore};
 use crate::domain::words::{Join, Mark, listed};
 
-use super::artifact::{Artifact, ArtifactKey, ArtifactSeen, Untold};
+use super::artifact::{Artifact, ArtifactKey, ArtifactSeen, ArtifactState, Comparison, Untold};
 use super::schema::{
     ArtifactLinkKind, ArtifactPropagation, BookName, EntryName, FieldType, FieldWord, KeyForm,
     KeyProblem, LinkKind, Propagation, ScalarType,
@@ -465,6 +465,60 @@ impl ArtifactLink {
     }
 }
 
+/// What the names a document's `Depends` links to artifacts write come to now, each
+/// under its link ([`Doc::depends_now`]).
+#[derive(Debug, Clone)]
+pub(in crate::domain::shelf) struct DependsNow<'d> {
+    names: BTreeMap<(&'d EntryName, &'d ArtifactKey), PinnedNow<'d>>,
+}
+
+impl<'d> DependsNow<'d> {
+    /// What the link `link` writing `name` comes to now; none when it does not write it.
+    pub(in crate::domain::shelf) fn get(
+        &self,
+        link: &EntryName,
+        name: &ArtifactKey,
+    ) -> Option<PinnedNow<'d>> {
+        self.names.get(&(link, name)).copied()
+    }
+
+    /// The names the link `link` writes.
+    pub(in crate::domain::shelf) fn names(
+        &self,
+        link: &EntryName,
+    ) -> impl Iterator<Item = &'d ArtifactKey> {
+        self.names
+            .keys()
+            .filter(move |(of, _)| *of == link)
+            .map(|(_, name)| *name)
+    }
+
+    /// The links that write a name.
+    pub(in crate::domain::shelf) fn links(&self) -> impl Iterator<Item = &'d EntryName> {
+        self.names.keys().map(|(link, _)| *link)
+    }
+}
+
+/// What one name a `Depends` link writes comes to now, and the comparison its link
+/// declares.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::domain::shelf) struct PinnedNow<'d> {
+    state: &'d ArtifactState,
+    comparison: &'d Comparison,
+}
+
+impl<'d> PinnedNow<'d> {
+    /// What it comes to now.
+    pub(in crate::domain::shelf) fn state(&self) -> &'d ArtifactState {
+        self.state
+    }
+
+    /// The comparison its link declares now.
+    pub(in crate::domain::shelf) fn comparison(&self) -> &'d Comparison {
+        self.comparison
+    }
+}
+
 /// The hash of a document, which says whether it changed.
 ///
 /// It covers the name of the book, the fields and the body. It does not cover the
@@ -717,11 +771,38 @@ impl Doc {
         &self,
         propagation: ArtifactPropagation,
     ) -> Vec<(&EntryName, &[Artifact])> {
-        self.artifact_links
-            .iter()
-            .filter(|(_, link)| link.kind.propagation == propagation)
+        self.artifact_links_meaning(propagation)
             .map(|(name, link)| (name, link.artifacts()))
             .collect()
+    }
+
+    /// The links to artifacts of `propagation`, whole, by name.
+    fn artifact_links_meaning(
+        &self,
+        propagation: ArtifactPropagation,
+    ) -> impl Iterator<Item = (&EntryName, &ArtifactLink)> {
+        self.artifact_links
+            .iter()
+            .filter(move |(_, link)| link.kind.propagation == propagation)
+    }
+
+    /// What each name its `Depends` links to artifacts write comes to now, with the
+    /// comparison its link declares: the one reading of them that what a pin comes to
+    /// now, the names a move left behind and the names a link writes are read from.
+    pub(in crate::domain::shelf) fn depends_now(&self) -> DependsNow<'_> {
+        let mut names = BTreeMap::new();
+        for (link, kind) in self.artifact_links_meaning(ArtifactPropagation::Depends) {
+            for artifact in kind.artifacts() {
+                names.insert(
+                    (link, artifact.key()),
+                    PinnedNow {
+                        state: artifact.state(),
+                        comparison: &kind.kind.comparison,
+                    },
+                );
+            }
+        }
+        DependsNow { names }
     }
 
     /// The body, as the adapter normalized it.

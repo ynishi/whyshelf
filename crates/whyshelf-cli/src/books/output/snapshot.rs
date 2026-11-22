@@ -5,14 +5,14 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 use whyshelf_core::app::shelf::{ApprovedReport, DiffItem, DiffReport};
-use whyshelf_core::domain::shelf::artifact::ArtifactState;
 use whyshelf_core::domain::shelf::doc::normalize;
+use whyshelf_core::domain::shelf::drift::{ArtifactChange, Edit};
 use whyshelf_core::domain::shelf::snapshot::{
-    ItemNow, ItemRole, Retrieval, SeenHash, SnapshotItem,
+    DocRole, ItemKind, ItemView, Retrieval, SnapshotItem,
 };
 
 use super::super::textdiff;
-use super::words::{ran_by, state_word};
+use super::words::ran_by;
 use super::{DocRef, HealthOut, Namer, RowOut};
 
 /// What an item of an approval is, and which document or file it names.
@@ -133,41 +133,63 @@ pub struct DiffOut {
 
 impl Namer<'_> {
     fn item(&self, item: &SnapshotItem) -> ItemOut {
-        let (role, doc, link, artifact) = match item.role() {
-            ItemRole::Subject { id } => ("subject", Some(self.doc(*id)), None, None),
-            ItemRole::Upstream { link, target, key } => (
-                "upstream",
-                Some(DocRef {
-                    id: target.to_string(),
-                    key: Some(key.to_string()),
-                }),
-                Some(link.to_string()),
-                None,
-            ),
-            ItemRole::Artifact { link, artifact, .. } => {
-                ("artifact", None, Some(link.to_string()), Some(artifact))
+        let address = item.address().map(ToString::to_string);
+        match item.kind() {
+            ItemKind::Doc(doc_role) => {
+                let seen = doc_role.seen();
+                let (role, doc, link) = match doc_role {
+                    DocRole::Subject { id, .. } => ("subject", self.doc(*id), None),
+                    DocRole::Upstream(pin) => (
+                        "upstream",
+                        DocRef {
+                            id: pin.target().to_string(),
+                            key: Some(pin.key().to_string()),
+                        },
+                        Some(pin.link().to_string()),
+                    ),
+                };
+                ItemOut {
+                    role,
+                    doc: Some(doc),
+                    link,
+                    path: None,
+                    name: None,
+                    space: None,
+                    read_as: None,
+                    approved_hash: Some(seen.to_string()),
+                    address,
+                }
             }
-        };
-        let approved_hash = match item.seen() {
-            SeenHash::Doc(hash) => Some(hash.to_string()),
-            SeenHash::Artifact(state) => state.hash().map(ToString::to_string),
-        };
-        ItemOut {
-            role,
-            doc,
-            link,
-            path: artifact.map(|a| a.name().to_string()),
-            name: artifact.map(|a| a.name().to_string()),
-            space: artifact.map(|a| a.space().to_string()),
-            // Only a name other than the one pinned: a way back is read as written.
-            read_as: item
-                .moved()
-                .map(|m| m.artifact())
-                .filter(|a| Some(*a) != artifact)
-                .map(|a| a.name().to_string()),
-            approved_hash,
-            address: item.address().map(ToString::to_string),
+            ItemKind::Artifact(read) => {
+                let pin = read.pin();
+                let artifact = pin.artifact();
+                ItemOut {
+                    role: "artifact",
+                    doc: None,
+                    link: Some(pin.link().to_string()),
+                    path: Some(artifact.name().to_string()),
+                    name: Some(artifact.name().to_string()),
+                    space: Some(artifact.space().to_string()),
+                    // Only a name other than the one pinned: a way back is read as
+                    // written.
+                    read_as: read.moved_away().map(|a| a.name().to_string()),
+                    approved_hash: pin.seen().state().hash().map(ToString::to_string),
+                    address,
+                }
+            }
         }
+    }
+}
+
+/// The word of what an artifact is now, from what it came to: `present`, `absent` or
+/// `unknown`.
+fn now_word(drift: &ArtifactChange<std::convert::Infallible>) -> &'static str {
+    match drift {
+        ArtifactChange::Content(Edit::Same { .. } | Edit::Edited { .. })
+        | ArtifactChange::Arrived { .. } => "present",
+        ArtifactChange::Content(Edit::KeptMeaning { declared, .. }) => match *declared {},
+        ArtifactChange::Gone { .. } | ArtifactChange::StillAbsent => "absent",
+        ArtifactChange::Untold(_) => "unknown",
     }
 }
 
@@ -226,10 +248,24 @@ pub fn diff(report: &DiffReport) -> DiffOut {
 }
 
 pub(super) fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
-    let out = namer.item(&item.item);
-    let current_hash = match &item.now {
-        ItemNow::Doc(hash) => hash.as_ref().ok().map(|h| h.to_string()),
-        ItemNow::Artifact(state) => state.hash().map(ToString::to_string),
+    let compared = &item.compared;
+    let out = namer.item(compared.item());
+    let current_hash = compared.now_hash().map(|hash| hash.to_string());
+    let changed = compared.changed();
+    let (doc_file, now) = match compared.view() {
+        ItemView::Doc { file, .. } => (file, None),
+        ItemView::Artifact { drift } => (None, Some(now_word(drift))),
+    };
+    // What holds it now: a document's file, or the name an artifact that is there now
+    // is read as (after a declared move), as `file` has always said.
+    let (is_doc, file) = match compared.item().kind() {
+        ItemKind::Doc(_) => (true, doc_file.map(ToString::to_string)),
+        ItemKind::Artifact(_) => (
+            false,
+            compared
+                .artifact_now()
+                .map(|read_as| read_as.name().to_string()),
+        ),
     };
     let approved_text = match &item.approved {
         Retrieval::Read(bytes) => std::str::from_utf8(bytes).ok(),
@@ -242,7 +278,7 @@ pub(super) fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
     let label = out
         .path
         .clone()
-        .or_else(|| item.file.as_ref().map(ToString::to_string))
+        .or_else(|| doc_file.map(ToString::to_string))
         .or_else(|| out.doc.as_ref().and_then(|d| d.key.clone()))
         .unwrap_or_default();
     // What is now is at the name a declared move took the artifact to.
@@ -253,9 +289,8 @@ pub(super) fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
     // artifact's hash is its link's comparison of the file (every byte, or the lines
     // with their white space collapsed, without blank and ignored lines), so when it is the same the diff is
     // empty, and when it is not, the diff is of the texts as they are.
-    let is_doc = matches!(item.now, ItemNow::Doc(_));
     let diff = match (approved_text, current_text) {
-        (Some(_), Some(_)) if !item.changed => Some(String::new()),
+        (Some(_), Some(_)) if !changed => Some(String::new()),
         (Some(then), Some(now)) if is_doc => Some(textdiff::unified(
             &normalize(then),
             &normalize(now),
@@ -270,27 +305,9 @@ pub(super) fn diff_item(namer: &Namer<'_>, item: &DiffItem) -> DiffItemOut {
         )),
         _ => None,
     };
-    // An artifact that is there now is held by its name, as `file` has always said:
-    // the name it is read as, after a declared move.
-    let file = match (&item.now, item.item.role()) {
-        (ItemNow::Artifact(ArtifactState::Present(_)), ItemRole::Artifact { artifact, .. }) => {
-            Some(
-                item.item
-                    .moved()
-                    .map_or(artifact, |m| m.artifact())
-                    .name()
-                    .to_string(),
-            )
-        }
-        _ => item.file.as_ref().map(ToString::to_string),
-    };
-    let now = match &item.now {
-        ItemNow::Doc(_) => None,
-        ItemNow::Artifact(state) => Some(state_word(state)),
-    };
     DiffItemOut {
         current_hash,
-        changed: item.changed,
+        changed,
         now,
         file,
         retrieval: retrieval_word(&item.approved),

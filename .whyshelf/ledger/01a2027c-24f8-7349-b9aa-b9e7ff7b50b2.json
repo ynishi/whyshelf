@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "bde4c42b7bf807b55ce897ff85ccad65190d549f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7488c25688681bf92812a2592a1698b4078734d862525f2e2ef70f4f7f6c9a0a",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/moves.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c17168c3adcda3a5931f5a8b8bac6b894d459bc7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c3f697ca76a2e9bedb88e10e9270cbbc8876ed901652cc5dbf7ed3dbbbc68ec6",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/prefix_trial_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "55e140a57fdc1963dac82f549b1cbd197966597a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d57b28264d087b7e69d7d256bd2b3596bab2cf0550bf6656259e413eca7d41f0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "905827c202eec883d225458b08480aaa2b0589b2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0aa7c2a4e5857c38578dcf4fd0bd27de07b46d97b42ed971bb3a7eb5cafc2e3e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/catalog.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2b5e93e7dd2cf7721a20a8444437efe5c36c930b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:aae35b0f51ab56d95cc8b6c18817ae81524b6cfdfdf12655ac27c496dfa4b7da",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/moves.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "319abf67200528c13b7feae8b2b3682776466d80",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a56a3b1f88d09ff3b672b6773ba572941011828b3968a1f90a873eb677c2ffeb",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/path.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9d85c71fc6aa6e8f8680f15c8ff144a86a6d401b",
+      "hash": "sha256:15e4de5579378addb80477b068aa86f5c3602279ad08664599ab7efef5e4c2e6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "96"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fd22-7aea-7470-903b-78df35942cc6"
+    }
+  ],
+  "id": "01a2027c-24f8-7349-b9aa-b9e7ff7b50b2",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:30fa521f178ad73062b3c344ffe9c82bd81e528c0c3446fc9fb5516b752eef23",
+  "seen_address": "fecc292a6eef7d335beb9de67cfa06d1db8678dd",
+  "subject": "01a1fd22-7fc3-77ad-8017-ba0d0ddf6bea",
+  "v": 1,
+  "verb": "approve"
+}

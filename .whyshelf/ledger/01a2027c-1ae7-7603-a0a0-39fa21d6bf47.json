@@ -1,0 +1,133 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "da55b5fc419054e68a10bf0a2aa77cd43aa5f541",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f6c0a2cd7ea8c126207ac2a344c692a7c3263741d2dcb13f810f48257c4eaf5c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "67d63fc52dcc2c61826206d889115b234870d4dc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ebd357d1e965e40dccad4fa00a8627b32a56d6c54a312b3648859d4d9af4f498",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fc62088c1055be556a17b998e56022f5f760dd4f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e52a129d11123a002edf3bd549f13ab1032ed851369e845ca190d970a965eb54",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/actor.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "842364cf54bfa7d1460b39c12d0231014379ea4e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6813ab5917c60e7fd29d880e9751415de3f9f32ce90dab0ad0fb5c82c0418ebe",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "79e3d0f1a81bf1da899e196e8235c86c4b0b4822",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0437ad78f0efcaec3c2652fba76ce6e2ce9e26efdd75e360f4205a4eeeb1a06a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/attribution_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f4e2311a8e217d9f1d1fdfae114f1abcd5d05186",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3f034a6cf5897bf485b279574db7f84bcc2281e528019b9225a13efeb3897701",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c9058de5c53627c5b7d311075c3a93673bd4e279",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9c33d7ead0e073e4b0e19406c514d67530dcb0a435edba5be796bab80152bd71",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a9b2fd3c4ceba61ffda41404197124792b3fb23d",
+      "hash": "sha256:d1cbb29f21ce6cbdc780eea2f9611ecbb427d583290301d8825f4234a4b8981d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "91"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f9a4-bea7-7778-ac4a-a68538d58570"
+    }
+  ],
+  "id": "01a2027c-1ae7-7603-a0a0-39fa21d6bf47",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:efbe51e918a753d42e58f5833149ff6136feac35c02706bb0ece745bcbfac4ba",
+  "seen_address": "d9e158743b61313e9fab5895795512f80e9e1dfb",
+  "subject": "01a1f9a4-fe48-72ea-aeb6-1d9056f1690b",
+  "v": 1,
+  "verb": "approve"
+}

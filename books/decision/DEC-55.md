@@ -4,7 +4,7 @@ key: "DEC-55"
 issues: ["#58", "#114", "#154"]
 rejected: ["Record stats as each command runs: a reading command would write, and the numbers would depend on who ran what", "Measure how long commands take in the same answer: time per run is a question about speed, kept for its own change", "Count an origin by any pin that differs, links included: a link edited would read as an artifact or a document that changed", "Count a second reading as an approval made again: nothing it stands on changed"]
 related: ["DEC-35", "DEC-27", "DEC-58"]
-rustdoc: ["whyshelf_core::domain::shelf::stats", "whyshelf_core::domain::id::DocId::made_at_millis", "whyshelf_core::app::shelf::ShelfApp::judge_all", "whyshelf_core::domain::shelf::ledger::Ledger::pins_read_now", "whyshelf"]
+rustdoc: ["whyshelf_core::domain::shelf::stats", "whyshelf_core::domain::id::DocId::made_at_millis", "whyshelf_core::app::shelf::ShelfApp::judge_all", "whyshelf_core::domain::shelf::ledger::ApprovalView::read_pins", "whyshelf"]
 serves: ["REQ-21", "REQ-5", "REQ-2"]
 title: "stats is one pure function of the ledger and the shelf, with each measure defined once"
 ---

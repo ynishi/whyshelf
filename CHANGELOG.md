@@ -10,6 +10,17 @@ and this project adheres to
 
 ### Added
 
+- In the library, the view of an approval tied to its ledger and what a pinned
+  content comes to (#153): `ledger::Ledger::declared` and `ledger::DeclaredNow`,
+  `ledger::StandingApproval` (`view`, `reading`, `quorum`), `ledger::ApprovalView`
+  (`subject`, `judgement`, `at`, `actor`, `attribution`, `seen`, `seen_address`,
+  `frame`, `artifacts`, `expires`, `revision`, `read_pins`), `ledger::Approval`
+  (`judgement`, `frame`, `expires`), `ledger::RecordOrder`; `drift::Edit`
+  (`then`, `now`), `drift::DocDrift`, `drift::ArtifactChange`;
+  `snapshot::SnapshotItem::compared` and `kind`, `snapshot::ItemKind`,
+  `snapshot::DocRole` (`id`, `seen`, `address`), `snapshot::ItemCompared`
+  (`view`, `changed`, `now_hash`, `artifact_now`, `item`), `snapshot::ItemView`
+  and `snapshot::HashNow` (which is `Display`).
 - `moves` suggests where a gone name of the space `rust-item` moved (#142), from
   the names the built docs hold now: a candidate ends as the gone name does, in
   the most segments of its crate, and is `same_content` when its promise hashes
@@ -287,6 +298,28 @@ and this project adheres to
 
 ### Changed
 
+- What a pinned content comes to now is decided once for each kind of content,
+  from the approval that stands, and `stale` and `diff` read it (#153). No
+  freshness, cause, notice, answer or record changes. In the library,
+  `DeclaredStatus::Approved` holds an `Approval` (`judgement`, `frame`,
+  `expires`) in place of its fields, and no longer carries `seen` or `artifacts`:
+  a library user goes through `Ledger::declared`, `StandingApproval::view()` and
+  `ApprovalView::seen()`, `artifacts()` and `read_pins()`; `Before::Record`
+  holds a `RecordOrder`, in place of the fields `at` and `id`, which has no
+  public constructor, so `Before::decision` is the way to make one;
+  `Readers::approvals`, `Readers::standing`
+  and `Readers::latest_of` give `ApprovalView`s, not `Decision`s
+  (`Readers::actors` and `Readers::at` keep their form), and `Readers` is no
+  longer `PartialEq` or `Eq`; `DiffItem` holds `compared: ItemCompared`,
+  `approved` and `current`, and no `item` (it is `ItemCompared::item`), `now`,
+  `file` or `changed`; a `SnapshotItem`
+  says what it is and what was seen of it by `kind()`, an `ItemKind`:
+  `ItemKind::Doc(DocRole)`, where `DocRole::Subject { id, seen, address }` is the
+  approved document and `DocRole::Upstream(FramePin)` an upstream, or
+  `ItemKind::Artifact(ReadPin)`. The doc of
+  what an item of `diff` compares no longer says it compares as freshness does:
+  it compares the content as it was approved the way it was pinned, whether or
+  not `stale` compares it now.
 - What was decided against a document is read once from its record, and what an
   upstream is to what stands on it is one reading (#150). No decision, count,
   strength, event or run changes. The words of a cause of an approval on an
@@ -553,6 +586,17 @@ and this project adheres to
   are one line, which says the reason once, how many names, and the documents
   that write them by key. A cause of one name keeps the line it had. The JSON
   answers still list every name (#99).
+
+### Removed
+
+- In the library (#153): `Ledger::read_pins`, `Ledger::reading` and
+  `Ledger::quorum` (the approval that stands has them:
+  `ApprovalView::read_pins`, `StandingApproval::reading` and
+  `StandingApproval::quorum`), `Ledger::pins_read_now` and `Asked::decision`,
+  the public `Ledger::pin_same_meaning`; `snapshot::ItemNow`,
+  `snapshot::ItemRole`, `snapshot::SeenHash`, `SnapshotItem::changed_from`,
+  `SnapshotItem::role`, `SnapshotItem::seen` and `SnapshotItem::moved`, and the
+  public `snapshot::doc_now` and `snapshot::DocNow`. No answer changes.
 
 ### Fixed
 

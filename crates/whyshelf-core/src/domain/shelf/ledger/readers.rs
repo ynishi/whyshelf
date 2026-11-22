@@ -1,23 +1,26 @@
 //! Who has read the content an approval stands on, and what a new approval of the
 //! document would be beside them: [`Ledger::readers`] and [`Ledger::kind_of`], the one
 //! place two approvals are matched for what they stand on and who made them; and
-//! whether enough of them did for the approval to settle, [`Ledger::quorum`], from the
-//! same walk that tells who counts now, [`Ledger::reading`]. The rules are on
-//! [`Readers`], [`ReadBy`], [`ApprovalKind`], [`ApprovalKind::left_out`] and
-//! [`Quorum`].
+//! whether enough of them did for the approval that stands to settle,
+//! [`StandingApproval::quorum`], from the same walk that tells who counts now,
+//! [`StandingApproval::reading`]. The rules are on [`Readers`], [`ReadBy`],
+//! [`ApprovalKind`], [`ApprovalKind::left_out`] and [`Quorum`].
 //!
 //! ```text
-//!   ledger ──► Readers  ◄── what an approval stands on (the one comparison)
-//!                 │
-//!                 ├── at(now) ──► ReadBy ──► count: Nobody / One / Several
-//!                 ├──────────────► Quorum (Met / Short): freshness, order, check read it
-//!                 ▼
-//!            ApprovalKind ──► left_out(taking, again)
-//!                 │
-//!        judge approve, --stale / --pending, stats: read the answer, decide nothing
+//!   the decisions of a document, the latest first in the order of the records (RecordOrder)
+//!        │ each a view of its record (ApprovalView), up to one that is no approval
+//!        ▼ or stands on other content
+//!     Readers  ◄── what an approval stands on (the one comparison)
+//!        │
+//!        ├── at(now) ──► ReadBy ──► count: Nobody / One / Several
+//!        ├──────────────► Quorum (Met / Short) of the StandingApproval: freshness,
+//!        │                order, check read it
+//!        ▼
+//!   ApprovalKind ──► left_out(taking, again)
+//!        │
+//!   judge approve, --stale / --pending, stats: read the answer, decide nothing
 //! ```
 
-use std::cmp::Reverse;
 use std::collections::BTreeSet;
 
 use crate::domain::actor::Actor;
@@ -26,61 +29,57 @@ use crate::domain::nonempty::NonEmptySet;
 
 use super::super::doc::DocHash;
 use super::super::schema::Approvals;
-use super::moved::moved_way;
 use super::{
-    ApproveFrame, ArtifactPin, Decision, DecisionVerb, FramePin, JudgedAt, JudgementId, Ledger,
-    Moved, PinnedArtifact, StandsOn,
+    ApprovalView, ApproveFrame, ArtifactPin, Decision, FramePin, JudgedAt, JudgementId, Ledger,
+    Moved, RecordOrder, StandingApproval, StandsOn,
 };
 
 /// Up to which record the ledger is read by [`Ledger::readers`] and
-/// [`Ledger::kind_of`]. Whether a record is revoked is read from the whole ledger
-/// either way.
+/// [`Ledger::kind_of`]: which records are read, decisions and declarations of moves
+/// alike. Whether a record is revoked is read from the whole ledger either way, and
+/// whether a move it keeps reaches a pin is a rule of time of its own (a move reaches
+/// the pins of an approval made at or before it, see [`Moved`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Before {
-    /// Every decision: the ledger as it is now.
+    /// Every record: the ledger as it is now.
     Now,
-    /// The decisions before one: of an earlier time, or of its time with a smaller
-    /// identity, the order in which [`Ledger::standing_decision`] takes the latest.
-    Record {
-        /// The time of the record.
-        at: JudgedAt,
-        /// Its identity.
-        id: JudgementId,
-    },
+    /// The records before one in the order of the records ([`RecordOrder`]), the order
+    /// in which [`Ledger::standing_decision`] takes the latest.
+    Record(RecordOrder),
 }
 
 impl Before {
-    /// The decisions before `decision`.
+    /// The records before `decision`.
     pub fn decision(decision: &Decision) -> Self {
-        Self::Record {
-            at: decision.at(),
-            id: decision.id(),
-        }
+        Self::Record(decision.order())
     }
 
-    fn keeps(self, decision: &Decision) -> bool {
-        self.keeps_at(decision.at(), decision.id())
+    /// Whether a decision is read.
+    pub(super) fn keeps(self, decision: &Decision) -> bool {
+        self.keeps_order(decision.order())
     }
 
     /// Whether a declaration of a move is read, in the same order as a decision.
-    fn keeps_move(self, moved: &Moved) -> bool {
-        self.keeps_at(moved.at, moved.id)
+    pub(super) fn keeps_move(self, moved: &Moved) -> bool {
+        self.keeps_order(moved.order())
     }
 
-    fn keeps_at(self, at: JudgedAt, id: JudgementId) -> bool {
+    fn keeps_order(self, order: RecordOrder) -> bool {
         match self {
             Self::Now => true,
-            Self::Record { at: before, id: of } => (at, id) < (before, of),
+            Self::Record(cut) => order < cut,
         }
     }
 }
 
 /// The readers of the content that stands about a document: the approvals of the same
-/// content that stand together now, the latest first ([`Ledger::readers`]).
+/// content that stand together now, the latest first ([`Ledger::readers`]), each a view
+/// of its record ([`ApprovalView`]).
 ///
-/// Walking back from the latest decision about the document that is not revoked,
-/// they are the approvals that stand on what it stands on, until a decision that does
-/// not (a decision that is no approval, or an approval of other content). So an edit
+/// Walking back from the latest decision about the document that is not revoked, in
+/// the order of the records, they are the approvals that stand on what it stands on,
+/// until a decision that does not (a decision that is no approval, or an approval of
+/// other content). Every row is read from its record as the first is. So an edit
 /// approved again by one actor starts a new list, and content approved again after
 /// other content is a new list too, not the readers it had before. What an approval
 /// stands on is the hash of the document, every pin of an upstream (link, identity,
@@ -96,31 +95,34 @@ impl Before {
 /// ([`Actor`](crate::domain::actor::Actor)): there is no authentication, so one person
 /// who gives two names reads as two readers. The readers say who declared they read
 /// the content, not that two people did.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Readers<'a> {
-    approvals: Vec<&'a Decision>,
+///
+/// Two lists of readers are not compared: a row is a view tied to its ledger, which has
+/// no equality ([`ApprovalView`]).
+#[derive(Debug, Clone)]
+pub struct Readers<'l> {
+    approvals: Vec<ApprovalView<'l>>,
 }
 
-impl<'a> Readers<'a> {
+impl<'l> Readers<'l> {
     /// The approvals, the latest first; the first is the approval that stands. Empty
     /// when no approval stands.
-    pub fn approvals(&self) -> &[&'a Decision] {
+    pub fn approvals(&self) -> &[ApprovalView<'l>] {
         &self.approvals
     }
 
     /// The approval that stands, when one does.
-    pub fn standing(&self) -> Option<&'a Decision> {
+    pub fn standing(&self) -> Option<ApprovalView<'l>> {
         self.approvals.first().copied()
     }
 
     /// The names that read the content, each once.
-    pub fn actors(&self) -> BTreeSet<&'a Actor> {
-        self.approvals.iter().map(|d| d.actor()).collect()
+    pub fn actors(&self) -> BTreeSet<&'l Actor> {
+        self.approvals.iter().map(ApprovalView::actor).collect()
     }
 
     /// The latest reading by `actor`, when it is a reader.
-    pub fn latest_of(&self, actor: &Actor) -> Option<&'a Decision> {
-        self.approvals.iter().copied().find(|d| d.actor() == actor)
+    pub fn latest_of(&self, actor: &Actor) -> Option<ApprovalView<'l>> {
+        self.approvals.iter().copied().find(|v| v.actor() == actor)
     }
 
     /// The names that read the content, told by whether their own latest reading has
@@ -136,7 +138,7 @@ impl<'a> Readers<'a> {
         for actor in self.actors() {
             let alive = self
                 .latest_of(actor)
-                .is_some_and(|own| !expires_of(own).is_some_and(|e| e.lapsed_by(now)));
+                .is_some_and(|own| !own.expires().is_some_and(|e| e.lapsed_by(now)));
             let side = if alive {
                 &mut read_by.counted
             } else {
@@ -207,8 +209,9 @@ impl ReaderCount {
     pub const ALL: [Self; 3] = [Self::Nobody, Self::One, Self::Several];
 }
 
-/// What one walk of the readers of a document gives ([`Ledger::reading`]): who reads
-/// its content now, and whether that is enough for the approval to settle.
+/// What one walk of the readers of the approval that stands gives
+/// ([`StandingApproval::reading`]): who reads its content now, and whether that is
+/// enough for the approval to settle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reading {
     /// The names that read the content, told at the time asked.
@@ -218,7 +221,8 @@ pub struct Reading {
 }
 
 /// A new approval of a document, asked about: what it would stand on, who would make
-/// it, when it would lapse, and when it is made.
+/// it, when it would lapse, and when it is made. What an approval of the ledger was
+/// when it was made is asked of its view, from its record, in the ledger it is of.
 #[derive(Debug, Clone, Copy)]
 pub struct Asked<'a> {
     subject: DocId,
@@ -248,29 +252,27 @@ impl<'a> Asked<'a> {
             at,
         }
     }
+}
 
-    /// The approval `decision` is, as it was asked when it was made; none when it is
-    /// no approval.
-    pub fn decision(decision: &'a Decision) -> Option<Self> {
-        let DecisionVerb::Approve {
-            seen,
-            frame,
-            artifacts,
-            expires,
-            ..
-        } = decision.verb()
-        else {
-            return None;
-        };
-        Some(Self {
-            subject: decision.subject(),
-            seen,
-            frame,
-            artifacts,
-            by: decision.actor(),
-            until: *expires,
-            at: decision.at(),
-        })
+impl<'l> ApprovalView<'l> {
+    /// The approval, as it was asked when it was made.
+    fn asked(&self) -> Asked<'l> {
+        Asked {
+            subject: self.subject(),
+            seen: self.seen,
+            frame: self.frame,
+            artifacts: self.artifacts,
+            by: self.actor(),
+            until: self.expires,
+            at: self.at(),
+        }
+    }
+
+    /// What the approval was when it was made, beside the readers before it in its
+    /// ledger ([`Ledger::kind_of`]).
+    pub(in crate::domain::shelf) fn kind_before(&self) -> ApprovalKind {
+        self.ledger
+            .kind_of(&self.asked(), Before::Record(self.order()))
     }
 }
 
@@ -376,7 +378,7 @@ impl ApprovalKind {
 }
 
 /// Whether the approval that stands about a document has as many different readers
-/// as the rule that reads it asks for ([`Ledger::quorum`]).
+/// as the rule that reads it asks for ([`StandingApproval::quorum`]).
 ///
 /// It is a fact of its own beside the freshness of the approval, never one of its
 /// causes: a level of degradation is the strongest of the causes, so a short quorum
@@ -397,105 +399,43 @@ pub enum Quorum {
     },
 }
 
-/// What an approval stands on; none for a decision that is no approval.
-fn stands_on(decision: &Decision) -> Option<StandsOn<'_>> {
-    match decision.verb() {
-        DecisionVerb::Approve {
-            seen,
-            frame,
-            artifacts,
-            ..
-        } => Some(StandsOn::of(seen, frame, artifacts)),
-        DecisionVerb::Deny { .. }
-        | DecisionVerb::Deprecate { .. }
-        | DecisionVerb::Retire { .. } => None,
-    }
-}
-
-/// When an approval lapses; none for one that does not, or a decision that is no
-/// approval.
-fn expires_of(decision: &Decision) -> Option<JudgedAt> {
-    match decision.verb() {
-        DecisionVerb::Approve { expires, .. } => *expires,
-        DecisionVerb::Deny { .. }
-        | DecisionVerb::Deprecate { .. }
-        | DecisionVerb::Retire { .. } => None,
-    }
-}
-
 impl Ledger {
     /// The readers of the content that stands about `subject`, reading the decisions
     /// `before` (the rule is on [`Readers`]): the one place they are read, by
-    /// [`Ledger::kind_of`] and by whatever lists who read a document.
+    /// [`Ledger::kind_of`], by the approval that stands
+    /// ([`StandingApproval::reading`]) and by whatever lists who read a document.
     pub fn readers(&self, subject: DocId, before: Before) -> Readers<'_> {
-        let mut decisions: Vec<&Decision> = self
-            .decisions
-            .values()
-            .filter(|d| {
-                d.subject() == subject && !self.revoked.contains(&d.id()) && before.keeps(d)
-            })
-            .collect();
-        decisions.sort_by_key(|d| Reverse((d.at(), d.id())));
+        self.walk(self.decisions_latest_first(subject, before))
+    }
+
+    /// The readers among `decisions`, the latest first: each a view of its record, up
+    /// to a decision that is no approval or an approval of other content than the first.
+    fn walk<'l>(&'l self, decisions: impl Iterator<Item = &'l Decision>) -> Readers<'l> {
         let mut approvals = Vec::new();
-        let mut content: Option<StandsOn<'_>> = None;
+        let mut content: Option<StandsOn<'l>> = None;
         for decision in decisions {
-            let Some(on) = stands_on(decision) else {
+            let Ok(view) = ApprovalView::of(self, decision) else {
                 break;
             };
+            let on = view.stands_on();
             if content.as_ref().is_some_and(|content| *content != on) {
                 break;
             }
             content.get_or_insert(on);
-            approvals.push(decision);
+            approvals.push(view);
         }
         Readers { approvals }
     }
 
-    /// Whether the approval that stands about `subject` has, at `now`, as many
-    /// different readers ([`Ledger::readers`]) as the rule that reads it asks for
-    /// (its need: the `approvals` of that rule; one when no rule reads it): the
-    /// quorum of [`Ledger::reading`] alone, for a caller that needs no readers
-    /// (freshness takes both from [`Ledger::reading`]).
-    ///
-    /// A name counts once, however many of its approvals are among the readers, and
-    /// only while its own latest reading has not lapsed at `now`
-    /// ([`JudgedAt::lapsed_by`]), whoever approved last: so once any reading lapses,
-    /// an approval that needed it waits again. When every reading lapsed, the reader
-    /// of the approval that stands is counted alone: the approval is expired, which
-    /// freshness tells ([`Cause::Expired`](super::super::freshness::Cause::Expired)),
-    /// and one that needs one name is never short. With no approval standing,
-    /// nothing awaits: [`Quorum::Met`]. A project that declares no rule asks for one
-    /// name of every approval, so its quorum is met whoever read it.
-    ///
-    /// The quorum alone, for a caller that asks nothing else: freshness takes it,
-    /// with the readers, from [`reading`](Self::reading), the one walk both come
-    /// from. It stays the public statement of the rule a decision names.
-    pub fn quorum(&self, subject: DocId, now: JudgedAt) -> Quorum {
-        self.reading(subject, now).quorum
-    }
-
-    /// Who reads the content that stands about `subject` at `now` and whether that
-    /// is enough ([`Ledger::quorum`]), from one walk of its readers: the one place
-    /// they are read for either, by freshness.
-    pub fn reading(&self, subject: DocId, now: JudgedAt) -> Reading {
-        let readers = self.readers(subject, Before::Now);
-        let read_by = readers.at(now);
-        let quorum = self.quorum_of(&readers, &read_by);
-        Reading { read_by, quorum }
-    }
-
-    /// Whether the `read_by` of `readers` are as many as the rule that reads the
-    /// approval that stands asks for. Only [`Ledger::reading`] asks it, so that the
-    /// two are of the same readers and the same time: the name that stands in for
-    /// every reading lapsed is here only, never in what `read_by` says.
-    fn quorum_of(&self, readers: &Readers<'_>, read_by: &ReadBy) -> Quorum {
+    /// Whether the `read_by` of the readers of the `standing` approval are as many as
+    /// the rule that reads it asks for. Only [`StandingApproval::reading`] asks it, so
+    /// that the two are of the same readers and the same time: the name that stands in
+    /// for every reading lapsed is here only, never in what `read_by` says.
+    fn quorum_of(&self, standing: ApprovalView<'_>, read_by: &ReadBy) -> Quorum {
         if self.admit.is_unruled() {
             return Quorum::Met;
         }
-        let Some(standing) = readers.standing() else {
-            return Quorum::Met;
-        };
-        let need = self.need(standing.id(), standing.at());
+        let need = self.need(standing.judgement(), standing.at());
         let mut counted = read_by.counted.iter();
         let names = match counted.next() {
             Some(first) => NonEmptySet::new(first.clone(), counted.cloned()),
@@ -520,46 +460,58 @@ impl Ledger {
         let Some(standing) = readers.standing() else {
             return ApprovalKind::New;
         };
-        let same = stands_on(standing)
-            .is_some_and(|on| on == StandsOn::of(asked.seen, asked.frame, asked.artifacts));
-        if !same {
+        if standing.stands_on() != StandsOn::of(asked.seen, asked.frame, asked.artifacts) {
             return ApprovalKind::New;
         }
         // Freshness reads the expiry of the approval that stands, not a reader's own:
         // once it lapsed, a new approval makes the document approved again, whoever
         // makes it; and one asked with another expiry moves when the document lapses.
-        let standing_expires = expires_of(standing);
+        // Freshness reads a pin of it through a move the cut keeps, and a new approval
+        // pins what it finds, read through none, so it would change what freshness
+        // reads even where its pins are the same values.
+        let standing_expires = standing.expires();
         if standing_expires.is_some_and(|e| e.lapsed_by(asked.at))
             || standing_expires != asked.until
-            || self.read_through_a_move(standing, before)
+            || standing.read_through_a_move(before)
         {
             return ApprovalKind::Renewal;
         }
-        let standing = standing.id();
+        let standing = standing.judgement();
         match readers.latest_of(asked.by) {
             None => ApprovalKind::SecondReading { standing },
-            Some(own) if expires_of(own) == asked.until => ApprovalKind::Repeat { standing },
+            Some(own) if own.expires() == asked.until => ApprovalKind::Repeat { standing },
             Some(_) => ApprovalKind::Renewal,
         }
     }
+}
 
-    /// Whether freshness reads a pin of `approval` through a move declared `before`
-    /// (the rule of [`Ledger::pins_read_now`]: a pin of something that was there, read
-    /// through the moves since the approval). A new approval pins what it finds, read
-    /// through none, so it would change what freshness reads even where its pins are
-    /// the same values.
-    fn read_through_a_move(&self, approval: &Decision, before: Before) -> bool {
-        let DecisionVerb::Approve { artifacts, .. } = approval.verb() else {
-            return false;
-        };
-        artifacts.iter().any(|pin| {
-            matches!(pin.seen, PinnedArtifact::Present { .. })
-                && moved_way(
-                    self.moveds.values().filter(|m| before.keeps_move(m)),
-                    &pin.artifact,
-                    approval.at(),
-                )
-                .is_some()
-        })
+impl StandingApproval<'_> {
+    /// Who reads the content of the approval that stands at `now`, and whether that is
+    /// enough ([`StandingApproval::quorum`]), from one walk of its readers
+    /// ([`Ledger::readers`]): the one place they are read for either.
+    pub fn reading(&self, now: JudgedAt) -> Reading {
+        let view = self.view();
+        let readers = view.ledger.readers(view.subject(), Before::Now);
+        let read_by = readers.at(now);
+        let quorum = view.ledger.quorum_of(view, &read_by);
+        Reading { read_by, quorum }
+    }
+
+    /// Whether the approval that stands has, at `now`, as many different readers
+    /// ([`Ledger::readers`]) as the rule that reads it asks for (its need: the
+    /// `approvals` of that rule; one when no rule reads it): the quorum of
+    /// [`StandingApproval::reading`] alone, the same walk, for a caller that needs no
+    /// readers.
+    ///
+    /// A name counts once, however many of its approvals are among the readers, and
+    /// only while its own latest reading has not lapsed at `now`
+    /// ([`JudgedAt::lapsed_by`]), whoever approved last: so once any reading lapses,
+    /// an approval that needed it waits again. When every reading lapsed, the reader
+    /// of the approval that stands is counted alone: the approval is expired, which
+    /// freshness tells ([`Cause::Expired`](super::super::freshness::Cause::Expired)),
+    /// and one that needs one name is never short. A project that declares no rule
+    /// asks for one name of every approval, so its quorum is met whoever read it.
+    pub fn quorum(&self, now: JudgedAt) -> Quorum {
+        self.reading(now).quorum
     }
 }

@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "4335d1b837d0caa8804813674f6a22fed844edf7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d85e7fe582db25a7f39130eda180f2eeb1ff83b38f805631beda045359f53ed9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795337998586,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a2027b-efc8-74e3-b191-a6f66d1c491b",
+  "kind": "decision",
+  "reason": "Reviewed for #153: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) with no change of behaviour found, its must-fix sentence (V-126) and should-fix points fixed (one owner of where an artifact item is held now, the quorum asked of the approval that stands, the changelog, #175 named for judge same). The documents made stale are approved again: their claims still hold of the comparison made once per kind of content and the approval read once, as cargo fmt, clippy, doc and test (two jobs) show.",
+  "revision": "e6897f5dfcc40f9595f4055588c79d7f1f87faae",
+  "seen": "sha256:88358390b91499d7e01ee8eca2447d308887c5c4e9a0377c415c34da4434293c",
+  "seen_address": "befd8c4f9003053924576f918f04c779b3cf2e8d",
+  "subject": "01a1c5ae-37cb-7230-9fce-a99ff188132c",
+  "v": 1,
+  "verb": "approve"
+}

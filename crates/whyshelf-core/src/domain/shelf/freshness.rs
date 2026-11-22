@@ -64,9 +64,16 @@
 //! - a cycle the document is in, among links or among frames;
 //! - an expiry: `now >= expires`.
 //!
+//! What each pin comes to now is read once, by the kind of its content (a document,
+//! the approved one or an upstream alike, and an artifact), of the approval that
+//! stands (`StandingApproval::compared`, by the rules of [`drift`](super::drift));
+//! the rules above are the words each role tells it in.
+//!
 //! A hash that differs is a change unless people declared the edit keeps the
 //! meaning ([`SameMeaning`]): when the ledger joins the pinned hash to the hash now
-//! ([`Ledger::doc_same_meaning`], [`Ledger::artifact_same_meaning`]), the
+//! ([`Ledger::doc_same_meaning`], and for an artifact the ledger's own reading of a
+//! pin, which takes the declarations of every name of the way of the pin as it is
+//! read now), the
 //! `SelfChanged`, `UpstreamChanged` or `ArtifactChanged` is not a cause, and a
 //! [`Notice`] names the declarations instead. The same three comparisons decide
 //! both, so an edit is either a cause or a notice, never both.
@@ -78,8 +85,9 @@
 //! hash and state it pinned, so an unchanged move is no cause, a move with an edit is
 //! an `ArtifactChanged` at the new name, and a link that still writes a name the move
 //! left (the old name, or one a chain passed) is one fact, [`Cause::ArtifactMoved`],
-//! and no `ArtifactLinksChanged`. The reading is the ledger's ([`Ledger::read_pins`]); nothing
-//! here follows a move. An artifact cause carries the [`ReadPin`]: the pin as it was
+//! and no `ArtifactLinksChanged`. The reading is the view's
+//! ([`ApprovalView::read_pins`](super::ledger::ApprovalView::read_pins)); nothing here
+//! follows a move. An artifact cause carries the [`ReadPin`]: the pin as it was
 //! made, and the name it is read as.
 //!
 //! [`Moved`]: super::ledger::Moved
@@ -99,9 +107,14 @@
 //!
 //! Beside its freshness, an approval that stands has a [`Quorum`]: whether as many
 //! different names read its content as the rule of who may decide asks for
-//! ([`Ledger::quorum`]; one name where no rule asks for more, so it is always met
-//! there), and the names that read it ([`Standing::read_by`]), from the same walk
-//! ([`Ledger::reading`]). Freshness and quorum are apart: a [`Freshness`] is fresh or
+//! ([`StandingApproval::quorum`]; one name where no rule asks for more, so it is
+//! always met there), and the names that read it ([`Standing::read_by`]), from the
+//! same walk ([`StandingApproval::reading`]).
+//!
+//! [`StandingApproval::quorum`]: super::ledger::StandingApproval::quorum
+//! [`StandingApproval::reading`]: super::ledger::StandingApproval::reading
+//!
+//! Freshness and quorum are apart: a [`Freshness`] is fresh or
 //! degraded by its causes alone, and a quorum short of its names is no cause of the
 //! approval itself. What
 //! is shown of both is [`Standing::kind`]'s: a fresh approval short of names is
@@ -115,20 +128,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
 
-use super::artifact::{
-    ArtifactHash, ArtifactKey, ArtifactSeen, ArtifactState, Comparison, Listings, Untold,
-};
+use super::artifact::{ArtifactHash, ArtifactKey, Comparison, Listings, Untold};
 use super::build::{DocFailure, FailureTag, InvalidDoc, Shelf};
 use super::cover::{Decided, counts, decided_of};
 use super::coverage::{CoverAssessment, CoverTarget, ExemptionGroup, assess as assess_cover};
-use super::doc::{Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
+use super::doc::{DependsNow, Doc, DocHash, LinkState, UnresolvedLink, UnresolvedWhy};
+use super::drift::{ArtifactChange, ArtifactDrift, DocDrift, Edit};
 use super::exemption::{ExemptionReading, Unneeded};
 use super::graph::{Cycle, CycleId};
 use super::ledger::{
-    DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger, LedgerProblem, NotStanding, Quorum,
-    ReadBy, ReadPin, Reading,
+    ApprovalPins, DeclaredNow, DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger,
+    LedgerProblem, NotStanding, PinNow, Quorum, ReadBy, ReadPin, Reading, SubjectPins,
 };
-use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
+use super::schema::{BookName, CoverSeverity, EntryName, Propagation};
 
 /// The documents that take the place of a deprecated one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -676,10 +688,11 @@ pub enum Standing {
     Approved {
         /// Whether it holds.
         freshness: Freshness,
-        /// Whether enough different names read its content ([`Ledger::quorum`]).
+        /// Whether enough different names read its content
+        /// ([`StandingApproval::quorum`](super::ledger::StandingApproval::quorum)).
         quorum: Quorum,
         /// The names that read its content now, from the walk that told its quorum
-        /// ([`Ledger::reading`]).
+        /// ([`StandingApproval::reading`](super::ledger::StandingApproval::reading)).
         read_by: ReadBy,
     },
 }
@@ -1367,13 +1380,13 @@ fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
     let mut statuses = BTreeMap::new();
     let mut same_meaning = BTreeMap::new();
     for id in order {
-        let status = ledger.status_of(id);
+        let declared = ledger.declared(id);
         let mut kept = Vec::new();
-        let standing = match &status {
-            DeclaredStatus::Pending => Standing::Pending,
+        let standing = match declared {
+            DeclaredNow::Pending => Standing::Pending,
             // The one carrying of a decision against to the standing: which one is
             // read already, and only a deprecated document has successors.
-            DeclaredStatus::Against {
+            DeclaredNow::Against {
                 status: against, ..
             } => Standing::Against(match against {
                 NotStanding::Denied => Against::Denied,
@@ -1382,35 +1395,19 @@ fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
                 },
                 NotStanding::Retired => Against::Retired,
             }),
-            DeclaredStatus::Approved {
-                seen,
-                frame,
-                expires,
-                ..
-            } => {
+            DeclaredNow::Approved(standing) => {
                 // The one walk of its readers, for who reads it and whether enough do.
-                let Reading { read_by, quorum } = ledger.reading(id, cx.now);
+                let Reading { read_by, quorum } = standing.reading(cx.now);
                 Standing::Approved {
-                    freshness: freshness_of(
-                        cx,
-                        id,
-                        Pinned {
-                            seen,
-                            frame,
-                            // The artifacts as the ledger reads them now, through moves.
-                            artifacts: &ledger.read_pins(id),
-                        },
-                        *expires,
-                        &standings,
-                        &mut kept,
-                    ),
+                    // What its pins come to now, each read once.
+                    freshness: freshness_of(cx, standing.compared(cx.shelf), &standings, &mut kept),
                     quorum,
                     read_by,
                 }
             }
         };
         standings.insert(id, standing);
-        statuses.insert(id, status);
+        statuses.insert(id, declared.to_status());
         if !kept.is_empty() {
             same_meaning.insert(id, kept);
         }
@@ -1433,41 +1430,42 @@ fn invalid_files(shelf: &Shelf) -> Vec<InvalidDoc> {
         .collect()
 }
 
-/// What an approval pinned: the hash it saw, the upstreams and the artifacts.
-struct Pinned<'a> {
-    seen: &'a DocHash,
-    frame: &'a BTreeSet<FramePin>,
-    artifacts: &'a [ReadPin],
-}
-
+/// The freshness of the approval that stands, from what its pins come to now
+/// (`pins`), each told in the words of its role.
 fn freshness_of(
     cx: &Cx<'_>,
-    id: DocId,
-    pinned: Pinned<'_>,
-    expires: Option<JudgedAt>,
+    pins: ApprovalPins<'_>,
     standings: &BTreeMap<DocId, Standing>,
     kept: &mut Vec<Notice>,
 ) -> Freshness {
     let mut causes = Vec::new();
-    match cx.shelf.state_of(id).valid_or_failure() {
-        Ok(doc) => {
+    let ApprovalPins { approval, subject } = pins;
+    match subject {
+        Ok(pins) => {
+            let SubjectPins {
+                doc,
+                depends,
+                seen,
+                frame,
+                artifacts,
+            } = pins;
             let found = Found {
                 causes: &mut causes,
                 kept,
             };
-            valid_causes(cx, doc, pinned.seen, pinned.frame, standings, found);
+            valid_causes(cx, doc, seen, approval.frame(), frame, standings, found);
             let found = Found {
                 causes: &mut causes,
                 kept,
             };
-            artifact_causes(cx.ledger, doc, pinned.artifacts, found);
+            artifact_causes(&depends, &artifacts, found);
             if let Some(ids) = cx.in_cycle.get(&doc.id()) {
                 causes.extend(ids.iter().map(|cycle| Cause::InCycle { cycle: *cycle }));
             }
         }
         Err(failure) => causes.push(Cause::SelfNotValid(failure)),
     }
-    if let Some(since) = expires
+    if let Some(since) = approval.expires()
         && since.lapsed_by(cx.now)
     {
         causes.push(Cause::Expired { since });
@@ -1482,36 +1480,42 @@ struct Found<'f> {
     kept: &'f mut Vec<Notice>,
 }
 
+/// The causes of a valid document's own hash and of its upstreams (`pins`, what each
+/// pin of `frame` comes to now), and the change of what its `Depends` links name.
 fn valid_causes(
     cx: &Cx<'_>,
     doc: &Doc,
-    seen: &DocHash,
+    seen: Edit<DocHash, NonEmptyVec<JudgementId>>,
     frame: &BTreeSet<FramePin>,
+    pins: Vec<(&FramePin, DocDrift<NonEmptyVec<JudgementId>, DocFailure>)>,
     standings: &BTreeMap<DocId, Standing>,
     found: Found<'_>,
 ) {
     let Found { causes, kept } = found;
-    if doc.hash() != seen {
-        match cx.ledger.doc_same_meaning(doc.id(), seen, doc.hash()) {
-            Some(declared) => kept.push(Notice::SelfSameMeaning {
-                approved: *seen,
-                now: *doc.hash(),
-                declared,
-            }),
-            None => causes.push(Cause::SelfChanged {
-                approved: *seen,
-                now: *doc.hash(),
-            }),
-        }
+    match seen {
+        Edit::Same { .. } => {}
+        Edit::Edited { then, now } => causes.push(Cause::SelfChanged {
+            approved: then,
+            now,
+        }),
+        Edit::KeptMeaning {
+            then,
+            now,
+            declared,
+        } => kept.push(Notice::SelfSameMeaning {
+            approved: then,
+            now,
+            declared,
+        }),
     }
 
     let mut lost: Vec<(&FramePin, FailureTag)> = Vec::new();
-    for pin in frame {
+    for (pin, now) in pins {
         let found = Found {
             causes: &mut *causes,
             kept: &mut *kept,
         };
-        pin_causes(cx, doc, pin, standings, found, &mut lost);
+        pin_causes(cx, doc, pin, now, standings, found, &mut lost);
     }
 
     causes.extend(link_changes(doc, frame, &lost));
@@ -1530,103 +1534,77 @@ fn valid_causes(
 /// fact, [`Cause::ArtifactMoved`]. What is left, a pinned artifact the link names in
 /// no way, and a name the link writes that no pin accounts for, is an
 /// [`Cause::ArtifactLinksChanged`] of that link.
-fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &[ReadPin], found: Found<'_>) {
+fn artifact_causes(depends: &DependsNow<'_>, pinned: &[(ReadPin, PinNow)], found: Found<'_>) {
     let Found { causes: out, kept } = found;
-    let current: BTreeMap<(&EntryName, &ArtifactKey), &ArtifactState> = doc
-        .artifact_links_of(ArtifactPropagation::Depends)
-        .into_iter()
-        .flat_map(|(link, artifacts)| {
-            artifacts
-                .iter()
-                .map(move |artifact| ((link, artifact.key()), artifact.state()))
-        })
-        .collect();
 
     let mut causes = Vec::new();
-    // Each pin with the names its way left that its link still writes.
-    let mut behind_of: Vec<(&ReadPin, Vec<&ArtifactKey>)> = Vec::new();
-    for read in pinned {
+    // Each pin with what it comes to and the names its way left that its link still
+    // writes.
+    let mut behind_of: Vec<(&ReadPin, &PinNow, Vec<&ArtifactKey>)> = Vec::new();
+    for (read, now) in pinned {
         let pin = read.pin();
         let behind: Vec<&ArtifactKey> = read
             .left_behind()
-            .filter(|name| current.contains_key(&(pin.link(), *name)))
+            .filter(|name| depends.get(pin.link(), name).is_some())
             .collect();
         causes.extend(behind.iter().map(|written| Cause::ArtifactMoved {
             link: pin.link().clone(),
             written: (*written).clone(),
             pin: read.clone(),
         }));
-        behind_of.push((read, behind));
-        let Some(now) = current.get(&(pin.link(), read.read_as())) else {
-            continue;
+        behind_of.push((read, now, behind));
+        // A pin its link no longer writes is told by the change of the link's names
+        // below; a name that cannot be told now is no cause (the notice says so); and
+        // two hashes are compared only when they were made the same way.
+        let drift = match now {
+            PinNow::Written(drift) => drift,
+            PinNow::NotWritten => continue,
         };
-        // A name that cannot be told now is no cause: the notice says so.
-        let Ok(now) = now.told() else {
-            continue;
-        };
-        // Two hashes are compared only when they were made the same way: when an
-        // artifact is there then and now and the link's declared comparison changed
-        // since, that is the cause, and the hashes are not compared. An artifact gone,
-        // or come, is told as such whatever the comparison: there is no pair of hashes.
-        let declared = doc
-            .artifact_links()
-            .get(pin.link())
-            .map(|link| &link.kind().comparison);
-        let changed_comparison = declared.filter(|d| *d != pin.comparison());
-        match (pin.seen().state(), now) {
-            (ArtifactSeen::Present(_), ArtifactSeen::Present(_))
-                if changed_comparison.is_some() =>
-            {
-                if let Some(declared) = changed_comparison {
-                    causes.push(Cause::ArtifactComparisonChanged {
+        match drift {
+            ArtifactDrift::Remade { now } => causes.push(Cause::ArtifactComparisonChanged {
+                pin: read.clone(),
+                now: now.clone(),
+            }),
+            ArtifactDrift::Change(change) => match change {
+                ArtifactChange::Content(Edit::Edited { now, .. }) => {
+                    causes.push(Cause::ArtifactChanged {
                         pin: read.clone(),
-                        now: declared.clone(),
+                        now: *now,
                     });
                 }
-            }
-            (ArtifactSeen::Present(then), ArtifactSeen::Present(now)) if then != now => {
-                match ledger.pin_same_meaning(read, &then, &now) {
-                    Some(declared) => kept.push(Notice::ArtifactSameMeaning {
+                ArtifactChange::Content(Edit::KeptMeaning { now, declared, .. }) => {
+                    kept.push(Notice::ArtifactSameMeaning {
                         pin: read.clone(),
-                        now,
-                        declared,
-                    }),
-                    None => causes.push(Cause::ArtifactChanged {
-                        pin: read.clone(),
-                        now,
-                    }),
+                        now: *now,
+                        declared: declared.clone(),
+                    });
                 }
-            }
-            (ArtifactSeen::Present(_), ArtifactSeen::Absent) => {
-                causes.push(Cause::ArtifactGone { pin: read.clone() });
-            }
-            (ArtifactSeen::Absent, ArtifactSeen::Present(now)) => {
-                causes.push(Cause::ArtifactArrived {
+                ArtifactChange::Gone { .. } => {
+                    causes.push(Cause::ArtifactGone { pin: read.clone() });
+                }
+                ArtifactChange::Arrived { now } => causes.push(Cause::ArtifactArrived {
                     pin: read.clone(),
-                    now,
-                });
-            }
-            (ArtifactSeen::Present(_), ArtifactSeen::Present(_))
-            | (ArtifactSeen::Absent, ArtifactSeen::Absent) => {}
+                    now: *now,
+                }),
+                ArtifactChange::Content(Edit::Same { .. })
+                | ArtifactChange::StillAbsent
+                | ArtifactChange::Untold(_) => {}
+            },
         }
     }
 
-    let mut names: BTreeSet<&EntryName> = pinned.iter().map(|r| r.pin().link()).collect();
-    names.extend(current.keys().map(|(link, _)| *link));
+    let mut names: BTreeSet<&EntryName> = pinned.iter().map(|(r, _)| r.pin().link()).collect();
+    names.extend(depends.links());
     for name in names {
-        let is: BTreeSet<&ArtifactKey> = current
-            .keys()
-            .filter(|(link, _)| *link == name)
-            .map(|(_, artifact)| *artifact)
-            .collect();
+        let is: BTreeSet<&ArtifactKey> = depends.names(name).collect();
         // What each pin of the link accounts for of what it writes now: the name it
         // is read as, and the names behind it (each an `ArtifactMoved` already). A pin
         // the link writes in no way is removed, as the name the link wrote then (the
         // name pinned), which is written now by no way of it.
         let mut accounted: BTreeSet<&ArtifactKey> = BTreeSet::new();
         let mut gone: BTreeSet<&ArtifactKey> = BTreeSet::new();
-        for (read, behind) in behind_of.iter().filter(|(r, _)| r.pin().link() == name) {
-            if is.contains(read.read_as()) {
+        for (read, now, behind) in behind_of.iter().filter(|(r, _, _)| r.pin().link() == name) {
+            if matches!(now, PinNow::Written(_)) {
                 accounted.insert(read.read_as());
             } else if behind.is_empty() {
                 gone.insert(read.pin().artifact());
@@ -1646,20 +1624,21 @@ fn artifact_causes(ledger: &Ledger, doc: &Doc, pinned: &[ReadPin], found: Found<
     out.extend(causes);
 }
 
-/// The causes one pin of the frame of a valid document adds: its upstream is no
-/// valid document (then that is the cause alone, and the pin is `lost`), or every
-/// rule that applies to the upstream that is one.
+/// The causes one pin of the frame of a valid document adds, from what its upstream
+/// comes to now (`now`): it is no valid document (then that is the cause alone, and the
+/// pin is `lost`), or every rule that applies to the upstream that is one.
 fn pin_causes<'p>(
     cx: &Cx<'_>,
     doc: &Doc,
     pin: &'p FramePin,
+    now: DocDrift<NonEmptyVec<JudgementId>, DocFailure>,
     standings: &BTreeMap<DocId, Standing>,
     found: Found<'_>,
     lost: &mut Vec<(&'p FramePin, FailureTag)>,
 ) {
     let Found { causes, kept } = found;
     let target = pin.target();
-    match cx.shelf.state_of(target).valid_or_failure() {
+    match now {
         Err(failure) => {
             lost.push((pin, failure.tag()));
             causes.push(Cause::UpstreamNotValid {
@@ -1667,21 +1646,19 @@ fn pin_causes<'p>(
                 failure,
             });
         }
-        Ok(upstream) => {
-            if upstream.hash() != pin.hash() {
-                match cx
-                    .ledger
-                    .doc_same_meaning(target, pin.hash(), upstream.hash())
-                {
-                    Some(declared) => kept.push(Notice::UpstreamSameMeaning {
+        Ok(edit) => {
+            match edit {
+                Edit::Same { .. } => {}
+                Edit::Edited { now, .. } => causes.push(Cause::UpstreamChanged {
+                    pin: pin.clone(),
+                    now,
+                }),
+                Edit::KeptMeaning { now, declared, .. } => {
+                    kept.push(Notice::UpstreamSameMeaning {
                         pin: pin.clone(),
-                        now: *upstream.hash(),
+                        now,
                         declared,
-                    }),
-                    None => causes.push(Cause::UpstreamChanged {
-                        pin: pin.clone(),
-                        now: *upstream.hash(),
-                    }),
+                    });
                 }
             }
             let same_cycle = cx
@@ -1981,8 +1958,8 @@ fn collect_notices(
                 }
             }
         }
-        if let Some(DeclaredStatus::Approved { frame, .. }) = statuses.get(&doc.id()) {
-            for pin in frame {
+        if let Some(DeclaredStatus::Approved(approval)) = statuses.get(&doc.id()) {
+            for pin in approval.frame() {
                 if let Some(Freshness::Degraded(degradation)) =
                     standings.get(&pin.target()).and_then(Standing::freshness)
                 {

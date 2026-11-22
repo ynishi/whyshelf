@@ -262,7 +262,7 @@ fn an_upstream_denied_or_gone_is_the_origin_of_what_stands_on_it() {
 fn pin_of_fr1() -> FramePin {
     let s = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
     match approved(&s, &[2]).status_of(docid(2)) {
-        DeclaredStatus::Approved { frame, .. } => frame.into_iter().next().unwrap(),
+        DeclaredStatus::Approved(approval) => approval.frame().iter().next().unwrap().clone(),
         other => panic!("an approval, got {other:?}"),
     }
 }

@@ -144,7 +144,7 @@ fn a_project_that_declares_no_rule_admits_every_name() {
     assert!(ledger.problems().is_empty());
     assert!(matches!(
         ledger.status_of(docid(1)),
-        DeclaredStatus::Approved { .. }
+        DeclaredStatus::Approved(_)
     ));
     assert!(ledger.accept(record).is_ok());
 }
@@ -175,7 +175,7 @@ fn a_record_the_rule_does_not_admit_is_not_used_and_is_a_problem_of_the_ledger()
     let ledger = Ledger::build(vec![by_bo, by_ana], &Admit::of(&shelf));
     assert!(matches!(
         ledger.status_of(docid(1)),
-        DeclaredStatus::Approved { judgement, .. } if judgement == jid(1002)
+        DeclaredStatus::Approved(approval) if approval.judgement() == jid(1002)
     ));
 }
 

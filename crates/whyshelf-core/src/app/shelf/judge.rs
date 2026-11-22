@@ -74,9 +74,9 @@ use crate::domain::actor::Attribution;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 use crate::domain::shelf::freshness::Successors;
 use crate::domain::shelf::ledger::{
-    AdmittedRecord, ApproveFrame, Asked, Before, Decision, DecisionProblem, DecisionVerb,
-    DeclaredStatus, JudgedAt, JudgementId, PresentFrame, Record, RetireFrame, Revocation, Taking,
-    frame_approve, frame_present, frame_retire,
+    AdmittedRecord, ApproveFrame, Asked, Before, Decision, DecisionProblem, DeclaredStatus,
+    JudgedAt, JudgementId, PresentFrame, Record, RetireFrame, Revocation, Taking, frame_approve,
+    frame_present, frame_retire,
 };
 use crate::domain::shelf::lookup::Reference;
 
@@ -349,8 +349,8 @@ impl<P: ShelfWrite> ShelfApp<P> {
             Judgement::Revoke { reason } => {
                 let standing = match loaded.ledger.status_of(subject) {
                     DeclaredStatus::Pending => return Err(ShelfError::NothingToRevoke { subject }),
-                    DeclaredStatus::Approved { judgement, .. }
-                    | DeclaredStatus::Against { judgement, .. } => judgement,
+                    DeclaredStatus::Approved(approval) => approval.judgement(),
+                    DeclaredStatus::Against { judgement, .. } => judgement,
                 };
                 let targets = NonEmptySet::from_set(BTreeSet::from([standing]))?;
                 (Plan::Revoke(targets, reason), None)
@@ -364,35 +364,38 @@ impl<P: ShelfWrite> ShelfApp<P> {
             .await
             .map_err(port(ShelfPort::Ids))?;
 
-        let record = match plan {
-            Plan::Approve(frame, until) => {
-                let frame = self.addressed(loaded, frame).await?;
-                Record::Decision(Decision::approve(id, frame, until, by, now, reason)?)
-            }
-            Plan::Deny(frame) => Record::Decision(Decision::deny(id, frame, by, now, reason)?),
-            Plan::Deprecate(frame) => {
-                Record::Decision(Decision::deprecate(id, frame, by, now, reason)?)
-            }
-            Plan::Retire(frame) => Record::Decision(Decision::retire(id, frame, by, now, reason)?),
-            Plan::Revoke(targets, reason) => {
-                Record::Revocation(Revocation::new(id, targets, by, now, reason))
-            }
-        };
-
         // An approval pins a name of a depends link with nothing there as absent; say
         // so, since a wrong name is pinned in the same way as evidence not written yet.
-        let absent = match &record {
-            Record::Decision(decision)
-                if matches!(decision.verb(), DecisionVerb::Approve { .. }) =>
-            {
-                loaded.shelf.doc(subject).map_or_else(Vec::new, |doc| {
+        let (record, absent) = match plan {
+            Plan::Approve(frame, until) => {
+                let frame = self.addressed(loaded, frame).await?;
+                let absent = loaded.shelf.doc(subject).map_or_else(Vec::new, |doc| {
                     doc.absent_artifacts()
                         .into_iter()
                         .map(|(link, artifact)| (link.clone(), artifact.clone()))
                         .collect()
-                })
+                });
+                (
+                    Record::Decision(Decision::approve(id, frame, until, by, now, reason)?),
+                    absent,
+                )
             }
-            _ => Vec::new(),
+            Plan::Deny(frame) => (
+                Record::Decision(Decision::deny(id, frame, by, now, reason)?),
+                Vec::new(),
+            ),
+            Plan::Deprecate(frame) => (
+                Record::Decision(Decision::deprecate(id, frame, by, now, reason)?),
+                Vec::new(),
+            ),
+            Plan::Retire(frame) => (
+                Record::Decision(Decision::retire(id, frame, by, now, reason)?),
+                Vec::new(),
+            ),
+            Plan::Revoke(targets, reason) => (
+                Record::Revocation(Revocation::new(id, targets, by, now, reason)),
+                Vec::new(),
+            ),
         };
         Ok(Decided::Judged(Judged {
             record,

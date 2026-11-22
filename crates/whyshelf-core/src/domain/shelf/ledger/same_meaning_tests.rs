@@ -7,10 +7,12 @@ use std::collections::BTreeSet;
 use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
 use crate::domain::shelf::artifact::ArtifactHash;
+use crate::domain::shelf::build::DocReading;
 use crate::domain::shelf::fixtures_tests::{
-    approve, by, deny, docid, file_artifact, fr, fr_titled, jid, ledger, name, reading, shelf,
-    shelf_with, sp_testing,
+    approve, by, deny, docid, file_artifact, fr, fr_titled, jid, ledger, list, name, reading,
+    shelf, shelf_with, sp_testing, text,
 };
+use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing, assess_unasked};
 
 use super::*;
 
@@ -766,6 +768,150 @@ fn what_is_no_decision_or_declaration_cannot_be_withdrawn() {
     assert_eq!(
         conflicted.check_withdraw(jid(2001)),
         Err(WithdrawRefusal::Unknown { id: jid(2001) })
+    );
+}
+
+// What `frame_same_meaning` reads on its own, apart from the pins stale compares (the
+// limitation its page states): these fix its answer as it is, beside what stale tells
+// of the same pins.
+
+/// The causes and the notices stale tells of SP-2 in `now`.
+fn stale_of(now: &Shelf, l: &Ledger) -> (Vec<Cause>, Vec<Notice>) {
+    let assessment = assess_unasked(now, l, JudgedAt::new(100));
+    let causes = match assessment.standing_of(docid(2)) {
+        Standing::Approved {
+            freshness: Freshness::Degraded(degraded),
+            ..
+        } => degraded.causes().iter().cloned().collect(),
+        Standing::Approved { .. } => Vec::new(),
+        other => panic!("an approval stands about SP-2, got {other:?}"),
+    };
+    (causes, assessment.notices_of(docid(2)).to_vec())
+}
+
+/// SP-2 approved on FR-1 while `tests/a.rs` held "a", with `more` beside it on the
+/// shelf; FR-1 and SP-2 approved, `more` not.
+fn approved_on_a(more: Vec<DocReading>) -> Vec<Record> {
+    let mut docs = vec![fr(1, &[]), sp_testing(2, &["FR-1"], &["tests/a.rs"])];
+    docs.extend(more);
+    let then = shelf_with(docs, &[("tests/a.rs", Some(ah("a")))]);
+    approving(&then, &[1, 2], 1001)
+}
+
+fn edit_of_a(at: &str, to: &str) -> SameMeaningOf {
+    SameMeaningOf::Artifact {
+        artifact: file_artifact(at),
+        from: NonEmptySet::from_set(BTreeSet::from([ah("a")])).unwrap(),
+        to: ah(to),
+    }
+}
+
+/// An edit declared before a move, of the old name: stale joins it, as the
+/// declarations of every name of the pin's way count; `judge same` of the new name
+/// reads the declarations of that name only, and offers the edit again.
+#[test]
+fn judge_same_offers_an_edit_declared_before_a_move_that_stale_tells_as_kept() {
+    let mut records = approved_on_a(Vec::new());
+    records.push(artifact_declaration(2001, "tests/a.rs", &["a"], "b"));
+    records.push(Record::Moved(Moved::new(
+        jid(3001),
+        MovedOf::new(
+            file_artifact("tests/a.rs").space().clone(),
+            name("tests/a.rs"),
+            name("tests/b.rs"),
+        )
+        .unwrap(),
+        by(),
+        JudgedAt::new(60),
+        because(),
+    )));
+    let l = ledger(records);
+    let now = shelf_with(
+        vec![fr(1, &[]), sp_testing(2, &["FR-1"], &["tests/b.rs"])],
+        &[("tests/b.rs", Some(ah("b")))],
+    );
+    let (causes, notices) = stale_of(&now, &l);
+    assert!(causes.is_empty(), "{causes:?}");
+    assert!(
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::ArtifactSameMeaning { .. })),
+        "{notices:?}"
+    );
+    assert_eq!(
+        frame(&now, &l, SameMeaningTarget::Artifact(name("tests/b.rs"))),
+        Ok(edit_of_a("tests/b.rs", "b"))
+    );
+}
+
+/// The pin of an approval whose document is not valid now: stale compares none of its
+/// pins; `judge same` gathers it as a pin of an approval that stands, and offers its edit.
+#[test]
+fn judge_same_offers_an_edit_of_a_pin_of_a_document_that_is_not_valid_which_stale_does_not_compare()
+{
+    let l = ledger(approved_on_a(vec![sp_testing(
+        3,
+        &["FR-1"],
+        &["tests/a.rs"],
+    )]));
+    let invalid = reading(
+        "specs/sp-2.md",
+        2,
+        "SP-2",
+        &[
+            ("title", text("spec")),
+            ("grounds", list(&["FR-1"])),
+            ("tests", list(&["tests/a.rs"])),
+            ("surprise", text("x")),
+        ],
+    );
+    let now = shelf_with(
+        vec![
+            fr(1, &[]),
+            invalid,
+            sp_testing(3, &["FR-1"], &["tests/a.rs"]),
+        ],
+        &[("tests/a.rs", Some(ah("b")))],
+    );
+    let (causes, _) = stale_of(&now, &l);
+    assert!(
+        matches!(causes.as_slice(), [Cause::SelfNotValid(_)]),
+        "{causes:?}"
+    );
+    assert_eq!(
+        frame(&now, &l, SameMeaningTarget::Artifact(name("tests/a.rs"))),
+        Ok(edit_of_a("tests/a.rs", "b"))
+    );
+}
+
+/// The pin of a name its link writes no more: stale tells the change of the link's names
+/// and compares no content; `judge same` gathers the pin, and offers its edit.
+#[test]
+fn judge_same_offers_an_edit_of_a_pin_its_link_writes_no_more_which_stale_does_not_compare() {
+    let l = ledger(approved_on_a(vec![sp_testing(
+        3,
+        &["FR-1"],
+        &["tests/a.rs"],
+    )]));
+    let now = shelf_with(
+        vec![
+            fr(1, &[]),
+            sp_testing(2, &["FR-1"], &["tests/c.rs"]),
+            sp_testing(3, &["FR-1"], &["tests/a.rs"]),
+        ],
+        &[("tests/a.rs", Some(ah("b"))), ("tests/c.rs", Some(ah("c")))],
+    );
+    let (causes, _) = stale_of(&now, &l);
+    assert!(
+        causes
+            .iter()
+            .all(|c| matches!(c, Cause::ArtifactLinksChanged { .. })),
+        "{causes:?}"
+    );
+    assert!(!causes.is_empty());
+    assert_eq!(
+        frame(&now, &l, SameMeaningTarget::Artifact(name("tests/a.rs"))),
+        Ok(edit_of_a("tests/a.rs", "b"))
     );
 }
 

@@ -280,7 +280,7 @@ fn the_same_name_in_two_spaces_is_two_artifacts() {
 fn one_address_from_two_spaces_is_read_back_by_each_space_s_adapter() {
     use super::ContentOf;
     use super::fake_tests::fake_address;
-    use crate::domain::shelf::snapshot::{ItemRole, Retrieval};
+    use crate::domain::shelf::snapshot::{ItemKind, Retrieval};
 
     // The same bytes in both spaces: the fake names them by one address.
     let same = b"one content\n";
@@ -317,12 +317,15 @@ fn one_address_from_two_spaces_is_read_back_by_each_space_s_adapter() {
     let read: Vec<(String, Retrieval)> = shown
         .items
         .iter()
-        .filter_map(|i| match i.item.role() {
-            ItemRole::Artifact { artifact, .. } => {
+        .filter_map(|i| match i.item.kind() {
+            ItemKind::Artifact(read) => {
                 assert_eq!(i.item.address(), Some(&address));
-                Some((artifact.space().to_string(), i.retrieval.clone()))
+                Some((
+                    read.pin().artifact().space().to_string(),
+                    i.retrieval.clone(),
+                ))
             }
-            _ => None,
+            ItemKind::Doc(_) => None,
         })
         .collect();
     assert_eq!(
@@ -339,7 +342,7 @@ fn one_address_from_two_spaces_is_read_back_by_each_space_s_adapter() {
     let approved: Vec<&Retrieval> = diff
         .items
         .iter()
-        .filter(|i| matches!(i.item.role(), ItemRole::Artifact { .. }))
+        .filter(|i| matches!(i.compared.item().kind(), ItemKind::Artifact(_)))
         .map(|i| &i.approved)
         .collect();
     assert_eq!(

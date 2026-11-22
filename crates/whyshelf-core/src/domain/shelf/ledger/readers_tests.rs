@@ -6,7 +6,8 @@ use std::collections::BTreeSet;
 
 use crate::domain::actor::{Actor, Attribution};
 use crate::domain::shelf::fixtures_tests::{
-    actor, approve, deny, docid, fr, fr_titled, jid, ledger, reading, shelf, sp_testing, text,
+    actor, approve, deny, docid, fr, fr_titled, jid, ledger, reading, shelf, sp_testing, standing,
+    text,
 };
 
 use super::*;
@@ -63,7 +64,7 @@ fn readers(records: &[Record]) -> Vec<JudgementId> {
         .readers(docid(1), Before::Now)
         .approvals()
         .iter()
-        .map(|d| d.id())
+        .map(|v| v.judgement())
         .collect()
 }
 
@@ -290,10 +291,7 @@ fn while_a_move_reads_a_pin_of_the_approval_that_stands_a_new_one_renews_it() {
         ApprovalKind::Renewal
     );
     // Read before the move was declared, it is not read through it.
-    let before = Before::Record {
-        at: JudgedAt::new(40),
-        id: jid(9),
-    };
+    let before = Before::Record(RecordOrder::of(JudgedAt::new(40), jid(9)));
     assert_eq!(
         kind_at(records, &actor(), before),
         ApprovalKind::Repeat { standing: jid(2) }
@@ -325,11 +323,7 @@ fn before_a_record_reads_the_ledger_as_it_was_and_by_identity_at_one_time() {
         approval(&a, 4, "cy", 30, None),
     ];
     let ledger = ledger(records);
-    let kind_of = |n: u128| {
-        let decision = ledger.decisions().find(|d| d.id() == jid(n)).unwrap();
-        let asked = Asked::decision(decision).unwrap();
-        ledger.kind_of(&asked, Before::decision(decision))
-    };
+    let kind_of = |n: u128| ledger.approval(jid(n)).unwrap().kind_before();
     assert_eq!(kind_of(1), ApprovalKind::New);
     assert_eq!(kind_of(2), ApprovalKind::SecondReading { standing: jid(1) });
     assert_eq!(kind_of(3), ApprovalKind::SecondReading { standing: jid(2) });
@@ -337,14 +331,11 @@ fn before_a_record_reads_the_ledger_as_it_was_and_by_identity_at_one_time() {
     let before_cy: Vec<JudgementId> = ledger
         .readers(
             docid(1),
-            Before::Record {
-                at: JudgedAt::new(20),
-                id: jid(3),
-            },
+            Before::Record(RecordOrder::of(JudgedAt::new(20), jid(3))),
         )
         .approvals()
         .iter()
-        .map(|d| d.id())
+        .map(|v| v.judgement())
         .collect();
     assert_eq!(before_cy, [jid(2), jid(1)]);
 }
@@ -384,7 +375,7 @@ fn a_pin_is_named_by_what_its_upstream_comes_to_now() {
     let second = approve(&before, &so_far, 11, 1011, 10, None);
     let l = ledger(vec![first, second]);
     let pin = match l.status_of(docid(11)) {
-        DeclaredStatus::Approved { frame, .. } => frame.into_iter().next().unwrap(),
+        DeclaredStatus::Approved(approval) => approval.frame().iter().next().unwrap().clone(),
         other => panic!("{other:?}"),
     };
     let key = |written: &str| crate::domain::shelf::doc::DocKey {
@@ -430,7 +421,7 @@ fn a_decision_that_is_no_approval_is_asked_nothing() {
     let records = vec![deny(&a, 1, 1, 10)];
     let ledger = ledger(records);
     let decision = ledger.decisions().next().unwrap();
-    assert!(Asked::decision(decision).is_none());
+    assert!(ledger.approval(decision.id()).is_none());
 }
 
 #[test]
@@ -588,7 +579,8 @@ fn when_every_reading_lapsed_nobody_counts_while_the_quorum_counts_the_approval_
     let bo = approve_as(&shelf, &before, 1, 1002, ("bo", 20, Some(60)));
     let ledger = admitted(&shelf, vec![ana, bo]);
 
-    let Reading { read_by, quorum } = ledger.reading(docid(1), JudgedAt::new(100));
+    let standing = standing(&ledger, docid(1));
+    let Reading { read_by, quorum } = standing.reading(JudgedAt::new(100));
     assert!(read_by.counted().is_empty());
     assert_eq!(named(read_by.lapsed()), ["ana", "bo"]);
     assert_eq!(read_by.count(), ReaderCount::Nobody);
@@ -602,11 +594,14 @@ fn when_every_reading_lapsed_nobody_counts_while_the_quorum_counts_the_approval_
     );
     assert_eq!(need.count(), 2);
     // The one a caller of the quorum alone asks is the same.
-    assert_eq!(ledger.quorum(docid(1), JudgedAt::new(100)), quorum);
+    assert_eq!(standing.quorum(JudgedAt::new(100)), quorum);
 }
 
+/// No readers are read by nobody, and with no approval standing there is no approval
+/// whose names a rule counts: a reading and a quorum are asked of the approval that
+/// stands alone.
 #[test]
-fn no_readers_are_read_by_nobody_and_their_quorum_is_met() {
+fn no_readers_are_read_by_nobody_and_no_approval_awaits_names() {
     use crate::domain::shelf::fixtures_tests::{admitted, asking, ruled_shelf};
     let empty = ledger(vec![]);
     let readers = empty.readers(docid(1), Before::Now);
@@ -614,18 +609,15 @@ fn no_readers_are_read_by_nobody_and_their_quorum_is_met() {
     let read = readers.at(JudgedAt::new(100));
     assert!(read.counted().is_empty() && read.lapsed().is_empty());
     assert_eq!(read.count(), ReaderCount::Nobody);
-    let reading = empty.reading(docid(1), JudgedAt::new(100));
-    assert_eq!(reading.quorum, Quorum::Met);
+    assert!(matches!(empty.declared(docid(1)), DeclaredNow::Pending));
 
     let shelf = ruled_shelf(asking(2, None), vec![fr(1, &[])]);
     let ruled = admitted(&shelf, vec![]);
     assert_eq!(
-        ruled.reading(docid(1), JudgedAt::new(100)),
-        Reading {
-            read_by: read,
-            quorum: Quorum::Met
-        }
+        ruled.readers(docid(1), Before::Now).at(JudgedAt::new(100)),
+        read
     );
+    assert!(matches!(ruled.declared(docid(1)), DeclaredNow::Pending));
 }
 
 #[test]

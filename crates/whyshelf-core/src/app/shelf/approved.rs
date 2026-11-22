@@ -14,9 +14,9 @@
 //!                                ContentStore::read_back --> readable contents
 //!                                                 |
 //!   show_approved:  each item + SnapshotItem::retrieval
-//!   diff:           each item + retrieval + what it is now (doc_now, or the
-//!                   ArtifactSource for an artifact) + the bytes now (DocSource,
-//!                   or ArtifactSource) + SnapshotItem::changed_from
+//!   diff:           each item + retrieval + SnapshotItem::compared (the shelf, and
+//!                   what the ArtifactSource read of an artifact by the name it is read
+//!                   as) + the bytes now (DocSource, or ArtifactSource)
 //! ```
 //!
 //! [`ShelfRead`]: super::ShelfRead
@@ -25,13 +25,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::location::RelPath;
-use crate::domain::shelf::artifact::{
-    ArtifactAsks, ArtifactReadings, ArtifactSeen, ContentAddress, Listings,
-};
-use crate::domain::shelf::ledger::MovedTo;
-use crate::domain::shelf::snapshot::{
-    ItemNow, ItemRole, Retrieval, Snapshot, SnapshotItem, doc_now,
-};
+use crate::domain::shelf::artifact::{ArtifactAsks, ArtifactReadings, ContentAddress, Listings};
+use crate::domain::shelf::snapshot::{ItemKind, ItemView, Retrieval, Snapshot, SnapshotItem};
 
 use super::ShelfApp;
 use super::error::ShelfError;
@@ -83,20 +78,12 @@ impl<P: ShelfRead> ShelfApp<P> {
         // An artifact is asked by the name it is read as (the one a declared move
         // took it to), as freshness compares it.
         let mut asks = ArtifactAsks::new();
-        for item in snapshot.items() {
-            if let ItemRole::Artifact {
-                artifact,
-                comparison,
-                ..
-            } = item.role()
-            {
-                let artifact = item.moved().map_or(artifact, MovedTo::artifact);
-                asks.ask(
-                    artifact.space().clone(),
-                    artifact.name().clone(),
-                    comparison.clone(),
-                );
-            }
+        for ask in snapshot.items().iter().filter_map(SnapshotItem::ask) {
+            asks.ask(
+                ask.artifact.space().clone(),
+                ask.artifact.name().clone(),
+                ask.comparison.clone(),
+            );
         }
         let artifacts_now = if asks.is_empty() {
             ArtifactReadings::new()
@@ -110,35 +97,28 @@ impl<P: ShelfRead> ShelfApp<P> {
 
         let mut items = Vec::with_capacity(snapshot.items().len());
         for item in snapshot.items() {
-            let (now, file, current) = match item.role() {
-                ItemRole::Subject { id } | ItemRole::Upstream { target: id, .. } => {
-                    let now = doc_now(&loaded.shelf, *id);
-                    let current = match &now.file {
-                        Some(file) => self.doc_bytes(file).await?,
-                        None => None,
-                    };
-                    (now.now, now.file, current)
-                }
-                ItemRole::Artifact {
-                    artifact,
-                    comparison,
-                    ..
-                } => {
-                    let artifact = item.moved().map_or(artifact, MovedTo::artifact);
-                    let state = artifacts_now.state_of(artifact, comparison);
-                    let current = match state.told() {
-                        Ok(ArtifactSeen::Present(_)) => self
-                            .ports
-                            .artifacts()
-                            .current(artifact)
-                            .await
-                            .map_err(port(ShelfPort::Artifacts))?,
-                        Ok(ArtifactSeen::Absent) | Err(_) => None,
-                    };
-                    (ItemNow::Artifact(state), None, current)
-                }
+            let compared = item.compared(&loaded.shelf, &artifacts_now);
+            // The bytes now: of the file that holds a document, or of an artifact that
+            // is there now, by the name it is read as.
+            let file = match compared.view() {
+                ItemView::Doc { file, .. } => file,
+                ItemView::Artifact { .. } => None,
             };
-            items.push(diff_item(item, &readable, now, file, current));
+            let current = match (file, compared.artifact_now()) {
+                (Some(file), _) => self.doc_bytes(file).await?,
+                (None, Some(read_as)) => self
+                    .ports
+                    .artifacts()
+                    .current(read_as)
+                    .await
+                    .map_err(port(ShelfPort::Artifacts))?,
+                (None, None) => None,
+            };
+            items.push(DiffItem {
+                approved: retrieval_of(item, &readable),
+                compared,
+                current,
+            });
         }
 
         let assessment = loaded.assess(&Listings::NotAsked);
@@ -206,9 +186,9 @@ type Readable = BTreeMap<(ContentOf, ContentAddress), Vec<u8>>;
 
 /// Whose content an item is: the adapter that named its address.
 fn content_of(item: &SnapshotItem) -> ContentOf {
-    match item.role() {
-        ItemRole::Subject { .. } | ItemRole::Upstream { .. } => ContentOf::Doc,
-        ItemRole::Artifact { artifact, .. } => ContentOf::Artifact(artifact.space().clone()),
+    match item.kind() {
+        ItemKind::Doc(_) => ContentOf::Doc,
+        ItemKind::Artifact(read) => ContentOf::Artifact(read.pin().artifact().space().clone()),
     }
 }
 
@@ -225,21 +205,4 @@ fn retrieval_of(item: &SnapshotItem, readable: &Readable) -> Retrieval {
         .into_iter()
         .collect();
     item.retrieval(&own)
-}
-
-fn diff_item(
-    item: &SnapshotItem,
-    readable: &Readable,
-    now: ItemNow,
-    file: Option<RelPath>,
-    current: Option<Vec<u8>>,
-) -> DiffItem {
-    DiffItem {
-        item: item.clone(),
-        approved: retrieval_of(item, readable),
-        changed: item.changed_from(&now),
-        now,
-        file,
-        current,
-    }
 }

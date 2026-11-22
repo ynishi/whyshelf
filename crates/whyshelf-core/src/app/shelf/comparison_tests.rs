@@ -7,7 +7,7 @@ use crate::domain::shelf::artifact::{Comparison, LinePrefix};
 use crate::domain::shelf::freshness::{Cause, Freshness, Standing};
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::schema::CompareDecl;
-use crate::domain::shelf::snapshot::ItemRole;
+use crate::domain::shelf::snapshot::ItemKind;
 
 use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::ledger::SameMeaningRefusal;
@@ -76,9 +76,10 @@ fn file_changed(app: &ShelfApp<FakeShelf>) -> bool {
     let diff = block_on(app.diff(&r("SP-2"))).unwrap();
     diff.items
         .iter()
-        .find(|i| matches!(i.item.role(), ItemRole::Artifact { artifact, .. } if artifact.name().as_str() == "tests/a.rs"))
+        .find(|i| matches!(i.compared.item().kind(), ItemKind::Artifact(read) if read.pin().artifact().name().as_str() == "tests/a.rs"))
         .unwrap()
-        .changed
+        .compared
+        .changed()
 }
 
 #[test]

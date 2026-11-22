@@ -26,7 +26,7 @@ use crate::domain::shelf::build::{
 };
 use crate::domain::shelf::fixtures_tests::{
     actor, approve, approved, docid, eid, file_artifact, file_space, fr, ledger, name, path,
-    reading, retire, schema, shelf, sp_testing,
+    read_pins, reading, retire, schema, shelf, sp_testing,
 };
 use crate::domain::shelf::freshness::assess_unasked as assess;
 use crate::domain::shelf::freshness::{Assessment, Cause, Freshness, Notice, Standing};
@@ -35,7 +35,7 @@ use crate::domain::shelf::ledger::{
     MovedRefusal, Record, Seen, frame_approve, frame_moved,
 };
 use crate::domain::shelf::lookup::{Absence, Reference, Resolution, resolve};
-use crate::domain::shelf::snapshot::{ItemNow, ItemRole, Snapshot, SnapshotItem, doc_now};
+use crate::domain::shelf::snapshot::{ItemKind, Snapshot, SnapshotItem, doc_now};
 use crate::domain::shelf::stats;
 
 // ---------------------------------------------------------------------------------
@@ -208,15 +208,12 @@ fn a_snapshot_keeps_a_document_that_cannot_be_told_apart_from_one_that_is_gone()
         let now = doc_now(&s, docid(id_of(row)));
         let (expected, file) = match row {
             Row::Valid => (
-                ItemNow::Doc(Ok(*s.doc(docid(1)).unwrap().hash())),
+                Ok(*s.doc(docid(1)).unwrap().hash()),
                 Some("findings/fr-1.md"),
             ),
-            Row::Invalid => (
-                ItemNow::Doc(Err(FailureTag::Invalid)),
-                Some("findings/fr-2.md"),
-            ),
-            Row::Gone => (ItemNow::Doc(Err(FailureTag::Gone)), None),
-            Row::Unknown => (ItemNow::Doc(Err(FailureTag::Unknown)), None),
+            Row::Invalid => (Err(FailureTag::Invalid), Some("findings/fr-2.md")),
+            Row::Gone => (Err(FailureTag::Gone), None),
+            Row::Unknown => (Err(FailureTag::Unknown), None),
         };
         assert_eq!(now.now, expected, "{row:?}");
         assert_eq!(now.file.as_ref().map(|f| f.as_str()), file, "{row:?}");
@@ -257,7 +254,7 @@ fn the_files_of_an_invalid_identity_are_in_the_order_of_its_files_and_the_snapsh
     // The snapshot's file is the first.
     let now = doc_now(&two, docid(2));
     assert_eq!(now.file.map(|f| f.to_string()), Some(files[0].clone()));
-    assert_eq!(now.now, ItemNow::Doc(Err(FailureTag::Invalid)));
+    assert_eq!(now.now, Err(FailureTag::Invalid));
 }
 
 #[test]
@@ -269,7 +266,7 @@ fn a_document_that_is_not_valid_has_changed_from_what_was_approved_whatever_it_c
         let snapshot = Snapshot::of(&known, docid(id)).expect("an approval stands");
         let subject = &snapshot.items()[0];
         assert_eq!(
-            subject.changed_from(&doc_now(&s, docid(id)).now),
+            subject.compared(&s, &ArtifactReadings::new()).changed(),
             changed,
             "{row:?}"
         );
@@ -371,8 +368,8 @@ fn spec_shelf(row: Told) -> Shelf {
     Shelf::build(&schema(), documents(), &readings_of(row))
 }
 
-/// The same, with `tests/a.rs` there with this content, or with nothing there.
-fn spec_shelf_holding(content: Option<&str>) -> Shelf {
+/// The answer for `tests/a.rs` there with this content, or with nothing there.
+fn readings_holding(content: Option<&str>) -> ArtifactReadings {
     let reading = match content {
         Some(text) => {
             ArtifactReading::of_hashes(BTreeMap::from([(Comparison::Bytes, h(text))]), None)
@@ -381,7 +378,12 @@ fn spec_shelf_holding(content: Option<&str>) -> Shelf {
     };
     let mut readings = ArtifactReadings::new();
     readings.insert(file_space(), name("tests/a.rs"), reading);
-    Shelf::build(&schema(), documents(), &readings)
+    readings
+}
+
+/// The same, with `tests/a.rs` there with this content, or with nothing there.
+fn spec_shelf_holding(content: Option<&str>) -> Shelf {
+    Shelf::build(&schema(), documents(), &readings_holding(content))
 }
 
 #[test]
@@ -407,7 +409,7 @@ fn an_approval_pins_what_can_be_told_and_is_refused_what_cannot() {
                     approve(&s, &ledger(Vec::new()), 1, 1001, 10, None),
                     approve(&s, &so_far, 2, 1002, 10, None),
                 ]);
-                let pins = both.read_pins(docid(2));
+                let pins = read_pins(&both, docid(2));
                 assert_eq!(pins.len(), 1, "{row:?}");
                 assert_eq!(pins[0].pin().seen().state(), seen, "{row:?}");
             }
@@ -507,7 +509,7 @@ fn artifact_item(snapshot: &Snapshot) -> &SnapshotItem {
     snapshot
         .items()
         .iter()
-        .find(|item| matches!(item.role(), ItemRole::Artifact { .. }))
+        .find(|item| matches!(item.kind(), ItemKind::Artifact(_)))
         .expect("the approval pinned the artifact")
 }
 
@@ -516,12 +518,9 @@ fn a_diff_tells_a_name_that_cannot_be_told_changed_and_a_name_as_it_was_unchange
     for pinned in [Some("then"), None] {
         let snapshot = Snapshot::of(&approved_while(pinned), docid(2)).unwrap();
         let item = artifact_item(&snapshot);
-        let as_pinned = match pinned {
-            Some(text) => ArtifactState::Present(h(text)),
-            None => ArtifactState::Absent,
-        };
+        let s = spec_shelf_holding(pinned);
         assert!(
-            !item.changed_from(&ItemNow::Artifact(as_pinned)),
+            !item.compared(&s, &readings_holding(pinned)).changed(),
             "{pinned:?}"
         );
         for row in TOLD {
@@ -532,7 +531,7 @@ fn a_diff_tells_a_name_that_cannot_be_told_changed_and_a_name_as_it_was_unchange
                 _ => false,
             };
             assert_eq!(
-                item.changed_from(&ItemNow::Artifact(state)),
+                item.compared(&s, &readings_of(row)).changed(),
                 !same,
                 "{row:?}, pinned {pinned:?}"
             );
