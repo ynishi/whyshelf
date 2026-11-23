@@ -1,0 +1,136 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8fe3420a5e36b603e8a755532bef6debd68128e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1aa36a7cd4418c1a1e85902f24e872c6fd95141647f83bc6df254b88a091cc19",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/canon.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "15438da9bc8d0cd40806c9bd31b33b6a1dff226e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94764bb140e397d0abc15683e76086bc530de516a33c9563da7755fa0dc4a899",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e73f11625395bcc79d17daebd7146b4ca2bed434",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3ebcd4c444c522416cc30f31ad058455530bb8b29b52e5e006fac48464f40d29",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/revocation_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fcddd211cb627f5ca51f7f6b841e66cd2c3fdc85",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:81ce633a3bdbf04554f4668671d03cf36da572d3fdcadec7813570ac1ad1a3f9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1f2bec710489be069f7e9d49fda07fd3fb2495d8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:46926aa86569935feef89e61799b4663b55bb04ea5beb1e03d7fe9418b9b3473",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5b749e7f90e015b5344978ba893b57ae1e05d194",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c517edd0e03ca48cdb53008d9ca5f1111c0ee9673a2ad0780e42bf065e9b049",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795420782181,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d740648a9acdbdb54f9fde12cf6df661af4b0dd9",
+      "hash": "sha256:95d308839ddd82cd6b2e8b1255d3783207eda53bcf1e3098ac3385e4212504c6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3b83-7c08-aeeb-5c338057481e"
+    },
+    {
+      "address": "74372b578812f77ad232998a3ae6850437d50c0a",
+      "hash": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157"
+    }
+  ],
+  "id": "01a2076b-0a29-75c5-a576-339d44ee7f44",
+  "kind": "decision",
+  "reason": "Read again after #112's first steps: the readers are split from the writers with no change, today's link and directory behaviour is pinned by tests, and Footing, Doc::depends_links / depends_names and the reach walk are added",
+  "revision": "944711c6540137fc2c6948e45bb86b1e5d799453",
+  "seen": "sha256:128f57b10a17afe9974d4c3c69326a4878e3ffc0f812557ef4a84be9c21ade52",
+  "seen_address": "732890f1367b93b5cbfea87deb2ea653325066f5",
+  "subject": "01a1c4ba-1664-702d-af36-26cafd3b5594",
+  "v": 1,
+  "verb": "approve"
+}

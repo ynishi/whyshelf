@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e034ef35d550ced4433b83c7ea4450cc5f863702",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:061b75991e39ba122b641291cfb268b4c096b6e7971b123ddeca7188b72e1b80",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6288d6b5013146b92ea8b30d06c103be9d68339f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c2377a08431f452e0816664dd3c92adbf63a754b062a5519555a4a8cf78cd0f7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795420782181,
+  "expires": null,
+  "frame": [
+    {
+      "address": "5edc41db98e0c4cc578c9cedb438a41761e27bf3",
+      "hash": "sha256:14ebd03b9f4e41442f3d8fbd85ec8cdfe2ecd72fb50895c5b6a1cc84e84a4dab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "22"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-155d-70fa-a267-9044c79b42b7"
+    }
+  ],
+  "id": "01a2076b-0dca-75df-b00e-860a94d91f6e",
+  "kind": "decision",
+  "reason": "Read again after #112's first steps: the readers are split from the writers with no change, today's link and directory behaviour is pinned by tests, and Footing, Doc::depends_links / depends_names and the reach walk are added",
+  "revision": "944711c6540137fc2c6948e45bb86b1e5d799453",
+  "seen": "sha256:e3de39ac2dc540f4da63078dfa3a57861de5e48834610e26af035950f33815b7",
+  "seen_address": "f3284e3edb747920e4fc1085b4cb45d959af678e",
+  "subject": "01a1c4ba-1c7a-7445-809d-046cf7ef0267",
+  "v": 1,
+  "verb": "approve"
+}

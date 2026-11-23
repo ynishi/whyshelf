@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "49ed1c4166bebe320bce2eed1871be9fd089cc33",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e63603bae01b839c87a6cb6b87ab46219f06e5ed61d5ff344fda955c915bc280",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0c5d60efe7bd3708eaf20b758a9395b2672f5446",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:64dc006655879075e4d38ceb7838c9e56ec40e0df46b43306c28e069b2385a61",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "326652d6ca14744f585174f628cba58b3d466335",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7a1773b46c21ccd48c9dac7a6d4d923f383f28392e8a6fd7ad6e8f04b630485f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "824243efcc292d3085ff9bcf50432b4acff1ca23",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:360508e991ce153764924df96b973265e28a7144fdc140333fccb8c941059f86",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f260650f401ba3e647bcfdb3e45f8de25c566f86",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5885b02032fb90ec93985fc6c8cdb4cb2b20c29422a30b4ec12bc7c1f32e7bb6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4df01389b2a3fd0897443cfd7c75b17688240517",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b79c2754c25225f2f60a75e168245515ba7a6c99a5bcd86ecc55e62d42397f70",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795420782181,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b4b013c3072c7576e998eb74980d082fbbbb3fe",
+      "hash": "sha256:3e379866f327b70afe6acdbf819f6f9b6a902810c5855c79becb1bd1a19be061",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "53"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7e2-6f31-74e1-8aa9-4de2bd6986d2"
+    }
+  ],
+  "id": "01a2076b-1ca4-7711-81d1-0760f6a9ff2d",
+  "kind": "decision",
+  "reason": "Read again after #112's first steps: the readers are split from the writers with no change, today's link and directory behaviour is pinned by tests, and Footing, Doc::depends_links / depends_names and the reach walk are added",
+  "revision": "944711c6540137fc2c6948e45bb86b1e5d799453",
+  "seen": "sha256:4fff836039815d80bd297e529a5fe506a514de3f56b81886db7efd092b08f941",
+  "seen_address": "f56aa84f441b058e2d794fd63dfecf8045c4d8ac",
+  "subject": "01a1c7e2-7061-7778-9bec-d92f955d4598",
+  "v": 1,
+  "verb": "approve"
+}

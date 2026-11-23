@@ -18,20 +18,19 @@
 //!   <id>.json --json--> Canon --from_canon--> Record   (or an UnreadableRecord)
 //! ```
 
+mod append;
+mod read;
+
 use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use whyshelf_core::app::shelf::{
-    Creation, LedgerAppend, LedgerContents, LedgerRead, UnreadableRecord, UnreadableWhy,
-};
+use whyshelf_core::app::shelf::UnreadableWhy;
 use whyshelf_core::domain::canon::Canon;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::shelf::ledger::{AdmittedRecord, Record};
-
-use super::create;
+use whyshelf_core::domain::shelf::ledger::Record;
 
 /// Why the ledger could not be read or written.
 #[derive(Debug, thiserror::Error)]
@@ -90,7 +89,11 @@ pub enum NotCanon {
     },
 }
 
-/// The ledger in a directory of JSON files.
+/// The ledger in a directory of JSON files: read ([`LedgerRead`], in
+/// `ledger/read.rs`), and a record added ([`LedgerAppend`], in `ledger/append.rs`).
+///
+/// [`LedgerRead`]: whyshelf_core::app::shelf::LedgerRead
+/// [`LedgerAppend`]: whyshelf_core::app::shelf::LedgerAppend
 #[derive(Debug, Clone)]
 pub struct JsonLedger {
     dir: PathBuf,
@@ -101,7 +104,8 @@ pub struct JsonLedger {
 
 impl JsonLedger {
     /// The ledger in `dir`, which the project names `rel` (`<whyshelf_dir>/ledger`),
-    /// from the same root as the paths [`LedgerAppend::append`] gives.
+    /// from the same root as the paths
+    /// [`LedgerAppend::append`](whyshelf_core::app::shelf::LedgerAppend::append) gives.
     pub fn new(dir: PathBuf, rel: RelPath) -> Self {
         Self { dir, rel }
     }
@@ -119,95 +123,6 @@ impl JsonLedger {
     fn io(&self, path: &Path) -> impl FnOnce(io::Error) -> LedgerError {
         let path = path.to_path_buf();
         move |source| LedgerError::Io { path, source }
-    }
-}
-
-/// Reading looks at the files of the directory that end in `.json` and at nothing
-/// else: a file with another extension (a note, an editor's backup) is not a
-/// record and is skipped on purpose. Every `.json` file is a record or an
-/// [`UnreadableRecord`]; one whose name cannot be reported fails the read with
-/// [`LedgerError::Name`]. None is dropped.
-impl LedgerRead for JsonLedger {
-    type Error = LedgerError;
-
-    async fn read(&self) -> Result<LedgerContents, LedgerError> {
-        let mut contents = LedgerContents::default();
-        let mut entries = match tokio::fs::read_dir(&self.dir).await {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(contents),
-            Err(source) => {
-                return Err(LedgerError::Io {
-                    path: self.dir.clone(),
-                    source,
-                });
-            }
-        };
-        let rel = &self.rel;
-        let mut files = Vec::new();
-        while let Some(entry) = entries.next_entry().await.map_err(self.io(&self.dir))? {
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json") {
-                files.push(path);
-            }
-        }
-        files.sort();
-        for path in files {
-            let bytes = tokio::fs::read(&path).await.map_err(self.io(&path))?;
-            match decode(&bytes) {
-                Ok(record) => contents.records.push(record),
-                Err(why) => {
-                    let name = |source| LedgerError::Name {
-                        path: path.clone(),
-                        source,
-                    };
-                    let segment = path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .ok_or_else(|| name(None))?;
-                    let file = format!("{rel}/{segment}")
-                        .parse::<RelPath>()
-                        .map_err(|e| name(Some(e)))?;
-                    contents.unreadable.push(UnreadableRecord { file, why });
-                }
-            }
-        }
-        Ok(contents)
-    }
-}
-
-impl LedgerAppend for JsonLedger {
-    type Error = LedgerError;
-
-    /// `<rel>/<id>.json`. The identity of a record is hexadecimal digits and `-`, so
-    /// a [`RelPath`] always takes it; were it ever not, the answer is the directory,
-    /// which still says where the file would have been.
-    fn path_of(&self, record: &Record) -> RelPath {
-        self.file_of(record).unwrap_or_else(|_| self.rel.clone())
-    }
-
-    /// The record is written to a new file by `create_new` (with the
-    /// directory made first): whole, or removed, and not put on disk, which is
-    /// [`FileSync::persist`]'s, for every record of a run at once.
-    ///
-    /// [`FileSync::persist`]: whyshelf_core::app::shelf::FileSync::persist
-    async fn append(&self, record: &AdmittedRecord) -> Result<RelPath, LedgerError> {
-        let record = record.record();
-        let file = self.file_of(record).map_err(|e| LedgerError::Name {
-            path: self.dir.clone(),
-            source: Some(e),
-        })?;
-        let path = self.dir.join(format!("{}.json", record.id()));
-        let mut text = serde_json::to_string_pretty(&to_json(&record.to_canon()))
-            .map_err(LedgerError::Json)?;
-        text.push('\n');
-        match create::create_new(&path, text.as_bytes()).await {
-            Ok(Creation::Created) => Ok(file),
-            Ok(Creation::AlreadyThere) => Err(LedgerError::Taken { path }),
-            Err(failed) => Err(LedgerError::Write {
-                step: failed.step,
-                source: failed.source,
-            }),
-        }
     }
 }
 
@@ -261,10 +176,13 @@ mod tests {
     use std::collections::BTreeSet;
 
     use uuid::Uuid;
+    use whyshelf_core::app::shelf::{LedgerAppend, LedgerRead};
     use whyshelf_core::domain::actor::{Actor, Attribution};
     use whyshelf_core::domain::id::EntityId;
     use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet};
-    use whyshelf_core::domain::shelf::ledger::{Admit, JudgedAt, JudgementId, Ledger, Revocation};
+    use whyshelf_core::domain::shelf::ledger::{
+        Admit, AdmittedRecord, JudgedAt, JudgementId, Ledger, Revocation,
+    };
 
     use super::*;
 

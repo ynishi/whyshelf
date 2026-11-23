@@ -1,0 +1,108 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7b710dde3d1129b7e6fcca6e3bf0f192a358a8ef",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6d8552fc8e4dfdd7bd1d807c99cae7189930988c9a223f1a2fd26a3a7c33f5d8",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/absent_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f260650f401ba3e647bcfdb3e45f8de25c566f86",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5885b02032fb90ec93985fc6c8cdb4cb2b20c29422a30b4ec12bc7c1f32e7bb6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d17b3f7b05d7afe7fea5fb757746d2e09691e0e4",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c14043ad7246f986c5d951e48efb61fe5003ab654ac541a730a65e4fb3162c2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file/read_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5b749e7f90e015b5344978ba893b57ae1e05d194",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c517edd0e03ca48cdb53008d9ca5f1111c0ee9673a2ad0780e42bf065e9b049",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795420782181,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11891129d27429b1a8097e576d0f157c6b3cd482",
+      "hash": "sha256:11cccbc99d5bcad0b080459ad707cac5bce11386aecf2af95545c684c1ce5a1a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-778a-7288-ae20-3289a8a7a718"
+    },
+    {
+      "address": "d7a292650bcffaef1d0c947abe40235c719878dc",
+      "hash": "sha256:c03e03305a381cb0aae097cab40d04c7bfd71505936711141eaa0c160fa3ff01",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "43"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-7849-7632-b126-5a6b72f508b0"
+    }
+  ],
+  "id": "01a2076b-11bd-71a8-a4cf-e8c3c94f321a",
+  "kind": "decision",
+  "reason": "Read again after #112's first steps: the readers are split from the writers with no change, today's link and directory behaviour is pinned by tests, and Footing, Doc::depends_links / depends_names and the reach walk are added",
+  "revision": "944711c6540137fc2c6948e45bb86b1e5d799453",
+  "seen": "sha256:9ac6ca557c3ddf9bae45ba8187f226a668925e6172b67d1cd48714cf710add33",
+  "seen_address": "2552859dfdc79b3eacb0cb43999bf8a1092da88b",
+  "subject": "01a1c5c5-790a-74a0-9dad-6cfab3896b88",
+  "v": 1,
+  "verb": "approve"
+}

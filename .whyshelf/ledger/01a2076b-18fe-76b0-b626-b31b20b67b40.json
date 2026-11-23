@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "0c92f387d265a84e6c06d8dee9f45aed5ae025d7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e405141e6ee534dd08ffce5bb545c08512f023d9d708b7959600a0428a77c4b4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f06db9d1e2c60c5ccfd126b7a9adcd8bb3edb4f7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f4a13d7d2a6a659f2ec46fed91968a801071488d5c81de50a2d0c1287bdb84f6",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795420782181,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b9f7bf18c2f806edf8706eb024654596741e2927",
+      "hash": "sha256:8d5c07353d2285bcbe95f0fa4f772221dd3ad68c3d8b51cb99429bd1e8e0957f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    }
+  ],
+  "id": "01a2076b-18fe-76b0-b626-b31b20b67b40",
+  "kind": "decision",
+  "reason": "Read again after #112's first steps: the readers are split from the writers with no change, today's link and directory behaviour is pinned by tests, and Footing, Doc::depends_links / depends_names and the reach walk are added",
+  "revision": "944711c6540137fc2c6948e45bb86b1e5d799453",
+  "seen": "sha256:e6b205f9a01b541f65fff69ac82aa0126616317732f174912f9faa0def77ac03",
+  "seen_address": "abb2a367a46d3ab3d96fee6da2cb4e6fb3f085fe",
+  "subject": "01a1c6a9-797b-7261-bf2c-9fa48fea4c5e",
+  "v": 1,
+  "verb": "approve"
+}

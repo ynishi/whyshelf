@@ -1,0 +1,156 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "49b692c071996155224ff92bfc11f8e4659a502f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a472c3deabec95e56feb781dcbbc22670447bcf55afd8ad6d38389b5efe2b74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8b75e355602bcbe905b921dd12c34c907af9a383",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:80b5d08a4bacedfa70e5b2580c33978ad7e7178941a0d8d34ad23aa0a6081405",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fcf9c5b89f70aaf252f26a6793f70b538da75363",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d237ab3f22c648d69945b76eeafb860836e172c968a6a78e6882d1b803c4584c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/unheld_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b1892faadb2fa3412e37bd4f8ee98ae2f8010a58",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:52f539b92777ce98f32b4c691e5566b4aa995591996b7e4e28a2e0abebf9cba3",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/doc.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8a352015a052255024d95835c97296e3476913f3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4a0cbb3c0b21bcf211d24397fcc3a737a5731b12d99baf8c3fff04a3a1a19267",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795420782181,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0ced39a5f1260a35d1e8baa2643b39f64e43ae8e",
+      "hash": "sha256:8ad46af5101b0517cee87c54e3b4343b7b611aaacb28f10841550b8946bbd88e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    },
+    {
+      "address": "2a8f99d19aa38815bad6ac8870dd6d6a775c16a2",
+      "hash": "sha256:593bb90fa66a9a019321f887ebbf7ab6dbbe48980a8ea29e481fe74ab5816c64",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "36"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ea98-7060-acb2-b3c19c484a89"
+    },
+    {
+      "address": "9f352c6a4d92d536917018027df6979787312f66",
+      "hash": "sha256:526f2b3a0ece30d39f8c6e2dfa26c07f3820174b124fadfebbe1f192f255d681",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "37"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ede0-77df-9261-99dde9095582"
+    },
+    {
+      "address": "8296963d236b11cbfaa914fbec39151acd418a9f",
+      "hash": "sha256:1a7a5597ecc29d58f0d0ac18bd14b5a790cdf2bdfe46a015485e5fe970873439",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "38"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-f0b8-7358-973e-9c8cf9148148"
+    }
+  ],
+  "id": "01a2076b-0859-76f9-824e-cd997c6e708c",
+  "kind": "decision",
+  "reason": "Read again after #112's first steps: the readers are split from the writers with no change, today's link and directory behaviour is pinned by tests, and Footing, Doc::depends_links / depends_names and the reach walk are added",
+  "revision": "944711c6540137fc2c6948e45bb86b1e5d799453",
+  "seen": "sha256:7b0c37e86042e1db02f284434425558a48c59aa36f73661e458f948879624f6c",
+  "seen_address": "4718a8c456fc4de16ebfdb99e3ac2b0d356b05e1",
+  "subject": "01a1c4ba-1606-7681-90fb-0d70558c8701",
+  "v": 1,
+  "verb": "approve"
+}
