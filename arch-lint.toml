@@ -148,6 +148,30 @@ to = ["ledger-reads-not"]
 message = "ledger reads only the modules of the shelf left out of the scope ledger-reads-not"
 doc = "books/decision/DEC-97.md"
 
+# The build is part of the ground of the ledger (left out of ledger-reads-not above), so
+# it reads no module that reads the ledger: not what a document stands on (footing), nor
+# what depends on documents (reach). The rules of a document's own links both of them
+# read are the document's (`Doc::depends_links`, `Doc::depends_names`), so the build has
+# them without either. A file of tests only is left out.
+[[scopes]]
+name = "build-not-tests"
+paths = ["crates/whyshelf-core/src/domain/shelf/build.rs", "crates/whyshelf-core/src/domain/shelf/build/**"]
+exclude = ["crates/whyshelf-core/src/domain/shelf/build/**/tests.rs", "crates/whyshelf-core/src/domain/shelf/build/**/*_tests.rs"]
+
+[[scopes]]
+name = "footing-and-reach"
+paths = [
+    "crates/whyshelf-core/src/domain/shelf/footing.rs", "crates/whyshelf-core/src/domain/shelf/footing/**",
+    "crates/whyshelf-core/src/domain/shelf/reach.rs", "crates/whyshelf-core/src/domain/shelf/reach/**",
+]
+
+[[deny-scope-dep]]
+name = "build-reads-not-footing-or-reach"
+from = "build-not-tests"
+to = ["footing-and-reach"]
+message = "build is part of the ground of the ledger: it reads neither footing nor reach, which read the ledger"
+doc = "books/decision/DEC-97.md"
+
 # What a pinned content comes to now (drift) reads the two modules of what a content is
 # (artifact, doc) and nothing else of the shelf: not the build (a document that is not
 # valid comes to it as a failure of a type it does not name), and not the ledger, which

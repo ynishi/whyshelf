@@ -124,13 +124,14 @@
 //! first. Fields, links and presets stay lists, so a name written twice reaches the
 //! domain twice and is reported there.
 
+mod read;
+mod write;
+
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::create;
 use super::system::parse_time;
 use serde::Deserialize;
-use whyshelf_core::app::shelf::{BookSchemaSource, Creation, DeclarationText, DeclarationWrite};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::schema::{
     ARTIFACT_TARGET, BookRuleDecl, BookSchemaDecl, CoverDecl, DecideDecl, DecideKind, DefaultsDecl,
@@ -179,8 +180,12 @@ pub enum BooksError {
     },
 }
 
-/// The declaration of the books, read from a TOML file, and written once, where none
-/// is, when a project is started ([`DeclarationWrite`]).
+/// The declaration of the books, read from a TOML file ([`BookSchemaSource`], in
+/// `books/read.rs`), and written once, where none is, when a project is started
+/// ([`DeclarationWrite`], in `books/write.rs`).
+///
+/// [`BookSchemaSource`]: whyshelf_core::app::shelf::BookSchemaSource
+/// [`DeclarationWrite`]: whyshelf_core::app::shelf::DeclarationWrite
 #[derive(Debug, Clone)]
 pub struct BooksToml {
     root: PathBuf,
@@ -201,64 +206,6 @@ impl BooksToml {
     /// The file.
     pub fn path(&self) -> &Path {
         &self.path
-    }
-}
-
-/// The file is created only where nothing is (`create_new`), with its directory, and
-/// the text is written as it is, comments and all; a write that fails removes the
-/// file it made, and only it.
-impl DeclarationWrite for BooksToml {
-    type Error = BooksError;
-
-    fn file(&self) -> RelPath {
-        self.file.clone()
-    }
-
-    async fn in_the_way(&self) -> Result<Option<RelPath>, BooksError> {
-        create::in_the_way(&self.root, &self.file)
-            .await
-            .map_err(|source| BooksError::Io {
-                path: self.path.clone(),
-                source,
-            })
-    }
-
-    async fn create(&self, text: &DeclarationText) -> Result<Creation, BooksError> {
-        create::create_new(&self.path, text.as_str().as_bytes())
-            .await
-            .map_err(|failed| BooksError::Write {
-                step: failed.step,
-                source: failed.source,
-            })
-    }
-}
-
-impl BookSchemaSource for BooksToml {
-    type Error = BooksError;
-
-    fn declarations_in(&self, text: &DeclarationText) -> Result<ShelfDecl, BooksError> {
-        parse(text.as_str()).map_err(|source| BooksError::Shape {
-            path: self.path.clone(),
-            source,
-        })
-    }
-
-    async fn declarations(&self) -> Result<ShelfDecl, BooksError> {
-        let text = match tokio::fs::read_to_string(&self.path).await {
-            Ok(text) => text,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Err(BooksError::Missing {
-                    path: self.path.clone(),
-                });
-            }
-            Err(source) => {
-                return Err(BooksError::Io {
-                    path: self.path.clone(),
-                    source,
-                });
-            }
-        };
-        self.declarations_in(&DeclarationText::new(text))
     }
 }
 
@@ -689,6 +636,9 @@ impl BookDto {
 mod tests {
     use std::collections::BTreeSet;
 
+    use whyshelf_core::app::shelf::{
+        BookSchemaSource, Creation, DeclarationText, DeclarationWrite,
+    };
     use whyshelf_core::domain::shelf::artifact::Space;
     use whyshelf_core::domain::shelf::schema::{
         Approvals, Cardinality, Propagation, Schema, SchemaProblem, WordAt, WordOf,

@@ -93,6 +93,8 @@ pub mod system;
 
 #[cfg(test)]
 mod project_tests;
+#[cfg(test)]
+mod readers_tests;
 
 use std::path::{Path, PathBuf};
 

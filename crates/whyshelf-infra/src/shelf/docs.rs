@@ -28,7 +28,7 @@
 //! created only where nothing is (`create_new`: a directory or a link there, even one
 //! to nothing, is in the way too), with its directories; a write that fails after
 //! the file was made removes it, and only it. What [`render`]
-//! writes, [`read`] reads back into the same entries; a test holds the two together.
+//! writes, [`read`](fn@read) reads back into the same entries; a test holds the two together.
 //!
 //! # Writing a document in the form
 //!
@@ -40,7 +40,7 @@
 //! the form, the whole text after the normalization rule ([`normalize`]), with what
 //! that text reads as when it is read as the file. So the form also normalizes a
 //! body: its line endings become `\n`, white space at the end of its lines and blank
-//! lines at its end go, and it ends with one newline. [`read`] normalizes the whole
+//! lines at its end go, and it ends with one newline. [`read`](fn@read) normalizes the whole
 //! text first, so this changes nothing it reads. Whether a file may be written over
 //! is [`DocSource::replaceable`]: not when the user cannot write it or it has more
 //! than one link ([`Replaceable::ReadOnly`], [`Replaceable::Linked`]).
@@ -67,10 +67,33 @@
 //!
 //! Before anything is read, the whole text is normalized by the domain's one rule,
 //! [`normalize`]; the body is hashed by the domain as it is after it.
+//!
+//! # Where each part is
+//!
+//! The reading of the documents is `docs/read.rs` ([`DocSource`]), the writing of them
+//! `docs/write.rs` ([`DocWrite`], [`DocReplace`], [`DocRemove`], and whether a file may
+//! be written over), and the reading back of a content by its address
+//! `docs/read_back.rs`. The text of a document, read and rendered, is here.
+//!
+//! [`DocSource`]: whyshelf_core::app::shelf::DocSource
+//! [`DocSource::forms`]: whyshelf_core::app::shelf::DocSource::forms
+//! [`DocSource::render`]: whyshelf_core::app::shelf::DocSource::render
+//! [`DocSource::replaceable`]: whyshelf_core::app::shelf::DocSource::replaceable
+//! [`DocWrite`]: whyshelf_core::app::shelf::DocWrite
+//! [`DocWrite::create`]: whyshelf_core::app::shelf::DocWrite::create
+//! [`DocReplace`]: whyshelf_core::app::shelf::DocReplace
+//! [`DocReplace::restore`]: whyshelf_core::app::shelf::DocReplace::restore
+//! [`DocRemove`]: whyshelf_core::app::shelf::DocRemove
+//! [`Replaceable::ReadOnly`]: whyshelf_core::app::shelf::Replaceable::ReadOnly
+//! [`Replaceable::Linked`]: whyshelf_core::app::shelf::Replaceable::Linked
+
+mod read;
+mod read_back;
+mod write;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use std::fmt;
 
@@ -78,23 +101,16 @@ use serde::Deserialize;
 use serde::de::{
     self, Deserializer, EnumAccess, IgnoredAny, MapAccess, SeqAccess, VariantAccess, Visitor,
 };
-use tokio::io::AsyncWriteExt;
-use whyshelf_core::app::shelf::{
-    Creation, DocRemove, DocReplace, DocSource, DocWrite, FileRead, Removal, Rendered, Replaceable,
-    Replacement,
-};
+use whyshelf_core::app::shelf::FileRead;
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonEmptyVec;
-use whyshelf_core::domain::shelf::artifact::ContentAddress;
 use whyshelf_core::domain::shelf::build::{
-    DocReading, FormEntries, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind, UnheldValue,
+    DocReading, RawProblem, RawValue, ReadId, UnheldItem, UnheldKind, UnheldValue,
 };
 use whyshelf_core::domain::shelf::doc::normalize;
-use whyshelf_core::domain::shelf::schema::BookRange;
 
-use super::create;
 use super::git::{Git, GitError};
 
 /// Why the documents could not be read at all, or a document's file could not be
@@ -152,106 +168,6 @@ impl MarkdownDocs {
             root,
         }
     }
-
-    /// The content a document's file had at `address`, or none when it cannot be
-    /// read back; an error when Git could not be run or took too long.
-    pub async fn read_back(&self, address: &ContentAddress) -> Result<Option<Vec<u8>>, DocsError> {
-        Ok(self.git.read_blob(address).await?)
-    }
-}
-
-impl DocSource for MarkdownDocs {
-    type Error = DocsError;
-
-    async fn read_docs(&self, ranges: &[BookRange]) -> Result<Vec<DocReading>, DocsError> {
-        Ok(self
-            .files_of(ranges)
-            .await?
-            .into_iter()
-            .map(|(origin, bytes)| match std::str::from_utf8(&bytes) {
-                Ok(text) => read(origin, text),
-                Err(_) => not_text(origin),
-            })
-            .collect())
-    }
-
-    async fn forms(&self, ranges: &[BookRange]) -> Result<Vec<FileRead>, DocsError> {
-        Ok(self
-            .files_of(ranges)
-            .await?
-            .into_iter()
-            .map(|(origin, bytes)| file_read(origin, bytes))
-            .collect())
-    }
-
-    fn render(&self, origin: &RelPath, entries: &FormEntries, body: &str) -> Rendered {
-        let text = render(entries.as_map(), body);
-        Rendered {
-            reads_as: read(origin.clone(), &text),
-            text: text.into_bytes(),
-        }
-    }
-
-    async fn replaceable(&self, file: &RelPath) -> Result<Replaceable, DocsError> {
-        replaceable(&self.root.join(file.as_str())).await
-    }
-
-    async fn current(&self, file: &RelPath) -> Result<Option<Vec<u8>>, DocsError> {
-        let full = self.root.join(file.as_str());
-        match tokio::fs::read(&full).await {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::NotFound
-                        | io::ErrorKind::NotADirectory
-                        | io::ErrorKind::IsADirectory
-                ) =>
-            {
-                Ok(None)
-            }
-            Err(source) => Err(DocsError::Io { path: full, source }),
-        }
-    }
-
-    async fn addresses(
-        &self,
-        files: &BTreeSet<RelPath>,
-    ) -> Result<BTreeMap<RelPath, ContentAddress>, DocsError> {
-        let mut there = Vec::new();
-        for file in files {
-            if self.current(file).await?.is_some() {
-                there.push(file);
-            }
-        }
-        let Some(names) = self.git.blob_names(&there).await? else {
-            return Ok(BTreeMap::new());
-        };
-        Ok(there.into_iter().cloned().zip(names).collect())
-    }
-}
-
-impl MarkdownDocs {
-    /// Every `.md` file the ranges take, with its bytes, in the order of the books
-    /// and, under each, a stable order. Whether a file is in a range is asked of
-    /// the range and of nothing else here ([`range_files`]); a file out of range is
-    /// not read.
-    async fn files_of(&self, ranges: &[BookRange]) -> Result<Vec<(RelPath, Vec<u8>)>, DocsError> {
-        let mut files = Vec::new();
-        for range in ranges {
-            for file in range_files(&self.root.join(range.dir().as_rel().as_str()), range).await? {
-                let origin = relative(&self.root, &file)?;
-                let bytes = tokio::fs::read(&file)
-                    .await
-                    .map_err(|source| DocsError::Io {
-                        path: file.clone(),
-                        source,
-                    })?;
-                files.push((origin, bytes));
-            }
-        }
-        Ok(files)
-    }
 }
 
 /// The reading of a file that is not UTF-8 text.
@@ -261,114 +177,6 @@ fn not_text(origin: RelPath) -> DocReading {
         id: ReadId::Unreadable,
         why: RawProblem::Syntax { line: None },
     }
-}
-
-/// Whether a file may be written over, from the file's metadata:
-///
-/// - [`Replaceable::Linked`]: it has more than one link (a hard link). The rename that
-///   replaces it would give this path a new file and leave the other links on the
-///   old one, so the two would part; and the new file would be the writer's, with
-///   none of the old one's owner or extended attributes. (Only on Unix, where the
-///   number of links is told.)
-/// - [`Replaceable::ReadOnly`]: the user cannot write it. It is opened for writing,
-///   which changes nothing in it (no byte, no time); a refusal (no permission, or a
-///   file system mounted read-only) is the answer.
-/// - [`Replaceable::Yes`] otherwise.
-async fn replaceable(file: &Path) -> Result<Replaceable, DocsError> {
-    let failed = |source| DocsError::Io {
-        path: file.to_path_buf(),
-        source,
-    };
-    let meta = tokio::fs::metadata(file).await.map_err(failed)?;
-    if links(&meta) > 1 {
-        return Ok(Replaceable::Linked);
-    }
-    match tokio::fs::OpenOptions::new().write(true).open(file).await {
-        Ok(_) => Ok(Replaceable::Yes),
-        Err(error)
-            if matches!(
-                error.kind(),
-                io::ErrorKind::PermissionDenied | io::ErrorKind::ReadOnlyFilesystem
-            ) =>
-        {
-            Ok(Replaceable::ReadOnly)
-        }
-        Err(source) => Err(failed(source)),
-    }
-}
-
-/// How many links the file has.
-#[cfg(unix)]
-fn links(meta: &std::fs::Metadata) -> u64 {
-    use std::os::unix::fs::MetadataExt;
-    meta.nlink()
-}
-
-/// How many links the file has: not told here, so one.
-#[cfg(not(unix))]
-fn links(_meta: &std::fs::Metadata) -> u64 {
-    1
-}
-
-/// Every file under `dir`, the directory of `range`, that the range takes, in a
-/// stable order. A directory that is not there has none.
-///
-/// The range is asked before anything else is done with a name: a directory it
-/// takes nothing under (an `exclude` of `<dir>/**`) is not opened, and a file it
-/// does not take is not made a path, so a name that is no path, or a directory
-/// that cannot be read, out of the range is no error. In the range, both are, as
-/// they were. A name is asked of the range as its text; one that is not UTF-8 is
-/// asked with its bad bytes replaced, and when the range takes that, it fails
-/// where every name that is no path fails ([`relative`]).
-async fn range_files(dir: &Path, range: &BookRange) -> Result<Vec<PathBuf>, DocsError> {
-    let mut found = Vec::new();
-    let mut pending = vec![(dir.to_path_buf(), String::new())];
-    while let Some((next, below)) = pending.pop() {
-        let mut entries = match tokio::fs::read_dir(&next).await {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-            Err(source) => return Err(DocsError::Io { path: next, source }),
-        };
-        let io = |source| DocsError::Io {
-            path: next.clone(),
-            source,
-        };
-        while let Some(entry) = entries.next_entry().await.map_err(io)? {
-            let kind = entry.file_type().await.map_err(io)?;
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            let at = if below.is_empty() {
-                name.into_owned()
-            } else {
-                format!("{below}/{name}")
-            };
-            // arch-lint: allow(no-sync-io) reason="`kind` is a FileType fetched with `.await` above: a pure accessor, no I/O"
-            if kind.is_dir() {
-                if !range.leaves_out_dir(&at) {
-                    pending.push((entry.path(), at));
-                }
-            // arch-lint: allow(no-sync-io) reason="`kind` is a FileType fetched with `.await` above: a pure accessor, no I/O"
-            } else if kind.is_file() && range.takes_below(&at) {
-                found.push(entry.path());
-            }
-        }
-    }
-    found.sort();
-    Ok(found)
-}
-
-/// The path of `file` relative to `root`, with `/` between segments.
-fn relative(root: &Path, file: &Path) -> Result<RelPath, DocsError> {
-    let name = |source| DocsError::Name {
-        path: file.to_path_buf(),
-        source,
-    };
-    let rel = file.strip_prefix(root).map_err(|_| name(None))?;
-    let mut segments = Vec::new();
-    for part in rel.components() {
-        segments.push(part.as_os_str().to_str().ok_or_else(|| name(None))?);
-    }
-    segments.join("/").parse().map_err(|e| name(Some(e)))
 }
 
 /// How a text stands to a front matter: the one place "no front matter" is defined.
@@ -919,187 +727,9 @@ impl<'de> Deserialize<'de> for HeldItem {
     }
 }
 
-impl DocWrite for MarkdownDocs {
-    type Error = DocsError;
-
-    async fn in_the_way(&self, path: &RelPath) -> Result<Option<RelPath>, DocsError> {
-        create::in_the_way(&self.root, path)
-            .await
-            .map_err(|source| DocsError::Io {
-                path: self.root.join(path.as_str()),
-                source,
-            })
-    }
-
-    async fn dir_in_the_way(&self, dir: &RelPath) -> Result<Option<RelPath>, DocsError> {
-        create::dir_in_the_way(&self.root, dir)
-            .await
-            .map_err(|source| DocsError::Io {
-                path: self.root.join(dir.as_str()),
-                source,
-            })
-    }
-
-    /// Created `create_new` with its directories; a write that fails removes the
-    /// file it made, and only it.
-    async fn create(
-        &self,
-        path: &RelPath,
-        entries: &FormEntries,
-        body: &str,
-    ) -> Result<Creation, DocsError> {
-        let file = self.root.join(path.as_str());
-        create::create_new(&file, render(entries.as_map(), body).as_bytes())
-            .await
-            .map_err(|failed| DocsError::Write {
-                step: failed.step,
-                source: failed.source,
-            })
-    }
-}
-
-/// The error of a step of a write, told as the step with its path.
-fn write_step(step: String) -> impl FnOnce(io::Error) -> DocsError {
-    move |source| DocsError::Write { step, source }
-}
-
-/// Writes over a document's file after comparing it with the bytes read: the text goes
-/// into a new file beside it (a name starting with `.` and ending in `.tmp`, so it
-/// is never read as a document), with the file's permissions, and is renamed over
-/// it. A new file that cannot be written is removed.
-///
-/// The comparison and the rename are two steps: an edit saved to the file in the
-/// short time between them is overwritten, and a file removed in it is written
-/// again. A read-only file and one with more than one link are never given here:
-/// [`DocSource::replaceable`] says so ([`Replaceable::ReadOnly`],
-/// [`Replaceable::Linked`]) and `fmt` leaves them alone.
-///
-/// [`DocReplace::restore`] puts a file back as it was by the same steps, from the text
-/// that was written to the bytes that were replaced.
-impl DocReplace for MarkdownDocs {
-    type Error = DocsError;
-
-    async fn replace_read(
-        &self,
-        path: &RelPath,
-        read: &[u8],
-        text: &[u8],
-    ) -> Result<Replacement, DocsError> {
-        self.replace_whole(path, read, text).await
-    }
-
-    async fn restore(
-        &self,
-        path: &RelPath,
-        written: &[u8],
-        before: &[u8],
-    ) -> Result<Replacement, DocsError> {
-        self.replace_whole(path, written, before).await
-    }
-}
-
-/// Removes a document's file after comparing it with the bytes it is expected to hold:
-/// a file that is not what was read is [`Removal::Changed`] and left as it is, and one that
-/// is gone is [`Removal::Gone`]. The comparison
-/// and the removal are two steps, so an edit saved in the short time between them is
-/// lost with the file. The directory is put on disk by
-/// [`FileSync::persist_gone`](whyshelf_core::app::shelf::FileSync::persist_gone).
-impl DocRemove for MarkdownDocs {
-    type Error = DocsError;
-
-    async fn remove_read(&self, path: &RelPath, read: &[u8]) -> Result<Removal, DocsError> {
-        let file = self.root.join(path.as_str());
-        match tokio::fs::read(&file).await {
-            Ok(now) if now == read => {}
-            Ok(_) => return Ok(Removal::Changed),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Ok(Removal::Gone);
-            }
-            Err(source) => return Err(DocsError::Io { path: file, source }),
-        }
-        match tokio::fs::remove_file(&file).await {
-            Ok(()) => Ok(Removal::Removed),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Removal::Gone),
-            Err(source) => Err(DocsError::Write {
-                step: format!("remove {}", file.display()),
-                source,
-            }),
-        }
-    }
-}
-
-impl MarkdownDocs {
-    /// Replace the file at `path`, which must hold `expected` just before, by `text`,
-    /// whole: [`replace_read`](DocReplace::replace_read), and, with the text that was
-    /// written as `expected`, [`restore`](DocReplace::restore).
-    async fn replace_whole(
-        &self,
-        path: &RelPath,
-        expected: &[u8],
-        text: &[u8],
-    ) -> Result<Replacement, DocsError> {
-        let file = self.root.join(path.as_str());
-        match tokio::fs::read(&file).await {
-            Ok(now) if now == expected => {}
-            Ok(_) => return Ok(Replacement::Changed),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Ok(Replacement::Changed);
-            }
-            Err(source) => {
-                return Err(DocsError::Io { path: file, source });
-            }
-        }
-        let permissions = tokio::fs::metadata(&file)
-            .await
-            .map_err(|source| DocsError::Io {
-                path: file.clone(),
-                source,
-            })?
-            .permissions();
-        let name = path.as_str().rsplit('/').next().unwrap_or(path.as_str());
-        let beside = file.with_file_name(format!(".{name}.{}.tmp", uuid::Uuid::now_v7()));
-        let shown = beside.display();
-        let written = async {
-            let mut out = tokio::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&beside)
-                .await
-                .map_err(write_step(format!("create the temporary file {shown}")))?;
-            out.write_all(text)
-                .await
-                .map_err(write_step(format!("write the temporary file {shown}")))?;
-            out.set_permissions(permissions)
-                .await
-                .map_err(write_step(format!(
-                    "give the temporary file {shown} the permissions of {}",
-                    file.display()
-                )))?;
-            out.sync_all().await.map_err(write_step(format!(
-                "write the temporary file {shown} to disk"
-            )))?;
-            drop(out);
-            tokio::fs::rename(&beside, &file)
-                .await
-                .map_err(write_step(format!(
-                    "rename {shown} over {}",
-                    file.display()
-                )))
-        }
-        .await;
-        if let Err(error) = written {
-            // The new file is not the document; whether it can be removed changes
-            // nothing of the error told.
-            let _ = tokio::fs::remove_file(&beside).await;
-            return Err(error);
-        }
-        Ok(Replacement::Replaced)
-    }
-}
-
 /// The text of a document: the front matter, then the body.
 ///
-/// The front matter is the flat form [`read`] reads: one `name: value` line per
+/// The front matter is the flat form [`read`](fn@read) reads: one `name: value` line per
 /// entry, `id` first, then `key`, then the rest by name. A text is always in double
 /// quotes, with `\` escapes for a quote, a backslash and every control or line-break
 /// character, so it is one line and is never read as a number, a truth value or
@@ -1212,7 +842,12 @@ fn seen_id(text: &str) -> Option<DocId> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use whyshelf_core::domain::shelf::schema::BookDir;
+    use whyshelf_core::app::shelf::{
+        Creation, DocRemove, DocReplace, DocSource, DocWrite, Removal, Rendered, Replaceable,
+        Replacement,
+    };
+    use whyshelf_core::domain::shelf::build::FormEntries;
+    use whyshelf_core::domain::shelf::schema::{BookDir, BookRange};
 
     const ID: &str = "019a6f3e-0000-7000-8000-000000000001";
 

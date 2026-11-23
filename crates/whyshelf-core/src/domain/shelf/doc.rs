@@ -728,6 +728,42 @@ impl Doc {
             .collect()
     }
 
+    /// What its `Depends` links resolve to, each with the link that names it, in the
+    /// order it holds them: the one rule of which documents its links make it stand
+    /// on. A link that cannot be followed leads nowhere.
+    pub(crate) fn depends_links(&self) -> impl Iterator<Item = (&EntryName, DocId)> {
+        self.links_of(Propagation::Depends)
+            .into_iter()
+            .flat_map(|(link, states)| {
+                states.iter().filter_map(move |state| match state {
+                    LinkState::Resolved(target) => Some((link, target.id())),
+                    LinkState::Unresolved(_) => None,
+                })
+            })
+    }
+
+    /// The documents its `Depends` links name, for what depends on a document: what a
+    /// link resolves to; the one document of the key a link writes when that document
+    /// is not valid ([`UnresolvedWhy::TargetInvalid`]: it names it, and cannot stand on
+    /// it); and every identity that could be read of the files that write a key two or
+    /// more of them write ([`UnresolvedWhy::Ambiguous`]: it names one of them, which
+    /// cannot be told). Any other link that cannot be followed names none.
+    pub(crate) fn depends_names(&self) -> impl Iterator<Item = DocId> + '_ {
+        self.links_of(Propagation::Depends)
+            .into_iter()
+            .flat_map(|(_, states)| states.iter())
+            .flat_map(|state| match state {
+                LinkState::Resolved(target) => vec![target.id()],
+                LinkState::Unresolved(link) => match link.why() {
+                    UnresolvedWhy::TargetInvalid(id) => vec![*id],
+                    UnresolvedWhy::Ambiguous(collision) => collision.ids().into_iter().collect(),
+                    UnresolvedWhy::Malformed(_)
+                    | UnresolvedWhy::Missing
+                    | UnresolvedWhy::NoIdentity(_) => Vec::new(),
+                },
+            })
+    }
+
     /// The links to artifacts, by name: every one the book declares is there, with
     /// no artifact in it when the document wrote no name.
     pub fn artifact_links(&self) -> &BTreeMap<EntryName, ArtifactLink> {

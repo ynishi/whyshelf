@@ -13,14 +13,14 @@ use std::fmt;
 use crate::domain::id::DocId;
 
 use super::build::Shelf;
-use super::doc::{Doc, LinkState};
+use super::footing::Footing;
 use super::freshness::{
     Assessment, Carried, Degradation, Freshness, FreshnessLevel, OriginGroup, Severity, Standing,
     StandingKind, Unapproved, UpstreamReading,
 };
 use super::graph::components;
-use super::ledger::{ApproveFrame, DeclaredNow, FramePin, FrameRefusal, Ledger, frame_approve};
-use super::schema::{EntryName, Propagation};
+use super::ledger::{ApproveFrame, FrameRefusal, Ledger, frame_approve};
+use super::schema::EntryName;
 
 /// The rule that took a document into a run of approvals. The two take apart sets: a
 /// stale one has an approval that stands, a pending one has none.
@@ -272,24 +272,12 @@ pub fn pending_of(shelf: &Shelf, assessment: &Assessment, id: DocId) -> Result<(
     }
 }
 
-/// What the `Depends` links of a document resolve to now; nothing for an identity
-/// with no valid document. A link that cannot be followed leads nowhere.
+/// What the `Depends` links of a document resolve to now (`Doc::depends_links`);
+/// nothing for an identity with no valid document.
 fn depends_targets(shelf: &Shelf, id: DocId) -> Vec<DocId> {
-    shelf.doc(id).map_or_else(Vec::new, depends_of)
-}
-
-/// What the `Depends` links of one document resolve to: the one rule of which
-/// documents a document stands on, for the order of approvals here and for the heads
-/// of a run of new documents (`NewPlan::heads`), which are not in a shelf yet.
-pub(super) fn depends_of(doc: &Doc) -> Vec<DocId> {
-    doc.links_of(Propagation::Depends)
-        .into_iter()
-        .flat_map(|(_, states)| states.iter())
-        .filter_map(|state| match state {
-            LinkState::Resolved(target) => Some(target.id()),
-            LinkState::Unresolved(_) => None,
-        })
-        .collect()
+    shelf.doc(id).map_or_else(Vec::new, |doc| {
+        doc.depends_links().map(|(_, target)| target).collect()
+    })
 }
 
 /// The members of `among` that no other member names through a `Depends` link, as
@@ -404,41 +392,34 @@ pub fn held_back(
     left_out: &BTreeSet<DocId>,
 ) -> Option<HeldBack> {
     let doc = shelf.doc(id)?;
-    doc.links_of(Propagation::Depends)
-        .into_iter()
-        .flat_map(|(link, states)| states.iter().map(move |state| (link, state)))
-        .find_map(|(link, state)| {
-            let LinkState::Resolved(target) = state else {
-                return None;
-            };
-            let upstream = target.id();
-            let in_run = run.contains(&upstream);
-            // What the upstream is to an approval on it is read once, from its
-            // standing; here only what holds a run back of that.
-            let hold = match UpstreamReading::of(&assessment.standing_of(upstream)) {
-                UpstreamReading::Approval { awaiting, carried } => match carried {
-                    Some(Carried::Broken) => Some(Hold::Broken),
-                    Some(Carried::Stale) if !in_run => Some(Hold::Stale),
-                    Some(Carried::Stale) | None => awaiting.then_some(Hold::Awaiting),
-                },
-                UpstreamReading::Unapproved(Unapproved::Pending) if !in_run => Some(Hold::Pending),
-                // Holds nothing back: a pending upstream in the run is decided
-                // before this one, and refusing an approval on an upstream decided
-                // against is the frame's (`frame_approve`), not the run's.
-                UpstreamReading::Unapproved(Unapproved::Pending) => None,
-                UpstreamReading::Unapproved(
-                    Unapproved::Superseded { .. } | Unapproved::Refused(_),
-                ) => None,
-            };
-            // The same after every arm that holds nothing back: the upstream was
-            // itself left out of the run.
-            let hold = hold.or_else(|| left_out.contains(&upstream).then_some(Hold::LeftOut))?;
-            Some(HeldBack {
-                link: link.clone(),
-                upstream,
-                hold,
-            })
+    doc.depends_links().find_map(|(link, upstream)| {
+        let in_run = run.contains(&upstream);
+        // What the upstream is to an approval on it is read once, from its
+        // standing; here only what holds a run back of that.
+        let hold = match UpstreamReading::of(&assessment.standing_of(upstream)) {
+            UpstreamReading::Approval { awaiting, carried } => match carried {
+                Some(Carried::Broken) => Some(Hold::Broken),
+                Some(Carried::Stale) if !in_run => Some(Hold::Stale),
+                Some(Carried::Stale) | None => awaiting.then_some(Hold::Awaiting),
+            },
+            UpstreamReading::Unapproved(Unapproved::Pending) if !in_run => Some(Hold::Pending),
+            // Holds nothing back: a pending upstream in the run is decided
+            // before this one, and refusing an approval on an upstream decided
+            // against is the frame's (`frame_approve`), not the run's.
+            UpstreamReading::Unapproved(Unapproved::Pending) => None,
+            UpstreamReading::Unapproved(Unapproved::Superseded { .. } | Unapproved::Refused(_)) => {
+                None
+            }
+        };
+        // The same after every arm that holds nothing back: the upstream was
+        // itself left out of the run.
+        let hold = hold.or_else(|| left_out.contains(&upstream).then_some(Hold::LeftOut))?;
+        Some(HeldBack {
+            link: link.clone(),
+            upstream,
+            hold,
         })
+    })
 }
 
 /// The identities of `among`, each after every one of `among` it stands on.
@@ -467,31 +448,10 @@ pub fn upstream_first(shelf: &Shelf, ledger: &Ledger, among: &BTreeSet<DocId>) -
     let mut links: BTreeMap<DocId, BTreeSet<DocId>> = BTreeMap::new();
     let mut both: BTreeMap<DocId, BTreeSet<DocId>> = BTreeMap::new();
     for id in among {
-        let linked: BTreeSet<DocId> = shelf
-            .doc(*id)
-            .map(|doc| {
-                doc.links_of(Propagation::Depends)
-                    .into_iter()
-                    .flat_map(|(_, states)| states.iter())
-                    .filter_map(|state| match state {
-                        LinkState::Resolved(target) => Some(target.id()),
-                        LinkState::Unresolved(_) => None,
-                    })
-                    .filter(|target| among.contains(target))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let pinned: BTreeSet<DocId> = match ledger.declared(*id) {
-            DeclaredNow::Approved(standing) => standing
-                .view()
-                .frame()
-                .iter()
-                .map(FramePin::target)
-                .filter(|target| among.contains(target))
-                .collect(),
-            _ => BTreeSet::new(),
-        };
-        both.insert(*id, linked.union(&pinned).copied().collect());
+        let footing = Footing::of(shelf, *id, ledger);
+        let linked: BTreeSet<DocId> = footing.linked().intersection(among).copied().collect();
+        let stood_on: BTreeSet<DocId> = footing.docs().intersection(among).copied().collect();
+        both.insert(*id, stood_on);
         links.insert(*id, linked);
     }
     components(&both)

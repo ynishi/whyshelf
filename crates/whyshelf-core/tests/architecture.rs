@@ -170,6 +170,55 @@ fn the_rule_of_the_ledgers_ground_catches_what_it_is_written_for() {
     );
 }
 
+/// The rule `build-reads-not-footing-or-reach` catches what it is written for, run as
+/// `arch-lint.toml` declares it over a tree of fixtures written to a directory of its
+/// own, as the ledger's rule above is: a `use` of footing, a path to reach written in
+/// full in code, and a `use` through `crate::` from a file under `build/`; and it
+/// leaves alone a module the build may read (`doc`) and a file of tests
+/// (`*_tests.rs`). What it does not see is what the ledger's rule does not, and a
+/// review reads those.
+#[test]
+fn the_rule_of_the_builds_ground_catches_what_it_is_written_for() {
+    const SHELF: &str = "crates/whyshelf-core/src/domain/shelf";
+    let fixtures = [
+        (
+            "build.rs",
+            "use super::footing::Footing;\n\
+             fn f() { let _ = super::reach::walk; }\n\
+             use super::doc::Doc;\n",
+        ),
+        (
+            "build/plan.rs",
+            "use crate::domain::shelf::footing::Footing;\n\
+             use super::super::doc::LinkState;\n",
+        ),
+        (
+            "build/plan_tests.rs",
+            "use super::super::super::reach::walk;\n",
+        ),
+    ];
+    let package = (
+        "crates/whyshelf-core/Cargo.toml".to_owned(),
+        "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\n",
+    );
+    let files: Vec<(String, &str)> = std::iter::once(package)
+        .chain(
+            fixtures
+                .into_iter()
+                .map(|(path, text)| (format!("{SHELF}/{path}"), text)),
+        )
+        .collect();
+    let caught = caught_over("whyshelf-arch-lint-build-fixtures", &files);
+    assert_eq!(
+        caught("build-reads-not-footing-or-reach"),
+        [
+            format!("{SHELF}/build.rs:1"),
+            format!("{SHELF}/build.rs:2"),
+            format!("{SHELF}/build/plan.rs:1"),
+        ]
+    );
+}
+
 /// The rule `drift-reads-only-its-ground` catches what it is written for, run as
 /// `arch-lint.toml` declares it over a tree of fixtures written to a directory of its
 /// own. drift reads nothing it denies, so the rule passes in the tree without showing

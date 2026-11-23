@@ -43,7 +43,6 @@ use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonBlank, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::ArtifactReadings;
 use crate::domain::shelf::doc::{DocKey, KeyWriter};
-use crate::domain::shelf::order::depends_of;
 use crate::domain::shelf::schema::BookName;
 
 use super::new::{AfterTaken, KeySearch, key_number, numbered};
@@ -325,7 +324,10 @@ impl NewPlan {
     /// [`order::heads`](crate::domain::shelf::order::heads), over the documents of the
     /// run, which are not in a shelf yet.
     pub fn heads(&self) -> Vec<DocKey> {
-        let stood_on: BTreeSet<DocId> = self.docs().flat_map(|new| depends_of(new.doc())).collect();
+        let stood_on: BTreeSet<DocId> = self
+            .docs()
+            .flat_map(|new| new.doc().depends_links().map(|(_, target)| target))
+            .collect();
         self.docs()
             .map(NewDoc::doc)
             .filter(|doc| !stood_on.contains(&doc.id()))

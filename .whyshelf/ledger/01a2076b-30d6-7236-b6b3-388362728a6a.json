@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "67d63fc52dcc2c61826206d889115b234870d4dc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ebd357d1e965e40dccad4fa00a8627b32a56d6c54a312b3648859d4d9af4f498",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "79f8aa274d0d3e6523ca6a400a3351ccffc13f5c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f765d2a8b2b5c539bfcf2d80baeaf07b45beb3cd86e3f6277764854243754905",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "1f2bec710489be069f7e9d49fda07fd3fb2495d8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:46926aa86569935feef89e61799b4663b55bb04ea5beb1e03d7fe9418b9b3473",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795420782181,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bdacefc0a24b96235859601f12133843cbdba093",
+      "hash": "sha256:3f352f6daad36095a71a70ecd5f9e473b96a9a86e7fc5d73b9d176156fab3af4",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "81"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f0ce-5b0a-7405-b5a1-fb50213d286a"
+    }
+  ],
+  "id": "01a2076b-30d6-7236-b6b3-388362728a6a",
+  "kind": "decision",
+  "reason": "Read again after #112's first steps: the readers are split from the writers with no change, today's link and directory behaviour is pinned by tests, and Footing, Doc::depends_links / depends_names and the reach walk are added",
+  "revision": "944711c6540137fc2c6948e45bb86b1e5d799453",
+  "seen": "sha256:7c5bf34be6221e5e53f67747919a49e729cb7ff6c96d2276f7776f791d078d74",
+  "seen_address": "c5345e83d832170345ad7c47e00cc8469a520fa5",
+  "subject": "01a1f0ce-bdab-70b7-8fd2-2cf2ca609114",
+  "v": 1,
+  "verb": "approve"
+}

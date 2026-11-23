@@ -20,7 +20,8 @@
 //!                                                        answers), ContentAddress, Revision
 //!                                                        (opaque), Artifact (a name in a space)
 //!   doc       ──► schema, artifact                     DocDraft, Doc::new ──► Doc, with its Links
-//!                                                        and its ArtifactLinks
+//!                                                        and its ArtifactLinks; what its Depends
+//!                                                        links resolve to, and name
 //!   drift     ──► artifact, doc                        Edit, DocDrift, ArtifactChange (what a pinned
 //!                                                        content comes to now)
 //!   graph                                              cycles_of ──► Cycle; components
@@ -42,6 +43,11 @@
 //!                                                      frame_approve / frame_present / frame_retire
 //!                                                        └─► ApproveFrame::addressed
 //!                                                        └─► Decision::approve / deny / deprecate / retire
+//!   footing   ──► doc, build, ledger                   Footing::of ──► Footing (what a document stands
+//!                                                        on: its links now, its approval's pins)
+//!   reach     ──► doc, build                           walk ──► Walked (what depends on some
+//!                                                        documents, and Unwalked: what the walk
+//!                                                        could not follow)
 //!   lookup    ──► schema, build, ledger                resolve ──► Resolution  (what a person typed)
 //!   cover     ──► schema, artifact, doc, build,        counts ──► whether a document stands;
 //!                 ledger                               covering_reach ──► what a covering link
@@ -63,7 +69,7 @@
 //!                                                        SnapshotItem::retrieval ──► Retrieval,
 //!                                                        SnapshotItem::compared ──► ItemCompared
 //!   order     ──► schema, doc, graph, build, ledger,   stale, pending ──► the documents a run takes;
-//!                 freshness                            upstream_first ──► the order approvals are
+//!                 freshness, footing                   upstream_first ──► the order approvals are
 //!                                                        judged in again;
 //!                                                      Foreseen::of ──► Foreseen (what the
 //!                                                        approving commands of stale would approve)
@@ -395,12 +401,21 @@ pub mod doc;
 pub mod drift;
 pub mod exemption;
 pub mod filter;
+mod footing;
 pub mod freshness;
 pub mod graph;
 pub mod ledger;
 pub mod lookup;
 pub mod map;
 pub mod order;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "no command calls the walk yet; `reach` and the gate are to"
+    )
+)]
+pub mod reach;
 pub mod rekey;
 pub mod schema;
 pub mod settle;

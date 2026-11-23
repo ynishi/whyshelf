@@ -10,6 +10,8 @@ and this project adheres to
 
 ### Added
 
+- In the library (#112): `reach::Unwalked`, what a walk down from named
+  documents could not follow, counted (`invalid`, `unreadable`).
 - In the library (#182): `settle::origins_asked`, `order::OriginsAsked`,
   `order::Foreseen` and `settle::settle_all`, the way origins are settled with
   what is foreseen of them.
