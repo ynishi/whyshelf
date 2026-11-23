@@ -31,6 +31,7 @@ use super::ports::{
     FileSync, FileWrite, IdSource, LedgerAppend, LedgerContents, LedgerRead, MoveSource, Removal,
     Rendered, Replaceable, Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
 };
+use super::state::{ReadWay, Side};
 use crate::domain::nonempty::{NonBlank, NonEmptyVec};
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings,
@@ -319,6 +320,23 @@ pub(super) struct FakeShelf {
     pub(super) listings: Mutex<BTreeMap<Space, NameListing>>,
     /// The (space, selection)s the fake was asked to list, in order.
     pub(super) listed: Mutex<Vec<(Space, Selection)>>,
+    /// The world at the side before a change, when a test sets one: what every port
+    /// that reads a side reads at [`Side::Before`]. Every other field is the side
+    /// after. With none, the fake reads no state before, and says so.
+    pub(super) before: Mutex<Option<FakeBefore>>,
+}
+
+/// The world a [`FakeShelf`] shows at the side before a change.
+#[derive(Debug, Clone, Default)]
+pub(super) struct FakeBefore {
+    /// The declaration; none: the two books of [`decls`].
+    pub(super) decl: Option<ShelfDecl>,
+    /// The readings of the files.
+    pub(super) readings: Vec<DocReading>,
+    /// The records of the ledger.
+    pub(super) records: Vec<Record>,
+    /// The bytes of the files, by path (the artifacts of the space `file` with them).
+    pub(super) files: BTreeMap<RelPath, Vec<u8>>,
 }
 
 /// The space of the files.
@@ -415,6 +433,7 @@ impl FakeShelf {
             boundaries: Mutex::new(BTreeMap::new()),
             listings: Mutex::new(BTreeMap::new()),
             listed: Mutex::new(Vec::new()),
+            before: Mutex::new(None),
         }
     }
 
@@ -649,13 +668,28 @@ impl FakeShelf {
             None => Ok(()),
         }
     }
+
+    /// The world before a change, for a reading at `side`: none at [`Side::After`],
+    /// and an error at [`Side::Before`] when the test set none.
+    fn before_at(&self, side: Side) -> Result<Option<FakeBefore>, FakeError> {
+        self.check()?;
+        match side {
+            Side::After => Ok(None),
+            Side::Before => lock(&self.before)
+                .clone()
+                .map(Some)
+                .ok_or(FakeError("this run reads no state before")),
+        }
+    }
 }
 
 impl BookSchemaSource for FakeShelf {
     type Error = FakeError;
 
-    async fn declarations(&self) -> Result<ShelfDecl, FakeError> {
-        self.check()?;
+    async fn declarations(&self, side: Side) -> Result<ShelfDecl, FakeError> {
+        if let Some(before) = self.before_at(side)? {
+            return Ok(before.decl.unwrap_or_else(|| ShelfDecl::of_books(decls())));
+        }
         Ok(match lock(&self.written).clone() {
             Some(written) => written,
             None => ShelfDecl::of_books(lock(&self.decls).clone()),
@@ -737,27 +771,37 @@ impl DocSource for FakeShelf {
     /// The readings the test gave, but not the files of a book's directory that its
     /// range does not take: a real listing never reads them. (A file under no book's
     /// directory is kept, for the tests that hold such a file to be invalid.)
-    async fn read_docs(&self, ranges: &[BookRange]) -> Result<Vec<DocReading>, FakeError> {
-        self.check()?;
+    async fn read_docs(
+        &self,
+        side: Side,
+        ranges: &[BookRange],
+    ) -> Result<Vec<DocReading>, FakeError> {
+        let before = self.before_at(side)?;
         *lock(&self.doc_reads) += 1;
-        Ok(lock(&self.readings)
-            .iter()
+        let readings = match before {
+            Some(before) => before.readings,
+            None => lock(&self.readings).clone(),
+        };
+        Ok(readings
+            .into_iter()
             .filter(|reading| listed(ranges, reading))
-            .cloned()
             .collect())
     }
 
-    async fn current(&self, file: &RelPath) -> Result<Option<Vec<u8>>, FakeError> {
-        self.check()?;
+    async fn current(&self, side: Side, file: &RelPath) -> Result<Option<Vec<u8>>, FakeError> {
+        if let Some(before) = self.before_at(side)? {
+            return Ok(before.files.get(file).cloned());
+        }
         Ok(lock(&self.files).get(file).cloned())
     }
 
+    /// Only the side after makes addresses, as a run that reads one side does.
     async fn addresses(
         &self,
+        side: Side,
         files: &BTreeSet<RelPath>,
     ) -> Result<BTreeMap<RelPath, ContentAddress>, FakeError> {
-        self.check()?;
-        if !self.versioned {
+        if !self.versioned || self.before_at(side)?.is_some() {
             return Ok(BTreeMap::new());
         }
         let there = lock(&self.files);
@@ -769,11 +813,13 @@ impl DocSource for FakeShelf {
 
     /// Each reading, with the bytes of its file in `files` (none: empty) and the line
     /// of the comment [`FakeShelf::set_comment`] gave it, if a parsed file.
-    async fn forms(&self, ranges: &[BookRange]) -> Result<Vec<FileRead>, FakeError> {
-        self.check()?;
-        let files = lock(&self.files);
+    async fn forms(&self, side: Side, ranges: &[BookRange]) -> Result<Vec<FileRead>, FakeError> {
+        let (readings, files) = match self.before_at(side)? {
+            Some(before) => (before.readings, before.files),
+            None => (lock(&self.readings).clone(), lock(&self.files).clone()),
+        };
         let comments = lock(&self.comments);
-        Ok(lock(&self.readings)
+        Ok(readings
             .iter()
             .filter(|reading| listed(ranges, reading))
             .map(|reading| {
@@ -934,8 +980,13 @@ impl DocRemove for FakeShelf {
 impl LedgerRead for FakeShelf {
     type Error = FakeError;
 
-    async fn read(&self) -> Result<LedgerContents, FakeError> {
-        self.check()?;
+    async fn read(&self, side: Side) -> Result<LedgerContents, FakeError> {
+        if let Some(before) = self.before_at(side)? {
+            return Ok(LedgerContents {
+                records: before.records,
+                unreadable: Vec::new(),
+            });
+        }
         Ok(LedgerContents {
             records: lock(&self.records).clone(),
             unreadable: lock(&self.unreadable).clone(),
@@ -1151,20 +1202,28 @@ impl FakeShelf {
 }
 
 impl FakeShelf {
-    /// The bytes of an artifact now: in `file`, the file at the path the name is; in
-    /// another space, what [`FakeShelf::put_in`] put there.
-    fn bytes_of(&self, artifact: &ArtifactKey) -> Option<Vec<u8>> {
+    /// The bytes of an artifact at a side (`before`, or now when none): in `file`, the
+    /// file at the path the name is; in another space, what [`FakeShelf::put_in`] put
+    /// there now, and nothing before.
+    fn bytes_of(&self, before: Option<&FakeBefore>, artifact: &ArtifactKey) -> Option<Vec<u8>> {
         if artifact.space() == &file_space() {
             let at = artifact.name().as_str().parse::<RelPath>().ok()?;
-            lock(&self.files).get(&at).cloned()
+            match before {
+                Some(before) => before.files.get(&at).cloned(),
+                None => lock(&self.files).get(&at).cloned(),
+            }
+        } else if before.is_some() {
+            None
         } else {
             lock(&self.elsewhere).get(artifact).cloned()
         }
     }
 
-    /// The answer for one name, as an adapter of its space gives it.
+    /// The answer for one name at a side (`before`, or now when none), as an adapter
+    /// of its space gives it: an address only now.
     fn answer(
         &self,
+        before: Option<&FakeBefore>,
         artifact: &ArtifactKey,
         comparisons: &BTreeSet<Comparison>,
     ) -> ArtifactReading {
@@ -1178,11 +1237,11 @@ impl FakeShelf {
         if let Some(why) = lock(&self.not_names).get(artifact) {
             return ArtifactReading::not_a_name(why.clone());
         }
-        match self.bytes_of(artifact) {
+        match self.bytes_of(before, artifact) {
             Some(bytes) => ArtifactReading::of_bytes(
                 &bytes,
                 comparisons,
-                self.versioned.then(|| fake_address(&bytes)),
+                (self.versioned && before.is_none()).then(|| fake_address(&bytes)),
             ),
             None => ArtifactReading::absent(),
         }
@@ -1208,15 +1267,19 @@ impl ArtifactSource for FakeShelf {
         )])
     }
 
-    async fn resolve(&self, asks: &ArtifactAsks) -> Result<ArtifactReadings, FakeError> {
-        self.check()?;
+    async fn resolve(
+        &self,
+        side: Side,
+        asks: &ArtifactAsks,
+    ) -> Result<ArtifactReadings, FakeError> {
+        let before = self.before_at(side)?;
         *lock(&self.artifact_reads) += 1;
         lock(&self.asked).push(asks.clone());
         Ok(asks
             .iter()
             .map(|(space, name, comparisons)| {
                 let artifact = ArtifactKey::new(space.clone(), name.clone());
-                let reading = self.answer(&artifact, comparisons);
+                let reading = self.answer(before.as_ref(), &artifact, comparisons);
                 (space.clone(), name.clone(), reading)
             })
             .collect())
@@ -1259,9 +1322,13 @@ impl ArtifactSource for FakeShelf {
         Ok(answers)
     }
 
-    async fn current(&self, artifact: &ArtifactKey) -> Result<Option<Vec<u8>>, FakeError> {
-        self.check()?;
-        Ok(self.bytes_of(artifact))
+    async fn current(
+        &self,
+        side: Side,
+        artifact: &ArtifactKey,
+    ) -> Result<Option<Vec<u8>>, FakeError> {
+        let before = self.before_at(side)?;
+        Ok(self.bytes_of(before.as_ref(), artifact))
     }
 
     /// A space the fake was told to list ([`FakeShelf::list_names`]) reads every
@@ -1276,8 +1343,13 @@ impl ArtifactSource for FakeShelf {
 
     /// The listing the fake was told to give for the space, whatever the selection
     /// (each ask is kept: [`FakeShelf::listed`]); [`CannotList`] for any other.
-    async fn list(&self, space: &Space, selection: &Selection) -> Result<NameListing, FakeError> {
-        self.check()?;
+    async fn list(
+        &self,
+        side: Side,
+        space: &Space,
+        selection: &Selection,
+    ) -> Result<NameListing, FakeError> {
+        self.before_at(side)?;
         lock(&self.listed).push((space.clone(), selection.clone()));
         Ok(lock(&self.listings)
             .get(space)
@@ -1372,6 +1444,10 @@ impl ShelfRead for FakeShelf {
     }
     fn clock(&self) -> &Self {
         self
+    }
+
+    fn way(&self) -> ReadWay {
+        ReadWay::new(reason("fake: one world after, and one before when set"))
     }
 }
 

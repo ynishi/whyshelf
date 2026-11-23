@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "d80901c3acaec533afe4ca946b24539b0ab1a058",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ac6d57b013f03596de1d7121105a7609a633f29086d4aac24a32572f0941193b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/merge_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ec32f92333e4c33424fc06bfb7f7a319d16d492d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e08fa0a0b6b73a839769109417e065888e28426efb968dc660f66bd63eb28267",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795431063434,
+  "expires": null,
+  "frame": [
+    {
+      "address": "94cca80b8f3d3641d2919034ae935d7ef1ca846d",
+      "hash": "sha256:eee898b1ea79b00ed9be51fbef4d0e0f32cb1f8bde2177db71374eb0a5bf484a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3ad8-7753-b9e1-a7cd0b06ed77"
+    }
+  ],
+  "id": "01a20807-e9c6-7780-a73d-ebf96a71eaf8",
+  "kind": "decision",
+  "reason": "Read again after #112's second steps: every reader reads its tree through one state port at a side, by FileStates, with today's answers kept (pinned by the readers' tests), rust-item's built docs read per side, and arch-lint holding the readers to the port",
+  "revision": "fb15461684310f73cf2ee72e5dbb7866107abe5d",
+  "seen": "sha256:9b53677b0838c08e1f6c37c9796cdb2fa12d95f1a85654fc07749310bcdb06e5",
+  "seen_address": "5c358e75bb47b2e8f80e4bac19340ab1b8f70eab",
+  "subject": "01a1c332-3e2b-7840-9c1e-c6aebdf917a0",
+  "v": 1,
+  "verb": "approve"
+}

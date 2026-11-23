@@ -38,6 +38,7 @@
 //! | where a pinned artifact that is gone may have moved, by space | [`MoveSource`] | [`artifact`] (for `file`: the same content, Git's renames; for `rust-item`: the names in the docs that end as the gone one does) |
 //! | content kept by address, read back by the adapter of the documents or of the space | [`ContentStore`] | [`Project`], to [`docs`] or [`artifact`] |
 //! | the project's version control | [`RevisionSource`] | [`git`] |
+//! | the tree of the project at one side of a change, which every reader above reads its files through | [`StateRead`], [`StateList`] | [`state`] |
 //! | none | [`Clock`], [`IdSource`], [`ActorSource`] | [`system`] |
 //!
 //! Git's words (blob, commit, `HEAD`) are this crate's alone: the domain holds an
@@ -48,6 +49,8 @@
 //! [`MoveSource`]: whyshelf_core::app::shelf::MoveSource
 //! [`ContentStore`]: whyshelf_core::app::shelf::ContentStore
 //! [`RevisionSource`]: whyshelf_core::app::shelf::RevisionSource
+//! [`StateRead`]: whyshelf_core::app::shelf::StateRead
+//! [`StateList`]: whyshelf_core::app::shelf::StateList
 //! [`ContentAddress`]: whyshelf_core::domain::shelf::artifact::ContentAddress
 //! [`Revision`]: whyshelf_core::domain::shelf::artifact::Revision
 //!
@@ -89,6 +92,7 @@ pub mod docs;
 pub mod git;
 pub mod init;
 pub mod ledger;
+pub mod state;
 pub mod system;
 
 #[cfg(test)]
@@ -100,10 +104,10 @@ use std::path::{Path, PathBuf};
 
 pub use create::PersistFailed;
 use whyshelf_core::app::shelf::{
-    ContentOf, ContentStore, DispatchError, FileSync, ShelfRead, ShelfWrite, Spaces,
+    ContentOf, ContentStore, DispatchError, FileSync, ReadWay, ShelfRead, ShelfWrite, Spaces,
 };
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
-use whyshelf_core::domain::nonempty::NonEmptyVec;
+use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::ContentAddress;
 
 use artifact::file::FileSpace;
@@ -115,6 +119,7 @@ use books::BooksToml;
 use docs::MarkdownDocs;
 use git::Git;
 use ledger::JsonLedger;
+use state::files::FileStates;
 use system::{ProjectActor, SystemClock, UuidV7Ids};
 
 /// The directory of whyshelf's own files in a project.
@@ -143,7 +148,13 @@ pub struct Project {
     artifacts: ArtifactSpaces,
     files: FileSpace,
     git: Git,
+    /// How the run reads, as named here.
+    way: ReadWay,
 }
+
+/// The way of a run that reads the files of the root of the project as they are. The
+/// root is not written in it, so an answer that names the way names no local path.
+const FILES_WAY: TextLiteral = TextLiteral::new("files: the project root");
 
 impl Project {
     /// The adapters of the project at `root`. `actor` is who judges when the
@@ -158,6 +169,10 @@ impl Project {
     /// ([`Spaces::new`]): one names as its space a text that is no space, two name one
     /// space, two offer a built-in preset of one name, or one offers a built-in preset
     /// for another space than its own.
+    ///
+    /// Every reader reads the project through one state of its tree: the root as it
+    /// is, at one side ([`FileStates::new`]), and the run's way names it so
+    /// (`files: the project root`).
     pub fn new(
         root: impl Into<PathBuf>,
         actor: Option<String>,
@@ -165,24 +180,23 @@ impl Project {
         cargo_target_dir: Option<PathBuf>,
     ) -> Result<Self, DispatchError> {
         let root: PathBuf = root.into();
+        let state = FileStates::new(root.clone());
         Ok(Self {
-            books: BooksToml::new(&root, BOOKS_FILE.into()),
-            docs: MarkdownDocs::new(root.clone()),
-            ledger: {
-                let rel: RelPath = LEDGER_DIR.into();
-                JsonLedger::new(root.join(rel.as_str()), rel)
-            },
+            books: BooksToml::on(state.clone(), BOOKS_FILE.into()),
+            docs: MarkdownDocs::on(state.clone()),
+            ledger: JsonLedger::on(state.clone(), LEDGER_DIR.into()),
             clock: SystemClock,
             ids: UuidV7Ids,
             artifacts: Spaces::new(Registry::of_project(
-                FileSpace::new(root.clone()),
-                RustItemSpace::new(root.clone(), cargo_target_dir),
-                RustTestSpace::new(root.clone()),
-                JsTestSpace::new(root.clone()),
+                FileSpace::on(state.clone()),
+                RustItemSpace::on(state.clone(), cargo_target_dir),
+                RustTestSpace::on(state.clone()),
+                JsTestSpace::on(state.clone()),
             ))?,
-            files: FileSpace::new(root.clone()),
+            files: FileSpace::on(state),
             git: Git::new(root.clone()),
             actor: ProjectActor::new(root.clone(), actor, ran_by),
+            way: ReadWay::new(NonBlank::from(FILES_WAY)),
             root,
         })
     }
@@ -258,6 +272,10 @@ impl ShelfRead for Project {
 
     fn clock(&self) -> &SystemClock {
         &self.clock
+    }
+
+    fn way(&self) -> ReadWay {
+        self.way.clone()
     }
 }
 

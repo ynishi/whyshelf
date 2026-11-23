@@ -1,9 +1,15 @@
 //! The search for where a gone file moved: the same content in the work tree, then
 //! Git's renames (the rules on the module page, "Suggesting moves").
+//!
+//! The search is of the project as it is ([`Side::After`]): its walk of the work tree
+//! and Git's history are read here directly, and what a path is (a file through no
+//! link out of the root, named as written) is read through the state of the project,
+//! by the same rule as a reading of the space.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
+use whyshelf_core::app::shelf::{AtSide, ByteBound, Side};
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::NonBlank;
 use whyshelf_core::domain::shelf::artifact::{ArtifactHash, ArtifactName, Comparison, Revision};
@@ -12,8 +18,59 @@ use whyshelf_core::domain::shelf::ledger::{
 };
 
 use super::super::super::git::{RenamesSince, first_line};
-use super::read::{Place, is_absent, named_as_written, place_of};
+use super::super::super::state::StateError;
+use super::super::super::state::files::FileStates;
+use super::super::super::state::paths::{Followed, Leave, follow, look_through, named_as_written};
+use super::read::is_absent;
 use super::{ArtifactError, FileSpace, ScanLimits};
+
+/// What a path of the project is now, by the rule of a reading of the space, within
+/// `most` bytes: a file (with its bytes), no file, or what cannot be read (counted
+/// apart by a caller).
+enum Path {
+    /// A file, of this length.
+    File(u64),
+    NoFile,
+    Unreadable,
+}
+
+/// The path at the side after, looked at through no link out of the root: nothing is
+/// opened.
+async fn path_now(state: &FileStates, path: &RelPath) -> Path {
+    match look_through(state, Side::After, path).await {
+        Ok(Followed::Reached {
+            answer: AtSide::There(len),
+            ..
+        }) => Path::File(len),
+        Ok(Followed::Reached { .. } | Followed::Left | Followed::Broken | Followed::TooMany) => {
+            Path::NoFile
+        }
+        Err(StateError::Io { source, .. }) if is_absent(&source) => Path::NoFile,
+        Err(_) => Path::Unreadable,
+    }
+}
+
+/// The bytes of a file at the side after, at most `most`, read through no link out of
+/// the root: none when it is no longer a file, and an error when it cannot be read.
+async fn bytes_now(state: &FileStates, path: &RelPath, most: u64) -> Result<Option<Vec<u8>>, ()> {
+    match follow(
+        state,
+        Side::After,
+        path,
+        Leave::Refused,
+        ByteBound::at_most(most),
+    )
+    .await
+    {
+        Ok(Followed::Reached {
+            answer: AtSide::There(bytes),
+            ..
+        }) => Ok(Some(bytes)),
+        Ok(_) => Ok(None),
+        Err(StateError::Io { source, .. }) if is_absent(&source) => Ok(None),
+        Err(_) => Err(()),
+    }
+}
 
 /// What one search for the same content passed over or stopped at.
 #[derive(Debug, Default)]
@@ -90,7 +147,7 @@ impl FileSpace {
                 None => walk(&self.root, &self.limits, &mut tally).await,
             };
             for path in &files {
-                let Some(bytes) = scan_read(&self.root, path, &self.limits, &mut tally).await
+                let Some(bytes) = scan_read(&self.state, path, &self.limits, &mut tally).await
                 else {
                     if tally.truncated {
                         break;
@@ -120,7 +177,7 @@ impl FileSpace {
                 }
                 // The candidate is the name as written on disk, which a file system
                 // that does not tell case apart may spell otherwise than the listing.
-                let Some(at) = written_on_disk(&self.root, path)
+                let Some(at) = written_on_disk(&self.root, &self.state, path)
                     .await
                     .and_then(|at| ArtifactName::new(at.as_str()).ok())
                 else {
@@ -207,13 +264,13 @@ impl FileSpace {
             match found_since {
                 RenamesSince::Found(renames) => {
                     for rename in renames {
-                        let present = match place_of(&self.root, &rename.to).await {
-                            Ok(Place::File { .. }) => {
-                                named_as_written(&self.root, &rename.to).await
+                        let present = match path_now(&self.state, &rename.to).await {
+                            Path::File(_) => {
+                                named_as_written(&self.state, Side::After, &rename.to).await
                             }
                             // A place that cannot be looked at is not said to have a
                             // file: `present` is what the adapter can say is there.
-                            Ok(Place::NoFile | Place::Outside) | Err(_) => false,
+                            Path::NoFile | Path::Unreadable => false,
                         };
                         let Ok(to) = ArtifactName::new(rename.to.as_str()) else {
                             continue;
@@ -269,7 +326,7 @@ impl FileSpace {
 
 /// The files under `root`, outside a repository: every regular file and symbolic
 /// link, by its path, in no directory or file whose name starts with `.`, never
-/// walking into a link (`place_of` follows one only inside the root when it is
+/// walking into a link (`read_within` follows one only inside the root when it is
 /// read), up to `limits.files` of them (more marks the tally truncated). A
 /// directory or an entry that cannot be read is passed over and counted.
 async fn walk(root: &std::path::Path, limits: &ScanLimits, tally: &mut Tally) -> Vec<RelPath> {
@@ -315,7 +372,7 @@ async fn walk(root: &std::path::Path, limits: &ScanLimits, tally: &mut Tally) ->
             // arch-lint: allow(no-sync-io) reason="`kind` is a FileType fetched with `.await` above: a pure accessor, no I/O"
             if kind.is_dir() {
                 dirs.push((entry.path(), at));
-            // A link is listed and never walked into (no loop): reading it, `place_of`
+            // A link is listed and never walked into (no loop): reading it, `read_within`
             // follows it only inside the root.
             // arch-lint: allow(no-sync-io) reason="`kind` is a FileType fetched with `.await` above: a pure accessor, no I/O"
             } else if (kind.is_file() || kind.is_symlink())
@@ -334,11 +391,11 @@ async fn walk(root: &std::path::Path, limits: &ScanLimits, tally: &mut Tally) ->
 }
 
 /// The bytes of one file for the search for the same content, within `limits`:
-/// none for no regular file, a link on the way, a file larger than one reading may
-/// be, one that cannot be read (each of the last two counted), and once a bound of
-/// the search is reached (the tally marked truncated).
+/// none for no regular file, a link on the way out of the root, a file larger than
+/// one reading may be, one that cannot be read (each of the last two counted), and
+/// once a bound of the search is reached (the tally marked truncated).
 async fn scan_read(
-    root: &std::path::Path,
+    state: &FileStates,
     path: &RelPath,
     limits: &ScanLimits,
     tally: &mut Tally,
@@ -350,10 +407,10 @@ async fn scan_read(
         tally.truncated = true;
         return None;
     }
-    let len = match place_of(root, path).await {
-        Ok(Place::File { len }) => len,
-        Ok(Place::NoFile | Place::Outside) => return None,
-        Err(_) => {
+    let len = match path_now(state, path).await {
+        Path::File(len) => len,
+        Path::NoFile => return None,
+        Path::Unreadable => {
             tally.unreadable += 1;
             return None;
         }
@@ -366,20 +423,19 @@ async fn scan_read(
         tally.truncated = true;
         return None;
     }
-    match tokio::fs::read(root.join(path.as_str())).await {
-        Ok(bytes) => {
-            tally.read += 1;
-            tally.bytes = tally
-                .bytes
-                .saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
-            Some(bytes)
-        }
-        Err(e) if is_absent(&e) => None,
-        Err(_) => {
+    let bytes = match bytes_now(state, path, limits.file_bytes).await {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return None,
+        Err(()) => {
             tally.unreadable += 1;
-            None
+            return None;
         }
-    }
+    };
+    tally.read += 1;
+    tally.bytes = tally
+        .bytes
+        .saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+    Some(bytes)
 }
 
 /// The path as its entries are written on disk, part by part: the entry named as
@@ -387,7 +443,11 @@ async fn scan_read(
 /// system that does not tell case apart opened), else the part as written. Kept only
 /// when [`named_as_written`] holds it to name the file, so a candidate is always a
 /// name `judge moved` takes; none otherwise.
-async fn written_on_disk(root: &std::path::Path, path: &RelPath) -> Option<RelPath> {
+async fn written_on_disk(
+    root: &std::path::Path,
+    state: &FileStates,
+    path: &RelPath,
+) -> Option<RelPath> {
     let mut dir = root.to_path_buf();
     let mut parts = Vec::new();
     for part in path.as_str().split('/') {
@@ -415,5 +475,7 @@ async fn written_on_disk(root: &std::path::Path, path: &RelPath) -> Option<RelPa
         parts.push(spelled);
     }
     let on_disk: RelPath = parts.join("/").parse().ok()?;
-    named_as_written(root, &on_disk).await.then_some(on_disk)
+    named_as_written(state, Side::After, &on_disk)
+        .await
+        .then_some(on_disk)
 }

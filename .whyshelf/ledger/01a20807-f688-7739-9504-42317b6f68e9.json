@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "0aa0ed0c9f0e106615115aaf6bb1121ed6931cb6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:275759da4758c8fbd5ffcd1fdfca61afc784e0ea350c5fb17435e391dab66dfe",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "580cec579dd6d8a5f3655f7d6bbd57aebc3668db",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:77c449c76cd297286247987fce154b640ae5cbf1935d0a32a2e92465781d074c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "48973920cc3a6c3ff581113ac41cf0c7539145b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fb921955a5cbf96692fd430f2501a0bc71d4fc448868ec9b50555c1943a57f4b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795431063434,
+  "expires": null,
+  "frame": [
+    {
+      "address": "25b7169b718ca6e43644f2c59e670afc90a9d03d",
+      "hash": "sha256:3973c62711ce992505e8435ad40c0ba88a1877e05e4bb806fd7666311527ef84",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "16"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-136c-718f-b63c-ca159f35530a"
+    }
+  ],
+  "id": "01a20807-f688-7739-9504-42317b6f68e9",
+  "kind": "decision",
+  "reason": "Read again after #112's second steps: every reader reads its tree through one state port at a side, by FileStates, with today's answers kept (pinned by the readers' tests), rust-item's built docs read per side, and arch-lint holding the readers to the port",
+  "revision": "fb15461684310f73cf2ee72e5dbb7866107abe5d",
+  "seen": "sha256:0997a426f4b2ebf847dd05dc57a7f602271ea252960c58a590818640fa920696",
+  "seen_address": "2eb8a1193d250362b9c546549ccc92564f98f83b",
+  "subject": "01a1c4ba-17ad-715e-afe9-e9a4d2a848c2",
+  "v": 1,
+  "verb": "approve"
+}

@@ -43,6 +43,7 @@ use super::adapter::{
     SpaceAdapter, SuggestWay, Visit,
 };
 use super::ports::{ArtifactSource, MoveSource};
+use super::state::Side;
 
 /// The adapters of the spaces, as a list: what [`Spaces`] dispatches to. It holds no
 /// rule and names no space; it hands an ask to the adapter at a number, whatever its
@@ -207,10 +208,10 @@ impl<R: SpaceRegistry> ArtifactSource for Spaces<R> {
         self.presets.clone()
     }
 
-    async fn resolve(&self, asks: &ArtifactAsks) -> Result<ArtifactReadings, R::Error> {
+    async fn resolve(&self, side: Side, asks: &ArtifactAsks) -> Result<ArtifactReadings, R::Error> {
         let mut readings = ArtifactReadings::new();
         for (space, names) in asks.spaces() {
-            let found = match self.ask_reading(space, Resolve { asks: names }).await {
+            let found = match self.ask_reading(space, Resolve { side, asks: names }).await {
                 Some(found) => found?,
                 None => {
                     let why = NonBlank::new(format!("no adapter offers the space `{space}`"))?;
@@ -237,9 +238,16 @@ impl<R: SpaceRegistry> ArtifactSource for Spaces<R> {
         Ok(answers)
     }
 
-    async fn current(&self, artifact: &ArtifactKey) -> Result<Option<Vec<u8>>, R::Error> {
+    async fn current(
+        &self,
+        side: Side,
+        artifact: &ArtifactKey,
+    ) -> Result<Option<Vec<u8>>, R::Error> {
         let name = artifact.name();
-        match self.ask_reading(artifact.space(), Current { name }).await {
+        match self
+            .ask_reading(artifact.space(), Current { side, name })
+            .await
+        {
             Some(bytes) => bytes,
             None => Ok(None),
         }
@@ -252,8 +260,13 @@ impl<R: SpaceRegistry> ArtifactSource for Spaces<R> {
         }
     }
 
-    async fn list(&self, space: &Space, selection: &Selection) -> Result<NameListing, R::Error> {
-        match self.ask_reading(space, ListNames { selection }).await {
+    async fn list(
+        &self,
+        side: Side,
+        space: &Space,
+        selection: &Selection,
+    ) -> Result<NameListing, R::Error> {
+        match self.ask_reading(space, ListNames { side, selection }).await {
             Some(listing) => listing,
             None => Ok(NameListing::CannotList(NonBlank::from(NO_ADAPTER))),
         }
@@ -312,6 +325,7 @@ impl<E> Visit<E> for Rename<'_> {
 
 /// The reading of the names of the adapter's space.
 struct Resolve<'a> {
+    side: Side,
     asks: &'a SpaceAsks,
 }
 
@@ -322,12 +336,13 @@ impl<E: Send> AsyncVisit<E> for Resolve<'_> {
     where
         E: From<A::Error>,
     {
-        adapter.resolve(self.asks).await.map_err(E::from)
+        adapter.resolve(self.side, self.asks).await.map_err(E::from)
     }
 }
 
-/// The current bytes of a name of the adapter's space.
+/// The bytes of a name of the adapter's space at a side.
 struct Current<'a> {
+    side: Side,
     name: &'a ArtifactName,
 }
 
@@ -338,7 +353,7 @@ impl<E: Send> AsyncVisit<E> for Current<'_> {
     where
         E: From<A::Error>,
     {
-        adapter.current(self.name).await.map_err(E::from)
+        adapter.current(self.side, self.name).await.map_err(E::from)
     }
 }
 
@@ -378,6 +393,7 @@ impl<E> Visit<E> for Select<'_> {
 
 /// The names of the adapter's space that a selection takes.
 struct ListNames<'a> {
+    side: Side,
     selection: &'a Selection,
 }
 
@@ -388,7 +404,7 @@ impl<E: Send> AsyncVisit<E> for ListNames<'_> {
     where
         E: From<A::Error>,
     {
-        A::List::list(adapter, self.selection)
+        A::List::list(adapter, self.side, self.selection)
             .await
             .map_err(E::from)
     }
@@ -503,11 +519,15 @@ mod tests {
             presets_of(&self.presets)
         }
 
-        async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, FakeError> {
+        async fn resolve(&self, _: Side, asks: &SpaceAsks) -> Result<SpaceReadings, FakeError> {
             Ok(there(asks))
         }
 
-        async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, FakeError> {
+        async fn current(
+            &self,
+            _: Side,
+            name: &ArtifactName,
+        ) -> Result<Option<Vec<u8>>, FakeError> {
             Ok(Some(name.as_str().as_bytes().to_vec()))
         }
     }
@@ -551,7 +571,7 @@ mod tests {
             }
         }
 
-        async fn list(&self, selection: &Selection) -> Result<NameListing, FakeError> {
+        async fn list(&self, _: Side, selection: &Selection) -> Result<NameListing, FakeError> {
             Ok(match self.select(selection) {
                 Ok(()) => NameListing::All(BTreeSet::from([name("a.rs")])),
                 Err(not) => NameListing::CannotList(not.why().clone()),
@@ -578,11 +598,11 @@ mod tests {
             BuiltinPresets::new()
         }
 
-        async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, FakeError> {
+        async fn resolve(&self, _: Side, asks: &SpaceAsks) -> Result<SpaceReadings, FakeError> {
             Ok(there(asks))
         }
 
-        async fn current(&self, _: &ArtifactName) -> Result<Option<Vec<u8>>, FakeError> {
+        async fn current(&self, _: Side, _: &ArtifactName) -> Result<Option<Vec<u8>>, FakeError> {
             Ok(None)
         }
     }
@@ -617,7 +637,7 @@ mod tests {
             panic!("an adapter that names CannotList is asked whether it reads a selection")
         }
 
-        async fn list(&self, _: &Selection) -> Result<NameListing, FakeError> {
+        async fn list(&self, _: Side, _: &Selection) -> Result<NameListing, FakeError> {
             panic!("an adapter that names CannotList is asked to list")
         }
     }
@@ -709,7 +729,7 @@ mod tests {
         let mut asks = ArtifactAsks::new();
         asks.ask(space("file"), name("a.rs"), Comparison::Bytes);
         asks.ask(other.clone(), name("a.rs"), Comparison::Bytes);
-        let found = block_on(spaces.resolve(&asks)).unwrap();
+        let found = block_on(spaces.resolve(Side::After, &asks)).unwrap();
         assert!(
             found
                 .get(&space("file"), &name("a.rs"))
@@ -724,7 +744,7 @@ mod tests {
         ));
 
         let key = ArtifactKey::new(other.clone(), name("a.rs"));
-        assert_eq!(block_on(spaces.current(&key)).unwrap(), None);
+        assert_eq!(block_on(spaces.current(Side::After, &key)).unwrap(), None);
         assert_eq!(
             block_on(spaces.suggest(&other, &[])).unwrap(),
             SpaceSuggestions::CannotSuggest
@@ -739,7 +759,7 @@ mod tests {
             SelectionCheck::CannotList(why.clone())
         );
         assert_eq!(
-            block_on(spaces.list(&other, &selecting("*.rs"))).unwrap(),
+            block_on(spaces.list(Side::After, &other, &selecting("*.rs"))).unwrap(),
             NameListing::CannotList(why)
         );
 
@@ -759,7 +779,9 @@ mod tests {
         let file = space("file");
         let key = ArtifactKey::new(file.clone(), name("a.rs"));
         assert_eq!(
-            block_on(spaces.current(&key)).unwrap().as_deref(),
+            block_on(spaces.current(Side::After, &key))
+                .unwrap()
+                .as_deref(),
             Some(&b"a.rs"[..])
         );
         assert_eq!(
@@ -779,7 +801,7 @@ mod tests {
             SelectionCheck::NotASelection(NonBlank::new("a bang is no pattern").unwrap())
         );
         assert_eq!(
-            block_on(spaces.list(&file, &selecting("*.rs"))).unwrap(),
+            block_on(spaces.list(Side::After, &file, &selecting("*.rs"))).unwrap(),
             NameListing::All(BTreeSet::from([name("a.rs")]))
         );
     }
@@ -810,13 +832,13 @@ mod tests {
             CannotList::selection()
         );
         assert_eq!(
-            block_on(spaces.list(&quiet, &selecting("*.rs"))).unwrap(),
+            block_on(spaces.list(Side::After, &quiet, &selecting("*.rs"))).unwrap(),
             CannotList::listing()
         );
         // The asks every adapter answers still reach it.
         let mut asks = ArtifactAsks::new();
         asks.ask(quiet.clone(), name("a"), Comparison::Bytes);
-        let found = block_on(spaces.resolve(&asks)).unwrap();
+        let found = block_on(spaces.resolve(Side::After, &asks)).unwrap();
         assert!(found.get(&quiet, &name("a")).unwrap().is_present());
     }
 

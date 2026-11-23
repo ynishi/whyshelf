@@ -36,6 +36,7 @@ use super::ports::{
 };
 use super::read::identity;
 use super::report::{ApprovedItem, ApprovedReport, DiffItem, DiffReport};
+use super::state::Side;
 use crate::domain::shelf::lookup::Reference;
 
 impl<P: ShelfRead> ShelfApp<P> {
@@ -90,7 +91,7 @@ impl<P: ShelfRead> ShelfApp<P> {
         } else {
             self.ports
                 .artifacts()
-                .resolve(&asks)
+                .resolve(Side::After, &asks)
                 .await
                 .map_err(port(ShelfPort::Artifacts))?
         };
@@ -109,7 +110,7 @@ impl<P: ShelfRead> ShelfApp<P> {
                 (None, Some(read_as)) => self
                     .ports
                     .artifacts()
-                    .current(read_as)
+                    .current(Side::After, read_as)
                     .await
                     .map_err(port(ShelfPort::Artifacts))?,
                 (None, None) => None,
@@ -139,7 +140,7 @@ impl<P: ShelfRead> ShelfApp<P> {
     async fn doc_bytes(&self, file: &RelPath) -> Result<Option<Vec<u8>>, ShelfError> {
         self.ports
             .docs()
-            .current(file)
+            .current(Side::After, file)
             .await
             .map_err(port(ShelfPort::Docs))
     }

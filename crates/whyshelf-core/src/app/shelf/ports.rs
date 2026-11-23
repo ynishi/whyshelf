@@ -36,6 +36,12 @@
 //! | [`RevisionSource`] | the point of the project's history now, if there is one |
 //! | [`MoveSource`] | for the names of a space with nothing behind them now, the names each may have moved to, each with how it was found, or that the space cannot suggest |
 //!
+//! A method that reads the state of the project takes the [`Side`] of a change it
+//! reads ([`BookSchemaSource::declarations`], the readings of [`DocSource`],
+//! [`LedgerRead::read`], and [`ArtifactSource::resolve`], [`current`](ArtifactSource::current)
+//! and [`list`](ArtifactSource::list)); one that reads by an address, searches, writes,
+//! or reads nothing does not. [`ShelfRead::way`] names how the run reads.
+//!
 //! The ports are bundled in two traits, so that a use case that only reads is generic
 //! over a type that has nothing to write with:
 //!
@@ -75,6 +81,7 @@ use crate::domain::shelf::ledger::{
 use crate::domain::shelf::schema::{BookRange, BuiltinPresets, ShelfDecl};
 
 use super::error::ShelfError;
+use super::state::{ReadWay, Side};
 
 /// Which port failed, for [`ShelfError::Port`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -144,12 +151,15 @@ pub trait BookSchemaSource: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// Every book, preset and default as the project declares them: text and
-    /// lists, nothing checked (that is
+    /// Every book, preset and default as the project declares them at `side`: text
+    /// and lists, nothing checked (that is
     /// [`Schema::declared`](crate::domain::shelf::schema::Schema::declared)'s work).
     /// A project with no declaration is an error, not an empty one: it is far more
     /// likely a wrong place than a shelf with no book.
-    fn declarations(&self) -> impl Future<Output = Result<ShelfDecl, Self::Error>> + Send;
+    fn declarations(
+        &self,
+        side: Side,
+    ) -> impl Future<Output = Result<ShelfDecl, Self::Error>> + Send;
 
     /// The declaration `text` holds, read by the reader
     /// [`declarations`](Self::declarations) reads the project's file with, and
@@ -195,35 +205,41 @@ pub trait DocSource: Send + Sync {
     /// shelf makes it an invalid
     /// document that says why (or leaves it out, when its book skips a file with no
     /// front matter). A directory that is not there has no file. An error
-    /// is for what stops the reading itself (a disk that cannot be read).
+    /// is for what stops the reading itself (a disk that cannot be read). Every file is
+    /// read at `side`.
     fn read_docs(
         &self,
+        side: Side,
         ranges: &[BookRange],
     ) -> impl Future<Output = Result<Vec<DocReading>, Self::Error>> + Send;
 
     /// The bytes of the file of a document (relative to the project root) as they
-    /// are now, or none when no file is there: what `diff` sets beside the content
-    /// that was approved.
+    /// are at `side`, or none when no file is there: what `diff` sets beside the
+    /// content that was approved.
     fn current(
         &self,
+        side: Side,
         file: &RelPath,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
 
-    /// Where the content of each of these files of documents, as it is now, can be
-    /// read back later ([`ContentStore::read_back`] of [`ContentOf::Doc`]), for those
-    /// it can say (outside version control it cannot, and that is no error).
+    /// Where the content of each of these files of documents, as it is at `side`, can
+    /// be read back later ([`ContentStore::read_back`] of [`ContentOf::Doc`]), for those
+    /// it can say (outside version control it cannot, nor at a side the state makes
+    /// no address of, and that is no error).
     fn addresses(
         &self,
+        side: Side,
         files: &BTreeSet<RelPath>,
     ) -> impl Future<Output = Result<BTreeMap<RelPath, ContentAddress>, Self::Error>> + Send;
 
     /// For every Markdown file the ranges take, as
-    /// [`read_docs`](Self::read_docs) finds them: its reading, its bytes, and the line
-    /// of the first comment in its front matter. Reading creates nothing, and no
-    /// judgement of the form is made: which entries the form holds is the use case's
-    /// ([`Shelf::form_entries`]), and whether to write is `fmt`'s.
+    /// [`read_docs`](Self::read_docs) finds them at `side`: its reading, its bytes, and
+    /// the line of the first comment in its front matter. Reading creates nothing, and
+    /// no judgement of the form is made: which entries the form holds is the use
+    /// case's ([`Shelf::form_entries`]), and whether to write is `fmt`'s.
     fn forms(
         &self,
+        side: Side,
         ranges: &[BookRange],
     ) -> impl Future<Output = Result<Vec<FileRead>, Self::Error>> + Send;
 
@@ -336,9 +352,9 @@ pub trait LedgerRead: Send + Sync {
     /// The adapter's error.
     type Error: Error + Send + Sync + 'static;
 
-    /// Every record of the ledger. A ledger that is not there reads as empty, and
-    /// reading it creates nothing.
-    fn read(&self) -> impl Future<Output = Result<LedgerContents, Self::Error>> + Send;
+    /// Every record of the ledger at `side`. A ledger that is not there reads as
+    /// empty, and reading it creates nothing.
+    fn read(&self, side: Side) -> impl Future<Output = Result<LedgerContents, Self::Error>> + Send;
 }
 
 /// Adding to the ledger.
@@ -675,9 +691,11 @@ pub trait ArtifactSource: Send + Sync {
     /// under any other comparison), and every other name is still answered: an error
     /// is for what stops the whole reading (a store that cannot be asked at all, one
     /// call of it past its bound of time), and then no name is answered. What a
-    /// space's names are is each adapter's own rule, on its page.
+    /// space's names are is each adapter's own rule, on its page. Every name is read
+    /// at `side`.
     fn resolve(
         &self,
+        side: Side,
         asks: &ArtifactAsks,
     ) -> impl Future<Output = Result<ArtifactReadings, Self::Error>> + Send;
 
@@ -702,11 +720,11 @@ pub trait ArtifactSource: Send + Sync {
     /// [`Renamed`]: crate::domain::shelf::artifact::Renamed
     fn renamed(&self, asks: &PrefixAsks, of: &PrefixMove) -> Result<PrefixAnswers, Self::Error>;
 
-    /// The bytes of the artifact as they are now, or none when nothing is there or
-    /// they cannot be read now: what `diff` sets beside the content that was
-    /// approved.
+    /// The bytes of the artifact as they are at `side`, or none when nothing is there
+    /// or they cannot be read: what `diff` sets beside the content that was approved.
     fn current(
         &self,
+        side: Side,
         artifact: &ArtifactKey,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
 
@@ -723,10 +741,11 @@ pub trait ArtifactSource: Send + Sync {
     /// ([`NameListing`]): all of them, some of them (the listing was cut at a bound,
     /// with why: never counted as all of them), or that none can be listed (the space
     /// lists nothing, no adapter names it, or nothing here to list from, with why).
-    /// Every name of a listing is one [`resolve`](Self::resolve) answers as there. An
-    /// error is for what stops the whole ask.
+    /// Every name of a listing is one [`resolve`](Self::resolve) answers as there at the
+    /// same `side`. An error is for what stops the whole ask.
     fn list(
         &self,
+        side: Side,
         space: &Space,
         selection: &Selection,
     ) -> impl Future<Output = Result<NameListing, Self::Error>> + Send;
@@ -834,6 +853,10 @@ pub trait ShelfRead: Send + Sync {
     fn store(&self) -> &Self::Store;
     /// The source of suggested moves.
     fn moves(&self) -> &Self::Moves;
+    /// The way the run reads, as the composition root names it (for a run of the files
+    /// of the project, `files: the project root`), which an answer may name. The core
+    /// does not read it.
+    fn way(&self) -> ReadWay;
 }
 
 /// The ports that `judge`, `new_doc`, `init`, `fmt` and `rekey` are generic over:

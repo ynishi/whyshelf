@@ -198,6 +198,53 @@ to = ["drift-reads-not"]
 message = "drift reads only the modules of the shelf left out of the scope drift-reads-not"
 doc = "books/decision/DEC-98.md"
 
+# The readers of a project read its tree through the state of it (the port
+# `StateRead`/`StateList` of whyshelf-core, `FileStates` in shelf/state), so that a run
+# reads every side of a change by one adapter: none reads the file system, nor the work
+# tree through Git, itself. Each module is a reader's part that reads (its writer, its
+# reading back by address and its search for moves are modules of their own). Their
+# tests are a file of their own, which may set up a tree on the file system, except in
+# rust_test.rs, js_test.rs and rust_item.rs, whose tests are inline: there each line of
+# a test that sets up a tree carries its own allow, and the rest of the file is held.
+[[scopes]]
+name = "readers"
+paths = [
+    "crates/whyshelf-infra/src/shelf/books/read.rs",
+    "crates/whyshelf-infra/src/shelf/docs/read.rs",
+    "crates/whyshelf-infra/src/shelf/ledger/read.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/file/read.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/rust_item/lookup.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/rust_item/catalog.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/rust_item/docs_tree.rs",
+]
+
+[[restrict-use]]
+name = "readers-read-through-the-state"
+scope = "readers"
+deny = [
+    "std::fs", "std::fs::**",
+    "tokio::fs", "tokio::fs::**",
+    "crate::shelf::git", "crate::shelf::git::**",
+]
+message = "a reader reads the project's tree through its state (StateRead, StateList), not the file system or Git: what a side is, is the adapter's alone."
+
+# Git reached through `super::` (the way a reader's module writes the path of a module
+# above it) is seen by a rule of `[[deny-scope-dep]]`, which resolves it; the rule of
+# `[[restrict-use]]` above compares a path as it is written. The module is a file only,
+# so it needs its `/**` too, as the ledger's rule says.
+[[scopes]]
+name = "git"
+paths = ["crates/whyshelf-infra/src/shelf/git.rs", "crates/whyshelf-infra/src/shelf/git/**"]
+
+[[deny-scope-dep]]
+name = "readers-ask-not-git"
+from = "readers"
+to = ["git"]
+message = "a reader asks Git nothing: the addresses and the files of the tree are the state's (StateRead::addresses, StateList::files)."
+
 [[restrict-use]]
 name = "async-infra"
 scope = "infra"

@@ -3,18 +3,18 @@
 //!
 //! | what | what it does | with |
 //! |---|---|---|
-//! | [`FileSpace::resolve`] | reads each named file's bytes from the working tree, up to [`MAX_FILE_BYTES`], and hashes them; names the blob its content is (or would be) in Git | `tokio::fs`, [`Git::blob_names`] |
-//! | [`FileSpace::current`] | the bytes of a named file now, the ones `resolve` hashes | `tokio::fs` |
+//! | [`FileSpace::resolve`] | reads each named file's bytes at a side, up to [`MAX_FILE_BYTES`], and hashes them; names the blob its content is (or would be) in Git | [`FileStates`] (its reading and its addresses) |
+//! | [`FileSpace::current`] | the bytes of a named file at a side, the ones `resolve` hashes | [`FileStates`] |
 //! | [`FileSpace::read_back`] | the content of a blob, by its name, up to [`MAX_FILE_BYTES`] | [`Git::read_blob_within`] |
-//! | [`FileSpace::suggest`] | for each gone file, the files it may have moved to | [`Git::work_tree_files`], `tokio::fs`, [`Git::renames_since`] |
-//! | [`FileSpace::list`] | the files a selection takes that are there now (what `resolve` answers as there), or why none can be listed | [`Git::work_tree_files`], `tokio::fs`, [`PathGlob`] |
+//! | [`FileSpace::suggest`] | for each gone file, the files it may have moved to | [`Git::work_tree_files`], `tokio::fs`, [`Git::renames_since`], [`FileStates`] |
+//! | [`FileSpace::list`] | the files a selection takes that are there at a side (what `resolve` answers as there), or why none can be listed | [`FileStates`] (its files, as Git lists them), [`PathGlob`] |
 //! | [`presets`] | the preset `file`: the space, `compare = "bytes"`, `means = "depends"`; and the preset `code`: the space, `compare = "presence"`, `means = "depends"` | values |
 //! | [`FileWrite`] for [`FileSpace`] | a new file at a path, where nothing is, for `init` | `tokio::fs` (`create_new`) |
 //!
 //! ```text
 //!   name ──a path under the root?── no ──► not a name (why)
 //!     │ yes
-//!   path ──tokio::fs, at most MAX_FILE_BYTES──► bytes, kept when no part of the path names an entry in another case only
+//!   path ──the state of the project, at most MAX_FILE_BYTES──► bytes, kept when no part of the path names an entry in another case only
 //!                               ──ArtifactReading::of_bytes──► a hash per comparison asked (always)
 //!                               └──git hash-object──► blob name ──► ContentAddress (in a repository)
 //!        ├─ no file there, or one named in another case only ──► absent
@@ -148,9 +148,9 @@
 //!
 //! The listing is the files Git lists (`git ls-files --cached --others
 //! --exclude-standard`, as the search for moves reads them), kept where `resolve`
-//! would answer *there*: a regular file (`place_of`, through a link only inside the
-//! root) of at most [`MAX_FILE_BYTES`], that opens, named as written (the rule of the
-//! case of a path). A file tracked and deleted, a directory and a submodule are not
+//! would answer *there*: a file (`read_within`, through a link only inside the root)
+//! of at most [`MAX_FILE_BYTES`], that reads, named as written (the rule of the case
+//! of a path). A file tracked and deleted, a directory and a submodule are not
 //! in it, so no name of it is absent under `resolve`. The same content gives the
 //! same names.
 //!
@@ -172,8 +172,12 @@
 //! target's (`CLAUDE.md -> AGENTS.md` is present, and an approval pins it). A link
 //! that leads outside the root, or that is broken, is not followed: the name cannot
 //! be told ([`FileSpace::resolve`]), has no bytes now ([`FileSpace::current`]), and
-//! is never read or suggested by the search for moves. The rule is held in one place
-//! for all three (`place_of`).
+//! is never read or suggested by the search for moves. Where a link leads is the
+//! state's ([`FileStates`]), and that it is not followed out of the root is this
+//! space's rule, held in one place for all three (`read_within`, which walks the
+//! links of a name refusing to leave the root). A kind of file
+//! that is neither a file, a directory nor a link (a pipe) cannot be told, and is not
+//! opened.
 //!
 //! # Outside Git
 //!
@@ -182,9 +186,10 @@
 //!
 //! # Where each part is
 //!
-//! What a name is now and the files a selection takes are read in `file/read.rs`,
-//! with the one place a path meets the file system (`place_of`) and the case of a
-//! path as written; the search for moves is `file/moves.rs`; the reading back of a
+//! What a name is at a side and the files a selection takes are read in
+//! `file/read.rs`, with the one reading of a path by the rules of the space
+//! (`read_within`, through the state of the project, with the case of a path as
+//! written); the search for moves is `file/moves.rs`; the reading back of a
 //! content by its address `file/read_back.rs`; the new file of `init`
 //! ([`FileWrite`]) `file/write.rs`.
 //!
@@ -202,7 +207,7 @@ use std::io;
 use std::path::PathBuf;
 
 use whyshelf_core::app::shelf::{
-    Answers, NameList, NamePrefixes, SpaceAdapter, SpaceReadBack, SpaceSuggest,
+    Answers, NameList, NamePrefixes, Side, SpaceAdapter, SpaceReadBack, SpaceSuggest,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathGlob, RelPath};
@@ -215,6 +220,8 @@ use whyshelf_core::domain::shelf::ledger::{GoneName, NameSuggestions, PATH_ONLY_
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
 use super::super::git::{Git, GitError};
+use super::super::state::StateError;
+use super::super::state::files::FileStates;
 pub(super) use read::{Bounded, read_within};
 
 /// The name of the space this adapter resolves names in: the space a record written
@@ -307,12 +314,16 @@ impl SpaceAdapter for FileSpace {
         presets()
     }
 
-    async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, ArtifactError> {
-        FileSpace::resolve(self, asks).await
+    async fn resolve(&self, side: Side, asks: &SpaceAsks) -> Result<SpaceReadings, ArtifactError> {
+        self.resolve_at(side, asks).await
     }
 
-    async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, ArtifactError> {
-        FileSpace::current(self, name).await
+    async fn current(
+        &self,
+        side: Side,
+        name: &ArtifactName,
+    ) -> Result<Option<Vec<u8>>, ArtifactError> {
+        self.current_at(side, name).await
     }
 }
 
@@ -346,8 +357,8 @@ impl NameList for FileSpace {
         FileSelection::read(selection).map(|_| ())
     }
 
-    async fn list(&self, selection: &Selection) -> Result<NameListing, ArtifactError> {
-        FileSpace::list(self, selection).await
+    async fn list(&self, side: Side, selection: &Selection) -> Result<NameListing, ArtifactError> {
+        self.list_at(side, selection).await
     }
 }
 
@@ -405,6 +416,19 @@ pub enum ArtifactError {
     /// the reason is never blank).
     #[error("the domain refused a reason of the adapter")]
     Reason(#[source] ValueError),
+    /// The state of the project could not be read at the side asked.
+    #[error(transparent)]
+    State(StateError),
+}
+
+/// Git asked through the state is Git asked by the space: one error for it.
+impl From<StateError> for ArtifactError {
+    fn from(error: StateError) -> Self {
+        match error {
+            StateError::Git(git) => Self::Git(git),
+            other => Self::State(other),
+        }
+    }
 }
 
 /// The files of a project, and its Git repository when it is in one.
@@ -412,6 +436,8 @@ pub enum ArtifactError {
 pub struct FileSpace {
     root: PathBuf,
     git: Git,
+    /// The state of the project the files are read from.
+    state: FileStates,
     limits: ScanLimits,
     /// The most bytes of a file a reading reads.
     max_file: u64,
@@ -566,11 +592,19 @@ pub(super) fn renamed(
 }
 
 impl FileSpace {
-    /// The files under `root`.
+    /// The files under `root`, read at one side (the root as it is).
     pub fn new(root: PathBuf) -> Self {
+        Self::on(FileStates::new(root))
+    }
+
+    /// The files of the project `state` reads; a new file is written, and moves are
+    /// searched for, under the root of the side after.
+    pub fn on(state: FileStates) -> Self {
+        let root = state.root().to_path_buf();
         Self {
             git: Git::new(root.clone()),
             root,
+            state,
             limits: ScanLimits::default(),
             max_file: MAX_FILE_BYTES,
         }
@@ -785,11 +819,11 @@ mod tests {
         write(dir.path(), "a.txt", "one\n").await;
         run(dir.path(), &["init", "-q"]).await;
         // Under a bound of zero, Git is stopped before it can answer: it is started
-        // within the first poll, and cannot have exited by its end.
-        let files = FileSpace {
-            git: Git::new(dir.path().to_path_buf()).with_timeout(std::time::Duration::ZERO),
-            ..FileSpace::new(dir.path().to_path_buf())
-        };
+        // within the first poll, and cannot have exited by its end. The addresses are
+        // the state's, so the bound is set on the Git the state asks.
+        let files = FileSpace::on(
+            FileStates::new(dir.path().to_path_buf()).with_timeout(std::time::Duration::ZERO),
+        );
         let found = files.resolve(&bytes_of(&["a.txt", "missing.txt"])).await;
         assert!(
             matches!(found, Err(ArtifactError::Git(GitError::TimedOut { .. }))),
@@ -1251,15 +1285,13 @@ mod tests {
     /// The gone names of the project at `root`, read as the use case reads them:
     /// the ledger's pinned names, resolved by this adapter.
     async fn gone_at(root: &std::path::Path) -> Vec<GoneName> {
-        use whyshelf_core::app::shelf::LedgerRead;
+        use whyshelf_core::app::shelf::{LedgerRead, Side};
         use whyshelf_core::domain::shelf::artifact::ArtifactReadings;
         use whyshelf_core::domain::shelf::ledger::{Admit, Ledger, PinnedNames};
-        let ledger = super::super::super::ledger::JsonLedger::new(
-            root.join(".whyshelf/ledger"),
-            ".whyshelf/ledger".parse().unwrap(),
-        );
+        let ledger =
+            super::super::super::ledger::JsonLedger::new(root, ".whyshelf/ledger".parse().unwrap());
         let pinned = PinnedNames::of(&Ledger::build(
-            ledger.read().await.unwrap().records,
+            ledger.read(Side::After).await.unwrap().records,
             &Admit::unruled(),
         ));
         let source = FileSpace::new(root.to_path_buf());

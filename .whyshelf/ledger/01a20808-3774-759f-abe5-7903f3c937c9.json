@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "bde4c42b7bf807b55ce897ff85ccad65190d549f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7488c25688681bf92812a2592a1698b4078734d862525f2e2ef70f4f7f6c9a0a",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/moves.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c17168c3adcda3a5931f5a8b8bac6b894d459bc7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c3f697ca76a2e9bedb88e10e9270cbbc8876ed901652cc5dbf7ed3dbbbc68ec6",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/prefix_trial_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "55e140a57fdc1963dac82f549b1cbd197966597a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d57b28264d087b7e69d7d256bd2b3596bab2cf0550bf6656259e413eca7d41f0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4b5e29a1c2cbbf9593cd6ecc514032f028540663",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ff7eea634f36c67389d1fad02effe6c7b7b9dba7f2d1f59303c825925f4fb747",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/catalog_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "39fb0612bcba0b4fb95221ecde599943356998a9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e6e2d0a5b9164ede35e8bac65d4f96f071c38938f3f4b8fce6f7d609930c5c3a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/moves.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "319abf67200528c13b7feae8b2b3682776466d80",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a56a3b1f88d09ff3b672b6773ba572941011828b3968a1f90a873eb677c2ffeb",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/path.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795431063434,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9d85c71fc6aa6e8f8680f15c8ff144a86a6d401b",
+      "hash": "sha256:15e4de5579378addb80477b068aa86f5c3602279ad08664599ab7efef5e4c2e6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "96"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fd22-7aea-7470-903b-78df35942cc6"
+    }
+  ],
+  "id": "01a20808-3774-759f-abe5-7903f3c937c9",
+  "kind": "decision",
+  "reason": "Read again after #112's second steps: every reader reads its tree through one state port at a side, by FileStates, with today's answers kept (pinned by the readers' tests), rust-item's built docs read per side, and arch-lint holding the readers to the port",
+  "revision": "fb15461684310f73cf2ee72e5dbb7866107abe5d",
+  "seen": "sha256:dd63b40893226c5e8250158525e4e3a4a8aa65134236bb0d033ca7839d049e2f",
+  "seen_address": "08c1198ef318896c120c67d5e5297d07f025a2e3",
+  "subject": "01a1fd22-7fc3-77ad-8017-ba0d0ddf6bea",
+  "v": 1,
+  "verb": "approve"
+}

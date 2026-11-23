@@ -53,6 +53,7 @@ use super::error::ShelfError;
 use super::load::{Loaded, load};
 use super::ports::{ArtifactSource, IdSource, ShelfPort, ShelfWrite, port};
 use super::prefix_trial::FramedPrefix;
+use super::state::Side;
 
 /// A request to declare that an artifact moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,7 +186,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         let readings = self
             .ports
             .artifacts()
-            .resolve(&asks)
+            .resolve(Side::After, &asks)
             .await
             .map_err(port(ShelfPort::Artifacts))?;
         let of = frame_moved(of, &readings)?;

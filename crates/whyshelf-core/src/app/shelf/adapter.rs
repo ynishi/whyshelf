@@ -52,6 +52,8 @@ use crate::domain::shelf::artifact::{
 use crate::domain::shelf::ledger::{GoneName, NameSuggestions, SpaceSuggestions};
 use crate::domain::shelf::schema::BuiltinPresets;
 
+use super::state::Side;
+
 /// The adapter of one space: the three asks every adapter answers, and how it answers
 /// the four it may.
 ///
@@ -112,17 +114,21 @@ pub trait SpaceAdapter: Send + Sync {
     /// listed), and every other name is answered: an error
     /// is for what stops the whole ask, and then no name is answered. It reads and
     /// writes nothing else, and reads nothing outside the root of the project or the
-    /// build directory it declares.
+    /// build directory it declares. Every name is read at `side`, through the state of
+    /// the tree it reads ([`StateRead`](super::state::StateRead)); a side the run does
+    /// not read is an error.
     fn resolve(
         &self,
+        side: Side,
         asks: &SpaceAsks,
     ) -> impl Future<Output = Result<SpaceReadings, Self::Error>> + Send;
 
-    /// The bytes of `name` as they are now: the bytes [`resolve`](Self::resolve)
+    /// The bytes of `name` as they are at `side`: the bytes [`resolve`](Self::resolve)
     /// hashes under the comparison of bytes, or none when the name is no name, has
     /// nothing there, or cannot be told.
     fn current(
         &self,
+        side: Side,
         name: &ArtifactName,
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
 }
@@ -186,15 +192,16 @@ pub trait NameList: SpaceAdapter {
     /// nothing (no I/O): the same answer whatever is there.
     fn select(&self, selection: &Selection) -> Result<(), NotASelection>;
 
-    /// The names there are now that `selection` takes. Every one of them is a name
-    /// that [`resolve`](SpaceAdapter::resolve) answers as there, and the same content
-    /// gives the same answer. A listing past a bound of what the adapter lists is
+    /// The names there are at `side` that `selection` takes. Every one of them is a
+    /// name that [`resolve`](SpaceAdapter::resolve) answers as there at the same side,
+    /// and the same content gives the same answer. A listing past a bound of what the adapter lists is
     /// [`NameListing::Some`], never [`NameListing::All`]; one that cannot be made (the
     /// project is not where the adapter can list from) is [`NameListing::CannotList`],
     /// not an error. An error is for what stops the whole ask. A selection that
     /// [`select`](Self::select) refuses is [`NameListing::CannotList`] with why.
     fn list(
         &self,
+        side: Side,
         selection: &Selection,
     ) -> impl Future<Output = Result<NameListing, Self::Error>> + Send;
 }
@@ -351,9 +358,10 @@ pub trait ListWay<A: SpaceAdapter + ?Sized>: sealed::Sealed {
     /// Whether `adapter` reads `selection`, with no I/O.
     fn select(adapter: &A, selection: &Selection) -> SelectionCheck;
 
-    /// The names of `adapter`'s space that `selection` takes.
+    /// The names of `adapter`'s space that `selection` takes at `side`.
     fn list(
         adapter: &A,
+        side: Side,
         selection: &Selection,
     ) -> impl Future<Output = Result<NameListing, A::Error>> + Send;
 }
@@ -366,8 +374,8 @@ impl<A: NameList + ?Sized> ListWay<A> for Answers {
         }
     }
 
-    async fn list(adapter: &A, selection: &Selection) -> Result<NameListing, A::Error> {
-        adapter.list(selection).await
+    async fn list(adapter: &A, side: Side, selection: &Selection) -> Result<NameListing, A::Error> {
+        adapter.list(side, selection).await
     }
 }
 
@@ -376,7 +384,7 @@ impl<A: SpaceAdapter + ?Sized> ListWay<A> for CannotList {
         Self::selection()
     }
 
-    async fn list(_: &A, _: &Selection) -> Result<NameListing, A::Error> {
+    async fn list(_: &A, _: Side, _: &Selection) -> Result<NameListing, A::Error> {
         Ok(Self::listing())
     }
 }

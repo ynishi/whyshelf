@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "635bc6304b005cba73015bcf52eaee984eba2a23",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:84ea4093ca763a535f208524406ca4fb822f5177411fed3b439ee7b224c64ff9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/quorum_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7a9c00c0a5ccf9663f620b76927e365656c9f569",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2b77a579456ee893ccaeacd6b32889eb19d6e5354724e3f7938271c07b76cf9b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4cff83d4e5724d7fe1604bedf79138ce66d72ea6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f28af36adf9aabd88894481423fe5d3b38e248308820363997556da171dbc884",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "aced97c987af0c8e9e5c9f0255f95d91b6cc39eb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9c44dabd7737abfa6167ca6de3173797f053984ba95f9ebc6bf22d5c08c71e5a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795431063434,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1fee4494b324b790563306a7337bda79c4e34e8b",
+      "hash": "sha256:960bd0b9091653ef170864b44f6c10f8472eb053f89a46182e4e02c4addf5cbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "89"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74"
+    }
+  ],
+  "id": "01a20808-2d91-77cf-a62d-81726719441b",
+  "kind": "decision",
+  "reason": "Read again after #112's second steps: every reader reads its tree through one state port at a side, by FileStates, with today's answers kept (pinned by the readers' tests), rust-item's built docs read per side, and arch-lint holding the readers to the port",
+  "revision": "fb15461684310f73cf2ee72e5dbb7866107abe5d",
+  "seen": "sha256:00455c126d60569ec8d148449c9947ff3412c1e71b8b8978794d9a17ef98d0b2",
+  "seen_address": "0048973b2472f1c3f9641ade554f787ebbb0fb4f",
+  "subject": "01a1f6a0-2c42-7c3f-a8d2-4e6b1f9c2d07",
+  "v": 1,
+  "verb": "approve"
+}

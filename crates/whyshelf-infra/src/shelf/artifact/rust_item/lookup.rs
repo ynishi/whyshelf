@@ -3,22 +3,29 @@
 //!
 //! | what | what it does |
 //! |---|---|
-//! | `Lookup` | the docs read for one resolution, each directory listed once and each page read once: `find` walks a path to its [`Found`], `promise` reads what the thing found promises |
+//! | `Lookup` | the docs of one side read for one resolution, each directory listed once and each page read once: `find` walks a path to its [`Found`], `promise` reads what the thing found promises |
 //! | `Reads` | what the pages asked for so far came to: how many were read, their bytes, how many could not be read and how many were too large (what a search for the moves of a name reports and holds to its bounds) |
-//! | `list`, `read` | the one listing of a directory and the one bounded reading of a page |
-//! | `reexport_link`, `within` | the link of a re-export in a module's index, and the file a link names when it stays inside the docs |
+//! | `reexport_link`, `within` | the link of a re-export in a module's index, and the place a link names when it stays inside the docs as written |
 //!
 //! The words of the layout are `layout`'s and the grammar of a path is `path`'s; this
-//! module is what walks one along the other, and reads the files of the docs by the
-//! rules of the page of the module above.
+//! module is what walks one along the other. It reads the docs through the port of the
+//! built docs ([`BuiltDocs`]) and nothing else: whether a place may be read, and
+//! whether a re-export leads into the docs, are the port's answers, asked before a
+//! place is listed or read.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Display;
+use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-use tokio::io::AsyncReadExt;
+use whyshelf_core::app::shelf::{
+    AtSide, ByteBound, DirListing, Entries, NotADir, Side, StateList, StateRead,
+};
 
 use super::super::on_blocking;
+use super::docs_path::DocsPath;
+use super::docs_tree::{BuiltDocs, DocsTree};
 use super::layout::{GENERATOR_MARK, ITEM_KINDS, MemberKind, Place, TYPE_KINDS};
 use super::path::RustPath;
 use super::promise::{Promise, Unreadable, promise_of};
@@ -35,12 +42,17 @@ pub(super) enum Found {
     CannotTell(String),
 }
 
+/// The `index.html` of the directory of a module.
+fn index_of(dir: &DocsPath) -> DocsPath {
+    dir.join("index.html").unwrap_or_else(|| dir.clone())
+}
+
 impl From<At> for Found {
     /// What a walk that ends at `at` comes to: the one place a [`Place`] is built.
     fn from(at: At) -> Self {
         match at {
             At::Module(dir) => Self::There(Place::Module {
-                page: dir.join("index.html"),
+                page: index_of(&dir),
             }),
             At::Item { page, kind } => Self::There(Place::Item { page, kind }),
             At::Member { page, kind, anchor } => Self::There(Place::Member { page, kind, anchor }),
@@ -53,13 +65,13 @@ impl From<At> for Found {
 #[derive(Debug, Clone)]
 enum At {
     /// The directory of a module (or of a crate).
-    Module(PathBuf),
+    Module(DocsPath),
     /// The page of an item.
-    Item { page: PathBuf, kind: String },
+    Item { page: DocsPath, kind: String },
     /// A member of a type, found by its anchor on the page of the type: nothing is
     /// under it.
     Member {
-        page: PathBuf,
+        page: DocsPath,
         kind: MemberKind,
         anchor: String,
     },
@@ -99,34 +111,30 @@ impl Failure {
     }
 }
 
-/// The docs, read for one resolution: each directory listed once, each page read
-/// once.
+/// The docs of one side, read for one resolution: each directory listed once, each
+/// page read once.
 pub(super) struct Lookup {
-    docs: PathBuf,
-    /// The docs with every symbolic link resolved, when they can be.
-    real_docs: Option<PathBuf>,
-    /// The root of the project and the build directory (the parent of the docs),
-    /// each with every symbolic link resolved, when it can be: no page and no
-    /// directory of a module is read outside both.
-    real_places: Vec<PathBuf>,
+    docs: DocsTree,
+    side: Side,
     max_page: u64,
-    listings: BTreeMap<PathBuf, Option<BTreeSet<String>>>,
-    pages: BTreeMap<PathBuf, Result<Arc<str>, String>>,
+    listings: BTreeMap<DocsPath, Option<BTreeSet<String>>>,
+    pages: BTreeMap<DocsPath, Result<Arc<str>, String>>,
     reads: Reads,
 }
 
 impl Lookup {
+    /// The docs at `docs` of the project at `root`, as the project is (one side): a
+    /// lookup a test makes with no space around it.
+    #[cfg(test)]
     pub(super) async fn new(root: &Path, docs: PathBuf, max_page: u64) -> Self {
-        let mut real_places = Vec::new();
-        for place in std::iter::once(root).chain(docs.parent()) {
-            if let Ok(real) = tokio::fs::canonicalize(place).await {
-                real_places.push(real);
-            }
-        }
+        Self::on(DocsTree::at(root, docs).await, Side::After, max_page)
+    }
+
+    /// The docs `docs`, read at `side`.
+    pub(super) fn on(docs: DocsTree, side: Side, max_page: u64) -> Self {
         Self {
-            real_docs: tokio::fs::canonicalize(&docs).await.ok(),
-            real_places,
             docs,
+            side,
             max_page,
             listings: BTreeMap::new(),
             pages: BTreeMap::new(),
@@ -134,9 +142,14 @@ impl Lookup {
         }
     }
 
-    /// The directory rustdoc wrote the docs in.
-    pub(super) fn docs(&self) -> &Path {
-        &self.docs
+    /// The directory rustdoc wrote the docs in, as a path of the file system.
+    pub(super) fn docs_dir(&self) -> PathBuf {
+        self.docs.dir(self.side)
+    }
+
+    /// Where `p` is, as a reader names it.
+    fn shown(&self, p: &DocsPath) -> String {
+        self.docs.shown(self.side, p).display().to_string()
     }
 
     /// What the pages asked for so far came to.
@@ -144,47 +157,62 @@ impl Lookup {
         self.reads
     }
 
-    /// Why nothing is read at `path`, when it leads outside the root of the project
+    /// Why nothing is read at `p`, when it leads outside the root of the project
     /// and the build directory once symbolic links are resolved, or is a link that
-    /// cannot be resolved.
-    pub(super) async fn outside(&self, path: &Path) -> Option<String> {
-        let inside = match tokio::fs::canonicalize(path).await {
-            Ok(real) => self.real_places.iter().any(|place| real.starts_with(place)),
-            Err(_) => false,
-        };
-        (!inside).then(|| {
-            format!(
-                "{} leads outside the root of the project and the build directory once symbolic links are resolved, or cannot be resolved: nothing is read through it",
-                path.display()
-            )
-        })
+    /// cannot be resolved ([`BuiltDocs::outside`]).
+    pub(super) async fn outside(&self, p: &DocsPath) -> Option<String> {
+        self.docs.outside(self.side, p).await
+    }
+
+    /// Whether `p` is a directory, read by listing it (no file is opened): none when
+    /// it cannot be looked at. A directory's listing is kept, so that
+    /// [`listing`](Self::listing) of it lists it no more.
+    pub(super) async fn listed_as_dir(&mut self, p: &DocsPath) -> Option<bool> {
+        if let Some(Some(_)) = self.listings.get(p) {
+            return Some(true);
+        }
+        match self.docs.list(self.side, Some(p)).await.ok()? {
+            DirListing::All(entries) | DirListing::Cut { entries, .. } => {
+                self.listings.insert(p.clone(), Some(names_of(entries)));
+                Some(true)
+            }
+            DirListing::NotADir(NotADir::File | NotADir::Untold(_) | NotADir::Elsewhere { .. }) => {
+                Some(false)
+            }
+            DirListing::NotADir(NotADir::Absent) => None,
+        }
     }
 
     /// The names of the entries of a directory, or none when it cannot be listed.
-    pub(super) async fn listing(&mut self, dir: &Path) -> Option<&BTreeSet<String>> {
+    pub(super) async fn listing(&mut self, dir: &DocsPath) -> Option<&BTreeSet<String>> {
         if !self.listings.contains_key(dir) {
-            let names = list(dir).await;
-            self.listings.insert(dir.to_path_buf(), names);
+            let names = match self.docs.list(self.side, Some(dir)).await {
+                Ok(DirListing::All(entries) | DirListing::Cut { entries, .. }) => {
+                    Some(names_of(entries))
+                }
+                Ok(DirListing::NotADir(_)) | Err(_) => None,
+            };
+            self.listings.insert(dir.clone(), names);
         }
         self.listings.get(dir).and_then(Option::as_ref)
     }
 
     /// Whether `name` is an entry of `dir`, as written; none when `dir` cannot be
     /// listed.
-    async fn has(&mut self, dir: &Path, name: &str) -> Option<bool> {
+    async fn has(&mut self, dir: &DocsPath, name: &str) -> Option<bool> {
         self.listing(dir).await.map(|names| names.contains(name))
     }
 
     /// The text of a page, or why it cannot be read (one outside the root and the
     /// build directory is not).
-    async fn page(&mut self, page: &Path) -> Result<Arc<str>, String> {
+    async fn page(&mut self, page: &DocsPath) -> Result<Arc<str>, String> {
         if !self.pages.contains_key(page) {
             let text = match self.outside(page).await {
                 Some(why) => {
                     self.reads.unreadable += 1;
                     Err(why)
                 }
-                None => match read(page, self.max_page).await {
+                None => match self.read(page).await {
                     Ok(text) => {
                         self.reads.pages += 1;
                         self.reads.bytes = self.reads.bytes.saturating_add(len_of(&text));
@@ -199,17 +227,68 @@ impl Lookup {
                     }
                 },
             };
-            self.pages.insert(page.to_path_buf(), text);
+            self.pages.insert(page.clone(), text);
         }
         self.pages
             .get(page)
             .cloned()
-            .unwrap_or_else(|| Err(format!("{} cannot be read", page.display())))
+            .unwrap_or_else(|| Err(format!("{} cannot be read", self.shown(page))))
+    }
+
+    /// The text of a page of at most the bound of a page, or why it cannot be read.
+    async fn read(&self, page: &DocsPath) -> Result<String, Failure> {
+        let shown = self.shown(page);
+        let cannot =
+            |why: &dyn Display| Failure::Unreadable(format!("{shown} cannot be read: {why}"));
+        let read = self
+            .docs
+            .read(
+                self.side,
+                &BTreeSet::from([page.clone()]),
+                ByteBound::at_most(self.max_page),
+            )
+            .await;
+        let bytes = match read.and_then(|mut read| read.remove(page).transpose()) {
+            Ok(Some(AtSide::There(bytes))) => bytes,
+            Ok(Some(AtSide::Absent) | None) => {
+                return Err(cannot(&io::Error::from(io::ErrorKind::NotFound)));
+            }
+            Ok(Some(AtSide::Dir)) => {
+                return Err(cannot(&io::Error::from(io::ErrorKind::IsADirectory)));
+            }
+            Ok(Some(AtSide::Untold(why))) => return Err(cannot(&why.as_str())),
+            Ok(Some(AtSide::Elsewhere { .. })) => {
+                return Err(cannot(&"a symbolic link is not followed"));
+            }
+            Err(super::super::super::state::StateError::Io { source, .. }) => {
+                return Err(cannot(&source));
+            }
+            Err(other) => return Err(cannot(&other)),
+        };
+        let max = self.max_page;
+        if u64::try_from(bytes.len()).map_or(true, |len| len > max) {
+            return Err(Failure::TooLarge(format!(
+                "{shown} is larger than {max} bytes, and is not read"
+            )));
+        }
+        // A page may be as large as the bound: a large one is decoded on a blocking
+        // thread.
+        on_blocking(bytes.len(), move || {
+            String::from_utf8_lossy(&bytes).into_owned()
+        })
+        .await
+        .map_err(|why| Failure::Unreadable(stopped(&shown, &why)))
     }
 
     pub(super) async fn find(&mut self, path: &RustPath) -> Found {
-        let crate_dir = self.docs.join(&path.krate);
-        let built = match self.has(&self.docs.clone(), &path.krate).await {
+        let top = DocsPath::top();
+        let Some(crate_dir) = top.join(&path.krate) else {
+            return Found::CannotTell(format!(
+                "the crate `{}` is no name of a directory of the docs",
+                path.krate
+            ));
+        };
+        let built = match self.has(&top, &path.krate).await {
             Some(true) => {
                 // Before it is listed: nothing outside is read.
                 if let Some(why) = self.outside(&crate_dir).await {
@@ -223,10 +302,10 @@ impl Lookup {
             return Found::CannotTell(format!(
                 "the docs of the crate `{}` are not built: {} has no index.html (build them with `cargo doc`, or the crate is no longer in the build)",
                 path.krate,
-                crate_dir.display()
+                self.shown(&crate_dir)
             ));
         }
-        let index = crate_dir.join("index.html");
+        let index = index_of(&crate_dir);
         let html = match self.page(&index).await {
             Ok(html) => html,
             Err(why) => return Found::CannotTell(why),
@@ -236,10 +315,10 @@ impl Lookup {
             Ok(false) => {
                 return Found::CannotTell(format!(
                     "{} is not rustdoc's: it has no {GENERATOR_MARK}",
-                    index.display()
+                    self.shown(&index)
                 ));
             }
-            Err(why) => return Found::CannotTell(stopped(&index, &why)),
+            Err(why) => return Found::CannotTell(stopped(&self.shown(&index), &why)),
         }
         let mut at = At::Module(crate_dir);
         for segment in &path.rest {
@@ -263,9 +342,10 @@ impl Lookup {
     pub(super) async fn promise(&mut self, place: &Place) -> Result<Promise, Unreadable> {
         let html = self.page(place.page()).await.map_err(Unreadable::Page)?;
         let at = place.clone();
+        let shown = self.shown(place.page());
         on_blocking(html.len(), move || promise_of(&html, &at))
             .await
-            .map_err(|why| Unreadable::Page(stopped(place.page(), &why)))?
+            .map_err(|why| Unreadable::Page(stopped(&shown, &why)))?
     }
 
     /// The place `segment` names under `at`: none when it names nothing there.
@@ -283,7 +363,7 @@ impl Lookup {
                         .find(|member| html.contains(&format!("id=\"{}.{wanted}\"", member.word())))
                 })
                 .await
-                .map_err(|why| stopped(&page, &why))?;
+                .map_err(|why| stopped(&self.shown(&page), &why))?;
                 Ok(named.map(|member| At::Member {
                     page,
                     kind: member,
@@ -296,12 +376,13 @@ impl Lookup {
     }
 
     /// The module or item `segment` names in the module at `dir`.
-    async fn in_module(&mut self, dir: &Path, segment: &str) -> Result<Option<At>, String> {
+    async fn in_module(&mut self, dir: &DocsPath, segment: &str) -> Result<Option<At>, String> {
         let Some(names) = self.listing(dir).await.cloned() else {
-            return Err(format!("{} cannot be listed", dir.display()));
+            return Err(format!("{} cannot be listed", self.shown(dir)));
         };
-        if names.contains(segment) {
-            let module = dir.join(segment);
+        if names.contains(segment)
+            && let Some(module) = dir.join(segment)
+        {
             // Before it is listed: nothing outside is read.
             if let Some(why) = self.outside(&module).await {
                 return Err(why);
@@ -310,11 +391,14 @@ impl Lookup {
                 return Ok(Some(At::Module(module)));
             }
         }
-        if let Some(kind) = ITEM_KINDS
-            .iter()
-            .find(|kind| names.contains(&format!("{kind}.{segment}.html")))
-        {
-            let page = dir.join(format!("{kind}.{segment}.html"));
+        if let Some((kind, page)) = ITEM_KINDS.iter().find_map(|kind| {
+            let file = format!("{kind}.{segment}.html");
+            names
+                .contains(&file)
+                .then(|| dir.join(&file))
+                .flatten()
+                .map(|page| (kind, page))
+        }) {
             if let Some(why) = self.outside(&page).await {
                 return Err(why);
             }
@@ -326,12 +410,12 @@ impl Lookup {
         if !names.contains("index.html") {
             return Ok(None);
         }
-        let index = dir.join("index.html");
+        let index = index_of(dir);
         let html = self.page(&index).await?;
         let wanted = segment.to_owned();
         let Some(link) = on_blocking(html.len(), move || reexport_link(&html, &wanted))
             .await
-            .map_err(|why| stopped(&index, &why))?
+            .map_err(|why| stopped(&self.shown(&index), &why))?
         else {
             return Ok(None);
         };
@@ -340,37 +424,32 @@ impl Lookup {
 
     /// The place a re-export of `segment` in the module at `dir` leads to, through
     /// its link (`href`, relative to `dir`). A re-export with no link, or whose link
-    /// leads outside the docs (symbolic links resolved) or to nothing readable, is
-    /// there, and nothing under it can be told.
-    async fn follow(&mut self, dir: &Path, link: Option<&str>, segment: &str) -> At {
-        let nowhere = || {
+    /// leads outside the docs (symbolic links resolved, [`BuiltDocs::inside_docs`]) or
+    /// to nothing readable, is there, and nothing under it can be told.
+    async fn follow(&mut self, dir: &DocsPath, link: Option<&str>, segment: &str) -> At {
+        let nowhere = |lookup: &Self| {
             At::Unfollowed(format!(
                 "`{segment}` is re-exported in {} from docs that are not here",
-                dir.display()
+                lookup.shown(dir)
             ))
         };
-        let Some(target) = link.and_then(|link| within(&self.docs, dir, link)) else {
-            return nowhere();
+        let Some(target) = link.and_then(|link| {
+            within(Path::new(""), &dir.under(Path::new("")), link)
+                .and_then(|place| DocsPath::of_relative(&place))
+        }) else {
+            return nowhere(self);
         };
-        let inside = match (&self.real_docs, tokio::fs::canonicalize(&target).await) {
-            (Some(docs), Ok(real)) => real.starts_with(docs),
-            _ => false,
-        };
-        if !inside {
-            return nowhere();
+        if !self.docs.inside_docs(self.side, &target).await {
+            return nowhere(self);
         }
-        let Some(file) = target
-            .file_name()
-            .and_then(|f| f.to_str())
-            .map(str::to_owned)
-        else {
-            return nowhere();
+        let Some(file) = target.file_name().map(str::to_owned) else {
+            return nowhere(self);
         };
-        let parent = target.parent().map(Path::to_path_buf).unwrap_or_default();
+        let parent = target.parent().unwrap_or_default();
         if file == "index.html" {
             return match self.has(&parent, "index.html").await {
                 Some(true) => At::Module(parent),
-                _ => nowhere(),
+                _ => nowhere(self),
             };
         }
         let kind = ITEM_KINDS
@@ -381,58 +460,26 @@ impl Lookup {
                 page: target,
                 kind: (*kind).to_owned(),
             },
-            _ => nowhere(),
+            _ => nowhere(self),
         }
     }
 }
 
-/// The names of the entries of a directory that are UTF-8, or none when it cannot
-/// be listed.
-pub(super) async fn list(dir: &Path) -> Option<BTreeSet<String>> {
-    let mut entries = tokio::fs::read_dir(dir).await.ok()?;
-    let mut names = BTreeSet::new();
-    loop {
-        match entries.next_entry().await {
-            Ok(Some(entry)) => {
-                if let Ok(name) = entry.file_name().into_string() {
-                    names.insert(name);
-                }
-            }
-            Ok(None) => return Some(names),
-            Err(_) => return None,
-        }
-    }
+/// The last part of each entry of a listing of the docs, with the entries whose name
+/// is no place of the docs.
+fn names_of(entries: Entries<DocsPath>) -> BTreeSet<String> {
+    entries
+        .named
+        .keys()
+        .filter_map(|p| p.file_name().map(str::to_owned))
+        .chain(entries.unnamed.into_keys())
+        .collect()
 }
 
 /// Why a page cannot be told, when the blocking thread it was read on stopped (a bug
 /// if it ever happens, or a runtime shutting down).
-fn stopped(page: &Path, why: &str) -> String {
-    format!("the reading of {} stopped: {why}", page.display())
-}
-
-/// The text of a page of at most `max` bytes, or why it cannot be read.
-async fn read(page: &Path, max: u64) -> Result<String, Failure> {
-    let cannot =
-        |e: std::io::Error| Failure::Unreadable(format!("{} cannot be read: {e}", page.display()));
-    let file = tokio::fs::File::open(page).await.map_err(cannot)?;
-    let mut bytes = Vec::new();
-    file.take(max.saturating_add(1))
-        .read_to_end(&mut bytes)
-        .await
-        .map_err(cannot)?;
-    if u64::try_from(bytes.len()).map_or(true, |len| len > max) {
-        return Err(Failure::TooLarge(format!(
-            "{} is larger than {max} bytes, and is not read",
-            page.display()
-        )));
-    }
-    // A page may be as large as the bound: a large one is decoded on a blocking
-    // thread.
-    on_blocking(bytes.len(), move || {
-        String::from_utf8_lossy(&bytes).into_owned()
-    })
-    .await
-    .map_err(|why| Failure::Unreadable(stopped(page, &why)))
+fn stopped(page: &str, why: &str) -> String {
+    format!("the reading of {page} stopped: {why}")
 }
 
 /// The bytes of a text, as a count that cannot overflow.

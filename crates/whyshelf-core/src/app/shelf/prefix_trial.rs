@@ -29,6 +29,7 @@ use crate::domain::shelf::ledger::{
 use super::ShelfApp;
 use super::error::ShelfError;
 use super::ports::{ArtifactSource, ShelfPort, ShelfRead, port};
+use super::state::Side;
 
 /// What the trial of one move of a prefix came to.
 pub(super) struct FramedPrefix {
@@ -78,7 +79,7 @@ impl<P: ShelfRead> ShelfApp<P> {
         let readings = if planned.iter().any(|(_, plan)| plan.is_ok()) {
             self.ports
                 .artifacts()
-                .resolve(&asks)
+                .resolve(Side::After, &asks)
                 .await
                 .map_err(port(ShelfPort::Artifacts))?
         } else {

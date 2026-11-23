@@ -32,6 +32,9 @@ use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::ledger::Record;
 
+use super::state::StateError;
+use super::state::files::FileStates;
+
 /// Why the ledger could not be read or written.
 #[derive(Debug, thiserror::Error)]
 pub enum LedgerError {
@@ -76,6 +79,19 @@ pub enum LedgerError {
     /// A record's canonical form has no JSON form (a bug of this program).
     #[error("a record could not be written as JSON")]
     Json(#[source] serde_json::Error),
+    /// What is at the directory or a record file cannot be told by the state of the
+    /// project (a kind of file that is neither a file, a directory nor a link), and is
+    /// not read. The read stops and says so, rather than skip what may hold a decision.
+    #[error("cannot tell what {} is: {why}", .path.display())]
+    Untold {
+        /// The path.
+        path: PathBuf,
+        /// Why, as the state said it.
+        why: String,
+    },
+    /// The state of the project could not be read at the side asked.
+    #[error(transparent)]
+    State(#[from] StateError),
 }
 
 /// Why a JSON value has no canonical form.
@@ -100,14 +116,28 @@ pub struct JsonLedger {
     /// The directory as the project names it (`.whyshelf/ledger`): the path of
     /// every file of the ledger, a record or not, is made from it.
     rel: RelPath,
+    /// The state of the project the records are read from, under `rel`.
+    state: FileStates,
 }
 
 impl JsonLedger {
-    /// The ledger in `dir`, which the project names `rel` (`<whyshelf_dir>/ledger`),
-    /// from the same root as the paths
-    /// [`LedgerAppend::append`](whyshelf_core::app::shelf::LedgerAppend::append) gives.
-    pub fn new(dir: PathBuf, rel: RelPath) -> Self {
-        Self { dir, rel }
+    /// The ledger of the project at `root`, in the directory the project names `rel`
+    /// (`<whyshelf_dir>/ledger`), read at one side (the root as it is): records are
+    /// read from it and added to it, under that root, and the paths
+    /// [`LedgerAppend::append`](whyshelf_core::app::shelf::LedgerAppend::append) gives
+    /// are from it.
+    pub fn new(root: &Path, rel: RelPath) -> Self {
+        Self::on(FileStates::new(root.to_path_buf()), rel)
+    }
+
+    /// The ledger the project `state` reads names `rel`; records are added under the
+    /// root of the side after.
+    pub fn on(state: FileStates, rel: RelPath) -> Self {
+        Self {
+            dir: state.root().join(rel.as_str()),
+            rel,
+            state,
+        }
     }
 
     /// The path of the file of `record`: `<rel>/<id>.json`.
@@ -118,11 +148,6 @@ impl JsonLedger {
     /// The directory.
     pub fn dir(&self) -> &Path {
         &self.dir
-    }
-
-    fn io(&self, path: &Path) -> impl FnOnce(io::Error) -> LedgerError {
-        let path = path.to_path_buf();
-        move |source| LedgerError::Io { path, source }
     }
 }
 
@@ -176,7 +201,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use uuid::Uuid;
-    use whyshelf_core::app::shelf::{LedgerAppend, LedgerRead};
+    use whyshelf_core::app::shelf::{LedgerAppend, LedgerRead, Side};
     use whyshelf_core::domain::actor::{Actor, Attribution};
     use whyshelf_core::domain::id::EntityId;
     use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet};
@@ -210,19 +235,19 @@ mod tests {
 
     /// The ledger of a project at `root`, as the project names it.
     fn ledger_in(root: &Path) -> JsonLedger {
-        ledger_at(root.join(".whyshelf/ledger"))
+        JsonLedger::new(root, ".whyshelf/ledger".parse().unwrap())
     }
 
-    /// The ledger in `dir`, which the project names `.whyshelf/ledger`.
+    /// The ledger in `dir`, which the project above it names `.whyshelf/ledger`.
     fn ledger_at(dir: PathBuf) -> JsonLedger {
-        JsonLedger::new(dir, ".whyshelf/ledger".parse().unwrap())
+        ledger_in(dir.ancestors().nth(2).unwrap())
     }
 
     #[tokio::test]
     async fn a_record_is_written_once_and_read_back_the_same() {
         let root = tempfile::tempdir().unwrap();
         let ledger = ledger_in(root.path());
-        assert!(ledger.read().await.unwrap().records.is_empty());
+        assert!(ledger.read(Side::After).await.unwrap().records.is_empty());
         assert!(!ledger.dir().exists(), "a read creates nothing");
 
         let record = revocation();
@@ -234,7 +259,7 @@ mod tests {
             ledger.append(&admitted(&record)).await,
             Err(LedgerError::Taken { .. })
         ));
-        let read = ledger.read().await.unwrap();
+        let read = ledger.read(Side::After).await.unwrap();
         assert_eq!(read.records, vec![record]);
         assert!(read.unreadable.is_empty());
     }
@@ -370,7 +395,7 @@ mod tests {
             .await
             .unwrap();
         tokio::fs::write(dir.join("y.json"), "{}").await.unwrap();
-        let read = ledger_at(dir).read().await.unwrap();
+        let read = ledger_at(dir).read(Side::After).await.unwrap();
         assert!(read.records.is_empty());
         assert_eq!(read.unreadable.len(), 2);
         assert_eq!(read.unreadable[0].file.as_str(), ".whyshelf/ledger/x.json");
@@ -438,7 +463,7 @@ mod tests {
         tokio::fs::create_dir_all(&dir).await.unwrap();
         tokio::fs::write(dir.join("a.json"), "{").await.unwrap();
         tokio::fs::write(dir.join("notes.txt"), "{").await.unwrap();
-        let read = ledger_at(dir).read().await.unwrap();
+        let read = ledger_at(dir).read(Side::After).await.unwrap();
         assert_eq!(read.unreadable.len(), 1);
         assert!(matches!(
             read.unreadable[0].why,
@@ -459,7 +484,7 @@ mod tests {
         tokio::fs::create_dir_all(&dir).await.unwrap();
         let name = OsStr::from_bytes(b"\xff\xfe.json");
         tokio::fs::write(dir.join(name), "{}").await.unwrap();
-        let result = ledger_at(dir).read().await;
+        let result = ledger_at(dir).read(Side::After).await;
         assert!(matches!(result, Err(LedgerError::Name { .. })));
     }
 
@@ -529,7 +554,7 @@ mod tests {
                     .unwrap();
             }
         }
-        let read = merged.read().await.unwrap();
+        let read = merged.read(Side::After).await.unwrap();
         assert!(read.unreadable.is_empty());
         assert_eq!(read.records.len(), 3);
         for record in [&own, &theirs, &same] {

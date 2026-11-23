@@ -32,6 +32,7 @@ use super::error::ShelfError;
 use super::load::{View, load};
 use super::ports::{ArtifactSource, MoveSource, ShelfPort, ShelfRead, port};
 use super::report::MovesReport;
+use super::state::Side;
 
 impl<P: ShelfRead> ShelfApp<P> {
     /// Every name a pin of something there, of an approval that stands, is read as
@@ -59,7 +60,7 @@ impl<P: ShelfRead> ShelfApp<P> {
         } else {
             self.ports
                 .artifacts()
-                .resolve(&asks)
+                .resolve(Side::After, &asks)
                 .await
                 .map_err(port(ShelfPort::Artifacts))?
         };

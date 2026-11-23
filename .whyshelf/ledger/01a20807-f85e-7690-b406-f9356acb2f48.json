@@ -1,0 +1,139 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7d8b65a4dc7868d6aed2f5cf95b87a9d2ca12bb7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3c588f5b35398ba49efbe72e22486114b76a783552c1f641ac163623084ec159",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6c91b1a7ad626e068cb9a04845f292a4075c2e80",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6106b88862cca6e7e8c4083d7a2f3b0de10d0b8e5d2ef690610de256b6d64884",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "115387f3b65d3a759d6420223a984d8c7810bc3e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:64d15b80cb7bc64791b7cac65aff5f9e139922d26be8dacb017be94de595da7f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "50be644142bdb88f4f9b66401cad35ee22551f23",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:acb526c9cf12c7a42d4cdd6553794e20eb4cec99a24ae3641860f20bb4870a7a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ec32f92333e4c33424fc06bfb7f7a319d16d492d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e08fa0a0b6b73a839769109417e065888e28426efb968dc660f66bd63eb28267",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795431063434,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d1d881bcfe383a435dc95a44292907393ab16dbc",
+      "hash": "sha256:b0d7183d426e1c555cd1199b5ace3d0a55ce10fd6f4a7b4d8cf1fa9ffd2e9c12",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "b2658e3ea467b40ba29fb5f907ece7c9fffb8c1b",
+      "hash": "sha256:4801f4277e4358483975f11c893726ace7decb09a0fc761397164c782163738e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ce54-705b-a4fb-17382395564a"
+    },
+    {
+      "address": "70a5dd9de54859341dbb149ca40373305205c37d",
+      "hash": "sha256:cd35831f4a42399efcdeb7bd78922f5392b0d77c54ab52fe052d07d73e6453b5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a20807-f85e-7690-b406-f9356acb2f48",
+  "kind": "decision",
+  "reason": "Read again after #112's second steps: every reader reads its tree through one state port at a side, by FileStates, with today's answers kept (pinned by the readers' tests), rust-item's built docs read per side, and arch-lint holding the readers to the port",
+  "revision": "fb15461684310f73cf2ee72e5dbb7866107abe5d",
+  "seen": "sha256:d62fa60dd298e63c294806ae4a292703e599438d10324162c2b31b39e5b73ffd",
+  "seen_address": "34f9a655305375885329cdbacec1b1458349b989",
+  "subject": "01a1c4ba-19a6-76f9-a7c1-40f9f8460ecf",
+  "v": 1,
+  "verb": "approve"
+}

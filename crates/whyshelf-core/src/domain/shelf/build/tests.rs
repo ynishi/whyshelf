@@ -135,6 +135,32 @@ fn an_identity_is_unknown_when_an_unparsed_file_has_an_unreadable_id_beside_id_l
 }
 
 #[test]
+fn an_identity_may_be_in_its_files_or_in_any_whose_identity_cannot_be_read() {
+    let in_files = |s: &Shelf, n: u128| -> Vec<String> {
+        s.state_of(docid(n))
+            .may_be_in()
+            .into_iter()
+            .map(|p| p.as_str().to_owned())
+            .collect()
+    };
+    let s = shelf(vec![
+        fr(1, &[]),
+        reading("notes/n.md", 2, "FR-2", &[("title", text("t"))]),
+    ]);
+    assert_eq!(in_files(&s, 1), [fr(1, &[]).origin().as_str()]);
+    assert_eq!(in_files(&s, 2), ["notes/n.md"]);
+    assert!(in_files(&s, 9).is_empty(), "gone");
+    let s = shelf(vec![DocReading::Unparsed {
+        origin: path("findings/x.md"),
+        id: ReadId::Unreadable,
+        why: RawProblem::Syntax { line: None },
+    }]);
+    assert_eq!(in_files(&s, 9), ["findings/x.md"]);
+    // The files known to carry it are none.
+    assert!(s.state_of(docid(9)).files().is_empty());
+}
+
+#[test]
 fn the_id_must_be_there_and_be_an_identifier() {
     let no_id = DocReading::Parsed {
         origin: path("findings/a.md"),

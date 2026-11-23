@@ -130,6 +130,8 @@ mod write;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use super::state::StateError;
+use super::state::files::FileStates;
 use super::system::parse_time;
 use serde::Deserialize;
 use whyshelf_core::domain::location::RelPath;
@@ -159,6 +161,15 @@ pub enum BooksError {
         #[source]
         source: io::Error,
     },
+    /// What is at the file cannot be told by the state of the project (a kind of file
+    /// that is neither a file, a directory nor a link), and is not read.
+    #[error("cannot tell what {} is: {why}", .path.display())]
+    Untold {
+        /// The file.
+        path: PathBuf,
+        /// Why, as the state said it.
+        why: String,
+    },
     /// The text is not TOML of the shape above. The parser's message says where.
     #[error("{} is not a declaration of books", .path.display())]
     Shape {
@@ -178,6 +189,9 @@ pub enum BooksError {
         #[source]
         source: io::Error,
     },
+    /// The state of the project could not be read at the side asked.
+    #[error(transparent)]
+    State(#[from] StateError),
 }
 
 /// The declaration of the books, read from a TOML file ([`BookSchemaSource`], in
@@ -191,15 +205,26 @@ pub struct BooksToml {
     root: PathBuf,
     file: RelPath,
     path: PathBuf,
+    /// The state of the project the file is read from.
+    state: FileStates,
 }
 
 impl BooksToml {
-    /// The declaration in the file `file` of the project at `root`.
+    /// The declaration in the file `file` of the project at `root`, read at one side
+    /// (the root as it is).
     pub fn new(root: &Path, file: RelPath) -> Self {
+        Self::on(FileStates::new(root.to_path_buf()), file)
+    }
+
+    /// The declaration in the file `file` of the project `state` reads; it is written
+    /// under the root of the side after.
+    pub fn on(state: FileStates, file: RelPath) -> Self {
+        let root = state.root().to_path_buf();
         Self {
-            root: root.to_path_buf(),
             path: root.join(file.as_str()),
+            root,
             file,
+            state,
         }
     }
 
@@ -637,7 +662,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use whyshelf_core::app::shelf::{
-        BookSchemaSource, Creation, DeclarationText, DeclarationWrite,
+        BookSchemaSource, Creation, DeclarationText, DeclarationWrite, Side,
     };
     use whyshelf_core::domain::shelf::artifact::Space;
     use whyshelf_core::domain::shelf::schema::{
@@ -1310,7 +1335,7 @@ means = "informs"
         let dir = tempfile::tempdir().unwrap();
         let source = BooksToml::new(dir.path(), "books.toml".parse().unwrap());
         assert!(matches!(
-            source.declarations().await,
+            source.declarations(Side::After).await,
             Err(BooksError::Missing { .. })
         ));
     }
@@ -1326,7 +1351,10 @@ means = "informs"
         assert_eq!(books.in_the_way().await.unwrap(), Some(books.file()));
         let written = tokio::fs::read_to_string(books.path()).await.unwrap();
         assert_eq!(written, text.as_str());
-        assert_eq!(books.declarations().await.unwrap().books[0].name, "a");
+        assert_eq!(
+            books.declarations(Side::After).await.unwrap().books[0].name,
+            "a"
+        );
 
         let other = DeclarationText::new("");
         assert_eq!(books.create(&other).await.unwrap(), Creation::AlreadyThere);

@@ -35,6 +35,7 @@
 //! docs through the [`Lookup`] it makes, and nothing else.
 
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(test)]
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -58,19 +59,19 @@ const MAX_CANDIDATES: usize = 16;
 /// For each of `gone`, the names of the docs that it may have moved to, with the notes
 /// of what could not be looked at; every name asked has an entry.
 ///
-/// `docs` is where the docs are, as the adapter tells it (or why it cannot): when it
-/// cannot, nothing is searched and each name has the note
+/// `lookup` is the lookup of the docs the adapter reads, at the side it reads them
+/// (the project as it is), with the bound of a page of `limits`, or why there is none:
+/// when there is none, nothing is searched and each name has the note
 /// [`MoveNote::SearchUnavailable`]. A bound of `limits` stops the search where it is
 /// and is a note, never an error; the only error is a text of the adapter that the
 /// domain refuses as a reason.
 pub(super) async fn suggest(
-    docs: Result<PathBuf, String>,
-    root: &Path,
+    lookup: Result<Lookup, String>,
     limits: &CatalogLimits,
     gone: &[GoneName],
 ) -> Result<BTreeMap<ArtifactName, NameSuggestions>, ValueError> {
-    let docs = match docs {
-        Ok(docs) => docs,
+    let mut lookup = match lookup {
+        Ok(lookup) => lookup,
         Err(why) => return unavailable(gone, why),
     };
     let asked: Vec<(&GoneName, Option<RustPath>)> = gone
@@ -81,14 +82,13 @@ pub(super) async fn suggest(
         .iter()
         .filter_map(|(_, path)| path.as_ref().map(|path| path.krate.clone()))
         .collect();
-    let mut lookup = Lookup::new(root, docs, limits.page_bytes).await;
     let catalog = Catalog::walk(&mut lookup, &crates, limits).await;
     if !catalog.listed() {
         return unavailable(
             gone,
             format!(
                 "the docs are not at {}: build them with `cargo doc`, or the directory cannot be read",
-                lookup.docs().display()
+                lookup.docs_dir().display()
             ),
         );
     }
@@ -431,7 +431,9 @@ mod tests {
     //! items is approved over docs written by hand, the docs are then changed, and the
     //! gone names are read from the ledger as the use case reads them.
 
-    use whyshelf_core::app::shelf::{JudgeRequest, Judgement, LedgerRead, ShelfApp, SpaceSuggest};
+    use whyshelf_core::app::shelf::{
+        JudgeRequest, Judgement, LedgerRead, ShelfApp, Side, SpaceSuggest,
+    };
     use whyshelf_core::domain::shelf::artifact::{
         ArtifactReadings, NamePrefix, PrefixMove, SpaceAsks,
     };
@@ -546,12 +548,9 @@ mod tests {
         /// The gone names, as the use case reads them: the pinned names of the
         /// ledger, resolved by this adapter.
         async fn gone(&self) -> Vec<GoneName> {
-            let ledger = JsonLedger::new(
-                self.root().join(".whyshelf/ledger"),
-                ".whyshelf/ledger".parse().unwrap(),
-            );
+            let ledger = JsonLedger::new(self.root(), ".whyshelf/ledger".parse().unwrap());
             let pinned = PinnedNames::of(&Ledger::build(
-                ledger.read().await.unwrap().records,
+                ledger.read(Side::After).await.unwrap().records,
                 &Admit::unruled(),
             ));
             let space = self.space();
@@ -571,7 +570,22 @@ mod tests {
             let gone = self.gone().await;
             assert!(!gone.is_empty());
             let docs = self.space().docs().await;
-            suggest(docs, self.root(), limits, &gone).await.unwrap()
+            suggest(lookup_of(docs, self.root(), limits).await, limits, &gone)
+                .await
+                .unwrap()
+        }
+    }
+
+    /// The lookup of the docs at `docs` of the project at `root`, as the adapter makes
+    /// one, or why there is none.
+    async fn lookup_of(
+        docs: Result<PathBuf, String>,
+        root: &Path,
+        limits: &CatalogLimits,
+    ) -> Result<Lookup, String> {
+        match docs {
+            Ok(docs) => Ok(Lookup::new(root, docs, limits.page_bytes).await),
+            Err(why) => Err(why),
         }
     }
 
@@ -1347,7 +1361,8 @@ mod tests {
             Err("where the docs are built is not known".to_owned()),
             Ok(nowhere),
         ] {
-            let said = suggest(docs, world.root(), &limits(), &gone).await.unwrap();
+            let lookup = lookup_of(docs, world.root(), &limits()).await;
+            let said = suggest(lookup, &limits(), &gone).await.unwrap();
             assert_eq!(said.len(), 2);
             for one in said.values() {
                 assert!(one.candidates.is_empty());

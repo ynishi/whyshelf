@@ -3,7 +3,7 @@
 //!
 //! | what | what it does | with |
 //! |---|---|---|
-//! | [`RustItemSpace::resolve`] | finds the build directory of the project, looks up each path in the HTML rustdoc wrote under it, and reads what the item promises from its page | `tokio::fs`, `toml` |
+//! | [`RustItemSpace::resolve`] | finds the build directory of the project at a side, looks up each path in the HTML rustdoc wrote under it, and reads what the item promises from its page | the state of the project ([`FileStates`]) and of its built docs, `toml` |
 //! | [`RustItemSpace::current`] | the text of what an item promises now | the same |
 //! | [`SpaceSuggest`] | for each gone name, the names there are now in the docs that end as it does, found by their content when an approval pinned some | the same |
 //! | [`presets`] | the presets `rustdoc` (the space, `compare = "presence"`, `means = "depends"`) and `rustdoc-promise` (the space, `compare = "lines"`, `means = "depends"`) | values |
@@ -179,13 +179,20 @@
 //!    `.cargo/config.toml` when both are, else `.cargo/config.toml`), read as TOML;
 //! 3. the directory [`TARGET_DIR_NAME`] beside the `Cargo.toml` at the root.
 //!
-//! A relative directory is taken from the root of the project. When none can be
-//! told (no variable, no setting, no `Cargo.toml` at the root), or the settings
-//! cannot be read, are larger than [`MAX_SETTINGS_BYTES`], or are reached through a
-//! symbolic link that leaves the root, no name can be told.
+//! Each side of a change tells its own: the settings and the `Cargo.toml` are read
+//! from the tree of that side, and a relative directory is taken from its root. When
+//! none can be told (no variable, no setting, no `Cargo.toml` at the root), or the
+//! settings cannot be read, are larger than [`MAX_SETTINGS_BYTES`], or are reached
+//! through a symbolic link that leaves the root, no name can be told.
 //! Cargo settings in the directories above the
 //! root or in cargo's home, and docs built for another target triple (`--target`),
 //! are not read.
+//!
+//! Docs under the root of the side, reached through no link out of it, are read
+//! through the project's tree, so each side reads its own; docs elsewhere are read on
+//! the file system where they are, and a run that reads two sides of a change reads
+//! them at neither (each of their names cannot be told: the place outside the project
+//! is of neither side). A run of one side reads them as before.
 //!
 //! The docs are read as they are: docs left there by an earlier build, of an item
 //! or a crate the project no longer has, read as there. Build them afresh before a
@@ -330,11 +337,14 @@
 //! [`ArtifactReading::of_bytes`]: whyshelf_core::domain::shelf::artifact::ArtifactReading::of_bytes
 
 mod catalog;
+mod docs_path;
+mod docs_tree;
 #[cfg(test)]
 mod fixture;
 mod layout;
 mod lookup;
 mod moves;
+mod outside_docs;
 mod path;
 mod promise;
 
@@ -342,7 +352,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use whyshelf_core::app::shelf::{
-    Answers, CannotList, NamePrefixes, NoReadBack, SpaceAdapter, SpaceSuggest,
+    Answers, CannotList, DirListing, NamePrefixes, NoReadBack, Side, SpaceAdapter, SpaceSuggest,
+    StateList,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
@@ -354,10 +365,16 @@ use whyshelf_core::domain::shelf::artifact::{
 use whyshelf_core::domain::shelf::ledger::{GoneName, NameSuggestions};
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
+use super::super::state::StateError;
+use super::super::state::files::FileStates;
 use super::file::{self, Bounded};
 use catalog::CatalogLimits;
+use docs_tree::{DocsAt, DocsTree, placed};
 pub use layout::{GENERATOR_MARK, ITEM_KINDS, MEMBER_KINDS};
-use lookup::{Found, Lookup, list};
+use lookup::{Found, Lookup};
+use outside_docs::OUTSIDE;
+#[cfg(test)]
+use outside_docs::list;
 use path::RustPath;
 use promise::{Promise, Unreadable};
 
@@ -422,6 +439,9 @@ pub enum RustItemError {
     /// reason is never blank).
     #[error("the domain refused a reason of the adapter")]
     Reason(#[source] ValueError),
+    /// The state of the project could not be read at the side asked.
+    #[error(transparent)]
+    State(#[from] StateError),
 }
 
 /// The space [`RUST_ITEM_SPACE`]: it answers a move of a prefix, suggests where an
@@ -443,12 +463,16 @@ impl SpaceAdapter for RustItemSpace {
         presets()
     }
 
-    async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, RustItemError> {
-        RustItemSpace::resolve(self, asks).await
+    async fn resolve(&self, side: Side, asks: &SpaceAsks) -> Result<SpaceReadings, RustItemError> {
+        self.resolve_at(side, asks).await
     }
 
-    async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustItemError> {
-        RustItemSpace::current(self, name).await
+    async fn current(
+        &self,
+        side: Side,
+        name: &ArtifactName,
+    ) -> Result<Option<Vec<u8>>, RustItemError> {
+        self.current_at(side, name).await
     }
 }
 
@@ -471,7 +495,10 @@ impl SpaceSuggest for RustItemSpace {
             page_bytes: self.max_page,
             ..CatalogLimits::default()
         };
-        moves::suggest(self.docs().await, &self.root, &limits, gone)
+        // The search reads the docs of the project as it is, through the space's own
+        // state, as a reading of it does.
+        let lookup = self.lookup_at(Side::After).await?;
+        moves::suggest(lookup, &limits, gone)
             .await
             .map_err(RustItemError::Reason)
     }
@@ -480,7 +507,9 @@ impl SpaceSuggest for RustItemSpace {
 /// The items of the Rust crates of a project, as their built docs know them.
 #[derive(Debug, Clone)]
 pub struct RustItemSpace {
-    root: PathBuf,
+    /// The state of the project the settings of the build, and the built docs in it,
+    /// are read from: every reading of the space, its search for moves too.
+    state: FileStates,
     /// `CARGO_TARGET_DIR`, as the caller read it.
     target_dir: Option<PathBuf>,
     /// The most bytes of a page read.
@@ -488,21 +517,45 @@ pub struct RustItemSpace {
 }
 
 impl RustItemSpace {
-    /// The items of the project at `root`, with `target_dir` the value of
-    /// `CARGO_TARGET_DIR` (read by the caller; none when it is not set).
+    /// The items of the project at `root`, read at one side (the root as it is), with
+    /// `target_dir` the value of `CARGO_TARGET_DIR` (read by the caller; none when it
+    /// is not set).
     pub fn new(root: PathBuf, target_dir: Option<PathBuf>) -> Self {
+        Self::on(FileStates::new(root), target_dir)
+    }
+
+    /// The items of the project `state` reads, with `target_dir` as for
+    /// [`new`](Self::new).
+    pub fn on(state: FileStates, target_dir: Option<PathBuf>) -> Self {
         Self {
-            root,
+            state,
             target_dir: target_dir.filter(|dir| !dir.as_os_str().is_empty()),
             max_page: MAX_PAGE_BYTES,
         }
     }
 
-    /// For each name: not a name (no Rust path), there (with the hash of what it
-    /// promises under each comparison asked, or under presence only, with why, when
-    /// its page cannot be read), absent, or cannot tell (with why). Every name asked
-    /// about has an answer.
+    /// For each name, as the project is ([`Side::After`]): not a name (no Rust path),
+    /// there (with the hash of what it promises under each comparison asked, or under
+    /// presence only, with why, when its page cannot be read), absent, or cannot tell
+    /// (with why). Every name asked about has an answer.
     pub async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, RustItemError> {
+        self.resolve_at(Side::After, asks).await
+    }
+
+    /// The text of what an item promises as the project is ([`Side::After`], what a
+    /// link that compares its text compares), or none when the name is none, or the
+    /// item is not there, or its promise cannot be told.
+    pub async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustItemError> {
+        self.current_at(Side::After, name).await
+    }
+
+    /// [`resolve`](Self::resolve), at `side`.
+    async fn resolve_at(
+        &self,
+        side: Side,
+        asks: &SpaceAsks,
+    ) -> Result<SpaceReadings, RustItemError> {
+        self.state.dir(side)?;
         let mut readings = SpaceReadings::new();
         let mut paths = Vec::new();
         for (name, comparisons) in asks {
@@ -516,8 +569,8 @@ impl RustItemSpace {
         if paths.is_empty() {
             return Ok(readings);
         }
-        let docs = match self.docs().await {
-            Ok(docs) => docs,
+        let mut lookup = match self.lookup_at(side).await? {
+            Ok(lookup) => lookup,
             Err(why) => {
                 let why = reason(why)?;
                 for (name, _, _) in paths {
@@ -527,7 +580,6 @@ impl RustItemSpace {
             }
         };
         let presence_only = reason(PRESENCE_ONLY.to_owned())?;
-        let mut lookup = Lookup::new(&self.root, docs, self.max_page).await;
         for (name, comparisons, path) in paths {
             let reading = match lookup.find(&path).await {
                 // Only presence asked (the preset `rustdoc`): its page is not read.
@@ -547,17 +599,19 @@ impl RustItemSpace {
         Ok(readings)
     }
 
-    /// The text of what an item promises now (what a link that compares its text
-    /// compares), or none when the name is none, or the item is not there, or its
-    /// promise cannot be told.
-    pub async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustItemError> {
+    /// [`current`](Self::current), at `side`.
+    async fn current_at(
+        &self,
+        side: Side,
+        name: &ArtifactName,
+    ) -> Result<Option<Vec<u8>>, RustItemError> {
+        self.state.dir(side)?;
         let Ok(path) = RustPath::parse(name.as_str()) else {
             return Ok(None);
         };
-        let Ok(docs) = self.docs().await else {
+        let Ok(mut lookup) = self.lookup_at(side).await? else {
             return Ok(None);
         };
-        let mut lookup = Lookup::new(&self.root, docs, self.max_page).await;
         Ok(match lookup.find(&path).await {
             Found::There(place) => lookup
                 .promise(&place)
@@ -568,30 +622,74 @@ impl RustItemSpace {
         })
     }
 
-    /// The directory rustdoc writes the docs of the project in (the rule on the
-    /// page of the module), or why it cannot be told.
-    async fn docs(&self) -> Result<PathBuf, String> {
-        if let Some(dir) = &self.target_dir {
-            return Ok(self.root.join(dir).join("doc"));
+    /// The lookup of the built docs of `side`, or why there is none: where they are
+    /// cannot be told ([`docs_at`](Self::docs_at)), or they are outside the project
+    /// in a run of two sides, which cannot read them alike.
+    async fn lookup_at(&self, side: Side) -> Result<Result<Lookup, String>, RustItemError> {
+        let at = match self.docs_at(side).await {
+            Ok(at) => at,
+            Err(why) => return Ok(Err(why)),
+        };
+        if matches!(at, DocsAt::Outside(_)) && !self.state.one_side() {
+            return Ok(Err(NonBlank::from(OUTSIDE).into_string()));
         }
-        if let Some(dir) = self.configured_target_dir().await? {
-            return Ok(self.root.join(dir).join("doc"));
-        }
-        if list(&self.root)
-            .await
-            .is_some_and(|names| names.contains("Cargo.toml"))
-        {
-            return Ok(self.root.join(TARGET_DIR_NAME).join("doc"));
-        }
-        Err(format!(
-            "where the docs are built is not known: CARGO_TARGET_DIR is not set, no cargo setting at {} names build.target-dir, and it has no Cargo.toml",
-            self.root.display()
-        ))
+        let docs = DocsTree::of(&self.state, side, at).await?;
+        Ok(Ok(Lookup::on(docs, side, self.max_page)))
     }
 
-    /// `build.target-dir` of the first cargo settings file at the root, if one
-    /// names it; why, when a file there cannot be read as settings.
-    async fn configured_target_dir(&self) -> Result<Option<PathBuf>, String> {
+    /// The directory rustdoc writes the docs of the project in, as the project is
+    /// ([`Side::After`]), as a path of the file system: what a test asks of where the
+    /// space reads.
+    #[cfg(test)]
+    async fn docs(&self) -> Result<PathBuf, String> {
+        Ok(match self.docs_at(Side::After).await? {
+            DocsAt::Inside(docs) => self.state.root().join(docs.as_str()),
+            DocsAt::Outside(docs) => docs,
+        })
+    }
+
+    /// Where rustdoc writes the docs of the project at `side` (the rule on the page
+    /// of the module, each place read from the tree of that side), or why it cannot be
+    /// told: `CARGO_TARGET_DIR`, then the cargo settings, then beside a `Cargo.toml`.
+    /// A directory relative to the root is the side's; inside the side's directory,
+    /// and reached through no link out of it, the docs are in the project
+    /// ([`DocsAt::Inside`]), and else outside it.
+    async fn docs_at(&self, side: Side) -> Result<DocsAt, String> {
+        let top = self
+            .state
+            .dir(side)
+            .map_err(|e| e.to_string())?
+            .to_path_buf();
+        let dir = match &self.target_dir {
+            Some(dir) => Some(dir.clone()),
+            None => self.configured_target_dir(side).await?,
+        };
+        let docs = match dir {
+            Some(dir) => top.join(dir).join("doc"),
+            None => {
+                let beside = match self.state.list(side, None).await {
+                    Ok(DirListing::All(entries) | DirListing::Cut { entries, .. }) => entries
+                        .named
+                        .contains_key(&RelPath::from(PathLiteral::new("Cargo.toml"))),
+                    Ok(DirListing::NotADir(_)) | Err(_) => false,
+                };
+                if !beside {
+                    return Err(format!(
+                        "where the docs are built is not known: CARGO_TARGET_DIR is not set, no cargo setting at {} names build.target-dir, and it has no Cargo.toml",
+                        top.display()
+                    ));
+                }
+                top.join(TARGET_DIR_NAME).join("doc")
+            }
+        };
+        placed(&self.state, side, docs)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    /// `build.target-dir` of the first cargo settings file at the root of `side`, if
+    /// one names it; why, when a file there cannot be read as settings.
+    async fn configured_target_dir(&self, side: Side) -> Result<Option<PathBuf>, String> {
         // Cargo uses the legacy name when both are there (with a warning).
         // Read by the rules of the space `file`: nothing through a link that leaves the
         // root, and within a bound of bytes.
@@ -601,8 +699,8 @@ impl RustItemSpace {
         ];
         for at in SETTINGS {
             let at = RelPath::from(at);
-            let file = self.root.join(at.as_str());
-            let text = match file::read_within(&self.root, &at, MAX_SETTINGS_BYTES).await {
+            let file = self.state.path_of(side, &at).map_err(|e| e.to_string())?;
+            let text = match file::read_within(&self.state, side, &at, MAX_SETTINGS_BYTES).await {
                 Ok(Bounded::Bytes(bytes)) => bytes,
                 Ok(Bounded::NoFile) => continue,
                 Ok(Bounded::Outside) => {
@@ -616,6 +714,9 @@ impl RustItemSpace {
                         "{} is larger than {MAX_SETTINGS_BYTES} bytes, and is not read",
                         file.display()
                     ));
+                }
+                Ok(Bounded::Untold(why)) => {
+                    return Err(format!("{} cannot be read: {why}", file.display()));
                 }
                 Err(e) => return Err(format!("{} cannot be read: {e}", file.display())),
             };
@@ -738,8 +839,10 @@ mod tests {
     async fn write(dir: &Path, at: &str, text: &str) {
         let full = dir.join(at);
         if let Some(parent) = full.parent() {
+            // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
             tokio::fs::create_dir_all(parent).await.unwrap();
         }
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
         tokio::fs::write(full, text).await.unwrap();
     }
 
@@ -1082,6 +1185,7 @@ mod tests {
         let target = demo().await;
         let outside = tempfile::tempdir().unwrap();
         write(outside.path(), "struct.Esc.html", &page(&["method.new"])).await;
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
         tokio::fs::symlink(outside.path(), target.path().join("doc/demo/out"))
             .await
             .unwrap();
@@ -1185,6 +1289,7 @@ mod tests {
             docs(RustItemSpace::new(r.to_path_buf(), None)).await,
             Ok(r.join(TARGET_DIR_NAME).join("doc"))
         );
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
         tokio::fs::remove_file(r.join(".cargo/config"))
             .await
             .unwrap();
@@ -1718,6 +1823,7 @@ mod tests {
                 use std::os::unix::fs::PermissionsExt;
                 let decl = "<pre class=\"rust item-decl\"><code>pub struct Esc;</code></pre>";
                 write(dir, "outside/struct.Esc.html", &whole(decl)).await;
+                // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
                 tokio::fs::symlink(
                     dir.join("outside/struct.Esc.html"),
                     d.join("doc/demo/struct.Esc.html"),
@@ -1726,10 +1832,12 @@ mod tests {
                 .unwrap();
                 tree.outside = Some(n("demo::Esc"));
                 let page = d.join("doc/demo/struct.Locked.html");
+                // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
                 tokio::fs::set_permissions(&page, std::fs::Permissions::from_mode(0o000))
                     .await
                     .unwrap();
                 // Run as a user every file opens to (root), it is no name to test.
+                // arch-lint: allow(readers-read-through-the-state) reason="a test asks whether its tree locks a file"
                 if tokio::fs::File::open(&page).await.is_err() {
                     tree.unreadable = Some(n("demo::Locked"));
                 }
@@ -1747,6 +1855,7 @@ mod tests {
     /// of its decision.
     async fn decisions_rustdoc(root: &Path) -> Vec<(String, String)> {
         let mut paths = Vec::new();
+        // arch-lint: allow(readers-read-through-the-state) reason="a test reads this repository's decisions, not a tree a reader reads"
         let mut entries = tokio::fs::read_dir(root.join("books/decision"))
             .await
             .unwrap();
@@ -1755,6 +1864,7 @@ mod tests {
             let Some(key) = file.strip_suffix(".md") else {
                 continue;
             };
+            // arch-lint: allow(readers-read-through-the-state) reason="a test reads this repository's decisions, not a tree a reader reads"
             let text = tokio::fs::read_to_string(entry.path()).await.unwrap();
             for line in text.lines() {
                 if let Some(list) = line.strip_prefix("rustdoc: ") {
@@ -1772,6 +1882,7 @@ mod tests {
     /// they are not built.
     #[tokio::test]
     async fn the_rustdoc_paths_of_this_repository_resolve_in_its_built_docs() {
+        // arch-lint: allow(readers-read-through-the-state) reason="a test finds this repository's root, not a tree a reader reads"
         let root = tokio::fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
             .await
             .unwrap();
