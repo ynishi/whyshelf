@@ -43,11 +43,15 @@
 //!                                                      frame_approve / frame_present / frame_retire
 //!                                                        └─► ApproveFrame::addressed
 //!                                                        └─► Decision::approve / deny / deprecate / retire
-//!   footing   ──► doc, build, ledger                   Footing::of ──► Footing (what a document stands
-//!                                                        on: its links now, its approval's pins)
-//!   reach     ──► doc, build                           walk ──► Walked (what depends on some
-//!                                                        documents, and Unwalked: what the walk
-//!                                                        could not follow)
+//!   footing   ──► artifact, doc, build, ledger,        Footing::of ──► Footing (what a document stands
+//!                 schema                                 on: its links now, its approval's pins,
+//!                                                        the artifacts of both)
+//!   reach     ──► artifact, doc, build, footing,       walk ──► Walked (what depends on some
+//!                 ledger, placement                      documents, and Unwalked: what the walk
+//!                                                        could not follow); Reach::of ──► Reach
+//!                                                        (and the artifacts they stand on),
+//!                                                        Reach::files ──► ReachFiles (the files
+//!                                                        of the project all of it is in)
 //!   lookup    ──► schema, build, ledger                resolve ──► Resolution  (what a person typed)
 //!   cover     ──► schema, artifact, doc, build,        counts ──► whether a document stands;
 //!                 ledger                               covering_reach ──► what a covering link
@@ -193,6 +197,10 @@
 //! | which documents a run of approvals takes: the expired or stale ones, or the pending ones | [`order::stale`], [`order::pending`] and [`order::pending_upstream`] (one document: [`order::pending_of`]), from an [`Assessment`] | the identities, with the broken ones told apart for `stale` |
 //! | the order a set of approvals is judged in again | [`upstream_first`](order::upstream_first), from the links and the pins | the identities, upstream first |
 //! | how the work went: approvals made again, pending time, runs, the pins that changed | [`stats::of`], from every decision and the keys now; the measures are defined on its page | a [`Stats`](stats::Stats) |
+//! | what a document stands on: the documents its links resolve to and its approval pinned, and the artifacts its links to artifacts name and its approval pinned (each pin as it is read now) | `Footing::of` in `footing.rs` (visible to the shelf's modules only) | a `Footing` |
+//! | which documents depend on some named documents, and what of the shelf a walk down from them cannot follow | `walk` in [`reach`] (visible to the crate only), by `Doc::depends_names` | a `Walked`, with an [`Unwalked`](reach::Unwalked) of what it could not follow |
+//! | what a reach of named documents stands on, and the files of the project it is in | `Reach::of` (the artifacts of each document reached, by its `Footing`) and `Reach::files` (every file a document may be in, `DocState::may_be_in`, and every file of the placement of its artifacts) in [`reach`] | a `Reach`, a `ReachFiles` with the artifacts that have no place and the documents that are gone apart |
+//! | where a name of a space lives in the files of the project | the adapter of the space, through the port of the application | a [`Placement`](placement::Placement): only these files, partly these files, or cannot say (why) |
 //! | which names that cannot be told now share a cause, whether a cause holds back one (document, name) or many, and whether one document or many writes the names of such a cause | [`untold_causes`](untold::untold_causes), by the space and the [`Untold`](artifact::Untold) (`Eq`), once | [`UntoldCause`](untold::UntoldCause) with its [`Held`](untold::Held) and [`Writers`](untold::Writers) |
 //!
 //! Two of these cannot be enforced by visibility alone: `DocHash::restore` and
@@ -410,21 +418,7 @@ pub mod ledger;
 pub mod lookup;
 pub mod map;
 pub mod order;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "no question reads where a name lives yet; the walk of what a change may touch is to"
-    )
-)]
-pub(crate) mod placement;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "no command calls the walk yet; `reach` and the gate are to"
-    )
-)]
+pub mod placement;
 pub mod reach;
 pub mod rekey;
 pub mod schema;

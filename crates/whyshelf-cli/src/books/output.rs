@@ -159,6 +159,7 @@ pub fn schemas() -> SchemasOut {
     put("get", schema_for!(GetOut));
     put("get --approved", schema_for!(ApprovedOut));
     put("trace", schema_for!(TraceOut));
+    put("reach", schema_for!(ReachOut));
     put("unlinked", schema_for!(UnlinkedOut));
     put("stale", schema_for!(StaleOut));
     put("stats", schema_for!(StatsOut));
@@ -250,6 +251,7 @@ mod moves;
 mod named;
 mod new;
 mod next;
+mod reach;
 mod rekey;
 mod snapshot;
 mod stale;
@@ -280,6 +282,7 @@ pub use map::{MapOut, map};
 pub use moves::{MovesOut, moves};
 pub use named::{ArtifactNamed, DocNamed, DocRef};
 pub use new::{CreatedOut, NewManyOut, created, new_many};
+pub use reach::{ReachOut, reach, reach_warnings};
 pub use rekey::{RekeyOut, rekey};
 pub use snapshot::{ApprovedOut, DiffOut, approved, diff};
 pub use stale::{StaleOut, stale, stale_warnings};
@@ -338,6 +341,7 @@ mod tests {
             "get",
             "get --approved",
             "trace",
+            "reach",
             "stale",
             "stats",
             "diff",
@@ -404,6 +408,23 @@ mod tests {
             "drawing",
         ] {
             assert!(stats.contains(&format!("\"{field}\"")), "{field}");
+        }
+        // What a walk could not follow is two counts, and the rest of a reach its lists.
+        let reach = serde_json::to_string(&outputs["reach"]).unwrap();
+        for field in [
+            "docs",
+            "named",
+            "artifacts",
+            "place",
+            "files",
+            "unplaced",
+            "gone",
+            "untold",
+            "invalid",
+            "unreadable",
+            "health",
+        ] {
+            assert!(reach.contains(&format!("\"{field}\"")), "{field}");
         }
         // A cause names the artifact it is about, beside the fields it had.
         let stale = serde_json::to_string(&outputs["stale"]).unwrap();

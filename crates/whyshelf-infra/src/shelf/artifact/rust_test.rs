@@ -231,6 +231,16 @@
 //! (through a symbolic link only while it stays inside the root). It declares no
 //! build directory, and runs no program.
 //!
+//! # Where a name lives
+//!
+//! A test lives, whole ([`Placement::Only`]), in the files the file its name writes
+//! before `::` is read from, as the space `file` places that path: the path as written
+//! when no link is on it, there or not (a test that is not there lives where it would
+//! be); with links inside the root on its way, each link entry and the name they lead
+//! to. A link that leaves the root or is broken, a kind of file that cannot be told,
+//! and a text that is not of the grammar (by the grammar alone, with nothing read)
+//! place it nowhere ([`Placement::Unplaced`]), with the reason `resolve` gives.
+//!
 //! # Known limits
 //!
 //! - The text holds the items beside the test in its test part, not only those it
@@ -281,7 +291,7 @@ use std::sync::Arc;
 
 use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, TokenStream, TokenTree};
 use whyshelf_core::app::shelf::{
-    Answers, CannotList, CannotSuggest, NamePrefixes, NoReadBack, Side, SpaceAdapter,
+    Answers, CannotList, CannotSuggest, NamePlaces, NamePrefixes, NoReadBack, Side, SpaceAdapter,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
@@ -290,6 +300,7 @@ use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, Comparison, PrefixMove, SpaceAsks, SpacePrefixes, SpaceReadings,
     SpaceRenamed,
 };
+use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
 use super::super::state::StateError;
@@ -404,13 +415,15 @@ pub enum RustTestError {
 }
 
 /// The space [`RUST_TEST_SPACE`]: it answers a move of a prefix, cannot suggest where
-/// a test moved, and keeps nothing by address.
+/// a test moved, keeps nothing by address, lists no names, and says where a test lives
+/// (the file it names).
 impl SpaceAdapter for RustTestSpace {
     type Error = RustTestError;
     type Prefixes = Answers;
     type Suggest = CannotSuggest;
     type ReadBack = NoReadBack;
     type List = CannotList;
+    type Places = Answers;
 
     fn space(&self) -> &str {
         RUST_TEST_SPACE
@@ -440,6 +453,29 @@ impl NamePrefixes for RustTestSpace {
         of: &PrefixMove,
     ) -> Result<(SpacePrefixes, SpaceRenamed), RustTestError> {
         renamed(names, of).map_err(RustTestError::Reason)
+    }
+}
+
+impl NamePlaces for RustTestSpace {
+    /// A test lives in the files of the file its name writes before `::`, whole: the
+    /// module page, "Where a name lives".
+    async fn places(
+        &self,
+        side: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> Result<BTreeMap<ArtifactName, Placement>, RustTestError> {
+        self.state.dir(side)?;
+        let mut placed = BTreeMap::new();
+        for name in names {
+            let placement = match TestName::parse(name.as_str()) {
+                Ok(test) => file::placed_only(&self.state, side, &test.file)
+                    .await
+                    .map_err(RustTestError::Reason)?,
+                Err(why) => Placement::Unplaced(reason(why.reason())?),
+            };
+            placed.insert(name.clone(), placement);
+        }
+        Ok(placed)
     }
 }
 
@@ -1790,6 +1826,8 @@ mod tests {
 
     use whyshelf_core::domain::shelf::artifact::{ArtifactState, NamePrefix, Untold};
 
+    use whyshelf_core::domain::nonempty::NonEmptySet;
+
     use super::super::conformance;
     use super::super::file::ScanLimits;
     use super::*;
@@ -1836,6 +1874,10 @@ mod tests {
             false
         }
 
+        fn places(&self) -> bool {
+            true
+        }
+
         fn adapter_at(&self, dir: &Path) -> super::super::Adapter {
             super::super::Adapter::RustTest(RustTestSpace {
                 max_file: MAX_TEST_FILE,
@@ -1865,6 +1907,15 @@ mod tests {
             tree.present = vec![n("src/a.rs::one"), n("src/a.rs::tests::inner")];
             tree.absent = vec![n("src/a.rs::missing"), n("src/none.rs::t")];
             tree.not_names = vec![n("src/a.rs"), n("src/a.txt::t"), n("src/a.rs::fn")];
+            // A test lives in the file it names, there or not.
+            let only = |file: &str| {
+                Placement::Only(NonEmptySet::new(file.parse::<RelPath>().unwrap(), []))
+            };
+            tree.placed = vec![
+                (n("src/a.rs::tests::inner"), only("src/a.rs")),
+                (n("src/a.rs::missing"), only("src/a.rs")),
+                (n("src/none.rs::t"), only("src/none.rs")),
+            ];
             tree.over_bytes = vec![conformance::OverBytes::Name {
                 bound: "a file",
                 name: n("src/big.rs::t"),
@@ -1890,6 +1941,20 @@ mod tests {
                     .await
                     .unwrap();
                 tree.outside = Some(n("out/x.rs::t"));
+                // A test read through a link inside the root lives in the link and in
+                // the file it leads to.
+                // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
+                tokio::fs::symlink("a.rs", root.join("src/link.rs"))
+                    .await
+                    .unwrap();
+                tree.present.push(n("src/link.rs::one"));
+                let both = NonEmptySet::new(
+                    "src/a.rs".parse::<RelPath>().unwrap(),
+                    ["src/link.rs".parse::<RelPath>().unwrap()],
+                );
+                tree.placed
+                    .push((n("src/link.rs::one"), Placement::Only(both)));
+                tree.linked = Some(n("src/link.rs::one"));
                 let locked = root.join("src/locked.rs");
                 // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
                 tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))

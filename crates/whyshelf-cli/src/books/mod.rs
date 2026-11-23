@@ -247,6 +247,23 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
             .trace(&reference)
             .await
             .map(|r| print(&output::trace(&r))),
+        // clap requires one reference or more; a list with none is the domain's refusal.
+        BooksCommand::Reach { references } => {
+            match NonEmptyVec::from_vec(references).map_err(|e| e.to_string()) {
+                Ok(references) => ShelfApp::new(project).reach(&references).await.map(|r| {
+                    let exit = print(&output::reach(&r));
+                    for warning in output::reach_warnings(&r) {
+                        eprintln!("{warning}");
+                    }
+                    exit
+                }),
+                Err(message) => {
+                    eprintln!("error: {message}");
+                    print(&output::usage(message));
+                    return ExitCode::from(Exit::Request as u8);
+                }
+            }
+        }
         BooksCommand::Unlinked {
             book,
             no_incoming,

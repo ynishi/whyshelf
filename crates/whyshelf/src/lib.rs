@@ -1128,6 +1128,14 @@
 //!   get <ref>                 one document, with where its approval starts to fail
 //!   get <ref> --approved      what the approval that stands saw, with its content read back
 //!   trace <ref>               what it links to and what links to it, transitively
+//!   reach <ref>...            what depends on them: every document whose depends links reach
+//!                             one named, transitively; the artifacts each stands on (its links
+//!                             now and the pins of its approval) with where each lives in the
+//!                             files of the project (`place`: `only` these files, `partly` these,
+//!                             or `unplaced` with why); and the files all of it is in. What may
+//!                             depend on them and cannot be read (a document that is not valid,
+//!                             a file whose identity cannot be read) is counted in `untold`, with
+//!                             a warning on stderr
 //!   unlinked [--book <name>] [--no-incoming | --no-outgoing]
 //!                             the documents linked neither way (look there first), those no
 //!                             link reaches and those that hold none, those decided against
@@ -1490,7 +1498,7 @@
 //! `ran_by` of the approval in the same way; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
 //! its `space`) and a `detail` sentence; every answer that reads the documents (`check`, `cover` and
-//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `stale`, `stats`, `moves`, `diff`) carries
+//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `reach`, `stale`, `stats`, `moves`, `diff`) carries
 //! `health` (files that are no document, cycles, records that contradict one another
 //! or cannot be read). The answers of the writes, of `map` and of `schema` carry
 //! none.

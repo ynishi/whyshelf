@@ -10,10 +10,14 @@
 //! |---|---|---|
 //! | [`Placement::Only`] | the thing is these files and nothing else | `file`: the path written; `rust-test`: the file before `::` |
 //! | [`Placement::Partly`] | these files hold the thing, and something outside them does too | `rust-item`: the file an item is defined in, while its docs come from the build |
-//! | [`Placement::Unplaced`] | the adapter cannot say, and why | a text that is no name of the space |
+//! | [`Placement::Unplaced`] | the adapter cannot say, and why | a text that is no name of the space; a name read through a link that leaves the root |
 //!
-//! The files are paths of the project as written ([`RelPath`]): a link on the way is
-//! not followed, and a link entry is never a file of a placement.
+//! The files are paths of the project as written ([`RelPath`]), the files the content
+//! of the name is read from at the side asked, by the same rule its reading follows
+//! links by: a name with no link on its way is its own path; one read through links
+//! inside the root lives in each link entry on its way, as written, and in the name
+//! they lead to, since its content depends on each of them; one whose content is read
+//! through no link (one that leaves the root, is broken, or loops) has no place.
 
 use std::collections::BTreeSet;
 

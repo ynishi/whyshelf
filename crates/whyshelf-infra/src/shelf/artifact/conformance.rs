@@ -34,6 +34,14 @@
 //!   lists reads a selection, refuses one that is none, lists names that `resolve`
 //!   answers as there, lists the same names asked again and over the tree written in
 //!   another place, and, past a bound of names, says some of them and never all;
+//! - where its names live, as the type of the adapter declares it: an adapter that
+//!   places nothing gives the fixed answer for every name, and one that places says
+//!   where each name of the tree lives as the hook declares, answers every name asked
+//!   and no error, places no text that is no name (by the grammar alone: the same
+//!   answer over nothing at all), places nowhere a name read through a link out of
+//!   the root, places a name read through a link inside the root in the link and what
+//!   it leads to, and gives the same answers asked again and over the tree written in
+//!   another place;
 //! - the seven headings of the module page.
 //!
 //! It does not check that large inputs are worked on a blocking thread, that nothing
@@ -50,14 +58,16 @@
 //! cases ask. So the asks are made one way for every adapter, and the move of a prefix
 //! and reading back are answered the way the adapter's type declares.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use whyshelf_core::app::shelf::CannotPlace;
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, ArtifactState, Comparison, ContentAddress, NameListing,
     PrefixMove, Renamed, Selection, SelectionCheck, Space, SpacePrefixes, SpaceReadings,
     SpaceRenamed, Untold,
 };
+use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::BuiltinPresets;
 
 use super::Adapter;
@@ -111,6 +121,12 @@ pub(super) struct Tree {
     /// What an adapter that lists names is asked, over this tree; none where the
     /// adapter lists nothing, or cannot list here (no Git).
     pub(super) listing: Option<ListCase>,
+    /// Names of the tree with where each lives, as an adapter that places names
+    /// places them (none for one that places nothing).
+    pub(super) placed: Vec<(ArtifactName, Placement)>,
+    /// A name whose content is read through a symbolic link inside the root, which
+    /// [`Tree::placed`] says the place of: none where the hook cannot make a link.
+    pub(super) linked: Option<ArtifactName>,
 }
 
 /// What an adapter that lists names is asked: a selection that takes at least two
@@ -142,6 +158,8 @@ impl Tree {
             unstored: Vec::new(),
             prefix: None,
             listing: None,
+            placed: Vec::new(),
+            linked: None,
         }
     }
 
@@ -261,6 +279,9 @@ pub(super) trait Hook {
     /// Whether the adapter lists the names a selection takes (it names `Answers`
     /// for the ask) or lists nothing (it names `CannotList`).
     fn lists(&self) -> bool;
+    /// Whether the adapter says where its names live (it names `Answers` for the
+    /// ask) or places nothing (it names `CannotPlace`).
+    fn places(&self) -> bool;
     /// The adapter over `dir`, with nothing written there.
     fn adapter_at(&self, dir: &Path) -> Adapter;
     /// Writes the tree into `dir`, which is empty, and says what it wrote.
@@ -385,6 +406,107 @@ mod ask {
             Err(e) => panic!("the listing of {selection:?} is an error: {e:?}"),
         }
     }
+
+    pub(super) async fn places(
+        adapter: &Adapter,
+        names: &[ArtifactName],
+    ) -> BTreeMap<ArtifactName, Placement> {
+        let (spaces, space) = dispatch(adapter);
+        let asked: BTreeSet<ArtifactKey> = names
+            .iter()
+            .map(|name| ArtifactKey::new(space.clone(), name.clone()))
+            .collect();
+        match spaces.places(Side::After, &asked).await {
+            Ok(placed) => placed
+                .into_iter()
+                .map(|(key, placement)| (key.name().clone(), placement))
+                .collect(),
+            Err(e) => panic!("where {names:?} live is an error: {e:?}"),
+        }
+    }
+}
+
+/// Holds an adapter that says where its names live to the contract of the ask, over
+/// the tree `adapter` reads (`tree`), the same tree in another place (`twin`) and
+/// nothing at all (`bare`).
+async fn check_places(space: &Space, tree: &Tree, twin: &Tree, bare: &Adapter) {
+    let names = tree.names();
+    let placed = ask::places(&tree.adapter, &names).await;
+    assert_eq!(
+        placed.keys().cloned().collect::<Vec<_>>(),
+        names,
+        "{space}: every name asked has a place, or why it has none"
+    );
+    for (name, expected) in &tree.placed {
+        assert_eq!(
+            placed.get(name),
+            Some(expected),
+            "{space}: where {name} lives"
+        );
+    }
+    // A name read through a link out of the root is read nowhere, so it lives nowhere.
+    if let Some(name) = &tree.outside {
+        assert!(
+            matches!(placed[name], Placement::Unplaced(_)),
+            "{space}: {name}, read through a link out of the root, has no place: {:?}",
+            placed[name]
+        );
+    }
+    // A name read through a link inside the root lives in the link and in what it
+    // leads to: the hook says where, and it is more than one file.
+    if let Some(name) = &tree.linked {
+        let files = placed[name].files().map(BTreeSet::len).unwrap_or_default();
+        assert!(
+            files >= 2,
+            "{space}: {name}, read through a link inside the root, lives in the link and its target: {:?}",
+            placed[name]
+        );
+        assert!(
+            tree.placed.iter().any(|(placed, _)| placed == name),
+            "{space}: the hook says where {name} lives"
+        );
+    }
+    let over_nothing = ask::places(bare, &tree.not_names).await;
+    for name in &tree.not_names {
+        assert!(
+            matches!(placed[name], Placement::Unplaced(_)),
+            "{space}: {name} is no name, and has no place: {:?}",
+            placed[name]
+        );
+        assert_eq!(
+            over_nothing.get(name),
+            placed.get(name),
+            "{space}: {name} has no place whatever is there"
+        );
+    }
+    assert_eq!(
+        ask::places(&tree.adapter, &names).await,
+        placed,
+        "{space}: where its names live, again"
+    );
+    // A reason may name where the tree is; the kind and the files may not.
+    let kinds = |placed: &BTreeMap<ArtifactName, Placement>| -> Vec<(ArtifactName, &'static str, Vec<String>)> {
+        placed
+            .iter()
+            .map(|(name, placement)| {
+                let kind = match placement {
+                    Placement::Only(_) => "only",
+                    Placement::Partly(_) => "partly",
+                    Placement::Unplaced(_) => "unplaced",
+                };
+                let files = placement
+                    .files()
+                    .map(|files| files.iter().map(ToString::to_string).collect())
+                    .unwrap_or_default();
+                (name.clone(), kind, files)
+            })
+            .collect()
+    };
+    assert_eq!(
+        kinds(&ask::places(&twin.adapter, &names).await),
+        kinds(&placed),
+        "{space}: where its names live, in another root"
+    );
 }
 
 /// What a reading says under every comparison: the hash, absence or why it cannot
@@ -807,6 +929,29 @@ pub(super) async fn check(hook: &impl Hook) {
         assert!(
             tree.listing.is_none(),
             "{space}: the hook gives a listing for an adapter that lists nothing"
+        );
+    }
+
+    // Where its names live, as the type of the adapter declares.
+    if hook.places() {
+        assert!(
+            !tree.placed.is_empty(),
+            "{space}: the adapter places names, and the hook says where none lives"
+        );
+        check_places(&space, &tree, &twin, &bare).await;
+        if tree.linked.is_none() {
+            unchecked.push("a name read through a link inside the root (no symbolic links)");
+        }
+    } else {
+        let asked: BTreeSet<ArtifactName> = names.iter().cloned().collect();
+        assert_eq!(
+            ask::places(adapter, &names).await,
+            CannotPlace::answer(&asked),
+            "{space}: an adapter that places nothing says so for every name"
+        );
+        assert!(
+            tree.placed.is_empty(),
+            "{space}: the hook places names for an adapter that places nothing"
         );
     }
 

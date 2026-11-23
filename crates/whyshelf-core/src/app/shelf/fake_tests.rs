@@ -32,13 +32,14 @@ use super::ports::{
     Rendered, Replaceable, Replacement, RevisionSource, ShelfRead, ShelfWrite, UnreadableRecord,
 };
 use super::state::{ReadWay, Side};
-use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec};
 use crate::domain::shelf::artifact::{
     ArtifactAsks, ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings,
     Comparison, ContentAddress, NameListing, PrefixAnswers, PrefixAsks, PrefixMove, Renamed,
     Revision, Selection, SelectionCheck, Space, SpacePrefixes,
 };
 use crate::domain::shelf::ledger::{GoneName, SpaceSuggestions};
+use crate::domain::shelf::placement::Placement;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Drive a future to completion on the current thread. The fakes never wait.
@@ -241,6 +242,8 @@ pub(super) struct FakeShelf {
     pub(super) versioned: bool,
     /// How many times the artifacts were read.
     pub(super) artifact_reads: Mutex<usize>,
+    /// How many times where artifacts live was asked.
+    pub(super) places_asked: Mutex<usize>,
     /// What each read of the artifacts asked for, in order.
     pub(super) asked: Mutex<Vec<ArtifactAsks>>,
     /// How many document files were created.
@@ -400,6 +403,7 @@ impl FakeShelf {
             revision: Mutex::new(None),
             versioned: true,
             artifact_reads: Mutex::new(0),
+            places_asked: Mutex::new(0),
             asked: Mutex::new(Vec::new()),
             created: Mutex::new(0),
             doc_reads: Mutex::new(0),
@@ -615,6 +619,11 @@ impl FakeShelf {
 
     pub(super) fn artifact_read_count(&self) -> usize {
         *lock(&self.artifact_reads)
+    }
+
+    /// How many times where artifacts live was asked ([`ArtifactSource::places`]).
+    pub(super) fn places_count(&self) -> usize {
+        *lock(&self.places_asked)
     }
 
     /// What the reads of the artifacts asked for, in order.
@@ -1355,6 +1364,31 @@ impl ArtifactSource for FakeShelf {
             .get(space)
             .cloned()
             .unwrap_or_else(CannotList::listing))
+    }
+
+    /// A name of the space `file` lives in the path it writes, when it is one; every
+    /// other name, of any space, cannot be placed. Each ask is counted
+    /// ([`FakeShelf::places_count`]).
+    async fn places(
+        &self,
+        side: Side,
+        artifacts: &BTreeSet<ArtifactKey>,
+    ) -> Result<BTreeMap<ArtifactKey, Placement>, FakeError> {
+        self.before_at(side)?;
+        *lock(&self.places_asked) += 1;
+        Ok(artifacts
+            .iter()
+            .map(|artifact| {
+                let path = (artifact.space().as_str() == "file")
+                    .then(|| artifact.name().as_str().parse::<RelPath>().ok())
+                    .flatten();
+                let placement = match path {
+                    Some(path) => Placement::Only(NonEmptySet::new(path, [])),
+                    None => Placement::Unplaced(reason("the fake places no such name")),
+                };
+                (artifact.clone(), placement)
+            })
+            .collect())
     }
 }
 

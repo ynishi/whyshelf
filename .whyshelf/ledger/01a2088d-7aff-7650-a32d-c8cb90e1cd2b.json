@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795439787631,
+  "expires": null,
+  "frame": [],
+  "id": "01a2088d-7aff-7650-a32d-c8cb90e1cd2b",
+  "kind": "decision",
+  "reason": "Read again after #112's third steps: each adapter answers where a name lives (NamePlaces) as resolve reads it, the footing reads artifacts on demand, and the reach command answers the documents that depend on the named, their artifacts and files, and what it could not follow",
+  "revision": "bf5f110b7f159fe67a4079fe8a3ef10ce0822d3c",
+  "seen": "sha256:e5510bccfa3f6b92fd7f402548a960d74bf50bd4d6beb031262a972e7a52fbec",
+  "seen_address": "0ea6a701aca38a113fa0876be6d8a41d3d7bb5ee",
+  "subject": "01a20869-ab6e-762c-9771-9e8d81baecb9",
+  "v": 1,
+  "verb": "approve"
+}

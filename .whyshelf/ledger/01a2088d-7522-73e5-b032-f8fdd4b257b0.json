@@ -1,0 +1,218 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "05c767a93feccfa07732827b90819b32cb19814e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94a06ba4141d6522902364d58ee6d9325f20ed2ad501a84309fee603927def3c",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "94e65ddd0696800981e0fe41c072bae9282f2d81",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7cf62ebdc14152ed4e9561995f2f9f740c4bd6fafd97cdd6a0ba3b8564bce357",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cause.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "145aa1916ce2e144948983cca3b2e12256f45661",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4d72404aa770e38758f5f7f690636c1ac4cb90b9ee41d1baf7a03f699a0e8711",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cause_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0c92f387d265a84e6c06d8dee9f45aed5ae025d7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e405141e6ee534dd08ffce5bb545c08512f023d9d708b7959600a0428a77c4b4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "47435c986f70edd78b7e6fe346b32eb2d7074a9a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:24dc6b8a1fbf5cbc098c1750241c518fd6d04b9d9940eeed0e3b8555bc45b4f5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/upstream_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fcddd211cb627f5ca51f7f6b841e66cd2c3fdc85",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:81ce633a3bdbf04554f4668671d03cf36da572d3fdcadec7813570ac1ad1a3f9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e6fab0d26ae95daf85195a93a58bd2fa8f46d03e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6a6b93763ff2d9365c884a4215016e44862bf4988af1cee7aa10e61ed5db1965",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795439787631,
+  "expires": null,
+  "frame": [
+    {
+      "address": "525343890867ccef51b5ad13d2cbb8bd114c090d",
+      "hash": "sha256:95ddf2961bb70764cb66bf788e055d497050b669b6c6f2ccd3e7dbab9f6ede02",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c333-d435-7f4d-abb6-036e89451d8b"
+    },
+    {
+      "address": "56d14a79192f6a254551c86a1d3832ac79361bba",
+      "hash": "sha256:07622dcbe7f5d6b212e1eee0b7c6389ea29b214ce3272b38c3415482d1c4d1ab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "15"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-131c-70e3-ae5e-e8e75931bc90"
+    },
+    {
+      "address": "b9f7bf18c2f806edf8706eb024654596741e2927",
+      "hash": "sha256:8d5c07353d2285bcbe95f0fa4f772221dd3ad68c3d8b51cb99429bd1e8e0957f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    },
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    },
+    {
+      "address": "a80c141845f7b47b4e1a75336439e3e44d517bd8",
+      "hash": "sha256:9cfd853526bcfecc0dba18c734c28d9e86c2eaa21b9b9798f7258b21b4859674",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    },
+    {
+      "address": "b4b58bc6542fbffd22bd8339bed96d34bc7fe992",
+      "hash": "sha256:4440a5a7c3bfffe0a910a409dc57df30f4801f6480f4300af0cb512b932df532",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "97"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2018b-8730-7780-ae0d-cbfe389fed66"
+    }
+  ],
+  "id": "01a2088d-7522-73e5-b032-f8fdd4b257b0",
+  "kind": "decision",
+  "reason": "Read again after #112's third steps: each adapter answers where a name lives (NamePlaces) as resolve reads it, the footing reads artifacts on demand, and the reach command answers the documents that depend on the named, their artifacts and files, and what it could not follow",
+  "revision": "bf5f110b7f159fe67a4079fe8a3ef10ce0822d3c",
+  "seen": "sha256:07156c01bc7864a377677d4d578ab1440d6230a0dd94f8340e9b0b54eac1f5bc",
+  "seen_address": "1862a77e2c488ff8dc8e0c3e8f81d82b1c0cb181",
+  "subject": "01a2018b-cea2-707b-891b-8a7e19cacd2e",
+  "v": 1,
+  "verb": "approve"
+}

@@ -940,13 +940,6 @@ impl<'a> DocState<'a> {
     /// the places of the artifacts it stands on
     /// ([`Placement`](super::placement::Placement)). It is not the files known to
     /// carry the identity (the shelf's own question, which leaves out those that may).
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "no question reads the files an identity may be in yet; the walk of what a change may touch is to"
-        )
-    )]
     pub(crate) fn may_be_in(&self) -> BTreeSet<&RelPath> {
         match self {
             Self::Valid(doc) => BTreeSet::from([doc.origin()]),

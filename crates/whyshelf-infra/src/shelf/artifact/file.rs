@@ -8,6 +8,7 @@
 //! | [`FileSpace::read_back`] | the content of a blob, by its name, up to [`MAX_FILE_BYTES`] | [`Git::read_blob_within`] |
 //! | [`FileSpace::suggest`] | for each gone file, the files it may have moved to | [`Git::work_tree_files`], `tokio::fs`, [`Git::renames_since`], [`FileStates`] |
 //! | [`FileSpace::list`] | the files a selection takes that are there at a side (what `resolve` answers as there), or why none can be listed | [`FileStates`] (its files, as Git lists them), [`PathGlob`] |
+//! | [`NamePlaces`] for [`FileSpace`] | where a name lives: the files its content is read from at a side (its path, or each link entry inside the root and where it leads), or why none | [`FileStates`] (`placed_within`, which opens nothing) |
 //! | [`presets`] | the preset `file`: the space, `compare = "bytes"`, `means = "depends"`; and the preset `code`: the space, `compare = "presence"`, `means = "depends"` | values |
 //! | [`FileWrite`] for [`FileSpace`] | a new file at a path, where nothing is, for `init` | `tokio::fs` (`create_new`) |
 //!
@@ -165,6 +166,18 @@
 //! it were not there. Outside a Git repository, or when Git cannot be run or fails,
 //! no listing can be made: [`NameListing::CannotList`] with why, and no error.
 //!
+//! # Where a name lives
+//!
+//! A name lives, whole ([`Placement::Only`]), in the files its content is read from
+//! at the side asked, read through the state by the rule of symbolic links below
+//! (`placed_within`, which opens nothing): its own path, as written, when no link is
+//! on it, there or not (a name with nothing there lives where it would be); each
+//! link entry on its way, as written, and the name they lead to, when links inside
+//! the root are, since its content depends on each. A link that leaves the root, is
+//! broken or loops, a kind of file that cannot be told, and a text that is no path
+//! under the root (by the grammar alone, with nothing read) place it nowhere
+//! ([`Placement::Unplaced`]), with the reason `resolve` gives.
+//!
 //! # Symbolic links
 //!
 //! A link on the path of a name is followed by its canonical path while that stays
@@ -196,6 +209,9 @@
 //! [`FileWrite`]: whyshelf_core::app::shelf::FileWrite
 //! [`MoveNote`]: whyshelf_core::domain::shelf::ledger::MoveNote
 //! [`ArtifactReading::not_a_name`]: whyshelf_core::domain::shelf::artifact::ArtifactReading::not_a_name
+//! [`NamePlaces`]: whyshelf_core::app::shelf::NamePlaces
+//! [`Placement::Only`]: whyshelf_core::domain::shelf::placement::Placement::Only
+//! [`Placement::Unplaced`]: whyshelf_core::domain::shelf::placement::Placement::Unplaced
 
 mod moves;
 mod read;
@@ -207,7 +223,7 @@ use std::io;
 use std::path::PathBuf;
 
 use whyshelf_core::app::shelf::{
-    Answers, NameList, NamePrefixes, Side, SpaceAdapter, SpaceReadBack, SpaceSuggest,
+    Answers, NameList, NamePlaces, NamePrefixes, Side, SpaceAdapter, SpaceReadBack, SpaceSuggest,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathGlob, RelPath};
@@ -217,12 +233,15 @@ use whyshelf_core::domain::shelf::artifact::{
     Selection, SelectionList, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::ledger::{GoneName, NameSuggestions, PATH_ONLY_SPACE};
+use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
 use super::super::git::{Git, GitError};
 use super::super::state::StateError;
 use super::super::state::files::FileStates;
-pub(super) use read::{Bounded, read_within};
+#[cfg(test)]
+pub(super) use read::OUTSIDE;
+pub(super) use read::{Bounded, Placed, placed_within, read_within};
 
 /// The name of the space this adapter resolves names in: the space a record written
 /// before spaces existed is read as naming its files in
@@ -297,14 +316,15 @@ pub enum WriteError {
 }
 
 /// The space [`FILE_SPACE`]: it answers a move of a prefix, suggests where a file
-/// moved, reads content back by the name of its blob, and lists the files a selection
-/// takes.
+/// moved, reads content back by the name of its blob, lists the files a selection
+/// takes, and says where a name lives (the file it writes).
 impl SpaceAdapter for FileSpace {
     type Error = ArtifactError;
     type Prefixes = Answers;
     type Suggest = Answers;
     type ReadBack = Answers;
     type List = Answers;
+    type Places = Answers;
 
     fn space(&self) -> &str {
         FILE_SPACE
@@ -360,6 +380,46 @@ impl NameList for FileSpace {
     async fn list(&self, side: Side, selection: &Selection) -> Result<NameListing, ArtifactError> {
         self.list_at(side, selection).await
     }
+}
+
+impl NamePlaces for FileSpace {
+    /// A name lives in the files its content is read from, whole: the module page,
+    /// "Where a name lives".
+    async fn places(
+        &self,
+        side: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> Result<BTreeMap<ArtifactName, Placement>, ArtifactError> {
+        self.state.dir(side)?;
+        let mut placed = BTreeMap::new();
+        for name in names {
+            let placement = match path_of(name) {
+                Ok(path) => placed_only(&self.state, side, &path)
+                    .await
+                    .map_err(ArtifactError::Reason)?,
+                Err(why) => Placement::Unplaced(no_path_reason(&why)?),
+            };
+            placed.insert(name.clone(), placement);
+        }
+        Ok(placed)
+    }
+}
+
+/// Where the file `path` names lives at `side`, by the rules this space reads it by:
+/// [`Placement::Only`] of the files its content is read from (the path as written,
+/// and each link entry on its way with where they lead inside the root), there or
+/// not; or unplaced, with the reason `resolve` gives, when nothing is read through it.
+/// The one reading of it, for this space and for those whose names start with a path
+/// of it (`rust-test`, `js-test`).
+pub(super) async fn placed_only(
+    state: &FileStates,
+    side: Side,
+    path: &RelPath,
+) -> Result<Placement, ValueError> {
+    Ok(match placed_within(state, side, path).await {
+        Placed::Files { files, .. } => Placement::Only(files),
+        Placed::Unplaced(why) => Placement::Unplaced(NonBlank::new(why)?),
+    })
 }
 
 /// What is said of a text of a selection that is no pattern, when what says which
@@ -489,6 +549,13 @@ impl Default for ScanLimits {
 /// The path a name of the space is: the one reader of the grammar of the names.
 fn path_of(name: &ArtifactName) -> Result<RelPath, ValueError> {
     name.as_str().parse::<RelPath>()
+}
+
+/// Why a text is no name of the space, from why it is no path ([`path_of`]): the one
+/// place the reason is written, which `resolve` and where a name lives both give.
+fn no_path_reason(why: &ValueError) -> Result<NonBlank, ArtifactError> {
+    NonBlank::new(format!("no path under the root of the project: {why}"))
+        .map_err(ArtifactError::Reason)
 }
 
 /// One part of a path: what lies between two `/` of it. Not empty, not `.` or `..`
@@ -629,6 +696,8 @@ mod tests {
     };
     use whyshelf_core::domain::shelf::ledger::{FoundBy, MoveNote, NoteKind};
 
+    use whyshelf_core::domain::nonempty::NonEmptySet;
+
     use super::super::super::git::RenamesSince;
     use super::super::conformance;
     use super::*;
@@ -716,6 +785,10 @@ mod tests {
             true
         }
 
+        fn places(&self) -> bool {
+            true
+        }
+
         fn adapter_at(&self, dir: &std::path::Path) -> super::super::Adapter {
             super::super::Adapter::File(FileSpace {
                 max_file: MAX_TEST_FILE,
@@ -741,6 +814,14 @@ mod tests {
             tree.unstored = vec![p("new.txt")];
             tree.absent = vec![p("missing.txt"), p("A.txt"), p("dir")];
             tree.not_names = vec![p("/a.txt"), p("a//b.txt"), p("../a.txt")];
+            // A name lives in the file it writes, there or not.
+            let only = |text: &str| {
+                Placement::Only(NonEmptySet::new(text.parse::<RelPath>().unwrap(), []))
+            };
+            tree.placed = ["a.txt", "dir/b.txt", "missing.txt", "dir"]
+                .into_iter()
+                .map(|text| (p(text), only(text)))
+                .collect();
             tree.over_bytes = vec![conformance::OverBytes::Name {
                 bound: "a file",
                 name: p("big.txt"),
@@ -790,6 +871,13 @@ mod tests {
                     .await
                     .unwrap();
                 tree.spellings = Some((p("a.txt"), p("alias.txt")));
+                // Read through the link: the link and what it leads to.
+                let both = NonEmptySet::new(
+                    "alias.txt".parse::<RelPath>().unwrap(),
+                    ["a.txt".parse::<RelPath>().unwrap()],
+                );
+                tree.placed.push((p("alias.txt"), Placement::Only(both)));
+                tree.linked = Some(p("alias.txt"));
                 let locked = root.join("locked.txt");
                 tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))
                     .await
