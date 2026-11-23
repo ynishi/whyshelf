@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8c7a3c38cf31e4c58d3d431ea7b4dddc95a31815",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:57d36f913ea7b3fba5a7721e703ba0dcb6a2b81e1df5826eb634223e282124a7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/next.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b72356cd7f488c9dd588c56c4316b41e55e30b69",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:666a72f209efe986d9d81e3d91ee1784dcf7bbe2536f8609f38a29bd2230f688",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e5bc0c472bc44816fe60bd2df71e643b20f96855",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:432cb134a061bf5403c7d7786ded334dec4ced04d9e1bbf2f52903cf8e82e9e0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795401325656,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f09a8e35202b04910512af6f9d999ee26fa45019",
+      "hash": "sha256:e645b2502af7b601e1185a0f508c91f5828911773d1f12223842c3faefec2f22",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a20642-27e0-7745-b478-2262aeaa2caa",
+  "kind": "decision",
+  "reason": "Read again after #176: a run of --stale is foreseen to approve only what the frame takes (Ledger::may_stand_on, ApproveFrame::foresee), with the tests named",
+  "revision": "e010936cab9f3553a35ac3ea5155f9b7583ea06e",
+  "seen": "sha256:7e5a8b4648351993352e37ef1df883804be9362c214da3591cfb3c26e56ce3ad",
+  "seen_address": "c8360ee41f5236cf2ef2ee5ecf2387cf971d6bd5",
+  "subject": "01a1db32-2f0d-760c-b870-8844f72644d6",
+  "v": 1,
+  "verb": "approve"
+}

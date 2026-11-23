@@ -3,8 +3,8 @@
 
 use crate::domain::shelf::artifact::ArtifactHash;
 use crate::domain::shelf::fixtures_tests::{
-    approve, approved, deny, docid, file_artifact, fr, fr_titled, ledger, lines, shelf, shelf_with,
-    sp_testing,
+    approve, approved, deny, deprecate, docid, file_artifact, fr, fr_titled, ledger, lines, list,
+    reading, shelf, shelf_with, sp_testing, text,
 };
 use crate::domain::shelf::graph::CycleSource;
 use crate::domain::shelf::ledger::{JudgedAt, Record};
@@ -623,4 +623,72 @@ fn an_edit_of_an_approval_on_a_pending_upstream_is_not_settled_by_stale() {
         .find(|g| g.origin == Origin::Doc(docid(1)))
         .expect("an origin at FR-1");
     assert!(!settlements(edited, &taken).contains(&Settlement::ApproveStale));
+}
+
+/// FR-1 approved on `then` and then on `now` with nothing else stale, and the origin
+/// at FR-1: `--stale` takes FR-1 again, the frame refuses it, so it would approve
+/// nothing of that origin and is not listed for it, though it would be were FR-1
+/// taken.
+fn not_settled_by_stale_where_the_frame_refuses(now: &Shelf, l: &Ledger) {
+    let assessment = assess(now, l, JudgedAt::new(100));
+    assert!(order::stale(&assessment).again.contains(&docid(1)));
+    let taken = order::stale_taken(now, l, &assessment);
+    assert!(taken.is_empty(), "{taken:?}");
+    let groups = assessment.origins();
+    let at_fr1 = groups
+        .iter()
+        .find(|g| g.origin == Origin::Doc(docid(1)))
+        .expect("an origin at FR-1");
+    assert!(settlements(at_fr1, &ids(&[1])).contains(&Settlement::ApproveStale));
+    assert!(!settlements(at_fr1, &taken).contains(&Settlement::ApproveStale));
+}
+
+#[test]
+fn an_edit_of_an_approval_on_an_upstream_deprecated_with_a_successor_is_not_settled_by_stale() {
+    // FR-1 is approved standing on FR-9, which is then deprecated with a successor,
+    // FR-3, so FR-1 is only stale on it; FR-1 is then edited.
+    let replacing = || {
+        reading(
+            "findings/fr-3.md",
+            3,
+            "FR-3",
+            &[("title", text("new")), ("supersedes", list(&["FR-9"]))],
+        )
+    };
+    let at_approval = shelf(vec![fr(1, &["FR-9"]), fr(9, &[]), replacing()]);
+    let now = shelf(vec![
+        fr_titled(1, "edited", &["FR-9"]),
+        fr(9, &[]),
+        replacing(),
+    ]);
+    let first = approve(&at_approval, &ledger(vec![]), 9, 1009, 10, None);
+    let second = approve(
+        &at_approval,
+        &ledger(vec![first.clone()]),
+        1,
+        1001,
+        10,
+        None,
+    );
+    let l = ledger(vec![first, second, deprecate(&at_approval, 9, 1010, 20)]);
+    not_settled_by_stale_where_the_frame_refuses(&now, &l);
+}
+
+#[test]
+fn a_link_rewritten_to_a_denied_document_is_not_settled_by_stale() {
+    // FR-1 is approved standing on FR-8, and its link is then rewritten to FR-9, which
+    // is denied.
+    let at_approval = shelf(vec![fr(1, &["FR-8"]), fr(8, &[]), fr(9, &[])]);
+    let now = shelf(vec![fr(1, &["FR-9"]), fr(8, &[]), fr(9, &[])]);
+    let first = approve(&at_approval, &ledger(vec![]), 8, 1008, 10, None);
+    let second = approve(
+        &at_approval,
+        &ledger(vec![first.clone()]),
+        1,
+        1001,
+        10,
+        None,
+    );
+    let l = ledger(vec![first, second, deny(&at_approval, 9, 1010, 20)]);
+    not_settled_by_stale_where_the_frame_refuses(&now, &l);
 }

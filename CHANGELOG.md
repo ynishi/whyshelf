@@ -10,6 +10,10 @@ and this project adheres to
 
 ### Added
 
+- In the library (#176): `ledger::Ledger::may_stand_on`, whether a new approval
+  may stand on an upstream, and `ledger::ApproveFrame::foresee`, whether the
+  frame of an approval is refused for what the shelf and the declared statuses
+  tell.
 - In the library (#175): `ledger::Framed`, the edit `judge same` frames, which
   tells a second declaration by the same name (`Framed::not_declared_by`), and
   `ledger::NotComparedWhy`, why a pin is not compared now.
@@ -619,6 +623,11 @@ and this project adheres to
 
 ### Fixed
 
+- `stale` offers `judge approve --stale` for an origin only when the run would
+  approve one of its approvals again: an approval the run refuses (on an
+  upstream decided against, a deprecated one with successors included, or on an
+  artifact that cannot be told now), and what stands on it, are no longer
+  counted (#176).
 - `judge same` offers only an edit that `stale` tells as a change: of an
   approval whose document is valid, of a document or of a name under a Depends
   link that still writes it, with the comparison that link declares, and not

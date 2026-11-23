@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b72356cd7f488c9dd588c56c4316b41e55e30b69",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:666a72f209efe986d9d81e3d91ee1784dcf7bbe2536f8609f38a29bd2230f688",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795401325656,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a20642-2095-739d-a1c7-2a15327588cb",
+  "kind": "decision",
+  "reason": "Read again after #176: a run of --stale is foreseen to approve only what the frame takes (Ledger::may_stand_on, ApproveFrame::foresee), with the tests named",
+  "revision": "e010936cab9f3553a35ac3ea5155f9b7583ea06e",
+  "seen": "sha256:88358390b91499d7e01ee8eca2447d308887c5c4e9a0377c415c34da4434293c",
+  "seen_address": "befd8c4f9003053924576f918f04c779b3cf2e8d",
+  "subject": "01a1c5ae-37cb-7230-9fce-a99ff188132c",
+  "v": 1,
+  "verb": "approve"
+}

@@ -5,12 +5,13 @@
 //! with the others fails here.
 //!
 //! The columns: whether `frame_approve` refuses a new approval on it
-//! ([`NotStanding`]), whether it counts, why an exemption of it is unneeded, what it
-//! is to what stands on it ([`UpstreamReading`]), the causes that come of it with their
-//! strength, the events at the origins ([`OriginEvent`]), whether a run holds what
-//! stands on it back ([`held_back`], with the upstream in the run and out of it, and
-//! left out of it), and whether approving again settles what it makes stale
-//! ([`Settlement::ApproveStale`]).
+//! ([`NotStanding`]), and `Ledger::may_stand_on` with it, whether it counts, why an
+//! exemption of it is unneeded, what it is to what stands on it ([`UpstreamReading`]),
+//! the causes that come of it with their strength, the events at the origins
+//! ([`OriginEvent`]), whether a run holds what stands on it back ([`held_back`], with
+//! the upstream in the run and out of it, and left out of it), whether what `--stale`
+//! is foreseen to approve again takes what stands on it ([`stale_taken`]), and whether
+//! approving again settles what it makes stale ([`Settlement::ApproveStale`]).
 
 use std::collections::BTreeSet;
 
@@ -23,7 +24,7 @@ use crate::domain::shelf::fixtures_tests::{
     ledger, list, reading, retire, ruled_shelf, shelf, spaces, text,
 };
 use crate::domain::shelf::ledger::{ExemptOf, FrameRefusal, Record, frame_approve};
-use crate::domain::shelf::order::{Hold, held_back};
+use crate::domain::shelf::order::{Hold, held_back, stale_taken};
 use crate::domain::shelf::schema::{CoverDecl, Schema};
 use crate::domain::shelf::settle::{Settlement, settlements};
 
@@ -51,6 +52,9 @@ struct Expect {
     events: Vec<OriginEvent>,
     /// What holds a run back, with FR-1 out of the run and in it.
     held: (Option<Hold>, Option<Hold>),
+    /// Whether `--stale` is foreseen to approve FR-2 again: only where it is stale,
+    /// nothing holds it back and the frame does not refuse it.
+    taken: bool,
     /// Whether approving again settles what the origins hold.
     approving_again_settles: bool,
 }
@@ -234,6 +238,7 @@ fn cases() -> Vec<(Case, Expect)> {
         told: Vec::new(),
         events: Vec::new(),
         held: (None, None),
+        taken: false,
         approving_again_settles: false,
     };
     let against = |status, reading, told: Told, severity, event| Expect {
@@ -243,6 +248,7 @@ fn cases() -> Vec<(Case, Expect)> {
         told: vec![(told, severity)],
         events: vec![event],
         held: (None, None),
+        taken: false,
         approving_again_settles: false,
     };
 
@@ -287,6 +293,7 @@ fn cases() -> Vec<(Case, Expect)> {
                 told: vec![(Told::Via(Carried::Stale), Severity::Stale)],
                 events: vec![OriginEvent::Edited],
                 held: (Some(Hold::Stale), None),
+                taken: true,
                 approving_again_settles: true,
                 ..nothing(approval(false, Some(Carried::Stale)))
             },
@@ -387,6 +394,11 @@ fn what_a_decision_about_an_upstream_is_to_what_stands_on_it_is_read_once() {
             Err(other) => panic!("{what}: {other:?}"),
         };
         assert_eq!(refusal, expect.refused, "{what}: frame_approve");
+        assert_eq!(
+            ledger.may_stand_on(docid(1)).err(),
+            expect.refused,
+            "{what}: may_stand_on"
+        );
 
         // Whether it counts, as the ledger declares it and as it stands.
         assert_eq!(
@@ -475,6 +487,14 @@ fn what_a_decision_about_an_upstream_is_to_what_stands_on_it_is_read_once() {
             held(&[2], &[1]),
             expect.held.0.or(Some(Hold::LeftOut)),
             "{what}: left out"
+        );
+
+        // What `--stale` is foreseen to approve again: FR-2 stale on an upstream the
+        // frame refuses is not taken, as the run refuses it.
+        assert_eq!(
+            stale_taken(&shelf, &ledger, &assessment).contains(&docid(2)),
+            expect.taken,
+            "{what}: taken by --stale"
         );
     }
 }

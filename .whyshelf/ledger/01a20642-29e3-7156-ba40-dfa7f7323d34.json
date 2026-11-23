@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b77eaefb9813c7a6a11175190e1ef5dc60019507",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:170afc1ef59d4744f3fe6ba18f7fad2d2d1525f90e979aa72e69837cc1f9ee19",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "011bcf7eba44bfcffdf823a38dfbb96377d99f07",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:15d6765a892e5579ca51f29abb4019f85e18b4cfaf3c28b997e8d45702e710da",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795401325656,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f09a8e35202b04910512af6f9d999ee26fa45019",
+      "hash": "sha256:e645b2502af7b601e1185a0f508c91f5828911773d1f12223842c3faefec2f22",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a20642-29e3-7156-ba40-dfa7f7323d34",
+  "kind": "decision",
+  "reason": "Read again after #176: a run of --stale is foreseen to approve only what the frame takes (Ledger::may_stand_on, ApproveFrame::foresee), with the tests named",
+  "revision": "e010936cab9f3553a35ac3ea5155f9b7583ea06e",
+  "seen": "sha256:d73b471501349e9f372bce51b21d83fe751e57daa6486f2bb054203c3c7af25d",
+  "seen_address": "f3a0524d9fa991dff45b634090f178604dddc855",
+  "subject": "01a1db32-31ed-7567-8c87-09f427a88ec3",
+  "v": 1,
+  "verb": "approve"
+}

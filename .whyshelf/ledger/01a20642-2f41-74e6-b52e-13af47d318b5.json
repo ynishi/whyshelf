@@ -1,0 +1,218 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "45e42505306e446cda549b2f9169d7da4af10707",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5c7db1abdb648df19b60bb45cce0e43146367a242c3988a72edb975f4a5ab244",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "94e65ddd0696800981e0fe41c072bae9282f2d81",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7cf62ebdc14152ed4e9561995f2f9f740c4bd6fafd97cdd6a0ba3b8564bce357",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cause.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "145aa1916ce2e144948983cca3b2e12256f45661",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4d72404aa770e38758f5f7f690636c1ac4cb90b9ee41d1baf7a03f699a0e8711",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cause_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0c92f387d265a84e6c06d8dee9f45aed5ae025d7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e405141e6ee534dd08ffce5bb545c08512f023d9d708b7959600a0428a77c4b4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "084edadf1e67cb2410caa4b95648ee023497da8b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:51084bb677c46362bad49a31ce09b5bca0bd0235248004d8402c1907eb7ae61b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/upstream_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fcddd211cb627f5ca51f7f6b841e66cd2c3fdc85",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:81ce633a3bdbf04554f4668671d03cf36da572d3fdcadec7813570ac1ad1a3f9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2e9a7af02b17693388bbac308e85a5f741177056",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4d0ff5dd41befe5292e8de703e939df958dd8273124afe6c91bb7e3d70ae6fe1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795401325656,
+  "expires": null,
+  "frame": [
+    {
+      "address": "525343890867ccef51b5ad13d2cbb8bd114c090d",
+      "hash": "sha256:95ddf2961bb70764cb66bf788e055d497050b669b6c6f2ccd3e7dbab9f6ede02",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c333-d435-7f4d-abb6-036e89451d8b"
+    },
+    {
+      "address": "56d14a79192f6a254551c86a1d3832ac79361bba",
+      "hash": "sha256:07622dcbe7f5d6b212e1eee0b7c6389ea29b214ce3272b38c3415482d1c4d1ab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "15"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-131c-70e3-ae5e-e8e75931bc90"
+    },
+    {
+      "address": "b9f7bf18c2f806edf8706eb024654596741e2927",
+      "hash": "sha256:8d5c07353d2285bcbe95f0fa4f772221dd3ad68c3d8b51cb99429bd1e8e0957f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    },
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    },
+    {
+      "address": "f09a8e35202b04910512af6f9d999ee26fa45019",
+      "hash": "sha256:e645b2502af7b601e1185a0f508c91f5828911773d1f12223842c3faefec2f22",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    },
+    {
+      "address": "b4b58bc6542fbffd22bd8339bed96d34bc7fe992",
+      "hash": "sha256:4440a5a7c3bfffe0a910a409dc57df30f4801f6480f4300af0cb512b932df532",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "97"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2018b-8730-7780-ae0d-cbfe389fed66"
+    }
+  ],
+  "id": "01a20642-2f41-74e6-b52e-13af47d318b5",
+  "kind": "decision",
+  "reason": "Read again after #176: a run of --stale is foreseen to approve only what the frame takes (Ledger::may_stand_on, ApproveFrame::foresee), with the tests named",
+  "revision": "e010936cab9f3553a35ac3ea5155f9b7583ea06e",
+  "seen": "sha256:07156c01bc7864a377677d4d578ab1440d6230a0dd94f8340e9b0b54eac1f5bc",
+  "seen_address": "1862a77e2c488ff8dc8e0c3e8f81d82b1c0cb181",
+  "subject": "01a2018b-cea2-707b-891b-8a7e19cacd2e",
+  "v": 1,
+  "verb": "approve"
+}

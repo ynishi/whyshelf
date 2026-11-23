@@ -17,7 +17,7 @@ use super::freshness::{
     Unapproved, UpstreamReading,
 };
 use super::graph::components;
-use super::ledger::{DeclaredNow, FramePin, Ledger};
+use super::ledger::{ApproveFrame, DeclaredNow, FramePin, Ledger};
 use super::schema::{EntryName, Propagation};
 
 /// The rule that took a document into a run of approvals. The two take apart sets: a
@@ -68,14 +68,25 @@ pub fn stale(assessment: &Assessment) -> StaleChoice {
 /// it can be told before the run: those [`stale`] takes again that no upstream holds
 /// back ([`held_back`]), taken upstream first ([`upstream_first`]) as the run takes
 /// them, so that one standing on a pending upstream, which `--stale` does not
-/// approve, holds back what stands on it in turn. One the run leaves out for what
-/// only the run finds (its frame refused, a repeat) is not foreseen.
+/// approve, holds back what stands on it in turn.
+///
+/// One whose frame is refused as the shelf and the ledger tell it before the run
+/// ([`ApproveFrame::foresee`]) is left out, as the run leaves it out, and so is what
+/// stands on it: a run writes only approvals, of documents nothing was decided
+/// against, which change no answer of it. What only the records the run itself
+/// writes, or who runs it, decide is not foreseen, such as a cycle among the frames
+/// of approvals, which the run's own approvals rewrite, a repeat or a second reading,
+/// a name the rules do not admit, or a hold its own approvals make (an upstream it
+/// approves again by fewer names than its rule asks for then awaits others,
+/// [`Hold::Awaiting`]).
 pub fn stale_taken(shelf: &Shelf, ledger: &Ledger, assessment: &Assessment) -> BTreeSet<DocId> {
     let run = stale(assessment).again;
     let mut left_out = BTreeSet::new();
     let mut taken = BTreeSet::new();
     for id in upstream_first(shelf, ledger, &run) {
-        if held_back(shelf, assessment, id, &run, &left_out).is_some() {
+        if held_back(shelf, assessment, id, &run, &left_out).is_some()
+            || ApproveFrame::foresee(shelf, ledger, id).is_err()
+        {
             left_out.insert(id);
         } else {
             taken.insert(id);
@@ -277,10 +288,9 @@ pub struct HeldBack {
 /// upstream whose approval only expired holds nothing back, unless its quorum is
 /// short: an approval on it is a notice, not a staleness. A short quorum is read
 /// before that, as it is no level of the freshness, and an expired approval that
-/// awaits other names would otherwise let what stands on it through. What a
-/// decision says against an upstream
-/// ([`NotStanding`](super::ledger::NotStanding)), a link that cannot be followed and a
-/// cycle are refusals of the frame
+/// awaits other names would otherwise let what stands on it through. An upstream a
+/// new approval may not stand on ([`Ledger::may_stand_on`]), a link that cannot be
+/// followed and a cycle are refusals of the frame
 /// ([`frame_approve`](super::ledger::frame_approve)), not this. What an upstream is to
 /// the approval on it is read from its standing once (`UpstreamReading` of the
 /// module `freshness`), and a reading that holds nothing back is then asked only

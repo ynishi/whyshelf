@@ -38,8 +38,7 @@
 //! - **`ApproveStale` is last, and only when it would take something of this
 //!   origin.** The event can be settled by approving again (the third column), and at
 //!   least one approval degraded by the origin is one `--stale` would make again
-//!   ([`stale_taken`]: those [`order::stale`] takes that no upstream holds back, so
-//!   not one standing on a pending upstream; strengths are not read again here).
+//!   ([`stale_taken`]; strengths are not read again here).
 //! - **`ApproveStale` acts on the whole shelf.** `judge approve --stale` takes every
 //!   approval that is expired or stale, not those of this origin, and approves them
 //!   with no expiry: an approval that had one loses it. When an origin holds both an
