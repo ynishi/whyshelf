@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9c304ebb0a176cfe09f56774b9cd1faf603fbf4a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:57d36f913ea7b3fba5a7721e703ba0dcb6a2b81e1df5826eb634223e282124a7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/next.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "071abe99c4f952ef27b50baeca2ea7061555e361",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4fa7f3e36ad831b02dbc1be206605d3f579bc737cd315ec3393e73eefe10897e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4cff83d4e5724d7fe1604bedf79138ce66d72ea6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f28af36adf9aabd88894481423fe5d3b38e248308820363997556da171dbc884",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795411345042,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a80c141845f7b47b4e1a75336439e3e44d517bd8",
+      "hash": "sha256:9cfd853526bcfecc0dba18c734c28d9e86c2eaa21b9b9798f7258b21b4859674",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a206db-0836-7638-9c2b-7dc5a6d56b47",
+  "kind": "decision",
+  "reason": "Read again after #182: stale offers an approval of one document by name only where frame_approve would take it (settle::origins_asked, order::Foreseen, settle::settle_all), with the tests named",
+  "revision": "6069fa7387c8ae33459f21bc7d3a746426a2f4ec",
+  "seen": "sha256:f56cb4d177d66599cea8f65eecc33695de300db74f5ba99a05703aa1a1c9e5ca",
+  "seen_address": "6896dca6fbc76a84b87819c2526a28b18df1ded8",
+  "subject": "01a1db32-2f0d-760c-b870-8844f72644d6",
+  "v": 1,
+  "verb": "approve"
+}

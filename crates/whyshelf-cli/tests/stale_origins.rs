@@ -292,6 +292,29 @@ fn a_pending_upstream_is_approved_and_stale_is_not_offered() {
 }
 
 #[test]
+fn a_pending_upstream_whose_link_names_a_denied_document_is_not_offered_its_approval() {
+    // N-1 is approved standing on an N-2 nobody decided about, and N-2 stands on N-3,
+    // which is denied: the frame refuses an approval of N-2.
+    let project = Project::with(
+        "next-pending-denied",
+        &linked_books(),
+        &note(1, "on: [N-2]\n"),
+    );
+    fs::write(project.0.join("notes/N-2.md"), note(2, "on: [N-3]\n")).unwrap();
+    fs::write(project.0.join("notes/N-3.md"), note(3, "")).unwrap();
+    succeeded(&project.run(&["judge", "deny", "N-3", "--reason", "not a note"]));
+    succeeded(&project.run(&["judge", "approve", "N-1"]));
+    let origins = origins_of(&project);
+    assert_eq!(origins[0]["start"]["doc"]["key"], "note:N-2", "{origins}");
+    assert_eq!(next_of(&project), Vec::<Vec<String>>::new());
+    // The approval it no longer offers is refused when it is run.
+    assert_ne!(
+        project.run(&["judge", "approve", "N-2"]).status.code(),
+        Some(0)
+    );
+}
+
+#[test]
 fn the_diff_is_of_the_approval_that_holds_the_cause_and_not_one_that_sees_it_through() {
     // N-1 stands on N-2, which stands on N-3; N-3 is edited. N-1 and N-2 are stale
     // through it, and only N-3 holds the cause: its `diff` shows the edit, and the

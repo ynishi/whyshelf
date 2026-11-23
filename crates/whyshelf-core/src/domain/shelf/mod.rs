@@ -64,9 +64,12 @@
 //!                                                        SnapshotItem::compared ──► ItemCompared
 //!   order     ──► schema, doc, graph, build, ledger,   stale, pending ──► the documents a run takes;
 //!                 freshness                            upstream_first ──► the order approvals are
-//!                                                        judged in again
-//!   settle    ──► freshness, artifact                  settlements ──► Settlement (what can settle an
-//!                                                        origin: read, declare, approve)
+//!                                                        judged in again;
+//!                                                      Foreseen::of ──► Foreseen (what the
+//!                                                        approving commands of stale would approve)
+//!   settle    ──► freshness, artifact, order           origins_asked ──► OriginsAsked;
+//!                                                      settle_all ──► Settlement (what can settle
+//!                                                        an origin: read, declare, approve)
 //!   stats     ──► artifact, doc, build, ledger,        stats::of ──► Stats         (how the work went,
 //!                 schema                                 from the records alone)
 //!   untold    ──► artifact                             untold_causes ──► UntoldCause (names that
@@ -178,7 +181,7 @@
 //! | where one identity stands, listed or not | [`Assessment::standing_of`] | a [`Standing`] |
 //! | where a degradation starts | [`Assessment::roots_of`] | [`RootCause`]s |
 //! | where a cause starts and what happened there | [`Cause::located`](freshness::Cause::located), gathered by [`Assessment::origins`](freshness::Assessment::origins) | an [`Origin`](freshness::Origin) and an [`OriginEvent`](freshness::OriginEvent); per origin, the events and the approvals that hold a cause there |
-//! | what can settle an origin | [`settlements`](settle::settlements), with what `--stale` would approve again ([`order::stale_taken`]) | the [`Settlement`](settle::Settlement)s, read first, then declare, then approve |
+//! | what can settle each origin | [`origins_asked`](settle::origins_asked), for the documents the settlements approve by name, then [`Foreseen::of`](order::Foreseen::of), for what the approving commands would approve (what `--stale` would approve again, [`order::stale_taken`], and whether the frame takes each approval by name), then [`settle_all`](settle::settle_all) | the [`Settlement`](settle::Settlement)s of each origin, read first, then declare, then approve |
 //! | which documents a run of approvals takes: the expired or stale ones, or the pending ones | [`order::stale`], [`order::pending`] and [`order::pending_upstream`] (one document: [`order::pending_of`]), from an [`Assessment`] | the identities, with the broken ones told apart for `stale` |
 //! | the order a set of approvals is judged in again | [`upstream_first`](order::upstream_first), from the links and the pins | the identities, upstream first |
 //! | how the work went: approvals made again, pending time, runs, the pins that changed | [`stats::of`], from every decision and the keys now; the measures are defined on its page | a [`Stats`](stats::Stats) |

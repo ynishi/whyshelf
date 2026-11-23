@@ -646,11 +646,11 @@ pub struct StaleEntry {
 /// An origin of stale approvals with what can settle it.
 ///
 /// Why they come together: what can settle an origin is read once, in the domain
-/// ([`settlements`]), from the origin and from the shelf's choice of what
-/// `judge approve --stale` takes, and a surface writes it in its own words; the
-/// application only puts the two side by side.
+/// ([`settle_all`]), from the origin and from what the approving commands are
+/// foreseen to approve, and a surface writes it in its own words; the application
+/// only puts the two side by side.
 ///
-/// [`settlements`]: crate::domain::shelf::settle::settlements
+/// [`settle_all`]: crate::domain::shelf::settle::settle_all
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettledOrigin {
     /// Where the degradations start, and what they degrade.

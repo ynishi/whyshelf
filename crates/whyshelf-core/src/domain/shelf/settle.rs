@@ -1,11 +1,13 @@
 //! What can settle an origin of stale approvals: the things a person can say or do
 //! about it, in the order a person would try them.
 //!
-//! [`settlements`] is the one entry. It reads an [`OriginGroup`] (where degradations
-//! start, what happened there and who holds each cause there) and the approvals
-//! `judge approve --stale` would make again ([`stale_taken`]), and returns the
-//! [`Settlement`]s. whyshelf does not guess what an edit means: it lists what can be
-//! said and says none of it, and it runs none of it.
+//! [`origins_asked`], then [`Foreseen::of`], then [`settle_all`] is the one way: it
+//! reads the [`OriginGroup`]s (where degradations start, what happened there and who
+//! holds each cause there) and what the approving commands would approve, foreseen
+//! once for the shelf ([`Foreseen`]: the approvals `judge approve --stale` would make
+//! again, [`stale_taken`], and whether the frame takes each approval by name), and
+//! returns the [`Settlement`]s of each origin. whyshelf does not guess what an edit means: it
+//! lists what can be said and says none of it, and it runs none of it.
 //!
 //! # What settles what
 //!
@@ -44,6 +46,13 @@
 //!   with no expiry: an approval that had one loses it. When an origin holds both an
 //!   expiry and an edit, `ApproveUntil` and `ApproveStale` are both listed, and the
 //!   second drops the expiry that the first keeps.
+//! - **An approval by name is listed only when the frame takes it.** `ApproveUntil`,
+//!   `ApprovePending` and `ApproveAsAnother` each approve one document by naming it,
+//!   in a run of one (`judge approve <d>`), and each is listed only when
+//!   [`Foreseen`] says the frame takes an approval of it ([`origins_asked`] says
+//!   which documents it is asked about), since a command the frame refuses settles
+//!   nothing (REQ-31); what it does not foresee is on [`Foreseen`]. Nothing is listed
+//!   in its place, since no other command settles that event.
 //! - **`DeclareSame` may be refused.** `judge same` refuses when approvals pinned
 //!   several earlier hashes that do not mean the same and `--from` names none, and
 //!   says which hashes there are. The settlement does not choose one: choosing the
@@ -60,12 +69,11 @@
 //! [`stale_taken`]: super::order::stale_taken
 //! [`order::stale`]: super::order::stale
 
-use std::collections::BTreeSet;
-
 use crate::domain::id::DocId;
 
 use super::artifact::ArtifactKey;
 use super::freshness::{Origin, OriginEvent, OriginGroup};
+use super::order::{Foreseen, OriginsAsked};
 
 /// One thing a person can say or do that may settle an origin.
 ///
@@ -106,13 +114,54 @@ pub enum SameSubject {
     Artifact(ArtifactKey),
 }
 
+/// The origins, with the documents their settlements approve by naming them, each in
+/// a run of one: what is to be foreseen of them ([`Foreseen::of`]) before they are
+/// settled ([`settle_all`]).
+pub fn origins_asked(groups: Vec<OriginGroup>) -> OriginsAsked {
+    let named = groups
+        .iter()
+        .flat_map(candidates)
+        .filter_map(|settlement| by_name(&settlement))
+        .collect();
+    OriginsAsked::new(groups, named)
+}
+
+/// What can settle each origin `foreseen` was asked about, in the order a person
+/// would try it, with what was foreseen of it. The one way to settle origins: the
+/// origins settled are those foreseen; what is offered of a document it was not asked
+/// about is [`Foreseen`]'s.
+pub fn settle_all(foreseen: Foreseen) -> Vec<(OriginGroup, Vec<Settlement>)> {
+    let next: Vec<Vec<Settlement>> = foreseen
+        .groups()
+        .iter()
+        .map(|group| settlements(group, &foreseen))
+        .collect();
+    foreseen.into_groups().into_iter().zip(next).collect()
+}
+
 /// What can settle one origin, in the order a person would try it: read first,
 /// then declare, then approve; each once.
 ///
-/// `taken` is the shelf's [`order::stale_taken`](super::order::stale_taken), the
-/// approvals `judge approve --stale` would make again. The rule is the table of the
-/// module page.
-pub fn settlements(group: &OriginGroup, taken: &BTreeSet<DocId>) -> Vec<Settlement> {
+/// `foreseen` is what the approving commands would approve ([`Foreseen`]). The rule
+/// is the table and the list of the module page.
+pub(super) fn settlements(group: &OriginGroup, foreseen: &Foreseen) -> Vec<Settlement> {
+    let mut found = candidates(group);
+    found.retain(|settlement| by_name(settlement).is_none_or(|doc| foreseen.frame_takes(doc)));
+    let again_takes_one = group
+        .degraded
+        .iter()
+        .any(|id| foreseen.again().contains(id));
+    if again_takes_one && group.events().iter().any(|e| approving_again_settles(*e)) {
+        found.push(Settlement::ApproveStale);
+    }
+    found.sort_by_key(rank);
+    found.dedup();
+    found
+}
+
+/// The settlements of the events of an origin, as the second column of the table
+/// gives them, before anything foreseen is read.
+fn candidates(group: &OriginGroup) -> Vec<Settlement> {
     // The approval whose `diff` shows the change: one that holds a cause of an event
     // a `diff` shows, never one that is degraded only through an upstream, nor one
     // that holds only another event here (a lapse of an approval made on the edit).
@@ -122,18 +171,27 @@ pub fn settlements(group: &OriginGroup, taken: &BTreeSet<DocId>) -> Vec<Settleme
         .filter(|(event, _)| shown_by_diff(*event))
         .map(|(_, holder)| *holder)
         .min();
-    let events = group.events();
-    let mut found: Vec<Settlement> = events
+    group
+        .events()
         .iter()
         .flat_map(|event| of_event(*event, &group.origin, read))
-        .collect();
-    let again_takes_one = group.degraded.iter().any(|id| taken.contains(id));
-    if again_takes_one && events.iter().any(|e| approving_again_settles(*e)) {
-        found.push(Settlement::ApproveStale);
+        .collect()
+}
+
+/// The document a settlement approves by naming it, in a run of one; none for one
+/// that approves nothing, and for `ApproveStale`, which takes what the rule of
+/// `--stale` takes.
+fn by_name(settlement: &Settlement) -> Option<DocId> {
+    match settlement {
+        Settlement::ApprovePending(doc)
+        | Settlement::ApproveAsAnother(doc)
+        | Settlement::ApproveUntil(doc) => Some(*doc),
+        Settlement::ReadDiff(_)
+        | Settlement::DeclareSame(_)
+        | Settlement::FindMoves
+        | Settlement::DeclareMoved(_)
+        | Settlement::ApproveStale => None,
     }
-    found.sort_by_key(rank);
-    found.dedup();
-    found
 }
 
 /// Whether a `diff` of an approval that holds a cause of the event shows it: the
@@ -238,11 +296,13 @@ fn rank(settlement: &Settlement) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
 
     use crate::domain::nonempty::NonEmptySet;
+    use crate::domain::shelf::build::DocFailure;
     use crate::domain::shelf::fixtures_tests::{docid, file_artifact};
     use crate::domain::shelf::graph::{CycleId, CycleSource};
+    use crate::domain::shelf::ledger::FrameRefusal;
 
     use super::*;
 
@@ -299,17 +359,29 @@ mod tests {
         }
     }
 
-    /// The approvals `--stale` would make again.
-    fn taking(again: &[u128]) -> BTreeSet<DocId> {
-        again.iter().map(|n| docid(*n)).collect()
+    /// What is foreseen: the approvals `--stale` would make again, and what the frame
+    /// says of an approval of each document asked about.
+    fn foreseen(again: &[u128], framed: &[(u128, Result<(), FrameRefusal>)]) -> Foreseen {
+        Foreseen::of_parts(
+            again.iter().map(|n| docid(*n)).collect::<BTreeSet<_>>(),
+            framed
+                .iter()
+                .map(|(n, said)| (docid(*n), said.clone()))
+                .collect::<BTreeMap<_, _>>(),
+        )
+    }
+
+    /// A refusal of the frame, as any refusal reads here.
+    fn refusal() -> FrameRefusal {
+        FrameRefusal::NotValid(DocFailure::Gone)
     }
 
     /// The settlements of an origin that is document 1, held by 1, with `--stale`
-    /// taking it.
+    /// taking it and the frame taking an approval of it.
     fn of_doc(events: &[OriginEvent]) -> Vec<Settlement> {
         settlements(
             &group(Origin::Doc(docid(1)), &[1], &[1], events),
-            &taking(&[1]),
+            &foreseen(&[1], &[(1, Ok(()))]),
         )
     }
 
@@ -321,7 +393,7 @@ mod tests {
                 &[2],
                 events,
             ),
-            &taking(&[2]),
+            &foreseen(&[2], &[]),
         )
     }
 
@@ -414,7 +486,7 @@ mod tests {
             &[1],
             &[OriginEvent::Cycle],
         );
-        assert_eq!(settlements(&cycle, &taking(&[1, 2])), Vec::new());
+        assert_eq!(settlements(&cycle, &foreseen(&[1, 2], &[])), Vec::new());
     }
 
     #[test]
@@ -461,7 +533,7 @@ mod tests {
         // Broken by another origin: the shelf leaves these out of `--stale`.
         let edited = group(Origin::Doc(docid(1)), &[2, 3], &[2], &[OriginEvent::Edited]);
         assert_eq!(
-            settlements(&edited, &taking(&[])),
+            settlements(&edited, &foreseen(&[], &[])),
             vec![
                 Settlement::ReadDiff(docid(2)),
                 Settlement::DeclareSame(SameSubject::Doc(docid(1))),
@@ -469,24 +541,24 @@ mod tests {
         );
         // One of them is taken: `--stale` approves it again.
         assert_eq!(
-            settlements(&edited, &taking(&[3])).last(),
+            settlements(&edited, &foreseen(&[3], &[])).last(),
             Some(&Settlement::ApproveStale)
         );
         // An approval the shelf takes that is not under the origin does not count.
-        assert!(!settlements(&edited, &taking(&[9])).contains(&Settlement::ApproveStale));
+        assert!(!settlements(&edited, &foreseen(&[9], &[])).contains(&Settlement::ApproveStale));
     }
 
     #[test]
     fn the_declaration_is_read_and_approved_again_and_nothing_is_declared_about_it() {
         let declaration = group(Origin::Declaration, &[2], &[2], &[OriginEvent::Relinked]);
         assert_eq!(
-            settlements(&declaration, &taking(&[2])),
+            settlements(&declaration, &foreseen(&[2], &[])),
             vec![Settlement::ReadDiff(docid(2)), Settlement::ApproveStale]
         );
         // Even an edit there is nothing to declare the meaning of.
         let edited = group(Origin::Declaration, &[2], &[2], &[OriginEvent::Edited]);
         assert!(
-            settlements(&edited, &taking(&[2]))
+            settlements(&edited, &foreseen(&[2], &[]))
                 .iter()
                 .all(|s| !matches!(s, Settlement::DeclareSame(_)))
         );
@@ -503,7 +575,7 @@ mod tests {
             &[OriginEvent::Edited],
         );
         assert_eq!(
-            settlements(&edited, &taking(&[1, 3, 5])).first(),
+            settlements(&edited, &foreseen(&[1, 3, 5], &[])).first(),
             Some(&Settlement::ReadDiff(docid(3)))
         );
     }
@@ -522,7 +594,7 @@ mod tests {
             ),
         };
         assert_eq!(
-            settlements(&mixed, &taking(&[1, 2])),
+            settlements(&mixed, &foreseen(&[1, 2], &[(1, Ok(()))])),
             vec![
                 Settlement::ReadDiff(docid(2)),
                 Settlement::DeclareSame(SameSubject::Doc(docid(1))),
@@ -545,12 +617,71 @@ mod tests {
             ],
         );
         assert_eq!(
-            settlements(&many, &taking(&[2, 3, 4])),
+            settlements(&many, &foreseen(&[2, 3, 4], &[])),
             vec![
                 Settlement::ReadDiff(docid(2)),
                 Settlement::DeclareSame(SameSubject::Artifact(file_artifact("tests/a.rs"))),
                 Settlement::ApproveStale,
             ]
+        );
+    }
+
+    #[test]
+    fn an_approval_by_name_the_frame_refuses_is_not_listed() {
+        // Beside an edit, so that what is not an approval by name is seen to stay.
+        for event in [
+            OriginEvent::Expired,
+            OriginEvent::UpstreamPending,
+            OriginEvent::UpstreamAwaiting,
+        ] {
+            let origin = group(
+                Origin::Doc(docid(1)),
+                &[1],
+                &[1],
+                &[OriginEvent::Edited, event],
+            );
+            assert_eq!(
+                settlements(&origin, &foreseen(&[1], &[(1, Err(refusal()))])),
+                vec![
+                    Settlement::ReadDiff(docid(1)),
+                    Settlement::DeclareSame(SameSubject::Doc(docid(1))),
+                    Settlement::ApproveStale,
+                ],
+                "{event:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn origins_asked_names_the_documents_the_settlements_approve_by_name() {
+        let groups = vec![
+            group(Origin::Doc(docid(1)), &[1], &[1], &[OriginEvent::Expired]),
+            group(
+                Origin::Doc(docid(2)),
+                &[4],
+                &[4],
+                &[OriginEvent::UpstreamPending],
+            ),
+            group(Origin::Doc(docid(3)), &[3], &[3], &[OriginEvent::Edited]),
+            group(
+                Origin::Artifact(file_artifact("tests/a.rs")),
+                &[5],
+                &[5],
+                &[OriginEvent::Gone],
+            ),
+        ];
+        assert_eq!(
+            origins_asked(groups.clone()),
+            OriginsAsked::new(groups, [docid(1), docid(2)].into())
+        );
+    }
+
+    #[test]
+    fn a_document_not_asked_about_is_not_taken() {
+        let expired = group(Origin::Doc(docid(1)), &[1], &[1], &[OriginEvent::Expired]);
+        assert_eq!(
+            settlements(&expired, &foreseen(&[1], &[])),
+            Vec::<Settlement>::new()
         );
     }
 }

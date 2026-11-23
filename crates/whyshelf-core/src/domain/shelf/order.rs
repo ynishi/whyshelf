@@ -1,9 +1,11 @@
 //! Approving a set of documents in one run: which are taken, by two rules, one owner
 //! each ([`stale`] for `judge approve --stale`, [`pending`] and [`pending_upstream`]
 //! for `--pending`, both read from one [`Assessment`]); in which order
-//! ([`upstream_first`]); and which upstream holds one back ([`held_back`]). Each rule
-//! is on its function. No order of books is read: the order comes from what each
-//! document stands on.
+//! ([`upstream_first`]); which upstream holds one back ([`held_back`]); and, for an
+//! approval made by naming one document, a run of one, what it would meet at the
+//! frame, foreseen with what `--stale` would take ([`Foreseen`]). Each rule is on its
+//! function. No order of books is read: the order comes from what each document
+//! stands on.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -13,11 +15,11 @@ use crate::domain::id::DocId;
 use super::build::Shelf;
 use super::doc::{Doc, LinkState};
 use super::freshness::{
-    Assessment, Carried, Degradation, Freshness, FreshnessLevel, Severity, Standing, StandingKind,
-    Unapproved, UpstreamReading,
+    Assessment, Carried, Degradation, Freshness, FreshnessLevel, OriginGroup, Severity, Standing,
+    StandingKind, Unapproved, UpstreamReading,
 };
 use super::graph::components;
-use super::ledger::{ApproveFrame, DeclaredNow, FramePin, Ledger};
+use super::ledger::{ApproveFrame, DeclaredNow, FramePin, FrameRefusal, Ledger, frame_approve};
 use super::schema::{EntryName, Propagation};
 
 /// The rule that took a document into a run of approvals. The two take apart sets: a
@@ -93,6 +95,103 @@ pub fn stale_taken(shelf: &Shelf, ledger: &Ledger, assessment: &Assessment) -> B
         }
     }
     taken
+}
+
+/// The origins of a shelf to be settled, with the documents their settlements
+/// approve by naming them: what [`Foreseen::of`] asks the frame about. Which
+/// documents those are is what settles the origins to say
+/// ([`origins_asked`](super::settle::origins_asked)), so only the modules of the
+/// shelf make one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OriginsAsked {
+    groups: Vec<OriginGroup>,
+    named: BTreeSet<DocId>,
+}
+
+impl OriginsAsked {
+    /// The origins `groups`, with `named`, the documents their settlements approve
+    /// by naming them.
+    pub(super) fn new(groups: Vec<OriginGroup>, named: BTreeSet<DocId>) -> Self {
+        Self { groups, named }
+    }
+}
+
+/// What the approving commands `stale` can offer would approve, foreseen once for
+/// the shelf before any of them is run, with the origins it was asked about: what
+/// `--stale` would approve again ([`stale_taken`]), and, for each document the
+/// settlements of those origins approve by name ([`OriginsAsked`]), whether the frame
+/// takes an approval of it.
+///
+/// An approval by name is a run of one, which writes nothing before it, so the frame
+/// it meets is [`frame_approve`] on the ledger as it is, the cycle among the frames
+/// of approvals included; why `--stale` is foreseen otherwise is [`stale_taken`]'s.
+/// A document it was not asked about is not taken: an approval of it is offered only
+/// once the frame was asked. The origins are settled with it by
+/// [`settle_all`](super::settle::settle_all), so the ones it was asked about are the
+/// ones settled. What only the person who runs it decides is not foreseen: whether
+/// the rules admit the name, a name that already approved the content (which repeats
+/// its reading), the time it is to lapse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Foreseen {
+    groups: Vec<OriginGroup>,
+    again: BTreeSet<DocId>,
+    framed: BTreeMap<DocId, Result<(), FrameRefusal>>,
+}
+
+impl Foreseen {
+    /// What is foreseen of the origins `asked` holds, on this shelf and ledger, as
+    /// [`Foreseen`] says.
+    pub fn of(
+        shelf: &Shelf,
+        ledger: &Ledger,
+        assessment: &Assessment,
+        asked: OriginsAsked,
+    ) -> Self {
+        let framed = asked
+            .named
+            .into_iter()
+            .map(|doc| (doc, frame_approve(shelf, ledger, doc).map(|_| ())))
+            .collect();
+        Self {
+            groups: asked.groups,
+            again: stale_taken(shelf, ledger, assessment),
+            framed,
+        }
+    }
+
+    /// A foreseen value of no origin, from its parts, for the tests of what reads it.
+    #[cfg(test)]
+    pub(crate) fn of_parts(
+        again: BTreeSet<DocId>,
+        framed: BTreeMap<DocId, Result<(), FrameRefusal>>,
+    ) -> Self {
+        Self {
+            groups: Vec::new(),
+            again,
+            framed,
+        }
+    }
+
+    /// The approvals `--stale` would make again ([`stale_taken`]).
+    pub(super) fn again(&self) -> &BTreeSet<DocId> {
+        &self.again
+    }
+
+    /// Whether the frame takes an approval of `doc`; see [`Foreseen`] for one it was
+    /// not asked about.
+    pub(super) fn frame_takes(&self, doc: DocId) -> bool {
+        matches!(self.framed.get(&doc), Some(Ok(())))
+    }
+
+    /// The origins it was asked about, in the order they were given.
+    pub(super) fn groups(&self) -> &[OriginGroup] {
+        &self.groups
+    }
+
+    /// The origins it was asked about, given back to be settled.
+    pub(super) fn into_groups(self) -> Vec<OriginGroup> {
+        self.groups
+    }
 }
 
 /// What stands about a document that is not pending: a decision. There is no
@@ -291,7 +390,7 @@ pub struct HeldBack {
 /// awaits other names would otherwise let what stands on it through. An upstream a
 /// new approval may not stand on ([`Ledger::may_stand_on`]), a link that cannot be
 /// followed and a cycle are refusals of the frame
-/// ([`frame_approve`](super::ledger::frame_approve)), not this. What an upstream is to
+/// ([`frame_approve`]), not this. What an upstream is to
 /// the approval on it is read from its standing once (`UpstreamReading` of the
 /// module `freshness`), and a reading that holds nothing back is then asked only
 /// whether the upstream was left out. Standings are read from `assessment`, which the

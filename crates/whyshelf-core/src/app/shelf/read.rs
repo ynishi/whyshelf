@@ -12,7 +12,7 @@
 //! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it; with a filter ([`status_filtered`](ShelfApp::status_filtered)), [`StatusFilter::new`] against the declaration and [`StatusFilter::admits`] per identity |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
-//! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], what can settle each origin ([`order::stale_taken`] once, then [`settlements`] of each origin), and the names approvals stand on that cannot be told now |
+//! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], what can settle each origin ([`origins_asked`] of the origins, what the approving commands would approve foreseen once, [`Foreseen::of`], then [`settle_all`]), and the names approvals stand on that cannot be told now |
 //! | `stats` | [`stats::of`](crate::domain::shelf::stats::of), from the ledger and the keys of the shelf; [`assess`] only for the health |
 //!
 //! [`Schema::declared`]: crate::domain::shelf::schema::Schema::declared
@@ -26,8 +26,9 @@
 //! [`StatusFilter::admits`]: crate::domain::shelf::filter::StatusFilter::admits
 //! [`Assessment::roots_of`]: crate::domain::shelf::freshness::Assessment::roots_of
 //! [`Freshness::Degraded`]: crate::domain::shelf::freshness::Freshness::Degraded
-//! [`order::stale_taken`]: crate::domain::shelf::order::stale_taken
-//! [`settlements`]: crate::domain::shelf::settle::settlements
+//! [`origins_asked`]: crate::domain::shelf::settle::origins_asked
+//! [`Foreseen::of`]: crate::domain::shelf::order::Foreseen::of
+//! [`settle_all`]: crate::domain::shelf::settle::settle_all
 //! [`resolve`]: crate::domain::shelf::lookup::resolve
 //! [domain_trace]: crate::domain::shelf::trace::trace
 
@@ -40,9 +41,9 @@ use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing};
 use crate::domain::shelf::ledger::{JudgedAt, MovedTo, Quorum};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
-use crate::domain::shelf::order;
+use crate::domain::shelf::order::Foreseen;
 use crate::domain::shelf::schema::{ArtifactPropagation, EntryName};
-use crate::domain::shelf::settle::settlements;
+use crate::domain::shelf::settle::{origins_asked, settle_all};
 use crate::domain::shelf::stats;
 use crate::domain::shelf::trace::{LinkEnd, trace};
 
@@ -479,15 +480,17 @@ impl<P: ShelfRead> ShelfApp<P> {
                     })
             })
             .collect();
-        // What `--stale` would approve again, asked once for every origin.
-        let taken = order::stale_taken(&loaded.shelf, &loaded.ledger, &assessment);
-        let origins = assessment
-            .origins()
+        // What the approving commands would approve, foreseen once for every origin,
+        // and each origin settled with it.
+        let foreseen = Foreseen::of(
+            &loaded.shelf,
+            &loaded.ledger,
+            &assessment,
+            origins_asked(assessment.origins()),
+        );
+        let origins = settle_all(foreseen)
             .into_iter()
-            .map(|group| SettledOrigin {
-                next: settlements(&group, &taken),
-                group,
-            })
+            .map(|(group, next)| SettledOrigin { group, next })
             .collect();
         Ok(StaleReport {
             entries,

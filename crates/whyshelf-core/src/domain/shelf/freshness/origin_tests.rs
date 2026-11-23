@@ -1,15 +1,20 @@
 //! Tests of where degradations start, grouped across documents
 //! ([`Assessment::origins`]).
 
-use crate::domain::shelf::artifact::ArtifactHash;
+use crate::domain::actor::{Actor, Attribution};
+use crate::domain::nonempty::NonBlank;
+use crate::domain::shelf::artifact::{ArtifactHash, ArtifactReading};
 use crate::domain::shelf::fixtures_tests::{
-    approve, approved, deny, deprecate, docid, file_artifact, fr, fr_titled, ledger, lines, list,
-    reading, shelf, shelf_with, sp_testing, text,
+    admitted, approve, approve_as, approved, asking, deny, deprecate, docid, file_artifact, fr,
+    fr_titled, jid, ledger, lines, list, reading, ruled_shelf, shelf, shelf_answered, shelf_with,
+    sp_testing, text,
 };
 use crate::domain::shelf::graph::CycleSource;
-use crate::domain::shelf::ledger::{JudgedAt, Record};
-use crate::domain::shelf::order;
-use crate::domain::shelf::settle::{Settlement, settlements};
+use crate::domain::shelf::ledger::{
+    ApproveFrame, Decision, FrameRefusal, JudgedAt, Record, frame_approve, frame_present,
+};
+use crate::domain::shelf::order::{self, Foreseen};
+use crate::domain::shelf::settle::{Settlement, origins_asked, settle_all, settlements};
 
 use super::assess_unasked as assess;
 use super::*;
@@ -599,9 +604,8 @@ fn an_origin_edited_and_lapsed_keeps_which_approval_holds_which_event() {
         ]
     );
     // The diff that shows the edit is FR-2's: FR-1's own approval saw the edit.
-    let taken = order::stale_taken(&now, &l, &assessment);
     assert_eq!(
-        settlements(group, &taken).first(),
+        next_at(&settled(&now, &l), 1).first(),
         Some(&Settlement::ReadDiff(docid(2)))
     );
 }
@@ -622,7 +626,8 @@ fn an_edit_of_an_approval_on_a_pending_upstream_is_not_settled_by_stale() {
         .iter()
         .find(|g| g.origin == Origin::Doc(docid(1)))
         .expect("an origin at FR-1");
-    assert!(!settlements(edited, &taken).contains(&Settlement::ApproveStale));
+    let foreseen = Foreseen::of_parts(taken, BTreeMap::new());
+    assert!(!settlements(edited, &foreseen).contains(&Settlement::ApproveStale));
 }
 
 /// FR-1 approved on `then` and then on `now` with nothing else stale, and the origin
@@ -639,8 +644,9 @@ fn not_settled_by_stale_where_the_frame_refuses(now: &Shelf, l: &Ledger) {
         .iter()
         .find(|g| g.origin == Origin::Doc(docid(1)))
         .expect("an origin at FR-1");
-    assert!(settlements(at_fr1, &ids(&[1])).contains(&Settlement::ApproveStale));
-    assert!(!settlements(at_fr1, &taken).contains(&Settlement::ApproveStale));
+    let taking = |again| Foreseen::of_parts(again, BTreeMap::new());
+    assert!(settlements(at_fr1, &taking(ids(&[1]))).contains(&Settlement::ApproveStale));
+    assert!(!settlements(at_fr1, &taking(taken)).contains(&Settlement::ApproveStale));
 }
 
 #[test]
@@ -691,4 +697,281 @@ fn a_link_rewritten_to_a_denied_document_is_not_settled_by_stale() {
     );
     let l = ledger(vec![first, second, deny(&at_approval, 9, 1010, 20)]);
     not_settled_by_stale_where_the_frame_refuses(&now, &l);
+}
+
+/// What settles each origin at time 100, read as `stale` reads it: the documents the
+/// settlements approve by name asked about once for the shelf, and the origins
+/// settled with what was foreseen of them.
+fn settled(now: &Shelf, l: &Ledger) -> Vec<(OriginGroup, Vec<Settlement>)> {
+    let assessment = assess(now, l, JudgedAt::new(100));
+    settle_all(Foreseen::of(
+        now,
+        l,
+        &assessment,
+        origins_asked(assessment.origins()),
+    ))
+}
+
+/// The origin at document `n`, with its settlements.
+fn settled_at(
+    settled: &[(OriginGroup, Vec<Settlement>)],
+    n: u128,
+) -> &(OriginGroup, Vec<Settlement>) {
+    settled
+        .iter()
+        .find(|(group, _)| group.origin == Origin::Doc(docid(n)))
+        .unwrap_or_else(|| panic!("an origin at {n} in {settled:?}"))
+}
+
+/// The settlements of the origin at document `n`.
+fn next_at(settled: &[(OriginGroup, Vec<Settlement>)], n: u128) -> &[Settlement] {
+    &settled_at(settled, n).1
+}
+
+/// Whether `stale` offers `settlement` for the origin at document `n`.
+fn offers(now: &Shelf, l: &Ledger, n: u128, settlement: &Settlement) -> bool {
+    next_at(&settled(now, l), n).contains(settlement)
+}
+
+#[test]
+fn every_origin_asked_about_is_settled_in_the_order_given() {
+    // FR-1 is edited, and the approval of FR-2 lapsed: two origins.
+    let then = shelf(vec![fr(1, &[]), fr(2, &[])]);
+    let now = shelf(vec![fr_titled(1, "edited", &[]), fr(2, &[])]);
+    let first = approve(&then, &ledger(vec![]), 1, 1001, 10, None);
+    let second = approve(&then, &ledger(vec![first.clone()]), 2, 1002, 10, Some(50));
+    let l = ledger(vec![first, second]);
+    let origins = assess(&now, &l, JudgedAt::new(100)).origins();
+    assert_eq!(origins.len(), 2, "{origins:?}");
+    let settled = settled(&now, &l);
+    let groups: Vec<OriginGroup> = settled.iter().map(|(group, _)| group.clone()).collect();
+    assert_eq!(groups, origins);
+    assert_eq!(next_at(&settled, 2), [Settlement::ApproveUntil(docid(2))]);
+}
+
+/// FR-1 stands on FR-9 and is approved to lapse at 50; FR-3 replaces FR-9, which is
+/// deprecated after the approval when `deprecated`.
+fn lapsed_on_a_replaced_upstream(deprecated: bool) -> (Shelf, Ledger) {
+    let replacing = reading(
+        "findings/fr-3.md",
+        3,
+        "FR-3",
+        &[("title", text("new")), ("supersedes", list(&["FR-9"]))],
+    );
+    let s = shelf(vec![fr(1, &["FR-9"]), fr(9, &[]), replacing]);
+    let first = approve(&s, &ledger(vec![]), 9, 1009, 10, None);
+    let second = approve(&s, &ledger(vec![first.clone()]), 1, 1001, 10, Some(50));
+    let mut records = vec![first, second];
+    if deprecated {
+        records.push(deprecate(&s, 9, 1010, 20));
+    }
+    (s, ledger(records))
+}
+
+#[test]
+fn an_expiry_on_an_upstream_deprecated_with_a_successor_is_not_offered_its_approval() {
+    let (s, l) = lapsed_on_a_replaced_upstream(true);
+    let settled = settled(&s, &l);
+    let expiry = Settlement::ApproveUntil(docid(1));
+    assert!(!next_at(&settled, 1).contains(&expiry), "{settled:?}");
+    // The refusal is seen at the upstream: superseded, with FR-1 under it.
+    let (upstream, _) = settled_at(&settled, 9);
+    assert!(upstream.events().contains(&OriginEvent::UpstreamSuperseded));
+    assert!(upstream.degraded.contains(&docid(1)));
+}
+
+#[test]
+fn an_expiry_on_an_upstream_that_stands_is_offered_its_approval() {
+    let (s, l) = lapsed_on_a_replaced_upstream(false);
+    assert!(offers(&s, &l, 1, &Settlement::ApproveUntil(docid(1))));
+}
+
+/// FR-2 is approved standing on FR-1, which nobody decided about, and a link of FR-1
+/// names FR-9, which is denied when `denied`.
+fn on_a_pending_upstream_on(denied: bool) -> (Shelf, Ledger) {
+    let s = shelf(vec![fr(1, &["FR-9"]), fr(2, &["FR-1"]), fr(9, &[])]);
+    let mut records = vec![approve(&s, &ledger(vec![]), 2, 1002, 10, None)];
+    if denied {
+        records.push(deny(&s, 9, 1009, 20));
+    }
+    (s, ledger(records))
+}
+
+#[test]
+fn a_pending_upstream_whose_link_names_a_denied_document_is_not_offered_its_approval() {
+    let (s, l) = on_a_pending_upstream_on(true);
+    assert!(!offers(&s, &l, 1, &Settlement::ApprovePending(docid(1))));
+}
+
+#[test]
+fn a_pending_upstream_whose_links_name_what_stands_is_offered_its_approval() {
+    // FR-9 is pending too: the frame takes FR-1, whose approval is stale from the
+    // start.
+    let (s, l) = on_a_pending_upstream_on(false);
+    assert!(offers(&s, &l, 1, &Settlement::ApprovePending(docid(1))));
+}
+
+/// FR-2 is approved standing on FR-1, which nobody decided about, and a link of FR-1
+/// names FR-7, which is on the shelf only when `there`.
+fn on_a_pending_upstream_linking(there: bool) -> (Shelf, Ledger) {
+    let mut readings = vec![fr(1, &["FR-7"]), fr(2, &["FR-1"])];
+    if there {
+        readings.push(fr(7, &[]));
+    }
+    let s = shelf(readings);
+    let l = ledger(vec![approve(&s, &ledger(vec![]), 2, 1002, 10, None)]);
+    (s, l)
+}
+
+#[test]
+fn a_pending_upstream_whose_link_cannot_be_followed_is_not_offered_its_approval() {
+    let (s, l) = on_a_pending_upstream_linking(false);
+    assert!(
+        matches!(
+            frame_approve(&s, &l, docid(1)),
+            Err(FrameRefusal::UnresolvedDepends { .. })
+        ),
+        "{:?}",
+        frame_approve(&s, &l, docid(1))
+    );
+    assert!(!offers(&s, &l, 1, &Settlement::ApprovePending(docid(1))));
+}
+
+#[test]
+fn a_pending_upstream_whose_link_is_followed_is_offered_its_approval() {
+    let (s, l) = on_a_pending_upstream_linking(true);
+    assert!(offers(&s, &l, 1, &Settlement::ApprovePending(docid(1))));
+}
+
+/// The design `cache` is approved standing on SP-2, which nobody decided about and
+/// which is tested by `tests/a.rs`; its adapter can tell about the file only when
+/// `told`.
+fn on_a_pending_spec(told: bool) -> (Shelf, Ledger) {
+    let readings = vec![
+        fr(1, &[]),
+        sp_testing(2, &["FR-1"], &["tests/a.rs"]),
+        reading(
+            "designs/d.md",
+            3,
+            "cache",
+            &[("title", text("d")), ("specs", list(&["SP-2"]))],
+        ),
+    ];
+    let s = if told {
+        shelf_with(readings, &[("tests/a.rs", Some(h("a")))])
+    } else {
+        let offline = ArtifactReading::cannot_tell(NonBlank::new("offline").unwrap());
+        shelf_answered(readings, &[("tests/a.rs", offline)])
+    };
+    let l = ledger(vec![approve(&s, &ledger(vec![]), 3, 1003, 10, None)]);
+    (s, l)
+}
+
+#[test]
+fn a_pending_upstream_on_an_artifact_that_cannot_be_told_is_not_offered_its_approval() {
+    let (s, l) = on_a_pending_spec(false);
+    assert!(
+        matches!(
+            frame_approve(&s, &l, docid(2)),
+            Err(FrameRefusal::ArtifactUnknown { .. })
+        ),
+        "{:?}",
+        frame_approve(&s, &l, docid(2))
+    );
+    assert!(!offers(&s, &l, 2, &Settlement::ApprovePending(docid(2))));
+}
+
+#[test]
+fn a_pending_upstream_on_an_artifact_that_is_told_is_offered_its_approval() {
+    let (s, l) = on_a_pending_spec(true);
+    assert!(offers(&s, &l, 2, &Settlement::ApprovePending(docid(2))));
+}
+
+/// Under a rule of two names: FR-9 approved by `ana` and `bo`, FR-1 on it by `ana`
+/// alone, FR-2 on FR-1 by both; FR-9 is then denied when `denied`.
+fn awaiting_on(denied: bool) -> (Shelf, Ledger) {
+    let s = ruled_shelf(
+        asking(2, None),
+        vec![fr(1, &["FR-9"]), fr(2, &["FR-1"]), fr(9, &[])],
+    );
+    let mut records: Vec<Record> = Vec::new();
+    for (subject, judgement, by) in [
+        (9, 1009, "ana"),
+        (9, 1010, "bo"),
+        (1, 1001, "ana"),
+        (2, 1002, "ana"),
+        (2, 1003, "bo"),
+    ] {
+        let so_far = admitted(&s, records.clone());
+        records.push(approve_as(&s, &so_far, subject, judgement, (by, 10, None)));
+    }
+    if denied {
+        let frame = frame_present(&s, docid(9)).unwrap();
+        let by = Attribution::one(Actor::new("ana").unwrap());
+        let denial = Decision::deny(jid(1011), frame, by, JudgedAt::new(20), None).unwrap();
+        records.push(Record::Decision(denial));
+    }
+    let l = admitted(&s, records);
+    (s, l)
+}
+
+#[test]
+fn an_awaiting_upstream_whose_own_upstream_is_denied_is_not_offered_another_name() {
+    let (s, l) = awaiting_on(true);
+    assert!(!offers(&s, &l, 1, &Settlement::ApproveAsAnother(docid(1))));
+}
+
+#[test]
+fn an_awaiting_upstream_whose_own_upstream_stands_is_offered_another_name() {
+    let (s, l) = awaiting_on(false);
+    assert!(offers(&s, &l, 1, &Settlement::ApproveAsAnother(docid(1))));
+}
+
+#[test]
+fn an_expiry_of_a_document_not_valid_is_not_offered_its_approval() {
+    // FR-1 is approved to lapse at 50, and its file is then gone: the lapse is told
+    // beside it.
+    let then = shelf(vec![fr(1, &[]), fr(2, &[])]);
+    let l = ledger(vec![approve(&then, &ledger(vec![]), 1, 1001, 10, Some(50))]);
+    let now = shelf(vec![fr(2, &[])]);
+    let settled = settled(&now, &l);
+    let (at_fr1, next) = settled_at(&settled, 1);
+    assert_eq!(
+        at_fr1.events(),
+        BTreeSet::from([OriginEvent::Expired, OriginEvent::NotValid])
+    );
+    assert!(!next.contains(&Settlement::ApproveUntil(docid(1))));
+}
+
+/// FR-2 is approved standing on FR-1, which nobody decided about; then the link of
+/// FR-2 no longer names FR-1, and, when `closing`, a link of FR-1 names FR-2.
+fn relinked(closing: bool) -> (Shelf, Ledger) {
+    let then = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
+    let l = approved(&then, &[2]);
+    let back: &[&str] = if closing { &["FR-2"] } else { &[] };
+    (shelf(vec![fr(1, back), fr(2, &[])]), l)
+}
+
+#[test]
+fn a_pending_upstream_whose_approval_would_close_a_cycle_of_frames_is_not_offered_it() {
+    let (now, l) = relinked(true);
+    // There is no cycle of links. The frame of FR-2's approval still pins FR-1, so
+    // an approval of FR-1 on FR-2 closes a cycle among the frames: what is foreseen
+    // of `--stale` does not tell it, and the frame a run of one meets does.
+    assert_eq!(ApproveFrame::foresee(&now, &l, docid(1)), Ok(()));
+    assert!(
+        matches!(
+            frame_approve(&now, &l, docid(1)),
+            Err(FrameRefusal::InCycle(_))
+        ),
+        "{:?}",
+        frame_approve(&now, &l, docid(1))
+    );
+    assert!(!offers(&now, &l, 1, &Settlement::ApprovePending(docid(1))));
+}
+
+#[test]
+fn a_pending_upstream_whose_approval_closes_no_cycle_is_offered_it() {
+    let (now, l) = relinked(false);
+    assert!(offers(&now, &l, 1, &Settlement::ApprovePending(docid(1))));
 }
