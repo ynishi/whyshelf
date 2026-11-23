@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "93788d4514706137d5de80779e11df8d3778a0be",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:99e0dcd22bf1a2e29d4873712fba5315d25823d993a3beb8f9349beb1254bb9b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/fmt.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795446922960,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4bf1e23b6aa06e20c49a1e5ee6aac8efeb1744b3",
+      "hash": "sha256:9afad7f4e49382e60101c43961b7eff455aa4f212f347d9f4481ec51bf8ca281",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "52"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+    }
+  ],
+  "id": "01a208f9-fc04-7771-aa53-03d2412848ed",
+  "kind": "decision",
+  "reason": "Read again after #113: units divides what does not hold into units that share nothing, joined by what a document stands on or names, the files its artifacts live in, untold names and the chain of outside upstreams that hold it back, with what may join them unseen counted",
+  "revision": "56bb787df6bd11f7fcf062da7bde3a242b5edf31",
+  "seen": "sha256:63d12d81fd2c0463b8556a8ef48b5ad322a900889692c7fd937f76dfd9b7ca2d",
+  "seen_address": "3904e084fa73b8494c369848a084ae274df9024b",
+  "subject": "01a1c7ad-0a7f-7355-b2db-c8107c1a1177",
+  "v": 1,
+  "verb": "approve"
+}

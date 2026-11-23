@@ -13,6 +13,7 @@ use whyshelf_core::domain::shelf::order::{Hold, Rule};
 use whyshelf_infra::shelf::ledger::to_json;
 
 use super::cause::absent_detail;
+use super::words::hold_word;
 use super::{CauseOut, DocRef, Namer};
 
 /// The answer of `judge`: every record written, and every approval left out, each in
@@ -405,17 +406,6 @@ fn left_out_detail(namer: &Namer<'_>, left: &LeftOut) -> String {
                 }
             }
         }
-    }
-}
-
-/// The word for why an upstream holds an approval back.
-fn hold_word(hold: Hold) -> &'static str {
-    match hold {
-        Hold::Broken => "broken",
-        Hold::Pending => "pending",
-        Hold::Stale => "stale",
-        Hold::Awaiting => "awaiting",
-        Hold::LeftOut => "left_out",
     }
 }
 

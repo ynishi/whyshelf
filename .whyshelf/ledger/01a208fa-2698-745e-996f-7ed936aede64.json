@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "09e2eafea40c7d3e6f98a469e7c70a222d655853",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b88464351a77a47856bfe0215ccf3a1574ab1ad4426e9e1503532dac04a193a3",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "db21b3debdd4e2df3df16a6c4a47f7180b83fdf2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:36e188269c4ffb34945bee5df60ecfb316495e5b83f30c8b5cbe4506aed3ebe7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/new_many.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795446922960,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4937a046e315e71bc5f4a581e4c734265afbc1b0",
+      "hash": "sha256:16441793e0701b6a5c293308826f0028ce5f8fb44f3d80f87a16f35a644eb9bd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "76"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e4f4-a1a7-70a3-a224-a7b68ad2e076"
+    }
+  ],
+  "id": "01a208fa-2698-745e-996f-7ed936aede64",
+  "kind": "decision",
+  "reason": "Read again after #113: units divides what does not hold into units that share nothing, joined by what a document stands on or names, the files its artifacts live in, untold names and the chain of outside upstreams that hold it back, with what may join them unseen counted",
+  "revision": "56bb787df6bd11f7fcf062da7bde3a242b5edf31",
+  "seen": "sha256:a1a4abce1b9be5b2f72503676db03eb69d8cd9abde3b0520045f0552dba303c1",
+  "seen_address": "0fd9091fb8719689a06404cff60202fccc730c4a",
+  "subject": "01a1e4f4-e2ca-70f8-b581-47184c25b15a",
+  "v": 1,
+  "verb": "approve"
+}

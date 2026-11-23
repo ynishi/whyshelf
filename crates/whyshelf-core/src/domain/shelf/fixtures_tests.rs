@@ -260,6 +260,21 @@ pub(super) fn shelf_answered(
     shelf_answered_by(&schema(), readings, artifacts)
 }
 
+/// The schema of [`decls`] with a second `Depends` link of the findings, `also`, into
+/// the findings: a finding then has two links it stands on, `base` and `also`.
+pub(super) fn schema_of_two_links() -> Schema {
+    let mut decls = decls();
+    decls[0]
+        .links
+        .push(link("also", "finding", Propagation::Depends));
+    Schema::validate(decls, &spaces()).unwrap()
+}
+
+/// As [`shelf`], with the books of `schema`.
+pub(super) fn shelf_of(schema: &Schema, readings: Vec<DocReading>) -> Shelf {
+    shelf_answered_by(schema, readings, &[])
+}
+
 /// As [`shelf_answered`], with the books of `schema`.
 fn shelf_answered_by(
     schema: &Schema,

@@ -39,6 +39,7 @@ use crate::domain::shelf::schema::{
 use crate::domain::shelf::settle::Settlement;
 use crate::domain::shelf::snapshot::{ItemCompared, Retrieval, Snapshot, SnapshotItem};
 use crate::domain::shelf::stats::Stats;
+use crate::domain::shelf::units::Units;
 use crate::domain::shelf::untold::UntoldName;
 
 use super::ports::UnreadableRecord;
@@ -698,6 +699,19 @@ impl ReachReport {
                 Placement::Only(_) | Placement::Partly(_) => None,
             })
     }
+}
+
+/// The result of `units`: what does not hold, divided into units of work that share
+/// nothing, read at the side after. The rules are on the page of
+/// [`units`](crate::domain::shelf::units).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnitsReport {
+    /// The units, and the artifacts whose place cannot be told.
+    pub units: Units,
+    /// The keys of the valid documents.
+    pub names: Names,
+    /// What is wrong around them.
+    pub health: Health,
 }
 
 /// An approval that does not hold, with where it starts to fail.

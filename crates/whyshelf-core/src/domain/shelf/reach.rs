@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{NonBlank, NonEmptySet, TextLiteral};
+use crate::domain::nonempty::NonEmptySet;
 
 use super::artifact::ArtifactKey;
 use super::build::{DocState, Shelf};
@@ -146,10 +146,6 @@ pub(crate) struct Placed {
     pub(crate) placement: Placement,
 }
 
-/// Why an artifact has no place when its adapter gave no answer for its name.
-const NO_PLACEMENT: TextLiteral =
-    TextLiteral::new("the adapter of its space gave no answer of where it lives");
-
 impl Reach {
     /// The reach of `named` in `shelf`: the walk down from them (R1, [`walk`]), and for
     /// each document it reached, the artifacts it stands on by its footing in `shelf`
@@ -208,7 +204,7 @@ impl Reach {
             let placement = placements
                 .get(artifact)
                 .cloned()
-                .unwrap_or_else(|| Placement::Unplaced(NonBlank::from(NO_PLACEMENT)));
+                .unwrap_or_else(Placement::unanswered);
             if let Some(files) = placement.files() {
                 found.files.extend(files.iter().cloned());
             }
@@ -431,7 +427,7 @@ mod tests {
                 sp_testing(3, &["FR-9"], &[]),
             ]);
             let reach = Reach::of(&named(&[1, 9, 77]), &s, &ledger(Vec::new()));
-            let why = NonBlank::new("no place").unwrap();
+            let why = crate::domain::nonempty::NonBlank::new("no place").unwrap();
             let placements = BTreeMap::from([
                 (file_artifact("t/a.rs"), only(&["t/a.rs"])),
                 (
@@ -478,7 +474,7 @@ mod tests {
             assert_eq!(found.gone, ids(&[77]));
             // An artifact its adapter gave no answer for has no place, and says so.
             let found = reach.files(&s, &BTreeMap::new());
-            let none = Placement::Unplaced(NonBlank::from(NO_PLACEMENT));
+            let none = Placement::unanswered();
             assert_eq!(found.artifacts.len(), 3);
             assert!(
                 found

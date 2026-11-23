@@ -1080,6 +1080,20 @@ impl Assessment {
         &self.standings
     }
 
+    /// Every approval that no longer holds ([`Freshness::Degraded`]), by identity,
+    /// with its degradation: the one place the set of degraded approvals is read from
+    /// the standings. What `--stale` takes ([`order::stale`](super::order::stale)),
+    /// the entries of `stale`, the origins ([`Assessment::origins`]), the moves
+    /// `check` lists and the documents `units` divides are all read from it.
+    pub(crate) fn degraded(&self) -> impl Iterator<Item = (DocId, &Degradation)> {
+        self.standings
+            .iter()
+            .filter_map(|(id, standing)| match standing.freshness() {
+                Some(Freshness::Degraded(degradation)) => Some((*id, degradation)),
+                Some(Freshness::Fresh) | None => None,
+            })
+    }
+
     /// Where one identity stands: the one answer for any identity, listed or not.
     ///
     /// The assessment lists every identity the ledger or the shelf knows. One it does
@@ -1182,11 +1196,8 @@ impl Assessment {
         // An origin exists only once a cause is under it, so what it holds is made
         // with that cause's event and holder, and the rest are added to it.
         let mut by_origin: BTreeMap<Origin, Gathered> = BTreeMap::new();
-        for (id, standing) in &self.standings {
-            if !matches!(standing.freshness(), Some(Freshness::Degraded(_))) {
-                continue;
-            }
-            for root in self.roots_of(*id) {
+        for (id, _) in self.degraded() {
+            for root in self.roots_of(id) {
                 // A root's path runs from the document asked about to the one that
                 // holds the cause, and is never empty.
                 let Some(&holder) = root.path.last() else {
@@ -1196,7 +1207,7 @@ impl Assessment {
                     let (degraded, held) = by_origin.entry(origin).or_insert_with(|| {
                         (BTreeSet::new(), NonEmptySet::new((event, holder), []))
                     });
-                    degraded.insert(*id);
+                    degraded.insert(id);
                     held.insert((event, holder));
                 }
             }

@@ -1,5 +1,5 @@
 //! The use cases that only read: `check`, `map`, `status`, `get`, `trace`, `reach`,
-//! `stale`, `stats`.
+//! `stale`, `units`, `stats`.
 //!
 //! Each builds the schema, the shelf and the ledger ([`load`](super::load)) and asks
 //! the entries of the domain; none writes, and the type they are generic over
@@ -14,6 +14,7 @@
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
 //! | `reach` | [`resolve`] for each reference, then the reach of the documents named ([`reach`](crate::domain::shelf::reach): the walk down, the artifacts each document reached stands on), where each artifact lives ([`ArtifactSource::places`]), the files of all of it, and the same as `status` for every document reached |
 //! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], what can settle each origin ([`origins_asked`] of the origins, what the approving commands would approve foreseen once, [`Foreseen::of`], then [`settle_all`]), and the names approvals stand on that cannot be told now |
+//! | `units` | [`assess`], then [`units::plan`](crate::domain::shelf::units::plan) (the approvals that are [`Freshness::Degraded`], and, asked, the pending documents, with what each stands on and what holds it back), where the artifacts they stand on live ([`ArtifactSource::places`]), then [`units::divide`](crate::domain::shelf::units::divide) |
 //! | `stats` | [`stats::of`](crate::domain::shelf::stats::of), from the ledger and the keys of the shelf; [`assess`] only for the health |
 //!
 //! [`Schema::declared`]: crate::domain::shelf::schema::Schema::declared
@@ -40,7 +41,7 @@ use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec};
 use crate::domain::shelf::artifact::{ArtifactKey, Listings};
 use crate::domain::shelf::filter::{StatusFilter, StatusFilterAsk};
-use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing};
+use crate::domain::shelf::freshness::{Cause, Notice, Standing};
 use crate::domain::shelf::ledger::{JudgedAt, MovedTo, Quorum};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
@@ -50,6 +51,7 @@ use crate::domain::shelf::schema::{ArtifactPropagation, EntryName};
 use crate::domain::shelf::settle::{origins_asked, settle_all};
 use crate::domain::shelf::stats;
 use crate::domain::shelf::trace::{LinkEnd, trace};
+use crate::domain::shelf::units::{self, UnitsOf};
 
 use super::ShelfApp;
 use super::cover::artifact_lists;
@@ -59,8 +61,8 @@ use super::ports::{ArtifactSource, ShelfPort, ShelfRead, port};
 use super::report::{
     Absent, Awaiting, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, GetReport, MapReport,
     MovedAway, ReachReport, ReachedArtifact, ReachedDoc, RepeatedExemption, SettledOrigin,
-    StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown,
-    UnneededExemption, UpstreamEdge, UpstreamEnd,
+    StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, UnitsReport,
+    Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 use super::state::Side;
 
@@ -209,25 +211,23 @@ impl<P: ShelfRead> ShelfApp<P> {
             .collect();
         // The links behind a move: the `ArtifactMoved` causes of every approval.
         let moved = assessment
-            .standings()
-            .iter()
-            .flat_map(|(id, standing)| {
-                let key = loaded.shelf.doc(*id).map(|doc| doc.key().clone());
-                let causes = match standing.freshness() {
-                    Some(Freshness::Degraded(d)) => d.causes().iter().collect(),
-                    _ => Vec::new(),
-                };
-                causes.into_iter().filter_map(move |cause| match cause {
-                    Cause::ArtifactMoved { link, written, pin } => Some(MovedAway {
-                        doc: *id,
-                        key: key.clone(),
-                        link: link.clone(),
-                        artifact: written.clone(),
-                        moved_to: pin.read_as().clone(),
-                        declared: pin.moved().map(MovedTo::declared)?,
-                    }),
-                    _ => None,
-                })
+            .degraded()
+            .flat_map(|(id, degradation)| {
+                let key = loaded.shelf.doc(id).map(|doc| doc.key().clone());
+                degradation
+                    .causes()
+                    .iter()
+                    .filter_map(move |cause| match cause {
+                        Cause::ArtifactMoved { link, written, pin } => Some(MovedAway {
+                            doc: id,
+                            key: key.clone(),
+                            link: link.clone(),
+                            artifact: written.clone(),
+                            moved_to: pin.read_as().clone(),
+                            declared: pin.moved().map(MovedTo::declared)?,
+                        }),
+                        _ => None,
+                    })
             })
             .collect();
         // The exemptions, as freshness read them: those that take the place of a gap,
@@ -514,15 +514,11 @@ impl<P: ShelfRead> ShelfApp<P> {
             assessment: &assessment,
         };
         let mut entries: Vec<StaleEntry> = assessment
-            .standings()
-            .iter()
-            .filter_map(|(id, standing)| match standing.freshness() {
-                Some(Freshness::Degraded(degradation)) => Some(StaleEntry {
-                    row: view.row(*id),
-                    level: degradation.level(),
-                    roots: assessment.roots_of(*id),
-                }),
-                _ => None,
+            .degraded()
+            .map(|(id, degradation)| StaleEntry {
+                row: view.row(id),
+                level: degradation.level(),
+                roots: assessment.roots_of(id),
             })
             .collect();
         entries.sort_by(|a, b| b.level.cmp(&a.level).then(a.row.id.cmp(&b.row.id)));
@@ -576,6 +572,40 @@ impl<P: ShelfRead> ShelfApp<P> {
             entries,
             origins,
             unknown,
+            names: loaded.names(),
+            health: view.health(),
+        })
+    }
+
+    /// What does not hold, divided into units of work that share nothing: the
+    /// approvals that no longer hold, and with [`UnitsOf::DegradedAndPending`] the
+    /// pending documents too. The rules are the domain's
+    /// ([`units`]): it reads what to divide once
+    /// ([`plan`](units::plan)), asks the adapters where the artifacts those stand on
+    /// live ([`ArtifactSource::places`], once, at the side after, and not at all when
+    /// none is stood on), and divides by the answers ([`divide`](units::divide)). An
+    /// adapter that cannot say where a name lives answers so for that name; an error
+    /// of the ask as a whole is [`ShelfError::Port`].
+    pub async fn units(&self, of: UnitsOf) -> Result<UnitsReport, ShelfError> {
+        let loaded = load(&self.ports).await?;
+        let assessment = loaded.assess(&Listings::NotAsked);
+        let view = View {
+            loaded: &loaded,
+            assessment: &assessment,
+        };
+        let plan = units::plan(&loaded.shelf, &loaded.ledger, &assessment, of);
+        let asked = plan.asks();
+        let placements = match asked.is_empty() {
+            true => BTreeMap::new(),
+            false => self
+                .ports
+                .artifacts()
+                .places(Side::After, &asked)
+                .await
+                .map_err(port(ShelfPort::Artifacts))?,
+        };
+        Ok(UnitsReport {
+            units: units::divide(plan, &placements),
             names: loaded.names(),
             health: view.health(),
         })

@@ -76,6 +76,7 @@ use whyshelf_core::domain::shelf::filter::{FieldAsk, FieldWant, StatusFilterAsk}
 use whyshelf_core::domain::shelf::freshness::StandingKind;
 use whyshelf_core::domain::shelf::ledger::{JudgementId, ReaderCount};
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
+use whyshelf_core::domain::shelf::units::UnitsOf;
 use whyshelf_infra::shelf::Project;
 use whyshelf_infra::shelf::init;
 use whyshelf_infra::shelf::system::parse_time;
@@ -293,6 +294,19 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
                 failed => failed,
             }
         }),
+        BooksCommand::Units { pending } => {
+            let of = match pending {
+                true => UnitsOf::DegradedAndPending,
+                false => UnitsOf::Degraded,
+            };
+            ShelfApp::new(project).units(of).await.map(|r| {
+                let exit = print(&output::units(&r));
+                for warning in output::units_warnings(&r) {
+                    eprintln!("{warning}");
+                }
+                exit
+            })
+        }
         BooksCommand::Stats { since } => {
             match since
                 .as_deref()

@@ -22,7 +22,11 @@
 use std::collections::BTreeSet;
 
 use crate::domain::location::RelPath;
-use crate::domain::nonempty::{NonBlank, NonEmptySet};
+use crate::domain::nonempty::{NonBlank, NonEmptySet, TextLiteral};
+
+/// Why a name has no place when its adapter gave no answer for it.
+const NO_ANSWER: TextLiteral =
+    TextLiteral::new("the adapter of its space gave no answer of where it lives");
 
 /// Where one name of a space lives in the tree of the project.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +48,12 @@ impl Placement {
             Self::Only(files) | Self::Partly(files) => Some(files.as_set()),
             Self::Unplaced(_) => None,
         }
+    }
+
+    /// The place of a name its adapter gave no answer for: unplaced, with why. The one
+    /// place every answer that asks where names live reads a missing answer as.
+    pub(crate) fn unanswered() -> Self {
+        Self::Unplaced(NonBlank::from(NO_ANSWER))
     }
 }
 
