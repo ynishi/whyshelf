@@ -53,7 +53,9 @@ fn declared(
     target: SameMeaningTarget,
     judgement: u128,
 ) -> Vec<Record> {
-    let of = frame_same_meaning(now, &ledger(records.clone()), target, None).unwrap();
+    let of = frame_same_meaning(now, &ledger(records.clone()), target, None)
+        .unwrap()
+        .of();
     records.push(declaration(judgement, of));
     records
 }

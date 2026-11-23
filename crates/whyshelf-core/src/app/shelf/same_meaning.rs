@@ -2,11 +2,11 @@
 //!
 //! ```text
 //!   reference or name ---- resolve -----------------> a SameMeaningTarget
-//!   target            ---- frame_same_meaning ------> what to declare (every earlier
-//!                                                     hash an approval pinned), or a
+//!   target            ---- frame_same_meaning ------> what to declare (the edits stale
+//!                                                     tells as changes), or a
 //!                                                     SameMeaningRefusal
-//!   + actor           ---- Ledger::not_declared_by -> without what the actor declared
-//!                                                     already, or NothingToDeclare
+//!   + actor           ---- Framed::not_declared_by -> without what the actor declared
+//!                                                     already, or AlreadyDeclaredBy
 //!   + time, new id, reason
 //!                     ---- SameMeaning::new,
 //!                          in_book ----------------> a Record, naming its document's book
@@ -90,11 +90,16 @@ impl<P: ShelfWrite> ShelfApp<P> {
     /// Declare, in order and on one reading, that each edit named keeps the meaning,
     /// and append every declaration, or none.
     ///
-    /// Refused (nothing written): a document that is not valid, a name of an
-    /// artifact no document links, linked in two spaces, with nothing behind it now
-    /// or that cannot be told now, and an edit no approval that stands pinned another
-    /// hash of (or one already declared: joined by the ledger, or declared by the
-    /// same name before).
+    /// Refused (nothing written): a document that is not valid, an edit of a pinned
+    /// hash with nothing behind it now or that cannot be told now, and a pin whose
+    /// content stale does not compare now (its link no longer writes the name, or its
+    /// document is not valid). Refused as a request to put right (nothing written
+    /// either): a name of an artifact no document links or that is linked in two
+    /// spaces, nothing to declare (no pin of it holds a hash that changed, whatever is
+    /// there now, or the edit is joined by the ledger already), a pin whose comparison
+    /// changed, several earlier hashes, a hash named that no pin holds as changed (one
+    /// nothing pins, the hash now, or one that already means the same), and one already
+    /// declared by the same name.
     pub async fn same_meaning(
         &mut self,
         requests: Vec<SameMeaningRequest>,
@@ -126,7 +131,12 @@ impl<P: ShelfWrite> ShelfApp<P> {
             }
             SameMeaningAbout::Artifact(name) => SameMeaningTarget::Artifact(name.clone()),
         };
-        let of = frame_same_meaning(&loaded.shelf, &loaded.ledger, target, request.from)?;
+        let framed = frame_same_meaning(&loaded.shelf, &loaded.ledger, target, request.from)?;
+
+        let by = self.attribution(request.by).await?;
+        // A name that declared an edge already adds nothing by declaring it again; who
+        // ran the command is not a name that declared it.
+        let of = framed.not_declared_by(by.actor())?;
         let about = match &of {
             SameMeaningOf::Doc { id, .. } => DeclaredAbout::Doc {
                 id: *id,
@@ -136,11 +146,6 @@ impl<P: ShelfWrite> ShelfApp<P> {
                 artifact: artifact.clone(),
             },
         };
-
-        let by = self.attribution(request.by).await?;
-        // A name that declared an edge already adds nothing by declaring it again; who
-        // ran the command is not a name that declared it.
-        let of = loaded.ledger.not_declared_by(of, by.actor())?;
         let id = self
             .ports
             .ids()

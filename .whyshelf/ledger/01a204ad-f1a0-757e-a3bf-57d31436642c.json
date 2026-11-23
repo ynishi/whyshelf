@@ -1,0 +1,134 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::freshness::Standing::kind",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::freshness::UpstreamStatus",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Framed::not_declared_by",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::Quorum",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::SameMeaning",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::ledger::StandingApproval::quorum",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::held_back",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::Approvals",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::schema::Authority::approvals",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795374835041,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b818706c621f264b47782ffb194b7775e4389c1b",
+      "hash": "sha256:6957de2aed4f7b23d0dbc76493c4e263c8502942aaf57c658345ceaaa4dc57e8",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "37"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1f6a0-2c41-7a3e-9b52-6e0d4f1c8a21"
+    }
+  ],
+  "id": "01a204ad-f1a0-757e-a3bf-57d31436642c",
+  "kind": "decision",
+  "reason": "Reviewed for #175: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) that found the edits judge same offers equal to those stale tells as changed, its false sentences (NotPinned, the refusal order, the only hash stale tells as changed) and should-fix points fixed. The documents made stale are approved again: their claims hold of judge same reading the one comparison of pinned content, as cargo fmt, clippy, doc and test (two jobs, 1839 passed) show.",
+  "revision": "3f2fb04cbafeb2d53824b10b51b35b6d052c9469",
+  "seen": "sha256:960bd0b9091653ef170864b44f6c10f8472eb053f89a46182e4e02c4addf5cbc",
+  "seen_address": "1fee4494b324b790563306a7337bda79c4e34e8b",
+  "subject": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74",
+  "v": 1,
+  "verb": "approve"
+}

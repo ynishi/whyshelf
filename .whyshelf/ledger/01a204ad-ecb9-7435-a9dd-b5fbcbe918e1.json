@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e123da1759364d64c50f98cd2323dbe54a3943cf",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f66fb70c7b86450feab7561639c4cec5e983dbf2099456c524cad7b008e240c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5f1d597c220bfaf0e17ad482359119c63fd2fe2d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:484de28fbdbfcd74e198adfd857f62696ab9617d261b2cdc4da54db0e7cee15c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "55e140a57fdc1963dac82f549b1cbd197966597a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d57b28264d087b7e69d7d256bd2b3596bab2cf0550bf6656259e413eca7d41f0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795374835041,
+  "expires": null,
+  "frame": [
+    {
+      "address": "431d4b1e794961b1ef1767ea3db5debc18d78e7b",
+      "hash": "sha256:30e6e11b84fb90a5af811e25fa8637aa65f92e5f41c716515d5b686941f42254",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "59"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c912-1826-76a6-838e-509c842f7e41"
+    }
+  ],
+  "id": "01a204ad-ecb9-7435-a9dd-b5fbcbe918e1",
+  "kind": "decision",
+  "reason": "Reviewed for #175: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) that found the edits judge same offers equal to those stale tells as changed, its false sentences (NotPinned, the refusal order, the only hash stale tells as changed) and should-fix points fixed. The documents made stale are approved again: their claims hold of judge same reading the one comparison of pinned content, as cargo fmt, clippy, doc and test (two jobs, 1839 passed) show.",
+  "revision": "3f2fb04cbafeb2d53824b10b51b35b6d052c9469",
+  "seen": "sha256:a7899f6b54a3a23aa1ea3b99964b3f000a85ccef4d0181212b15cbae44596beb",
+  "seen_address": "b94861ec5d692d790288f3cf4f8542a4dae6db35",
+  "subject": "01a1c912-19c0-7572-98be-116b5c92ca97",
+  "v": 1,
+  "verb": "approve"
+}

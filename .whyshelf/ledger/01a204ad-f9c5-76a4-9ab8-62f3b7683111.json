@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795374835041,
+  "expires": null,
+  "frame": [],
+  "id": "01a204ad-f9c5-76a4-9ab8-62f3b7683111",
+  "kind": "decision",
+  "reason": "Reviewed for #175: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) that found the edits judge same offers equal to those stale tells as changed, its false sentences (NotPinned, the refusal order, the only hash stale tells as changed) and should-fix points fixed. The documents made stale are approved again: their claims hold of judge same reading the one comparison of pinned content, as cargo fmt, clippy, doc and test (two jobs, 1839 passed) show.",
+  "revision": "3f2fb04cbafeb2d53824b10b51b35b6d052c9469",
+  "seen": "sha256:af5345a12df350ba47cf68bd0bcb91cfe47152669ee43e41c943522556b00ba4",
+  "seen_address": "e383dc48c281f314d377378f2777bbf10b3f0681",
+  "subject": "01a20256-dcfb-72a9-8f3b-e1cc42876ec3",
+  "v": 1,
+  "verb": "approve"
+}

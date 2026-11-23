@@ -10,7 +10,7 @@ use crate::domain::shelf::schema::CompareDecl;
 use crate::domain::shelf::snapshot::ItemKind;
 
 use crate::domain::nonempty::NonBlank;
-use crate::domain::shelf::ledger::SameMeaningRefusal;
+use crate::domain::shelf::ledger::{NotComparedWhy, SameMeaningRefusal};
 
 use super::fake_tests::{FakeShelf, aname, block_on, file_space, fr, sp_tested};
 use super::{
@@ -98,7 +98,10 @@ fn a_hash_pinned_under_another_comparison_is_a_request_error_and_writes_nothing(
     assert!(
         matches!(
             err,
-            ShelfError::SameMeaningRefused(SameMeaningRefusal::PinnedUnderOtherComparison { .. })
+            ShelfError::SameMeaningRefused(SameMeaningRefusal::NotComparedNow {
+                hash: Some(_),
+                why: NotComparedWhy::ComparisonChanged,
+            })
         ),
         "{err:?}"
     );

@@ -292,6 +292,12 @@ pub(super) fn sp_testing(n: u128, grounds: &[&str], tests: &[&str]) -> DocReadin
 /// The schema of [`decls`] with the spec's `tests` link comparing `lines`, leaving out
 /// the lines that start with one of `ignore`.
 pub(super) fn schema_of_lines(ignore: &[&str]) -> Schema {
+    Schema::validate(decls_of_lines(ignore), &spaces()).unwrap()
+}
+
+/// [`decls`] with the spec's `tests` link comparing `lines`, leaving out the lines that
+/// start with one of `ignore`.
+fn decls_of_lines(ignore: &[&str]) -> Vec<BookSchemaDecl> {
     let mut decls = decls();
     let tests = decls[1]
         .links
@@ -302,7 +308,7 @@ pub(super) fn schema_of_lines(ignore: &[&str]) -> Schema {
         kind: "lines".to_owned(),
         ignore: ignore.iter().map(|i| (*i).to_owned()).collect(),
     });
-    Schema::validate(decls, &spaces()).unwrap()
+    decls
 }
 
 /// The comparison `lines` with these prefixes left out.
@@ -421,7 +427,12 @@ pub(super) fn asking(approvals: i64, since: Option<i64>) -> DecideDecl {
 
 /// The schema of the three books under who may decide as `decide` says.
 fn ruled_schema(decide: DecideDecl) -> Schema {
-    let mut decl = ShelfDecl::of_books(decls());
+    ruled_schema_of(decls(), decide)
+}
+
+/// The schema of `books` under who may decide as `decide` says.
+fn ruled_schema_of(books: Vec<BookSchemaDecl>, decide: DecideDecl) -> Schema {
+    let mut decl = ShelfDecl::of_books(books);
     decl.decide = decide;
     Schema::declared(decl, &BuiltinPresets::new(), &spaces(), &Default::default()).unwrap()
 }
@@ -445,7 +456,23 @@ pub(super) fn ruled_shelf_with(
             (*p, ArtifactReading::of_hashes(hashes, None))
         })
         .collect();
-    shelf_answered_by(&ruled_schema(decide), readings, &answers)
+    ruled_shelf_answered(decide, readings, &answers)
+}
+
+/// As [`ruled_shelf`], whose artifacts in the space `file` are these answers, as an
+/// adapter answers: every other name asked is absent.
+pub(super) fn ruled_shelf_answered(
+    decide: DecideDecl,
+    readings: Vec<DocReading>,
+    artifacts: &[(&str, ArtifactReading)],
+) -> Shelf {
+    shelf_answered_by(&ruled_schema(decide), readings, artifacts)
+}
+
+/// The schema of the three books under who may decide as `decide` says, the spec's
+/// `tests` link comparing `lines` without the lines that start with one of `ignore`.
+pub(super) fn ruled_schema_of_lines(decide: DecideDecl, ignore: &[&str]) -> Schema {
+    ruled_schema_of(decls_of_lines(ignore), decide)
 }
 
 /// The ledger of `records`, read with who may decide as `shelf` declares it.

@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "71269cdfb11a68c4e6ef09328b68c9212b01f1b3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6eea1394979deb8691c3d218abbc3b4225c191fbe4988aa4cd6bb8b442796957",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6903818e4ef099503c95e3ff2a2e0d15127c822d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8c71bce08a6c01210eca31c2ab1eb0c09c9bf9ccdf084cfe5949310d033fb4c1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/dispatch.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "293bac7ddff58b49073ac5f0a7ab0b665caf41fe",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ec51ad10e7608461eb5d1540b1bbdd2681be7b63900ceda72e6c1dd55b34c557",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a096bf34557afb45206950a477b7443a5babc4e6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3087c4bd62ddca63092a2fcd081dfa10b140c60b29e5e835f35111b5fa8881ab",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cede9d7a47899f767eed83ccad7d29617dd7ac9c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0f7571bd378d795e98ca4a4a83c805f1ac4c2dfa567c384581782ef604b7c425",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/prefix_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795374835041,
+  "expires": null,
+  "frame": [
+    {
+      "address": "28de2319c7a40f142e802423b498ba15a506b3e2",
+      "hash": "sha256:916f6db637041e4b18ad98dc61c728af405ac00ccc952d12f5484c73c2b70453",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "80"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f0ce-3040-7549-bf80-827e6a156a89"
+    }
+  ],
+  "id": "01a204ad-f000-7786-bb91-63ebf83326ca",
+  "kind": "decision",
+  "reason": "Reviewed for #175: the design passed an independent Design Review; code review (high; no correctness bug, its cleanups applied), rule-judge (arch, structural) with no violation, and a blind review (Opus, from the issue and the change only) that found the edits judge same offers equal to those stale tells as changed, its false sentences (NotPinned, the refusal order, the only hash stale tells as changed) and should-fix points fixed. The documents made stale are approved again: their claims hold of judge same reading the one comparison of pinned content, as cargo fmt, clippy, doc and test (two jobs, 1839 passed) show.",
+  "revision": "3f2fb04cbafeb2d53824b10b51b35b6d052c9469",
+  "seen": "sha256:e9fc08e33c14960ca14eab981fbeebed2146f46c96b5f13dd94d588cbdecd70f",
+  "seen_address": "68d4e84f7db2b355c758118768682bc3761b2aea",
+  "subject": "01a1f0ce-8cb8-726a-a5e7-51ec4ba0bd1d",
+  "v": 1,
+  "verb": "approve"
+}

@@ -342,14 +342,16 @@ fn a_declaration_about_another_document_or_path_does_not_count() {
     ]);
     assert_eq!(l.doc_same_meaning(docid(1), &dh(1), &dh(2)), None);
     assert!(l.doc_same_meaning(docid(2), &dh(1), &dh(2)).is_some());
+    assert_eq!(unmoved(&l, "tests/a.rs").joins(&ah("a"), &ah("b")), None);
     assert_eq!(
-        l.artifact_same_meaning(&file_artifact("tests/a.rs"), &ah("a"), &ah("b")),
-        None
-    );
-    assert_eq!(
-        ids(l.artifact_same_meaning(&file_artifact("tests/b.rs"), &ah("b"), &ah("a"))),
+        ids(unmoved(&l, "tests/b.rs").joins(&ah("b"), &ah("a"))),
         Some(vec![jid(2002)])
     );
+}
+
+/// The declarations read for the file at `at` under a way no move took.
+fn unmoved<'l>(l: &'l Ledger, at: &str) -> ArtifactJoins<'l> {
+    l.artifact_joins(&WayNames::unmoved(&file_artifact(at)))
 }
 
 #[test]
@@ -359,11 +361,11 @@ fn files_are_joined_through_a_chain_as_documents_are() {
         artifact_declaration(2002, "tests/a.rs", &["b"], "c"),
     ]);
     assert_eq!(
-        ids(l.artifact_same_meaning(&file_artifact("tests/a.rs"), &ah("a"), &ah("c"))),
+        ids(unmoved(&l, "tests/a.rs").joins(&ah("a"), &ah("c"))),
         Some(vec![jid(2001), jid(2002)])
     );
     assert_eq!(
-        ids(l.artifact_same_meaning(&file_artifact("tests/a.rs"), &ah("c"), &ah("a"))),
+        ids(unmoved(&l, "tests/a.rs").joins(&ah("c"), &ah("a"))),
         Some(vec![jid(2002), jid(2001)])
     );
 }
@@ -405,22 +407,23 @@ fn hash_of(shelf: &Shelf, n: u128) -> DocHash {
     *shelf.doc(docid(n)).unwrap().hash()
 }
 
-/// `frame_same_meaning` with no hash named.
+/// What `frame_same_meaning` offers with no hash named.
 fn frame(
     shelf: &Shelf,
     ledger: &Ledger,
     target: SameMeaningTarget,
 ) -> Result<SameMeaningOf, SameMeaningRefusal> {
-    frame_same_meaning(shelf, ledger, target, None)
+    frame_same_meaning(shelf, ledger, target, None).map(|framed| framed.of())
 }
 
-/// `frame_same_meaning` of FR-1 with the hash `named`.
+/// What `frame_same_meaning` offers of FR-1 with the hash `named`.
 fn frame_named(
     shelf: &Shelf,
     ledger: &Ledger,
     named: ContentHash,
 ) -> Result<SameMeaningOf, SameMeaningRefusal> {
     frame_same_meaning(shelf, ledger, SameMeaningTarget::Doc(docid(1)), Some(named))
+        .map(|framed| framed.of())
 }
 
 /// FR-1 titled `title`, FR-2, FR-3 and FR-4 on it.
@@ -676,6 +679,7 @@ fn a_file_pinned_at_two_different_hashes_needs_one_named() {
             SameMeaningTarget::Artifact(at()),
             Some(*hash.hash()),
         )
+        .map(|framed| framed.of())
     };
 
     assert!(
@@ -771,9 +775,9 @@ fn what_is_no_decision_or_declaration_cannot_be_withdrawn() {
     );
 }
 
-// What `frame_same_meaning` reads on its own, apart from the pins stale compares (the
-// limitation its page states): these fix its answer as it is, beside what stale tells
-// of the same pins.
+// What `frame_same_meaning` offers of the pins stale compares, beside what stale tells
+// of the same pins: where it read on its own before, it offered these edits; it offers
+// none of them now.
 
 /// The causes and the notices stale tells of SP-2 in `now`.
 fn stale_of(now: &Shelf, l: &Ledger) -> (Vec<Cause>, Vec<Notice>) {
@@ -798,19 +802,11 @@ fn approved_on_a(more: Vec<DocReading>) -> Vec<Record> {
     approving(&then, &[1, 2], 1001)
 }
 
-fn edit_of_a(at: &str, to: &str) -> SameMeaningOf {
-    SameMeaningOf::Artifact {
-        artifact: file_artifact(at),
-        from: NonEmptySet::from_set(BTreeSet::from([ah("a")])).unwrap(),
-        to: ah(to),
-    }
-}
-
 /// An edit declared before a move, of the old name: stale joins it, as the
 /// declarations of every name of the pin's way count; `judge same` of the new name
-/// reads the declarations of that name only, and offers the edit again.
+/// reads the same declarations for the pin, and has nothing to declare.
 #[test]
-fn judge_same_offers_an_edit_declared_before_a_move_that_stale_tells_as_kept() {
+fn judge_same_offers_no_edit_declared_before_a_move_that_stale_tells_as_kept() {
     let mut records = approved_on_a(Vec::new());
     records.push(artifact_declaration(2001, "tests/a.rs", &["a"], "b"));
     records.push(Record::Moved(Moved::new(
@@ -840,15 +836,14 @@ fn judge_same_offers_an_edit_declared_before_a_move_that_stale_tells_as_kept() {
     );
     assert_eq!(
         frame(&now, &l, SameMeaningTarget::Artifact(name("tests/b.rs"))),
-        Ok(edit_of_a("tests/b.rs", "b"))
+        Err(SameMeaningRefusal::NothingToDeclare)
     );
 }
 
 /// The pin of an approval whose document is not valid now: stale compares none of its
-/// pins; `judge same` gathers it as a pin of an approval that stands, and offers its edit.
+/// pins; `judge same` offers no edit of it, and says why.
 #[test]
-fn judge_same_offers_an_edit_of_a_pin_of_a_document_that_is_not_valid_which_stale_does_not_compare()
-{
+fn judge_same_refuses_a_pin_of_a_document_that_is_not_valid_which_stale_does_not_compare() {
     let l = ledger(approved_on_a(vec![sp_testing(
         3,
         &["FR-1"],
@@ -880,14 +875,30 @@ fn judge_same_offers_an_edit_of_a_pin_of_a_document_that_is_not_valid_which_stal
     );
     assert_eq!(
         frame(&now, &l, SameMeaningTarget::Artifact(name("tests/a.rs"))),
-        Ok(edit_of_a("tests/a.rs", "b"))
+        Err(SameMeaningRefusal::NotComparedNow {
+            hash: None,
+            why: NotComparedWhy::DocumentNotValid
+        })
+    );
+    assert_eq!(
+        frame_same_meaning(
+            &now,
+            &l,
+            SameMeaningTarget::Artifact(name("tests/a.rs")),
+            Some(*ah("a").hash())
+        )
+        .map(|framed| framed.of()),
+        Err(SameMeaningRefusal::NotComparedNow {
+            hash: Some(ah("a").to_string()),
+            why: NotComparedWhy::DocumentNotValid
+        })
     );
 }
 
 /// The pin of a name its link writes no more: stale tells the change of the link's names
-/// and compares no content; `judge same` gathers the pin, and offers its edit.
+/// and compares no content; `judge same` offers no edit of it, and says why.
 #[test]
-fn judge_same_offers_an_edit_of_a_pin_its_link_writes_no_more_which_stale_does_not_compare() {
+fn judge_same_refuses_an_edit_of_a_pin_its_link_writes_no_more_which_stale_does_not_compare() {
     let l = ledger(approved_on_a(vec![sp_testing(
         3,
         &["FR-1"],
@@ -911,7 +922,10 @@ fn judge_same_offers_an_edit_of_a_pin_its_link_writes_no_more_which_stale_does_n
     assert!(!causes.is_empty());
     assert_eq!(
         frame(&now, &l, SameMeaningTarget::Artifact(name("tests/a.rs"))),
-        Ok(edit_of_a("tests/a.rs", "b"))
+        Err(SameMeaningRefusal::NotComparedNow {
+            hash: None,
+            why: NotComparedWhy::LinkDropped
+        })
     );
 }
 

@@ -20,8 +20,8 @@ use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::{CoverMiss, ExemptRefusal};
 use crate::domain::shelf::filter::FilterProblem;
 use crate::domain::shelf::ledger::{
-    DecisionProblem, FrameRefusal, MovedRefusal, NamedWhy, NotAdmitted, PrefixRefusal,
-    SameMeaningProblem, SameMeaningRefusal, WithdrawRefusal,
+    DecisionProblem, FrameRefusal, MovedRefusal, NamedWhy, NotAdmitted, NotComparedWhy,
+    PrefixRefusal, SameMeaningProblem, SameMeaningRefusal, WithdrawRefusal,
 };
 use crate::domain::shelf::lookup::Reference;
 use crate::domain::shelf::order::NotPending;
@@ -560,14 +560,18 @@ impl ShelfError {
             | Self::NotACoverLink { .. } => ErrorClass::Request,
             // As a reference that names nothing and a revocation of nothing: a name of
             // an artifact no document links or that is linked in two spaces, a hash
-            // that names nothing pinned, an earlier hash that cannot be told
-            // without being named, nothing left to declare or to withdraw.
+            // that names nothing pinned, a pin whose comparison changed since it was
+            // made (approve again), an earlier hash that cannot be told without being
+            // named, nothing left to declare or to withdraw.
             Self::SameMeaningRefused(
                 SameMeaningRefusal::ArtifactNotLinked { .. }
                 | SameMeaningRefusal::ArtifactInSpaces { .. }
                 | SameMeaningRefusal::NotPinned { .. }
                 | SameMeaningRefusal::SeveralEarlier { .. }
-                | SameMeaningRefusal::PinnedUnderOtherComparison { .. }
+                | SameMeaningRefusal::NotComparedNow {
+                    why: NotComparedWhy::ComparisonChanged,
+                    ..
+                }
                 | SameMeaningRefusal::NothingToDeclare
                 | SameMeaningRefusal::AlreadyDeclaredBy { .. },
             )
@@ -586,14 +590,19 @@ impl ShelfError {
                 | ExemptRefusal::AlreadyExemptInRun { .. },
             ) => ErrorClass::Request,
             // As a judgement the model refuses: no valid document, an artifact with
-            // nothing behind it now or that cannot be told now.
+            // nothing behind it now or that cannot be told now, a pin under a link that
+            // no longer writes its name, or of a document that is not valid.
             Self::Refused(_)
             | Self::Decision(_)
             | Self::NotAdmitted(_)
             | Self::SameMeaningRefused(
                 SameMeaningRefusal::DocNotValid { .. }
                 | SameMeaningRefusal::ArtifactAbsent { .. }
-                | SameMeaningRefusal::ArtifactUnknown { .. },
+                | SameMeaningRefusal::ArtifactUnknown { .. }
+                | SameMeaningRefusal::NotComparedNow {
+                    why: NotComparedWhy::LinkDropped | NotComparedWhy::DocumentNotValid,
+                    ..
+                },
             )
             | Self::SameMeaning(_)
             | Self::ExemptRefused(

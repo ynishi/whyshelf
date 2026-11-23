@@ -9,7 +9,8 @@ use whyshelf_core::domain::shelf::artifact::{ArtifactKey, Space};
 use whyshelf_core::domain::shelf::build::DocFailure;
 use whyshelf_core::domain::shelf::ledger::PrefixRefusal;
 use whyshelf_core::domain::shelf::ledger::{
-    DecisionProblem, FrameRefusal, MovedRefusal, NamedRefusal, NamedWhy,
+    DecisionProblem, FrameRefusal, MovedRefusal, NamedRefusal, NamedWhy, NotComparedWhy,
+    SameMeaningRefusal,
 };
 use whyshelf_core::domain::shelf::lookup::Reference;
 
@@ -73,6 +74,22 @@ fn each_class_of_error_has_its_exit_status() {
     ] {
         assert_eq!(error.class(), class, "{error:?}");
         assert_eq!(exit_of(error.class()) as u8, exit, "{error:?}");
+    }
+}
+
+#[test]
+fn a_pin_stale_does_not_compare_now_ends_by_why() {
+    // A changed comparison is approved again, as before (exit 2); a link that no longer
+    // writes the name and a document that is not valid are a person's to mend (exit 1).
+    for (why, class, exit) in [
+        (NotComparedWhy::ComparisonChanged, ErrorClass::Request, 2),
+        (NotComparedWhy::LinkDropped, ErrorClass::Refused, 1),
+        (NotComparedWhy::DocumentNotValid, ErrorClass::Refused, 1),
+    ] {
+        let error =
+            ShelfError::SameMeaningRefused(SameMeaningRefusal::NotComparedNow { hash: None, why });
+        assert_eq!(error.class(), class, "{why}");
+        assert_eq!(exit_of(error.class()) as u8, exit, "{why}");
     }
 }
 

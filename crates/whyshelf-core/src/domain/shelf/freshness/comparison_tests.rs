@@ -11,8 +11,8 @@ use crate::domain::shelf::fixtures_tests::{
     schema_of_lines, shelf_reading, sp_testing, spaces, text,
 };
 use crate::domain::shelf::ledger::{
-    JudgedAt, Record, SameMeaning, SameMeaningOf, SameMeaningRefusal, SameMeaningTarget,
-    frame_same_meaning,
+    JudgedAt, NotComparedWhy, Record, SameMeaning, SameMeaningOf, SameMeaningRefusal,
+    SameMeaningTarget, frame_same_meaning,
 };
 use crate::domain::shelf::schema::{
     Cardinality, LinkEntryDecl, LinkTargetDecl, Propagation, Schema,
@@ -158,7 +158,8 @@ fn a_declaration_of_the_same_meaning_holds_under_lines() {
         SameMeaningTarget::Artifact(name("tests/a.rs")),
         None,
     )
-    .unwrap();
+    .unwrap()
+    .of();
     records.push(Record::SameMeaning(
         SameMeaning::new(
             jid(2001),
@@ -250,7 +251,8 @@ fn a_declaration_about_a_file_under_two_comparisons_keeps_each_link_s_edit() {
         SameMeaningTarget::Artifact(name("src/a.rs")),
         None,
     )
-    .unwrap();
+    .unwrap()
+    .of();
     let mut records = records;
     records.push(Record::SameMeaning(
         SameMeaning::new(
@@ -281,6 +283,7 @@ fn frame_of_a(
         SameMeaningTarget::Artifact(name("src/a.rs")),
         named.map(|h| *h.hash()),
     )
+    .map(|framed| framed.of())
 }
 
 #[test]
@@ -350,24 +353,106 @@ fn a_hash_pinned_under_a_comparison_no_link_declares_now_cannot_be_declared() {
     let pinned = Comparison::Bytes.fingerprint(CODE);
     let target = || SameMeaningTarget::Artifact(name("tests/a.rs"));
     let l = ledger(records);
+    let frame = |named: Option<ArtifactHash>| {
+        frame_same_meaning(&now, &l, target(), named.map(|h| *h.hash())).map(|framed| framed.of())
+    };
     assert_eq!(
-        frame_same_meaning(&now, &l, target(), Some(*pinned.hash())),
-        Err(SameMeaningRefusal::PinnedUnderOtherComparison {
-            hash: pinned.to_string()
+        frame(Some(pinned)),
+        Err(SameMeaningRefusal::NotComparedNow {
+            hash: Some(pinned.to_string()),
+            why: NotComparedWhy::ComparisonChanged,
         })
     );
-    // Unnamed, the pin of the other comparison is not an earlier hash at all.
+    // Unnamed, the pin of the other comparison is the one pinned hash, and stale does
+    // not compare it now: the refusal says why.
     assert_eq!(
-        frame_same_meaning(&now, &l, target(), None),
-        Err(SameMeaningRefusal::NothingToDeclare)
+        frame(None),
+        Err(SameMeaningRefusal::NotComparedNow {
+            hash: None,
+            why: NotComparedWhy::ComparisonChanged,
+        })
     );
     // A hash no approval pinned is still `NotPinned`.
     let never = Comparison::Bytes.fingerprint(b"never");
     assert_eq!(
-        frame_same_meaning(&now, &l, target(), Some(*never.hash())),
+        frame(Some(never)),
         Err(SameMeaningRefusal::NotPinned {
             hash: never.to_string()
         })
+    );
+}
+
+#[test]
+fn a_pin_whose_comparison_changed_is_not_offered_though_another_link_declares_the_old_one() {
+    // SP-2 was approved testing `src/a.rs` by its bytes; its link compares lines now,
+    // and the design `x`, not approved, checks the bytes of the same file.
+    let approved_on = shelf_reading(
+        &schema(),
+        vec![sp_testing(2, &[], &["src/a.rs"])],
+        &[("src/a.rs", CODE)],
+    );
+    let records = approvals(&approved_on, &[2]);
+    let remade = both_shelf(b"fn a() {\n    two();\n}\n");
+    assert!(matches!(
+        causes_of(&assess(&remade, &ledger(records.clone()), now()), 2).as_slice(),
+        [Cause::ArtifactComparisonChanged { .. }]
+    ));
+    assert_eq!(
+        frame_of_a(&remade, &records, None),
+        Err(SameMeaningRefusal::NotComparedNow {
+            hash: None,
+            why: NotComparedWhy::ComparisonChanged,
+        })
+    );
+}
+
+#[test]
+fn a_pin_remade_beside_one_edited_leaves_the_edit_offered() {
+    // SP-2 and the design `x` both pinned the bytes of `src/a.rs`; SP-2's link compares
+    // lines now, `x`'s still bytes, and the file was edited.
+    let mut decls = decls();
+    for book in &mut decls {
+        if book.name == "design" {
+            book.links.push(LinkEntryDecl {
+                name: "checks".to_owned(),
+                target: LinkTargetDecl::Artifact,
+                cardinality: Cardinality::Many,
+                propagation: Propagation::Depends,
+                space: Some("file".to_owned()),
+                compare: None,
+                cover: None,
+            });
+        }
+    }
+    let bytes = Schema::validate(decls, &spaces()).unwrap();
+    let docs = || {
+        vec![
+            sp_testing(2, &[], &["src/a.rs"]),
+            reading(
+                "designs/x.md",
+                3,
+                "x",
+                &[("title", text("design")), ("checks", list(&["src/a.rs"]))],
+            ),
+        ]
+    };
+    let records = approvals(
+        &shelf_reading(&bytes, docs(), &[("src/a.rs", CODE)]),
+        &[2, 3],
+    );
+    let edited: &[u8] = b"fn a() {\n    two();\n}\n";
+    let shelf = both_shelf(edited);
+    let edit = Ok(SameMeaningOf::Artifact {
+        artifact: file_artifact("src/a.rs"),
+        from: NonEmptySet::new(Comparison::Bytes.fingerprint(CODE), []),
+        to: Comparison::Bytes.fingerprint(edited),
+    });
+    // The remade pin holds the same hash as the edited one: it neither hides the edit
+    // nor refuses it, named or not.
+    assert_eq!(frame_of_a(&shelf, &records, None), edit);
+    assert_eq!(
+        frame_of_a(&shelf, &records, Some(Comparison::Bytes.fingerprint(CODE))),
+        edit
     );
 }
 

@@ -175,7 +175,8 @@ fn records(shelf: &Shelf, now: &Shelf, targets: Vec<SameMeaningTarget>) -> Vec<R
             target,
             None,
         )
-        .unwrap();
+        .unwrap()
+        .of();
         records.push(Record::SameMeaning(
             SameMeaning::new(jid(20 + i as u8), of, actor(), JudgedAt::new(50), because()).unwrap(),
         ));

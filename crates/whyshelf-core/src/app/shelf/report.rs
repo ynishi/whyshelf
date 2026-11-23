@@ -197,8 +197,7 @@ pub enum BooksCheck {
         /// approve them.
         awaiting: Vec<Awaiting>,
         /// The edits declared to keep the meaning by fewer different names than
-        /// they need, which join nothing yet, that a pin of an approval that stands
-        /// meets
+        /// they need, which join nothing yet, that a pin that stale reads now meets
         /// ([`Ledger::same_meaning_short`](crate::domain::shelf::ledger::Ledger::same_meaning_short)).
         /// They leave the check clean too.
         same_meaning_short: Vec<ShortSameMeaning>,
