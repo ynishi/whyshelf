@@ -281,7 +281,7 @@ use std::sync::Arc;
 
 use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, TokenStream, TokenTree};
 use whyshelf_core::app::shelf::{
-    Answers, CannotList, CannotSuggest, NamePrefixes, NoReadBack, SpaceAdapter,
+    Answers, CannotList, CannotSuggest, NamePrefixes, NoReadBack, Side, SpaceAdapter,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
@@ -292,6 +292,8 @@ use whyshelf_core::domain::shelf::artifact::{
 };
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
+use super::super::state::StateError;
+use super::super::state::files::FileStates;
 use super::Spelled;
 use super::file::{self, Bounded};
 
@@ -396,6 +398,9 @@ pub enum RustTestError {
     /// reason is never blank).
     #[error("the domain refused a reason of the adapter")]
     Reason(#[source] ValueError),
+    /// The state of the project could not be read at the side asked.
+    #[error(transparent)]
+    State(#[from] StateError),
 }
 
 /// The space [`RUST_TEST_SPACE`]: it answers a move of a prefix, cannot suggest where
@@ -415,12 +420,16 @@ impl SpaceAdapter for RustTestSpace {
         presets()
     }
 
-    async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, RustTestError> {
-        RustTestSpace::resolve(self, asks).await
+    async fn resolve(&self, side: Side, asks: &SpaceAsks) -> Result<SpaceReadings, RustTestError> {
+        self.resolve_at(side, asks).await
     }
 
-    async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustTestError> {
-        RustTestSpace::current(self, name).await
+    async fn current(
+        &self,
+        side: Side,
+        name: &ArtifactName,
+    ) -> Result<Option<Vec<u8>>, RustTestError> {
+        self.current_at(side, name).await
     }
 }
 
@@ -501,24 +510,46 @@ impl fmt::Display for Place {
 /// The test functions of the Rust source of a project.
 #[derive(Debug, Clone)]
 pub struct RustTestSpace {
-    root: PathBuf,
+    /// The state of the project the files are read from.
+    state: FileStates,
     /// The most bytes of a file read.
     max_file: u64,
 }
 
 impl RustTestSpace {
-    /// The tests in the files under `root`.
+    /// The tests in the files under `root`, read at one side (the root as it is).
     pub fn new(root: PathBuf) -> Self {
+        Self::on(FileStates::new(root))
+    }
+
+    /// The tests in the files of the project `state` reads.
+    pub fn on(state: FileStates) -> Self {
         Self {
-            root,
+            state,
             max_file: MAX_FILE_BYTES,
         }
     }
 
-    /// For each name: not a name, the hash of the test's text under each comparison
-    /// asked, absent, or cannot tell (with why). Every name asked about has an
-    /// answer; each file is read and lexed once.
+    /// For each name, as the project is ([`Side::After`]): not a name, the hash of the
+    /// test's text under each comparison asked, absent, or cannot tell (with why).
+    /// Every name asked about has an answer; each file is read and lexed once.
     pub async fn resolve(&self, asks: &SpaceAsks) -> Result<SpaceReadings, RustTestError> {
+        self.resolve_at(Side::After, asks).await
+    }
+
+    /// The text of a test as the project is ([`Side::After`], what is compared), or
+    /// none when the name is none, or the test is not there or cannot be told.
+    pub async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustTestError> {
+        self.current_at(Side::After, name).await
+    }
+
+    /// [`resolve`](Self::resolve), at `side`.
+    async fn resolve_at(
+        &self,
+        side: Side,
+        asks: &SpaceAsks,
+    ) -> Result<SpaceReadings, RustTestError> {
+        self.state.dir(side)?;
         let mut readings = SpaceReadings::new();
         let mut by_file: BTreeMap<RelPath, Vec<Asked<'_>>> = BTreeMap::new();
         for (name, comparisons) in asks {
@@ -539,7 +570,7 @@ impl RustTestSpace {
         }
         for (path, tests) in by_file {
             let wanted: Vec<Wanted> = tests.iter().map(|(_, _, t)| t.wanted()).collect();
-            let found = self.find_in(&path, wanted).await;
+            let found = self.find_in(side, &path, wanted).await;
             // The texts may be as large as the file: large ones are hashed on a
             // blocking thread.
             let asked: Vec<BTreeSet<Comparison>> =
@@ -585,13 +616,17 @@ impl RustTestSpace {
         Ok(readings)
     }
 
-    /// The text of a test now (what is compared), or none when the name is none, or
-    /// the test is not there or cannot be told.
-    pub async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustTestError> {
+    /// [`current`](Self::current), at `side`.
+    async fn current_at(
+        &self,
+        side: Side,
+        name: &ArtifactName,
+    ) -> Result<Option<Vec<u8>>, RustTestError> {
+        self.state.dir(side)?;
         let Ok(test) = TestName::parse(name.as_str()) else {
             return Ok(None);
         };
-        let found = self.find_in(&test.file, vec![test.wanted()]).await;
+        let found = self.find_in(side, &test.file, vec![test.wanted()]).await;
         Ok(match found.into_iter().next() {
             Some(Found::Text(text)) => Some(text.joined().into_bytes()),
             Some(Found::Absent | Found::CannotTell(_)) | None => None,
@@ -599,10 +634,10 @@ impl RustTestSpace {
     }
 
     /// What each of `wanted` comes to in the file at `path`, in their order.
-    async fn find_in(&self, path: &RelPath, wanted: Vec<Wanted>) -> Vec<Found> {
+    async fn find_in(&self, side: Side, path: &RelPath, wanted: Vec<Wanted>) -> Vec<Found> {
         let every = |found: Found| vec![found; wanted.len()];
         let untold = |why: Untellable| every(Found::CannotTell(why));
-        let bytes = match file::read_within(&self.root, path, self.max_file).await {
+        let bytes = match file::read_within(&self.state, side, path, self.max_file).await {
             Ok(Bounded::Bytes(bytes)) => bytes,
             Ok(Bounded::NoFile) => return every(Found::Absent),
             Ok(Bounded::Outside) => return untold(Untellable::Outside(path.clone())),
@@ -610,6 +645,12 @@ impl RustTestSpace {
                 return untold(Untellable::TooLarge {
                     path: path.clone(),
                     max: self.max_file,
+                });
+            }
+            Ok(Bounded::Untold(why)) => {
+                return untold(Untellable::Unreadable {
+                    path: path.clone(),
+                    why: why.as_str().to_owned(),
                 });
             }
             Err(e) => {
@@ -1844,15 +1885,18 @@ mod tests {
             {
                 use std::os::unix::fs::PermissionsExt;
                 write(dir, "outside/x.rs", "#[test]\nfn t() {}\n").await;
+                // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
                 tokio::fs::symlink(dir.join("outside"), root.join("out"))
                     .await
                     .unwrap();
                 tree.outside = Some(n("out/x.rs::t"));
                 let locked = root.join("src/locked.rs");
+                // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
                 tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))
                     .await
                     .unwrap();
                 // Run as a user every file opens to (root), it is no name to test.
+                // arch-lint: allow(readers-read-through-the-state) reason="a test asks whether its tree locks a file"
                 if tokio::fs::File::open(&locked).await.is_err() {
                     tree.unreadable = Some(n("src/locked.rs::t"));
                 }
@@ -1876,8 +1920,10 @@ mod tests {
     async fn write(dir: &Path, at: &str, text: &str) {
         let full = dir.join(at);
         if let Some(parent) = full.parent() {
+            // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
             tokio::fs::create_dir_all(parent).await.unwrap();
         }
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
         tokio::fs::write(full, text).await.unwrap();
     }
 
@@ -2585,6 +2631,7 @@ mod tests {
         let why = unknown_why(r, "src/broken.rs::top").await;
         assert!(why.contains("(at line 2, column"), "{why}");
         // One that is not UTF-8.
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
         tokio::fs::write(r.join("src/bytes.rs"), b"fn a() {}\xff")
             .await
             .unwrap();
@@ -2663,6 +2710,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
         write(outside.path(), "lib.rs", SOURCE).await;
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
         tokio::fs::symlink(outside.path(), root.path().join("out"))
             .await
             .unwrap();
@@ -2670,6 +2718,7 @@ mod tests {
         assert!(why.contains("leads outside the root"), "{why}");
         // A link inside the root is read through.
         write(root.path(), "src/lib.rs", SOURCE).await;
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
         tokio::fs::symlink(root.path().join("src"), root.path().join("in"))
             .await
             .unwrap();

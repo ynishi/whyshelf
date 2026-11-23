@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "ff7aafd067a583c445e14d3c09837ff1089c050d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:dd078d7b15bfc64bbd9ee17e8c1642d81e3ba1912e8c6ee942b01a8f4d61f290",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795431063434,
+  "expires": null,
+  "frame": [
+    {
+      "address": "43f06e1c521039f504c59418b68322685a80e246",
+      "hash": "sha256:f2016633a50701c0c919bad83e485e59222aeda46c56917a8123b5e4ae6c7c59",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "68"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb78-d2d4-770d-9d90-5aa3f5577115"
+    }
+  ],
+  "id": "01a20808-1298-763f-ba63-b8b965cd8406",
+  "kind": "decision",
+  "reason": "Read again after #112's second steps: every reader reads its tree through one state port at a side, by FileStates, with today's answers kept (pinned by the readers' tests), rust-item's built docs read per side, and arch-lint holding the readers to the port",
+  "revision": "fb15461684310f73cf2ee72e5dbb7866107abe5d",
+  "seen": "sha256:ddf122e726d92fe58de416e537b617b6f6d31883a058b5710c98fdb240d68f19",
+  "seen_address": "8df2ae5c242e9267fc5912e849d1ee7252842fce",
+  "subject": "01a1cb78-d506-7713-a7ec-8a792c57d276",
+  "v": 1,
+  "verb": "approve"
+}

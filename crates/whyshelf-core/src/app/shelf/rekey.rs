@@ -49,6 +49,7 @@ use super::ports::{DocSource, DocWrite, ShelfPort, ShelfWrite, port};
 use super::read::identity;
 use super::report::{Names, Row};
 use super::run_writes::{Create, Edit, Edited, Remove, Replace, RunWrites};
+use super::state;
 
 /// What `rekey` is asked.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,7 +166,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         let forms = self
             .ports
             .docs()
-            .forms(&schema.ranges())
+            .forms(state::Side::After, &schema.ranges())
             .await
             .map_err(port(ShelfPort::Docs))?;
         let readings: Vec<DocReading> = forms.iter().map(|found| found.reading.clone()).collect();

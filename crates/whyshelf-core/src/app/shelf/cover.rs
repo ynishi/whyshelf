@@ -32,12 +32,13 @@ use crate::domain::shelf::schema::{BookName, EntryName};
 
 use super::ShelfApp;
 use super::error::ShelfError;
-use super::load::{View, listings_of, load_with, schema_of};
+use super::load::{View, listings_of, load_with, now, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
     ArtifactCoverLists, CoverReport, ExemptArtifact, RepeatedArtifact, UncoveredArtifact,
     UnneededArtifact,
 };
+use super::state::Side;
 
 /// A covering link to artifacts by the book that declares it and its name: what
 /// `cover` is asked about.
@@ -129,7 +130,7 @@ impl<P: ShelfRead> ShelfApp<P> {
     /// share one listing and show the same completeness. It exits as every reading
     /// does: what it tells is not a failure.
     pub async fn cover(&self, link: Option<CoverLinkAsk>) -> Result<CoverReport, ShelfError> {
-        let schema = match schema_of(&self.ports).await? {
+        let schema = match schema_of(&self.ports, Side::After).await? {
             Ok(schema) => schema,
             Err(problems) => return Ok(CoverReport::SchemaInvalid(problems)),
         };
@@ -149,8 +150,8 @@ impl<P: ShelfRead> ShelfApp<P> {
             }
             None => schema.cover_selections(),
         };
-        let loaded = load_with(&self.ports, &schema).await?;
-        let listings = listings_of(self.ports.artifacts(), asks).await?;
+        let loaded = load_with(&self.ports, Side::After, &schema, now(&self.ports).await?).await?;
+        let listings = listings_of(self.ports.artifacts(), Side::After, asks).await?;
         let assessment = loaded.assess(&listings);
         let view = View {
             loaded: &loaded,

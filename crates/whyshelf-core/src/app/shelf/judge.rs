@@ -88,6 +88,7 @@ use super::ports::{DocSource, IdSource, RevisionSource, ShelfPort, ShelfWrite, p
 use super::read::identity;
 use super::report::{Judged, JudgedAll, LeftOut, LeftOutWhy};
 use super::run_writes::RunWrites;
+use super::state::Side;
 
 /// What a request asks, checked before the run asks for its actor: its reference and
 /// a deprecation's successor resolve, and an approval's expiry is after now. The rest
@@ -423,7 +424,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         let addresses = self
             .ports
             .docs()
-            .addresses(&frame.files())
+            .addresses(Side::After, &frame.files())
             .await
             .map_err(port(ShelfPort::Docs))?;
         let revision = self

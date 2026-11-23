@@ -50,13 +50,14 @@ use crate::domain::shelf::trace::{LinkEnd, trace};
 use super::ShelfApp;
 use super::cover::artifact_lists;
 use super::error::ShelfError;
-use super::load::{Loaded, View, listings_of, load, load_with, schema_of};
+use super::load::{Loaded, View, listings_of, load, load_with, now, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
     Absent, Awaiting, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, GetReport, MapReport,
     MovedAway, RepeatedExemption, SettledOrigin, StaleEntry, StaleReport, StatsReport,
     StatusReport, TraceReport, Uncovered, Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
+use super::state::Side;
 
 /// The identity a reference names, or why it names none.
 // The error is read once and ends the use case; it is not a hot path.
@@ -99,14 +100,19 @@ impl<P: ShelfRead> ShelfApp<P> {
     /// A declaration that is not sound is an answer, not an error, and then nothing
     /// else is read: there is no way to tell which files are books without it.
     pub async fn books_check(&self) -> Result<BooksCheck, ShelfError> {
-        let schema = match schema_of(&self.ports).await? {
+        let schema = match schema_of(&self.ports, Side::After).await? {
             Ok(schema) => schema,
             Err(problems) => return Ok(BooksCheck::SchemaInvalid(problems)),
         };
-        let loaded = load_with(&self.ports, &schema).await?;
+        let loaded = load_with(&self.ports, Side::After, &schema, now(&self.ports).await?).await?;
         // `check` is the gate on a cover of artifacts, so it always asks the adapters
         // for the names the selections take.
-        let listings = listings_of(self.ports.artifacts(), schema.cover_selections()).await?;
+        let listings = listings_of(
+            self.ports.artifacts(),
+            Side::After,
+            schema.cover_selections(),
+        )
+        .await?;
         let assessment = loaded.assess(&listings);
         let view = View {
             loaded: &loaded,
@@ -309,7 +315,7 @@ impl<P: ShelfRead> ShelfApp<P> {
     /// declaration that is not sound is an answer, as for
     /// [`books_check`](Self::books_check).
     pub async fn map(&self) -> Result<MapReport, ShelfError> {
-        Ok(match schema_of(&self.ports).await? {
+        Ok(match schema_of(&self.ports, Side::After).await? {
             Ok(schema) => MapReport::Mapped(ShelfMap::of(&schema)),
             Err(problems) => MapReport::SchemaInvalid(problems),
         })
@@ -332,9 +338,11 @@ impl<P: ShelfRead> ShelfApp<P> {
     /// documents are not read then. The answer carries the filter as given, and its
     /// `health` and `names` are of the whole project, not of the rows.
     pub async fn status_filtered(&self, ask: &StatusFilterAsk) -> Result<StatusReport, ShelfError> {
-        let schema = schema_of(&self.ports).await?.map_err(ShelfError::Schema)?;
+        let schema = schema_of(&self.ports, Side::After)
+            .await?
+            .map_err(ShelfError::Schema)?;
         let filter = StatusFilter::new(&schema, ask.clone()).map_err(ShelfError::Filter)?;
-        let loaded = load_with(&self.ports, &schema).await?;
+        let loaded = load_with(&self.ports, Side::After, &schema, now(&self.ports).await?).await?;
         let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,

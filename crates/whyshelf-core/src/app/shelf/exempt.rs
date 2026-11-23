@@ -49,6 +49,7 @@ use super::error::ShelfError;
 use super::load::{Loaded, listings_of, load};
 use super::ports::{IdSource, ShelfPort, ShelfWrite, port};
 use super::read::identity;
+use super::state::Side;
 
 /// What `judge exempt` is asked to exempt from the link: a document, or an artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,7 +165,7 @@ impl<P: ShelfWrite> ShelfApp<P> {
         if asks.is_empty() {
             return Ok(ListedNames::of(&Listings::NotAsked));
         }
-        let listings = listings_of(self.ports.artifacts(), asks).await?;
+        let listings = listings_of(self.ports.artifacts(), Side::After, asks).await?;
         Ok(ListedNames::of(&listings))
     }
 

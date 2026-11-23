@@ -285,7 +285,7 @@ fn every() -> BTreeSet<Comparison> {
 /// by), as a project asks it.
 mod ask {
     // arch-lint: allow(ports-by-the-dispatch) reason="the test asks the dispatch through the port it answers, and implements none"
-    use whyshelf_core::app::shelf::{ArtifactSource, Spaces};
+    use whyshelf_core::app::shelf::{ArtifactSource, Side, Spaces};
     use whyshelf_core::domain::shelf::artifact::{ArtifactAsks, ArtifactKey, PrefixAsks};
 
     use super::super::Registry;
@@ -318,7 +318,7 @@ mod ask {
                 asks.ask(space.clone(), name.clone(), comparison);
             }
         }
-        match spaces.resolve(&asks).await {
+        match spaces.resolve(Side::After, &asks).await {
             Ok(readings) => readings
                 .iter()
                 .map(|(_, name, reading)| (name.clone(), reading.clone()))
@@ -329,7 +329,10 @@ mod ask {
 
     pub(super) async fn current(adapter: &Adapter, name: &ArtifactName) -> Option<Vec<u8>> {
         let (spaces, space) = dispatch(adapter);
-        match spaces.current(&ArtifactKey::new(space, name.clone())).await {
+        match spaces
+            .current(Side::After, &ArtifactKey::new(space, name.clone()))
+            .await
+        {
             Ok(bytes) => bytes,
             Err(e) => panic!("the current bytes of {name} are an error: {e:?}"),
         }
@@ -377,7 +380,7 @@ mod ask {
 
     pub(super) async fn list(adapter: &Adapter, selection: &Selection) -> NameListing {
         let (spaces, space) = dispatch(adapter);
-        match spaces.list(&space, selection).await {
+        match spaces.list(Side::After, &space, selection).await {
             Ok(listing) => listing,
             Err(e) => panic!("the listing of {selection:?} is an error: {e:?}"),
         }

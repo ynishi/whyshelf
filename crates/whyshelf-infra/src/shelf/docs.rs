@@ -112,6 +112,8 @@ use whyshelf_core::domain::shelf::build::{
 use whyshelf_core::domain::shelf::doc::normalize;
 
 use super::git::{Git, GitError};
+use super::state::StateError;
+use super::state::files::FileStates;
 
 /// Why the documents could not be read at all, or a document's file could not be
 /// written. A file that is not a document is not an error: it is a reading that
@@ -150,6 +152,20 @@ pub enum DocsError {
     /// Git gave no usable name for a document's file that is there.
     #[error(transparent)]
     Git(#[from] GitError),
+    /// What is at the directory of a range, or at a document's file, cannot be told by
+    /// the state of the project (a kind of file that is neither a file, a directory
+    /// nor a link), and is not read. The reading stops, as for a file that cannot be
+    /// read.
+    #[error("cannot tell what {} is: {why}", .path.display())]
+    Untold {
+        /// The path.
+        path: PathBuf,
+        /// Why, as the state said it.
+        why: String,
+    },
+    /// The state of the project could not be read at the side asked.
+    #[error(transparent)]
+    State(#[from] StateError),
 }
 
 /// The Markdown files of a project, and where their content is kept: the blob each
@@ -158,14 +174,24 @@ pub enum DocsError {
 pub struct MarkdownDocs {
     root: PathBuf,
     git: Git,
+    /// The state of the project the documents are read from.
+    state: FileStates,
 }
 
 impl MarkdownDocs {
-    /// The documents of the project at `root`.
+    /// The documents of the project at `root`, read at one side (the root as it is).
     pub fn new(root: PathBuf) -> Self {
+        Self::on(FileStates::new(root))
+    }
+
+    /// The documents of the project `state` reads; they are written under the root of
+    /// the side after.
+    pub fn on(state: FileStates) -> Self {
+        let root = state.root().to_path_buf();
         Self {
             git: Git::new(root.clone()),
             root,
+            state,
         }
     }
 }
@@ -844,7 +870,7 @@ mod tests {
     use super::*;
     use whyshelf_core::app::shelf::{
         Creation, DocRemove, DocReplace, DocSource, DocWrite, Removal, Rendered, Replaceable,
-        Replacement,
+        Replacement, Side,
     };
     use whyshelf_core::domain::shelf::build::FormEntries;
     use whyshelf_core::domain::shelf::schema::{BookDir, BookRange};
@@ -1422,7 +1448,7 @@ mod tests {
             docs.replace_read(&gone, b"", b"new").await.unwrap(),
             Replacement::Changed
         );
-        assert!(docs.current(&gone).await.unwrap().is_none());
+        assert!(docs.current(Side::After, &gone).await.unwrap().is_none());
 
         assert_eq!(
             docs.create(&at, &all_of(&BTreeMap::new()), "Other.\n")
@@ -1463,7 +1489,10 @@ mod tests {
             .is_ok();
 
         let forms = docs
-            .forms(&[BookRange::of_dir(BookDir::new("docs").unwrap())])
+            .forms(
+                Side::After,
+                &[BookRange::of_dir(BookDir::new("docs").unwrap())],
+            )
             .await
             .unwrap();
         let mut got = Vec::new();
@@ -1539,7 +1568,7 @@ mod tests {
         assert_eq!(tokio::fs::read_to_string(&file).await.unwrap(), written);
 
         let dirs = [BookRange::of_dir(BookDir::new("books/design").unwrap())];
-        let readings = docs.read_docs(&dirs).await.unwrap();
+        let readings = docs.read_docs(Side::After, &dirs).await.unwrap();
         let [DocReading::Parsed { entries: back, .. }] = readings.as_slice() else {
             panic!("one parsed file");
         };
@@ -1629,7 +1658,7 @@ mod tests {
             docs.remove_read(&at, before).await.unwrap(),
             Removal::Removed
         );
-        assert!(docs.current(&at).await.unwrap().is_none());
+        assert!(docs.current(Side::After, &at).await.unwrap().is_none());
         // Gone is told apart from changed, and is no error.
         assert_eq!(docs.remove_read(&at, before).await.unwrap(), Removal::Gone);
         assert_eq!(
@@ -1655,7 +1684,7 @@ mod tests {
             BookRange::of_dir(BookDir::new("docs/specs").unwrap()),
             BookRange::of_dir(BookDir::new("docs/missing").unwrap()),
         ];
-        let readings = docs.read_docs(&dirs).await.unwrap();
+        let readings = docs.read_docs(Side::After, &dirs).await.unwrap();
         assert_eq!(readings.len(), 1);
         let DocReading::Parsed { origin, .. } = &readings[0] else {
             panic!("parsed");
@@ -1714,7 +1743,7 @@ mod tests {
             let docs = docs.clone();
             async move {
                 let mut names: Vec<String> = docs
-                    .read_docs(&ranges)
+                    .read_docs(Side::After, &ranges)
                     .await
                     .unwrap()
                     .into_iter()
@@ -1741,7 +1770,10 @@ mod tests {
             ["docs/specs/keep/e.md"]
         );
         // `forms` (`fmt`) lists the same files.
-        let forms = docs.forms(&ranges_of(None, &["archive/**"])).await.unwrap();
+        let forms = docs
+            .forms(Side::After, &ranges_of(None, &["archive/**"]))
+            .await
+            .unwrap();
         assert_eq!(forms.len(), 3);
     }
 
@@ -1761,17 +1793,17 @@ mod tests {
             .unwrap();
         let docs = MarkdownDocs::new(root.path().to_path_buf());
         let out = docs
-            .read_docs(&ranges_of(None, &["archive/**"]))
+            .read_docs(Side::After, &ranges_of(None, &["archive/**"]))
             .await
             .unwrap();
         assert_eq!(out.len(), 1);
         let out = docs
-            .read_docs(&ranges_of(None, &["archive/*.md"]))
+            .read_docs(Side::After, &ranges_of(None, &["archive/*.md"]))
             .await
             .unwrap();
         assert_eq!(out.len(), 1, "a file the range does not take is not named");
         assert!(matches!(
-            docs.read_docs(&ranges_of(None, &[])).await,
+            docs.read_docs(Side::After, &ranges_of(None, &[])).await,
             Err(DocsError::Name { .. })
         ));
     }
@@ -1795,7 +1827,7 @@ mod tests {
         let docs = MarkdownDocs::new(root.path().to_path_buf());
         for exclude in ["archive/**", "**", "*/locked/**", "**/locked/**"] {
             let got = docs
-                .read_docs(&ranges_of(Some(&["*.md"]), &[exclude]))
+                .read_docs(Side::After, &ranges_of(Some(&["*.md"]), &[exclude]))
                 .await;
             if exclude == "**" {
                 assert!(got.unwrap().is_empty());
@@ -1806,7 +1838,7 @@ mod tests {
         if !readable {
             // In the range, a directory that cannot be read fails, as it did.
             assert!(matches!(
-                docs.read_docs(&ranges_of(None, &[])).await,
+                docs.read_docs(Side::After, &ranges_of(None, &[])).await,
                 Err(DocsError::Io { .. })
             ));
         }

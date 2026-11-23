@@ -91,6 +91,7 @@ use super::ports::{
     DocReplace, DocSource, FileRead, Replaceable, Replacement, ShelfPort, ShelfRead, ShelfWrite,
     port,
 };
+use super::state::Side;
 
 /// The answer of [`fmt`](ShelfApp::fmt) and [`fmt_check`](ShelfApp::fmt_check), the
 /// files in the order the documents are read.
@@ -375,12 +376,14 @@ async fn plan<D: DocSource>(
 
 /// The plan of every file of the books.
 async fn plans<P: ShelfRead>(ports: &P, ask: &DropAsk) -> Result<Vec<Plan>, ShelfError> {
-    let schema = schema_of(ports).await?.map_err(ShelfError::Schema)?;
+    let schema = schema_of(ports, Side::After)
+        .await?
+        .map_err(ShelfError::Schema)?;
     // The names to drop fit the declaration, or nothing is read or written.
     let drop = DropNames::new(&schema, ask.clone()).map_err(ShelfError::Drop)?;
     let found = ports
         .docs()
-        .forms(&schema.ranges())
+        .forms(Side::After, &schema.ranges())
         .await
         .map_err(port(ShelfPort::Docs))?;
     let mut plans = Vec::with_capacity(found.len());

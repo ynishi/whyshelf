@@ -7,11 +7,11 @@
 //! | [`MODULE_KIND`], [`GENERATOR_MARK`] | the kind of the place of a module, and the mark of a page rustdoc wrote |
 //! | [`Place`] | where in the docs the thing a path names is told of |
 //!
-//! This module reads no file and depends on no sibling: what reads the layout
-//! (`lookup`, `promise`) takes its words from here, so a change of the layout is
-//! a change of this module's words.
+//! This module reads no file and depends on no sibling but the name of a place in the
+//! docs (`docs_path`): what reads the layout (`lookup`, `promise`) takes its words from
+//! here, so a change of the layout is a change of this module's words.
 
-use std::path::{Path, PathBuf};
+use super::docs_path::DocsPath;
 
 /// The mark rustdoc writes in the head of each page: an index without it is no
 /// docs this adapter reads.
@@ -118,18 +118,18 @@ pub(super) enum Place {
     /// A module, or a crate: the index of its directory ([`MODULE_KIND`]).
     Module {
         /// The `index.html` of the module.
-        page: PathBuf,
+        page: DocsPath,
     },
     /// An item: its page.
     Item {
-        page: PathBuf,
+        page: DocsPath,
         /// The kind of the page: a kind of [`ITEM_KINDS`].
         kind: String,
     },
     /// A member of a type: the page of the type, the kind of the member and the
     /// `id` of its element on the page (`method.new`).
     Member {
-        page: PathBuf,
+        page: DocsPath,
         kind: MemberKind,
         anchor: String,
     },
@@ -137,7 +137,7 @@ pub(super) enum Place {
 
 impl Place {
     /// The page the promise is read from.
-    pub(super) fn page(&self) -> &Path {
+    pub(super) fn page(&self) -> &DocsPath {
         match self {
             Self::Module { page } | Self::Item { page, .. } | Self::Member { page, .. } => page,
         }

@@ -137,7 +137,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     // arch-lint: allow(ports-by-the-dispatch) reason="the test asks the dispatch through the port it answers, and implements none"
-    use whyshelf_core::app::shelf::{ArtifactSource, Spaces};
+    use whyshelf_core::app::shelf::{ArtifactSource, Side, Spaces};
     use whyshelf_core::domain::shelf::artifact::{
         ArtifactAsks, ArtifactKey, ArtifactName, Comparison, Space,
     };
@@ -194,7 +194,7 @@ mod tests {
         let mut asks = ArtifactAsks::new();
         asks.ask(space("file"), name("a.rs"), Comparison::Bytes);
         asks.ask(space("rust-test"), name("a.rs"), Comparison::Bytes);
-        let found = source.resolve(&asks).await.unwrap();
+        let found = source.resolve(Side::After, &asks).await.unwrap();
         assert!(
             found
                 .get(&space("file"), &name("a.rs"))
@@ -209,7 +209,7 @@ mod tests {
         );
         let key = ArtifactKey::new(space("file"), name("a.rs"));
         assert_eq!(
-            source.current(&key).await.unwrap().as_deref(),
+            source.current(Side::After, &key).await.unwrap().as_deref(),
             Some(&b"one\n"[..])
         );
     }

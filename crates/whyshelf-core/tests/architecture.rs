@@ -219,6 +219,62 @@ fn the_rule_of_the_builds_ground_catches_what_it_is_written_for() {
     );
 }
 
+/// The rule `readers-read-through-the-state` catches what it is written for, run as
+/// `arch-lint.toml` declares it over a tree of fixtures written to a directory of its
+/// own: a `use` of the file system (`std::fs`, `tokio::fs`) and a path to it written in
+/// full in code, in a module of a reader; and a `use` of Git, through `super::` and
+/// through `crate::`. It leaves alone a reader's file of tests (which sets up a tree on
+/// the file system) and a module of a writer.
+///
+/// The fixture writes a `Cargo.toml` with a `[package]` table, as `super::` is resolved
+/// from the module path of a file in its package.
+#[test]
+fn the_rule_of_the_readers_catches_what_it_is_written_for() {
+    const INFRA: &str = "crates/whyshelf-infra/src/shelf";
+    let fixtures = [
+        (
+            "books/read.rs",
+            "use std::fs;\nfn f() { let _ = tokio::fs::read; }\n",
+        ),
+        ("docs/read.rs", "use super::super::git::Git;\n"),
+        ("ledger/read.rs", "use crate::shelf::git::first_line;\n"),
+        (
+            "artifact/rust_item/lookup.rs",
+            "fn g() { let _ = std::fs::read; }\n",
+        ),
+        ("artifact/file/read_tests.rs", "use tokio::fs;\n"),
+        ("artifact/file/write.rs", "use tokio::fs;\n"),
+    ];
+    let package = (
+        "crates/whyshelf-infra/Cargo.toml".to_owned(),
+        "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\n",
+    );
+    let files: Vec<(String, &str)> = std::iter::once(package)
+        .chain(
+            fixtures
+                .into_iter()
+                .map(|(path, text)| (format!("{INFRA}/{path}"), text)),
+        )
+        .collect();
+    let caught = caught_over("whyshelf-arch-lint-readers-fixtures", &files);
+    assert_eq!(
+        caught("readers-read-through-the-state"),
+        [
+            format!("{INFRA}/artifact/rust_item/lookup.rs:1"),
+            format!("{INFRA}/books/read.rs:1"),
+            format!("{INFRA}/books/read.rs:2"),
+            format!("{INFRA}/ledger/read.rs:1"),
+        ]
+    );
+    assert_eq!(
+        caught("readers-ask-not-git"),
+        [
+            format!("{INFRA}/docs/read.rs:1"),
+            format!("{INFRA}/ledger/read.rs:1"),
+        ]
+    );
+}
+
 /// The rule `drift-reads-only-its-ground` catches what it is written for, run as
 /// `arch-lint.toml` declares it over a tree of fixtures written to a directory of its
 /// own. drift reads nothing it denies, so the rule passes in the tree without showing

@@ -80,6 +80,8 @@
 //!                 schema                                 from the records alone)
 //!   untold    ──► artifact                             untold_causes ──► UntoldCause (names that
 //!                                                        cannot be told, by cause)
+//!   placement ──► (none)                               Placement (where a name of a space lives
+//!                                                        in the files of the project)
 //!   filter    ──► schema, doc, build, freshness        StatusFilter::new ──► StatusFilter;
 //!                                                      StatusFilter::admits ──► whether a document
 //!                                                        passes
@@ -408,6 +410,14 @@ pub mod ledger;
 pub mod lookup;
 pub mod map;
 pub mod order;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "no question reads where a name lives yet; the walk of what a change may touch is to"
+    )
+)]
+pub(crate) mod placement;
 #[cfg_attr(
     not(test),
     expect(

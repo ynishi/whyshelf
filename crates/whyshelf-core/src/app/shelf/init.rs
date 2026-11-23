@@ -71,6 +71,7 @@ use super::ports::{
     ShelfWrite, port,
 };
 use super::run_writes::{RunWrites, Stop, Wrote};
+use super::state::Side;
 
 /// A request to start a project.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -305,7 +306,7 @@ async fn in_the_way<P: ShelfWrite>(
     let mut obstacles = Vec::new();
     let there = ports
         .docs()
-        .read_docs(&schema.ranges())
+        .read_docs(Side::After, &schema.ranges())
         .await
         .map_err(port(ShelfPort::Docs))?;
     let shelf = Shelf::build(schema, there, &ArtifactReadings::new());

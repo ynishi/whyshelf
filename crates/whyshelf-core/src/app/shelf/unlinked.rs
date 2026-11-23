@@ -29,9 +29,10 @@ use crate::domain::shelf::trace::{Linkage, linkage};
 
 use super::ShelfApp;
 use super::error::ShelfError;
-use super::load::{View, load_with, schema_of};
+use super::load::{View, load_with, now, schema_of};
 use super::ports::ShelfRead;
 use super::report::{UnlinkedEntry, UnlinkedLists, UnlinkedReport};
+use super::state::Side;
 
 /// Which of the two one-way questions of `unlinked` to answer; the documents linked
 /// neither way are answered whichever is asked.
@@ -104,7 +105,7 @@ impl<P: ShelfRead> ShelfApp<P> {
     /// [`books_check`](Self::books_check), with the lists asked for empty; a book
     /// that is not declared is [`ShelfError::UnknownBook`], with no reference.
     pub async fn unlinked(&self, filter: &UnlinkedFilter) -> Result<UnlinkedReport, ShelfError> {
-        let schema = match schema_of(&self.ports).await? {
+        let schema = match schema_of(&self.ports, Side::After).await? {
             Ok(schema) => schema,
             Err(problems) => {
                 return Ok(UnlinkedReport::SchemaInvalid {
@@ -121,7 +122,7 @@ impl<P: ShelfRead> ShelfApp<P> {
                 book: book.clone(),
             });
         }
-        let loaded = load_with(&self.ports, &schema).await?;
+        let loaded = load_with(&self.ports, Side::After, &schema, now(&self.ports).await?).await?;
         let assessment = loaded.assess(&Listings::NotAsked);
         let view = View {
             loaded: &loaded,

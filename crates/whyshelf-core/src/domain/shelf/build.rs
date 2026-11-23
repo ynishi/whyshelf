@@ -932,6 +932,30 @@ impl<'a> DocState<'a> {
         }
     }
 
+    /// The files the identity may be in now: a valid document's file, every file of
+    /// an invalid one, every file whose identity could not be read when no file is
+    /// known to carry it (any of them may), and none when it is gone.
+    ///
+    /// The files a question about what a change may touch reads of a document, beside
+    /// the places of the artifacts it stands on
+    /// ([`Placement`](super::placement::Placement)). It is not the files known to
+    /// carry the identity (the shelf's own question, which leaves out those that may).
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "no question reads the files an identity may be in yet; the walk of what a change may touch is to"
+        )
+    )]
+    pub(crate) fn may_be_in(&self) -> BTreeSet<&RelPath> {
+        match self {
+            Self::Valid(doc) => BTreeSet::from([doc.origin()]),
+            Self::Invalid(docs) => docs.iter().map(InvalidDoc::origin).collect(),
+            Self::Unknown { unreadable } => unreadable.iter().collect(),
+            Self::Gone => BTreeSet::new(),
+        }
+    }
+
     /// The owned form of the whole state, with the files: the one place an answer
     /// takes what to show of a document from.
     ///

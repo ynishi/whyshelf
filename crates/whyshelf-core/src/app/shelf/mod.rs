@@ -66,6 +66,17 @@
 //! files that are no document, the cycles, the records that contradict one another
 //! and the files of the ledger that are no record. None is a failure of the use case,
 //! and none is left out.
+//!
+//! # Which end of a change is read
+//!
+//! Every port that reads the state of the project takes a [`Side`], and every space's
+//! ask that reads does too: a use case reads one end of a change, [`Side::After`] for
+//! every command here, reading the clock once and handing that time to the reading of
+//! the side: the declaration and then the documents and the ledger, in one load, or,
+//! for a use case that answers a declaration that is not sound or holds its ask
+//! against the declaration first, the declaration and then the rest, at the same side
+//! and time. The trees those readings are of are read through the ports of
+//! [`state`], by one adapter for the run.
 
 mod adapter;
 mod approve_chosen;
@@ -89,6 +100,7 @@ mod rekey;
 mod report;
 mod run_writes;
 mod same_meaning;
+pub mod state;
 mod unlinked;
 mod withdraw;
 
@@ -141,6 +153,8 @@ mod run_writes_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]
+mod side_tests;
+#[cfg(test)]
 mod space_tests;
 #[cfg(test)]
 mod stale_gate_tests;
@@ -190,6 +204,10 @@ pub use report::{
 };
 pub use run_writes::Edited;
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
+pub use state::{
+    AtSide, Beyond, ByteBound, DirListing, Entries, EntryKind, Leads, NameAnswers, NotADir,
+    RawPart, ReadWay, Side, StateList, StateRead, TreeFiles, Unnamed,
+};
 pub use unlinked::{UnlinkedAsk, UnlinkedFilter};
 pub use withdraw::WithdrawRequest;
 

@@ -12,7 +12,10 @@
 //! page, the directory of a module) or inside the docs (a re-export).
 //!
 //! Each test has a number (T1, T2, ...) so that a verification or a comment can name
-//! it; T18 is not used.
+//! it; T18 is not used. The rows the readers gained when they came to read through the
+//! state of the project are T27 and after: a kind of file that is neither a file, a
+//! directory nor a link (a pipe), which each reader tells as it tells a file it cannot
+//! read and never opens, and the built docs of `rust-item` at the two sides of a change.
 //!
 //! Each test makes its own small project in a temporary directory: a root and, beside
 //! it, a directory outside the root.
@@ -23,7 +26,7 @@ use std::process::Stdio;
 
 use tokio::process::Command;
 use uuid::Uuid;
-use whyshelf_core::app::shelf::{BookSchemaSource, DocSource, LedgerAppend, LedgerRead};
+use whyshelf_core::app::shelf::{BookSchemaSource, DocSource, LedgerAppend, LedgerRead, Side};
 use whyshelf_core::domain::actor::{Actor, Attribution};
 use whyshelf_core::domain::id::EntityId;
 use whyshelf_core::domain::location::RelPath;
@@ -39,11 +42,13 @@ use whyshelf_core::domain::shelf::ledger::{
 use whyshelf_core::domain::shelf::schema::{BookDir, BookRange};
 
 use super::artifact::file::FileSpace;
+use super::artifact::js_test::JsTestSpace;
 use super::artifact::rust_item::{GENERATOR_MARK, RustItemSpace};
 use super::artifact::rust_test::RustTestSpace;
 use super::books::{BooksError, BooksToml};
-use super::docs::MarkdownDocs;
+use super::docs::{DocsError, MarkdownDocs};
 use super::ledger::{JsonLedger, LedgerError};
+use super::state::files::FileStates;
 
 /// A root and a directory outside it, side by side in one temporary directory.
 struct Tree {
@@ -154,7 +159,10 @@ async fn t1_the_declaration_is_read_through_a_link_inside_the_root() {
     let t = tree().await;
     write(&t.root, "decl/books.toml", BOOKS).await;
     link("../decl/books.toml", &t.root, ".whyshelf/books.toml").await;
-    let decl = declaration(&t.root).declarations().await.unwrap();
+    let decl = declaration(&t.root)
+        .declarations(Side::After)
+        .await
+        .unwrap();
     assert_eq!(decl.books.len(), 1);
 }
 
@@ -165,7 +173,10 @@ async fn t2_the_declaration_is_read_through_a_link_out_of_the_root() {
     let t = tree().await;
     write(&t.outside, "books.toml", BOOKS).await;
     link(&t.outside, &t.root, ".whyshelf").await;
-    let decl = declaration(&t.root).declarations().await.unwrap();
+    let decl = declaration(&t.root)
+        .declarations(Side::After)
+        .await
+        .unwrap();
     assert_eq!(decl.books.len(), 1);
 }
 
@@ -175,7 +186,10 @@ async fn t2_the_declaration_is_read_through_a_link_out_of_the_root() {
 async fn t3_a_broken_link_is_a_missing_declaration() {
     let t = tree().await;
     link("nowhere.toml", &t.root, ".whyshelf/books.toml").await;
-    let error = declaration(&t.root).declarations().await.unwrap_err();
+    let error = declaration(&t.root)
+        .declarations(Side::After)
+        .await
+        .unwrap_err();
     assert!(matches!(error, BooksError::Missing { .. }), "{error:?}");
 }
 
@@ -186,15 +200,73 @@ async fn t3_a_directory_in_the_place_of_the_declaration_cannot_be_read() {
     tokio::fs::create_dir_all(t.root.join(".whyshelf/books.toml"))
         .await
         .unwrap();
-    let error = declaration(&t.root).declarations().await.unwrap_err();
+    let error = declaration(&t.root)
+        .declarations(Side::After)
+        .await
+        .unwrap_err();
     assert!(matches!(error, BooksError::Io { .. }), "{error:?}");
+}
+
+/// A pipe at `at` under `dir`, when the system can make one (`mkfifo`): opened for
+/// reading, it would wait for a writer, so a test that ends shows it was not opened.
+#[cfg(unix)]
+pub(crate) async fn pipe(dir: &Path, at: &str) -> bool {
+    let full = dir.join(at);
+    if let Some(parent) = full.parent() {
+        tokio::fs::create_dir_all(parent).await.unwrap();
+    }
+    Command::new("mkfifo")
+        .arg(full)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .is_ok_and(|s| s.success())
+}
+
+/// What `read` gives, when it ends. A read that opened the pipe at `pipe` would wait
+/// for a writer: after a while the pipe is opened for writing, which lets that read
+/// end, and the test fails rather than waits.
+#[cfg(unix)]
+pub(crate) async fn ends<F: std::future::Future>(pipe: &Path, read: F) -> F::Output {
+    let wait = std::time::Duration::from_secs(30);
+    match tokio::time::timeout(wait, read).await {
+        Ok(read) => read,
+        Err(_) => {
+            let mut writer = tokio::fs::OpenOptions::new();
+            writer.write(true);
+            let _ = tokio::time::timeout(wait, writer.open(pipe)).await;
+            panic!(
+                "{} was opened, and the read waited for a writer",
+                pipe.display()
+            );
+        }
+    }
+}
+
+/// T27: a pipe in the place of the declaration cannot be told, and is not opened.
+#[cfg(unix)]
+#[tokio::test]
+async fn t27_a_pipe_in_the_place_of_the_declaration_cannot_be_told() {
+    let t = tree().await;
+    if !pipe(&t.root, ".whyshelf/books.toml").await {
+        return;
+    }
+    let books = declaration(&t.root);
+    let error = ends(
+        &t.root.join(".whyshelf/books.toml"),
+        books.declarations(Side::After),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, BooksError::Untold { .. }), "{error:?}");
 }
 
 // The ledger (ledger/read.rs, `LedgerRead::read`): the directory and each `.json` file read
 // as the system reads them, links followed, out of the root too.
 
 fn ledger(root: &Path) -> JsonLedger {
-    JsonLedger::new(root.join(".whyshelf/ledger"), rel(".whyshelf/ledger"))
+    JsonLedger::new(root, rel(".whyshelf/ledger"))
 }
 
 /// A record, admitted as a project that declares no rule admits it.
@@ -217,7 +289,8 @@ fn record() -> AdmittedRecord {
 
 /// A record written in `dir`, by the ledger itself: the name of its file.
 async fn record_in(dir: &Path) -> String {
-    let at = JsonLedger::new(dir.to_path_buf(), rel(".whyshelf/ledger"))
+    let name = dir.file_name().unwrap().to_str().unwrap();
+    let at = JsonLedger::new(dir.parent().unwrap(), rel(name))
         .append(&record())
         .await
         .unwrap();
@@ -231,7 +304,7 @@ async fn t4_the_ledger_is_read_through_a_directory_linked_out_of_the_root() {
     let t = tree().await;
     record_in(&t.outside.join("ledger")).await;
     link(t.outside.join("ledger"), &t.root, ".whyshelf/ledger").await;
-    let contents = ledger(&t.root).read().await.unwrap();
+    let contents = ledger(&t.root).read(Side::After).await.unwrap();
     assert_eq!(contents.records.len(), 1);
     assert!(contents.unreadable.is_empty());
 }
@@ -248,7 +321,7 @@ async fn t5_a_record_is_read_through_a_file_linked_out_of_the_root() {
         &format!(".whyshelf/ledger/{name}"),
     )
     .await;
-    let contents = ledger(&t.root).read().await.unwrap();
+    let contents = ledger(&t.root).read(Side::After).await.unwrap();
     assert_eq!(contents.records.len(), 1);
 }
 
@@ -259,7 +332,7 @@ async fn t6_a_directory_named_as_a_record_stops_the_read() {
     tokio::fs::create_dir_all(t.root.join(".whyshelf/ledger/x.json"))
         .await
         .unwrap();
-    let error = ledger(&t.root).read().await.unwrap_err();
+    let error = ledger(&t.root).read(Side::After).await.unwrap_err();
     assert!(matches!(error, LedgerError::Io { .. }), "{error:?}");
 }
 
@@ -270,13 +343,39 @@ async fn t6_a_directory_named_as_a_record_stops_the_read() {
 async fn t22_a_broken_link_is_no_ledger_and_a_broken_record_stops_the_read() {
     let t = tree().await;
     link(t.outside.join("gone"), &t.root, ".whyshelf/ledger").await;
-    let contents = ledger(&t.root).read().await.unwrap();
+    let contents = ledger(&t.root).read(Side::After).await.unwrap();
     assert!(contents.records.is_empty() && contents.unreadable.is_empty());
 
     let t = tree().await;
     link("nowhere.json", &t.root, ".whyshelf/ledger/x.json").await;
-    let error = ledger(&t.root).read().await.unwrap_err();
+    let error = ledger(&t.root).read(Side::After).await.unwrap_err();
     assert!(matches!(error, LedgerError::Io { .. }), "{error:?}");
+}
+
+/// T28: a pipe named as a record, or in the place of the directory of the ledger,
+/// cannot be told and stops the read; it is not opened.
+#[cfg(unix)]
+#[tokio::test]
+async fn t28_a_pipe_in_the_ledger_cannot_be_told_and_stops_the_read() {
+    let t = tree().await;
+    if !pipe(&t.root, ".whyshelf/ledger/x.json").await {
+        return;
+    }
+    let at = t.root.join(".whyshelf/ledger/x.json");
+    let error = ends(&at, ledger(&t.root).read(Side::After))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, LedgerError::Untold { .. }), "{error:?}");
+
+    let t = tree().await;
+    if !pipe(&t.root, ".whyshelf/ledger").await {
+        return;
+    }
+    let at = t.root.join(".whyshelf/ledger");
+    let error = ends(&at, ledger(&t.root).read(Side::After))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, LedgerError::Untold { .. }), "{error:?}");
 }
 
 // The documents (docs/read.rs, `DocSource::read_docs` and `current`): the directory of a
@@ -292,7 +391,7 @@ fn docs_range() -> BookRange {
 /// The origins of the documents the range of `docs` takes.
 async fn origins(root: &Path) -> Vec<String> {
     MarkdownDocs::new(root.to_path_buf())
-        .read_docs(&[docs_range()])
+        .read_docs(Side::After, &[docs_range()])
         .await
         .unwrap()
         .iter()
@@ -309,7 +408,7 @@ async fn t7_the_directory_of_a_range_is_read_through_a_link_out_of_the_root() {
     write(&t.outside, "docs/a.md", DOC).await;
     link(t.outside.join("docs"), &t.root, "docs").await;
     let readings = MarkdownDocs::new(t.root.clone())
-        .read_docs(&[docs_range()])
+        .read_docs(Side::After, &[docs_range()])
         .await
         .unwrap();
     assert_eq!(readings.len(), 1);
@@ -350,10 +449,13 @@ async fn t9_the_file_of_a_document_is_read_now_through_a_link_out_of_the_root() 
     link(t.outside.join("docs"), &t.root, "docs").await;
     let docs = MarkdownDocs::new(t.root.clone());
     assert_eq!(
-        docs.current(&rel("docs/a.md")).await.unwrap().as_deref(),
+        docs.current(Side::After, &rel("docs/a.md"))
+            .await
+            .unwrap()
+            .as_deref(),
         Some(DOC.as_bytes())
     );
-    assert_eq!(docs.current(&rel("docs")).await.unwrap(), None);
+    assert_eq!(docs.current(Side::After, &rel("docs")).await.unwrap(), None);
 }
 
 /// T23: the directory of a range that is a broken link holds no documents, and the
@@ -368,7 +470,161 @@ async fn t23_a_broken_link_holds_no_documents_and_is_no_file_now() {
     let t = tree().await;
     link("nowhere.md", &t.root, "docs/a.md").await;
     let docs = MarkdownDocs::new(t.root.clone());
-    assert_eq!(docs.current(&rel("docs/a.md")).await.unwrap(), None);
+    assert_eq!(
+        docs.current(Side::After, &rel("docs/a.md")).await.unwrap(),
+        None
+    );
+}
+
+/// T29: an entry of a range that is a pipe is passed over, as a link is; a pipe in the
+/// place of the directory of a range, or of a document's file read now, cannot be told.
+/// None is opened.
+#[cfg(unix)]
+#[tokio::test]
+async fn t29_a_pipe_in_a_range_is_passed_over_and_one_in_the_place_of_a_file_cannot_be_told() {
+    let t = tree().await;
+    write(&t.root, "docs/a.md", DOC).await;
+    if !pipe(&t.root, "docs/b.md").await {
+        return;
+    }
+    let at = t.root.join("docs/b.md");
+    assert_eq!(ends(&at, origins(&t.root)).await, ["docs/a.md"]);
+    let docs = MarkdownDocs::new(t.root.clone());
+    let error = ends(&at, docs.current(Side::After, &rel("docs/b.md")))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DocsError::Untold { .. }), "{error:?}");
+
+    let t = tree().await;
+    if !pipe(&t.root, "docs").await {
+        return;
+    }
+    let docs = MarkdownDocs::new(t.root.clone());
+    let error = ends(
+        &t.root.join("docs"),
+        docs.read_docs(Side::After, &[docs_range()]),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, DocsError::Untold { .. }), "{error:?}");
+}
+
+/// A loop of two links at `at` under `dir`, the second beside it.
+#[cfg(unix)]
+async fn looped(dir: &Path, at: &str) {
+    let other = format!("{at}.other");
+    let name = |path: &str| path.rsplit('/').next().unwrap().to_owned();
+    link(name(&other), dir, at).await;
+    link(name(at), dir, &other).await;
+}
+
+/// T34: a loop of links where the declaration, the directory of the ledger, a record or
+/// the directory of a range is fails the read with the system's error (`Io`), as a
+/// reading of the path does; it is not read as nothing there, which a broken link is
+/// (T3, T22, T23).
+#[cfg(unix)]
+#[tokio::test]
+async fn t34_a_loop_of_links_is_the_systems_error_and_not_nothing_there() {
+    let t = tree().await;
+    looped(&t.root, ".whyshelf/books.toml").await;
+    let error = declaration(&t.root)
+        .declarations(Side::After)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, BooksError::Io { .. }), "{error:?}");
+
+    let t = tree().await;
+    looped(&t.root, ".whyshelf/ledger").await;
+    let error = ledger(&t.root).read(Side::After).await.unwrap_err();
+    assert!(matches!(error, LedgerError::Io { .. }), "{error:?}");
+
+    let t = tree().await;
+    looped(&t.root, ".whyshelf/ledger/x.json").await;
+    let error = ledger(&t.root).read(Side::After).await.unwrap_err();
+    assert!(matches!(error, LedgerError::Io { .. }), "{error:?}");
+
+    let t = tree().await;
+    looped(&t.root, "docs").await;
+    let error = MarkdownDocs::new(t.root.clone())
+        .read_docs(Side::After, &[docs_range()])
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DocsError::Io { .. }), "{error:?}");
+}
+
+/// T35: a link that leads through a file (`docs` to `README.md/x`) is the system's own
+/// answer for a path through a file: the file of a document read now there, and the
+/// link itself, are no file now, and the directory of a range there fails the read
+/// (`Io`), as a listing of the path does.
+#[cfg(unix)]
+#[tokio::test]
+async fn t35_a_link_through_a_file_is_no_file_now() {
+    let t = tree().await;
+    write(&t.root, "README.md", "read me\n").await;
+    link("README.md/x", &t.root, "docs").await;
+    let docs = MarkdownDocs::new(t.root.clone());
+    assert_eq!(
+        docs.current(Side::After, &rel("docs/a.md")).await.unwrap(),
+        None
+    );
+    assert_eq!(docs.current(Side::After, &rel("docs")).await.unwrap(), None);
+    let error = docs
+        .read_docs(Side::After, &[docs_range()])
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DocsError::Io { .. }), "{error:?}");
+}
+
+/// T37: a record whose name is no path of the project (a backslash in it) is read as
+/// the system names it: kept when it decodes; when it does not, its name cannot be
+/// reported, and the read fails (`Name`, with the reason of the grammar).
+#[cfg(unix)]
+#[tokio::test]
+async fn t37_a_record_whose_name_is_no_path_is_read_and_kept() {
+    let t = tree().await;
+    let kept = t.outside.join("kept");
+    let name = record_in(&kept).await;
+    let bytes = tokio::fs::read(kept.join(&name)).await.unwrap();
+    let dir = t.root.join(".whyshelf/ledger");
+    tokio::fs::create_dir_all(&dir).await.unwrap();
+    tokio::fs::write(dir.join("a\\b.json"), &bytes)
+        .await
+        .unwrap();
+    let contents = ledger(&t.root).read(Side::After).await.unwrap();
+    assert_eq!(contents.records.len(), 1);
+    assert!(contents.unreadable.is_empty());
+
+    tokio::fs::write(dir.join("c\\d.json"), "{}").await.unwrap();
+    let error = ledger(&t.root).read(Side::After).await.unwrap_err();
+    assert!(
+        matches!(
+            error,
+            LedgerError::Name {
+                source: Some(_),
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}
+
+/// T38: a directory in a range whose name is no path of the project (a backslash in
+/// it) is walked: one that holds no file the range takes is no error, and a file the
+/// range takes in it fails the read (`Name`): it cannot be named as a document.
+#[cfg(unix)]
+#[tokio::test]
+async fn t38_a_directory_of_a_range_whose_name_is_no_path_is_walked() {
+    let t = tree().await;
+    write(&t.root, "docs/a.md", DOC).await;
+    write(&t.root, "docs/x\\y/notes.txt", "notes\n").await;
+    assert_eq!(origins(&t.root).await, ["docs/a.md"]);
+
+    write(&t.root, "docs/x\\y/b.md", DOC).await;
+    let error = MarkdownDocs::new(t.root.clone())
+        .read_docs(Side::After, &[docs_range()])
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DocsError::Name { .. }), "{error:?}");
 }
 
 // The space `file` (artifact/file/read.rs, `place_of`): a link is followed by its
@@ -479,6 +735,63 @@ async fn t24_a_directory_as_a_name_is_absent() {
         .unwrap();
     assert_eq!(found[&n("dir")], ArtifactReading::absent());
     assert_eq!(space.current(&n("dir")).await.unwrap(), None);
+}
+
+/// T30: a pipe named in the space `file` cannot be told, and has no bytes now; it is not
+/// opened.
+#[cfg(unix)]
+#[tokio::test]
+async fn t30_a_pipe_in_the_space_file_cannot_be_told() {
+    let t = tree().await;
+    if !pipe(&t.root, "pipe.txt").await {
+        return;
+    }
+    let at = t.root.join("pipe.txt");
+    let space = FileSpace::new(t.root.clone());
+    let asked = asks(&["pipe.txt"], Comparison::Bytes);
+    let found = ends(&at, space.resolve(&asked)).await.unwrap();
+    let why = untold_why(&found[&n("pipe.txt")], &Comparison::Bytes).unwrap();
+    assert!(why.contains("neither a file"), "{why}");
+    assert_eq!(
+        ends(&at, space.current(&n("pipe.txt"))).await.unwrap(),
+        None
+    );
+}
+
+/// T31: a test named in a pipe, in the space `rust-test`, cannot be told; it is not
+/// opened.
+#[cfg(unix)]
+#[tokio::test]
+async fn t31_a_test_in_a_pipe_cannot_be_told() {
+    let t = tree().await;
+    if !pipe(&t.root, "src/lib.rs").await {
+        return;
+    }
+    let space = RustTestSpace::new(t.root.clone());
+    let asked = asks(&["src/lib.rs::top"], Comparison::Bytes);
+    let found = ends(&t.root.join("src/lib.rs"), space.resolve(&asked))
+        .await
+        .unwrap();
+    let why = untold_why(&found[&n("src/lib.rs::top")], &Comparison::Bytes).unwrap();
+    assert!(why.contains("neither a file"), "{why}");
+}
+
+/// T36: a test named in a pipe, in the space `js-test`, cannot be told; it is not
+/// opened.
+#[cfg(unix)]
+#[tokio::test]
+async fn t36_a_js_test_in_a_pipe_cannot_be_told() {
+    let t = tree().await;
+    if !pipe(&t.root, "src/a.test.ts").await {
+        return;
+    }
+    let space = JsTestSpace::new(t.root.clone());
+    let asked = asks(&["src/a.test.ts::top"], Comparison::Bytes);
+    let found = ends(&t.root.join("src/a.test.ts"), space.resolve(&asked))
+        .await
+        .unwrap();
+    let why = untold_why(&found[&n("src/a.test.ts::top")], &Comparison::Bytes).unwrap();
+    assert!(why.contains("neither a file"), "{why}");
 }
 
 /// T13: the names of a selection are the files Git lists of the work tree: none can
@@ -691,11 +1004,16 @@ async fn t20_the_address_of_a_document_is_its_blob_in_the_work_tree() {
     write(&t.root, "docs/a.md", DOC).await;
     let docs = MarkdownDocs::new(t.root.clone());
     let asked = BTreeSet::from([rel("docs/a.md"), rel("docs/gone.md")]);
-    assert!(docs.addresses(&asked).await.unwrap().is_empty());
+    assert!(
+        docs.addresses(Side::After, &asked)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     git(&t.root, &["init", "-q"]).await;
     git(&t.root, &["add", "docs/a.md"]).await;
     write(&t.root, "docs/a.md", &format!("{DOC}More.\n")).await;
-    let addresses = docs.addresses(&asked).await.unwrap();
+    let addresses = docs.addresses(Side::After, &asked).await.unwrap();
     assert_eq!(
         addresses
             .iter()
@@ -791,4 +1109,75 @@ async fn t21_the_built_docs_are_where_the_variable_the_settings_or_the_cargo_tom
             "{why}"
         );
     }
+}
+
+// The built docs of `rust-item` at the two sides of a change (artifact/rust_item.rs,
+// `docs_at`): each side tells where its docs are from its own tree, and reads its own;
+// docs outside the project at a side are told at neither.
+
+/// The crates of `space` that resolve as there at `side`, among `crates`.
+async fn built_at(space: &RustItemSpace, side: Side, crates: &[&'static str]) -> Vec<&'static str> {
+    use whyshelf_core::app::shelf::SpaceAdapter;
+    let found = SpaceAdapter::resolve(space, side, &asks(crates, Comparison::Presence))
+        .await
+        .unwrap();
+    crates
+        .iter()
+        .copied()
+        .filter(|krate| found[&n(krate)].is_present())
+        .collect()
+}
+
+/// T32: with a different `build.target-dir` before and after a
+/// change, each side reads the docs where its own settings put them.
+#[tokio::test]
+async fn t32_each_side_reads_the_built_docs_its_own_settings_name() {
+    let t = tree().await;
+    let (before, after) = (t.outside.clone(), t.root.clone());
+    for side in [&before, &after] {
+        write(side, "old/doc/olden/index.html", &page()).await;
+        write(side, "new/doc/newer/index.html", &page()).await;
+    }
+    write(
+        &before,
+        ".cargo/config.toml",
+        "[build]\ntarget-dir = \"old\"\n",
+    )
+    .await;
+    write(
+        &after,
+        ".cargo/config.toml",
+        "[build]\ntarget-dir = \"new\"\n",
+    )
+    .await;
+    let space = RustItemSpace::on(FileStates::between(before, after), None);
+    let crates = ["olden", "newer"];
+    assert_eq!(built_at(&space, Side::Before, &crates).await, ["olden"]);
+    assert_eq!(built_at(&space, Side::After, &crates).await, ["newer"]);
+}
+
+/// T33: an absolute `CARGO_TARGET_DIR` under the root of the side after and not under
+/// the directory of the side before is outside the project at the side before, which
+/// cannot be told in a run of two sides; the side after reads it.
+#[tokio::test]
+async fn t33_built_docs_outside_the_side_before_are_untold_there_and_read_at_the_side_after() {
+    let t = tree().await;
+    let (before, after) = (t.outside.clone(), t.root.clone());
+    write(&after, "env/doc/demo/index.html", &page()).await;
+    let space = RustItemSpace::on(
+        FileStates::between(before, after.clone()),
+        Some(after.join("env")),
+    );
+    assert_eq!(built_at(&space, Side::After, &["demo"]).await, ["demo"]);
+    use whyshelf_core::app::shelf::SpaceAdapter;
+    let found = SpaceAdapter::resolve(&space, Side::Before, &asks(&["demo"], Comparison::Presence))
+        .await
+        .unwrap();
+    let why = untold_why(&found[&n("demo")], &Comparison::Presence).unwrap();
+    assert!(
+        why.contains(
+            "the built docs are outside the project, so the two sides cannot be read alike"
+        ),
+        "{why}"
+    );
 }

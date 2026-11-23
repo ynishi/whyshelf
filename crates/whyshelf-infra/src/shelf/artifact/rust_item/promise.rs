@@ -723,14 +723,14 @@ mod tests {
     //! own and watch the layout of the real one.
 
     use std::collections::BTreeSet;
-    use std::path::PathBuf;
 
     use whyshelf_core::domain::shelf::artifact::Comparison;
 
+    use super::super::docs_path::DocsPath;
     use super::*;
 
     fn place(kind: &str, anchor: Option<&str>) -> Place {
-        let page = PathBuf::from("page.html");
+        let page = DocsPath::top().join("page.html").unwrap();
         match anchor {
             Some(anchor) => Place::Member {
                 page,

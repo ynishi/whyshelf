@@ -66,6 +66,7 @@ use super::error::ShelfError;
 use super::load::load;
 use super::ports::{ArtifactSource, IdSource, ShelfPort, ShelfWrite, port};
 use super::run_writes::{RunWrites, Stop, Wrote};
+use super::state::Side;
 
 /// What a request gives for one entry of a new document, before the book's
 /// declaration says what it is: a surface that reads text (the command line) gives a
@@ -300,7 +301,7 @@ pub(super) async fn plan_of<P: ShelfWrite>(
     } else {
         ports
             .artifacts()
-            .resolve(&asks)
+            .resolve(Side::After, &asks)
             .await
             .map_err(port(ShelfPort::Artifacts))?
     };

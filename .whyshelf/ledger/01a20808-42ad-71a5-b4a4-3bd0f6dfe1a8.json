@@ -1,0 +1,195 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "a0fd1daa4c88c8c61d934e2c28855fb6ededc9e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:46558b5f8c963a9fcff69f871b65c77f89eb701008c54ec13142ade7c3594aa6",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a870ab3668dcac9b6a3b5d6841773be79c8b0d31",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a8451d48fc18df3135248605db8b126efe8ce4474304ac18d401a0a04177de30",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/side_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "57d512bfe53a113d76a068617da0ce21d152f331",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2087bf174be9a8d488f1fe68a00ac4ff5fc4169daa8de1614bdd7b16cdbbace4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/state.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e6fab0d26ae95daf85195a93a58bd2fa8f46d03e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6a6b93763ff2d9365c884a4215016e44862bf4988af1cee7aa10e61ed5db1965",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b8644ace7bf7a8d1057865628713dcd25e718936",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:75f35dc73c482cb1b451d51e148b9c781de61d767a37a0261d725c434df1227a",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file/read_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "00c9b9cc9f85a50b17b9266de78a0f95c5b05745",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9f77f35b488172ef162a347573af00cc4720a79020880193db4e2bffd6cf054f",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/docs_path.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cd153032bb2951a7689b42f2418dc58ce117b7ea",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a37b420a33b757c7fc4c18e3ea2a87290a91c1ebfe6c0c3068e2785da0aff7b1",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e12f9cfba3679acecc743dba95e4b66f790edbd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:db4e8136ce88b5cf0f83988a7ddcdf594ae0592f7fc56dbb0dbf2aa84c9ef2cc",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/state/files_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4454e88d40e1fcb7c973c23345ebbd3a57888d82",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a056b02aebed2f4b235fb984b8ca9bc8e253a9443ed312bd9d3d215185d2a08f",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/state/paths_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795431063434,
+  "expires": null,
+  "frame": [
+    {
+      "address": "2cd7b31f1f651c5e806cd7ce9e317e51e6ec9093",
+      "hash": "sha256:ac00d5d939dfa765fdda2828554068fbae551619d56ca6422533e350085a6bb3",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "101"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a207dc-7f20-73bc-8120-bdeba2c06f55"
+    },
+    {
+      "address": "6bf32f31eb7bead6a944e70f7adf773ee51a72e2",
+      "hash": "sha256:387e442f32e8f461f69af47d83b92010ad53074c371da9a0165a4fc1ff5d6aee",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "102"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a207dc-7f20-73bc-8120-bdecf13534a3"
+    },
+    {
+      "address": "b5bcb1dc7dd36e1356c742dfddc22ade4eaf9323",
+      "hash": "sha256:fda2fd81ec64ce707bc89a7f5c61fd4675e725015f9bf3f719beebd24a870407",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "105"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a207dc-7f20-73bc-8120-bded052d50a0"
+    }
+  ],
+  "id": "01a20808-42ad-71a5-b4a4-3bd0f6dfe1a8",
+  "kind": "decision",
+  "reason": "Read again after #112's second steps: every reader reads its tree through one state port at a side, by FileStates, with today's answers kept (pinned by the readers' tests), rust-item's built docs read per side, and arch-lint holding the readers to the port",
+  "revision": "fb15461684310f73cf2ee72e5dbb7866107abe5d",
+  "seen": "sha256:849ca58debd42aecf540c7e1084b78f32099eeaad1b11ae6c1fb2abd1db5e24e",
+  "seen_address": "ce940fa3835a04e0412bfbe75993ac505334a2ae",
+  "subject": "01a207dc-7f20-73bc-8120-bdeedc62c6e9",
+  "v": 1,
+  "verb": "approve"
+}
