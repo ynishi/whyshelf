@@ -15,7 +15,7 @@ use crate::domain::id::DocId;
 use super::build::Shelf;
 use super::footing::Footing;
 use super::freshness::{
-    Assessment, Carried, Degradation, Freshness, FreshnessLevel, OriginGroup, Severity, Standing,
+    Assessment, Carried, Degradation, FreshnessLevel, OriginGroup, Severity, Standing,
     StandingKind, Unapproved, UpstreamReading,
 };
 use super::graph::components;
@@ -52,15 +52,12 @@ pub fn stale(assessment: &Assessment) -> StaleChoice {
         again: BTreeSet::new(),
         broken: Vec::new(),
     };
-    for (id, standing) in assessment.standings() {
-        let Some(Freshness::Degraded(degradation)) = standing.freshness() else {
-            continue;
-        };
+    for (id, degradation) in assessment.degraded() {
         match degradation.level() {
             Severity::Expired | Severity::Stale => {
-                choice.again.insert(*id);
+                choice.again.insert(id);
             }
-            Severity::Broken => choice.broken.push((*id, degradation.clone())),
+            Severity::Broken => choice.broken.push((id, degradation.clone())),
         }
     }
     choice
@@ -384,6 +381,9 @@ pub struct HeldBack {
 /// whether the upstream was left out. Standings are read from `assessment`, which the
 /// caller makes of the ledger as the approvals already decided in the run left it: an
 /// upstream stale only through one the run has approved since holds nothing back.
+///
+/// Each (link, target) of the links is told on its own, by what its upstream is; the
+/// first that holds the approval back is the answer.
 pub fn held_back(
     shelf: &Shelf,
     assessment: &Assessment,
@@ -392,56 +392,85 @@ pub fn held_back(
     left_out: &BTreeSet<DocId>,
 ) -> Option<HeldBack> {
     let doc = shelf.doc(id)?;
-    doc.depends_links().find_map(|(link, upstream)| {
-        let in_run = run.contains(&upstream);
-        // What the upstream is to an approval on it is read once, from its
-        // standing; here only what holds a run back of that.
-        let hold = match UpstreamReading::of(&assessment.standing_of(upstream)) {
-            UpstreamReading::Approval { awaiting, carried } => match carried {
-                Some(Carried::Broken) => Some(Hold::Broken),
-                Some(Carried::Stale) if !in_run => Some(Hold::Stale),
-                Some(Carried::Stale) | None => awaiting.then_some(Hold::Awaiting),
-            },
-            UpstreamReading::Unapproved(Unapproved::Pending) if !in_run => Some(Hold::Pending),
-            // Holds nothing back: a pending upstream in the run is decided
-            // before this one, and refusing an approval on an upstream decided
-            // against is the frame's (`frame_approve`), not the run's.
-            UpstreamReading::Unapproved(Unapproved::Pending) => None,
-            UpstreamReading::Unapproved(Unapproved::Superseded { .. } | Unapproved::Refused(_)) => {
-                None
-            }
-        };
-        // The same after every arm that holds nothing back: the upstream was
-        // itself left out of the run.
-        let hold = hold.or_else(|| left_out.contains(&upstream).then_some(Hold::LeftOut))?;
-        Some(HeldBack {
-            link: link.clone(),
-            upstream,
-            hold,
-        })
+    doc.depends_links()
+        .find_map(|(link, upstream)| hold_of(assessment, link, upstream, run, left_out))
+}
+
+/// For each (link, target) of `id`'s Depends links, the hold [`held_back`] tells of
+/// it, in link order then target order; [`held_back`] is the first.
+pub(super) fn holds(
+    shelf: &Shelf,
+    assessment: &Assessment,
+    id: DocId,
+    run: &BTreeSet<DocId>,
+    left_out: &BTreeSet<DocId>,
+) -> Vec<HeldBack> {
+    shelf.doc(id).map_or_else(Vec::new, |doc| {
+        doc.depends_links()
+            .filter_map(|(link, upstream)| hold_of(assessment, link, upstream, run, left_out))
+            .collect()
+    })
+}
+
+/// What one (link, target) holds back, by the rule of [`held_back`].
+fn hold_of(
+    assessment: &Assessment,
+    link: &EntryName,
+    upstream: DocId,
+    run: &BTreeSet<DocId>,
+    left_out: &BTreeSet<DocId>,
+) -> Option<HeldBack> {
+    let in_run = run.contains(&upstream);
+    // What the upstream is to an approval on it is read once, from its
+    // standing; here only what holds a run back of that.
+    let hold = match UpstreamReading::of(&assessment.standing_of(upstream)) {
+        UpstreamReading::Approval { awaiting, carried } => match carried {
+            Some(Carried::Broken) => Some(Hold::Broken),
+            Some(Carried::Stale) if !in_run => Some(Hold::Stale),
+            Some(Carried::Stale) | None => awaiting.then_some(Hold::Awaiting),
+        },
+        UpstreamReading::Unapproved(Unapproved::Pending) if !in_run => Some(Hold::Pending),
+        // Holds nothing back: a pending upstream in the run is decided
+        // before this one, and refusing an approval on an upstream decided
+        // against is the frame's (`frame_approve`), not the run's.
+        UpstreamReading::Unapproved(Unapproved::Pending) => None,
+        UpstreamReading::Unapproved(Unapproved::Superseded { .. } | Unapproved::Refused(_)) => None,
+    };
+    // The same after every arm that holds nothing back: the upstream was
+    // itself left out of the run.
+    let hold = hold.or_else(|| left_out.contains(&upstream).then_some(Hold::LeftOut))?;
+    Some(HeldBack {
+        link: link.clone(),
+        upstream,
+        hold,
     })
 }
 
 /// The identities of `among`, each after every one of `among` it stands on.
 ///
 /// A document stands on what its `Depends` links resolve to now ([`Shelf::build`])
-/// and on what the approval that stands about it pinned ([`Ledger::status_of`]).
+/// and on what the approval that stands about it pinned ([`Ledger::declared`]).
 /// Only the documents of `among` are ordered, and only the edges between two of
 /// them count: a document outside the set is left out, and no order passes through
-/// it. Otherwise the order is upstream first and deterministic: the same set, shelf
-/// and ledger give the same order, and the documents with no edge to another of the
-/// set come by identity among themselves.
+/// it. A link that names a document it cannot stand on (one that is not valid, or a
+/// key two files write) is no edge, and gives no order. Otherwise the order is
+/// upstream first and deterministic: the same set, shelf and ledger give the same
+/// order, and the documents with no edge to another of the set come by identity
+/// among themselves.
 ///
-/// Every document a `Depends` link of a member names, when it is in `among`, comes
-/// before the member; so one pass in this order sees each upstream decided before
-/// what stands on it.
+/// Every document a `Depends` link of a member resolves to, when it is in `among`,
+/// comes before the member; so one pass in this order sees each upstream decided
+/// before what stands on it.
 ///
-/// A cycle cannot be judged: a document in a cycle of links or of frames is broken
-/// ([`Cause::InCycle`]), and a broken approval is never in a set to approve again, so
-/// no cycle of either graph reaches this order. The two graphs together can still
-/// close a ring neither closes alone (a link now one way, a pin from before the link
-/// was rewritten the other). There the links alone decide, since the approval made
-/// again pins the links as they are now and its old pins are what it replaces.
+/// A set may hold a cycle: a broken approval may be one of a cycle of links or of
+/// frames ([`Cause::InCycle`]), and a pending document's links may close one, so a
+/// set that takes broken or pending documents (the pending ones `--pending` takes, a
+/// unit of [`units`](super::units)) can bring it here. The
+/// members of a cycle the links alone close come by identity among themselves. The
+/// two graphs together can also close a ring neither closes alone (a link now one
+/// way, a pin from before the link was rewritten the other). There the links alone
+/// decide, since the approval made again pins the links as they are now and its old
+/// pins are what it replaces.
 ///
 /// [`Cause::InCycle`]: super::freshness::Cause::InCycle
 pub fn upstream_first(shelf: &Shelf, ledger: &Ledger, among: &BTreeSet<DocId>) -> Vec<DocId> {
@@ -571,6 +600,85 @@ mod tests {
         );
         let held = held_back(&without_pending, &assessment, docid(2), &run, &ids(&[1])).unwrap();
         assert_eq!((held.upstream, held.hold), (docid(1), Hold::LeftOut));
+    }
+
+    /// FR-4, whose links `base` and `also` name these, in the schema of two links. A
+    /// document holds its links by name, so `also` is read before `base`.
+    fn on_two_links(base: &[&str], also: &[&str]) -> crate::domain::shelf::build::DocReading {
+        use crate::domain::shelf::fixtures_tests::{list, reading, text};
+        reading(
+            "findings/fr-4.md",
+            4,
+            "FR-4",
+            &[
+                ("title", text("t")),
+                ("base", list(base)),
+                ("also", list(also)),
+            ],
+        )
+    }
+
+    #[test]
+    fn holds_tells_of_every_link_and_target_in_order_and_held_back_is_the_first() {
+        use crate::domain::shelf::fixtures_tests::{schema_of_two_links, shelf_of};
+        use crate::domain::shelf::freshness::assess_unasked as assess;
+        use crate::domain::shelf::ledger::JudgedAt;
+        // FR-1 approved; FR-2 and FR-3 pending, outside the run: the second target of
+        // `base` and the one target of `also` each hold FR-4 back.
+        let s = shelf_of(
+            &schema_of_two_links(),
+            vec![
+                fr(1, &[]),
+                fr(2, &[]),
+                fr(3, &[]),
+                on_two_links(&["FR-1", "FR-2"], &["FR-3"]),
+            ],
+        );
+        let approvals = approved(&s, &[1]);
+        let assessment = assess(&s, &approvals, JudgedAt::new(100));
+        let run = ids(&[4]);
+        let none = BTreeSet::new();
+        let all = holds(&s, &assessment, docid(4), &run, &none);
+        let told: Vec<(&str, DocId, Hold)> = all
+            .iter()
+            .map(|held| (held.link.as_str(), held.upstream, held.hold))
+            .collect();
+        assert_eq!(
+            told,
+            [
+                ("also", docid(3), Hold::Pending),
+                ("base", docid(2), Hold::Pending),
+            ]
+        );
+        assert_eq!(
+            held_back(&s, &assessment, docid(4), &run, &none).as_ref(),
+            all.first()
+        );
+        // In the run, neither holds anything back; and no valid document, no hold.
+        assert!(holds(&s, &assessment, docid(4), &ids(&[2, 3, 4]), &none).is_empty());
+        assert!(holds(&s, &assessment, docid(77), &run, &none).is_empty());
+    }
+
+    #[test]
+    fn a_refused_upstream_on_one_link_does_not_hide_a_pending_one_on_the_next() {
+        use crate::domain::shelf::fixtures_tests::{deny, schema_of_two_links, shelf_of};
+        use crate::domain::shelf::freshness::assess_unasked as assess;
+        use crate::domain::shelf::ledger::JudgedAt;
+        // `also` (read first, by name) names FR-1, denied; `base` names FR-2, pending.
+        let s = shelf_of(
+            &schema_of_two_links(),
+            vec![fr(1, &[]), fr(2, &[]), on_two_links(&["FR-2"], &["FR-1"])],
+        );
+        let decided = ledger(vec![deny(&s, 1, 9, 20)]);
+        let assessment = assess(&s, &decided, JudgedAt::new(100));
+        let run = ids(&[4]);
+        let none = BTreeSet::new();
+        let held = held_back(&s, &assessment, docid(4), &run, &none).unwrap();
+        assert_eq!(
+            (held.link.as_str(), held.upstream, held.hold),
+            ("base", docid(2), Hold::Pending)
+        );
+        assert_eq!(holds(&s, &assessment, docid(4), &run, &none), vec![held]);
     }
 
     #[test]

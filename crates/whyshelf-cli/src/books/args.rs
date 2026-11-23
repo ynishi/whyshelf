@@ -215,6 +215,16 @@ pub enum BooksCommand {
         #[arg(long)]
         exit_code: bool,
     },
+    /// The approvals that no longer hold, divided into units of work that share
+    /// nothing: no unit stands on an artifact that lives in a file another stands on,
+    /// on a document of another, or on an upstream outside them that holds another
+    /// back; each unit with its documents upstream first, the files its artifacts live
+    /// in, and the upstreams it waits on. It writes nothing, and the exit is 0.
+    Units {
+        /// Divide the pending documents too.
+        #[arg(long)]
+        pending: bool,
+    },
     /// How the work went, from the ledger and the documents: approvals made again,
     /// the time documents stayed pending, the runs of `judge` (one that writes no
     /// decision, as `revoke`, `same` and `withdraw`, is no run here), and the

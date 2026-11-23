@@ -10,6 +10,35 @@ and this project adheres to
 
 ### Added
 
+- The command `units [--pending]` (#113): the approvals that no longer hold (with
+  `--pending`, the pending documents too) divided into units of work that share
+  nothing, at the side after, so that each unit can be mended and approved again
+  apart from the others. Two documents are in one unit when one stands on the other
+  (its `Depends` links, or what its approval pinned) or its `Depends` link names the
+  other, which it cannot stand on (a document that is not valid, or a key two files
+  write); when they stand on artifacts that live in one file, whole or in part (two
+  tests of one file are one unit); or when the same upstreams outside the documents
+  divided hold both back, directly or through what holds such an upstream back in
+  turn (that chain joins as the documents divided do, and stops at what holds nothing
+  back: an approval that holds, an upstream a new approval may not stand on, and a
+  document divided). Each unit (`units`) lists its `documents` in the order
+  `judge approve` takes them, each with its `standing`; the `files` its artifacts
+  live in; its `artifacts`, each with the `documents` that stand on it and its
+  `place` as `reach` writes it; and `waits_on`, the upstreams outside it to approve
+  first, each with its `hold` (`pending` or `awaiting`). An artifact whose place
+  cannot be told joins only what stands on the same name, and is listed in
+  `unplaced`. The files of the documents and of the declaration are no key, so two
+  units may write the declaration. What could join units without being seen (a
+  document whose links cannot be read that is divided, or that a document divided or
+  of the chain stands on or names; a file whose identity cannot be read) is counted
+  in `untold` (`invalid`,
+  `unreadable`, as `reach` names them), with a warning on stderr. Its schema is
+  `outputs.units` of `schema`; the JSON stays version 1. It writes nothing, and the
+  exit is 0.
+- In the library (#113): `units`, the division of what does not hold (`UnitsOf`,
+  `plan` and `UnitsPlan` with `asks`, `divide`, and the answer `Units` with `Unit`,
+  `UnitDoc`, `UnitArtifact`, `UnplacedArtifact` and `Unjoined` through
+  `Units::untold`), and `app::shelf::ShelfApp::units` with its answer `UnitsReport`.
 - The command `reach <ref>...` (#112): what depends on the documents named and what
   all of them stand on, at the side after. Its answer lists every document whose
   `Depends` links reach one named, transitively (`docs`, each with `named`, its

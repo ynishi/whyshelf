@@ -13,7 +13,7 @@ use whyshelf_core::domain::nonempty::NonEmptySet;
 use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::reach::Unwalked;
 
-use super::words::plural;
+use super::words::unread;
 use super::{DocRef, HealthOut, Namer, standing};
 
 /// One document reached.
@@ -124,17 +124,24 @@ impl Namer<'_> {
     }
 
     fn reached_artifact(&self, reached: &ReachedArtifact) -> ReachArtifactOut {
-        let files = |files: &NonEmptySet<RelPath>| files.iter().map(ToString::to_string).collect();
         ReachArtifactOut {
             space: reached.artifact.space().to_string(),
             name: reached.artifact.name().to_string(),
             by: reached.by.iter().map(|id| self.doc(*id)).collect(),
-            place: match &reached.placement {
-                Placement::Only(only) => PlaceOut::Only { files: files(only) },
-                Placement::Partly(part) => PlaceOut::Partly { files: files(part) },
-                Placement::Unplaced(why) => PlaceOut::Unplaced {
-                    why: why.as_str().to_owned(),
-                },
+            place: PlaceOut::from(&reached.placement),
+        }
+    }
+}
+
+impl From<&Placement> for PlaceOut {
+    /// Where an artifact lives, as every answer that says so writes it.
+    fn from(placement: &Placement) -> Self {
+        let files = |files: &NonEmptySet<RelPath>| files.iter().map(ToString::to_string).collect();
+        match placement {
+            Placement::Only(only) => Self::Only { files: files(only) },
+            Placement::Partly(part) => Self::Partly { files: files(part) },
+            Placement::Unplaced(why) => Self::Unplaced {
+                why: why.as_str().to_owned(),
             },
         }
     }
@@ -184,24 +191,10 @@ struct Untold(Unwalked);
 
 impl fmt::Display for Untold {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (invalid, unreadable) = (self.0.invalid(), self.0.unreadable());
-        let mut parts = Vec::new();
-        if invalid > 0 {
-            parts.push(format!(
-                "{invalid} document{} whose links cannot be read",
-                plural(invalid)
-            ));
-        }
-        if unreadable > 0 {
-            parts.push(format!(
-                "{unreadable} file{} whose identity cannot be read",
-                plural(unreadable)
-            ));
-        }
         write!(
             f,
             "{} may depend on the named, so what they reach may be more than this answer says",
-            parts.join(" and ")
+            unread(self.0.invalid(), self.0.unreadable())
         )
     }
 }

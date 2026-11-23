@@ -162,6 +162,7 @@ pub fn schemas() -> SchemasOut {
     put("reach", schema_for!(ReachOut));
     put("unlinked", schema_for!(UnlinkedOut));
     put("stale", schema_for!(StaleOut));
+    put("units", schema_for!(UnitsOut));
     put("stats", schema_for!(StatsOut));
     put("moves", schema_for!(MovesOut));
     put("diff", schema_for!(DiffOut));
@@ -259,6 +260,7 @@ mod stats;
 mod status;
 mod summary;
 mod trace;
+mod units;
 mod unlinked;
 mod untold;
 mod words;
@@ -289,6 +291,7 @@ pub use stale::{StaleOut, stale, stale_warnings};
 pub use stats::stats;
 pub use status::{StatusOut, status};
 pub use trace::{TraceOut, trace};
+pub use units::{UnitsOut, units, units_warnings};
 pub use unlinked::{UnlinkedOut, unlinked};
 use words::shell_word;
 pub use words::{readers, standing};
@@ -430,6 +433,30 @@ mod tests {
         let stale = serde_json::to_string(&outputs["stale"]).unwrap();
         for field in ["kind", "severity", "upstream", "link", "detail", "artifact"] {
             assert!(stale.contains(&format!("\"{field}\"")), "{field}");
+        }
+        // The division is an answer of its own, and the list of `stale` is as it was.
+        let units = serde_json::to_string(&outputs["units"]).unwrap();
+        assert!(units.contains("\"version\""));
+        for field in [
+            "units",
+            "documents",
+            "standing",
+            "files",
+            "artifacts",
+            "place",
+            "waits_on",
+            "hold",
+            "unplaced",
+            "why",
+            "untold",
+            "invalid",
+            "unreadable",
+            "health",
+        ] {
+            assert!(units.contains(&format!("\"{field}\"")), "{field}");
+        }
+        for field in ["units", "waits_on"] {
+            assert!(!stale.contains(&format!("\"{field}\"")), "{field}");
         }
     }
 

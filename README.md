@@ -76,6 +76,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
 | `check` | the declaration, the documents and the ledger; exit 1 if anything is wrong |
 | `status`, `get <ref>` | where each document stands, or one with why |
 | `stale [--exit-code]` | the approvals that no longer hold, with where that starts |
+| `units [--pending]` | the approvals that no longer hold (with `--pending`, the pending documents too), divided into units of work that share nothing |
 | `trace <ref>`, `map` | the chain through a document, and the books and their links |
 | `reach <ref>...` | what depends on documents, what all of it stands on, and the files that hold it |
 | `unlinked` | the documents no link reaches, or that hold none |

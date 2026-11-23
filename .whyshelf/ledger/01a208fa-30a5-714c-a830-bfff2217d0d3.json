@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795446922960,
+  "expires": null,
+  "frame": [],
+  "id": "01a208fa-30a5-714c-a830-bfff2217d0d3",
+  "kind": "decision",
+  "reason": "Read again after #113: units divides what does not hold into units that share nothing, joined by what a document stands on or names, the files its artifacts live in, untold names and the chain of outside upstreams that hold it back, with what may join them unseen counted",
+  "revision": "56bb787df6bd11f7fcf062da7bde3a242b5edf31",
+  "seen": "sha256:7a6fc8c65db9fb1f7a016e53b8d19289fc00b9aac97354512dd894ea3d42f60f",
+  "seen_address": "c15d9b75a38c2ee7d50580b2042ce64538a772f1",
+  "subject": "01a208d2-0bb9-75d2-8714-adc250ce96bd",
+  "v": 1,
+  "verb": "approve"
+}

@@ -17,6 +17,7 @@
 //! | [`reach`](ShelfApp::reach) | no | [`ReachReport`]: the named documents and every document that depends on one of them, the artifacts all of them stand on with where each lives, the files of the project all of it is in, and what may depend on them that could not be read |
 //! | [`unlinked`](ShelfApp::unlinked) | no | [`UnlinkedReport`]: the problems of the declaration, or the documents linked neither way, those no link reaches and those that hold none, those decided against apart |
 //! | [`stale`](ShelfApp::stale) | no | [`StaleReport`]: the approvals that no longer hold, with where they start to fail and what can settle each origin, and whether a gate passes ([`StaleReport::gate`]) |
+//! | [`units`](ShelfApp::units) | no | [`UnitsReport`]: the approvals that no longer hold (and, asked, the pending documents) divided into units of work that share nothing, each with its documents upstream first, the files its artifacts live in and the upstreams it waits on, and the artifacts whose place cannot be told |
 //! | [`stats`](ShelfApp::stats) | no | [`StatsReport`]: how the work went, from the ledger: approvals made again, pending time, runs, and the pins that changed under approvals made again |
 //! | [`show_approved`](ShelfApp::show_approved) | no | [`ApprovedReport`]: what the approval that stands saw, each item with its content or why it could not be read back |
 //! | [`diff`](ShelfApp::diff) | no | [`DiffReport`]: each item of that approval, as approved and as it is now |
@@ -168,6 +169,8 @@ mod successor_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod units_tests;
+#[cfg(test)]
 mod unlinked_tests;
 
 pub use adapter::{
@@ -203,8 +206,8 @@ pub use report::{
     GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport, MovedAway, MovesReport,
     Names, ReachReport, ReachedArtifact, ReachedDoc, RepeatedArtifact, RepeatedExemption, Row,
     SettledOrigin, StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered,
-    UncoveredArtifact, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport, UnneededArtifact,
-    UnneededExemption, UpstreamEdge, UpstreamEnd,
+    UncoveredArtifact, UnitsReport, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport,
+    UnneededArtifact, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 pub use run_writes::Edited;
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};

@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "41b2391f189dd41468d1f1bcf6b841f645d3e049",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:878904a0d5d2bd0b353b9effba49750aee62ace7f070596827a47e6daa75dbde",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a72de66e8519cd70c65680ce76577050479985ca",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:463ad9316cc1beda5182ec13a28d39640462abf75ca66531d182f5126b8193ce",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/units_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "7b2496abf694c4155537a94cf18161309d7893f7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:04b9ceccdf40314b79ac8831bfba839d90bba07430a819f672cc7014c6ef8cab",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5ca068054afdc6dbedfe3fe438b0c4830cbdc979",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e4a25d348f488ce2feea0af7a5af0e6dc88026936107be047376ca0de017650c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/units/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4aa2918e485cf18b75a5c4adea5a803416e476fc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1e33a700bc1ab240526ec4f1e4ba67b70d6264a5b5380d7cd3caa26a2e119f6b",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/split_modules.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795446922960,
+  "expires": null,
+  "frame": [
+    {
+      "address": "cf3daf29968731ea6bfddf2ae584a83002cf55d8",
+      "hash": "sha256:f843a4be58434ae371dd7a13ecd3e2f890da44a920e35b501e078e5b424ec4ad",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "107"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a208d2-0bb9-75d2-8714-adc41b7c187b"
+    }
+  ],
+  "id": "01a208fa-36b0-728d-9d28-06f90c501911",
+  "kind": "decision",
+  "reason": "Read again after #113: units divides what does not hold into units that share nothing, joined by what a document stands on or names, the files its artifacts live in, untold names and the chain of outside upstreams that hold it back, with what may join them unseen counted",
+  "revision": "56bb787df6bd11f7fcf062da7bde3a242b5edf31",
+  "seen": "sha256:842c68af510b1e7c844d97769b497092251e49c654130e32c31665051fc728ba",
+  "seen_address": "357080491143e24a73522b2a53a90827f58d58e5",
+  "subject": "01a208d2-0bb9-75d2-8714-adc59a816e73",
+  "v": 1,
+  "verb": "approve"
+}

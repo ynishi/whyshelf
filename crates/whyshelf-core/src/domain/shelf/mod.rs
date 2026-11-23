@@ -80,6 +80,11 @@
 //!   settle    ──► freshness, artifact, order           origins_asked ──► OriginsAsked;
 //!                                                      settle_all ──► Settlement (what can settle
 //!                                                        an origin: read, declare, approve)
+//!   units     ──► doc, build, ledger, graph,           plan ──► UnitsPlan (what does not hold,
+//!                 freshness, order, footing,             what each stands on and what holds it
+//!                 placement                              back, and the places to ask);
+//!                                                      divide ──► Units (units of work that
+//!                                                        share nothing)
 //!   stats     ──► artifact, doc, build, ledger,        stats::of ──► Stats         (how the work went,
 //!                 schema                                 from the records alone)
 //!   untold    ──► artifact                             untold_causes ──► UntoldCause (names that
@@ -196,6 +201,7 @@
 //! | what can settle each origin | [`origins_asked`](settle::origins_asked), for the documents the settlements approve by name, then [`Foreseen::of`](order::Foreseen::of), for what the approving commands would approve (what `--stale` would approve again, [`order::stale_taken`], and whether the frame takes each approval by name), then [`settle_all`](settle::settle_all) | the [`Settlement`](settle::Settlement)s of each origin, read first, then declare, then approve |
 //! | which documents a run of approvals takes: the expired or stale ones, or the pending ones | [`order::stale`], [`order::pending`] and [`order::pending_upstream`] (one document: [`order::pending_of`]), from an [`Assessment`] | the identities, with the broken ones told apart for `stale` |
 //! | the order a set of approvals is judged in again | [`upstream_first`](order::upstream_first), from the links and the pins | the identities, upstream first |
+//! | which documents that do not hold (and, asked, which pending ones) share nothing, so that each part can be mended and approved again apart | [`units::plan`], then [`units::divide`] with where the artifacts live, by the rules of [`units`] | [`Units`](units::Units): the units, each with its documents upstream first, its files, its artifacts and the upstreams it waits on, and the artifacts whose place cannot be told |
 //! | how the work went: approvals made again, pending time, runs, the pins that changed | [`stats::of`], from every decision and the keys now; the measures are defined on its page | a [`Stats`](stats::Stats) |
 //! | what a document stands on: the documents its links resolve to and its approval pinned, and the artifacts its links to artifacts name and its approval pinned (each pin as it is read now) | `Footing::of` in `footing.rs` (visible to the shelf's modules only) | a `Footing` |
 //! | which documents depend on some named documents, and what of the shelf a walk down from them cannot follow | `walk` in [`reach`] (visible to the crate only), by `Doc::depends_names` | a `Walked`, with an [`Unwalked`](reach::Unwalked) of what it could not follow |
@@ -426,6 +432,7 @@ pub mod settle;
 pub mod snapshot;
 pub mod stats;
 pub mod trace;
+pub mod units;
 pub mod untold;
 
 #[cfg(test)]

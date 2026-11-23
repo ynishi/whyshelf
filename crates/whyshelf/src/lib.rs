@@ -1148,6 +1148,26 @@
 //!                             approvals stand on that cannot be told now (`unknown`)
 //!                             (exit 1 with --exit-code when there is any, or when an
 //!                             approval stands on a name that cannot be told now)
+//!   units [--pending]         the approvals that no longer hold (with --pending, the pending
+//!                             documents too) divided into units of work that share nothing, so
+//!                             that each can be mended and approved again apart: two documents
+//!                             are in one unit when one stands on the other or its link names
+//!                             the other, when they stand on artifacts that live in one file, or
+//!                             when the same upstreams outside them hold both back, directly or
+//!                             through what holds such an upstream back in turn (that chain joins
+//!                             as they do, and stops at what holds nothing back: an approval that
+//!                             holds, an upstream a new approval may not stand on, a document
+//!                             divided). Each unit has its
+//!                             documents in the order `judge approve` takes them, the files its
+//!                             artifacts live in (`place` as `reach` writes it), and `waits_on`,
+//!                             the upstreams outside it to approve first (`pending` or
+//!                             `awaiting`). An artifact whose place cannot be told joins only
+//!                             what stands on the same name, and is listed in `unplaced`. The
+//!                             files of the documents and of the declaration are not counted.
+//!                             What could join units unseen (a document whose links cannot be
+//!                             read that is divided, or stood on or named by a document divided
+//!                             or of the chain; a file whose identity cannot be read) is counted
+//!                             in `untold`, with a warning on stderr. It writes nothing; exit 0
 //!   stats [--since <time>]    how the work went, from the ledger: approvals made again, the time
 //!                             documents stayed pending, the runs of judge, and what changed
 //!                             under approvals made again
@@ -1498,7 +1518,7 @@
 //! `ran_by` of the approval in the same way; a cause has
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
 //! its `space`) and a `detail` sentence; every answer that reads the documents (`check`, `cover` and
-//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `reach`, `stale`, `stats`, `moves`, `diff`) carries
+//! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `reach`, `stale`, `units`, `stats`, `moves`, `diff`) carries
 //! `health` (files that are no document, cycles, records that contradict one another
 //! or cannot be read). The answers of the writes, of `map` and of `schema` carry
 //! none.
