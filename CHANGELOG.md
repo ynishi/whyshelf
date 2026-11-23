@@ -10,6 +10,18 @@ and this project adheres to
 
 ### Added
 
+- In the library (#112): the state of a tree of names at one side of a change,
+  `app::shelf::state` (`Side`, `StateRead` with `read`, `look`, `read_outside`,
+  `read_beyond` and `addresses`, `StateList` with `list`, `list_outside`,
+  `list_beyond` and `files`, `AtSide`, `NameAnswers`, `Leads`, `DirListing`,
+  `NotADir`, `Entries`, `EntryKind`, `Unnamed`, `Beyond`, `RawPart`,
+  `TreeFiles`, `ReadWay`, `ByteBound`), and its adapter for a directory of the
+  file system, `infra::shelf::state` (`files::FileStates`, at one side with
+  `new` or at two with `between`, with `root`, `dir`, `path_of` and
+  `with_timeout`; `files::LEAVES`; `StateError`); every reader of a project
+  reads its tree through it. The constructors `BooksToml::on`, `MarkdownDocs::on`, `JsonLedger::on`,
+  `FileSpace::on`, `RustTestSpace::on`, `JsTestSpace::on` and
+  `RustItemSpace::on`, which read through a given state.
 - In the library (#112): `reach::Unwalked`, what a walk down from named
   documents could not follow, counted (`invalid`, `unreadable`).
 - In the library (#182): `settle::origins_asked`, `order::OriginsAsked`,
@@ -310,6 +322,27 @@ and this project adheres to
 
 ### Changed
 
+- In the library (#112): the ports that read the project take the `Side` of a
+  change they read: `BookSchemaSource::declarations`, `DocSource::read_docs`,
+  `forms`, `current` and `addresses`, `LedgerRead::read`, and
+  `ArtifactSource::resolve`, `current` and `list`; so do the asks of a space that
+  read, `SpaceAdapter::resolve` and `current` and `NameList::list`. Every command
+  reads `Side::After`, at a time read once from the clock (`load_at` in the
+  application). `ShelfRead::way` names how a run reads. `JsonLedger::new` takes
+  the root of the project, from which records are both read and added, where it
+  took the directory of the ledger.
+- In the library (#112): `BooksError`, `DocsError` and `LedgerError` have an
+  `Untold` variant and a `State` one; `ArtifactError`, `RustTestError`,
+  `JsTestError` and `RustItemError` a `State` one.
+- A kind of file that is none of a file, a directory or a link (a pipe, a socket,
+  a device) is not opened by any reader (#112): in the place of the declaration,
+  a record, the directory of the ledger or of a range, or a document's file, it
+  fails the reading as a file that cannot be read does; among the entries of a
+  range it is passed over, as a link is; and a name of a space it is told by
+  cannot be told, where the space `file` answered absent.
+- The architecture rules `readers-read-through-the-state` and
+  `readers-ask-not-git` hold the modules that read the project to its state
+  (#112).
 - In the library (#182): `settle::settlements` is no longer public;
   `settle::settle_all` settles the origins `settle::origins_asked` was given,
   with the `order::Foreseen` of them.
