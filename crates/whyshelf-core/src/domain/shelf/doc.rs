@@ -259,6 +259,19 @@ pub enum UnresolvedWhy {
     TargetInvalid(DocId),
 }
 
+/// Why a document a `Depends` link names is one the link cannot be followed to: the
+/// reasons of [`UnresolvedWhy`] that name a document, by the one rule of which
+/// documents a link names, which is the [`Doc`]'s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Unfollowed {
+    /// It is the one document of the key, and it is invalid
+    /// ([`UnresolvedWhy::TargetInvalid`]).
+    TargetInvalid,
+    /// It is of a file that writes a key two or more files write
+    /// ([`UnresolvedWhy::Ambiguous`]).
+    Ambiguous,
+}
+
 /// One link that could not be followed: what was written, the book it points into,
 /// the key it reads as there (when it reads as one), and why.
 ///
@@ -407,6 +420,45 @@ pub enum LinkState {
     Resolved(ResolvedLink),
     /// The link names nothing that can be stood on.
     Unresolved(UnresolvedLink),
+}
+
+/// What one key a `Depends` link writes names.
+enum Named<'a> {
+    /// The valid document it resolves to.
+    Resolved(DocId),
+    /// The documents it names and cannot be followed to, by why.
+    Unfollowed(Vec<DocId>, Unfollowed),
+    /// A key that is no document's.
+    Unnamed(&'a DocKey),
+    /// Nothing: a text that is no key.
+    Nothing,
+}
+
+/// What `state` names: the one match over why a link cannot be followed that
+/// [`Doc::depends_names`], [`Doc::unfollowed_names`] and [`Doc::unnamed_keys`] read.
+fn named(state: &LinkState) -> Named<'_> {
+    match state {
+        LinkState::Resolved(target) => Named::Resolved(target.id()),
+        LinkState::Unresolved(link) => match link.why() {
+            UnresolvedWhy::TargetInvalid(id) => {
+                Named::Unfollowed(vec![*id], Unfollowed::TargetInvalid)
+            }
+            UnresolvedWhy::Ambiguous(collision) => {
+                let ids: Vec<DocId> = collision.ids().into_iter().collect();
+                if ids.is_empty() {
+                    // Only files with no identity that could be read write the key: as
+                    // with one such file, no document has it.
+                    link.key().map_or(Named::Nothing, Named::Unnamed)
+                } else {
+                    Named::Unfollowed(ids, Unfollowed::Ambiguous)
+                }
+            }
+            UnresolvedWhy::Missing | UnresolvedWhy::NoIdentity(_) => {
+                link.key().map_or(Named::Nothing, Named::Unnamed)
+            }
+            UnresolvedWhy::Malformed(_) => Named::Nothing,
+        },
+    }
 }
 
 /// One link a book declares, as a document holds it: what kind of link it is, and
@@ -749,19 +801,42 @@ impl Doc {
     /// more of them write ([`UnresolvedWhy::Ambiguous`]: it names one of them, which
     /// cannot be told). Any other link that cannot be followed names none.
     pub(crate) fn depends_names(&self) -> impl Iterator<Item = DocId> + '_ {
+        self.depends_states().flat_map(|state| match named(state) {
+            Named::Resolved(id) => vec![id],
+            Named::Unfollowed(ids, _) => ids,
+            Named::Unnamed(_) | Named::Nothing => Vec::new(),
+        })
+    }
+
+    /// The documents of [`Doc::depends_names`] that no link resolves to, each with why
+    /// its link cannot be followed to it, in the order it holds them: a document two
+    /// links name is there for each.
+    pub(crate) fn unfollowed_names(&self) -> impl Iterator<Item = (DocId, Unfollowed)> + '_ {
+        self.depends_states().flat_map(|state| match named(state) {
+            Named::Unfollowed(ids, why) => ids.into_iter().map(|id| (id, why)).collect(),
+            Named::Resolved(_) | Named::Unnamed(_) | Named::Nothing => Vec::new(),
+        })
+    }
+
+    /// The keys its `Depends` links write that are no document's, in the order it holds
+    /// them: no file writes the key ([`UnresolvedWhy::Missing`]), or the files that do
+    /// carry no identity that could be read ([`UnresolvedWhy::NoIdentity`] for one, an
+    /// [`UnresolvedWhy::Ambiguous`] whose writers have no identity for several). A text
+    /// that is no key ([`UnresolvedWhy::Malformed`]) is none.
+    pub(crate) fn unnamed_keys(&self) -> impl Iterator<Item = &DocKey> + '_ {
+        self.depends_states()
+            .filter_map(|state| match named(state) {
+                Named::Unnamed(key) => Some(key),
+                Named::Resolved(_) | Named::Unfollowed(..) | Named::Nothing => None,
+            })
+    }
+
+    /// What each key written in its `Depends` links comes to, link by link in the order
+    /// it holds them.
+    fn depends_states(&self) -> impl Iterator<Item = &LinkState> + '_ {
         self.links_of(Propagation::Depends)
             .into_iter()
             .flat_map(|(_, states)| states.iter())
-            .flat_map(|state| match state {
-                LinkState::Resolved(target) => vec![target.id()],
-                LinkState::Unresolved(link) => match link.why() {
-                    UnresolvedWhy::TargetInvalid(id) => vec![*id],
-                    UnresolvedWhy::Ambiguous(collision) => collision.ids().into_iter().collect(),
-                    UnresolvedWhy::Malformed(_)
-                    | UnresolvedWhy::Missing
-                    | UnresolvedWhy::NoIdentity(_) => Vec::new(),
-                },
-            })
     }
 
     /// The links to artifacts, by name: every one the book declares is there, with
@@ -1119,6 +1194,61 @@ mod wording_tests {
                 docid(1)
             )
         );
+    }
+}
+
+#[cfg(test)]
+mod names_tests {
+    use crate::domain::shelf::build::DocReading;
+    use crate::domain::shelf::fixtures_tests::{docid, entries, fr, path, reading, shelf, text};
+
+    use super::Unfollowed;
+
+    /// A finding whose file writes `key` and the identity `id` as written.
+    fn writing(file: &str, id: Option<&str>, key: &str) -> DocReading {
+        let mut written = vec![("key", text(key)), ("title", text("t"))];
+        if let Some(id) = id {
+            written.push(("id", text(id)));
+        }
+        DocReading::Parsed {
+            origin: path(file),
+            entries: entries(&written),
+            body: "body\n".to_owned(),
+        }
+    }
+
+    #[test]
+    fn what_a_link_names_and_cannot_be_followed_to_and_the_keys_that_are_no_documents() {
+        // FR-10 links to: FR-1 (valid), FR-2 (not valid), FR-3 (written by the files of
+        // 3 and 6), FR-4 (written by a file with no `id:`), FR-5 (written by a file whose
+        // identity cannot be read), FR-9 (written by no file) and `bad` (no key).
+        let s = shelf(vec![
+            fr(1, &[]),
+            reading("findings/fr-2.md", 2, "FR-2", &[]),
+            fr(3, &[]),
+            reading("findings/twin.md", 6, "FR-3", &[("title", text("t"))]),
+            writing("findings/fr-4.md", None, "FR-4"),
+            writing("findings/fr-5.md", Some("not an identity"), "FR-5"),
+            fr(10, &["FR-1", "FR-2", "FR-3", "FR-4", "FR-5", "FR-9", "bad"]),
+        ]);
+        let doc = s.doc(docid(10)).expect("FR-10 is valid");
+        let names: Vec<_> = doc.depends_names().collect();
+        assert_eq!(names, [docid(1), docid(2), docid(3), docid(6)]);
+        let unfollowed: Vec<_> = doc.unfollowed_names().collect();
+        assert_eq!(
+            unfollowed,
+            [
+                (docid(2), Unfollowed::TargetInvalid),
+                (docid(3), Unfollowed::Ambiguous),
+                (docid(6), Unfollowed::Ambiguous),
+            ]
+        );
+        let keys: Vec<String> = doc.unnamed_keys().map(ToString::to_string).collect();
+        assert_eq!(keys, ["finding:FR-4", "finding:FR-5", "finding:FR-9"]);
+        // A document whose links all resolve names nothing it cannot be followed to.
+        let plain = s.doc(docid(1)).expect("FR-1 is valid");
+        assert_eq!(plain.unfollowed_names().count(), 0);
+        assert_eq!(plain.unnamed_keys().count(), 0);
     }
 }
 

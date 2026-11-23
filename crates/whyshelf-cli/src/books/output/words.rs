@@ -1,10 +1,12 @@
 //! The words more than one answer writes the same way: a plural, a problem of the
 //! declaration, a text as a word of a shell, what an artifact is now, the word of
-//! a standing, why an upstream holds an approval back, how many names read an
-//! approval, and who ran the command that made a record.
+//! a standing, why an upstream holds an approval back, why a link cannot be followed
+//! to what it names, how many names read an approval, and who ran the command that
+//! made a record.
 
 use whyshelf_core::domain::actor::{Actor, Attribution};
 use whyshelf_core::domain::shelf::artifact::ArtifactState;
+use whyshelf_core::domain::shelf::doc::Unfollowed;
 use whyshelf_core::domain::shelf::freshness::{FreshnessLevel, StandingKind};
 use whyshelf_core::domain::shelf::ledger::ReaderCount;
 use whyshelf_core::domain::shelf::order::Hold;
@@ -107,6 +109,16 @@ pub(super) fn hold_word(hold: Hold) -> &'static str {
         Hold::Stale => "stale",
         Hold::Awaiting => "awaiting",
         Hold::LeftOut => "left_out",
+    }
+}
+
+/// The word for why a link cannot be followed to the document it names: the one place
+/// the words are written. The match is exhaustive, so a new reason does not build until
+/// it has a word.
+pub(super) fn unfollowed(why: Unfollowed) -> &'static str {
+    match why {
+        Unfollowed::TargetInvalid => "invalid",
+        Unfollowed::Ambiguous => "ambiguous",
     }
 }
 

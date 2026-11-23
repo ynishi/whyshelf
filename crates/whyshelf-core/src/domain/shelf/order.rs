@@ -19,7 +19,7 @@ use super::freshness::{
     StandingKind, Unapproved, UpstreamReading,
 };
 use super::graph::components;
-use super::ledger::{ApproveFrame, FrameRefusal, Ledger, frame_approve};
+use super::ledger::{ApproveFrame, FrameRefusal, Ledger, NotStanding, frame_approve};
 use super::schema::EntryName;
 
 /// The rule that took a document into a run of approvals. The two take apart sets: a
@@ -255,7 +255,7 @@ impl fmt::Display for NotPending {
 /// from [`Ledger::status_of`]: never decided, or every decision about it withdrawn).
 /// A document whose files are invalid, or that has none, is not, though the ledger
 /// says nothing of it; nor is one approved, or decided against
-/// ([`NotStanding`](super::ledger::NotStanding)).
+/// ([`NotStanding`]).
 ///
 /// The ledger knows no standing "superseded": a pending document another replaces
 /// (a `Replaces` link to it) is pending, and taken as any other.
@@ -394,6 +394,27 @@ pub fn held_back(
     let doc = shelf.doc(id)?;
     doc.depends_links()
         .find_map(|(link, upstream)| hold_of(assessment, link, upstream, run, left_out))
+}
+
+/// The upstreams a new approval of the document of `footing` may not stand on
+/// ([`Ledger::may_stand_on`]), among what its `Depends` links resolve to now (the
+/// footing's linked, so one two links name is there once), each with the decision
+/// against it. What its approval only pinned is not among them: the frame of a new
+/// approval pins the links as they are.
+pub(super) fn refused_upstreams(
+    ledger: &Ledger,
+    footing: &Footing,
+) -> BTreeMap<DocId, NotStanding> {
+    footing
+        .linked()
+        .iter()
+        .filter_map(|upstream| {
+            ledger
+                .may_stand_on(*upstream)
+                .err()
+                .map(|status| (*upstream, status))
+        })
+        .collect()
 }
 
 /// For each (link, target) of `id`'s Depends links, the hold [`held_back`] tells of
@@ -840,5 +861,75 @@ mod tests {
         let now = shelf(vec![fr(1, &["FR-2"]), fr(2, &[])]);
         let order = upstream_first(&now, &ledger, &ids(&[1, 2]));
         assert_eq!(order, vec![docid(2), docid(1)]);
+    }
+
+    #[test]
+    fn the_refused_upstreams_are_those_linked_a_decision_against_stands_about() {
+        use crate::domain::nonempty::{NonBlank, NonEmptySet};
+        use crate::domain::shelf::build::DocReading;
+        use crate::domain::shelf::fixtures_tests::{
+            by, deny, deprecate, jid, list, reading, retire, schema_of_two_links, shelf_of, text,
+        };
+        use crate::domain::shelf::ledger::{JudgedAt, Record, Revocation};
+        // FR-1 pending, FR-2 approved, FR-3 denied, FR-4 deprecated, FR-5 retired, FR-6
+        // denied and the denial revoked; FR-7 denied, and only pinned by FR-10's
+        // approval. FR-10 links to all but FR-7, and to FR-3 on both of its links.
+        let ups: Vec<DocReading> = (1..=7).map(|n| fr(n, &[])).collect();
+        let on = |base: &[&str]| {
+            reading(
+                "findings/fr-10.md",
+                10,
+                "FR-10",
+                &[
+                    ("title", text("t")),
+                    ("base", list(base)),
+                    ("also", list(&["FR-3"])),
+                ],
+            )
+        };
+        let schema = schema_of_two_links();
+        let mut then_docs = ups.clone();
+        then_docs.push(on(&["FR-7"]));
+        let then = shelf_of(&schema, then_docs);
+        let mut records: Vec<Record> = Vec::new();
+        for n in [2, 7, 10] {
+            records.push(approve(
+                &then,
+                &ledger(records.clone()),
+                n,
+                1000 + n,
+                10,
+                None,
+            ));
+        }
+        records.push(deny(&then, 3, 3, 20));
+        records.push(deprecate(&then, 4, 4, 20));
+        records.push(retire(&then, 5, 5, 20));
+        records.push(deny(&then, 6, 6, 20));
+        records.push(Record::Revocation(Revocation::new(
+            jid(16),
+            NonEmptySet::from_set(BTreeSet::from([jid(6)])).unwrap(),
+            by(),
+            JudgedAt::new(30),
+            NonBlank::new("not so").unwrap(),
+        )));
+        records.push(deny(&then, 7, 7, 20));
+        let mut now_docs = ups;
+        now_docs.push(on(&["FR-1", "FR-2", "FR-3", "FR-4", "FR-5", "FR-6"]));
+        let now = shelf_of(&schema, now_docs);
+        let ledger = ledger(records);
+        let footing = Footing::of(&now, docid(10), &ledger);
+        assert!(footing.docs().contains(&docid(7)), "FR-7 is pinned");
+        assert_eq!(
+            refused_upstreams(&ledger, &footing),
+            BTreeMap::from([
+                (docid(3), NotStanding::Denied),
+                (docid(4), NotStanding::Deprecated),
+                (docid(5), NotStanding::Retired),
+            ])
+        );
+        // No valid document, no footing linked: nothing refused.
+        let none = Footing::of(&now, docid(77), &ledger);
+        assert!(refused_upstreams(&ledger, &none).is_empty());
     }
 }
