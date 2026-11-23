@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795401325656,
+  "expires": null,
+  "frame": [],
+  "id": "01a20642-34a1-7194-a156-5614972d3e24",
+  "kind": "decision",
+  "reason": "Read again after #176: a run of --stale is foreseen to approve only what the frame takes (Ledger::may_stand_on, ApproveFrame::foresee), with the tests named",
+  "revision": "e010936cab9f3553a35ac3ea5155f9b7583ea06e",
+  "seen": "sha256:4675dc4ccd42e05d60196274419bebae05eec625c6c39c041d3b9dddac1efd53",
+  "seen_address": "98c3806bd259149ad1785abd056b6ec64ca9ada8",
+  "subject": "01a20631-eace-733e-b00f-18451af9f89c",
+  "v": 1,
+  "verb": "approve"
+}

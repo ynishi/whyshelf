@@ -1,18 +1,24 @@
 //! Tests of `approve_stale` over the in-memory fake.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use crate::domain::id::DocId;
+use crate::domain::shelf::artifact::Listings;
 use crate::domain::shelf::build::{DocReading, RawValue};
 use crate::domain::shelf::freshness::{Cause, Degradation, Freshness, Severity, Standing};
 use crate::domain::shelf::ledger::{
     DecisionProblem, DecisionVerb, DeclaredStatus, FrameRefusal, JudgedAt, Record,
 };
 use crate::domain::shelf::lookup::Reference;
-use crate::domain::shelf::order::Hold;
+use crate::domain::shelf::order::{self, Hold};
+use crate::domain::shelf::schema::{
+    BookRuleDecl, DecideDecl, GroupDecl, MemberDecl, RuleDecl, ShelfDecl,
+};
 
 use super::fake_tests::{
     FakeShelf, block_on, docid, file, file_space, fr, path, reason, sp, sp_tested,
 };
+use super::load::load;
 use super::{
     ApproveStaleRequest, ChosenApproved, ErrorClass, JudgeRequest, Judgement, LeftOutWhy, ShelfApp,
     ShelfError,
@@ -65,6 +71,40 @@ fn held_of(done: &ChosenApproved, n: u128) -> (crate::domain::id::DocId, Hold) {
     match why_of(done, n) {
         LeftOutWhy::StandsOn { held, .. } => (held.upstream, held.hold),
         other => panic!("{n} is left out as standing on another, not {other:?}"),
+    }
+}
+
+/// What `stale` foresees a run of `--stale` approving again, read before the run as
+/// the use case `stale` reads it.
+fn foreseen(app: &ShelfApp<FakeShelf>) -> BTreeSet<DocId> {
+    let loaded = block_on(load(app.ports())).unwrap();
+    let assessment = loaded.assess(&Listings::NotAsked);
+    order::stale_taken(&loaded.shelf, &loaded.ledger, &assessment)
+}
+
+/// Who may decide: alice and bo, and an approval asks for both their names.
+fn asking_alice_and_bo() -> DecideDecl {
+    let both = vec!["both".to_owned()];
+    let member = |name: &str| MemberDecl {
+        name: name.to_owned(),
+        from: None,
+        until: None,
+    };
+    let rule = || RuleDecl {
+        default: Some(both.clone()),
+        approvals: Some(2),
+        ..RuleDecl::default()
+    };
+    DecideDecl {
+        groups: vec![GroupDecl {
+            name: "both".to_owned(),
+            members: vec![member("alice"), member("bo")],
+        }],
+        shelf: Some(rule()),
+        books: vec![BookRuleDecl {
+            book: "finding".to_owned(),
+            rule: rule(),
+        }],
     }
 }
 
@@ -377,6 +417,133 @@ fn a_stale_approval_on_a_deprecated_upstream_is_refused_and_the_rest_is_written(
         LeftOutWhy::Refused(FrameRefusal::UpstreamNotStanding { .. })
     ));
     assert_eq!(app.ports().record_count(), 5);
+}
+
+#[test]
+fn what_a_run_is_foreseen_to_approve_again_on_a_deprecated_upstream_is_what_it_approves() {
+    // As above, and FR-6 stands on FR-2: FR-2 is refused, so FR-6 is left out with it.
+    let fake = FakeShelf::new().with_files(vec![
+        fr(1, "old", &[]),
+        fr(2, "on it", &["FR-1"]),
+        file(
+            "findings/fr-3.md",
+            3,
+            "FR-3",
+            "new",
+            &[("supersedes", &["FR-1"])],
+        ),
+        fr(4, "apart", &[]),
+        fr(6, "on FR-2", &["FR-2"]),
+    ]);
+    fake.decls.lock().unwrap()[0]
+        .links
+        .push(super::fake_tests::link(
+            "supersedes",
+            "finding",
+            crate::domain::shelf::schema::Propagation::Replaces,
+        ));
+    let mut app = ShelfApp::new(fake);
+    block_on(app.judge_all(vec![
+        approve("FR-1", None),
+        approve("FR-2", None),
+        approve("FR-4", None),
+        approve("FR-6", None),
+    ]))
+    .unwrap();
+    block_on(app.judge(JudgeRequest {
+        judgement: Judgement::Deprecate {
+            successor: None,
+            reason: None,
+        },
+        reference: "FR-1".parse().unwrap(),
+        by: Default::default(),
+    }))
+    .unwrap();
+    app.ports().edit(fr(4, "apart, edited", &[]), 4);
+
+    let foreseen = foreseen(&app);
+    let done = again(&mut app).unwrap();
+    assert_eq!(foreseen, judged_ids(&done).into_iter().collect());
+    assert_eq!(judged_ids(&done), vec![docid(4)]);
+    assert!(matches!(
+        why_of(&done, 2),
+        LeftOutWhy::Refused(FrameRefusal::UpstreamNotStanding { .. })
+    ));
+    assert_eq!(held_of(&done, 6), (docid(2), Hold::LeftOut));
+    assert_eq!(app.ports().record_count(), 6);
+}
+
+#[test]
+fn what_a_run_is_foreseen_to_approve_again_on_an_artifact_not_told_is_what_it_approves() {
+    // As `a_frame_the_model_refuses_is_left_out_and_the_rest_is_written`, and SP-3
+    // stands on SP-2: SP-2 is refused, so SP-3 is left out with it.
+    let fake = FakeShelf::new().with_files(vec![
+        fr(1, "slow", &[]),
+        sp_tested(2, "cache", &["FR-1"], &["tests/a.rs"]),
+        sp_with(3, &[("after", &["SP-2"])]),
+    ]);
+    fake.decls.lock().unwrap()[1]
+        .links
+        .push(super::fake_tests::link(
+            "after",
+            "spec",
+            crate::domain::shelf::schema::Propagation::Depends,
+        ));
+    fake.put_file("tests/a.rs", b"assert!(fast);\n");
+    let mut app = ShelfApp::new(fake);
+    block_on(app.judge_all(vec![
+        approve("FR-1", None),
+        approve("SP-2", None),
+        approve("SP-3", None),
+    ]))
+    .unwrap();
+    app.ports().edit(fr(1, "slower", &[]), 1);
+    app.ports()
+        .cannot_tell(&file_space(), "tests/a.rs", "offline");
+
+    let foreseen = foreseen(&app);
+    let done = again(&mut app).unwrap();
+    assert_eq!(foreseen, judged_ids(&done).into_iter().collect());
+    assert_eq!(judged_ids(&done), vec![docid(1)]);
+    assert!(matches!(
+        why_of(&done, 2),
+        LeftOutWhy::Refused(FrameRefusal::ArtifactUnknown { .. })
+    ));
+    assert_eq!(held_of(&done, 3), (docid(2), Hold::LeftOut));
+    assert_eq!(app.ports().record_count(), 4);
+}
+
+#[test]
+fn a_hold_the_runs_own_approval_makes_is_not_foreseen() {
+    // Every approval asks for the names of alice and bo, and FR-1 and FR-2, on it,
+    // have both; FR-1 is edited. Before the run nothing holds FR-2 back, so it is
+    // foreseen. The run approves FR-1 again by alice alone, which then awaits bo, and
+    // holds FR-2 back: what the run's own records decide is not foreseen.
+    let fake = FakeShelf::new().with_files(vec![fr(1, "slow", &[]), fr(2, "on it", &["FR-1"])]);
+    let books = fake.decls.lock().unwrap().clone();
+    *fake.written.lock().unwrap() = Some(ShelfDecl {
+        decide: asking_alice_and_bo(),
+        ..ShelfDecl::of_books(books)
+    });
+    let mut app = ShelfApp::new(fake);
+    let by = |reference: &str, name: &str| JudgeRequest {
+        by: super::fake_tests::named(name),
+        ..approve(reference, None)
+    };
+    block_on(app.judge_all(vec![
+        by("FR-1", "alice"),
+        by("FR-1", "bo"),
+        by("FR-2", "alice"),
+        by("FR-2", "bo"),
+    ]))
+    .unwrap();
+    app.ports().edit(fr(1, "slower", &[]), 1);
+
+    let foreseen = foreseen(&app);
+    let done = again(&mut app).unwrap();
+    assert_eq!(foreseen, BTreeSet::from([docid(1), docid(2)]));
+    assert_eq!(judged_ids(&done), vec![docid(1)]);
+    assert_eq!(held_of(&done, 2), (docid(1), Hold::Awaiting));
 }
 
 #[test]

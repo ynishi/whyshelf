@@ -141,6 +141,8 @@
 //! | who replaces whom (a fact of links) | [`Shelf::replacers_of`] | the candidates |
 //! | who succeeds whom (a verdict) | [`Successors::of`] | [`Successors`] |
 //! | the facts a decision stands on | [`frame_approve`], [`frame_present`], [`frame_retire`] | an [`ApproveFrame`], a [`PresentFrame`], a [`RetireFrame`], or a [`FrameRefusal`] |
+//! | whether a new approval may stand on an upstream | [`Ledger::may_stand_on`](ledger::Ledger::may_stand_on), from what was decided ([`Ledger::declared`]), which the frame reads | nothing, or the [`NotStanding`](ledger::NotStanding) decided against it |
+//! | which refusals of an approval's frame can be told before it is made | [`ApproveFrame::foresee`](ledger::ApproveFrame::foresee): every refusal of [`frame_approve`] but a cycle among the frames of approvals, by the same code | nothing, or the [`FrameRefusal`] |
 //! | the invariants of a decision | `Decision::assemble`, visible to the ledger's modules only | a [`Decision`] or a [`DecisionProblem`] |
 //! | reading a record back | [`Record::from_canon`] | a [`Record`] or a [`RecordProblem`] |
 //! | a contradiction among records | [`Ledger::build`] | [`LedgerProblem`]s |

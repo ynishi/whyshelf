@@ -3,10 +3,12 @@
 use std::collections::BTreeSet;
 
 use crate::domain::canon::Canon;
+use crate::domain::shelf::artifact::ArtifactReading;
 use crate::domain::shelf::build::{DocReading, RawProblem, ReadId};
 use crate::domain::shelf::doc::UnresolvedWhy;
 use crate::domain::shelf::fixtures_tests::{
     approve, by, deny, deprecate, docid, fr, fr_titled, jid, ledger, path, reading, retire, shelf,
+    shelf_answered, sp_testing,
 };
 
 use super::*;
@@ -184,6 +186,107 @@ fn an_approval_is_refused_on_an_upstream_that_does_not_stand() {
 fn an_approval_on_a_pending_upstream_is_taken() {
     let shelf = shelf(vec![fr_titled(1, "a", &[]), fr_titled(2, "b", &["FR-1"])]);
     assert!(frame_approve(&shelf, &ledger(vec![]), docid(2)).is_ok());
+}
+
+#[test]
+fn a_new_approval_may_stand_on_an_upstream_unless_a_decision_against_it_stands() {
+    let shelf = shelf(vec![fr(1, &[])]);
+    let approval = || approve(&shelf, &ledger(vec![]), 1, 1001, 10, None);
+    let cases: Vec<(&str, Vec<Record>, Result<(), NotStanding>)> = vec![
+        ("pending", vec![], Ok(())),
+        ("approved", vec![approval()], Ok(())),
+        (
+            "denied",
+            vec![approval(), deny(&shelf, 1, 1002, 20)],
+            Err(NotStanding::Denied),
+        ),
+        (
+            "deprecated",
+            vec![approval(), deprecate(&shelf, 1, 1002, 20)],
+            Err(NotStanding::Deprecated),
+        ),
+        (
+            "retired",
+            vec![approval(), retire(&shelf, 1, 1002, 20)],
+            Err(NotStanding::Retired),
+        ),
+        (
+            "a denial revoked",
+            vec![deny(&shelf, 1, 1002, 20), revoke(1003, 1002, 30)],
+            Ok(()),
+        ),
+    ];
+    for (what, records, expected) in cases {
+        assert_eq!(ledger(records).may_stand_on(docid(1)), expected, "{what}");
+    }
+}
+
+#[test]
+fn what_the_shelf_and_the_declared_statuses_refuse_is_foreseen_as_the_frame_refuses_it() {
+    let (denied_shelf, denied) = upstream_judged(|s| deny(s, 1, 1001, 10));
+    let untold = shelf_answered(
+        vec![fr(1, &[]), sp_testing(2, &["FR-1"], &["tests/a.rs"])],
+        &[(
+            "tests/a.rs",
+            ArtifactReading::cannot_tell(NonBlank::new("offline").unwrap()),
+        )],
+    );
+    type Is = fn(&FrameRefusal) -> bool;
+    let cases: Vec<(&str, Shelf, Ledger, Is)> = vec![
+        (
+            "not valid",
+            shelf(vec![reading("findings/fr-2.md", 2, "FR-2", &[])]),
+            ledger(vec![]),
+            |r| matches!(r, FrameRefusal::NotValid(_)),
+        ),
+        (
+            "a link that cannot be followed",
+            shelf(vec![fr(2, &["FR-9"])]),
+            ledger(vec![]),
+            |r| matches!(r, FrameRefusal::UnresolvedDepends { .. }),
+        ),
+        ("an upstream denied", denied_shelf, denied, |r| {
+            matches!(r, FrameRefusal::UpstreamNotStanding { .. })
+        }),
+        (
+            "an artifact that cannot be told",
+            untold,
+            ledger(vec![]),
+            |r| matches!(r, FrameRefusal::ArtifactUnknown { .. }),
+        ),
+        (
+            "a cycle of links",
+            shelf(vec![fr(1, &["FR-2"]), fr(2, &["FR-1"])]),
+            ledger(vec![]),
+            |r| matches!(r, FrameRefusal::InCycle(_)),
+        ),
+    ];
+    for (what, s, l, is) in cases {
+        let refused = frame_approve(&s, &l, docid(2)).expect_err(what);
+        assert!(is(&refused), "{what}: {refused:?}");
+        assert_eq!(
+            ApproveFrame::foresee(&s, &l, docid(2)),
+            Err(refused),
+            "{what}"
+        );
+    }
+}
+
+#[test]
+fn a_cycle_an_approval_would_close_among_the_frames_is_not_foreseen() {
+    // FR-2 was approved on FR-1; now FR-1 links to FR-2 and FR-2 to nothing. No link
+    // closes a cycle, but an approval of FR-1 would pin FR-2, whose approval pins
+    // FR-1: what the frames standing then are decides it, not the shelf.
+    let then = shelf(vec![fr(1, &[]), fr(2, &["FR-1"])]);
+    let first = approve(&then, &ledger(vec![]), 1, 1001, 10, None);
+    let second = approve(&then, &ledger(vec![first.clone()]), 2, 1002, 10, None);
+    let l = ledger(vec![first, second]);
+    let now = shelf(vec![fr(1, &["FR-2"]), fr(2, &[])]);
+    assert_eq!(ApproveFrame::foresee(&now, &l, docid(1)), Ok(()));
+    assert!(matches!(
+        frame_approve(&now, &l, docid(1)),
+        Err(FrameRefusal::InCycle(_))
+    ));
 }
 
 #[test]

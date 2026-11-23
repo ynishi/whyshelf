@@ -19,8 +19,29 @@ use super::super::doc::{DocHash, DocKey, LinkState, UnresolvedLink};
 use super::super::graph::{Cycle, LabelledCycle};
 use super::super::schema::{ArtifactPropagation, BookName, EntryName, Propagation};
 use super::{
-    ArtifactPin, DeclaredStatus, FramePin, Ledger, NameForm, NotStanding, PinnedArtifact, Seen,
+    ArtifactPin, DeclaredNow, FramePin, Ledger, NameForm, NotStanding, PinnedArtifact, Seen,
 };
+
+impl Ledger {
+    /// Whether a new approval may stand on `upstream`, by what the records say of it
+    /// now: not when a decision against it stands, which is the answer
+    /// ([`NotStanding`]), since an approval pinned to it would not hold from the start
+    /// (a deprecated one is to be replaced: pin its successor). An upstream that is
+    /// only pending, or approved and itself degraded, may be stood on: how it stands
+    /// now can change without anyone deciding anything about what stands on it, so an
+    /// approval on it is left to freshness, which tells it stale (or worse) from the
+    /// start.
+    ///
+    /// The one place this refusal is decided. Whether a document counts, as the module
+    /// `cover` says, is the same set and another rule: the two part on the day a
+    /// deprecated document with successors may be stood on.
+    pub fn may_stand_on(&self, upstream: DocId) -> Result<(), NotStanding> {
+        match self.declared(upstream) {
+            DeclaredNow::Against { status, .. } => Err(status),
+            DeclaredNow::Pending | DeclaredNow::Approved(_) => Ok(()),
+        }
+    }
+}
 
 /// The facts an approval stands on, taken by [`frame_approve`].
 ///
@@ -94,6 +115,23 @@ impl ApproveFrame {
     pub fn artifacts(&self) -> &BTreeSet<ArtifactPin> {
         &self.artifacts
     }
+
+    /// Whether [`frame_approve`] would refuse an approval of `id` for what the shelf
+    /// and the declared statuses tell: every refusal of it but that the approval would
+    /// close a cycle among the frames of approvals, which the frames standing when it
+    /// is made decide. No frame is returned, so none leaves this module that was not
+    /// asked about such a cycle. Why a run may be foreseen with it is
+    /// [`stale_taken`](crate::domain::shelf::order::stale_taken)'s.
+    ///
+    /// A refusal added to the frame is told here when it reads only the shelf and the
+    /// declared statuses; one that reads what approvals made since write goes with the
+    /// cycle among the frames, which this does not tell.
+    // The refusal is the answer and is asked once per document foreseen; it is not a
+    // hot path.
+    #[allow(clippy::result_large_err)]
+    pub fn foresee(shelf: &Shelf, ledger: &Ledger, id: DocId) -> Result<(), FrameRefusal> {
+        frame_on_shelf(shelf, ledger, id).map(|_| ())
+    }
 }
 
 /// The facts a denial or a deprecation stands on, taken by [`frame_present`].
@@ -131,9 +169,8 @@ pub enum FrameRefusal {
     /// approvals, which this approval would close. Which one the cycle says.
     #[error("the document is in {0}")]
     InCycle(LabelledCycle),
-    /// A `Depends` link names a document people decided against
-    /// ([`NotStanding`]). An approval pinned to it would not hold from the start; a
-    /// deprecated one is to be replaced, so pin its successor.
+    /// A `Depends` link names a document people decided against, which a new
+    /// approval may not stand on ([`Ledger::may_stand_on`]).
     #[error("the link `{link}` names {key}, which is {status}: an approval cannot stand on it")]
     UpstreamNotStanding {
         /// The link.
@@ -164,17 +201,13 @@ pub enum FrameRefusal {
 ///
 /// Refuses when the document is not valid, when a `Depends` link cannot be followed
 /// (a link to a document that is not valid is one: the build leaves it unresolved),
-/// when it names a document people decided against ([`NotStanding`]: an approval on
-/// it would not hold from the start), when the document is
-/// in a cycle of links, and when the approval would close a cycle among the frames
-/// of approvals. A resolved link carries the key and hash of what it names, and the
-/// pin is taken from it as it is.
-///
-/// One rule decides what is refused here and what is left to freshness: what a
-/// decision already says about an upstream refuses; how the upstream stands *now*
-/// (an upstream that is only pending, or approved and itself degraded) does not,
-/// because it can change without anyone deciding anything about this document. Such
-/// an approval is stale (or worse) from the start, and freshness says so.
+/// when it names a document a new approval may not stand on
+/// ([`Ledger::may_stand_on`]), when a `Depends` link names an artifact that cannot be
+/// told about now, when the document is in a cycle of links, and when the approval
+/// would close a cycle among the frames of approvals, in that order, the links in
+/// the order the document holds them. A resolved link carries the key and hash of
+/// what it names, and the pin is taken from it as it is. Which of these refusals can
+/// be told before the approval is made is [`ApproveFrame::foresee`]'s.
 // The refusal is the answer and is asked once per judgement; it is not a hot path.
 #[allow(clippy::result_large_err)]
 pub fn frame_approve(
@@ -182,6 +215,17 @@ pub fn frame_approve(
     ledger: &Ledger,
     id: DocId,
 ) -> Result<ApproveFrame, FrameRefusal> {
+    closing_no_cycle(frame_on_shelf(shelf, ledger, id)?, shelf, ledger)
+}
+
+/// The frame of an approval of `id`, or the first refusal of [`frame_approve`] that
+/// [`ApproveFrame::foresee`] tells.
+///
+/// The frame it makes has not been asked whether it closes a cycle among the frames
+/// of approvals, so it does not leave this module but through [`closing_no_cycle`].
+// The refusal is the answer; see `frame_approve`.
+#[allow(clippy::result_large_err)]
+fn frame_on_shelf(shelf: &Shelf, ledger: &Ledger, id: DocId) -> Result<ApproveFrame, FrameRefusal> {
     let doc = shelf
         .state_of(id)
         .valid_or_failure()
@@ -200,8 +244,7 @@ pub fn frame_approve(
                 }
                 LinkState::Resolved(upstream) => {
                     let target = upstream.id();
-                    // The one refusal of an approval on what was decided against.
-                    if let DeclaredStatus::Against { status, .. } = ledger.status_of(target) {
+                    if let Err(status) = ledger.may_stand_on(target) {
                         return Err(FrameRefusal::UpstreamNotStanding {
                             link: link.clone(),
                             target,
@@ -261,17 +304,8 @@ pub fn frame_approve(
         }
     }
 
-    let in_cycle = |cycle: Cycle| {
-        FrameRefusal::InCycle(LabelledCycle::new(cycle, |member| {
-            shelf.doc(member).map(|doc| doc.key().clone())
-        }))
-    };
     if let Some(cycle) = shelf.cycles().iter().find(|c| c.contains(id)) {
-        return Err(in_cycle(cycle.clone()));
-    }
-    let targets: BTreeSet<DocId> = pins.iter().map(FramePin::target).collect();
-    if let Some(cycle) = ledger.frame_graph().would_cycle(id, &targets) {
-        return Err(in_cycle(cycle));
+        return Err(in_cycle(shelf, cycle.clone()));
     }
     Ok(ApproveFrame {
         subject: id,
@@ -284,6 +318,30 @@ pub fn frame_approve(
         subject_file: doc.origin().clone(),
         upstream_files,
     })
+}
+
+/// `frame`, unless the approval would close a cycle among the frames of approvals
+/// standing in `ledger`: the one refusal of [`frame_approve`] that
+/// [`ApproveFrame::foresee`] does not tell.
+// The refusal is the answer; see `frame_approve`.
+#[allow(clippy::result_large_err)]
+fn closing_no_cycle(
+    frame: ApproveFrame,
+    shelf: &Shelf,
+    ledger: &Ledger,
+) -> Result<ApproveFrame, FrameRefusal> {
+    let targets: BTreeSet<DocId> = frame.frame.iter().map(FramePin::target).collect();
+    match ledger.frame_graph().would_cycle(frame.subject, &targets) {
+        Some(cycle) => Err(in_cycle(shelf, cycle)),
+        None => Ok(frame),
+    }
+}
+
+/// A cycle as a refusal, its members named by the keys the shelf tells.
+fn in_cycle(shelf: &Shelf, cycle: Cycle) -> FrameRefusal {
+    FrameRefusal::InCycle(LabelledCycle::new(cycle, |member| {
+        shelf.doc(member).map(|doc| doc.key().clone())
+    }))
 }
 
 /// The frame of a denial or a deprecation of `id`: the hash it would see.
