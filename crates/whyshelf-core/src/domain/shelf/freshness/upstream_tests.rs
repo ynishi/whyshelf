@@ -13,7 +13,7 @@
 //! is foreseen to approve again takes what stands on it ([`stale_taken`]), and whether
 //! approving again settles what it makes stale ([`Settlement::ApproveStale`]).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::shelf::artifact::{ArtifactReadings, ListedNames, Listings};
 use crate::domain::shelf::build::DocReading;
@@ -24,7 +24,7 @@ use crate::domain::shelf::fixtures_tests::{
     ledger, list, reading, retire, ruled_shelf, shelf, spaces, text,
 };
 use crate::domain::shelf::ledger::{ExemptOf, FrameRefusal, Record, frame_approve};
-use crate::domain::shelf::order::{Hold, held_back, stale_taken};
+use crate::domain::shelf::order::{Foreseen, Hold, held_back, stale_taken};
 use crate::domain::shelf::schema::{CoverDecl, Schema};
 use crate::domain::shelf::settle::{Settlement, settlements};
 
@@ -464,9 +464,10 @@ fn what_a_decision_about_an_upstream_is_to_what_stands_on_it_is_read_once() {
             .iter()
             .flat_map(|group| group.degraded.iter().copied())
             .collect();
+        let taking_all = Foreseen::of_parts(degraded, BTreeMap::new());
         let settles = groups
             .iter()
-            .any(|group| settlements(group, &degraded).contains(&Settlement::ApproveStale));
+            .any(|group| settlements(group, &taking_all).contains(&Settlement::ApproveStale));
         assert_eq!(
             settles, expect.approving_again_settles,
             "{what}: approving again"

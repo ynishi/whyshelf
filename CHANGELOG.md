@@ -10,6 +10,9 @@ and this project adheres to
 
 ### Added
 
+- In the library (#182): `settle::origins_asked`, `order::OriginsAsked`,
+  `order::Foreseen` and `settle::settle_all`, the way origins are settled with
+  what is foreseen of them.
 - In the library (#176): `ledger::Ledger::may_stand_on`, whether a new approval
   may stand on an upstream, and `ledger::ApproveFrame::foresee`, whether the
   frame of an approval is refused for what the shelf and the declared statuses
@@ -305,6 +308,9 @@ and this project adheres to
 
 ### Changed
 
+- In the library (#182): `settle::settlements` is no longer public;
+  `settle::settle_all` settles the origins `settle::origins_asked` was given,
+  with the `order::Foreseen` of them.
 - `check` lists as short only the declarations a pin that `stale` reads now
   meets: no longer one met only by a pin of an approval whose document is not
   valid (its own hash included), by an artifact's pin under a link that no
@@ -623,6 +629,11 @@ and this project adheres to
 
 ### Fixed
 
+- `stale` offers `judge approve <ref>` (with `--until`, `--actor`, or for a
+  pending upstream) only when the frame would take the approval: no longer for
+  an approval on an upstream decided against, of a document that is not valid,
+  on a link that cannot be followed, on an artifact that cannot be told now, or
+  one that would close a cycle among the frames (#182).
 - `stale` offers `judge approve --stale` for an origin only when the run would
   approve one of its approvals again: an approval the run refuses (on an
   upstream decided against, a deprecated one with successors included, or on an

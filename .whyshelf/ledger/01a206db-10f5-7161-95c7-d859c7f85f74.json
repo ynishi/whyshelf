@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795411345042,
+  "expires": null,
+  "frame": [],
+  "id": "01a206db-10f5-7161-95c7-d859c7f85f74",
+  "kind": "decision",
+  "reason": "Read again after #182: stale offers an approval of one document by name only where frame_approve would take it (settle::origins_asked, order::Foreseen, settle::settle_all), with the tests named",
+  "revision": "6069fa7387c8ae33459f21bc7d3a746426a2f4ec",
+  "seen": "sha256:f28197235044456bab503e5eae7327dc33b9e6e48bd3cda211b3b2c091398ae4",
+  "seen_address": "42044a06ca95db73da2753f825d5cf88b5b257bb",
+  "subject": "01a206c8-04d1-7322-a451-225ea0f26b8f",
+  "v": 1,
+  "verb": "approve"
+}

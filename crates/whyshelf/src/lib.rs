@@ -950,6 +950,12 @@
 //! | an upstream was replaced, or a link writes a name the artifact moved away from | nothing to type: write the link to the successor, or to the new name | not listed |
 //! | an upstream was decided against, a document is not valid, or a cycle | nothing to type: mend the file, or look at the decision again | not listed |
 //!
+//! A `judge approve` of one document is listed only when the frame that run of one
+//! meets would take the approval, read before it is run: not when an approval of it
+//! is refused as [Commands](#commands) says, a cycle among the frames of approvals
+//! included. What only the person writes (the name, the time) is not foreseen
+//! ([`domain::shelf::order::Foreseen`]).
+//!
 //! `--stale` is listed last, and only when it would take an approval under the
 //! origin. Three things to know before using it:
 //!

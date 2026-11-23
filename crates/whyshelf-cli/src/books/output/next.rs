@@ -2,7 +2,7 @@
 //! an origin of `stale` ([`commands`]), and those to run after `init` ([`after_init`]).
 //!
 //! What can settle an origin is decided once, by the model
-//! ([`settlements`](whyshelf_core::domain::shelf::settle::settlements)); this module
+//! ([`settle_all`](whyshelf_core::domain::shelf::settle::settle_all)); this module
 //! only says each [`Settlement`] in the words of the command line, and decides
 //! nothing about whether it applies.
 //!
