@@ -10,6 +10,35 @@ and this project adheres to
 
 ### Added
 
+- The command `reach <ref>...` (#112): what depends on the documents named and what
+  all of them stand on, at the side after. Its answer lists every document whose
+  `Depends` links reach one named, transitively (`docs`, each with `named`, its
+  `standing` and the `files` it may be in); the artifacts each stands on, what its
+  links to artifacts name now and what the approval that stands about it pinned
+  (`artifacts`, each with `by` and its `place`: `only` these files, `partly` these
+  files, or `unplaced` with why); the files of the project all of it is in
+  (`files`); the artifacts with no place (`unplaced`) and the documents that are
+  gone (`gone`) apart; and, when the walk could not read what may depend on them,
+  how many (`untold`: `invalid`, documents not reached whose links cannot be read,
+  and `unreadable`, files whose identity cannot be read), with a warning on stderr.
+  Its schema is `outputs.reach` of `schema`; the JSON stays version 1. A reference
+  that names no document, or several, is a request error (exit 2).
+- Where a name of a space lives in the files of the project (#112), the fifth ask an
+  adapter may answer: `app::shelf::NamePlaces` (`places`, at a side), the
+  not-answering `app::shelf::CannotPlace` and `app::shelf::PlacesWay`, the answer
+  `placement::Placement` (`Only`, `Partly`, `Unplaced`, with `files`), and
+  `app::shelf::ArtifactSource::places`, which the dispatch answers (a space with no
+  adapter is unplaced, each name, with why). A placement is the files the content of
+  a name is read from, by the rule its reading follows links by: through a link inside
+  the root, the link entry and the file it leads to; through one that leaves the root
+  or is broken, none, with the reason the reading gives. `file` places a name in the
+  file it writes; `rust-test` and `js-test` in the file a test name writes before
+  `::`; `rust-item` in part in the file its page in the docs links to as its source,
+  under the directory the manifests of the project (`Cargo.toml` at the root and of
+  the members of its workspace) give its crate, which must be a file of the project.
+  In the library,
+  `app::shelf::ShelfApp::reach` and its answer `ReachReport` (with `ReachedDoc` and
+  `ReachedArtifact`).
 - In the library (#112): the state of a tree of names at one side of a change,
   `app::shelf::state` (`Side`, `StateRead` with `read`, `look`, `read_outside`,
   `read_beyond` and `addresses`, `StateList` with `list`, `list_outside`,
@@ -322,6 +351,9 @@ and this project adheres to
 
 ### Changed
 
+- In the library (#112): a `SpaceAdapter` names how it answers where its names
+  live (`type Places`, `Answers` with `NamePlaces` or `CannotPlace`), and an
+  `ArtifactSource` answers `places`.
 - In the library (#112): the ports that read the project take the `Side` of a
   change they read: `BookSchemaSource::declarations`, `DocSource::read_docs`,
   `forms`, `current` and `addresses`, `LedgerRead::read`, and
