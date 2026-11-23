@@ -5,6 +5,7 @@
 //! |---|---|---|
 //! | [`RustItemSpace::resolve`] | finds the build directory of the project at a side, looks up each path in the HTML rustdoc wrote under it, and reads what the item promises from its page | the state of the project ([`FileStates`]) and of its built docs, `toml` |
 //! | [`RustItemSpace::current`] | the text of what an item promises now | the same |
+//! | [`NamePlaces`] | where an item is defined: the file its page links to as its source, under the directory the manifests give its crate | the same, and the manifests (`Cargo.toml`) of the project, `toml` |
 //! | [`SpaceSuggest`] | for each gone name, the names there are now in the docs that end as it does, found by their content when an approval pinned some | the same |
 //! | [`presets`] | the presets `rustdoc` (the space, `compare = "presence"`, `means = "depends"`) and `rustdoc-promise` (the space, `compare = "lines"`, `means = "depends"`) | values |
 //!
@@ -331,12 +332,67 @@
 //!
 //! The cargo settings at the root of the project, and the docs in the build
 //! directory it declares there or the caller gives (where the docs are, above),
-//! which may be outside the root; nothing outside the root and that directory.
+//! which may be outside the root; nothing outside the root and that directory. Where
+//! a name lives (below) reads the manifests of the project too.
 //!
+//! # Where a name lives
+//!
+//! An item lives in part in the file of the project that its page in the docs links to
+//! as its source ([`Placement::Partly`]): the line `Source` of the heading of its page,
+//! or of the element of a member (a field and a variant, declared in the body of their
+//! type, take their type's), names a page `src/<crate>/<path>.html` of the docs, and
+//! the file is `<path>` under the directory of the root file of `<crate>`, a part
+//! `up` of it read as `..`. That file is looked at in the tree of the side as the
+//! space `file` looks at one: the placement is its path, or, through links inside the
+//! root, each link entry and the name they lead to; it must be a file there. The thing
+//! a name names is in part elsewhere: its docs are made by the build.
+//!
+//! Which directory holds a crate is read from the manifests: the `Cargo.toml` at the
+//! root (its package) and those of the members of its workspace, each read as the
+//! cargo settings are (through no link out of the root, at most
+//! [`MAX_SETTINGS_BYTES`]). A member is a path, or a pattern of `*` and `?` in its
+//! parts, the directories it matches that hold a `Cargo.toml`; a directory under a
+//! path of `exclude` is taken out of what a pattern matches, and a member written as a
+//! path stays. The dependencies of a package (by a path or not) are not read: an item
+//! of one is no crate of the project.
+//!
+//! The crates of a package are as cargo makes them:
+//!
+//! - its library: the name and the path of `[lib]`; else, unless `autolib = false`,
+//!   when the package has a file `src/lib.rs`, the name of the package with `-` as `_`
+//!   and `src/lib.rs`;
+//! - its binaries: those cargo finds by the layout (`src/main.rs` by the name of the
+//!   package, and each `src/bin/<name>.rs` and `src/bin/<name>/main.rs` by its name),
+//!   unless `autobins = false`, or the package is of the edition 2015 (the edition
+//!   when none is written, or the workspace's when it is inherited) and declares a
+//!   `[[bin]]` and does not say `autobins = true`; and each `[[bin]]`, in the place of
+//!   a found one of its name, by its path, else the found one's, else `src/main.rs`
+//!   when it has the name of the package, else `src/bin/<name>.rs` or
+//!   `src/bin/<name>/main.rs`, whichever is there;
+//! - a library and a binary of one name are the library, the one `cargo doc`
+//!   documents.
+//!
+//! A name cannot be placed ([`Placement::Unplaced`], with why) when it is no Rust
+//! path; when the docs cannot be read or the item is not in them (absent, or cannot
+//! be told, as `resolve` says); when its page cannot be read or links to no page of
+//! the source; when the crate is none of the manifests (a dependency, docs left by an
+//! earlier build), two packages have it, or something that might have it cannot be
+//! read (a manifest, a member written with `**` or `[`, a member directory that is a
+//! symbolic link, a directory of a package's source that cannot be listed); when the
+//! path leads out of the project; or when the file is no file of the project, or is
+//! read through a link that leaves the root or is broken. A source rustdoc keeps
+//! outside the directory of the crate's root file (one a build writes, one a `#[path]`
+//! names elsewhere) is named by its whole path, so it is no file of the project, and
+//! the reason does not repeat the path. What an item's page says of its source is the
+//! build's: docs left by an earlier build place an item where its source was then.
+//!
+//! [`Placement::Partly`]: whyshelf_core::domain::shelf::placement::Placement::Partly
+//! [`Placement::Unplaced`]: whyshelf_core::domain::shelf::placement::Placement::Unplaced
 //! [`Comparison::Presence`]: whyshelf_core::domain::shelf::artifact::Comparison::Presence
 //! [`ArtifactReading::of_bytes`]: whyshelf_core::domain::shelf::artifact::ArtifactReading::of_bytes
 
 mod catalog;
+mod crates;
 mod docs_path;
 mod docs_tree;
 #[cfg(test)]
@@ -352,23 +408,25 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use whyshelf_core::app::shelf::{
-    Answers, CannotList, DirListing, NamePrefixes, NoReadBack, Side, SpaceAdapter, SpaceSuggest,
-    StateList,
+    Answers, CannotList, DirListing, NamePlaces, NamePrefixes, NoReadBack, Side, SpaceAdapter,
+    SpaceSuggest, StateList,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
-use whyshelf_core::domain::nonempty::NonBlank;
+use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, Comparison, PrefixMove, SpaceAsks, SpacePrefixes, SpaceReadings,
     SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::ledger::{GoneName, NameSuggestions};
+use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
 use super::super::state::StateError;
 use super::super::state::files::FileStates;
 use super::file::{self, Bounded};
 use catalog::CatalogLimits;
+use crates::Crates;
 use docs_tree::{DocsAt, DocsTree, placed};
 pub use layout::{GENERATOR_MARK, ITEM_KINDS, MEMBER_KINDS};
 use lookup::{Found, Lookup};
@@ -399,6 +457,13 @@ pub const MAX_PAGE_BYTES: u64 = 32 * 1024 * 1024;
 /// where the docs are cannot be told. Settings are far smaller, and a file this small
 /// is read and parsed where it is asked for.
 pub const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
+
+/// What an item whose page names no file of the project is placed as. The path is not
+/// said: rustdoc names a source outside the directory of the crate's root file (one a
+/// build writes, one a `#[path]` names) by its whole path.
+const NOT_A_FILE: TextLiteral = TextLiteral::new(
+    "the source its page names is no file of the project (rustdoc names a source outside the directory of the crate's root file, such as one a build writes, by its whole path)",
+);
 
 /// What a reading asked of presence only says of any other comparison.
 const PRESENCE_ONLY: &str = "only presence was asked of the item, so what it promises was not read";
@@ -446,14 +511,16 @@ pub enum RustItemError {
 
 /// The space [`RUST_ITEM_SPACE`]: it answers a move of a prefix, suggests where an
 /// item moved (the names there are now in the docs that end as a gone one does, see
-/// the module page, "Suggesting moves"), keeps nothing by address, and lists no names
-/// ([`CannotList`]).
+/// the module page, "Suggesting moves"), keeps nothing by address, lists no names
+/// ([`CannotList`]), and says where an item is defined in part (the module page,
+/// "Where a name lives").
 impl SpaceAdapter for RustItemSpace {
     type Error = RustItemError;
     type Prefixes = Answers;
     type Suggest = Answers;
     type ReadBack = NoReadBack;
     type List = CannotList;
+    type Places = Answers;
 
     fn space(&self) -> &str {
         RUST_ITEM_SPACE
@@ -483,6 +550,16 @@ impl NamePrefixes for RustItemSpace {
         of: &PrefixMove,
     ) -> Result<(SpacePrefixes, SpaceRenamed), RustItemError> {
         path::renamed(names, of).map_err(RustItemError::Reason)
+    }
+}
+
+impl NamePlaces for RustItemSpace {
+    async fn places(
+        &self,
+        side: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> Result<BTreeMap<ArtifactName, Placement>, RustItemError> {
+        self.places_at(side, names).await
     }
 }
 
@@ -620,6 +697,75 @@ impl RustItemSpace {
                 .map(|promise| promise.text().into_bytes()),
             Found::Unread(_) | Found::Absent | Found::CannotTell(_) => None,
         })
+    }
+
+    /// Where each of `names` lives at `side`, by the rule on the page of the module
+    /// ("Where a name lives"): the file of the project its page links to as its
+    /// source, in part; or, with why, unplaced. Every name has an answer; the docs and
+    /// the manifests are read once for them all.
+    async fn places_at(
+        &self,
+        side: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> Result<BTreeMap<ArtifactName, Placement>, RustItemError> {
+        /// What an item that is not in the docs is placed as.
+        const NOT_IN_THE_DOCS: TextLiteral =
+            TextLiteral::new("no item of the built docs has the name, so its source is not known");
+        self.state.dir(side)?;
+        let mut placed = BTreeMap::new();
+        let mut paths = Vec::new();
+        for name in names {
+            match RustPath::parse(name.as_str()) {
+                Ok(path) => paths.push((name, path)),
+                Err(why) => {
+                    placed.insert(name.clone(), Placement::Unplaced(reason(why)?));
+                }
+            }
+        }
+        if paths.is_empty() {
+            return Ok(placed);
+        }
+        let mut lookup = match self.lookup_at(side).await? {
+            Ok(lookup) => lookup,
+            Err(why) => {
+                let why = reason(why)?;
+                for (name, _) in paths {
+                    placed.insert(name.clone(), Placement::Unplaced(why.clone()));
+                }
+                return Ok(placed);
+            }
+        };
+        let mut crates: Option<Crates> = None;
+        for (name, path) in paths {
+            let file = match lookup.find(&path).await {
+                Found::There(place) => match lookup.source(&place).await {
+                    Ok(source) => {
+                        let crates = match crates.as_ref() {
+                            Some(crates) => crates,
+                            None => crates.insert(Crates::of(&self.state, side).await),
+                        };
+                        crates.file_of(&source)
+                    }
+                    Err(why) => Err(why),
+                },
+                Found::Unread(why) | Found::CannotTell(why) => Err(why),
+                Found::Absent => Err(NonBlank::from(NOT_IN_THE_DOCS).into_string()),
+            };
+            // The file is looked at in the tree of the side, as the space `file` looks
+            // at one: through no link out of the root, and a file of the project.
+            let placement = match file {
+                Ok(file) => match file::placed_within(&self.state, side, &file).await {
+                    file::Placed::Files { files, there: true } => Placement::Partly(files),
+                    file::Placed::Files { there: false, .. } => {
+                        Placement::Unplaced(NonBlank::from(NOT_A_FILE))
+                    }
+                    file::Placed::Unplaced(why) => Placement::Unplaced(reason(why)?),
+                },
+                Err(why) => Placement::Unplaced(reason(why)?),
+            };
+            placed.insert(name.clone(), placement);
+        }
+        Ok(placed)
     }
 
     /// The lookup of the built docs of `side`, or why there is none: where they are
@@ -783,6 +929,7 @@ mod tests {
 
     use std::path::Path;
 
+    use whyshelf_core::domain::nonempty::NonEmptySet;
     use whyshelf_core::domain::shelf::artifact::{ArtifactState, Comparison, NamePrefix, Untold};
 
     use super::super::conformance;
@@ -1683,11 +1830,21 @@ mod tests {
     /// The bound of a page of the conformance test.
     const MAX_TEST_PAGE: u64 = 8192;
 
-    /// A project at `root` with the docs of the crate `demo` beside its `Cargo.toml`:
-    /// a re-export of `inner::Thing`, and two methods `put` on `Shelf` (`method.put`
-    /// and `method.put-1`).
+    /// The page of a function `name` of the crate `demo`, whose line `Source` links to
+    /// `src/<name>.rs` of the crate.
+    fn sourced_fn(name: &str) -> String {
+        format!(
+            "<!DOCTYPE html><html><head>{GENERATOR_MARK}</head><body><main><section id=\"main-content\" class=\"content\"><div class=\"main-heading\"><h1>Function</h1><span class=\"sub-heading\"><a class=\"src\" href=\"../src/demo/{name}.rs.html#1-2\">Source</a></span></div><pre class=\"rust item-decl\"><code>pub fn {name}()</code></pre></section></main></body></html>"
+        )
+    }
+
+    /// A project at `root`, the package `demo`, with the docs of its crate beside its
+    /// `Cargo.toml`: a re-export of `inner::Thing`, two methods `put` on `Shelf`
+    /// (`method.put` and `method.put-1`), and a function `located` whose page links to
+    /// its source, `src/located.rs`.
     async fn conformance_docs(root: &Path) {
-        write(root, "Cargo.toml", "[workspace]\n").await;
+        write(root, "Cargo.toml", "[package]\nname = \"demo\"\n").await;
+        write(root, "src/lib.rs", "mod located;\n").await;
         let d = root.join(TARGET_DIR_NAME);
         let index = whole(&format!(
             "{}<h2 id=\"reexports\" class=\"section-header\">Re-exports</h2><dl><dt id=\"reexport.Thing\"><code>pub use inner::<a class=\"struct\" href=\"inner/struct.Thing.html\" title=\"x\">Thing</a>;</code></dt></dl>",
@@ -1714,6 +1871,17 @@ mod tests {
             &d,
             "doc/demo/fn.free.html",
             &whole("<pre class=\"rust item-decl\"><code>pub fn free()</code></pre>"),
+        )
+        .await;
+        write(&d, "doc/demo/fn.located.html", &sourced_fn("located")).await;
+        write(root, "src/located.rs", "pub fn located() {}\n").await;
+        // A source a build wrote, outside the directory of the crate's root file:
+        // rustdoc names it by the parts of its whole path, which no file of the project
+        // is at.
+        write(
+            &d,
+            "doc/demo/fn.built.html",
+            &sourced_fn("Users/dev/target/debug/build/demo-1/out/built"),
         )
         .await;
         write(
@@ -1764,6 +1932,10 @@ mod tests {
             false
         }
 
+        fn places(&self) -> bool {
+            true
+        }
+
         fn adapter_at(&self, dir: &Path) -> super::super::Adapter {
             super::super::Adapter::RustItem(RustItemSpace {
                 max_page: MAX_TEST_PAGE,
@@ -1793,8 +1965,33 @@ mod tests {
                 n("demo::Shelf::bare"),
                 n("demo::free"),
                 n("demo::inner"),
+                n("demo::located"),
+                n("demo::built"),
             ];
             tree.absent = vec![n("demo::Missing"), n("demo::Shelf::missing")];
+            // An item lives in part in the file its page links to as its source; one
+            // not in the docs has no place, nor one whose source is no file of the
+            // project (said with no path).
+            let located: RelPath = "src/located.rs".parse().unwrap();
+            tree.placed = vec![
+                (
+                    n("demo::located"),
+                    Placement::Partly(NonEmptySet::new(located, [])),
+                ),
+                (
+                    n("demo::built"),
+                    Placement::Unplaced(NonBlank::from(NOT_A_FILE)),
+                ),
+                (
+                    n("demo::Missing"),
+                    Placement::Unplaced(
+                        NonBlank::new(
+                            "no item of the built docs has the name, so its source is not known",
+                        )
+                        .unwrap(),
+                    ),
+                ),
+            ];
             tree.not_names = vec![n("demo::r#type"), n("demo::"), n("crate::demo")];
             tree.over_bytes = vec![
                 conformance::OverBytes::Name {
@@ -1831,6 +2028,32 @@ mod tests {
                 .await
                 .unwrap();
                 tree.outside = Some(n("demo::Esc"));
+                // An item whose source is read through a link inside the root lives in
+                // the link and its target; one whose source leads out of it, nowhere.
+                write(&root, "src/real.rs", "pub fn linked() {}\n").await;
+                // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
+                tokio::fs::symlink("real.rs", root.join("src/linked.rs"))
+                    .await
+                    .unwrap();
+                write(&d, "doc/demo/fn.linked.html", &sourced_fn("linked")).await;
+                write(dir, "outside/far.rs", "pub fn far() {}\n").await;
+                // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
+                tokio::fs::symlink(dir.join("outside/far.rs"), root.join("src/far.rs"))
+                    .await
+                    .unwrap();
+                write(&d, "doc/demo/fn.far.html", &sourced_fn("far")).await;
+                tree.present.extend([n("demo::linked"), n("demo::far")]);
+                let both = NonEmptySet::new(
+                    "src/linked.rs".parse::<RelPath>().unwrap(),
+                    ["src/real.rs".parse::<RelPath>().unwrap()],
+                );
+                tree.placed
+                    .push((n("demo::linked"), Placement::Partly(both)));
+                tree.placed.push((
+                    n("demo::far"),
+                    Placement::Unplaced(NonBlank::new(file::OUTSIDE).unwrap()),
+                ));
+                tree.linked = Some(n("demo::linked"));
                 let page = d.join("doc/demo/struct.Locked.html");
                 // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
                 tokio::fs::set_permissions(&page, std::fs::Permissions::from_mode(0o000))

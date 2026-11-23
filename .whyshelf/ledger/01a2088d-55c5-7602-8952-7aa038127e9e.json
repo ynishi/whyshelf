@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "80960bb1bf018e085f10cc5d78b92c0a6446a888",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8f081ebb6d2a8d601b0e50720681fe4f52a9a4f833e4c5f6c39155dd8b70eaf7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2158acf988c0da8b8ecbd64524e3ed8f2168f0e7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ed4c459e74647e7f48eb54ae53cab1064788d905755222df6909729d9898580f",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795439787631,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a80c141845f7b47b4e1a75336439e3e44d517bd8",
+      "hash": "sha256:9cfd853526bcfecc0dba18c734c28d9e86c2eaa21b9b9798f7258b21b4859674",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a2088d-55c5-7602-8952-7aa038127e9e",
+  "kind": "decision",
+  "reason": "Read again after #112's third steps: each adapter answers where a name lives (NamePlaces) as resolve reads it, the footing reads artifacts on demand, and the reach command answers the documents that depend on the named, their artifacts and files, and what it could not follow",
+  "revision": "bf5f110b7f159fe67a4079fe8a3ef10ce0822d3c",
+  "seen": "sha256:0d0ce1e4029ceac7324e44bca9cca1b9f591fb18da38d4c6f7e16997eaa063e8",
+  "seen_address": "07e48736dd212d3b9459bc11e2c1310d252ebd09",
+  "subject": "01a1db32-31ed-7567-8c87-09f427a88ec3",
+  "v": 1,
+  "verb": "approve"
+}

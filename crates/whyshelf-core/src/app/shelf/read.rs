@@ -1,5 +1,5 @@
-//! The use cases that only read: `check`, `map`, `status`, `get`, `trace`, `stale`,
-//! `stats`.
+//! The use cases that only read: `check`, `map`, `status`, `get`, `trace`, `reach`,
+//! `stale`, `stats`.
 //!
 //! Each builds the schema, the shelf and the ledger ([`load`](super::load)) and asks
 //! the entries of the domain; none writes, and the type they are generic over
@@ -12,6 +12,7 @@
 //! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it; with a filter ([`status_filtered`](ShelfApp::status_filtered)), [`StatusFilter::new`] against the declaration and [`StatusFilter::admits`] per identity |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
+//! | `reach` | [`resolve`] for each reference, then the reach of the documents named ([`reach`](crate::domain::shelf::reach): the walk down, the artifacts each document reached stands on), where each artifact lives ([`ArtifactSource::places`]), the files of all of it, and the same as `status` for every document reached |
 //! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], what can settle each origin ([`origins_asked`] of the origins, what the approving commands would approve foreseen once, [`Foreseen::of`], then [`settle_all`]), and the names approvals stand on that cannot be told now |
 //! | `stats` | [`stats::of`](crate::domain::shelf::stats::of), from the ledger and the keys of the shelf; [`assess`] only for the health |
 //!
@@ -31,17 +32,20 @@
 //! [`settle_all`]: crate::domain::shelf::settle::settle_all
 //! [`resolve`]: crate::domain::shelf::lookup::resolve
 //! [domain_trace]: crate::domain::shelf::trace::trace
+//! [`ArtifactSource::places`]: super::ports::ArtifactSource::places
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
-use crate::domain::shelf::artifact::Listings;
+use crate::domain::nonempty::{NonEmptySet, NonEmptyVec};
+use crate::domain::shelf::artifact::{ArtifactKey, Listings};
 use crate::domain::shelf::filter::{StatusFilter, StatusFilterAsk};
 use crate::domain::shelf::freshness::{Cause, Freshness, Notice, Standing};
 use crate::domain::shelf::ledger::{JudgedAt, MovedTo, Quorum};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::Foreseen;
+use crate::domain::shelf::reach::Reach;
 use crate::domain::shelf::schema::{ArtifactPropagation, EntryName};
 use crate::domain::shelf::settle::{origins_asked, settle_all};
 use crate::domain::shelf::stats;
@@ -51,11 +55,12 @@ use super::ShelfApp;
 use super::cover::artifact_lists;
 use super::error::ShelfError;
 use super::load::{Loaded, View, listings_of, load, load_with, now, schema_of};
-use super::ports::ShelfRead;
+use super::ports::{ArtifactSource, ShelfPort, ShelfRead, port};
 use super::report::{
     Absent, Awaiting, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, GetReport, MapReport,
-    MovedAway, RepeatedExemption, SettledOrigin, StaleEntry, StaleReport, StatsReport,
-    StatusReport, TraceReport, Uncovered, Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
+    MovedAway, ReachReport, ReachedArtifact, ReachedDoc, RepeatedExemption, SettledOrigin,
+    StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, Unknown,
+    UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 use super::state::Side;
 
@@ -427,6 +432,73 @@ impl<P: ShelfRead> ShelfApp<P> {
             root: view.row(id),
             upstream,
             downstream,
+            names: loaded.names(),
+            health: view.health(),
+        })
+    }
+
+    /// What depends on the documents the references name, and what all of them stand
+    /// on: every document reached by a walk down their `Depends` links, the artifacts
+    /// each stands on (its links to artifacts now and the pins of its approval) with
+    /// where each lives, the files of the project all of it is in, and what may depend
+    /// on them that the walk could not read. The rules are the domain's
+    /// ([`reach`](crate::domain::shelf::reach)); where an artifact lives is its
+    /// adapter's ([`ArtifactSource::places`]). It reads the side after, as every
+    /// command but one that compares two ends of a change does.
+    ///
+    /// A reference that names no document, or several, is the error it is for `get`;
+    /// a document only the ledger knows is reached, and gone.
+    pub async fn reach(
+        &self,
+        references: &NonEmptyVec<Reference>,
+    ) -> Result<ReachReport, ShelfError> {
+        let loaded = load(&self.ports).await?;
+        let first = identity(&loaded, references.first())?;
+        let mut named = NonEmptySet::new(first, []);
+        for reference in references.iter().skip(1) {
+            named.insert(identity(&loaded, reference)?);
+        }
+        let assessment = loaded.assess(&Listings::NotAsked);
+        let view = View {
+            loaded: &loaded,
+            assessment: &assessment,
+        };
+        let reach = Reach::of(&named, &loaded.shelf, &loaded.ledger);
+        let asked: BTreeSet<ArtifactKey> = reach.artifacts().keys().cloned().collect();
+        let placements = match asked.is_empty() {
+            true => BTreeMap::new(),
+            false => self
+                .ports
+                .artifacts()
+                .places(Side::After, &asked)
+                .await
+                .map_err(port(ShelfPort::Artifacts))?,
+        };
+        let found = reach.files(&loaded.shelf, &placements);
+        let docs = found
+            .docs
+            .into_iter()
+            .map(|(id, files)| ReachedDoc {
+                row: view.row(id),
+                named: named.contains(&id),
+                files,
+            })
+            .collect();
+        let artifacts = found
+            .artifacts
+            .into_iter()
+            .map(|(artifact, placed)| ReachedArtifact {
+                artifact,
+                by: placed.by,
+                placement: placed.placement,
+            })
+            .collect();
+        Ok(ReachReport {
+            docs,
+            artifacts,
+            files: found.files,
+            gone: found.gone.into_iter().collect(),
+            untold: reach.untold().copied(),
             names: loaded.names(),
             health: view.health(),
         })

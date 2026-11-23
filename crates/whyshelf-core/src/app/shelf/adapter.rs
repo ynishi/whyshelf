@@ -13,11 +13,12 @@
 //!     type Suggest   = Answers | CannotSuggest  SpaceSuggest    where a gone name moved
 //!     type ReadBack  = Answers | NoReadBack     SpaceReadBack   content by its address
 //!     type List      = Answers | CannotList     NameList        the names a selection takes
+//!     type Places    = Answers | CannotPlace    NamePlaces      where a name lives in the files
 //!
 //!   the dispatch ──Visit──────► one adapter (its space and presets, a move of a prefix,
 //!                                            whether it reads a selection)
 //!                ──AsyncVisit─► one adapter (resolve, current, suggest, read back,
-//!                                            the names a selection takes)
+//!                                            the names a selection takes, where names live)
 //! ```
 //!
 //! An ask an adapter may answer is declared by its type: the adapter names
@@ -50,12 +51,13 @@ use crate::domain::shelf::artifact::{
     SelectionCheck, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
 };
 use crate::domain::shelf::ledger::{GoneName, NameSuggestions, SpaceSuggestions};
+use crate::domain::shelf::placement::Placement;
 use crate::domain::shelf::schema::BuiltinPresets;
 
 use super::state::Side;
 
 /// The adapter of one space: the three asks every adapter answers, and how it answers
-/// the four it may.
+/// the five it may.
 ///
 /// The promises, whatever the names of the space are:
 ///
@@ -88,6 +90,9 @@ pub trait SpaceAdapter: Send + Sync {
     /// How it answers which names a selection takes: [`Answers`] (and [`NameList`])
     /// or [`CannotList`].
     type List: ListWay<Self>;
+    /// How it answers where its names live in the files of the project: [`Answers`]
+    /// (and [`NamePlaces`]) or [`CannotPlace`].
+    type Places: PlacesWay<Self>;
 
     /// The name of the space it reads names of: the one place a space's name comes
     /// from, the same each time. The dispatch keys the adapter by it, and a text that
@@ -206,6 +211,32 @@ pub trait NameList: SpaceAdapter {
     ) -> impl Future<Output = Result<NameListing, Self::Error>> + Send;
 }
 
+/// Where the names of a space live in the files of the project, as its adapter can
+/// say: the domain knows no form of a name, so only the space's grammar (and what it
+/// reads) can say which files hold the thing a name names.
+pub trait NamePlaces: SpaceAdapter {
+    /// For each of `names`, where it lives in the tree of the project at `side`, as a
+    /// [`Placement`]: the files its content is read from, whole ([`Placement::Only`])
+    /// or holding part of the thing ([`Placement::Partly`]), each a path of the project
+    /// as written; or that it cannot say, and why ([`Placement::Unplaced`]). The files
+    /// are read through the state at `side` by the rule [`resolve`](SpaceAdapter::resolve)
+    /// follows links by: through a link inside the root, the link entry as written and
+    /// every name it leads to are both files of it; through a link that leaves the root,
+    /// is broken or loops, or a thing the state cannot tell, it is unplaced with the
+    /// reason `resolve` gives. Every name asked has an
+    /// answer. A text that is no name of the space is unplaced by the grammar alone,
+    /// with no I/O: the same answer whatever is there. A name the adapter cannot place
+    /// is unplaced, and every other name is still answered: an error is for what stops
+    /// the whole ask (a side the run does not read), and then no name is answered.
+    /// Where a name lives is no part of a reading: it is never pinned, and nothing is
+    /// hashed.
+    fn places(
+        &self,
+        side: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> impl Future<Output = Result<BTreeMap<ArtifactName, Placement>, Self::Error>> + Send;
+}
+
 /// The adapter answers this ask itself, through the small trait of the ask. A type,
 /// never a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -267,6 +298,25 @@ impl CannotList {
     }
 }
 
+/// The adapter says nowhere its names live: every name asked is
+/// [`Placement::Unplaced`], with the same reason. A type, never a value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CannotPlace {}
+
+impl CannotPlace {
+    /// The reason of the fixed answer.
+    const WHY: TextLiteral =
+        TextLiteral::new("the space does not say where its names live in the files of the project");
+
+    /// The answer of a space that places nothing, for each of `names`.
+    pub fn answer(names: &BTreeSet<ArtifactName>) -> BTreeMap<ArtifactName, Placement> {
+        names
+            .iter()
+            .map(|name| (name.clone(), Placement::Unplaced(NonBlank::from(Self::WHY))))
+            .collect()
+    }
+}
+
 /// The ways of answering are the core's: an adapter names one, and makes none.
 mod sealed {
     pub trait Sealed {}
@@ -275,6 +325,7 @@ mod sealed {
     impl Sealed for super::CannotSuggest {}
     impl Sealed for super::NoReadBack {}
     impl Sealed for super::CannotList {}
+    impl Sealed for super::CannotPlace {}
 }
 
 /// How the adapter `A` answers a move of a prefix: [`Answers`] calls its
@@ -389,6 +440,37 @@ impl<A: SpaceAdapter + ?Sized> ListWay<A> for CannotList {
     }
 }
 
+/// How the adapter `A` answers where its names live: [`Answers`] calls its
+/// [`NamePlaces`], [`CannotPlace`] gives its fixed answer and calls nothing.
+pub trait PlacesWay<A: SpaceAdapter + ?Sized>: sealed::Sealed {
+    /// The answer of `adapter` for these names of its space at `side`.
+    fn places(
+        adapter: &A,
+        side: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> impl Future<Output = Result<BTreeMap<ArtifactName, Placement>, A::Error>> + Send;
+}
+
+impl<A: NamePlaces + ?Sized> PlacesWay<A> for Answers {
+    async fn places(
+        adapter: &A,
+        side: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> Result<BTreeMap<ArtifactName, Placement>, A::Error> {
+        adapter.places(side, names).await
+    }
+}
+
+impl<A: SpaceAdapter + ?Sized> PlacesWay<A> for CannotPlace {
+    async fn places(
+        _: &A,
+        _: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> Result<BTreeMap<ArtifactName, Placement>, A::Error> {
+        Ok(Self::answer(names))
+    }
+}
+
 /// One ask put to one adapter, with no I/O: its space and presets, a move of a
 /// prefix, or whether it reads a selection. A registry hands it to the adapter at a
 /// number, whatever its type; `E` is the registry's error, which every adapter's
@@ -403,8 +485,9 @@ pub trait Visit<E> {
         E: From<A::Error>;
 }
 
-/// One ask put to one adapter that reads: resolve, current, suggest, read back or the
-/// names a selection takes. As [`Visit`], with the answer a future.
+/// One ask put to one adapter that reads: resolve, current, suggest, read back, the
+/// names a selection takes or where names live. As [`Visit`], with the answer a
+/// future.
 pub trait AsyncVisit<E>: Send {
     /// The answer.
     type Output: Send;

@@ -1,0 +1,80 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "80960bb1bf018e085f10cc5d78b92c0a6446a888",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8f081ebb6d2a8d601b0e50720681fe4f52a9a4f833e4c5f6c39155dd8b70eaf7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "90b172c1471550c6975618e8a60912eb24dbf47b",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:800adbb7c008d2376ba5f5ca96a81510387b58ea4c80eddada6f1c6757054151",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/reach.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795439787631,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9baff2fa12e27d5f8c11c992cdd6c37382ade791",
+      "hash": "sha256:f758e509ffccab51972f63e9a794df8df49ddf2771d54f2b4b06d4d50bbeee61",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "99"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8e84ae5744"
+    },
+    {
+      "address": "6bb496a5b8e0d4b5b513ca7e7eb6f5d629e9d6f6",
+      "hash": "sha256:8de8c5243d0477e06575fd5f48763ffdb2fceae314023d3d45b05f00709debbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "100"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8f92f2c0bb"
+    }
+  ],
+  "id": "01a2088d-80db-753c-87cc-38802bf398f7",
+  "kind": "decision",
+  "reason": "Read again after #112's third steps: each adapter answers where a name lives (NamePlaces) as resolve reads it, the footing reads artifacts on demand, and the reach command answers the documents that depend on the named, their artifacts and files, and what it could not follow",
+  "revision": "bf5f110b7f159fe67a4079fe8a3ef10ce0822d3c",
+  "seen": "sha256:f014ab0cdba5b11fbcf080e48d3f82f7c4f41868ed4c6c7045c8847514352d35",
+  "seen_address": "f82f91d612169ded2ff6eb41dfef1cbc90ea5156",
+  "subject": "01a20869-ab6e-762c-9771-9e900a99fc74",
+  "v": 1,
+  "verb": "approve"
+}

@@ -9,11 +9,12 @@
 //! decision that cannot be read is a decision the answer does not know of, so no
 //! answer leaves it out.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::actor::Actor;
 use crate::domain::id::DocId;
-use crate::domain::nonempty::{NonEmptySet, NonEmptyVec, TwoOrMore};
+use crate::domain::location::RelPath;
+use crate::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, NowNamed, SkippedFile};
 use crate::domain::shelf::coverage::{CoverAssessment, LinkCover};
@@ -30,6 +31,8 @@ use crate::domain::shelf::ledger::{
 };
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::HeldBack;
+use crate::domain::shelf::placement::Placement;
+use crate::domain::shelf::reach::Unwalked;
 use crate::domain::shelf::schema::{
     Approvals, BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
 };
@@ -630,6 +633,71 @@ pub struct TraceReport {
     pub names: Names,
     /// What is wrong around them.
     pub health: Health,
+}
+
+/// One document a reach reached ([`ReachReport`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReachedDoc {
+    /// The document as the answers show it.
+    pub row: Row,
+    /// Whether it was named; one not named depends on one that was, transitively.
+    pub named: bool,
+    /// The files it may be in: its file, the files of an invalid one, or every file
+    /// whose identity cannot be read when it may be in any of them; none when it is
+    /// gone.
+    pub files: BTreeSet<RelPath>,
+}
+
+/// One artifact the documents a reach reached stand on ([`ReachReport`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReachedArtifact {
+    /// Its space and name.
+    pub artifact: ArtifactKey,
+    /// The documents reached that stand on it: their `Depends` links to artifacts name
+    /// it now, or the approval that stands about them pinned it.
+    pub by: BTreeSet<DocId>,
+    /// Where it lives in the files of the project, as the adapter of its space says.
+    pub placement: Placement,
+}
+
+/// The result of `reach`: what depends on the named documents, what all of them stand
+/// on, and the files of the project that holds it, read at the side after.
+///
+/// The rules are on the page of [`reach`](crate::domain::shelf::reach): the documents
+/// reached are the named and every document whose `Depends` links name one reached;
+/// the artifacts are those each of them stands on; the files are every file a document
+/// reached may be in and every file of the placement of an artifact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReachReport {
+    /// Every document reached, by identity.
+    pub docs: Vec<ReachedDoc>,
+    /// Every artifact they stand on, by space and name.
+    pub artifacts: Vec<ReachedArtifact>,
+    /// The files: those of the documents and those of the placements of the
+    /// artifacts, whole or in part.
+    pub files: BTreeSet<RelPath>,
+    /// The documents reached that are gone: no file carries them.
+    pub gone: Vec<DocId>,
+    /// What may depend on the named and could not be read, when anything may: the
+    /// reach may be more than these documents.
+    pub untold: Option<Unwalked>,
+    /// The keys of the valid documents.
+    pub names: Names,
+    /// What is wrong around them.
+    pub health: Health,
+}
+
+impl ReachReport {
+    /// The artifacts whose place the adapter of their space cannot say, each with
+    /// why.
+    pub fn unplaced(&self) -> impl Iterator<Item = (&ArtifactKey, &NonBlank)> {
+        self.artifacts
+            .iter()
+            .filter_map(|reached| match &reached.placement {
+                Placement::Unplaced(why) => Some((&reached.artifact, why)),
+                Placement::Only(_) | Placement::Partly(_) => None,
+            })
+    }
 }
 
 /// An approval that does not hold, with where it starts to fail.

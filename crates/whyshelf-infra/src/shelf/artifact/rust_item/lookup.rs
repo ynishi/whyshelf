@@ -3,7 +3,7 @@
 //!
 //! | what | what it does |
 //! |---|---|
-//! | `Lookup` | the docs of one side read for one resolution, each directory listed once and each page read once: `find` walks a path to its [`Found`], `promise` reads what the thing found promises |
+//! | `Lookup` | the docs of one side read for one resolution, each directory listed once and each page read once: `find` walks a path to its [`Found`], `promise` reads what the thing found promises, `source` where its page says its source is |
 //! | `Reads` | what the pages asked for so far came to: how many were read, their bytes, how many could not be read and how many were too large (what a search for the moves of a name reports and holds to its bounds) |
 //! | `reexport_link`, `within` | the link of a re-export in a module's index, and the place a link names when it stays inside the docs as written |
 //!
@@ -28,7 +28,7 @@ use super::docs_path::DocsPath;
 use super::docs_tree::{BuiltDocs, DocsTree};
 use super::layout::{GENERATOR_MARK, ITEM_KINDS, MemberKind, Place, TYPE_KINDS};
 use super::path::RustPath;
-use super::promise::{Promise, Unreadable, promise_of};
+use super::promise::{Promise, Unreadable, promise_of, source_link};
 
 /// What a path comes to in the docs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -348,6 +348,27 @@ impl Lookup {
             .map_err(|why| Unreadable::Page(stopped(&shown, &why)))?
     }
 
+    /// The place in the docs of the page of the source the thing at `place` is
+    /// defined in (`src/<crate>/<path>.html`), read from the link `Source` of its page
+    /// ([`source_link`], parsed on a blocking thread as a promise is), or why it
+    /// cannot be: the page cannot be read, has no such link, or its link leads outside
+    /// the docs as written.
+    pub(super) async fn source(&mut self, place: &Place) -> Result<DocsPath, String> {
+        let html = self.page(place.page()).await?;
+        let at = place.clone();
+        let shown = self.shown(place.page());
+        let link = on_blocking(html.len(), move || source_link(&html, &at))
+            .await
+            .map_err(|why| stopped(&shown, &why))?
+            .ok_or_else(|| format!("{shown} has no link to the source of the item"))?;
+        let dir = place.page().parent().unwrap_or_default();
+        within(Path::new(""), &dir.under(Path::new("")), &link)
+            .and_then(|source| DocsPath::of_relative(&source))
+            .ok_or_else(|| {
+                format!("the link to the source in {shown} leads outside the docs: {link}")
+            })
+    }
+
     /// The place `segment` names under `at`: none when it names nothing there.
     async fn step(&mut self, at: At, segment: &str) -> Result<Option<At>, String> {
         match at {
@@ -540,7 +561,40 @@ fn within(docs: &Path, dir: &Path, link: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::fixture::write;
     use super::*;
+
+    #[tokio::test]
+    async fn the_source_of_an_item_is_the_page_its_link_names_inside_the_docs_and_none_outside() {
+        let dir = tempfile::tempdir().unwrap();
+        let docs = dir.path().join("doc");
+        let page = |href: &str| {
+            format!(
+                "<!DOCTYPE html><html><head>{GENERATOR_MARK}</head><body><main><section id=\"main-content\"><div class=\"main-heading\"><a class=\"src\" href=\"{href}\">Source</a></div></section></main></body></html>"
+            )
+        };
+        write(&docs, "demo/index.html", &page("../src/demo/lib.rs.html")).await;
+        write(
+            &docs,
+            "demo/fn.inside.html",
+            &page("../src/demo/a.rs.html#3"),
+        )
+        .await;
+        write(&docs, "demo/fn.out.html", &page("../../../x.rs.html")).await;
+        let mut lookup = Lookup::new(dir.path(), docs, 1 << 20).await;
+        let source = |found: Found| match found {
+            Found::There(place) => place,
+            other => panic!("there: {other:?}"),
+        };
+        let inside = source(lookup.find(&RustPath::parse("demo::inside").unwrap()).await);
+        assert_eq!(
+            lookup.source(&inside).await,
+            Ok(DocsPath::of_relative(Path::new("src/demo/a.rs.html")).unwrap())
+        );
+        let out = source(lookup.find(&RustPath::parse("demo::out").unwrap()).await);
+        let why = lookup.source(&out).await.unwrap_err();
+        assert!(why.contains("leads outside the docs"), "{why}");
+    }
 
     #[test]
     fn a_link_is_followed_only_inside_the_docs() {

@@ -31,15 +31,16 @@
 //! | [`DocReplace`] | a document's file that is there, replaced whole by its text in the form, after a comparison with what was read (an edit saved just after it is overwritten); and, to undo that, the bytes it had put back as they were |
 //! | [`DocRemove`] | a document's file that is there, removed after a comparison with what was read |
 //! | [`ActorSource`] | who is acting |
-//! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); for a move of a prefix, which names are under it and what each is under the new one, by the space's own grammar of names; whether a space reads a selection, and the names a selection takes there now (all, some, or that the space cannot list); and the bytes of an artifact now |
+//! | [`ArtifactSource`] | the spaces it offers, and the presets of links to artifacts each adapter offers for its own; for each name a document links to in one: there (hashes, an address?), absent, cannot tell (why), or not a name (why); for a move of a prefix, which names are under it and what each is under the new one, by the space's own grammar of names; whether a space reads a selection, and the names a selection takes there now (all, some, or that the space cannot list); the bytes of an artifact now; and where each artifact asked lives in the files of the project (a [`Placement`]) |
 //! | [`ContentStore`] | content read back by its [`ContentAddress`], by the adapter of the document or the space it is of, or "not readable" |
 //! | [`RevisionSource`] | the point of the project's history now, if there is one |
 //! | [`MoveSource`] | for the names of a space with nothing behind them now, the names each may have moved to, each with how it was found, or that the space cannot suggest |
 //!
 //! A method that reads the state of the project takes the [`Side`] of a change it
 //! reads ([`BookSchemaSource::declarations`], the readings of [`DocSource`],
-//! [`LedgerRead::read`], and [`ArtifactSource::resolve`], [`current`](ArtifactSource::current)
-//! and [`list`](ArtifactSource::list)); one that reads by an address, searches, writes,
+//! [`LedgerRead::read`], and [`ArtifactSource::resolve`], [`current`](ArtifactSource::current),
+//! [`list`](ArtifactSource::list) and [`places`](ArtifactSource::places)); one that
+//! reads by an address, searches, writes,
 //! or reads nothing does not. [`ShelfRead::way`] names how the run reads.
 //!
 //! The ports are bundled in two traits, so that a use case that only reads is generic
@@ -78,6 +79,7 @@ use crate::domain::shelf::ledger::GoneNames;
 use crate::domain::shelf::ledger::{
     AdmittedRecord, GoneName, JudgedAt, JudgementId, Record, RecordProblem, SpaceSuggestions,
 };
+use crate::domain::shelf::placement::Placement;
 use crate::domain::shelf::schema::{BookRange, BuiltinPresets, ShelfDecl};
 
 use super::error::ShelfError;
@@ -749,6 +751,18 @@ pub trait ArtifactSource: Send + Sync {
         space: &Space,
         selection: &Selection,
     ) -> impl Future<Output = Result<NameListing, Self::Error>> + Send;
+
+    /// For each artifact asked, where it lives in the files of the project at `side`,
+    /// as the adapter of its space says ([`Placement`]): these files only, these files
+    /// in part, or that it cannot say (with why; also a name of a space no adapter
+    /// names, or one whose adapter places no name). Every artifact asked has an
+    /// answer. Where a name lives is each adapter's own rule, on its page; it is never
+    /// pinned. An error is for what stops the whole ask.
+    fn places(
+        &self,
+        side: Side,
+        artifacts: &BTreeSet<ArtifactKey>,
+    ) -> impl Future<Output = Result<BTreeMap<ArtifactKey, Placement>, Self::Error>> + Send;
 }
 
 /// Where the artifacts that are gone may have moved to, as each space's adapter can

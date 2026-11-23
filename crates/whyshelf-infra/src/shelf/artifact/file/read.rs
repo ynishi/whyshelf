@@ -14,7 +14,7 @@ use std::io;
 
 use whyshelf_core::app::shelf::{AtSide, ByteBound, Side, StateList, StateRead, TreeFiles};
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
+use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, NameListing, Selection, SpaceAsks, SpaceReadings, Untold,
 };
@@ -22,9 +22,10 @@ use whyshelf_core::domain::shelf::artifact::{
 use super::super::super::state::StateError;
 use super::super::super::state::files::FileStates;
 use super::super::super::state::paths::{
-    DirNames, Followed, Leave, follow, look_through, named_as_written, named_as_written_in,
+    DirNames, Followed, Leave, follow, look_through, look_through_links, named_as_written,
+    named_as_written_in,
 };
-use super::{ArtifactError, FileSelection, FileSpace, path_of};
+use super::{ArtifactError, FileSelection, FileSpace, no_path_reason, path_of};
 
 #[cfg(test)]
 #[path = "read_tests.rs"]
@@ -73,9 +74,7 @@ impl FileSpace {
             let path = match path_of(name) {
                 Ok(path) => path,
                 Err(why) => {
-                    let why =
-                        NonBlank::new(format!("no path under the root of the project: {why}"))
-                            .map_err(ArtifactError::Reason)?;
+                    let why = no_path_reason(&why)?;
                     readings.insert(name.clone(), ArtifactReading::not_a_name(why));
                     continue;
                 }
@@ -98,10 +97,7 @@ impl FileSpace {
                     }
                 }
                 Ok(Bounded::NoFile) => ArtifactReading::absent(),
-                Ok(Bounded::Outside) => untold(
-                    "a symbolic link on the path leads outside the root of the project, or is broken: nothing is read through it"
-                        .to_owned(),
-                )?,
+                Ok(Bounded::Outside) => untold(OUTSIDE.to_owned())?,
                 Ok(Bounded::TooLarge) => untold(format!(
                     "{path} is larger than {} bytes, and is not read",
                     self.max_file
@@ -381,6 +377,71 @@ pub(in super::super) async fn read_within(
         Ok(Bounded::Bytes(bytes))
     } else {
         Ok(Bounded::NoFile)
+    }
+}
+
+/// What `resolve` says of a name a link on whose path leaves the root or is broken.
+pub(in super::super) const OUTSIDE: &str = "a symbolic link on the path leads outside the root of the project, or is broken: nothing is read through it";
+
+/// Where the content of a path lives at `side`, by the rules [`read_within`] reads it
+/// by, with nothing opened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in super::super) enum Placed {
+    /// The files its content is read from: the path as written when no link is on it;
+    /// when links inside the root are, each link entry on the way, as written, and
+    /// the name they lead to (none of it when that is the top of the tree). `there`
+    /// says whether a file is at the end.
+    Files {
+        files: NonEmptySet<RelPath>,
+        there: bool,
+    },
+    /// Nothing is read through it, with the reason `resolve` gives: a link that leaves
+    /// the root or is broken, a loop, a kind of file that cannot be told, or a path the
+    /// state cannot look at.
+    Unplaced(String),
+}
+
+/// Where the content of `path` lives at `side` ([`Placed`]), following its links as
+/// [`read_within`] does ([`Leave::Refused`]: only inside the root), and looking at
+/// what is at the end without opening it.
+pub(in super::super) async fn placed_within(
+    state: &FileStates,
+    side: Side,
+    path: &RelPath,
+) -> Placed {
+    let (followed, links) = match look_through_links(state, side, path).await {
+        Ok(traced) => traced,
+        Err(StateError::Io { source, .. }) if is_absent(&source) => {
+            return Placed::Files {
+                files: NonEmptySet::new(path.clone(), []),
+                there: false,
+            };
+        }
+        Err(e) => return Placed::Unplaced(format!("{path} cannot be read: {e}")),
+    };
+    let (at, there) = match followed {
+        Followed::Reached {
+            answer: AtSide::Untold(why),
+            ..
+        } => return Placed::Unplaced(untold_why(why).into_string()),
+        Followed::Reached {
+            answer: AtSide::Elsewhere { .. },
+            ..
+        }
+        | Followed::Left
+        | Followed::Broken
+        | Followed::TooMany => return Placed::Unplaced(OUTSIDE.to_owned()),
+        Followed::Reached { at, answer } => (at, matches!(answer, AtSide::There(_))),
+    };
+    let mut files: BTreeSet<RelPath> = links.into_iter().collect();
+    files.extend(at);
+    match NonEmptySet::from_set(files) {
+        Ok(files) => Placed::Files { files, there },
+        // No link and no name: the walk always has the one or the other.
+        Err(_) => Placed::Files {
+            files: NonEmptySet::new(path.clone(), []),
+            there,
+        },
     }
 }
 

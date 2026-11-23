@@ -22,6 +22,7 @@
 //! | [`read_back`](Spaces::read_back) | the answer of [`NoReadBack`] |
 //! | [`select`](ArtifactSource::select) | [`SelectionCheck::CannotList`], "no adapter offers the space" |
 //! | [`list`](ArtifactSource::list) | [`NameListing::CannotList`], "no adapter offers the space" |
+//! | [`places`](ArtifactSource::places) | [`Placement::Unplaced`], each name, with why |
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
@@ -36,11 +37,12 @@ use crate::domain::shelf::artifact::{
     SpaceAsks, SpacePrefixes, SpaceProblem, SpaceReadings, SpaceRenamed,
 };
 use crate::domain::shelf::ledger::{GoneName, SpaceSuggestions};
+use crate::domain::shelf::placement::Placement;
 use crate::domain::shelf::schema::{BuiltinPresets, PresetName};
 
 use super::adapter::{
-    AsyncVisit, CannotSuggest, ListWay, NoPrefixes, NoReadBack, PrefixesWay, ReadBackWay,
-    SpaceAdapter, SuggestWay, Visit,
+    AsyncVisit, CannotSuggest, ListWay, NoPrefixes, NoReadBack, PlacesWay, PrefixesWay,
+    ReadBackWay, SpaceAdapter, SuggestWay, Visit,
 };
 use super::ports::{ArtifactSource, MoveSource};
 use super::state::Side;
@@ -271,6 +273,48 @@ impl<R: SpaceRegistry> ArtifactSource for Spaces<R> {
             None => Ok(NameListing::CannotList(NonBlank::from(NO_ADAPTER))),
         }
     }
+
+    async fn places(
+        &self,
+        side: Side,
+        artifacts: &BTreeSet<ArtifactKey>,
+    ) -> Result<BTreeMap<ArtifactKey, Placement>, R::Error> {
+        let mut by_space: BTreeMap<&Space, BTreeSet<ArtifactName>> = BTreeMap::new();
+        for artifact in artifacts {
+            by_space
+                .entry(artifact.space())
+                .or_default()
+                .insert(artifact.name().clone());
+        }
+        let mut placements = BTreeMap::new();
+        for (space, names) in by_space {
+            let placed = match self
+                .ask_reading(
+                    space,
+                    Places {
+                        side,
+                        names: &names,
+                    },
+                )
+                .await
+            {
+                Some(placed) => placed?,
+                None => {
+                    let why = NonBlank::new(format!("no adapter offers the space `{space}`"))?;
+                    names
+                        .iter()
+                        .map(|name| (name.clone(), Placement::Unplaced(why.clone())))
+                        .collect()
+                }
+            };
+            placements.extend(
+                placed
+                    .into_iter()
+                    .map(|(name, placement)| (ArtifactKey::new(space.clone(), name), placement)),
+            );
+        }
+        Ok(placements)
+    }
 }
 
 /// The reason of the answers of a selection and a listing for a space no adapter
@@ -410,6 +454,25 @@ impl<E: Send> AsyncVisit<E> for ListNames<'_> {
     }
 }
 
+/// Where names of the adapter's space live, at a side.
+struct Places<'a> {
+    side: Side,
+    names: &'a BTreeSet<ArtifactName>,
+}
+
+impl<E: Send> AsyncVisit<E> for Places<'_> {
+    type Output = Result<BTreeMap<ArtifactName, Placement>, E>;
+
+    async fn visit<A: SpaceAdapter>(self, adapter: &A) -> Self::Output
+    where
+        E: From<A::Error>,
+    {
+        A::Places::places(adapter, self.side, self.names)
+            .await
+            .map_err(E::from)
+    }
+}
+
 /// The content at an address the adapter gave.
 struct ReadBack<'a> {
     address: &'a ContentAddress,
@@ -431,8 +494,11 @@ impl<E: Send> AsyncVisit<E> for ReadBack<'_> {
 #[cfg(test)]
 mod tests {
     use crate::app::shelf::adapter::{
-        Answers, CannotList, NameList, NamePrefixes, SpaceReadBack, SpaceSuggest,
+        Answers, CannotList, CannotPlace, NameList, NamePlaces, NamePrefixes, SpaceReadBack,
+        SpaceSuggest,
     };
+    use crate::domain::location::RelPath;
+    use crate::domain::nonempty::NonEmptySet;
     use crate::domain::shelf::artifact::{
         ArtifactState, Comparison, NamePrefix, NotASelection, Renamed, Untold,
     };
@@ -497,8 +563,9 @@ mod tests {
     }
 
     /// An adapter that answers every ask: a name is there with its text as content,
-    /// every name is outside a prefix, no name moved, every address reads back, and a
-    /// selection takes the name "a.rs" (but for [`NOT_A_PATTERN`], which no selection is).
+    /// every name is outside a prefix, no name moved, every address reads back, a
+    /// selection takes the name "a.rs" (but for [`NOT_A_PATTERN`], which no selection is),
+    /// and a name lives in the file of its own text.
     struct Answering {
         space: &'static str,
         presets: Vec<(&'static str, Option<&'static str>)>,
@@ -510,6 +577,7 @@ mod tests {
         type Suggest = Answers;
         type ReadBack = Answers;
         type List = Answers;
+        type Places = Answers;
 
         fn space(&self) -> &str {
             self.space
@@ -579,6 +647,25 @@ mod tests {
         }
     }
 
+    impl NamePlaces for Answering {
+        async fn places(
+            &self,
+            _: Side,
+            names: &BTreeSet<ArtifactName>,
+        ) -> Result<BTreeMap<ArtifactName, Placement>, FakeError> {
+            Ok(names
+                .iter()
+                .map(|n| (n.clone(), placed_in(n.as_str())))
+                .collect())
+        }
+    }
+
+    /// The placement of a name that lives in the file of its own text.
+    fn placed_in(text: &str) -> Placement {
+        let file: RelPath = text.parse().unwrap();
+        Placement::Only(NonEmptySet::new(file, []))
+    }
+
     /// An adapter that names the not-answering type of each ask it may answer, and
     /// still has a way to answer each, which must never be called.
     struct Silent;
@@ -589,6 +676,7 @@ mod tests {
         type Suggest = CannotSuggest;
         type ReadBack = NoReadBack;
         type List = CannotList;
+        type Places = CannotPlace;
 
         fn space(&self) -> &str {
             "quiet"
@@ -639,6 +727,16 @@ mod tests {
 
         async fn list(&self, _: Side, _: &Selection) -> Result<NameListing, FakeError> {
             panic!("an adapter that names CannotList is asked to list")
+        }
+    }
+
+    impl NamePlaces for Silent {
+        async fn places(
+            &self,
+            _: Side,
+            _: &BTreeSet<ArtifactName>,
+        ) -> Result<BTreeMap<ArtifactName, Placement>, FakeError> {
+            panic!("an adapter that names CannotPlace is asked where its names live")
         }
     }
 
@@ -762,6 +860,19 @@ mod tests {
             block_on(spaces.list(Side::After, &other, &selecting("*.rs"))).unwrap(),
             NameListing::CannotList(why)
         );
+        let placed = block_on(spaces.places(
+            Side::After,
+            &BTreeSet::from([key.clone(), ArtifactKey::new(space("file"), name("a.rs"))]),
+        ))
+        .unwrap();
+        assert!(matches!(
+            &placed[&key],
+            Placement::Unplaced(why) if why.as_str().contains("`other`")
+        ));
+        assert_eq!(
+            placed[&ArtifactKey::new(space("file"), name("a.rs"))],
+            placed_in("a.rs")
+        );
 
         let mut asks = PrefixAsks::new();
         asks.ask(other.clone(), name("src/a/x.rs"));
@@ -804,6 +915,10 @@ mod tests {
             block_on(spaces.list(Side::After, &file, &selecting("*.rs"))).unwrap(),
             NameListing::All(BTreeSet::from([name("a.rs")]))
         );
+        assert_eq!(
+            block_on(spaces.places(Side::After, &BTreeSet::from([key.clone()]))).unwrap(),
+            BTreeMap::from([(key, placed_in("a.rs"))])
+        );
     }
 
     #[test]
@@ -834,6 +949,12 @@ mod tests {
         assert_eq!(
             block_on(spaces.list(Side::After, &quiet, &selecting("*.rs"))).unwrap(),
             CannotList::listing()
+        );
+        let names = BTreeSet::from([name("a")]);
+        let key = ArtifactKey::new(quiet.clone(), name("a"));
+        assert_eq!(
+            block_on(spaces.places(Side::After, &BTreeSet::from([key.clone()]))).unwrap(),
+            BTreeMap::from([(key, CannotPlace::answer(&names)[&name("a")].clone())])
         );
         // The asks every adapter answers still reach it.
         let mut asks = ArtifactAsks::new();

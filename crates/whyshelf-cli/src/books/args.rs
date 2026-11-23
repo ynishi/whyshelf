@@ -182,6 +182,17 @@ pub enum BooksCommand {
         /// A key, an identifier or a short identifier.
         reference: Reference,
     },
+    /// What depends on the documents named and what all of them stand on: every
+    /// document whose `Depends` links reach one named, transitively, the artifacts each
+    /// stands on (its links now and the pins of its approval) with where each lives, and
+    /// the files of the project all of it is in; what may depend on them and could not
+    /// be read is counted (`untold`), with a warning on stderr. A reference that names
+    /// no document, or several, is a request error (exit 2).
+    Reach {
+        /// Keys, identifiers or short identifiers, one or more.
+        #[arg(required = true, value_name = "REFERENCE")]
+        references: Vec<Reference>,
+    },
     /// The documents linked neither way, those no link reaches and those that hold
     /// none, those decided against apart; exit 0 whenever the declaration can be
     /// used, whatever it lists.

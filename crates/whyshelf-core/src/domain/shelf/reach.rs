@@ -1,18 +1,31 @@
 //! What depends on some named documents: the one walk down from them (`walk`),
-//! and what it could not follow ([`Unwalked`]).
+//! and what it could not follow ([`Unwalked`]); and what a reach of them comes to
+//! (`Reach`): the artifacts those documents stand on, and the files of the project
+//! all of it is in.
 //!
 //! Which documents the `Depends` links of a document name is `Doc::depends_names`. The
 //! walk takes every valid document of the shelf whose links name one it reached,
 //! until none is left, and counts what it could not read the links of: a document
 //! whose links cannot be read, and a file whose identity cannot be read, may depend
 //! on the named without the walk seeing it.
+//!
+//! | rule | what | the one place |
+//! |---|---|---|
+//! | R1 | the documents reached: the named and what depends on them, and what the walk could not follow | `walk` |
+//! | R2 | the artifacts they stand on, by space: each reached document's `Footing::artifacts` (its links to artifacts now and the pins of its approval), outside the walk | `Reach::of` |
+//! | R3 | the files: every file a reached document may be in (`DocState::may_be_in`) and every file of the placement of an artifact ([`Placement`], its adapter's answer), with the artifacts whose place cannot be told and the documents that are gone apart | `Reach::files` |
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
-use crate::domain::nonempty::NonEmptySet;
+use crate::domain::location::RelPath;
+use crate::domain::nonempty::{NonBlank, NonEmptySet, TextLiteral};
 
-use super::build::Shelf;
+use super::artifact::ArtifactKey;
+use super::build::{DocState, Shelf};
+use super::footing::Footing;
+use super::ledger::Ledger;
+use super::placement::Placement;
 
 /// What a walk down from the named reached, and what it could not follow.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +110,116 @@ pub(crate) fn walk(named: &NonEmptySet<DocId>, shelf: &Shelf) -> Walked {
         unreadable,
     });
     Walked { reached, untold }
+}
+
+/// A reach of named documents: what the walk down from them reached and could not
+/// follow (R1), and the artifacts the documents reached stand on (R2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Reach {
+    walked: Walked,
+    /// Each artifact a document reached stands on, with those of them that do.
+    artifacts: BTreeMap<ArtifactKey, BTreeSet<DocId>>,
+}
+
+/// What a reach comes to in the files of the project (R3).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct ReachFiles {
+    /// Each document reached, with the files it may be in (none when it is gone).
+    pub(crate) docs: BTreeMap<DocId, BTreeSet<RelPath>>,
+    /// Each artifact the documents reached stand on, with those documents and where
+    /// it lives.
+    pub(crate) artifacts: BTreeMap<ArtifactKey, Placed>,
+    /// Every file a document reached may be in, and every file the placement of an
+    /// artifact it stands on names, whole or in part.
+    pub(crate) files: BTreeSet<RelPath>,
+    /// The documents reached that are gone: no file carries them, so none is in
+    /// `files` for them.
+    pub(crate) gone: BTreeSet<DocId>,
+}
+
+/// One artifact of a reach: the documents reached that stand on it, and where it lives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Placed {
+    /// The documents reached that stand on it.
+    pub(crate) by: BTreeSet<DocId>,
+    /// Its adapter's answer, or unplaced with why when its adapter gave none.
+    pub(crate) placement: Placement,
+}
+
+/// Why an artifact has no place when its adapter gave no answer for its name.
+const NO_PLACEMENT: TextLiteral =
+    TextLiteral::new("the adapter of its space gave no answer of where it lives");
+
+impl Reach {
+    /// The reach of `named` in `shelf`: the walk down from them (R1, [`walk`]), and for
+    /// each document it reached, the artifacts it stands on by its footing in `shelf`
+    /// and `ledger` ([`Footing::artifacts`]), outside the walk (R2).
+    pub(crate) fn of(named: &NonEmptySet<DocId>, shelf: &Shelf, ledger: &Ledger) -> Self {
+        let walked = walk(named, shelf);
+        let mut artifacts: BTreeMap<ArtifactKey, BTreeSet<DocId>> = BTreeMap::new();
+        for id in walked.reached() {
+            for artifact in Footing::of(shelf, *id, ledger).artifacts(shelf, ledger) {
+                artifacts.entry(artifact).or_default().insert(*id);
+            }
+        }
+        Self { walked, artifacts }
+    }
+
+    /// The documents reached: the named, and every document that depends on one of
+    /// them, transitively.
+    pub(crate) fn docs(&self) -> &BTreeSet<DocId> {
+        self.walked.reached()
+    }
+
+    /// Each artifact a document reached stands on, by space and name, with the
+    /// documents reached that stand on it.
+    pub(crate) fn artifacts(&self) -> &BTreeMap<ArtifactKey, BTreeSet<DocId>> {
+        &self.artifacts
+    }
+
+    /// What may depend on the named and could not be read, when anything may.
+    pub(crate) fn untold(&self) -> Option<&Unwalked> {
+        self.walked.untold()
+    }
+
+    /// The files of the reach (R3), given where each artifact lives (`placements`,
+    /// the adapters' answers): every file a document reached may be in
+    /// (`DocState::may_be_in`: its file, the files of an invalid one, or every file
+    /// whose identity cannot be read when it may be in any), and every file of the
+    /// placement of each artifact, whole or in part. An artifact whose adapter cannot
+    /// say where it lives, or gave no answer for it, is unplaced with why, and a
+    /// document that is gone is told apart.
+    pub(crate) fn files(
+        &self,
+        shelf: &Shelf,
+        placements: &BTreeMap<ArtifactKey, Placement>,
+    ) -> ReachFiles {
+        let mut found = ReachFiles::default();
+        for id in self.docs() {
+            let state = shelf.state_of(*id);
+            if matches!(state, DocState::Gone) {
+                found.gone.insert(*id);
+            }
+            let files: BTreeSet<RelPath> = state.may_be_in().into_iter().cloned().collect();
+            found.files.extend(files.iter().cloned());
+            found.docs.insert(*id, files);
+        }
+        for (artifact, by) in &self.artifacts {
+            let placement = placements
+                .get(artifact)
+                .cloned()
+                .unwrap_or_else(|| Placement::Unplaced(NonBlank::from(NO_PLACEMENT)));
+            if let Some(files) = placement.files() {
+                found.files.extend(files.iter().cloned());
+            }
+            let placed = Placed {
+                by: by.clone(),
+                placement,
+            };
+            found.artifacts.insert(artifact.clone(), placed);
+        }
+        found
+    }
 }
 
 #[cfg(test)]
@@ -250,5 +373,130 @@ mod tests {
         let walked = walk(&named(&[77]), &s);
         assert_eq!(walked.reached(), &ids(&[77]));
         assert_eq!(untold(&walked), None);
+    }
+
+    mod reach_of {
+        use super::*;
+        use crate::domain::shelf::fixtures_tests::{approved, file_artifact, ledger, sp_testing};
+
+        fn only(paths: &[&str]) -> Placement {
+            let mut files = paths.iter().map(|p| path(p));
+            let first = files.next().unwrap();
+            Placement::Only(NonEmptySet::new(first, files))
+        }
+
+        fn files(paths: &[&str]) -> BTreeSet<RelPath> {
+            paths.iter().map(|p| path(p)).collect()
+        }
+
+        #[test]
+        fn a_reach_stands_on_the_artifacts_of_every_document_reached_and_no_other() {
+            let s = shelf(vec![
+                fr(1, &[]),
+                sp_testing(2, &["FR-1"], &["t/a.rs", "t/b.rs"]),
+                sp_testing(3, &["FR-4"], &["t/c.rs"]),
+                fr(4, &[]),
+            ]);
+            let reach = Reach::of(&named(&[1]), &s, &ledger(Vec::new()));
+            assert_eq!(reach.docs(), &ids(&[1, 2]));
+            assert_eq!(
+                reach.artifacts(),
+                &BTreeMap::from([
+                    (file_artifact("t/a.rs"), ids(&[2])),
+                    (file_artifact("t/b.rs"), ids(&[2])),
+                ])
+            );
+            assert_eq!(reach.untold(), None);
+        }
+
+        #[test]
+        fn a_reach_stands_on_what_the_approval_of_a_document_pinned_too() {
+            // Approved while it named `t/old.rs`; it names only `t/a.rs` now.
+            let before = shelf(vec![fr(1, &[]), sp_testing(2, &["FR-1"], &["t/old.rs"])]);
+            let approvals = approved(&before, &[1, 2]);
+            let now = shelf(vec![fr(1, &[]), sp_testing(2, &["FR-1"], &["t/a.rs"])]);
+            let reach = Reach::of(&named(&[1]), &now, &approvals);
+            assert_eq!(
+                reach.artifacts().keys().cloned().collect::<BTreeSet<_>>(),
+                BTreeSet::from([file_artifact("t/a.rs"), file_artifact("t/old.rs")])
+            );
+        }
+
+        #[test]
+        fn the_files_are_the_documents_and_the_places_of_their_artifacts_with_the_rest_apart() {
+            let s = shelf(vec![
+                fr(1, &[]),
+                sp_testing(2, &["FR-1"], &["t/a.rs", "t/b.rs", "t/c.rs"]),
+                invalid(9),
+                sp_testing(3, &["FR-9"], &[]),
+            ]);
+            let reach = Reach::of(&named(&[1, 9, 77]), &s, &ledger(Vec::new()));
+            let why = NonBlank::new("no place").unwrap();
+            let placements = BTreeMap::from([
+                (file_artifact("t/a.rs"), only(&["t/a.rs"])),
+                (
+                    file_artifact("t/b.rs"),
+                    Placement::Partly(NonEmptySet::new(path("src/b.rs"), [])),
+                ),
+                (file_artifact("t/c.rs"), Placement::Unplaced(why.clone())),
+            ]);
+            let found = reach.files(&s, &placements);
+            assert_eq!(
+                found.files,
+                files(&[
+                    "findings/fr-1.md",
+                    "findings/fr-9.md",
+                    "specs/sp-2.md",
+                    "specs/sp-3.md",
+                    "t/a.rs",
+                    "src/b.rs",
+                ])
+            );
+            let placed: BTreeMap<ArtifactKey, Placement> = found
+                .artifacts
+                .iter()
+                .map(|(artifact, placed)| (artifact.clone(), placed.placement.clone()))
+                .collect();
+            assert_eq!(placed, placements);
+            assert!(
+                found
+                    .artifacts
+                    .values()
+                    .all(|placed| placed.by == ids(&[2]))
+            );
+            assert_eq!(
+                found.artifacts[&file_artifact("t/c.rs")].placement,
+                Placement::Unplaced(why)
+            );
+            // Each document reached with its files, one gone with none.
+            assert_eq!(
+                found.docs.keys().copied().collect::<BTreeSet<_>>(),
+                ids(&[1, 2, 3, 9, 77])
+            );
+            assert_eq!(found.docs[&docid(2)], files(&["specs/sp-2.md"]));
+            assert!(found.docs[&docid(77)].is_empty());
+            assert_eq!(found.gone, ids(&[77]));
+            // An artifact its adapter gave no answer for has no place, and says so.
+            let found = reach.files(&s, &BTreeMap::new());
+            let none = Placement::Unplaced(NonBlank::from(NO_PLACEMENT));
+            assert_eq!(found.artifacts.len(), 3);
+            assert!(
+                found
+                    .artifacts
+                    .values()
+                    .all(|placed| placed.placement == none)
+            );
+            assert_eq!(found.files.len(), 4);
+        }
+
+        #[test]
+        fn a_document_that_may_be_in_any_unreadable_file_reaches_every_such_file() {
+            let s = shelf(vec![fr(1, &[]), unreadable()]);
+            let reach = Reach::of(&named(&[5]), &s, &ledger(Vec::new()));
+            let found = reach.files(&s, &BTreeMap::new());
+            assert_eq!(found.files, files(&["findings/unreadable.md"]));
+            assert!(found.gone.is_empty());
+            assert_eq!(reach.untold().map(|u| u.unreadable()), Some(1));
+        }
     }
 }

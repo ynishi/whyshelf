@@ -197,7 +197,21 @@ pub(crate) async fn look_through<N: TreeName, S: StateRead<N>>(
     side: Side,
     name: &N,
 ) -> Result<Followed<N, AtSide<N, u64>>, S::Error> {
+    look_through_links(state, side, name)
+        .await
+        .map(|(followed, _)| followed)
+}
+
+/// [`look_through`], with the link entries the walk went through, in order, each the
+/// name of the link as the tree writes it (the first part of the name then read that
+/// is a link): what the content of `name` depends on beside the name it is reached at.
+pub(crate) async fn look_through_links<N: TreeName, S: StateRead<N>>(
+    state: &S,
+    side: Side,
+    name: &N,
+) -> Result<(Followed<N, AtSide<N, u64>>, Vec<N>), S::Error> {
     let mut now = name.clone();
+    let mut links = Vec::new();
     for _ in 0..MOST_LINKS {
         let answer = state
             .look(side, &BTreeSet::from([now.clone()]))
@@ -205,30 +219,33 @@ pub(crate) async fn look_through<N: TreeName, S: StateRead<N>>(
             .remove(&now)
             .unwrap_or(Ok(AtSide::Untold(Untold::NoAnswer)))?;
         let AtSide::Elsewhere { at, leads, .. } = answer else {
-            return Ok(Followed::Reached {
+            let reached = Followed::Reached {
                 at: Some(now),
                 answer,
-            });
+            };
+            return Ok((reached, links));
         };
+        links.push(at.clone());
         match leads {
             Leads::Inside(to) => match rebased(&now, &at, Some(&to)) {
                 Some(next) => now = next,
-                None => return Ok(Followed::Broken),
+                None => return Ok((Followed::Broken, links)),
             },
             Leads::Top => match rebased(&now, &at, None) {
                 Some(next) => now = next,
                 None => {
-                    return Ok(Followed::Reached {
+                    let reached = Followed::Reached {
                         at: None,
                         answer: AtSide::Dir,
-                    });
+                    };
+                    return Ok((reached, links));
                 }
             },
-            Leads::Outside => return Ok(Followed::Left),
-            Leads::Broken | Leads::Unresolved => return Ok(Followed::Broken),
+            Leads::Outside => return Ok((Followed::Left, links)),
+            Leads::Broken | Leads::Unresolved => return Ok((Followed::Broken, links)),
         }
     }
-    Ok(Followed::TooMany)
+    Ok((Followed::TooMany, links))
 }
 
 /// What is under `dir` at `side` (none: the top of the tree), every link on the way

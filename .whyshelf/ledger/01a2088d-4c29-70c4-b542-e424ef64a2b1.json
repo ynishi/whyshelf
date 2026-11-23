@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "c7a76af86959d13c44655edb06d4bb32cdb8b0f3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:92057aae58d7cc01409eb222ed6e7e411f8869a38da80419bf4bd79ec8858371",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/code_preset.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "80960bb1bf018e085f10cc5d78b92c0a6446a888",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8f081ebb6d2a8d601b0e50720681fe4f52a9a4f833e4c5f6c39155dd8b70eaf7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3e2fc5213bf03e885505295d2bf70b10caf31db5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fc2e7cbc21a89b422d89b2796dc665766187ee3a0976c25eb14910d6b4a9c462",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/experiment.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795439787631,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b706870cbac06039fa6de0e42af08f4ba530dcb",
+      "hash": "sha256:a6fb5160c904b99530d18041760c34aafc39a0c6d75b4ca92f70e630f1c5f0bf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "67"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+    }
+  ],
+  "id": "01a2088d-4c29-70c4-b542-e424ef64a2b1",
+  "kind": "decision",
+  "reason": "Read again after #112's third steps: each adapter answers where a name lives (NamePlaces) as resolve reads it, the footing reads artifacts on demand, and the reach command answers the documents that depend on the named, their artifacts and files, and what it could not follow",
+  "revision": "bf5f110b7f159fe67a4079fe8a3ef10ce0822d3c",
+  "seen": "sha256:2b888f0c73ba200e9cf1b1f9daf35f180da04dc4a70f58c4ddbe954e62e62746",
+  "seen_address": "006550498483927c936925d248b628b486bc5222",
+  "subject": "01a1cb51-02c3-725c-99f7-665bea5c0aac",
+  "v": 1,
+  "verb": "approve"
+}

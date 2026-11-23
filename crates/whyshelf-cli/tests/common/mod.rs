@@ -150,7 +150,7 @@ pub(crate) fn json(output: &Output) -> serde_json::Value {
 }
 
 /// The reading commands, each with the arguments it runs with on [`NOTE`].
-pub(crate) const READS: [&[&str]; 14] = [
+pub(crate) const READS: [&[&str]; 15] = [
     &["fmt", "--check"],
     &["check"],
     &["map"],
@@ -160,6 +160,7 @@ pub(crate) const READS: [&[&str]; 14] = [
     &["stale", "--exit-code"],
     &["get", "N-1"],
     &["trace", "N-1"],
+    &["reach", "N-1"],
     &["get", "N-1", "--approved"],
     &["diff", "N-1"],
     &["schema"],

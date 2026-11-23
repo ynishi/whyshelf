@@ -312,6 +312,16 @@
 //! (through a symbolic link only while it stays inside the root). It declares no
 //! build directory, and runs no program.
 //!
+//! # Where a name lives
+//!
+//! A test lives, whole ([`Placement::Only`]), in the files the file its name writes
+//! before `::` is read from, as the space `file` places that path: the path as written
+//! when no link is on it, there or not (a test that is not there lives where it would
+//! be); with links inside the root on its way, each link entry and the name they lead
+//! to. A link that leaves the root or is broken, a kind of file that cannot be told,
+//! and a text that is not of the grammar (by the grammar alone, with nothing read)
+//! place it nowhere ([`Placement::Unplaced`]), with the reason `resolve` gives.
+//!
 //! # Known limits
 //!
 //! - The text is the test call alone. An edit of a helper it calls, of a hook
@@ -346,7 +356,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use whyshelf_core::app::shelf::{
-    Answers, CannotList, CannotSuggest, NamePrefixes, NoReadBack, Side, SpaceAdapter,
+    Answers, CannotList, CannotSuggest, NamePlaces, NamePrefixes, NoReadBack, Side, SpaceAdapter,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
@@ -355,6 +365,7 @@ use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, Comparison, PrefixMove, SpaceAsks, SpacePrefixes, SpaceReadings,
     SpaceRenamed,
 };
+use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
 use super::super::state::StateError;
@@ -564,13 +575,15 @@ pub enum JsTestError {
 }
 
 /// The space [`JS_TEST_SPACE`]: it answers a move of a prefix, cannot suggest where
-/// a test moved, and keeps nothing by address.
+/// a test moved, keeps nothing by address, lists no names, and says where a test lives
+/// (the file it names).
 impl SpaceAdapter for JsTestSpace {
     type Error = JsTestError;
     type Prefixes = Answers;
     type Suggest = CannotSuggest;
     type ReadBack = NoReadBack;
     type List = CannotList;
+    type Places = Answers;
 
     fn space(&self) -> &str {
         JS_TEST_SPACE
@@ -600,6 +613,29 @@ impl NamePrefixes for JsTestSpace {
         of: &PrefixMove,
     ) -> Result<(SpacePrefixes, SpaceRenamed), JsTestError> {
         renamed(names, of).map_err(JsTestError::Reason)
+    }
+}
+
+impl NamePlaces for JsTestSpace {
+    /// A test lives in the files of the file its name writes before `::`, whole: the
+    /// module page, "Where a name lives".
+    async fn places(
+        &self,
+        side: Side,
+        names: &BTreeSet<ArtifactName>,
+    ) -> Result<BTreeMap<ArtifactName, Placement>, JsTestError> {
+        self.state.dir(side)?;
+        let mut placed = BTreeMap::new();
+        for name in names {
+            let placement = match TestName::parse(name.as_str()) {
+                Ok(test) => file::placed_only(&self.state, side, &test.file)
+                    .await
+                    .map_err(JsTestError::Reason)?,
+                Err(why) => Placement::Unplaced(reason(why.reason())?),
+            };
+            placed.insert(name.clone(), placement);
+        }
+        Ok(placed)
     }
 }
 
@@ -3013,6 +3049,8 @@ mod tests {
 
     use whyshelf_core::domain::shelf::artifact::{ArtifactState, NamePrefix, Untold};
 
+    use whyshelf_core::domain::nonempty::NonEmptySet;
+
     use super::super::conformance;
     use super::super::file::ScanLimits;
     use super::*;
@@ -3058,6 +3096,10 @@ mod tests {
             false
         }
 
+        fn places(&self) -> bool {
+            true
+        }
+
         fn adapter_at(&self, dir: &Path) -> super::super::Adapter {
             super::super::Adapter::JsTest(JsTestSpace {
                 max_file: MAX_TEST_FILE,
@@ -3091,6 +3133,14 @@ mod tests {
                 n("src/a.txt::t"),
                 n("src/a.test.ts::a\\b"),
             ];
+            // A test lives in the file it names, there or not.
+            let only = |file: &str| {
+                Placement::Only(NonEmptySet::new(file.parse::<RelPath>().unwrap(), []))
+            };
+            tree.placed = vec![
+                (n("src/a.test.ts::group::inner"), only("src/a.test.ts")),
+                (n("src/none.test.ts::t"), only("src/none.test.ts")),
+            ];
             tree.over_bytes = vec![conformance::OverBytes::Name {
                 bound: "a file",
                 name: n("src/big.test.ts::t"),
@@ -3116,6 +3166,20 @@ mod tests {
                     .await
                     .unwrap();
                 tree.outside = Some(n("out/x.test.ts::t"));
+                // A test read through a link inside the root lives in the link and in
+                // the file it leads to.
+                // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
+                tokio::fs::symlink("a.test.ts", root.join("src/link.test.ts"))
+                    .await
+                    .unwrap();
+                tree.present.push(n("src/link.test.ts::one"));
+                let both = NonEmptySet::new(
+                    "src/a.test.ts".parse::<RelPath>().unwrap(),
+                    ["src/link.test.ts".parse::<RelPath>().unwrap()],
+                );
+                tree.placed
+                    .push((n("src/link.test.ts::one"), Placement::Only(both)));
+                tree.linked = Some(n("src/link.test.ts::one"));
                 let locked = root.join("src/locked.test.ts");
                 // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
                 tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))

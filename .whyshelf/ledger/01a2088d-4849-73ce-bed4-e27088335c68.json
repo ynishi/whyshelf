@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "80960bb1bf018e085f10cc5d78b92c0a6446a888",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:8f081ebb6d2a8d601b0e50720681fe4f52a9a4f833e4c5f6c39155dd8b70eaf7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b4909589f2d7715458fbe7d31cce0fdcb526f9dd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:aa6d0321631e3b99b2343406ec6e2a660908e91d480e0e2b8c1badc599d1631b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/init.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795439787631,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4181d40e89264f003a05072849315f2bbfe3750b",
+      "hash": "sha256:7eadac6a9ad1e3958244c3a3864969fa9b52cd3d3c7b78fb6d8080d20c921193",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "66"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb06-d455-710f-8a4e-5bd7fa7cd3c8"
+    }
+  ],
+  "id": "01a2088d-4849-73ce-bed4-e27088335c68",
+  "kind": "decision",
+  "reason": "Read again after #112's third steps: each adapter answers where a name lives (NamePlaces) as resolve reads it, the footing reads artifacts on demand, and the reach command answers the documents that depend on the named, their artifacts and files, and what it could not follow",
+  "revision": "bf5f110b7f159fe67a4079fe8a3ef10ce0822d3c",
+  "seen": "sha256:177e6b40fd3c4912196e42526c42b1d1eae7016454863ff7d573e9bf4b3e5fbc",
+  "seen_address": "6446e5e45812347e658b5f688692e7655de9d90b",
+  "subject": "01a1cb07-1890-7277-a010-a55ae3658674",
+  "v": 1,
+  "verb": "approve"
+}

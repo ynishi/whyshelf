@@ -6,6 +6,7 @@
 //! | `promise_of` | the one reader of a page: the promise of the [`Place`] in it, or why it cannot be read |
 //! | `Promise::text` | the one place the text is formed, which `resolve` hashes and `current` returns |
 //! | `has_declaration` | the one table of the kinds that have a declaration |
+//! | `source_link` | the link `Source` of the [`Place`] in a page: where the docs say its source is |
 //!
 //! ```text
 //!   page + Place ──► the part of the page the place owns
@@ -160,6 +161,57 @@ pub(super) fn promise_of(html: &str, place: &Place) -> Result<Promise, Unreadabl
     } else {
         Ok(Promise::DocsOnly(parts.docs))
     }
+}
+
+/// The link `Source` of the item or the member `place` names, as written in the HTML
+/// `html` of its page: the `href` of the first link of the class `src` in the heading
+/// of the page, before its first section (an item, a module, a crate), or in the
+/// element of the member. A field and a variant are declared in the body of their
+/// type, and their element has no such link: they take the heading's. None when the
+/// page has no such link.
+pub(super) fn source_link(html: &str, place: &Place) -> Option<String> {
+    let main = main_content(html)?;
+    let Place::Member { kind, anchor, .. } = place else {
+        return src_link(main, true);
+    };
+    let mut lexer = Lexer::new(main);
+    let element = loop {
+        if let Token::Open(tag) = lexer.next()?.token
+            && tag.attr("id") == Some(anchor.as_str())
+        {
+            break tag;
+        }
+    };
+    let element = lexer.inner(&element)?;
+    match (src_link(element.of(main), false), kind) {
+        (Some(link), _) => Some(link),
+        (None, MemberKind::StructField | MemberKind::Variant) => src_link(main, true),
+        (
+            None,
+            MemberKind::Method
+            | MemberKind::TyMethod
+            | MemberKind::AssociatedConstant
+            | MemberKind::AssociatedType,
+        ) => None,
+    }
+}
+
+/// The `href` of the first link of the class `src` in `html`, before its first `h2`
+/// when `heading_only` (the heading of a page comes before its sections).
+fn src_link(html: &str, heading_only: bool) -> Option<String> {
+    let mut lexer = Lexer::new(html);
+    while let Some(next) = lexer.next() {
+        let Token::Open(tag) = next.token else {
+            continue;
+        };
+        if heading_only && tag.is("h2") {
+            return None;
+        }
+        if tag.is("a") && tag.has_class("src") {
+            return tag.attr("href").map(decode);
+        }
+    }
+    None
 }
 
 /// What a page tells of its item or member, before the kind decides what a promise
@@ -1085,5 +1137,41 @@ mod tests {
         let text = text(&shelf(SHELF_DECL, &docs, ""), "struct", None);
         assert!(text.contains("\ndoc decl pub struct Shelf;\n"), "{text}");
         assert!(!text.contains("\ndecl pub struct Shelf;"), "{text}");
+    }
+
+    #[test]
+    fn the_source_of_an_item_is_the_link_of_its_heading_and_of_a_member_its_own() {
+        let method = "<section id=\"method.put\" class=\"method\"><a class=\"src rightside\" href=\"../src/demo/shelf/put.rs.html#20\">Source</a><h4 class=\"code-header\">pub fn put(&amp;self)</h4></section>";
+        let field = "<span id=\"structfield.root\" class=\"structfield section-header\"><a href=\"#structfield.root\" class=\"anchor field\">§</a><code>root: u8</code></span>";
+        let required = "<section id=\"tymethod.get\" class=\"method\"><h4 class=\"code-header\">fn get(&amp;self)</h4></section>";
+        let html = shelf(
+            SHELF_DECL,
+            SHELF_DOCS,
+            &format!("<h2 id=\"fields\">Fields</h2>{field}{method}{required}"),
+        );
+        let heading = Some("../src/demo/lib.rs.html#1-2".to_owned());
+        assert_eq!(source_link(&html, &place("struct", None)), heading);
+        assert_eq!(source_link(&html, &place("module", None)), heading);
+        assert_eq!(
+            source_link(&html, &place("method", Some("method.put"))),
+            Some("../src/demo/shelf/put.rs.html#20".to_owned())
+        );
+        // A field is declared in the body of its type: the heading's.
+        assert_eq!(
+            source_link(&html, &place("structfield", Some("structfield.root"))),
+            heading
+        );
+        // A method with no link of its own, and a member not on the page: none.
+        assert_eq!(
+            source_link(&html, &place("tymethod", Some("tymethod.get"))),
+            None
+        );
+        assert_eq!(
+            source_link(&html, &place("method", Some("method.gone"))),
+            None
+        );
+        // A page with no link in its heading, and a link of a section after it, has none.
+        let bare = page(&format!("{SHELF_DECL}<h2 id=\"x\">X</h2>{method}"));
+        assert_eq!(source_link(&bare, &place("struct", None)), None);
     }
 }

@@ -14,6 +14,7 @@
 //! | [`status_filtered`](ShelfApp::status_filtered) | no | [`StatusReport`]: the documents that pass a filter by book, standing and field, with the filter as given; a filter that does not fit the declaration is [`ShelfError::Filter`] |
 //! | [`get`](ShelfApp::get) | no | [`GetReport`]: one document, its standing, notices and root causes |
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
+//! | [`reach`](ShelfApp::reach) | no | [`ReachReport`]: the named documents and every document that depends on one of them, the artifacts all of them stand on with where each lives, the files of the project all of it is in, and what may depend on them that could not be read |
 //! | [`unlinked`](ShelfApp::unlinked) | no | [`UnlinkedReport`]: the problems of the declaration, or the documents linked neither way, those no link reaches and those that hold none, those decided against apart |
 //! | [`stale`](ShelfApp::stale) | no | [`StaleReport`]: the approvals that no longer hold, with where they start to fail and what can settle each origin, and whether a gate passes ([`StaleReport::gate`]) |
 //! | [`stats`](ShelfApp::stats) | no | [`StatsReport`]: how the work went, from the ledger: approvals made again, pending time, runs, and the pins that changed under approvals made again |
@@ -145,6 +146,8 @@ mod prefix_trial_tests;
 #[cfg(test)]
 mod preset_tests;
 #[cfg(test)]
+mod reach_tests;
+#[cfg(test)]
 mod rekey_tests;
 #[cfg(test)]
 mod run_tests;
@@ -168,9 +171,9 @@ mod tests;
 mod unlinked_tests;
 
 pub use adapter::{
-    Answers, AsyncVisit, CannotList, CannotSuggest, ListWay, NameList, NamePrefixes, NoPrefixes,
-    NoReadBack, PrefixesWay, ReadBackWay, SpaceAdapter, SpaceReadBack, SpaceSuggest, SuggestWay,
-    Visit,
+    Answers, AsyncVisit, CannotList, CannotPlace, CannotSuggest, ListWay, NameList, NamePlaces,
+    NamePrefixes, NoPrefixes, NoReadBack, PlacesWay, PrefixesWay, ReadBackWay, SpaceAdapter,
+    SpaceReadBack, SpaceSuggest, SuggestWay, Visit,
 };
 pub use approve_chosen::{
     ApproveChosenRequest, ApproveStaleRequest, Choose, ChosenApproved, ChosenJudged, ChosenLeftOut,
@@ -198,9 +201,10 @@ pub use report::{
     Absent, ApprovedItem, ApprovedReport, ArtifactCoverLists, Awaiting, BookCount, BooksCheck,
     CoverReport, DiffItem, DiffReport, DownstreamEdge, ExemptArtifact, ExemptEntry, Gate,
     GetReport, Health, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport, MovedAway, MovesReport,
-    Names, RepeatedArtifact, RepeatedExemption, Row, SettledOrigin, StaleEntry, StaleReport,
-    StatsReport, StatusReport, TraceReport, Uncovered, UncoveredArtifact, Unknown, UnlinkedEntry,
-    UnlinkedLists, UnlinkedReport, UnneededArtifact, UnneededExemption, UpstreamEdge, UpstreamEnd,
+    Names, ReachReport, ReachedArtifact, ReachedDoc, RepeatedArtifact, RepeatedExemption, Row,
+    SettledOrigin, StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered,
+    UncoveredArtifact, Unknown, UnlinkedEntry, UnlinkedLists, UnlinkedReport, UnneededArtifact,
+    UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 pub use run_writes::Edited;
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
