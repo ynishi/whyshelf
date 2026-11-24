@@ -206,6 +206,7 @@
 //! | what a document stands on: the documents its links resolve to and its approval pinned, and the artifacts its links to artifacts name and its approval pinned (each pin as it is read now) | `Footing::of` in `footing.rs` (visible to the shelf's modules only) | a `Footing` |
 //! | which documents depend on some named documents, and what of the shelf a walk down from them cannot follow | `walk` in [`reach`] (visible to the crate only), by `Doc::depends_names` | a `Walked`, with an [`Unwalked`](reach::Unwalked) of what it could not follow |
 //! | what a reach of named documents stands on, and the files of the project it is in | `Reach::of` (the artifacts of each document reached, by its `Footing`) and `Reach::files` (every file a document may be in, `DocState::may_be_in`, and every file of the placement of its artifacts) in [`reach`] | a `Reach`, a `ReachFiles` with the artifacts that have no place and the documents that are gone apart |
+//! | whether a change reaches each document, and whether those it reaches are inside the reach of named documents as the shelf stood before the change | `within` in [`within`] (visible to the crate only), from [`impact`](impact::impact) of the change and of the change read backwards, the ledger and the shelf of each end, and `walk` on the shelf before | a [`Within`](within::Within): a [`Verdict`](within::Verdict) per document, and whether all pass |
 //! | where a name of a space lives in the files of the project | the adapter of the space, through the port of the application | a [`Placement`](placement::Placement): only these files, partly these files, or cannot say (why) |
 //! | which names that cannot be told now share a cause, whether a cause holds back one (document, name) or many, and whether one document or many writes the names of such a cause | [`untold_causes`](untold::untold_causes), by the space and the [`Untold`](artifact::Untold) (`Eq`), once | [`UntoldCause`](untold::UntoldCause) with its [`Held`](untold::Held) and [`Writers`](untold::Writers) |
 //!
@@ -435,6 +436,7 @@ pub mod stats;
 pub mod trace;
 pub mod units;
 pub mod untold;
+pub mod within;
 
 #[cfg(test)]
 mod fixtures_tests;

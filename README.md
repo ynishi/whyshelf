@@ -80,6 +80,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
 | `trace <ref>`, `map` | the chain through a document, and the books and their links |
 | `reach <ref>...` | what depends on documents, what all of it stands on, and the files that hold it |
 | `impact (--since <rev> [--until <rev> \| --index] \| --before <dir> [--after <dir>])` | whether a change makes approvals not hold: `yes` with where it starts, `no`, or `cannot_tell` with what cannot be told |
+| `impact ... --within <ref>... [--exit-code]` | and whether the change stays inside the documents it was meant for |
 | `unlinked` | the documents no link reaches, or that hold none |
 | `stats`, `moves` | how the work went, from the ledger; and where pinned files may have moved |
 | `get <ref> --approved`, `diff <ref>` | what an approval saw; and that against now |
@@ -99,6 +100,8 @@ Every command prints one JSON document on stdout (`--help` and `--version` aside
 
 - Git: `--since <rev>` before, and `--until <rev>` or `--index` after (default `HEAD`). It reads the tracked content as a checkout of the repository writes it (no filter driver is run), each commit converted by its own `.gitattributes`; the attributes of your own Git settings (`core.attributesFile` and its default file) and of the system are not read, so nothing outside the repository decides a conversion. `--index` can be read only while the index's `.gitattributes` are `HEAD`'s (otherwise exit 2: ask with the file way), and a path added with `git add -N` reads there as an empty file. It needs a Git that knows `--attr-source`; each converted file costs one process of Git. Nothing is built in a commit, so an approval that stands on a `rust-item` cannot be told this way.
 - Files: `--before <dir>` before, and `--after <dir>` after (default the project root). Prepare the directory before yourself (for example `git worktree add --detach <dir> <rev>`, and build the docs there to ask about `rust-item`); whyshelf makes nothing.
+
+`impact --within <ref>...` answers too, for every document, whether the change reaches it (a cause added or taken away, what was decided, on the shelf or off it, its content or links, a record about it), each by the rule `impact`, the ledger or the shelf already answers it with, and its verdict against the reach of the documents named as the project stood before the change (the named and those that depend on them). `--exit-code` (which requires `--within`) exits 1 unless the gate passes; `--within` alone exits 0. The verdicts, what keeps the gate from passing (a file of the books or of the ledger that cannot be read, at either end, among it) and the known limits are on the page of the library's `domain::shelf::within`, the one place they are stated. Read through Git, the built docs cannot be read, so an approval on a `rust-item` outside the reach cannot be told: to tell it, build the docs in both directories and ask with the file way.
 
 ## In CI
 

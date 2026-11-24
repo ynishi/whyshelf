@@ -1,7 +1,8 @@
 //! The words more than one answer writes the same way: a plural, a problem of the
 //! declaration, a text as a word of a shell, what an artifact is now, the word of
 //! a standing, how strongly an approval does not hold, whether one holds at an end of a
-//! change and what the change made of it, why an upstream holds an approval back, why
+//! change and what the change made of it, how a change reaches a document and how one
+//! is inside the reach, why an upstream holds an approval back, why
 //! a link cannot be followed to what it names, how many names read an approval, and
 //! who ran the command that made a record.
 
@@ -15,6 +16,7 @@ use whyshelf_core::domain::shelf::impact::{Made, Sides};
 use whyshelf_core::domain::shelf::ledger::ReaderCount;
 use whyshelf_core::domain::shelf::order::Hold;
 use whyshelf_core::domain::shelf::schema::SchemaProblem;
+use whyshelf_core::domain::shelf::within::{InsideBy, Witness};
 
 /// Who ran the command that made a record, as every answer that shows the record's
 /// actor shows it beside it: null when the actor ran it. The one place it is written.
@@ -145,12 +147,35 @@ pub(super) fn made_word(made: &Made) -> &'static str {
     }
 }
 
-/// The word of which end of a change could not tell.
+/// The word of which end of a change could not tell, for `impact` read either way
+/// ([`Backward::side`](whyshelf_core::domain::shelf::within::Backward::side) turns the
+/// change read backwards into the change's own words first).
 pub(super) fn sides_word(sides: Sides) -> &'static str {
     match sides {
         Sides::Before => "before",
         Sides::After => "after",
         Sides::Both => "both",
+    }
+}
+
+/// The word of one way a change is shown to reach a document: the one place the words
+/// are written.
+pub(super) fn witness_word(witness: Witness) -> &'static str {
+    match witness {
+        Witness::AddsCause => "adds_cause",
+        Witness::RemovesCause => "removes_cause",
+        Witness::Decided => "decided",
+        Witness::OnShelf => "on_shelf",
+        Witness::Edited => "edited",
+        Witness::Recorded => "recorded",
+    }
+}
+
+/// The word of how a document is inside the reach before a change.
+pub(super) fn inside_word(by: InsideBy) -> &'static str {
+    match by {
+        InsideBy::Named => "named",
+        InsideBy::Reached => "reached",
     }
 }
 

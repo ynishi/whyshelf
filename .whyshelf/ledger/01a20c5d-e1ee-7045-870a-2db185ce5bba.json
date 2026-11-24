@@ -1,0 +1,101 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::impact_within",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::within::Away",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::within::UnprovenWhy",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::within::Within::named",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::within::Within::reached_before",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::within::Within::untold_before",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795503800005,
+  "expires": null,
+  "frame": [
+    {
+      "address": "29c5aea253516899ea75b42d656ee7270ea70cfe",
+      "hash": "sha256:265a977195c55a648c226021701966ff2e602167b1a07eb9cd121d52d4515c4e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a20c5d-7de1-71a3-a910-8337d1321a0b"
+    }
+  ],
+  "id": "01a20c5d-e1ee-7045-870a-2db185ce5bba",
+  "kind": "decision",
+  "reason": "impact --within tells whether a change stays inside the documents it was meant for, and --exit-code fails on what is outside, unproven or undetermined (#174); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "0c0198a967f78d6eef3b28fd3b21468f0b134c5b",
+  "seen": "sha256:e8d4bab80d3621199a31bf05b523382af6c93bcd9eda78170081f1a813e65f53",
+  "seen_address": "3405b78b90541c14660ff4a50a1594489d231cb2",
+  "subject": "01a20c5d-7de1-71a3-a910-8339cc620342",
+  "v": 1,
+  "verb": "approve"
+}

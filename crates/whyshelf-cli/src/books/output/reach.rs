@@ -167,11 +167,19 @@ pub fn reach(report: &ReachReport) -> ReachOut {
             })
             .collect(),
         gone: report.gone.iter().map(|id| namer.doc(*id)).collect(),
-        untold: report.untold.map(|u| UntoldOut {
-            invalid: u.invalid(),
-            unreadable: u.unreadable(),
-        }),
+        untold: report.untold.map(UntoldOut::from),
         health: namer.health(&report.health),
+    }
+}
+
+/// What a walk could not follow, counted: the one place it is answered, for `reach`
+/// and the reach before a change of `impact --within`.
+impl From<Unwalked> for UntoldOut {
+    fn from(untold: Unwalked) -> Self {
+        Self {
+            invalid: untold.invalid(),
+            unreadable: untold.unreadable(),
+        }
     }
 }
 

@@ -61,8 +61,8 @@ use std::process::ExitCode;
 
 use whyshelf_core::app::shelf::{
     ApproveChosenRequest, AttributionAsk, Choose, CoverLinkAsk, CoverReport, EntryInput,
-    ErrorClass, ExemptAsk, ExemptRequest, JudgeRequest, Judgement, MapReport, MovedRequest,
-    NewDocRequest, PendingScope, PrefixMovedRequest, RekeyRequest, SameMeaningAbout,
+    ErrorClass, ExemptAsk, ExemptRequest, ImpactReport, JudgeRequest, Judgement, MapReport,
+    MovedRequest, NewDocRequest, PendingScope, PrefixMovedRequest, RekeyRequest, SameMeaningAbout,
     SameMeaningRequest, ShelfApp, ShelfError, StaleReport, UnlinkedAsk, UnlinkedFilter,
     UnlinkedReport, WithdrawRequest,
 };
@@ -75,6 +75,7 @@ use whyshelf_core::domain::shelf::build::DropAsk;
 use whyshelf_core::domain::shelf::filter::{FieldAsk, FieldWant, StatusFilterAsk};
 use whyshelf_core::domain::shelf::freshness::StandingKind;
 use whyshelf_core::domain::shelf::ledger::{JudgementId, ReaderCount};
+use whyshelf_core::domain::shelf::lookup::Reference;
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
 use whyshelf_core::domain::shelf::units::UnitsOf;
 use whyshelf_infra::shelf::init;
@@ -274,6 +275,8 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
             index,
             before,
             after,
+            within,
+            exit_code,
         } => {
             let ask = match (since, before) {
                 (Some(since), _) => ChangeAsk::Git {
@@ -294,7 +297,7 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
                     return ExitCode::from(Exit::Request as u8);
                 }
             };
-            return impact(typed_root, ask).await;
+            return impact(typed_root, ask, within, exit_code).await;
         }
         BooksCommand::Unlinked {
             book,
@@ -956,6 +959,18 @@ fn stale_exit(report: &StaleReport, exit_code: bool) -> Exit {
     }
 }
 
+/// The exit of `impact` once its answer is printed: with `--exit-code`, 1 when the
+/// gate on the documents named does not pass ([`Within::passes`]); otherwise 0.
+///
+/// [`Within::passes`]: whyshelf_core::domain::shelf::within::Within::passes
+fn impact_exit(report: &ImpactReport, exit_code: bool) -> Exit {
+    if exit_code && report.within.as_ref().is_some_and(|gate| !gate.passes()) {
+        Exit::Stopped
+    } else {
+        Exit::Ok
+    }
+}
+
 /// The exit of `map` once its answer is printed: 1 for a declaration that cannot be
 /// used, as `check` gives for one; otherwise 0.
 fn map_exit(report: &MapReport) -> Exit {
@@ -1010,11 +1025,18 @@ fn failed_run(error: &dyn std::error::Error) -> ExitCode {
     ExitCode::from(Exit::Failed as u8)
 }
 
-/// `impact` on the project at `root`, its two ends opened as `ask` asks: an end that
-/// cannot be opened so is an error of the request (exit 2), adapters of the spaces
-/// that cannot be dispatched to and a Git that could not be asked a failed run, and an
-/// error met while reading a port's.
-async fn impact(root: Option<PathBuf>, ask: ChangeAsk) -> ExitCode {
+/// `impact` on the project at `root`, its two ends opened as `ask` asks, with the gate
+/// on the documents `within` names when it names any: an end that cannot be opened so
+/// is an error of the request (exit 2), adapters of the spaces that cannot be
+/// dispatched to and a Git that could not be asked a failed run, and an error met
+/// while reading a port's. Once the answer is printed, the exit is
+/// [`impact_exit`]'s.
+async fn impact(
+    root: Option<PathBuf>,
+    ask: ChangeAsk,
+    within: Vec<Reference>,
+    exit_code: bool,
+) -> ExitCode {
     let project = match Project::for_change(
         root.unwrap_or_else(|| PathBuf::from(".")),
         ask,
@@ -1039,8 +1061,17 @@ async fn impact(root: Option<PathBuf>, ask: ChangeAsk) -> ExitCode {
             return ExitCode::from(Exit::Request as u8);
         }
     };
-    let exit = match ShelfApp::new(project).impact().await {
-        Ok(report) => print(&output::impact(&report)),
+    let app = ShelfApp::new(project);
+    // No reference is no gate: `impact` alone.
+    let answered = match NonEmptyVec::from_vec(within) {
+        Ok(references) => app.impact_within(&references).await,
+        Err(_) => app.impact().await,
+    };
+    let exit = match answered {
+        Ok(answer) => match print(&output::impact(&answer)) {
+            Exit::Ok => impact_exit(&answer, exit_code),
+            failed => failed,
+        },
         Err(error) => report(&error),
     };
     ExitCode::from(exit as u8)
