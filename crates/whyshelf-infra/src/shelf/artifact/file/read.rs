@@ -3,8 +3,8 @@
 //! link out of the root followed, within a bound of bytes, the case of a path as
 //! written).
 //!
-//! Every reading is of the state of the project at the side asked
-//! ([`FileStates`](super::super::super::state::files::FileStates)): a link on the path
+//! Every reading is of the tree of the project at the side asked
+//! ([`ProjectTree`](super::super::super::state::ProjectTree)): a link on the path
 //! is followed only while it stays inside the root ([`Leave::Refused`]), and a name is
 //! held to be written as the state writes it
 //! ([`named_as_written`](super::super::super::state::paths::named_as_written)).
@@ -19,12 +19,11 @@ use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, NameListing, Selection, SpaceAsks, SpaceReadings, Untold,
 };
 
-use super::super::super::state::StateError;
-use super::super::super::state::files::FileStates;
 use super::super::super::state::paths::{
     DirNames, Followed, Leave, follow, look_through, look_through_links, named_as_written,
     named_as_written_in,
 };
+use super::super::super::state::{ProjectTree, StateError};
 use super::{ArtifactError, FileSelection, FileSpace, no_path_reason, path_of};
 
 #[cfg(test)]
@@ -62,7 +61,7 @@ impl FileSpace {
         side: Side,
         asks: &SpaceAsks,
     ) -> Result<SpaceReadings, ArtifactError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let mut readings = SpaceReadings::new();
         let mut present = Vec::new();
         let untold = |why: String| {
@@ -127,7 +126,7 @@ impl FileSpace {
         side: Side,
         name: &ArtifactName,
     ) -> Result<Option<Vec<u8>>, ArtifactError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let Ok(path) = path_of(name) else {
             return Ok(None);
         };
@@ -322,7 +321,7 @@ pub(in super::super) enum Bounded {
 /// opened, and by what is read, in case it grew since. An error only when the file is
 /// there and cannot be read, which each caller tells as a name that cannot be told.
 pub(in super::super) async fn read_within(
-    state: &FileStates,
+    state: &ProjectTree,
     side: Side,
     path: &RelPath,
     max: u64,
@@ -405,7 +404,7 @@ pub(in super::super) enum Placed {
 /// [`read_within`] does ([`Leave::Refused`]: only inside the root), and looking at
 /// what is at the end without opening it.
 pub(in super::super) async fn placed_within(
-    state: &FileStates,
+    state: &ProjectTree,
     side: Side,
     path: &RelPath,
 ) -> Placed {

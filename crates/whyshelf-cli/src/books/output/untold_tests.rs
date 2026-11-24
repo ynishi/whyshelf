@@ -75,6 +75,7 @@ fn stale_of(unknown: Vec<Unknown>) -> StaleReport {
         entries: Vec::new(),
         origins: Vec::new(),
         unknown,
+        held: whyshelf_core::app::shelf::Gate::CannotTell,
         names: Names::default(),
         health: Health::default(),
     }

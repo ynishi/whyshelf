@@ -1,5 +1,6 @@
 //! The commands, as clap types.
 
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
@@ -192,6 +193,33 @@ pub enum BooksCommand {
         /// Keys, identifiers or short identifiers, one or more.
         #[arg(required = true, value_name = "REFERENCE")]
         references: Vec<Reference>,
+    },
+    /// Whether a change makes approvals not hold: the project before and after it,
+    /// read the same one way, and for every document whether its approval held, holds,
+    /// and whether the change adds a cause that makes it not hold, by the rule `stale`
+    /// uses (`yes` with where it starts, `no`, or `cannot_tell` with what cannot be
+    /// told). The way is the flags': through Git with `--since` (and `--until` or
+    /// `--index`), or through two directories with `--before` (and `--after`); both
+    /// ways at once, or neither, is a request error (exit 2), and so is an end that
+    /// cannot be opened as asked. It writes nothing, and the exit is 0.
+    #[command(group(clap::ArgGroup::new("way").required(true).args(["since", "before"])))]
+    Impact {
+        /// The commit before the change: a revision Git reads.
+        #[arg(long, conflicts_with_all = ["before", "after"])]
+        since: Option<String>,
+        /// The commit after the change (default `HEAD`).
+        #[arg(long, requires = "since", conflicts_with = "index")]
+        until: Option<String>,
+        /// The index after the change: what is staged.
+        #[arg(long, requires = "since")]
+        index: bool,
+        /// The directory of the project before the change (whyshelf makes none:
+        /// `git worktree add --detach <dir> <rev>` makes one).
+        #[arg(long)]
+        before: Option<PathBuf>,
+        /// The directory of the project after the change (default the project root).
+        #[arg(long, requires = "before")]
+        after: Option<PathBuf>,
     },
     /// The documents linked neither way, those no link reaches and those that hold
     /// none, those decided against apart; exit 0 whenever the declaration can be

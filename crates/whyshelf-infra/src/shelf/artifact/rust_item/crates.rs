@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use whyshelf_core::app::shelf::{DirListing, EntryKind, NotADir, Side, StateList};
 use whyshelf_core::domain::location::RelPath;
 
-use super::super::super::state::files::FileStates;
+use super::super::super::state::ProjectTree;
 use super::super::file::{self, Bounded};
 use super::MAX_SETTINGS_BYTES;
 use super::docs_path::DocsPath;
@@ -66,7 +66,7 @@ pub(super) struct Crates {
 impl Crates {
     /// The crates of the project at `side`, read from the manifest at its root and
     /// those of the members of its workspace.
-    pub(super) async fn of(state: &FileStates, side: Side) -> Self {
+    pub(super) async fn of(state: &ProjectTree, side: Side) -> Self {
         let mut crates = Self::default();
         let Some(root) = crates.manifest(state, side, &Dir::new(), true).await else {
             return crates;
@@ -196,7 +196,7 @@ impl Crates {
     /// is there and cannot be read, or when `needed` and it is not there).
     async fn manifest(
         &mut self,
-        state: &FileStates,
+        state: &ProjectTree,
         side: Side,
         dir: &Dir,
         needed: bool,
@@ -257,7 +257,7 @@ impl Crates {
     /// `src/lib.rs`.
     async fn has_library(
         &mut self,
-        state: &FileStates,
+        state: &ProjectTree,
         side: Side,
         manifest: &toml::Table,
         dir: &Dir,
@@ -281,7 +281,7 @@ impl Crates {
     /// workspace, for a package that inherits it.
     async fn read_package(
         &mut self,
-        state: &FileStates,
+        state: &ProjectTree,
         side: Side,
         manifest: &toml::Table,
         dir: &Dir,
@@ -335,7 +335,7 @@ impl Crates {
     /// `src/bin/<name>.rs` and `src/bin/<name>/main.rs` by its name.
     async fn layout_bins(
         &mut self,
-        state: &FileStates,
+        state: &ProjectTree,
         side: Side,
         dir: &Dir,
         name: &str,
@@ -367,7 +367,12 @@ impl Crates {
 
     /// The names of the files under `dir`: none when it is not there, and none, with
     /// why kept as not read, when it cannot be listed.
-    async fn files_under(&mut self, state: &FileStates, side: Side, dir: &Dir) -> BTreeSet<String> {
+    async fn files_under(
+        &mut self,
+        state: &ProjectTree,
+        side: Side,
+        dir: &Dir,
+    ) -> BTreeSet<String> {
         match self.subfiles(state, side, dir).await {
             Ok(files) => files,
             Err(why) => {
@@ -378,7 +383,7 @@ impl Crates {
     }
 
     /// The names of the directories under `dir`, as [`Self::files_under`] lists files.
-    async fn dirs_under(&mut self, state: &FileStates, side: Side, dir: &Dir) -> Vec<String> {
+    async fn dirs_under(&mut self, state: &ProjectTree, side: Side, dir: &Dir) -> Vec<String> {
         match self.subdirs(state, side, dir).await {
             Ok(dirs) => dirs,
             Err(why) => {
@@ -428,7 +433,7 @@ impl Crates {
     /// and each directory its pattern matches that holds a manifest when it is one.
     async fn expand(
         &mut self,
-        state: &FileStates,
+        state: &ProjectTree,
         side: Side,
         member: &str,
     ) -> Result<Vec<Dir>, String> {
@@ -486,7 +491,7 @@ impl Crates {
     /// The names of the directories under `dir`, as the state lists them.
     async fn subdirs(
         &self,
-        state: &FileStates,
+        state: &ProjectTree,
         side: Side,
         dir: &Dir,
     ) -> Result<Vec<String>, String> {
@@ -496,7 +501,7 @@ impl Crates {
     /// The names of the files under `dir`, as the state lists them.
     async fn subfiles(
         &self,
-        state: &FileStates,
+        state: &ProjectTree,
         side: Side,
         dir: &Dir,
     ) -> Result<BTreeSet<String>, String> {
@@ -510,7 +515,7 @@ impl Crates {
     /// The names of the entries of `kind` under `dir`; none when it is no directory.
     async fn entries(
         &self,
-        state: &FileStates,
+        state: &ProjectTree,
         side: Side,
         dir: &Dir,
         kind: EntryKind,
@@ -684,7 +689,10 @@ mod tests {
     }
 
     async fn crates_at(root: &Path) -> Crates {
-        Crates::of(&FileStates::new(root.to_path_buf()), Side::After).await
+        let tree = ProjectTree::files(crate::shelf::state::files::FileStates::new(
+            root.to_path_buf(),
+        ));
+        Crates::of(&tree, Side::After).await
     }
 
     #[test]

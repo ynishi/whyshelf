@@ -237,8 +237,8 @@ use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
 use super::super::git::{Git, GitError};
-use super::super::state::StateError;
 use super::super::state::files::FileStates;
+use super::super::state::{ProjectTree, StateError};
 #[cfg(test)]
 pub(super) use read::OUTSIDE;
 pub(super) use read::{Bounded, Placed, placed_within, read_within};
@@ -390,7 +390,7 @@ impl NamePlaces for FileSpace {
         side: Side,
         names: &BTreeSet<ArtifactName>,
     ) -> Result<BTreeMap<ArtifactName, Placement>, ArtifactError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let mut placed = BTreeMap::new();
         for name in names {
             let placement = match path_of(name) {
@@ -412,7 +412,7 @@ impl NamePlaces for FileSpace {
 /// The one reading of it, for this space and for those whose names start with a path
 /// of it (`rust-test`, `js-test`).
 pub(super) async fn placed_only(
-    state: &FileStates,
+    state: &ProjectTree,
     side: Side,
     path: &RelPath,
 ) -> Result<Placement, ValueError> {
@@ -496,8 +496,8 @@ impl From<StateError> for ArtifactError {
 pub struct FileSpace {
     root: PathBuf,
     git: Git,
-    /// The state of the project the files are read from.
-    state: FileStates,
+    /// The tree of the project the files are read from.
+    state: ProjectTree,
     limits: ScanLimits,
     /// The most bytes of a file a reading reads.
     max_file: u64,
@@ -661,13 +661,12 @@ pub(super) fn renamed(
 impl FileSpace {
     /// The files under `root`, read at one side (the root as it is).
     pub fn new(root: PathBuf) -> Self {
-        Self::on(FileStates::new(root))
+        Self::on(ProjectTree::files(FileStates::new(root.clone())), root)
     }
 
-    /// The files of the project `state` reads; a new file is written, and moves are
-    /// searched for, under the root of the side after.
-    pub fn on(state: FileStates) -> Self {
-        let root = state.root().to_path_buf();
+    /// The files of the project `state` reads; a new file is written, moves are
+    /// searched for and content is read back by its address, under `root`.
+    pub fn on(state: ProjectTree, root: PathBuf) -> Self {
         Self {
             git: Git::new(root.clone()),
             root,
@@ -910,7 +909,10 @@ mod tests {
         // within the first poll, and cannot have exited by its end. The addresses are
         // the state's, so the bound is set on the Git the state asks.
         let files = FileSpace::on(
-            FileStates::new(dir.path().to_path_buf()).with_timeout(std::time::Duration::ZERO),
+            ProjectTree::files(
+                FileStates::new(dir.path().to_path_buf()).with_timeout(std::time::Duration::ZERO),
+            ),
+            dir.path().to_path_buf(),
         );
         let found = files.resolve(&bytes_of(&["a.txt", "missing.txt"])).await;
         assert!(

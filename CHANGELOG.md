@@ -10,6 +10,41 @@ and this project adheres to
 
 ### Added
 
+- The command `impact` (#112): whether a change makes approvals not hold. (Whether a
+  change stays inside the documents it was meant for, and an exit status for that,
+  are not part of it.) It reads
+  the project before and after the change the same one way, named by the flags:
+  through Git (`--since <rev>`, and `--until <rev>` or `--index`; the default after is
+  `HEAD`), reading the tracked content as a checkout of the repository writes it, each
+  commit converted by its own `.gitattributes` and no filter driver run (the attributes
+  of a person's settings and of the system are not read); or through two directories
+  (`--before <dir>`, and `--after <dir>`, by default the project root), which whyshelf
+  does not make. Both ends are judged at one time. For every document either end
+  lists (`docs`) it answers whether its approval held (`before`) and holds (`after`),
+  by the rule `stale` uses (`holding`: `not_there`, `pending`, `against`, `holds`,
+  `cannot_tell`, `does_not_hold`), whether the two differ (`changed`), and whether the
+  change adds a cause that makes it not hold (`made`): `yes` with the causes added
+  (`certain`, and `uncertain`: on a name the side before could not tell), `no`, or
+  `cannot_tell` with the side and the names that could not be told. A cause is the
+  document that holds it and the cause itself, so a new way to the same cause is no
+  new one, and a new edit of what already did not hold is a cause added: `yes` does
+  not say the approval held before. Its `way` says how it read. Both ways at once or
+  neither, a revision that names no commit, Git outside a repository, a Git that does
+  not know a form the reading needs (`--attr-source` among them), an index whose
+  `.gitattributes` are not `HEAD`'s, and a directory that is not there are request
+  errors (exit 2); no Git to run, a Git that fails, and a declaration, a document or
+  the ledger reached through a link out of the project, which the two ends cannot
+  read alike, fail the run (exit 3). Nothing is written. Known limits: through Git,
+  nothing is built, so an approval that stands on a `rust-item` cannot be told; a
+  submodule and a path of a conflict in the index cannot be told; a path added with
+  `git add -N` reads at the index as an empty file; a file a filter driver names is
+  read as a checkout that runs no driver writes it, and the attributes of a person's
+  settings do not convert a file; each converted file costs one process of Git.
+- `stale`'s gate is now the fold of each document's holding (`Gate::fold` of
+  `Gate::from`), made as each document is asked whether its approval holds; the
+  entries and the names that cannot be told are made from that one answer per
+  document. In the library, `StaleReport` carries the fold (`held`), which
+  `StaleReport::gate` answers. Its answer does not change.
 - The command `units [--pending]` (#113): the approvals that no longer hold (with
   `--pending`, the pending documents too) divided into units of work that share
   nothing, at the side after, so that each unit can be mended and approved again

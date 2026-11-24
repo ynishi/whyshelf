@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "62726734285039ab4fa003676cd85b3d315fd3e1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:754f723f8d0f083b6e2f8d79891a2b16d24e6a921afa1d84ba5179951d0c5046",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/conformance.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b1cc917c707cde23aa34db36478541e3ded92fd7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:400446b6cb2a99ec6bf9ed907057f63dadb010422c6b83cab51ae92ea0978a37",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2d452d8c8c5295b13a8a6be300eeedf4b8a92fc1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1abcc0c12d1c9bef29d8a0f6c6018ce0ca7308567a6155957b30b25294cd940b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "723e0fe9932cb4d06f6cea89bc58ea7bd3927c09",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5d267ae00afb057948bd65a3bdce6749a586e664051460f5b80f8539a1b08ba6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "36902b0f12ed91af1891a0a3568cd3f95586b179",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:88a1ae60770e24cc027d8bff94f9cac447d4d588016ff8fa5ff933030cb3b878",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "44f5821c3c5f5d625c887d28d57960d1baf12e71",
+      "hash": "sha256:5226bb99994afadf255dcafc4a68d0beec56c75000eed6526e56b0f2ed2792ec",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "84"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-16db-7158-a8f3-5fb875ef9cb6"
+    },
+    {
+      "address": "8b30c059c954ca4982b781be4527b247e4cc8510",
+      "hash": "sha256:969bb9324d7a31ca9dff838217cea880755d22fffc21e5c71aac4b22e02f1edf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "85"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-569c-711e-af85-e6456a1155fc"
+    }
+  ],
+  "id": "01a20baa-b341-70bd-a31d-6c215a9f51a8",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:f32f6154acbd5a846cb7dcabd0d3f10b00f8ddde4afe52f8822cc1457be31bcc",
+  "seen_address": "37618529e3fd999fb33c27b209372c5385212543",
+  "subject": "01a1f3d1-807b-7752-9685-97d1055a7641",
+  "v": 1,
+  "verb": "approve"
+}

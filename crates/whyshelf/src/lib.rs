@@ -1136,6 +1136,30 @@
 //!                             depend on them and cannot be read (a document that is not valid,
 //!                             a file whose identity cannot be read) is counted in `untold`, with
 //!                             a warning on stderr
+//!   impact (--since <rev> [--until <rev> | --index] | --before <dir> [--after <dir>])
+//!                             whether a change makes approvals not hold: the project before
+//!                             and after it, read one way at both ends (Git: two commits, or a
+//!                             commit and the index, each converted by its own .gitattributes,
+//!                             no filter driver run; files: two directories you prepare), each
+//!                             judged at one time; for every document (`docs`) its `before` and
+//!                             `after` (`holding`: `not_there`, `pending`, `against`, `holds`,
+//!                             `cannot_tell`, `does_not_hold`, with its `level`, `roots` and the
+//!                             names that cannot be told, `untold`), `changed`, and `made`:
+//!                             `yes` (the causes added, `certain`, and those on a name the side
+//!                             before could not tell, `uncertain`), `no`, or `cannot_tell` (the
+//!                             `side` that could not tell, `before`, `after` or `both`, and the
+//!                             `untold` names); `way` says how it read. Both ways at once, or
+//!                             neither, and an end that cannot be opened as asked (a revision
+//!                             that names no commit, Git outside a repository, an index whose
+//!                             .gitattributes are not HEAD's, a directory that is not there) are
+//!                             exit 2; no git to run, a git that fails, and a declaration, a
+//!                             document or the ledger reached through a link out of the
+//!                             project, which the two ends cannot read alike, fail the run
+//!                             (exit 3). `yes` does not say the approval held before: a new
+//!                             edit of what already did not hold is a cause added too. Only
+//!                             the repository's attributes convert a file (not those of your
+//!                             settings), and a path added with `git add -N` reads at the
+//!                             index as an empty file. It writes nothing
 //!   unlinked [--book <name>] [--no-incoming | --no-outgoing]
 //!                             the documents linked neither way (look there first), those no
 //!                             link reaches and those that hold none, those decided against
@@ -1523,6 +1547,7 @@
 //! a `kind`, a `severity`, the `upstream` it names (or the `artifact`, a name, with
 //! its `space`) and a `detail` sentence; every answer that reads the documents (`check`, `cover` and
 //! `unlinked` when the declaration can be used, `status`, `get`, `trace`, `reach`, `stale`, `units`, `stats`, `moves`, `diff`) carries
+//! (`impact` carries one for each end, `health_before` and `health_after`)
 //! `health` (files that are no document, cycles, records that contradict one another
 //! or cannot be read). The answers of the writes, of `map` and of `schema` carry
 //! none.

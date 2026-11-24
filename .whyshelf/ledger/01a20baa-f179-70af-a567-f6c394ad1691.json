@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [],
+  "id": "01a20baa-f179-70af-a567-f6c394ad1691",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:5069df32e64d165ea1836bcd49c659ec8142b68a85ba58e773ed5925d70f8172",
+  "seen_address": "80268f9a05f337cf415d4ca21da7afc6b38b6a24",
+  "subject": "01a20baa-2bf0-764d-88ea-9a7d738c1719",
+  "v": 1,
+  "verb": "approve"
+}

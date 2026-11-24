@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e3baab9a9aea7a76b0cc1433722371add5a42205",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d2639dde9390e6de5f61181a67bd726de3b7d372ae121203f73d046e4568ddde",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a5fafec30328bb4853ae5f52b12cd7e3d8b6da26",
+      "hash": "sha256:7c69ef722d8d07713a4b4d0b6df27c59b8b57bfe59f2e71fa16dabd58a76fd4f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "26"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c532-68dc-71dd-a7c8-35e9618f81f6"
+    }
+  ],
+  "id": "01a20baa-bb2f-7459-9071-850c992c2f28",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:3f623ad950c4df18d757767c4dc48348934ac804789a6758b397862261721f60",
+  "seen_address": "428fe218f4689325142865b083fbe9aa336d550e",
+  "subject": "01a1f896-c2b6-7071-bc5f-832eb20788b2",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,79 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item::MAX_SETTINGS_BYTES",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item::RustItemSpace",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item::RustItemSpace::on",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "089ece40b09afeafcc4ca4a01a56d66d14272cf1",
+      "hash": "sha256:48b3da65cd451390df517273bb04a2f94efc0de7a737b017c96f767388cea42d",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "35"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1f2a3-70f9-7184-8e59-6b24e25f79b6"
+    }
+  ],
+  "id": "01a20baa-dbdf-73a0-884d-e7745ad44565",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:0269489336085167c42afaa04abe8d1e3f181b33263cc927a6a0d9477e8c3309",
+  "seen_address": "8fe51bdfb5f986fbbae5c383608da1789305a6b0",
+  "subject": "01a207dc-7f20-73bc-8120-bded052d50a0",
+  "v": 1,
+  "verb": "approve"
+}

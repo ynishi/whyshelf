@@ -18,9 +18,8 @@ use whyshelf_core::domain::shelf::ledger::{
 };
 
 use super::super::super::git::{RenamesSince, first_line};
-use super::super::super::state::StateError;
-use super::super::super::state::files::FileStates;
 use super::super::super::state::paths::{Followed, Leave, follow, look_through, named_as_written};
+use super::super::super::state::{ProjectTree, StateError, SystemRead};
 use super::read::is_absent;
 use super::{ArtifactError, FileSpace, ScanLimits};
 
@@ -36,7 +35,7 @@ enum Path {
 
 /// The path at the side after, looked at through no link out of the root: nothing is
 /// opened.
-async fn path_now(state: &FileStates, path: &RelPath) -> Path {
+async fn path_now(state: &ProjectTree, path: &RelPath) -> Path {
     match look_through(state, Side::After, path).await {
         Ok(Followed::Reached {
             answer: AtSide::There(len),
@@ -52,7 +51,7 @@ async fn path_now(state: &FileStates, path: &RelPath) -> Path {
 
 /// The bytes of a file at the side after, at most `most`, read through no link out of
 /// the root: none when it is no longer a file, and an error when it cannot be read.
-async fn bytes_now(state: &FileStates, path: &RelPath, most: u64) -> Result<Option<Vec<u8>>, ()> {
+async fn bytes_now(state: &ProjectTree, path: &RelPath, most: u64) -> Result<Option<Vec<u8>>, ()> {
     match follow(
         state,
         Side::After,
@@ -117,6 +116,14 @@ impl FileSpace {
             .iter()
             .map(|g| (g.name().clone(), Vec::new()))
             .collect();
+        // The work tree and Git's history are read where the system holds the project:
+        // a run that cannot read what the system resolves has no candidate.
+        if let SystemRead::Untold(_) = self.state.system_read(Side::After)? {
+            return Ok(found
+                .into_keys()
+                .map(|name| (name, NameSuggestions::default()))
+                .collect());
+        }
         let mut notes: BTreeMap<ArtifactName, Vec<MoveNote>> = BTreeMap::new();
 
         // 1. The same content, in the hash the pin used.
@@ -395,7 +402,7 @@ async fn walk(root: &std::path::Path, limits: &ScanLimits, tally: &mut Tally) ->
 /// one reading may be, one that cannot be read (each of the last two counted), and
 /// once a bound of the search is reached (the tally marked truncated).
 async fn scan_read(
-    state: &FileStates,
+    state: &ProjectTree,
     path: &RelPath,
     limits: &ScanLimits,
     tally: &mut Tally,
@@ -445,7 +452,7 @@ async fn scan_read(
 /// name `judge moved` takes; none otherwise.
 async fn written_on_disk(
     root: &std::path::Path,
-    state: &FileStates,
+    state: &ProjectTree,
     path: &RelPath,
 ) -> Option<RelPath> {
     let mut dir = root.to_path_buf();

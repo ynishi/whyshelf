@@ -20,7 +20,7 @@
 //! [`StateRead::look`] and so opening nothing: what a reader asks to know a name is
 //! there and within its bound. [`read_allowed`] and [`list_allowed`] are the one
 //! reading, through every link as the system follows one, of a name and of a directory
-//! of the project's tree ([`FileStates`]), whose answers the declaration, the documents
+//! of the project's tree ([`ProjectTree`]), whose answers the declaration, the documents
 //! and the ledger each map to their own errors.
 //!
 //! | reader | its rule |
@@ -37,8 +37,7 @@ use whyshelf_core::app::shelf::{
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::artifact::Untold;
 
-use super::StateError;
-use super::files::FileStates;
+use super::{ProjectTree, StateError};
 
 /// The most links one walk reads a name again through: past them it is a loop the
 /// state did not tell, or a chain no reader follows.
@@ -339,7 +338,7 @@ pub(crate) enum Read {
 /// `name` of the project's tree at `side`, read whole through every link as the
 /// system follows one: the one such reading of the declaration, a document's file and
 /// a record.
-pub(crate) async fn read_allowed(state: &FileStates, side: Side, name: &RelPath) -> Read {
+pub(crate) async fn read_allowed(state: &ProjectTree, side: Side, name: &RelPath) -> Read {
     match follow(state, side, name, Leave::Allowed, ByteBound::WHOLE).await {
         Ok(Followed::Reached { answer, .. }) => Read::of(answer),
         Ok(walk) => Read::Failed(Failure::of_walk(&walk)),
@@ -350,7 +349,7 @@ pub(crate) async fn read_allowed(state: &FileStates, side: Side, name: &RelPath)
 /// The place `at`, which the project's tree cannot name, read whole as the system
 /// resolves it: the reading of an entry of the ledger whose name is no path.
 pub(crate) async fn read_beyond_allowed(
-    state: &FileStates,
+    state: &ProjectTree,
     side: Side,
     at: &Beyond<RelPath>,
 ) -> Read {
@@ -389,7 +388,7 @@ impl Listed {
 /// The entries under the place `at`, which the project's tree cannot name, listed as
 /// the system resolves it: the walk of a directory of a range whose name is no path.
 pub(crate) async fn list_beyond_allowed(
-    state: &FileStates,
+    state: &ProjectTree,
     side: Side,
     at: &Beyond<RelPath>,
 ) -> Listed {
@@ -415,7 +414,7 @@ pub(crate) enum Listed {
 /// The entries of `dir` of the project's tree at `side`, listed through every link
 /// as the system follows one: the one such listing of the ledger and of the
 /// directories of a range.
-pub(crate) async fn list_allowed(state: &FileStates, side: Side, dir: &RelPath) -> Listed {
+pub(crate) async fn list_allowed(state: &ProjectTree, side: Side, dir: &RelPath) -> Listed {
     match follow_dir(state, side, Some(dir), Leave::Allowed).await {
         Ok(Followed::Reached { answer, .. }) => Listed::of(answer),
         Ok(walk) => Listed::Failed(Failure::of_walk(&walk)),

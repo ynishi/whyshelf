@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "25421e4c3e31c5e2105fbdfe873fe37436a438e5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1714f3ee9796b2004805aa239b038cd89c07dbb0a9bf18e40f505953c61b9192",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e6cedbdf71abbb2b21b7f7856f417b0ca0ce44ed",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21201c1d7dda3f9ff2e730cff9788bf51d846191b4d086a449f5ecfb3f7766c5",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4bf1e23b6aa06e20c49a1e5ee6aac8efeb1744b3",
+      "hash": "sha256:9afad7f4e49382e60101c43961b7eff455aa4f212f347d9f4481ec51bf8ca281",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "52"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+    }
+  ],
+  "id": "01a20baa-867f-77d5-a414-36b635d8c0d2",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:4cc7cf9e3ad8b44953649ea0f523268c1e3196959072b3da6e8bd94e4a80bdf9",
+  "seen_address": "48b5909bf7e7847e0540a31b7acafc7b31ec908f",
+  "subject": "01a1c7ad-001a-777b-8fe2-cc8909aaffa0",
+  "v": 1,
+  "verb": "approve"
+}

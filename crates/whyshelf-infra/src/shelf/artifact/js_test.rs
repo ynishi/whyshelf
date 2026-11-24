@@ -368,6 +368,7 @@ use whyshelf_core::domain::shelf::artifact::{
 use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
+use super::super::state::ProjectTree;
 use super::super::state::StateError;
 use super::super::state::files::FileStates;
 use super::Spelled;
@@ -624,7 +625,7 @@ impl NamePlaces for JsTestSpace {
         side: Side,
         names: &BTreeSet<ArtifactName>,
     ) -> Result<BTreeMap<ArtifactName, Placement>, JsTestError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let mut placed = BTreeMap::new();
         for name in names {
             let placement = match TestName::parse(name.as_str()) {
@@ -710,8 +711,8 @@ impl fmt::Display for Place {
 /// The tests of the JavaScript and TypeScript source of a project.
 #[derive(Debug, Clone)]
 pub struct JsTestSpace {
-    /// The state of the project the files are read from.
-    state: FileStates,
+    /// The tree of the project the files are read from.
+    state: ProjectTree,
     /// The most bytes of a file read.
     max_file: u64,
 }
@@ -719,11 +720,11 @@ pub struct JsTestSpace {
 impl JsTestSpace {
     /// The tests in the files under `root`, read at one side (the root as it is).
     pub fn new(root: PathBuf) -> Self {
-        Self::on(FileStates::new(root))
+        Self::on(ProjectTree::files(FileStates::new(root)))
     }
 
     /// The tests in the files of the project `state` reads.
-    pub fn on(state: FileStates) -> Self {
+    pub fn on(state: ProjectTree) -> Self {
         Self {
             state,
             max_file: MAX_FILE_BYTES,
@@ -745,7 +746,7 @@ impl JsTestSpace {
 
     /// [`resolve`](Self::resolve), at `side`.
     async fn resolve_at(&self, side: Side, asks: &SpaceAsks) -> Result<SpaceReadings, JsTestError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let mut readings = SpaceReadings::new();
         let mut by_file: BTreeMap<RelPath, Vec<Asked<'_>>> = BTreeMap::new();
         for (name, comparisons) in asks {
@@ -819,7 +820,7 @@ impl JsTestSpace {
         side: Side,
         name: &ArtifactName,
     ) -> Result<Option<Vec<u8>>, JsTestError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let Ok(test) = TestName::parse(name.as_str()) else {
             return Ok(None);
         };

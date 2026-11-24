@@ -32,8 +32,8 @@ use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::ledger::Record;
 
-use super::state::StateError;
 use super::state::files::FileStates;
+use super::state::{ProjectTree, StateError};
 
 /// Why the ledger could not be read or written.
 #[derive(Debug, thiserror::Error)]
@@ -116,8 +116,8 @@ pub struct JsonLedger {
     /// The directory as the project names it (`.whyshelf/ledger`): the path of
     /// every file of the ledger, a record or not, is made from it.
     rel: RelPath,
-    /// The state of the project the records are read from, under `rel`.
-    state: FileStates,
+    /// The tree of the project the records are read from, under `rel`.
+    state: ProjectTree,
 }
 
 impl JsonLedger {
@@ -127,14 +127,15 @@ impl JsonLedger {
     /// [`LedgerAppend::append`](whyshelf_core::app::shelf::LedgerAppend::append) gives
     /// are from it.
     pub fn new(root: &Path, rel: RelPath) -> Self {
-        Self::on(FileStates::new(root.to_path_buf()), rel)
+        let tree = ProjectTree::files(FileStates::new(root.to_path_buf()));
+        Self::on(tree, root.to_path_buf(), rel)
     }
 
-    /// The ledger the project `state` reads names `rel`; records are added under the
-    /// root of the side after.
-    pub fn on(state: FileStates, rel: RelPath) -> Self {
+    /// The ledger the project `state` reads names `rel`; records are added under
+    /// `root`.
+    pub fn on(state: ProjectTree, root: PathBuf, rel: RelPath) -> Self {
         Self {
-            dir: state.root().join(rel.as_str()),
+            dir: root.join(rel.as_str()),
             rel,
             state,
         }

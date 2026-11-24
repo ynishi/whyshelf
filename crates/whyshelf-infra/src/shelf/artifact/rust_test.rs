@@ -303,6 +303,7 @@ use whyshelf_core::domain::shelf::artifact::{
 use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
+use super::super::state::ProjectTree;
 use super::super::state::StateError;
 use super::super::state::files::FileStates;
 use super::Spelled;
@@ -464,7 +465,7 @@ impl NamePlaces for RustTestSpace {
         side: Side,
         names: &BTreeSet<ArtifactName>,
     ) -> Result<BTreeMap<ArtifactName, Placement>, RustTestError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let mut placed = BTreeMap::new();
         for name in names {
             let placement = match TestName::parse(name.as_str()) {
@@ -546,8 +547,8 @@ impl fmt::Display for Place {
 /// The test functions of the Rust source of a project.
 #[derive(Debug, Clone)]
 pub struct RustTestSpace {
-    /// The state of the project the files are read from.
-    state: FileStates,
+    /// The tree of the project the files are read from.
+    state: ProjectTree,
     /// The most bytes of a file read.
     max_file: u64,
 }
@@ -555,11 +556,11 @@ pub struct RustTestSpace {
 impl RustTestSpace {
     /// The tests in the files under `root`, read at one side (the root as it is).
     pub fn new(root: PathBuf) -> Self {
-        Self::on(FileStates::new(root))
+        Self::on(ProjectTree::files(FileStates::new(root)))
     }
 
     /// The tests in the files of the project `state` reads.
-    pub fn on(state: FileStates) -> Self {
+    pub fn on(state: ProjectTree) -> Self {
         Self {
             state,
             max_file: MAX_FILE_BYTES,
@@ -585,7 +586,7 @@ impl RustTestSpace {
         side: Side,
         asks: &SpaceAsks,
     ) -> Result<SpaceReadings, RustTestError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let mut readings = SpaceReadings::new();
         let mut by_file: BTreeMap<RelPath, Vec<Asked<'_>>> = BTreeMap::new();
         for (name, comparisons) in asks {
@@ -658,7 +659,7 @@ impl RustTestSpace {
         side: Side,
         name: &ArtifactName,
     ) -> Result<Option<Vec<u8>>, RustTestError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let Ok(test) = TestName::parse(name.as_str()) else {
             return Ok(None);
         };

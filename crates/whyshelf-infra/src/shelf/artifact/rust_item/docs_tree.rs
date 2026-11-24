@@ -4,7 +4,8 @@
 //! | where the docs are | adapter | what is read, and through which link |
 //! |---|---|---|
 //! | in the project ([`DocsAt::Inside`]) | [`UnderTree`] | each place of the docs as the name `<docs>/<place>` of the project's tree, read through no link out of the root (`Leave::Refused`): the root holds the build directory, so "inside the root or the build directory" is "inside the root" |
-//! | outside it ([`DocsAt::Outside`]) | [`OutsideDocs`](super::outside_docs::OutsideDocs) | the file system, by the canonical paths of the root and the build directory; nothing at all in a run of two sides |
+//! | outside it ([`DocsAt::Outside`]) | [`OutsideDocs`](super::outside_docs::OutsideDocs) | the file system, by the canonical paths of the root and the build directory |
+//! | outside it, in a run that cannot read what the system resolves ([`DocsAt::Untold`]) | none | nothing: the reason the tree gives ([`LEAVES`](super::super::super::state::files::LEAVES)) |
 //!
 //! A re-export is followed only into the docs ([`BuiltDocs::inside_docs`]): under the
 //! project, when the name its link comes to, links resolved, is under the name the
@@ -23,43 +24,74 @@ use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{ContentAddress, Untold};
 
-use super::super::super::state::StateError;
-use super::super::super::state::files::{FileStates, name_of};
+use super::super::super::state::files::name_of;
 use super::super::super::state::paths::{
     Followed, Leave, TreeName, follow, follow_dir, look_through,
 };
+use super::super::super::state::{ProjectTree, StateError, SystemRead};
 use super::docs_path::DocsPath;
 use super::outside_docs::{OutsideDocs, leads_outside};
 
 /// Where the built docs of one side are: a directory of the project, by its name in
-/// the project's tree, or a directory outside the root of the project.
+/// the project's tree; a directory outside the root of the project, read where the
+/// system finds it (with the root of the side, which the reading of the docs keeps to);
+/// or outside it in a run that cannot read such a place, with why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DocsAt {
     Inside(RelPath),
-    Outside(PathBuf),
+    Outside { root: PathBuf, docs: PathBuf },
+    Untold(Untold),
 }
 
-/// Where the docs at `docs` (a path of the file system, made from the side's
-/// directory) are at `side`: inside the project when the path is under the side's
-/// directory as written and no link on its way leads out of the root; outside it
-/// otherwise.
+/// Where the docs at `docs` (the directory as the settings write it: relative to the
+/// top of the side, or absolute) are at `side`, by names of the side's tree, the one
+/// place it is decided:
+///
+/// | `docs` | where |
+/// |---|---|
+/// | relative, a name of the tree (no `..`; a `.` is the top, as a path joined to it reads it) | that name, inside |
+/// | relative, no name of the tree | outside |
+/// | absolute, under the directory the side is read from | the name below it, inside |
+/// | absolute, and the side is read from no directory, or not under it | outside |
+///
+/// A name inside reached through a link out of the root is outside too. Outside, a
+/// run that reads what the system resolves reads the docs there
+/// ([`DocsAt::Outside`]); one that cannot says why ([`DocsAt::Untold`]).
 pub(crate) async fn placed(
-    state: &FileStates,
+    state: &ProjectTree,
     side: Side,
     docs: PathBuf,
 ) -> Result<DocsAt, StateError> {
-    let top = state.dir(side)?;
-    let Some(rel) = docs.strip_prefix(top).ok().and_then(name_of) else {
-        return Ok(DocsAt::Outside(docs));
+    let named = if docs.is_relative() {
+        // A leading `.` (`./target`) names the top, as a path joined to it reads it.
+        let from_top: PathBuf = docs
+            .components()
+            .filter(|part| !matches!(part, std::path::Component::CurDir))
+            .collect();
+        name_of(&from_top)
+    } else {
+        state
+            .dir(side)
+            .and_then(|top| docs.strip_prefix(top).ok())
+            .and_then(name_of)
     };
-    // Docs reached through a link out of the root are read where the system finds
-    // them, by the rules of docs outside the project.
-    Ok(
-        match follow_dir(state, side, Some(&rel), Leave::Refused).await {
-            Ok(Followed::Left) => DocsAt::Outside(docs),
-            _ => DocsAt::Inside(rel),
+    if let Some(rel) = named {
+        // Docs reached through a link out of the root are read where the system finds
+        // them, by the rules of docs outside the project.
+        if !matches!(
+            follow_dir(state, side, Some(&rel), Leave::Refused).await,
+            Ok(Followed::Left)
+        ) {
+            return Ok(DocsAt::Inside(rel));
+        }
+    }
+    Ok(match state.system_read(side)? {
+        SystemRead::At(top) => DocsAt::Outside {
+            root: top.to_path_buf(),
+            docs: top.join(&docs),
         },
-    )
+        SystemRead::Untold(why) => DocsAt::Untold(why),
+    })
 }
 
 /// The built docs of a run, read at a side: what the lookup of a path reads them
@@ -82,7 +114,7 @@ pub(crate) trait BuiltDocs: StateRead<DocsPath> + StateList<DocsPath> {
 /// The built docs inside the project, read through the project's tree `S`: the place
 /// `p` of the docs is the name `<docs>/<p>`.
 #[derive(Debug, Clone)]
-pub(crate) struct UnderTree<S = FileStates> {
+pub(crate) struct UnderTree<S = ProjectTree> {
     state: S,
     /// The directory of the docs, as the project names it.
     docs: RelPath,
@@ -350,30 +382,40 @@ pub(crate) enum DocsTree {
 }
 
 impl DocsTree {
-    /// The docs `at` of `side`, read through `state`.
-    pub(crate) async fn of(state: &FileStates, side: Side, at: DocsAt) -> Result<Self, StateError> {
-        Ok(match at {
+    /// The docs `at` of `side`, read through `state`; why none are read, when where
+    /// they are cannot be read ([`DocsAt::Untold`]).
+    pub(crate) async fn of(
+        state: &ProjectTree,
+        side: Side,
+        at: DocsAt,
+    ) -> Result<Result<Self, Untold>, StateError> {
+        Ok(Ok(match at {
             DocsAt::Inside(docs) => {
                 let shown = state.path_of(side, &docs)?;
                 Self::Under(UnderTree::new(state.clone(), docs, shown))
             }
-            DocsAt::Outside(docs) => {
-                Self::Outside(OutsideDocs::new(state.dir(side)?, docs, state.one_side()).await)
-            }
-        })
+            DocsAt::Outside { root, docs } => Self::Outside(OutsideDocs::new(&root, docs).await),
+            DocsAt::Untold(why) => return Ok(Err(why)),
+        }))
     }
 
     /// The docs at `docs` of the project at `root`, read at one side: what a test
     /// makes a lookup over.
     #[cfg(test)]
     pub(crate) async fn at(root: &std::path::Path, docs: PathBuf) -> Self {
-        let state = FileStates::new(root.to_path_buf());
+        let state = ProjectTree::files(super::super::super::state::files::FileStates::new(
+            root.to_path_buf(),
+        ));
+        let outside = || DocsAt::Outside {
+            root: root.to_path_buf(),
+            docs: docs.clone(),
+        };
         let at = placed(&state, Side::After, docs.clone())
             .await
-            .unwrap_or(DocsAt::Outside(docs.clone()));
+            .unwrap_or_else(|_| outside());
         match Self::of(&state, Side::After, at).await {
-            Ok(tree) => tree,
-            Err(_) => Self::Outside(OutsideDocs::new(root, docs, true).await),
+            Ok(Ok(tree)) => tree,
+            Ok(Err(_)) | Err(_) => Self::Outside(OutsideDocs::new(root, docs).await),
         }
     }
 

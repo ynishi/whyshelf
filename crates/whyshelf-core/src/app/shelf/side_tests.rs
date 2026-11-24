@@ -48,6 +48,55 @@ fn a_side_the_run_does_not_read_is_an_error_of_a_port_never_the_other_side() {
     );
 }
 
+/// DEC-106: `impact` reads the clock once and both sides at that time, and answers
+/// every document with its holding at each side and what the change made of it (the
+/// rules I1, I4 and I5 of the domain's `impact`).
+#[test]
+fn impact_reads_both_sides_at_one_time_and_answers_each_document() {
+    use crate::domain::shelf::freshness::{Holding, HoldsAs};
+    use crate::domain::shelf::impact::Made;
+    use crate::domain::shelf::lookup::Reference;
+
+    use super::{JudgeRequest, Judgement, ShelfApp};
+
+    let ports = FakeShelf::new().with_files(vec![fr(1, "slow", &[]), sp(2, "cache", &["FR-1"])]);
+    let mut app = ShelfApp::new(ports);
+    let approve = |reference: &str| JudgeRequest {
+        judgement: Judgement::Approve {
+            until: None,
+            reason: None,
+            again: false,
+        },
+        reference: reference.parse::<Reference>().unwrap(),
+        by: Default::default(),
+    };
+    block_on(app.judge_all(vec![approve("FR-1"), approve("SP-2")])).unwrap();
+    let records = app.ports().records();
+    *app.ports().before.lock().unwrap() = Some(FakeBefore {
+        readings: vec![fr(1, "slow", &[]), sp(2, "cache", &["FR-1"])],
+        records,
+        ..FakeBefore::default()
+    });
+    app.ports().edit(fr(1, "slower", &[]), 1);
+    let read_before = *app.ports().now.lock().unwrap();
+    *app.ports().clock_step.lock().unwrap() = 7;
+
+    let report = block_on(app.impact()).unwrap();
+    assert_eq!(*app.ports().now.lock().unwrap(), read_before + 7);
+    assert_eq!(
+        report.way.as_str(),
+        "fake: one world after, and one before when set"
+    );
+    let ids: Vec<_> = report.entries.iter().map(|e| e.id()).collect();
+    assert_eq!(ids, [docid(1), docid(2)]);
+    for entry in &report.entries {
+        assert_eq!(entry.before(), &Holding::Holds(HoldsAs::Fresh));
+        assert!(matches!(entry.after(), Holding::DoesNotHold { .. }));
+        assert!(entry.changed());
+        assert!(matches!(entry.made(), Made::Yes(_)), "{:?}", entry.made());
+    }
+}
+
 #[test]
 fn a_load_reads_the_side_after_and_the_clock_once() {
     let ports = two_sides();

@@ -41,12 +41,15 @@ use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{ContentAddress, Untold};
 
 use super::super::git::{Git, first_line};
-use super::StateError;
+use super::{StateError, SystemRead};
 
-/// Why a run of two sides cannot read through a link that leaves the tree: the place
-/// outside is not of either side, so the two sides cannot be read alike.
-pub const LEAVES: TextLiteral =
-    TextLiteral::new("a link leaves the project, so the two sides cannot be read alike");
+/// Why a run of two sides cannot read what the system resolves: a link out of the
+/// tree, a place that is no name of it, or built docs outside the project are of
+/// neither side, so the two sides cannot be read alike. The one reason of it, for
+/// every adapter of a run of two sides.
+pub const LEAVES: TextLiteral = TextLiteral::new(
+    "it is read as the system resolves it, outside the tree of the project or by no name of it, and the two sides cannot be read alike",
+);
 
 /// The tree of a project in a directory: at one side (the root of the project, read
 /// as [`Side::After`]) or at two (a directory for each). A clone is the same state,
@@ -109,14 +112,15 @@ impl FileStates {
         }))
     }
 
-    /// The directory of the side after: the root of the project.
-    pub fn root(&self) -> &Path {
-        &self.0.after.dir
-    }
-
-    /// Whether the run reads one side only.
-    pub(crate) fn one_side(&self) -> bool {
-        self.0.before.is_none()
+    /// Whether the run reads what the system resolves at `side`: a run of one side
+    /// does, under its directory; one of two cannot ([`LEAVES`]).
+    pub(crate) fn system_read(&self, side: Side) -> Result<SystemRead<'_>, StateError> {
+        let dir = self.dir(side)?;
+        Ok(if self.0.before.is_none() {
+            SystemRead::At(dir)
+        } else {
+            SystemRead::Untold(leaves())
+        })
     }
 
     fn side(&self, side: Side) -> Result<&SideDir, StateError> {
@@ -206,10 +210,6 @@ pub(crate) async fn read_path(
     })
 }
 
-/// Why a run of two sides reads no place that is no name of the tree.
-const UNNAMED_TWO: TextLiteral =
-    TextLiteral::new("a place that is no name of the project cannot be read alike at two sides");
-
 /// What is said of a name of another kind, when what names it cannot be made (it
 /// never cannot: a name is not blank).
 const OTHER_KIND: TextLiteral =
@@ -235,8 +235,9 @@ pub(crate) fn other_kind_of(what: &str) -> Untold {
     )
 }
 
-/// What a run of two sides answers of a reading through a link that leaves the tree.
-fn leaves() -> Untold {
+/// What a run of two sides answers of a reading of what the system resolves: the one
+/// place the answer is made, for every adapter.
+pub(crate) fn leaves() -> Untold {
     Untold::Said(NonBlank::from(LEAVES))
 }
 
@@ -287,17 +288,7 @@ impl StateRead<RelPath> for FileStates {
         names: &BTreeSet<RelPath>,
         bound: ByteBound,
     ) -> Result<NameAnswers<RelPath, Vec<u8>, StateError>, StateError> {
-        let dir = self.dir(side)?;
-        let mut read = BTreeMap::new();
-        for name in names {
-            let answer = if self.one_side() {
-                read_path(&dir.join(name.as_str()), bound, name.as_str()).await
-            } else {
-                Ok(AtSide::Untold(leaves()))
-            };
-            read.insert(name.clone(), answer);
-        }
-        Ok(read)
+        Ok(read_outside_by(&self.system_read(side)?, names, bound).await)
     }
 
     /// The place as the system resolves its path, every link followed; in a run of
@@ -308,12 +299,7 @@ impl StateRead<RelPath> for FileStates {
         at: &Beyond<RelPath>,
         bound: ByteBound,
     ) -> Result<AtSide<RelPath>, StateError> {
-        let path = self.beyond_path(side, at)?;
-        if !self.one_side() {
-            return Ok(AtSide::Untold(Untold::Said(NonBlank::from(UNNAMED_TWO))));
-        }
-        let what = path.display().to_string();
-        read_path(&path, bound, &what).await
+        read_beyond_by(&self.system_read(side)?, at, bound).await
     }
 
     async fn addresses(
@@ -322,7 +308,7 @@ impl StateRead<RelPath> for FileStates {
         names: &BTreeSet<RelPath>,
     ) -> Result<BTreeMap<RelPath, ContentAddress>, StateError> {
         let at = self.side(side)?;
-        if !self.one_side() || side != Side::After {
+        if !matches!(self.system_read(side)?, SystemRead::At(_)) || side != Side::After {
             return Ok(BTreeMap::new());
         }
         let paths: Vec<&RelPath> = names.iter().collect();
@@ -363,12 +349,7 @@ impl StateList<RelPath> for FileStates {
         side: Side,
         dir: &RelPath,
     ) -> Result<DirListing<RelPath>, StateError> {
-        let top = self.dir(side)?;
-        if !self.one_side() {
-            return Ok(DirListing::NotADir(NotADir::Untold(leaves())));
-        }
-        let path = top.join(dir.as_str());
-        list_path(&path, dir.as_str(), Under::Named(dir)).await
+        list_outside_by(&self.system_read(side)?, dir).await
     }
 
     /// The entries under the place as the system resolves its path, every link
@@ -378,14 +359,7 @@ impl StateList<RelPath> for FileStates {
         side: Side,
         at: &Beyond<RelPath>,
     ) -> Result<DirListing<RelPath>, StateError> {
-        let path = self.beyond_path(side, at)?;
-        if !self.one_side() {
-            return Ok(DirListing::NotADir(NotADir::Untold(Untold::Said(
-                NonBlank::from(UNNAMED_TWO),
-            ))));
-        }
-        let what = path.display().to_string();
-        list_path(&path, &what, Under::Beyond(at)).await
+        list_beyond_by(&self.system_read(side)?, at).await
     }
 
     async fn files(&self, side: Side, bound: ByteBound) -> Result<TreeFiles<RelPath>, StateError> {
@@ -425,6 +399,80 @@ impl StateList<RelPath> for FileStates {
             TreeFiles::All(names)
         })
     }
+}
+
+/// The four readings of what the system resolves, by the one answer of whether the run
+/// reads it ([`SystemRead`]): under its directory when it does, and that it cannot be
+/// told when it does not. Every adapter of a tree reads them so.
+///
+/// Each name of `names` as the system resolves it, every link followed.
+pub(crate) async fn read_outside_by(
+    system: &SystemRead<'_>,
+    names: &BTreeSet<RelPath>,
+    bound: ByteBound,
+) -> NameAnswers<RelPath, Vec<u8>, StateError> {
+    let mut read = BTreeMap::new();
+    for name in names {
+        let answer = match system {
+            SystemRead::At(dir) => read_path(&dir.join(name.as_str()), bound, name.as_str()).await,
+            SystemRead::Untold(why) => Ok(AtSide::Untold(why.clone())),
+        };
+        read.insert(name.clone(), answer);
+    }
+    read
+}
+
+/// The path of the place `at` under the directory `dir` of a side.
+fn beyond_under(dir: &Path, at: &Beyond<RelPath>) -> PathBuf {
+    let mut path = match &at.dir {
+        Some(named) => dir.join(named.as_str()),
+        None => dir.to_path_buf(),
+    };
+    for part in &at.parts {
+        path.push(part.as_os_str());
+    }
+    path
+}
+
+/// The place `at`, which the tree cannot name, as the system resolves it.
+pub(crate) async fn read_beyond_by(
+    system: &SystemRead<'_>,
+    at: &Beyond<RelPath>,
+    bound: ByteBound,
+) -> Result<AtSide<RelPath>, StateError> {
+    let dir = match system {
+        SystemRead::At(dir) => dir,
+        SystemRead::Untold(why) => return Ok(AtSide::Untold(why.clone())),
+    };
+    let path = beyond_under(dir, at);
+    let what = path.display().to_string();
+    read_path(&path, bound, &what).await
+}
+
+/// The entries under `name` as the system resolves it, each with its own kind.
+pub(crate) async fn list_outside_by(
+    system: &SystemRead<'_>,
+    name: &RelPath,
+) -> Result<DirListing<RelPath>, StateError> {
+    let dir = match system {
+        SystemRead::At(dir) => dir,
+        SystemRead::Untold(why) => return Ok(DirListing::NotADir(NotADir::Untold(why.clone()))),
+    };
+    list_path(&dir.join(name.as_str()), name.as_str(), Under::Named(name)).await
+}
+
+/// The entries under the place `at` as the system resolves it, each unnamed.
+pub(crate) async fn list_beyond_by(
+    system: &SystemRead<'_>,
+    at: &Beyond<RelPath>,
+) -> Result<DirListing<RelPath>, StateError> {
+    let dir = match system {
+        SystemRead::At(dir) => dir,
+        SystemRead::Untold(why) => return Ok(DirListing::NotADir(NotADir::Untold(why.clone()))),
+    };
+    let path = beyond_under(dir, at);
+    let what = path.display().to_string();
+    list_path(&path, &what, Under::Beyond(at)).await
 }
 
 /// What a walk along the parts of a name, links not followed, came to.
