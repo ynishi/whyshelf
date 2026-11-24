@@ -1,7 +1,7 @@
 ---
 id: "01a1fbcb-ad29-72b5-abcc-3f913aa58d51"
 key: "REQ-40"
-grounds: ["F-59"]
+grounds: ["F-59", "F-71"]
 issues: ["#111"]
 title: "A link to artifacts can expect every name of a selection to be reached by a document, and a gap fails or warns as a cover into a book does"
 ---

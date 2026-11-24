@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795531674003,
+  "expires": null,
+  "frame": [],
+  "id": "01a20e07-49d5-7726-807d-b6c69b576dc4",
+  "kind": "decision",
+  "reason": "rust-test lists the tests of the files a selection takes, through one Lister shared with file, and says partial with why where it cannot tell every test (#120 part 1); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "209650e47716b3d2e41d95eaeba51b1c3f9bb7b0",
+  "seen": "sha256:9f1eb7c019a43be05b6c6e074027a680e2c81cd893405734a2852aaac381b436",
+  "seen_address": "266f6603ed292986e4fee640a8779dd6158e52ee",
+  "subject": "01a20e06-b79e-7071-b438-62a615e3b0f3",
+  "v": 1,
+  "verb": "approve"
+}

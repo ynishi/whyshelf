@@ -1,0 +1,96 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test::INERT_ATTRIBUTES",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test::INERT_DERIVES",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test::RustTestSpace",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795531674003,
+  "expires": null,
+  "frame": [
+    {
+      "address": "537ad92c67cad3f36024aa45964f6604c6a23a47",
+      "hash": "sha256:da4400e50c4645fbb1ed3c9028302053e58da039407d2a8e91d092ebc33f2f00",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1cad2-34df-74f6-b9c7-64f09ffc1dd4"
+    },
+    {
+      "address": "2acaeee005c0bc14a1daa56bcb4d470291d93b9d",
+      "hash": "sha256:b46560fec898e7deffa76683965adb2424fe4687ace26c296ce6a2d0bbf2a4a2",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "40"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1fbcb-ad29-72b5-abcc-3f913aa58d51"
+    }
+  ],
+  "id": "01a20e07-4c0a-7645-a114-a8da802739a8",
+  "kind": "decision",
+  "reason": "rust-test lists the tests of the files a selection takes, through one Lister shared with file, and says partial with why where it cannot tell every test (#120 part 1); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "209650e47716b3d2e41d95eaeba51b1c3f9bb7b0",
+  "seen": "sha256:742ec0d16cd39698b29e01ec73ee56e90d5ca90b621a385d5b88ccd109f1ed60",
+  "seen_address": "97aaa0123c589539ad29a3d5e346132c5875f4af",
+  "subject": "01a20e06-b79e-7071-b438-62a7fe44a70c",
+  "v": 1,
+  "verb": "approve"
+}

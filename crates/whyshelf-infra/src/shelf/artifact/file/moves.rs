@@ -146,15 +146,20 @@ impl FileSpace {
             let comparisons: std::sync::Arc<[Comparison]> =
                 wanted.keys().map(|c| (*c).clone()).collect();
             let mut tally = Tally::default();
-            let files = match self.git.work_tree_files(self.limits.listing_bytes).await? {
+            let files = match self
+                .git
+                .work_tree_files(self.lister.limits().listing_bytes)
+                .await?
+            {
                 Some(listing) => {
                     tally.truncated |= listing.cut;
                     listing.files
                 }
-                None => walk(&self.root, &self.limits, &mut tally).await,
+                None => walk(&self.root, self.lister.limits(), &mut tally).await,
             };
             for path in &files {
-                let Some(bytes) = scan_read(&self.state, path, &self.limits, &mut tally).await
+                let Some(bytes) =
+                    scan_read(&self.state, path, self.lister.limits(), &mut tally).await
                 else {
                     if tally.truncated {
                         break;
@@ -196,7 +201,7 @@ impl FileSpace {
                     }
                 }
             }
-            let scanned = tally.notes(&self.limits);
+            let scanned = tally.notes(self.lister.limits());
             for name in gone {
                 if name.pins().iter().any(|pin| pin.content().is_some()) {
                     notes
@@ -248,7 +253,7 @@ impl FileSpace {
         for (revision, names) in by_revision {
             let found_since = match self
                 .git
-                .renames_since(revision, self.limits.listing_bytes)
+                .renames_since(revision, self.lister.limits().listing_bytes)
                 .await
             {
                 Ok(found_since) => found_since,

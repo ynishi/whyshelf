@@ -12,7 +12,7 @@ impl FileSpace {
         &self,
         address: &ContentAddress,
     ) -> Result<Option<Vec<u8>>, ArtifactError> {
-        let cap = usize::try_from(self.max_file).unwrap_or(usize::MAX);
+        let cap = usize::try_from(self.lister.max_file()).unwrap_or(usize::MAX);
         Ok(self.git.read_blob_within(address, cap).await?)
     }
 }

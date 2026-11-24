@@ -26,9 +26,11 @@
 //! An adapter that cannot suggest names [`CannotSuggest`], one that reads nothing
 //! back [`NoReadBack`], and one that lists no names [`CannotList`]: the core gives
 //! their answers. Each answers a move of a prefix with its own grammar of names (the
-//! domain knows no boundary of a name, and builds none). Only `file` lists the names a
-//! selection takes ([`NameList`], [`file`](mod@file#listing-the-names-of-a-selection)):
-//! the other spaces name [`CannotList`].
+//! domain knows no boundary of a name, and builds none). `file` and `rust-test` list
+//! the names a selection takes ([`NameList`],
+//! [`file`](mod@file#listing-the-names-of-a-selection),
+//! [`rust_test`](mod@rust_test#listing-the-names-of-a-selection)), choosing the files
+//! they take in one place; the other spaces name [`CannotList`].
 //!
 //! Each adapter offers its presets of links to artifacts for its own space, as
 //! values ([`SpaceAdapter::presets`]); the domain knows none. A project may write

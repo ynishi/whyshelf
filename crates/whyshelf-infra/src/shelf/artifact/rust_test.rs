@@ -6,6 +6,7 @@
 //! |---|---|---|
 //! | [`RustTestSpace::resolve`] | reads each file named, by the rules of the space `file`, lexes it once, and finds each test named in it by a shallow scan of its items; the text of a test is what is compared | [`file`](mod@file), `proc-macro2` |
 //! | [`RustTestSpace::current`] | the text of a named test now | the same |
+//! | [`NameList::list`] | the tests of the `.rs` files a selection takes, the files being those the state of the project lists, chosen as the space `file` chooses them | [`file`](mod@file), the state of the project, `proc-macro2` |
 //! | [`presets`] | the preset `test`: the space, `compare = "bytes"`, `means = "depends"` | values |
 //!
 //! ```text
@@ -148,8 +149,10 @@
 //!   test).
 //!
 //! The inert attributes are [`INERT_ATTRIBUTES`], any attribute of a tool
-//! (`rustfmt::…`, `clippy::…`, `rust_analyzer::…`, `diagnostic::…`), and a
-//! `cfg_attr` whose attributes are all inert. The reason names the first
+//! (`rustfmt::…`, `clippy::…`, `rust_analyzer::…`, `diagnostic::…`), a
+//! `cfg_attr` whose attributes are all inert, an `unsafe(…)` of an inert one
+//! (`#[unsafe(no_mangle)]`), and a `derive` of [`INERT_DERIVES`] only (those of the
+//! standard library; a derive of a crate may write items). The reason names the first
 //! few that may make it, each once, and how many more there are.
 //!
 //! So where a module on the way holds an item macro or an attribute that is not
@@ -225,10 +228,78 @@
 //! | cannot tell | a symbolic link on the path leaves the root or is broken; the file cannot be read, is too large, is not UTF-8, does not lex, or nests too deep; or the test is not found, and a twin of a module on the way is declared out of line or a macro on the way may make it |
 //! | not a name | the text is not of the grammar above |
 //!
+//! # Listing the names of a selection
+//!
+//! A selection of this space is one of the space `file`: patterns over the paths
+//! under the root, read by the same grammar ([`PathGlob`]), a path taken when some
+//! `include` matches it and no `exclude` does; a text that is no pattern makes it no
+//! selection, and its listing [`NameListing::CannotList`] with why.
+//!
+//! The files it takes are those the state of the project lists at the side, chosen
+//! as the space `file` chooses the files of its own listing (the same code: through
+//! a link only inside the root, within [`MAX_FILE_BYTES`], named as written); of
+//! them, those whose path ends in `.rs`. Each is read and lexed as for a name
+//! (finding the test, above), and its items are walked into every inline module, at
+//! any depth: each function that carries a test attribute is a test, named by the
+//! file, the modules on the way and the function, each segment as the source spells
+//! it (`fn r#type` is `<file>::r#type`), and read back by the grammar of the names.
+//! Twins (a function or a module of one name under two `#[cfg]`s, or spelled raw and
+//! plain) are one name, the first in the order of the file. A module declared out of
+//! line is in another file, whose tests are listed when the selection takes that
+//! file. A test listed lives where "Where a name lives" (below) says of the file it
+//! is listed of.
+//!
+//! Nothing is passed over in silence. The listing is [`NameListing::Some`] with why,
+//! and never all of them, when what the space `file` would not list whole is so (more
+//! files than it lists, a listing of the state left short, a file a reading cannot
+//! tell), when a file taken cannot be read, is not UTF-8, does not lex or nests too
+//! deep, when something in a file may make a test the scan does not see, when a
+//! test's name
+//! cannot be written as a name of the space, when it takes more tests than the
+//! bound of names of a listing
+//! ([`ScanLimits::names`](super::file::ScanLimits::names)), and when it would read
+//! more files, or more bytes in all, than one listing reads
+//! ([`ScanLimits::files`](super::file::ScanLimits::files),
+//! [`ScanLimits::total_bytes`](super::file::ScanLimits::total_bytes)): it stops
+//! there, and says so. The size of a file is looked at before it is opened, so a
+//! file past the bytes left is not read, and no listing reads past the bound. The reason names the first few files, each
+//! with the first thing found, and counts the rest; a file with nothing that may make
+//! a test, and with no test, adds nothing. When the state cannot list the files
+//! (outside a Git repository, a Git that cannot be run), no listing is made:
+//! [`NameListing::CannotList`] with why, and no error. A side the run does not read is
+//! an error of the whole ask.
+//!
+//! What may make a test the scan does not see, for a listing, is wider than on the
+//! way to one named test (what may make a test, above), since a listing answers for
+//! every item of the file: an item macro call; an inner attribute that is not inert;
+//! an attribute that is not inert on any item at all (a module, a function that is no
+//! test, an `impl`, a `struct`, an `enum`, a `trait`, a `const`, a `static`, a module
+//! out of line, a macro call), an attribute macro there being free to write test
+//! functions; and on a test, any such attribute beside its test attribute
+//! (`#[test] #[gen_variants]`), which may write more tests. A test attribute that is
+//! a path (`#[tokio::test]`, `#[test_log::test]`) is a macro of a crate: the function
+//! is listed as the test of its name, and the file is not whole, since such a macro
+//! may write more than one test. A `derive` is inert only when every derive it names
+//! is one of [`INERT_DERIVES`], under `std` or `core`, or by its bare name when, in
+//! the module the derive is written in, no `use` names an item so (as the last
+//! segment of a path or an alias) and no glob `use` (`use x::*;`) is written: a `use`
+//! may bring a crate's derive in under a name of the standard library's, so a
+//! spelling alone is not trusted. The scope is the module's own, as Rust resolves a
+//! name: a `use` of a module around it, or of a module in it, does not reach it, so
+//! `use super::*;` in `mod tests` makes the bare derives of `mod tests` makers, and
+//! none of the file's others. Any other
+//! derive is a macro of a crate, and may. A module out of line read by `#[path]` from
+//! a file that does not end in `.rs` (`#[path = "x.inc"] mod tests;`), or by a
+//! `path` the scan cannot read as one literal, is never taken by a listing, so its
+//! tests would be passed over: the file that declares it is not whole. Such an
+//! attribute beside a test does not change how the test itself is resolved: the
+//! test named is there, with its text, while the listing of its file is not whole.
+//!
 //! # Where it reads
 //!
 //! The files under the root of the project, by the rules of the space `file`
-//! (through a symbolic link only while it stays inside the root). It declares no
+//! (through a symbolic link only while it stays inside the root); for a listing, the
+//! files a selection takes are those the state of the project lists. It declares no
 //! build directory, and runs no program.
 //!
 //! # Where a name lives
@@ -282,23 +353,29 @@
 //! - A text is the tokens as `proc-macro2` prints them; an update of it that prints
 //!   them otherwise would make every approval of a test stale once.
 //! - Moves are not suggested: the adapter names [`CannotSuggest`].
-//! - Names are not listed: the adapter names [`CannotList`].
+//! - A cover compares names as written, so a document that spells a test otherwise
+//!   than the listing does (`foo` for a function written `r#foo`) does not reach it,
+//!   though `resolve` reads both as the one test: write the name as the listing
+//!   spells it.
+//!
+//! [`PathGlob`]: whyshelf_core::domain::location::PathGlob
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use proc_macro2::{Delimiter, Group, Ident, Punct, Spacing, TokenStream, TokenTree};
 use whyshelf_core::app::shelf::{
-    Answers, CannotList, CannotSuggest, NamePlaces, NamePrefixes, NoReadBack, Side, SpaceAdapter,
+    Answers, CannotSuggest, NameList, NamePlaces, NamePrefixes, NoReadBack, Side, SpaceAdapter,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, PrefixMove, SpaceAsks, SpacePrefixes, SpaceReadings,
-    SpaceRenamed,
+    ArtifactName, ArtifactReading, Comparison, NameListing, NotASelection, PrefixMove, Selection,
+    SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
@@ -307,7 +384,7 @@ use super::super::state::ProjectTree;
 use super::super::state::StateError;
 use super::super::state::files::FileStates;
 use super::Spelled;
-use super::file::{self, Bounded};
+use super::file::{self, Bounded, Cause, FileSelection, Lister, Take, Taken, Unit};
 
 /// The name of the space this adapter resolves names in.
 pub const RUST_TEST_SPACE: &str = "rust-test";
@@ -327,41 +404,103 @@ pub const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_DEPTH: usize = 128;
 
 /// The attributes that make no item and rewrite none (with those of a tool, and a
-/// `cfg_attr` of them): one of them on a module, or on a function of the name, does
-/// not make a test that is not found one that cannot be told.
+/// `cfg_attr` of them): one of them on an item does not make a test that is not found
+/// one that cannot be told, nor a listing that is not whole.
+///
+/// They are the built-in attributes the language defines, which are no macros: the
+/// Rust Reference, "Attributes", "Built-in attributes index"
+/// (<https://doc.rust-lang.org/reference/attributes.html#built-in-attributes-index>),
+/// with `coverage`, which the compiler reads the same way. Left out of it: `test`, a
+/// test attribute, read on its own; `derive`, read derive by derive
+/// ([`INERT_DERIVES`]). `macro_use` and `macro_export` are in it: they say where a
+/// macro's name is seen and write no item, and a call of a macro is a maker of its
+/// own. An attribute of a crate (a derive's helper `serde`, `error`, `command`) is
+/// none of these, and is no inert attribute.
 pub const INERT_ATTRIBUTES: &[&str] = &[
+    // Conditional compilation.
     "cfg",
     "cfg_attr",
-    "allow",
-    "deny",
-    "warn",
-    "expect",
-    "forbid",
-    "doc",
-    "path",
-    "macro_use",
-    "inline",
-    "cold",
-    "must_use",
-    "deprecated",
-    "track_caller",
+    // Testing.
     "ignore",
     "should_panic",
-    "no_mangle",
-    "coverage",
+    // Derive.
+    "automatically_derived",
+    // Macros.
+    "macro_export",
+    "macro_use",
+    "proc_macro",
+    "proc_macro_derive",
+    "proc_macro_attribute",
+    // Diagnostics.
+    "allow",
+    "expect",
+    "warn",
+    "deny",
+    "forbid",
+    "deprecated",
+    "must_use",
+    // ABI, linking, symbols and library handling.
+    "link",
+    "link_name",
+    "link_ordinal",
+    "no_link",
+    "repr",
+    "crate_type",
+    "no_main",
     "export_name",
     "link_section",
+    "no_mangle",
+    "used",
+    "crate_name",
+    // Code generation.
+    "inline",
+    "cold",
+    "naked",
+    "no_builtins",
     "target_feature",
-    "feature",
+    "track_caller",
+    "instruction_set",
+    "coverage",
+    // Documentation.
+    "doc",
+    // Preludes.
     "no_std",
-    "no_main",
     "no_implicit_prelude",
+    // Modules.
+    "path",
+    // Limits.
     "recursion_limit",
     "type_length_limit",
-    "crate_name",
-    "crate_type",
+    // Runtime.
+    "panic_handler",
+    "global_allocator",
     "windows_subsystem",
+    // Features.
+    "feature",
+    // Type system.
+    "non_exhaustive",
+    // Debugger.
+    "debugger_visualizer",
+    "collapse_debuginfo",
 ];
+
+/// The derives whose output is known to add no item that can be a test: those of the
+/// standard library. Any other derive (a derive macro of a crate) may, and is no
+/// inert attribute.
+pub const INERT_DERIVES: &[&str] = &[
+    "Debug",
+    "Clone",
+    "Copy",
+    "PartialEq",
+    "Eq",
+    "PartialOrd",
+    "Ord",
+    "Hash",
+    "Default",
+];
+
+/// The mark of a path of a derive among the paths of an attribute.
+const DERIVE: &str = "derive";
 
 /// The keywords that start an item: a `!` after one is no macro call
 /// (`impl !Send for S {}`).
@@ -416,14 +555,14 @@ pub enum RustTestError {
 }
 
 /// The space [`RUST_TEST_SPACE`]: it answers a move of a prefix, cannot suggest where
-/// a test moved, keeps nothing by address, lists no names, and says where a test lives
-/// (the file it names).
+/// a test moved, keeps nothing by address, lists the tests of the files a selection
+/// takes, and says where a test lives.
 impl SpaceAdapter for RustTestSpace {
     type Error = RustTestError;
     type Prefixes = Answers;
     type Suggest = CannotSuggest;
     type ReadBack = NoReadBack;
-    type List = CannotList;
+    type List = Answers;
     type Places = Answers;
 
     fn space(&self) -> &str {
@@ -454,6 +593,19 @@ impl NamePrefixes for RustTestSpace {
         of: &PrefixMove,
     ) -> Result<(SpacePrefixes, SpaceRenamed), RustTestError> {
         renamed(names, of).map_err(RustTestError::Reason)
+    }
+}
+
+impl NameList for RustTestSpace {
+    /// A selection is one of the space `file`: patterns over the paths of files.
+    fn select(&self, selection: &Selection) -> Result<(), NotASelection> {
+        FileSelection::read(selection).map(|_| ())
+    }
+
+    /// The tests of the `.rs` files the selection takes at `side`: the module page,
+    /// "Listing the names of a selection".
+    async fn list(&self, side: Side, selection: &Selection) -> Result<NameListing, RustTestError> {
+        self.list_at(side, selection).await
     }
 }
 
@@ -493,6 +645,10 @@ enum NotAName {
     EmptySegment,
     #[error("`{0}` is no Rust identifier")]
     NoIdentifier(String),
+    #[error("`{0}` does not read back as the file and the segments it was written of")]
+    NotReadBack(String),
+    #[error("`{name}` is refused as a name: {why}")]
+    Refused { name: String, why: String },
 }
 
 impl NotAName {
@@ -549,8 +705,10 @@ impl fmt::Display for Place {
 pub struct RustTestSpace {
     /// The tree of the project the files are read from.
     state: ProjectTree,
-    /// The most bytes of a file read.
-    max_file: u64,
+    /// The files a selection takes, the bounds of a listing, and the most bytes of a
+    /// file read ([`MAX_FILE_BYTES`]): one value for each, for the listing and the
+    /// reading alike.
+    lister: Lister,
 }
 
 impl RustTestSpace {
@@ -562,9 +720,23 @@ impl RustTestSpace {
     /// The tests in the files of the project `state` reads.
     pub fn on(state: ProjectTree) -> Self {
         Self {
+            lister: Lister::on(state.clone(), MAX_FILE_BYTES),
             state,
-            max_file: MAX_FILE_BYTES,
         }
+    }
+
+    /// The same, listing within `limits`.
+    #[cfg(test)]
+    fn with_limits(mut self, limits: super::file::ScanLimits) -> Self {
+        self.lister = self.lister.with_limits(limits);
+        self
+    }
+
+    /// The same, a file being read up to `max_file` bytes.
+    #[cfg(test)]
+    fn with_max_file(mut self, max_file: u64) -> Self {
+        self.lister = self.lister.with_max_file(max_file);
+        self
     }
 
     /// For each name, as the project is ([`Side::After`]): not a name, the hash of the
@@ -670,32 +842,180 @@ impl RustTestSpace {
         })
     }
 
+    /// The tests of the `.rs` files `selection` takes at `side` (the rules on the
+    /// page of the module, "Listing the names of a selection"): the files are those
+    /// the state lists, taken as the space `file` takes them ([`Lister::taken`]); each
+    /// is read as `resolve` reads one and its items walked into every inline module;
+    /// and the listing is all of them only when nothing kept it from being so
+    /// ([`file::listing`]). A selection that is none, and a state that cannot list,
+    /// give no listing, and no error.
+    async fn list_at(
+        &self,
+        side: Side,
+        selection: &Selection,
+    ) -> Result<NameListing, RustTestError> {
+        self.state.reads(side)?;
+        let chosen = match FileSelection::read(selection) {
+            Ok(chosen) => chosen,
+            Err(not) => return Ok(NameListing::CannotList(not.why().clone())),
+        };
+        let takes = |path: &RelPath| {
+            if path.as_str().ends_with(".rs") && chosen.takes(path.as_str()) {
+                Take::Named(path.clone())
+            } else {
+                Take::Skip
+            }
+        };
+        // The bound of names is of the tests listed, counted where their names are
+        // made (below), not of the files.
+        let (files, mut causes) = match self.lister.taken(side, takes, None).await? {
+            Taken::CannotList(why) => return Ok(NameListing::CannotList(why)),
+            Taken::All(files) => (files, Vec::new()),
+            Taken::Some { found, short } => (
+                found,
+                short.into_vec().into_iter().map(Cause::from).collect(),
+            ),
+        };
+        let limits = *self.lister.limits();
+        let limit = limits.names;
+        let mut found = BTreeSet::new();
+        let mut unwritten = 0usize;
+        let mut unlisted = Unlisted::default();
+        // The files and the bytes the listing has read, held to the bounds of what
+        // one listing reads ([`ScanLimits::files`](super::file::ScanLimits::files),
+        // [`ScanLimits::total_bytes`](super::file::ScanLimits::total_bytes)).
+        // The size of a file is looked at before it is opened, so no file is read past
+        // the bound of bytes in all.
+        let mut read_bytes = 0u64;
+        'files: for (read_files, path) in files.iter().enumerate() {
+            let left = limits.total_bytes.saturating_sub(read_bytes);
+            let stop = |read_bytes: u64| {
+                reason(format!(
+                    "the listing stops after reading {read_files} file(s) of {read_bytes} bytes in all, the most one listing reads"
+                ))
+                .map(Cause::Own)
+            };
+            if read_files >= limits.files || left == 0 {
+                causes.push(stop(read_bytes)?);
+                break;
+            }
+            let walked = match self.tests_in(side, path, left, &mut read_bytes).await {
+                Ok(Some(walked)) => walked,
+                Ok(None) => {
+                    causes.push(stop(read_bytes)?);
+                    break;
+                }
+                Err(why) => {
+                    unlisted.add(why.to_string());
+                    continue;
+                }
+            };
+            if let Some(maker) = walked.maker {
+                unlisted.add(format!(
+                    "{path}: {maker} may make a test, and macros are not expanded"
+                ));
+            }
+            for name in walked.names {
+                let Ok(name) = name else {
+                    unwritten += 1;
+                    continue;
+                };
+                if found.contains(&name) {
+                    continue;
+                }
+                if found.len() == limit {
+                    causes.push(Cause::PastNames { limit });
+                    break 'files;
+                }
+                found.insert(name);
+            }
+        }
+        if let Some(count) = NonZeroUsize::new(unwritten) {
+            causes.push(Cause::Unnameable {
+                count,
+                of: Unit::Tests,
+            });
+        }
+        if !unlisted.is_empty() {
+            causes.push(Cause::Own(reason(unlisted.to_string())?));
+        }
+        file::listing(found, causes).map_err(RustTestError::Reason)
+    }
+
+    /// The tests of the file at `path` at `side`, read as `resolve` reads it, and the
+    /// first thing in it that may make a test the scan cannot see; or why it cannot
+    /// be read; or none, unread, when it is larger than the `left` bytes the listing
+    /// may still read. The bytes read are added to `read`.
+    async fn tests_in(
+        &self,
+        side: Side,
+        path: &RelPath,
+        left: u64,
+        read: &mut u64,
+    ) -> Result<Option<Walked>, Untellable> {
+        let max = self.lister.max_file();
+        let bytes = match self.source_at(side, path, max.min(left)).await {
+            Source::Bytes(bytes) => {
+                *read = read.saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+                bytes
+            }
+            // Past what the listing may still read, and within what a file may be.
+            Source::Untold(Untellable::TooLarge { .. }) if left < max => return Ok(None),
+            // The listing saw it there: what is not there now cannot be passed over.
+            Source::NoFile => {
+                return Err(Untellable::Unreadable {
+                    path: path.clone(),
+                    why: "no file is there now".to_owned(),
+                });
+            }
+            Source::Untold(why) => return Err(why),
+        };
+        let at = path.clone();
+        // The file may be as large as the bound: it is decoded and lexed on a
+        // blocking thread.
+        let walk = move || match String::from_utf8(bytes) {
+            Ok(text) => tests_of(&at, &text),
+            Err(_) => Err(Untellable::NotUtf8(at.clone())),
+        };
+        match tokio::task::spawn_blocking(walk).await {
+            Ok(walked) => walked.map(Some),
+            Err(e) => Err(Untellable::Stopped {
+                path: path.clone(),
+                why: e.to_string(),
+            }),
+        }
+    }
+
+    /// The bytes of the file at `path` at `side`, read by the rules of the space
+    /// `file` up to `max` bytes (its size looked at before it is opened), or what
+    /// keeps them from being read.
+    async fn source_at(&self, side: Side, path: &RelPath, max: u64) -> Source {
+        let unreadable = |why: String| {
+            Source::Untold(Untellable::Unreadable {
+                path: path.clone(),
+                why,
+            })
+        };
+        match file::read_within(&self.state, side, path, max).await {
+            Ok(Bounded::Bytes(bytes)) => Source::Bytes(bytes),
+            Ok(Bounded::NoFile) => Source::NoFile,
+            Ok(Bounded::Outside) => Source::Untold(Untellable::Outside(path.clone())),
+            Ok(Bounded::TooLarge) => Source::Untold(Untellable::TooLarge {
+                path: path.clone(),
+                max,
+            }),
+            Ok(Bounded::Untold(why)) => unreadable(why.as_str().to_owned()),
+            Err(e) => unreadable(e.to_string()),
+        }
+    }
+
     /// What each of `wanted` comes to in the file at `path`, in their order.
     async fn find_in(&self, side: Side, path: &RelPath, wanted: Vec<Wanted>) -> Vec<Found> {
         let every = |found: Found| vec![found; wanted.len()];
-        let untold = |why: Untellable| every(Found::CannotTell(why));
-        let bytes = match file::read_within(&self.state, side, path, self.max_file).await {
-            Ok(Bounded::Bytes(bytes)) => bytes,
-            Ok(Bounded::NoFile) => return every(Found::Absent),
-            Ok(Bounded::Outside) => return untold(Untellable::Outside(path.clone())),
-            Ok(Bounded::TooLarge) => {
-                return untold(Untellable::TooLarge {
-                    path: path.clone(),
-                    max: self.max_file,
-                });
-            }
-            Ok(Bounded::Untold(why)) => {
-                return untold(Untellable::Unreadable {
-                    path: path.clone(),
-                    why: why.as_str().to_owned(),
-                });
-            }
-            Err(e) => {
-                return untold(Untellable::Unreadable {
-                    path: path.clone(),
-                    why: e.to_string(),
-                });
-            }
+        let bytes = match self.source_at(side, path, self.lister.max_file()).await {
+            Source::Bytes(bytes) => bytes,
+            Source::NoFile => return every(Found::Absent),
+            Source::Untold(why) => return every(Found::CannotTell(why)),
         };
         let count = wanted.len();
         let at = path.clone();
@@ -721,6 +1041,246 @@ impl RustTestSpace {
 /// The domain's reason of a text this adapter wrote.
 fn reason(why: String) -> Result<NonBlank, RustTestError> {
     NonBlank::new(why).map_err(RustTestError::Reason)
+}
+
+/// What a file is for a reading of its tests: its bytes, no file there, or why it
+/// cannot be told.
+enum Source {
+    Bytes(Vec<u8>),
+    NoFile,
+    Untold(Untellable),
+}
+
+/// The tests of one file, walked: the name of each (or why it cannot be written), in
+/// the order of the file, twins once, and the first thing in the file that may make a
+/// test the scan cannot see.
+struct Walked {
+    names: Vec<Result<ArtifactName, NotAName>>,
+    maker: Option<String>,
+}
+
+/// Why a listing of the tests of files is not all of them, as the adapter says it:
+/// each file that may hold a test the scan cannot see, with the first thing that may
+/// make one, or that cannot be read, with why; the first [`Unlisted::SHOWN`] of them
+/// in the order of the files, and how many more, so that a reason stays small
+/// whatever a selection takes.
+#[derive(Debug, Default)]
+struct Unlisted {
+    shown: Vec<String>,
+    more: usize,
+}
+
+impl Unlisted {
+    /// How many files are named in a reason.
+    const SHOWN: usize = 5;
+
+    fn add(&mut self, why: String) {
+        if self.shown.len() < Self::SHOWN {
+            self.shown.push(why);
+        } else {
+            self.more = self.more.saturating_add(1);
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.shown.is_empty()
+    }
+}
+
+impl fmt::Display for Unlisted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.shown.join("; "))?;
+        if self.more > 0 {
+            write!(f, "; and {} more file(s)", self.more)?;
+        }
+        Ok(())
+    }
+}
+
+/// The tests in the source `text` of the file at `path`: the file is lexed once (as
+/// `resolve` lexes it), and its items walked into every inline module, a function
+/// that carries a test attribute ([`Scanned::is_test`]) being a test, named as the
+/// source spells it ([`TestName::of`]). Twins (under their own `#[cfg]`, or spelled
+/// raw and plain) are one test, the first in the order of the file. What may make a
+/// test is gathered over every item, by the rule on the page of the module ("Listing
+/// the names of a selection"): an item macro call, an inner attribute that is not
+/// inert, an attribute that is not inert on any item, and on a test, one beside its
+/// test attribute.
+fn tests_of(path: &RelPath, text: &str) -> Result<Walked, Untellable> {
+    let mut written: Vec<(Vec<String>, String)> = Vec::new();
+    let mut makers = Makers::default();
+    {
+        let _spans = Spans;
+        let top = Items::scan(lexed(path, text)?);
+        let mut twins = BTreeSet::new();
+        let mut walk = Walk {
+            makers: &mut makers,
+            twins: &mut twins,
+            written: &mut written,
+        };
+        walk_tests(&top, &mut Vec::new(), &mut walk);
+    }
+    // Read back once the spans of the file are dropped: reading a name lexes it.
+    let names = written
+        .iter()
+        .map(|(modules, function)| TestName::of(path, modules, function))
+        .collect();
+    Ok(Walked {
+        names,
+        maker: makers.first().map(str::to_owned),
+    })
+}
+
+/// What a walk of the tests of one file gathers.
+struct Walk<'a> {
+    makers: &'a mut Makers,
+    twins: &'a mut BTreeSet<Vec<String>>,
+    written: &'a mut Vec<(Vec<String>, String)>,
+}
+
+/// The tests of `items` (inside the inline `modules`, as written, outermost first),
+/// and of every inline module among them, pushed onto `written` as spelled, a twin of
+/// one already in `twins` (its segments unraw) left out; and what may make a test,
+/// added to `makers`. A bare derive is read in the scope of the module it is written
+/// in (`items`), as Rust resolves it: the `use` items of that module, not of a module
+/// in it nor of one around it.
+fn walk_tests(items: &Items, modules: &mut Vec<String>, walk: &mut Walk<'_>) {
+    items.makers(walk.makers);
+    let scope = Scope::of(items);
+    // A bare derive of a name of the standard library's that the scope shadows: why.
+    let note = |p: &str| match p
+        .strip_prefix("derive(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        Some(name) if INERT_DERIVES.contains(&name) && scope.names.contains(name) => {
+            format!(", where a `use` of the module brings in an item named `{name}`")
+        }
+        Some(name) if INERT_DERIVES.contains(&name) => {
+            format!(", where a glob `use` of the module may bring in a derive named `{name}`")
+        }
+        _ => String::new(),
+    };
+    let path_of = |modules: &[String], last: &Ident| {
+        modules
+            .iter()
+            .map(|m| Segment::of(m).to_string())
+            .chain(std::iter::once(Segment::of(&last.to_string()).to_string()))
+            .collect::<Vec<_>>()
+    };
+    for item in &items.items {
+        match &item.kind {
+            Kind::Fn(name) if item.is_test() => {
+                let test = path_of(modules, name).join("::");
+                // A test attribute of a crate (`tokio::test`) is a macro, which may
+                // write more than the one test it is read as.
+                for p in item.test_macros() {
+                    walk.makers.add(format!(
+                        "the attribute `#[{p}]` on the test `{test}`, a macro that may write more than one test"
+                    ));
+                }
+                // An attribute macro beside the test attribute may make more tests.
+                for p in item.maker_beside_test() {
+                    walk.makers
+                        .add(format!("the attribute `#[{p}]` on the test `{test}`"));
+                }
+                // A twin is the test already written.
+                let first = walk.twins.insert(path_of(modules, name));
+                if first {
+                    walk.written.push((modules.clone(), name.to_string()));
+                }
+            }
+            Kind::Fn(name) => {
+                for p in item.maker_in(&scope) {
+                    walk.makers.add(format!(
+                        "the attribute `#[{p}]` on the function `{}`{}",
+                        path_of(modules, name).join("::"),
+                        note(&p)
+                    ));
+                }
+            }
+            Kind::Mod {
+                name,
+                body: Some(body),
+            } => {
+                for p in item.maker_in(&scope) {
+                    walk.makers.add(format!(
+                        "the attribute `#[{p}]` on the module `{}`{}",
+                        path_of(modules, name).join("::"),
+                        note(&p)
+                    ));
+                }
+                modules.push(name.to_string());
+                walk_tests(&Items::scan(body.stream()), modules, walk);
+                modules.pop();
+            }
+            // Any other item (an impl, a struct, a trait, a const, a module out of
+            // line, a macro call): an attribute macro or a derive on it may make
+            // tests too.
+            Kind::Mod { body: None, .. } | Kind::Macro(_) | Kind::Other => {
+                let at = if modules.is_empty() {
+                    "at the top of the file".to_owned()
+                } else {
+                    format!(
+                        "in the module `{}`",
+                        modules
+                            .iter()
+                            .map(|m| Segment::of(m).to_string())
+                            .collect::<Vec<_>>()
+                            .join("::")
+                    )
+                };
+                for p in item.maker_in(&scope) {
+                    walk.makers.add(format!(
+                        "the attribute `#[{p}]` on an item {at}{}",
+                        note(&p)
+                    ));
+                }
+                // A module out of line read from a file that is no `.rs` file: the
+                // listing never takes that file, so its tests would be passed over.
+                if let Kind::Mod { name, body: None } = &item.kind
+                    && item.path_off_listing()
+                {
+                    walk.makers.add(format!(
+                        "the module `{name}` {at}, read by `#[path]` from a file that is no `.rs` file a listing takes"
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// The tokens of the source `text` of the file at `path`, as the scan reads them (a
+/// byte order mark and a first line `#!` of an interpreter left out), held to
+/// [`MAX_DEPTH`]; or why they cannot be read.
+fn lexed(path: &RelPath, text: &str) -> Result<TokenStream, Untellable> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    // A first line `#!` that starts no inner attribute is the line of an
+    // interpreter, which rustc skips too; its line end is kept, so lines count
+    // as in the file.
+    let text = match text.strip_prefix("#!") {
+        Some(rest) if !rest.trim_start().starts_with('[') => {
+            rest.find('\n').map_or("", |end| &rest[end..])
+        }
+        _ => text,
+    };
+    let tokens: TokenStream = match text.parse() {
+        Ok(tokens) => tokens,
+        Err(e) => {
+            let start = e.span().start();
+            let at = (start.line > 0).then_some((start.line, start.column + 1));
+            return Err(Untellable::Lex {
+                path: path.clone(),
+                at: Place(at),
+            });
+        }
+    };
+    if nests_deeper_than(&tokens, MAX_DEPTH) {
+        return Err(Untellable::TooDeep {
+            path: path.clone(),
+            max: MAX_DEPTH,
+        });
+    }
+    Ok(tokens)
 }
 
 /// Drops the record of the source text `proc-macro2` keeps for the spans of the
@@ -832,6 +1392,34 @@ impl TestName {
             },
             written,
         ))
+    }
+
+    /// The name of the test the source writes as `function` under the inline
+    /// `modules` of the file at `file`, each segment as the source spells it (the
+    /// printing of its identifier: `r#type` stays so), so that a document written in
+    /// that spelling meets it (a cover compares names as written). The one place a
+    /// name is built from the source; it is read back by the one reader of the
+    /// grammar ([`TestName::parse_spelled`]) to the same file and the same segments
+    /// as written, or it is none, with why (a file whose path holds `::`, an
+    /// identifier the grammar refuses, a name the domain refuses).
+    fn of(file: &RelPath, modules: &[String], function: &str) -> Result<ArtifactName, NotAName> {
+        let segments: Vec<&str> = modules
+            .iter()
+            .map(String::as_str)
+            .chain(std::iter::once(function))
+            .collect();
+        let text = std::iter::once(file.as_str())
+            .chain(segments.iter().copied())
+            .collect::<Vec<_>>()
+            .join("::");
+        let (read, spelled) = Self::parse_spelled(&text)?;
+        if read.file != *file || spelled.iter().map(|s| s.text.as_str()).ne(segments) {
+            return Err(NotAName::NotReadBack(text));
+        }
+        ArtifactName::new(text.as_str()).map_err(|why| NotAName::Refused {
+            name: text.clone(),
+            why: why.to_string(),
+        })
     }
 
     fn wanted(&self) -> Wanted {
@@ -1024,34 +1612,10 @@ impl Text {
 /// file is lexed once, and its items scanned for each.
 fn look_up(path: &RelPath, text: &str, wanted: &[Wanted]) -> Vec<Found> {
     let _spans = Spans;
-    let every = |why: Untellable| vec![Found::CannotTell(why); wanted.len()];
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    // A first line `#!` that starts no inner attribute is the line of an
-    // interpreter, which rustc skips too; its line end is kept, so lines count
-    // as in the file.
-    let text = match text.strip_prefix("#!") {
-        Some(rest) if !rest.trim_start().starts_with('[') => {
-            rest.find('\n').map_or("", |end| &rest[end..])
-        }
-        _ => text,
-    };
-    let tokens: TokenStream = match text.parse() {
+    let tokens = match lexed(path, text) {
         Ok(tokens) => tokens,
-        Err(e) => {
-            let start = e.span().start();
-            let at = (start.line > 0).then_some((start.line, start.column + 1));
-            return every(Untellable::Lex {
-                path: path.clone(),
-                at: Place(at),
-            });
-        }
+        Err(why) => return vec![Found::CannotTell(why); wanted.len()],
     };
-    if nests_deeper_than(&tokens, MAX_DEPTH) {
-        return every(Untellable::TooDeep {
-            path: path.clone(),
-            max: MAX_DEPTH,
-        });
-    }
     let top = Items::scan(tokens);
     // The text of the items beside of each test part, by its place, made once.
     let mut parts = BTreeMap::new();
@@ -1080,6 +1644,51 @@ struct Scanned {
     kind: Kind,
     start: usize,
     end: usize,
+}
+
+impl Scanned {
+    /// Whether the item is a test: a function that carries a test attribute
+    /// ([`is_test`], the rule on the page of the module). The one place it is told,
+    /// for finding a test, leaving the tests out of the items beside, and listing.
+    fn is_test(&self) -> bool {
+        matches!(self.kind, Kind::Fn(_)) && self.attrs.iter().any(is_test)
+    }
+
+    /// What of its outer attributes may make an item: each that is not inert
+    /// ([`not_inert`]), as a path, in the order written; none when all are.
+    fn maker(&self) -> Vec<String> {
+        self.attrs.iter().filter_map(not_inert).collect()
+    }
+
+    /// What of its outer attributes, besides a test attribute, may make an item:
+    /// on a test, an attribute macro beside `#[test]` may make more tests.
+    fn maker_beside_test(&self) -> Vec<String> {
+        self.attrs.iter().flat_map(beside_test).collect()
+    }
+
+    /// [`maker`](Self::maker) in a module whose `use` items make `scope`: a bare
+    /// derive of a name one brings in, or of any name where a glob is, may be a
+    /// crate's.
+    fn maker_in(&self, scope: &Scope) -> Vec<String> {
+        self.attrs
+            .iter()
+            .filter_map(|attr| not_inert_in(attr, scope))
+            .collect()
+    }
+
+    /// Its test attributes that are a path of more than one segment (`tokio::test`):
+    /// a crate's macro, which may write more tests than the one it is read as.
+    fn test_macros(&self) -> Vec<String> {
+        self.attrs.iter().flat_map(test_macros).collect()
+    }
+
+    /// Whether a `#[path]` on it names a file a listing cannot read as Rust: a
+    /// literal that does not end in `.rs`, or a `path` in another form.
+    fn path_off_listing(&self) -> bool {
+        self.attrs
+            .iter()
+            .any(|attr| path_is_rust(attr) == Some(false))
+    }
 }
 
 /// What an item is, as far as the scan tells.
@@ -1260,6 +1869,11 @@ impl Makers {
     fn is_empty(&self) -> bool {
         self.shown.is_empty()
     }
+
+    /// The first one seen.
+    fn first(&self) -> Option<&str> {
+        self.shown.first().map(String::as_str)
+    }
 }
 
 impl fmt::Display for Makers {
@@ -1374,13 +1988,11 @@ fn find(
                     out_of_line.get_or_insert_with(|| named.join("::"));
                     continue;
                 };
-                for attr in &item.attrs {
-                    if let Some(p) = not_inert(attr) {
-                        makers.add(format!(
-                            "the attribute `#[{p}]` on the module `{}`",
-                            named.join("::")
-                        ));
-                    }
+                for p in item.maker() {
+                    makers.add(format!(
+                        "the attribute `#[{p}]` on the module `{}`",
+                        named.join("::")
+                    ));
                 }
                 let items = Items::scan(body.stream());
                 items.makers(&mut makers);
@@ -1410,16 +2022,14 @@ fn find(
             if !function.names(name) {
                 continue;
             }
-            if item.attrs.iter().any(is_test) {
+            if item.is_test() {
                 texts.push(without_docs(level.tokens_of(item)).to_string());
                 parts.insert(at.part());
             } else {
-                for attr in &item.attrs {
-                    if let Some(p) = not_inert(attr) {
-                        makers.add(format!(
-                            "the attribute `#[{p}]` on the function `{function}`"
-                        ));
-                    }
+                for p in item.maker() {
+                    makers.add(format!(
+                        "the attribute `#[{p}]` on the function `{function}`"
+                    ));
                 }
             }
         }
@@ -1491,7 +2101,7 @@ fn beside(items: &Items, depth: usize, over: &[TokenTree], lines: &mut Vec<Token
     let mark: Vec<TokenTree> = mark.collect();
     for item in &items.items {
         match &item.kind {
-            Kind::Fn(_) if item.attrs.iter().any(is_test) => {}
+            Kind::Fn(_) if item.is_test() => {}
             Kind::Mod {
                 body: Some(body), ..
             } => {
@@ -1707,6 +2317,35 @@ fn paths_in(tokens: &[TokenTree], out: &mut Vec<Vec<String>>) {
         }
         return;
     }
+    // `#[derive(A, b::C)]` is each derive it names, marked as one: `derive`, then the
+    // path of the derive.
+    if path.len() == 1
+        && path[0] == "derive"
+        && let Some(TokenTree::Group(list)) = tokens.get(1)
+        && list.delimiter() == Delimiter::Parenthesis
+    {
+        let inside: Vec<TokenTree> = list.stream().into_iter().collect();
+        for part in inside.split(|t| matches!(t, TokenTree::Punct(p) if p.as_char() == ',')) {
+            if !part.is_empty() {
+                let mut derive = vec![DERIVE.to_owned()];
+                derive.extend(path_at(part));
+                out.push(derive);
+            }
+        }
+        return;
+    }
+    // `#[unsafe(no_mangle)]` (edition 2024) is the attribute inside it.
+    if path.len() == 1
+        && path[0] == "unsafe"
+        && let Some(TokenTree::Group(inner)) = tokens.get(1)
+        && inner.delimiter() == Delimiter::Parenthesis
+    {
+        let inside: Vec<TokenTree> = inner.stream().into_iter().collect();
+        if !inside.is_empty() {
+            paths_in(&inside, out);
+            return;
+        }
+    }
     out.push(path);
 }
 
@@ -1732,25 +2371,166 @@ fn path_at(tokens: &[TokenTree]) -> Vec<String> {
 /// Whether an attribute makes the function a test: one whose path's last segment
 /// is `test`, itself or in a `cfg_attr` (the rule on the page of the module).
 fn is_test(attr: &Group) -> bool {
-    attribute_paths(attr)
-        .iter()
-        .any(|path| path.last().is_some_and(|s| s == "test"))
+    attribute_paths(attr).iter().any(|path| is_test_path(path))
+}
+
+/// Whether the path of an attribute is a test attribute: its last segment is `test`
+/// (a derive is none).
+fn is_test_path(path: &[String]) -> bool {
+    path.first().is_none_or(|first| first != DERIVE) && path.last().is_some_and(|s| s == "test")
+}
+
+/// Whether the path of an attribute is inert: one of [`INERT_ATTRIBUTES`], one of a
+/// tool, or a derive of [`INERT_DERIVES`], under `std` or `core`, or by its bare name
+/// when no `use` of the module it is written in names an item so and no glob `use` is
+/// written there (`scope`: a `use` may bring a derive of a crate in under that name).
+fn inert(path: &[String], scope: &Scope) -> bool {
+    match path {
+        [] => true,
+        [derive, rest @ ..] if derive == DERIVE => match rest {
+            [] => true,
+            [name] => INERT_DERIVES.contains(&name.as_str()) && !scope.shadows(name),
+            [root, .., name] => {
+                matches!(root.as_str(), "std" | "core") && INERT_DERIVES.contains(&name.as_str())
+            }
+        },
+        [one] => INERT_ATTRIBUTES.contains(&one.as_str()),
+        [tool, ..] => TOOLS.contains(&tool.as_str()),
+    }
+}
+
+/// An attribute's path as a reason writes it: `derive(serde::Serialize)` for a
+/// derive, else its segments.
+fn written(path: &[String]) -> String {
+    match path {
+        [derive, rest @ ..] if derive == DERIVE => format!("derive({})", rest.join("::")),
+        _ => path.join("::"),
+    }
 }
 
 /// The first attribute of `attr` that is not inert, written as a path; none when
 /// all are.
 fn not_inert(attr: &Group) -> Option<String> {
+    not_inert_in(attr, &Scope::default())
+}
+
+/// [`not_inert`], in a module whose `use` items make `scope`.
+fn not_inert_in(attr: &Group, scope: &Scope) -> Option<String> {
     attribute_paths(attr)
         .into_iter()
-        .find(|path| {
-            let inert = match path.as_slice() {
-                [] => true,
-                [one] => INERT_ATTRIBUTES.contains(&one.as_str()),
-                [tool, ..] => TOOLS.contains(&tool.as_str()),
-            };
-            !inert
-        })
-        .map(|path| path.join("::"))
+        .find(|path| !inert(path, scope))
+        .map(|path| written(&path))
+}
+
+/// Each attribute of `attr` that is neither inert nor a test attribute, written as a
+/// path: what, on a function that is a test, may make other tests.
+fn beside_test(attr: &Group) -> Vec<String> {
+    attribute_paths(attr)
+        .into_iter()
+        .filter(|path| !inert(path, &Scope::default()) && !is_test_path(path))
+        .map(|path| written(&path))
+        .collect()
+}
+
+/// Each test attribute of `attr` that is a path of more than one segment
+/// (`tokio::test`, `test_log::test`), written as a path: a macro of a crate, which
+/// may write more than the one test it is read as.
+fn test_macros(attr: &Group) -> Vec<String> {
+    attribute_paths(attr)
+        .into_iter()
+        .filter(|path| is_test_path(path) && path.len() > 1)
+        .map(|path| written(&path))
+        .collect()
+}
+
+/// When `attr` is a `path` attribute, whether its file is one a listing reads: the
+/// literal of `#[path = "…"]` ends in `.rs` (raw or not). A `path` in any other form
+/// (under a `cfg_attr`, or not a literal) is none it can tell. None when `attr` is no
+/// `path` attribute.
+fn path_is_rust(attr: &Group) -> Option<bool> {
+    let tokens: Vec<TokenTree> = attr.stream().into_iter().collect();
+    if let [
+        TokenTree::Ident(name),
+        TokenTree::Punct(eq),
+        TokenTree::Literal(file),
+    ] = tokens.as_slice()
+        && name == "path"
+        && eq.as_char() == '='
+    {
+        let file = file.to_string();
+        return Some(file.ends_with(".rs\"") || file.ends_with(".rs\"#"));
+    }
+    attribute_paths(attr)
+        .iter()
+        .any(|path| path.len() == 1 && path[0] == "path")
+        .then_some(false)
+}
+
+/// What the `use` items of one module (one list of items, not those of a module in
+/// it nor of one around it) bring into its scope, as Rust resolves a name there: the
+/// last segment of each path of a `use` tree, or its alias, and whether a glob
+/// (`use x::*;`) is among them, which may bring in any name.
+#[derive(Debug, Default)]
+struct Scope {
+    names: BTreeSet<String>,
+    glob: bool,
+}
+
+impl Scope {
+    /// The scope the `use` items of `items` make.
+    fn of(items: &Items) -> Self {
+        let mut scope = Self::default();
+        for item in &items.items {
+            if !matches!(item.kind, Kind::Other) {
+                continue;
+            }
+            let tokens: Vec<TokenTree> = items.tokens_of(item).into_iter().collect();
+            let mut k = 2 * item.attrs.len();
+            if word(&tokens, k) == Some("pub") {
+                k += 1;
+                if matches!(tokens.get(k), Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis)
+                {
+                    k += 1;
+                }
+            }
+            if matches!(tokens.get(k), Some(TokenTree::Ident(u)) if u == "use") {
+                named_in_use(&tokens[k + 1..], &mut scope);
+            }
+        }
+        scope
+    }
+
+    /// Whether a bare `name` may name an item a `use` of the module brings in.
+    fn shadows(&self, name: &str) -> bool {
+        self.glob || self.names.contains(name)
+    }
+}
+
+/// The names a `use` tree brings in: each identifier that ends a path (before `,`,
+/// `;` or the end of a group) and each one after `as`; and a `*`, a glob.
+fn named_in_use(tokens: &[TokenTree], out: &mut Scope) {
+    for (i, token) in tokens.iter().enumerate() {
+        match token {
+            TokenTree::Group(group) => {
+                let inside: Vec<TokenTree> = group.stream().into_iter().collect();
+                named_in_use(&inside, out);
+            }
+            TokenTree::Punct(p) if p.as_char() == '*' => out.glob = true,
+            TokenTree::Ident(ident) => {
+                let ends = match tokens.get(i + 1) {
+                    None => true,
+                    Some(TokenTree::Punct(p)) => matches!(p.as_char(), ',' | ';'),
+                    _ => false,
+                };
+                let aliased =
+                    i > 0 && matches!(&tokens[i - 1], TokenTree::Ident(before) if before == "as");
+                if ends || aliased {
+                    out.names.insert(Segment::of(&ident.to_string()).0);
+                }
+            }
+            TokenTree::Punct(_) | TokenTree::Literal(_) => {}
+        }
+    }
 }
 
 /// The tokens without the doc attributes (`#[doc …]`, `#![doc …]`, which `///` and
@@ -1872,7 +2652,7 @@ mod tests {
         }
 
         fn lists(&self) -> bool {
-            false
+            true
         }
 
         fn places(&self) -> bool {
@@ -1880,10 +2660,9 @@ mod tests {
         }
 
         fn adapter_at(&self, dir: &Path) -> super::super::Adapter {
-            super::super::Adapter::RustTest(RustTestSpace {
-                max_file: MAX_TEST_FILE,
-                ..RustTestSpace::new(dir.to_path_buf())
-            })
+            super::super::Adapter::RustTest(
+                RustTestSpace::new(dir.to_path_buf()).with_max_file(MAX_TEST_FILE),
+            )
         }
 
         async fn tree(&self, dir: &Path) -> conformance::Tree {
@@ -1933,6 +2712,24 @@ mod tests {
                 n("src/a.rs::tests::inner"),
                 n("src/a.rs::checks::inner"),
             ));
+            // The files are listed through Git: with none here, no listing is made.
+            if conformance::git_runs().await {
+                conformance::isolated_git(&root, &["init", "-q"]).await;
+                tree.listing = Some(conformance::ListCase {
+                    // The three tests of the file: one, the twins as one, and the one in
+                    // its module of tests.
+                    selection: select(&["src/a.rs"]),
+                    bad: select(&["/a.rs"]),
+                    bounded: super::super::Adapter::RustTest(
+                        RustTestSpace::new(root.clone())
+                            .with_max_file(MAX_TEST_FILE)
+                            .with_limits(ScanLimits {
+                                names: 1,
+                                ..ScanLimits::default()
+                            }),
+                    ),
+                });
+            }
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -2713,10 +3510,7 @@ mod tests {
         let why = unknown_why(r, "src/deep.rs::a").await;
         assert!(why.contains("deeper than 128"), "{why}");
         // One that is too large.
-        let small = RustTestSpace {
-            max_file: 100,
-            ..RustTestSpace::new(r.to_path_buf())
-        };
+        let small = RustTestSpace::new(r.to_path_buf()).with_max_file(100);
         let found = small.resolve(&asks(&["src/lib.rs::top"])).await.unwrap();
         match found[&n("src/lib.rs::top")].state(&Comparison::Bytes) {
             ArtifactState::Unknown(Untold::Said(why)) => {
@@ -2862,5 +3656,762 @@ mod tests {
             text_in("#![allow(unused)]\n#[test] fn a() {}\n", &[], "a"),
             "# [test] fn a () { }\n#! [allow (unused)]"
         );
+    }
+
+    // Listing the names of a selection.
+
+    fn select(include: &[&str]) -> Selection {
+        Selection::new(include.iter().map(|s| (*s).to_owned()).collect(), vec![]).unwrap()
+    }
+
+    fn names(texts: &[&str]) -> BTreeSet<ArtifactName> {
+        texts.iter().map(|t| n(t)).collect()
+    }
+
+    async fn listing_of(space: &RustTestSpace, include: &[&str]) -> NameListing {
+        space.list(Side::After, &select(include)).await.unwrap()
+    }
+
+    fn why_of(listing: &NameListing) -> String {
+        match listing {
+            NameListing::Some { why, .. } => why.as_str().to_owned(),
+            other => panic!("a listing that is not all: {other:?}"),
+        }
+    }
+
+    /// `files` under a new root, in a repository of Git (untracked, so listed as files
+    /// not ignored); none when Git cannot be run here.
+    async fn in_git(files: &[(&str, &str)]) -> Option<tempfile::TempDir> {
+        if !conformance::git_runs().await {
+            return None;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        for (at, text) in files {
+            write(dir.path(), at, text).await;
+        }
+        conformance::isolated_git(dir.path(), &["init", "-q"]).await;
+        Some(dir)
+    }
+
+    /// Tests at the top, in inline modules two deep, twins of a function and of a
+    /// module, a raw identifier, raw and plain twins, a module out of line, and a
+    /// `#[test]` in a string.
+    const LISTED: &str = r##"#[test]
+fn top() {}
+
+fn helper() {}
+
+#[cfg(test)]
+mod tests {
+    const S: &str = "#[test] fn in_a_string() {}";
+
+    #[test]
+    fn r#type() {}
+
+    #[cfg(unix)]
+    #[test]
+    fn twin() {}
+
+    #[cfg(not(unix))]
+    #[test]
+    fn twin() {}
+
+    #[cfg(unix)]
+    #[test]
+    fn r#both() {}
+
+    #[cfg(not(unix))]
+    #[test]
+    fn both() {}
+
+    mod deeper {
+        mod deepest {
+            #[test]
+            fn far() {}
+        }
+    }
+
+    mod elsewhere;
+}
+
+#[cfg(not(test))]
+mod tests {
+    #[test]
+    fn in_a_twin_module() {}
+}
+"##;
+
+    #[tokio::test]
+    async fn a_listing_names_every_test_of_the_rs_files_taken_as_the_source_spells_it() {
+        let Some(dir) = in_git(&[
+            ("src/lib.rs", LISTED),
+            ("src/notes.txt", "#[test]\nfn not_rust() {}\n"),
+            ("other/x.rs", "#[test]\nfn not_taken() {}\n"),
+        ])
+        .await
+        else {
+            return;
+        };
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        let listed = [
+            "src/lib.rs::top",
+            "src/lib.rs::tests::r#type",
+            "src/lib.rs::tests::twin",
+            "src/lib.rs::tests::r#both",
+            "src/lib.rs::tests::deeper::deepest::far",
+            "src/lib.rs::tests::in_a_twin_module",
+        ];
+        let listing = listing_of(&space, &["src/**"]).await;
+        assert_eq!(listing, NameListing::All(names(&listed)));
+        // Each is a name of the grammar, which `resolve` answers as there.
+        let found = space.resolve(&asks(&listed)).await.unwrap();
+        for name in listed {
+            assert!(TestName::parse(name).is_ok(), "{name}");
+            assert!(
+                matches!(
+                    found[&n(name)].state(&Comparison::Bytes),
+                    ArtifactState::Present(_)
+                ),
+                "{name}: {:?}",
+                found[&n(name)]
+            );
+        }
+        // The same content, the same names; a file with no test adds none.
+        write(dir.path(), "src/empty.rs", "fn not_a_test() {}\n").await;
+        assert_eq!(
+            listing_of(&space, &["src/**"]).await,
+            NameListing::All(names(&listed))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_listing_is_not_all_where_something_may_make_a_test() {
+        let deep = format!(
+            "#[test] fn a() {{ {}{} }}",
+            "(".repeat(MAX_DEPTH + 1),
+            ")".repeat(MAX_DEPTH + 1)
+        );
+        let Some(dir) = in_git(&[
+            ("call.rs", "#[test]\nfn a() {}\nproptest! { fn b() {} }\n"),
+            ("only_call.rs", "opaque!(X);\n"),
+            ("module.rs", "#[my_attr]\nmod m {\n    #[test]\n    fn a() {}\n}\n"),
+            ("inner.rs", "#![my_inner]\n#[test]\nfn a() {}\n"),
+            ("main.rs", "#[tokio::main]\nasync fn main() {}\n"),
+            ("rstest.rs", "#[rstest]\nfn a() {}\n"),
+            ("lex.rs", "fn a() { \"unclosed }\n"),
+            ("deep.rs", &deep),
+            (
+                "inert.rs",
+                "#[cfg(test)]\n#[allow(dead_code)]\nmod m {\n    #[inline]\n    fn h() {}\n    #[test]\n    #[ignore]\n    fn a() {}\n}\n",
+            ),
+        ])
+        .await
+        else {
+            return;
+        };
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        for (file, found, maker) in [
+            ("call.rs", vec!["call.rs::a"], "the macro call `proptest!`"),
+            ("only_call.rs", vec![], "the macro call `opaque!`"),
+            (
+                "module.rs",
+                vec!["module.rs::m::a"],
+                "`#[my_attr]` on the module `m`",
+            ),
+            ("inner.rs", vec!["inner.rs::a"], "`#![my_inner]`"),
+            ("main.rs", vec![], "`#[tokio::main]` on the function `main`"),
+            ("rstest.rs", vec![], "`#[rstest]` on the function `a`"),
+            ("lex.rs", vec![], "does not parse as Rust"),
+            ("deep.rs", vec![], "deeper than"),
+        ] {
+            let listing = listing_of(&space, &[file]).await;
+            let NameListing::Some { found: listed, why } = &listing else {
+                panic!("{file}: {listing:?}");
+            };
+            assert_eq!(listed, &names(&found), "{file}");
+            assert!(why.as_str().starts_with(file), "{file}: {why}");
+            assert!(why.as_str().contains(maker), "{file}: {why}");
+        }
+        // Attributes that are inert, on a module and on functions, keep it whole.
+        assert_eq!(
+            listing_of(&space, &["inert.rs"]).await,
+            NameListing::All(names(&["inert.rs::m::a"]))
+        );
+        // Each file is named, the first few, and the rest counted.
+        let all = why_of(&listing_of(&space, &["*.rs"]).await);
+        assert!(all.ends_with("; and 3 more file(s)"), "{all}");
+    }
+
+    #[tokio::test]
+    async fn a_file_that_cannot_be_read_keeps_a_listing_from_being_all() {
+        let Some(dir) = in_git(&[
+            ("a.rs", "#[test]\nfn a() {}\n"),
+            ("big.rs", &"/".repeat(80)),
+        ])
+        .await
+        else {
+            return;
+        };
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
+        tokio::fs::write(dir.path().join("bytes.rs"), [0xff, 0xfe, b'\n'])
+            .await
+            .unwrap();
+        let listing = listing_of(&RustTestSpace::new(dir.path().to_path_buf()), &["*.rs"]).await;
+        let NameListing::Some { found, why } = &listing else {
+            panic!("{listing:?}");
+        };
+        assert_eq!(found, &names(&["a.rs::a"]));
+        assert!(why.as_str().contains("bytes.rs is not UTF-8"), "{why}");
+        // A file past the bound of bytes is one a reading cannot tell, as for `file`.
+        let small = RustTestSpace::new(dir.path().to_path_buf()).with_max_file(64);
+        let why = why_of(&listing_of(&small, &["a.rs", "big.rs"]).await);
+        assert_eq!(
+            why,
+            "1 file(s) the selection takes that a reading cannot tell (past the bound of bytes, leading out of the project, or not readable)"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_listing_past_its_bound_of_names_or_with_a_name_it_cannot_write_is_some() {
+        let long = format!("#[test]\nfn {}() {{}}\n", "a".repeat(5000));
+        let Some(dir) = in_git(&[
+            (
+                "a.rs",
+                "#[test]\nfn one() {}\n#[test]\nfn two() {}\n#[test]\nfn three() {}\n",
+            ),
+            ("long.rs", &long),
+        ])
+        .await
+        else {
+            return;
+        };
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        let one = space.clone().with_limits(ScanLimits {
+            names: 1,
+            ..ScanLimits::default()
+        });
+        let listing = listing_of(&one, &["a.rs"]).await;
+        let NameListing::Some { found, why } = &listing else {
+            panic!("{listing:?}");
+        };
+        assert_eq!(found, &names(&["a.rs::one"]));
+        assert_eq!(
+            why.as_str(),
+            "the selection takes more than 1 names, and the listing stops there"
+        );
+        // As many tests as the bound is all of them: the bound is of names, not files.
+        let three = space.clone().with_limits(ScanLimits {
+            names: 3,
+            ..ScanLimits::default()
+        });
+        assert!(matches!(
+            listing_of(&three, &["a.rs"]).await,
+            NameListing::All(found) if found.len() == 3
+        ));
+        // Past the files, or the bytes in all, one listing reads: it stops, and says
+        // so. The size of a file is looked at before it is opened, so a file past the
+        // bytes left is not read at all.
+        let a = u64::try_from(
+            "#[test]\nfn one() {}\n#[test]\nfn two() {}\n#[test]\nfn three() {}\n".len(),
+        )
+        .unwrap();
+        for (bounded, read, found_after) in [
+            (
+                ScanLimits {
+                    files: 1,
+                    ..ScanLimits::default()
+                },
+                format!("1 file(s) of {a} bytes"),
+                names(&["a.rs::one", "a.rs::two", "a.rs::three"]),
+            ),
+            (
+                ScanLimits {
+                    total_bytes: a,
+                    ..ScanLimits::default()
+                },
+                format!("1 file(s) of {a} bytes"),
+                names(&["a.rs::one", "a.rs::two", "a.rs::three"]),
+            ),
+            (
+                ScanLimits {
+                    total_bytes: a - 1,
+                    ..ScanLimits::default()
+                },
+                "0 file(s) of 0 bytes".to_owned(),
+                BTreeSet::new(),
+            ),
+        ] {
+            let listing = listing_of(&space.clone().with_limits(bounded), &["*.rs"]).await;
+            let NameListing::Some { found, why } = &listing else {
+                panic!("{bounded:?}: {listing:?}");
+            };
+            assert_eq!(found, &found_after, "{bounded:?}");
+            assert!(
+                why.as_str()
+                    .starts_with(&format!("the listing stops after reading {read} in all")),
+                "{bounded:?}: {why}"
+            );
+        }
+        // A name longer than a name may be.
+        let listing = listing_of(&space, &["long.rs"]).await;
+        assert_eq!(
+            why_of(&listing),
+            "1 test(s) whose name cannot be written as a name of the space"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_listing_that_cannot_be_made_is_no_error_and_a_side_not_read_is_one() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "a.rs", "#[test]\nfn a() {}\n").await;
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        // Outside a repository the state cannot list the files.
+        assert!(matches!(
+            listing_of(&space, &["*.rs"]).await,
+            NameListing::CannotList(_)
+        ));
+        // A text that is no pattern: no selection, and no listing, with the same why.
+        let bad = select(&["/a.rs"]);
+        let why = space.select(&bad).unwrap_err().why().clone();
+        assert_eq!(
+            space.list(Side::After, &bad).await.unwrap(),
+            NameListing::CannotList(why)
+        );
+        assert!(space.select(&select(&["src/**/*.rs"])).is_ok());
+        // A run of one side reads no side before: the whole ask fails.
+        assert!(matches!(
+            space.list(Side::Before, &select(&["*.rs"])).await,
+            Err(RustTestError::State(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_through_git_each_side_lists_the_tests_of_its_commit() {
+        use super::super::super::state::GitAfter;
+        use super::super::super::state::git::GitStates;
+        let Some(dir) = in_git(&[("src/a.rs", "#[test]\nfn first() {}\n")]).await else {
+            return;
+        };
+        let root = dir.path();
+        conformance::isolated_git(root, &["add", "-A"]).await;
+        conformance::isolated_git(root, &["commit", "-q", "-m", "one"]).await;
+        write(root, "src/a.rs", "#[test]\nfn second() {}\n").await;
+        conformance::isolated_git(root, &["add", "-A"]).await;
+        conformance::isolated_git(root, &["commit", "-q", "-m", "two"]).await;
+        // In the work tree only: no commit holds it.
+        write(root, "src/loose.rs", "#[test]\nfn loose() {}\n").await;
+        let Ok(states) = GitStates::open(
+            root.to_path_buf(),
+            "HEAD~1",
+            &GitAfter::Commit("HEAD".to_owned()),
+        )
+        .await
+        else {
+            // A Git too old to read a commit as a checkout writes it.
+            return;
+        };
+        let space = RustTestSpace::on(ProjectTree::git(states));
+        let selection = select(&["src/**/*.rs"]);
+        assert_eq!(
+            space.list(Side::Before, &selection).await.unwrap(),
+            NameListing::All(names(&["src/a.rs::first"]))
+        );
+        assert_eq!(
+            space.list(Side::After, &selection).await.unwrap(),
+            NameListing::All(names(&["src/a.rs::second"]))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_test_listed_lives_where_the_file_it_is_listed_of_is_placed() {
+        let Some(dir) = in_git(&[("src/a.rs", "#[test]\nfn one() {}\n")]).await else {
+            return;
+        };
+        #[cfg(unix)]
+        // arch-lint: allow(readers-read-through-the-state) reason="a test sets up its tree on the file system"
+        tokio::fs::symlink("a.rs", dir.path().join("src/link.rs"))
+            .await
+            .unwrap();
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        let NameListing::All(listed) = listing_of(&space, &["src/**/*.rs"]).await else {
+            panic!("the files are listed whole");
+        };
+        assert!(listed.contains(&n("src/a.rs::one")), "{listed:?}");
+        let placed = space.places(Side::After, &listed).await.unwrap();
+        for name in &listed {
+            let file = TestName::parse(name.as_str()).unwrap().file;
+            let only = file::placed_only(&space.state, Side::After, &file)
+                .await
+                .unwrap();
+            assert_eq!(placed[name], only, "{name}");
+            assert!(
+                matches!(&only, Placement::Only(files) if files.contains(&file)),
+                "{name}: {only:?}"
+            );
+        }
+        #[cfg(unix)]
+        assert!(listed.contains(&n("src/link.rs::one")), "{listed:?}");
+    }
+
+    #[tokio::test]
+    async fn an_attribute_macro_or_a_derive_on_any_item_keeps_a_listing_from_being_all() {
+        const TEST: &str = "#[test]\nfn a() {}\n";
+        let with = |item: &str| format!("{item}\n{TEST}");
+        let files = [
+            ("impl.rs", with("#[my_macro]\nimpl S {}")),
+            (
+                "struct.rs",
+                with("#[derive(Debug, serde::Serialize)]\nstruct S;"),
+            ),
+            ("enum.rs", with("#[derive(thiserror::Error)]\nenum E {}")),
+            ("trait.rs", with("#[my_macro]\ntrait T {}")),
+            ("const.rs", with("#[my_macro]\nconst X: u8 = 1;")),
+            ("static.rs", with("#[my_macro]\nstatic Y: u8 = 1;")),
+            ("outside.rs", with("#[my_macro]\nmod x;")),
+            ("included.rs", with("#[path = \"x.inc\"]\nmod tests;")),
+            (
+                "unread_path.rs",
+                with("#[cfg_attr(unix, path = \"x.rs\")]\nmod tests;"),
+            ),
+            (
+                "inner.rs",
+                "mod m {\n    #[my_macro]\n    struct S;\n    #[test]\n    fn a() {}\n}\n"
+                    .to_owned(),
+            ),
+            (
+                "std.rs",
+                with(
+                    "#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]\n#[derive(std::fmt::Debug, core::hash::Hash)]\n#[repr(C)]\n#[cfg(unix)]\n#[allow(dead_code)]\nstruct S;\n#[path = \"y.rs\"]\nmod y;\n#[path = r\"z.rs\"]\nmod z;",
+                ),
+            ),
+        ];
+        let files: Vec<(&str, &str)> = files.iter().map(|(p, t)| (*p, t.as_str())).collect();
+        let Some(dir) = in_git(&files).await else {
+            return;
+        };
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        for (file, maker) in [
+            ("impl.rs", "`#[my_macro]` on an item at the top of the file"),
+            ("struct.rs", "`#[derive(serde::Serialize)]` on an item"),
+            ("enum.rs", "`#[derive(thiserror::Error)]` on an item"),
+            ("trait.rs", "`#[my_macro]` on an item"),
+            ("const.rs", "`#[my_macro]` on an item"),
+            ("static.rs", "`#[my_macro]` on an item"),
+            ("outside.rs", "`#[my_macro]` on an item"),
+            (
+                "included.rs",
+                "the module `tests` at the top of the file, read by `#[path]` from a file that is no `.rs` file",
+            ),
+            (
+                "unread_path.rs",
+                "the module `tests` at the top of the file, read by `#[path]`",
+            ),
+            ("inner.rs", "`#[my_macro]` on an item in the module `m`"),
+        ] {
+            let listing = listing_of(&space, &[file]).await;
+            let NameListing::Some { found, why } = &listing else {
+                panic!("{file}: an attribute that may make a test is passed over: {listing:?}");
+            };
+            assert_eq!(found.len(), 1, "{file}: the test is still found");
+            assert!(why.as_str().starts_with(file), "{file}: {why}");
+            assert!(why.as_str().contains(maker), "{file}: {why}");
+        }
+        // The derives of the standard library and the built-in attributes keep it
+        // whole.
+        assert_eq!(
+            listing_of(&space, &["std.rs"]).await,
+            NameListing::All(names(&["std.rs::a"]))
+        );
+    }
+
+    #[test]
+    fn the_built_in_attributes_are_inert_and_those_of_a_crate_are_not() {
+        let built_in = [
+            "repr(C)",
+            "non_exhaustive",
+            "must_use",
+            "deprecated(note = \"x\")",
+            "doc = \"x\"",
+            "doc(hidden)",
+            "inline(always)",
+            "cold",
+            "track_caller",
+            "allow(dead_code)",
+            "warn(unused)",
+            "deny(missing_docs)",
+            "forbid(unsafe_code)",
+            "expect(dead_code, reason = \"x\")",
+            "automatically_derived",
+            "no_mangle",
+            "unsafe(no_mangle)",
+            "export_name = \"x\"",
+            "link_section = \".x\"",
+            "used",
+            "link(name = \"x\")",
+            "link_name = \"x\"",
+            "no_link",
+            "path = \"x.rs\"",
+            "ignore",
+            "should_panic(expected = \"x\")",
+            "macro_use",
+            "macro_export",
+            "target_feature(enable = \"avx2\")",
+            "global_allocator",
+            "panic_handler",
+            "naked",
+            "debugger_visualizer(natvis_file = \"x.natvis\")",
+            "collapse_debuginfo(yes)",
+            "cfg(unix)",
+            "cfg_attr(unix, repr(C))",
+            "derive(Debug, Clone, std::hash::Hash)",
+            "clippy::cognitive_complexity",
+            "diagnostic::on_unimplemented(message = \"x\")",
+        ];
+        for attr in built_in {
+            let top = Items::scan(format!("#[{attr}]\nstruct S;\n").parse().unwrap());
+            assert_eq!(top.items[0].maker(), Vec::<String>::new(), "#[{attr}]");
+        }
+        // A derive of a crate and its helper attributes: what it writes is not seen.
+        for (attr, maker) in [
+            ("serde(rename_all = \"snake_case\")", "serde"),
+            ("error(\"x\")", "error"),
+            ("command(name = \"x\")", "command"),
+            (
+                "derive(Debug, thiserror::Error)",
+                "derive(thiserror::Error)",
+            ),
+            (
+                "cfg_attr(unix, derive(serde::Serialize))",
+                "derive(serde::Serialize)",
+            ),
+            ("my_macro", "my_macro"),
+            ("test", "test"),
+        ] {
+            let top = Items::scan(format!("#[{attr}]\nstruct S;\n").parse().unwrap());
+            assert_eq!(top.items[0].maker(), vec![maker.to_owned()], "#[{attr}]");
+        }
+    }
+
+    #[tokio::test]
+    async fn the_derives_of_the_standard_library_are_inert_and_no_other_is() {
+        let Some(dir) = in_git(&[
+            (
+                "std.rs",
+                "#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]\n#[derive(std::fmt::Debug, core::hash::Hash)]\n#[cfg(unix)]\n#[allow(dead_code)]\nstruct S;\n#[test]\nfn a() {}\n",
+            ),
+            ("named.rs", "#[derive(Debug, Serialize)]\nstruct S;\n#[test]\nfn a() {}\n"),
+            ("other.rs", "#[derive(my::Debug)]\nstruct S;\n#[test]\nfn a() {}\n"),
+            (
+                "aliased.rs",
+                "use serde::Serialize as Debug;\n#[derive(Debug)]\nstruct S;\n#[test]\nfn a() {}\n",
+            ),
+            (
+                "imported.rs",
+                "mod m {\n    use my::{derives::Clone, Other};\n    #[derive(Clone)]\n    struct S;\n}\n#[test]\nfn a() {}\n",
+            ),
+            (
+                "unused.rs",
+                "use my::Other;\n#[derive(Debug, Clone)]\nstruct S;\n#[test]\nfn a() {}\n",
+            ),
+            (
+                "glob.rs",
+                "use my::*;\n#[derive(Debug)]\nstruct S;\n#[test]\nfn a() {}\n",
+            ),
+            (
+                "child_glob.rs",
+                "#[derive(Debug)]\nstruct S;\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn a() {}\n}\n",
+            ),
+            (
+                "glob_inside.rs",
+                "#[derive(Debug)]\nstruct S;\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[derive(Clone)]\n    struct T;\n    #[test]\n    fn a() {}\n}\n",
+            ),
+            (
+                "parent_use.rs",
+                "use my::Debug;\nmod m {\n    #[derive(Debug)]\n    struct S;\n    #[test]\n    fn a() {}\n}\n",
+            ),
+        ])
+        .await
+        else {
+            return;
+        };
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        assert_eq!(
+            listing_of(&space, &["std.rs"]).await,
+            NameListing::All(names(&["std.rs::a"]))
+        );
+        assert!(
+            why_of(&listing_of(&space, &["named.rs"]).await).contains("`#[derive(Serialize)]`")
+        );
+        // A derive of another crate under a name the standard library uses.
+        assert!(
+            why_of(&listing_of(&space, &["other.rs"]).await).contains("`#[derive(my::Debug)]`")
+        );
+        // A bare name a `use` of the file brings in, as its last segment or by an
+        // alias, at the top or in a module: what it names is not told by its spelling.
+        assert!(
+            why_of(&listing_of(&space, &["aliased.rs"]).await)
+                .contains("`#[derive(Debug)]` on an item at the top of the file")
+        );
+        assert!(
+            why_of(&listing_of(&space, &["imported.rs"]).await)
+                .contains("`#[derive(Clone)]` on an item in the module `m`")
+        );
+        // A `use` of other names leaves them the standard library's.
+        assert_eq!(
+            listing_of(&space, &["unused.rs"]).await,
+            NameListing::All(names(&["unused.rs::a"]))
+        );
+        // A glob `use` may bring in any name, in the module it is written in only.
+        assert!(why_of(&listing_of(&space, &["glob.rs"]).await).contains(
+            "`#[derive(Debug)]` on an item at the top of the file, where a glob `use` of the module may bring in a derive named `Debug`"
+        ));
+        assert_eq!(
+            listing_of(&space, &["child_glob.rs"]).await,
+            NameListing::All(names(&["child_glob.rs::tests::a"]))
+        );
+        let inside = why_of(&listing_of(&space, &["glob_inside.rs"]).await);
+        assert!(
+            inside.contains("`#[derive(Clone)]` on an item in the module `tests`, where a glob"),
+            "{inside}"
+        );
+        assert!(!inside.contains("derive(Debug)"), "{inside}");
+        // A `use` of the module around does not reach a derive in a module in it.
+        assert_eq!(
+            listing_of(&space, &["parent_use.rs"]).await,
+            NameListing::All(names(&["parent_use.rs::m::a"]))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_test_attribute_of_a_crate_is_a_test_and_keeps_a_listing_from_being_all() {
+        let Some(dir) = in_git(&[
+            (
+                "tokio.rs",
+                "#[tokio::test]\nasync fn a() {}\n#[test]\nfn b() {}\n",
+            ),
+            ("cfg.rs", "#[cfg_attr(unix, test_log::test)]\nfn a() {}\n"),
+            (
+                "plain.rs",
+                "#[test]\nfn a() {}\n#[cfg_attr(unix, test)]\nfn b() {}\n",
+            ),
+        ])
+        .await
+        else {
+            return;
+        };
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        for (file, found, maker) in [
+            (
+                "tokio.rs",
+                vec!["tokio.rs::a", "tokio.rs::b"],
+                "`#[tokio::test]` on the test `a`, a macro that may write more than one test",
+            ),
+            (
+                "cfg.rs",
+                vec!["cfg.rs::a"],
+                "`#[test_log::test]` on the test `a`",
+            ),
+        ] {
+            let listing = listing_of(&space, &[file]).await;
+            let NameListing::Some { found: listed, why } = &listing else {
+                panic!("{file}: a test macro of a crate is passed over: {listing:?}");
+            };
+            assert_eq!(listed, &names(&found), "{file}: each is a test of its name");
+            assert!(why.as_str().contains(maker), "{file}: {why}");
+        }
+        // The test attribute of the language alone keeps it whole.
+        assert_eq!(
+            listing_of(&space, &["plain.rs"]).await,
+            NameListing::All(names(&["plain.rs::a", "plain.rs::b"]))
+        );
+    }
+
+    #[tokio::test]
+    async fn an_attribute_macro_beside_a_test_attribute_keeps_a_listing_from_being_all() {
+        let Some(dir) = in_git(&[
+            ("made.rs", "#[test]\n#[gen_variants]\nfn a() {}\n"),
+            ("cfg.rs", "#[cfg_attr(unix, test)]\n#[serial]\nfn a() {}\n"),
+            (
+                "inert.rs",
+                "#[test]\n#[ignore]\n#[should_panic]\nfn a() {}\n#[test]\n#[should_panic(expected = \"x\")]\nfn b() {}\n#[cfg_attr(unix, test)]\n#[allow(dead_code)]\nfn c() {}\n",
+            ),
+        ])
+        .await
+        else {
+            return;
+        };
+        let space = RustTestSpace::new(dir.path().to_path_buf());
+        for (file, maker) in [
+            ("made.rs", "`#[gen_variants]` on the test `a`"),
+            ("cfg.rs", "`#[serial]` on the test `a`"),
+        ] {
+            let listing = listing_of(&space, &[file]).await;
+            let NameListing::Some { found, why } = &listing else {
+                panic!("{file}: an attribute beside the test is passed over: {listing:?}");
+            };
+            assert_eq!(found, &names(&[format!("{file}::a").as_str()]), "{file}");
+            assert!(why.as_str().contains(maker), "{file}: {why}");
+        }
+        // The test named is still there to resolve: only the listing is not whole.
+        let read = space.resolve(&asks(&["made.rs::a"])).await.unwrap();
+        assert!(matches!(
+            read[&n("made.rs::a")].state(&Comparison::Bytes),
+            ArtifactState::Present(_)
+        ));
+        assert_eq!(
+            listing_of(&space, &["inert.rs"]).await,
+            NameListing::All(names(&["inert.rs::a", "inert.rs::b", "inert.rs::c"]))
+        );
+    }
+
+    #[test]
+    fn an_item_is_a_test_by_its_attribute_and_may_make_one_by_one_not_inert() {
+        let top = Items::scan(
+            "#[test] fn a() {}\n#[tokio::test] async fn b() {}\n#[cfg_attr(unix, test)] fn c() {}\n#[cfg(test)] fn d() {}\n#[rstest] fn e() {}\n#[test] mod f {}\n#[allow(x)] #[cfg(test)] #[clippy::y] fn g() {}\n#[a] #[b::c] #[inline] fn h() {}\n#[unsafe(no_mangle)] #[proc_macro] fn i() {}\n#[unsafe(a)] fn j() {}\n"
+                .parse()
+                .unwrap(),
+        );
+        let table: Vec<(bool, Vec<String>)> = top
+            .items
+            .iter()
+            .map(|item| (item.is_test(), item.maker()))
+            .collect();
+        let strings = |paths: &[&str]| paths.iter().map(|p| (*p).to_owned()).collect::<Vec<_>>();
+        assert_eq!(
+            table,
+            // A test attribute is itself not inert: what a test carries is never
+            // asked whether it may make one.
+            vec![
+                (true, strings(&["test"])),
+                (true, strings(&["tokio::test"])),
+                (true, strings(&["test"])),
+                (false, strings(&[])),
+                (false, strings(&["rstest"])),
+                (false, strings(&["test"])),
+                (false, strings(&[])),
+                (false, strings(&["a", "b::c"])),
+                (false, strings(&[])),
+                (false, strings(&["a"])),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_name_is_built_as_the_source_spells_it_and_reads_back() {
+        let file: RelPath = "x.rs".parse().unwrap();
+        let of = |modules: &[&str], function: &str| {
+            let modules: Vec<String> = modules.iter().map(|m| (*m).to_owned()).collect();
+            TestName::of(&file, &modules, function).map(|name| name.as_str().to_owned())
+        };
+        assert_eq!(of(&[], "r#foo").unwrap(), "x.rs::r#foo");
+        assert_eq!(of(&[], "r#type").unwrap(), "x.rs::r#type");
+        assert_eq!(
+            of(&["tests", "r#mod"], "a").unwrap(),
+            "x.rs::tests::r#mod::a"
+        );
+        // What the grammar would not read back is no name.
+        assert!(of(&[], "fn").is_err());
+        let odd: RelPath = "a::b.rs".parse().unwrap();
+        assert!(TestName::of(&odd, &[], "t").is_err());
     }
 }

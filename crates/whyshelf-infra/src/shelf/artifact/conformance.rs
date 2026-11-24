@@ -90,6 +90,52 @@ fn headings() -> Vec<&'static str> {
     headings
 }
 
+/// Whether `git` can be run here: a test that lists through Git passes without it.
+pub(super) async fn git_runs() -> bool {
+    tokio::process::Command::new("git")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .await
+        .is_ok_and(|s| s.success())
+}
+
+/// Git run on `dir` with the person's own settings shut out: no system file, an
+/// empty global file, a home of its own, and no `GIT_*` variable of the caller. For
+/// the hooks and the tests of the adapters whose listing is read through Git.
+pub(super) async fn isolated_git(dir: &Path, args: &[&str]) {
+    let home = dir.join(".home");
+    let global = home.join("gitconfig");
+    if let Err(e) = tokio::fs::create_dir_all(&home).await {
+        panic!("{}: {e}", home.display());
+    }
+    if let Err(e) = tokio::fs::write(&global, "").await {
+        panic!("{}: {e}", global.display());
+    }
+    let mut command = tokio::process::Command::new("git");
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(&name);
+        }
+    }
+    let ran = command
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .env("GIT_CONFIG_GLOBAL", &global)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .arg("-C")
+        .arg(dir)
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+        .args(args)
+        .output()
+        .await;
+    match ran {
+        Ok(out) => assert!(out.status.success(), "git {args:?}: {out:?}"),
+        Err(e) => panic!("git {args:?} cannot be run: {e}"),
+    }
+}
+
 /// What a hook wrote, and what each of its names comes to.
 pub(super) struct Tree {
     /// The adapter over the tree.

@@ -147,17 +147,21 @@
 //! pattern makes the selection no selection of the space, with why, and its listing
 //! [`NameListing::CannotList`] with the same why.
 //!
-//! The listing is the files Git lists (`git ls-files --cached --others
-//! --exclude-standard`, as the search for moves reads them), kept where `resolve`
-//! would answer *there*: a file (`read_within`, through a link only inside the root)
-//! of at most [`MAX_FILE_BYTES`], that reads, named as written (the rule of the case
-//! of a path). A file tracked and deleted, a directory and a submodule are not
-//! in it, so no name of it is absent under `resolve`. The same content gives the
-//! same names.
+//! The listing is the files the state of the project lists at the side: in the work
+//! tree, those Git lists, tracked or untracked and not ignored (`git ls-files
+//! --cached --others --exclude-standard`, as the search for moves reads them); read
+//! through Git, those of the commit or the index. Each is kept where `resolve` would
+//! answer *there*: a file (`read_within`, through a link only inside the root) of at
+//! most [`MAX_FILE_BYTES`], that reads, named as written (the rule of the case of a
+//! path). A file tracked and deleted, a directory and a submodule are not in it, so
+//! no name of it is absent under `resolve`. The same content gives the same names.
+//! Which files a selection takes is chosen in one place (`Lister`, in
+//! `file/read.rs`), which `rust-test` uses too.
 //!
 //! Nothing is passed over in silence: a listing is [`NameListing::Some`] with why,
 //! and never all of them, when it takes more than [`ScanLimits::names`] names, when
-//! Git's listing is cut at [`ScanLimits::listing_bytes`], when Git lists a file whose
+//! the state's listing is cut (in the work tree, at [`ScanLimits::listing_bytes`]),
+//! when it lists a file whose
 //! path is not UTF-8 or no path of the project, when the selection takes a path too
 //! long for a name, or when it takes a file `resolve` cannot tell (past
 //! [`MAX_FILE_BYTES`], a link out of the root, one the file system will not read, or
@@ -200,7 +204,8 @@
 //! # Where each part is
 //!
 //! What a name is at a side and the files a selection takes are read in
-//! `file/read.rs`, with the one reading of a path by the rules of the space
+//! `file/read.rs` (the choice of the files, `Lister`, and the one writing of the
+//! reason of a listing that is not all, `listing`), with the one reading of a path by the rules of the space
 //! (`read_within`, through the state of the project, with the case of a path as
 //! written); the search for moves is `file/moves.rs`; the reading back of a
 //! content by its address `file/read_back.rs`; the new file of `init`
@@ -241,7 +246,9 @@ use super::super::state::files::FileStates;
 use super::super::state::{ProjectTree, StateError};
 #[cfg(test)]
 pub(super) use read::OUTSIDE;
-pub(super) use read::{Bounded, Placed, placed_within, read_within};
+pub(super) use read::{
+    Bounded, Cause, Lister, Placed, Take, Taken, Unit, listing, placed_within, read_within,
+};
 
 /// The name of the space this adapter resolves names in: the space a record written
 /// before spaces existed is read as naming its files in
@@ -427,8 +434,10 @@ pub(super) async fn placed_only(
 const NO_PATTERN: TextLiteral = TextLiteral::new("a text of the selection is no pattern of files");
 
 /// A [`Selection`] of the space `file`, read: each text is a [`PathGlob`], the one
-/// grammar of a segment glob, matched against a path under the root.
-struct FileSelection {
+/// grammar of a segment glob, matched against a path under the root. The one reader
+/// of a selection for this space and for those whose names start with a path of it
+/// (`rust-test`).
+pub(super) struct FileSelection {
     include: Vec<PathGlob>,
     exclude: Vec<PathGlob>,
 }
@@ -436,7 +445,7 @@ struct FileSelection {
 impl FileSelection {
     /// The selection read, or the first text that is no pattern of the grammar, with
     /// why. No I/O.
-    fn read(selection: &Selection) -> Result<Self, NotASelection> {
+    pub(super) fn read(selection: &Selection) -> Result<Self, NotASelection> {
         let globs = |list: SelectionList, texts: &[String]| {
             texts
                 .iter()
@@ -459,7 +468,7 @@ impl FileSelection {
 
     /// Whether the selection takes the path: some `include` matches it and no
     /// `exclude` does.
-    fn takes(&self, path: &str) -> bool {
+    pub(super) fn takes(&self, path: &str) -> bool {
         self.include.iter().any(|glob| glob.matches(path))
             && !self.exclude.iter().any(|glob| glob.matches(path))
     }
@@ -498,9 +507,9 @@ pub struct FileSpace {
     git: Git,
     /// The tree of the project the files are read from.
     state: ProjectTree,
-    limits: ScanLimits,
-    /// The most bytes of a file a reading reads.
-    max_file: u64,
+    /// The files a selection takes, and the bounds of a listing, of a search for
+    /// moves and of the bytes of a file a reading reads: one value for each.
+    lister: Lister,
 }
 
 /// The bounds of one search for the same content ([`FileSpace::suggest`]) and of one
@@ -670,15 +679,21 @@ impl FileSpace {
         Self {
             git: Git::new(root.clone()),
             root,
+            lister: Lister::on(state.clone(), MAX_FILE_BYTES),
             state,
-            limits: ScanLimits::default(),
-            max_file: MAX_FILE_BYTES,
         }
     }
 
-    /// The same, searching for the same content within `limits`.
+    /// The same, searching for the same content and listing within `limits`.
     pub fn with_limits(mut self, limits: ScanLimits) -> Self {
-        self.limits = limits;
+        self.lister = self.lister.with_limits(limits);
+        self
+    }
+
+    /// The same, a file being read up to `max_file` bytes.
+    #[cfg(test)]
+    fn with_max_file(mut self, max_file: u64) -> Self {
+        self.lister = self.lister.with_max_file(max_file);
         self
     }
 }
@@ -686,7 +701,6 @@ impl FileSpace {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-    use std::process::Stdio;
 
     use tokio::process::Command;
     use whyshelf_core::app::shelf::{Creation, FileWrite, RevisionSource};
@@ -698,18 +712,12 @@ mod tests {
     use whyshelf_core::domain::nonempty::NonEmptySet;
 
     use super::super::super::git::RenamesSince;
-    use super::super::conformance;
+    use super::super::conformance::{self, isolated_git};
     use super::*;
 
     /// Whether `git` can be run here; the tests that need it pass without it.
     async fn git_installed() -> bool {
-        Command::new("git")
-            .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await
-            .is_ok_and(|s| s.success())
+        conformance::git_runs().await
     }
 
     async fn run(dir: &std::path::Path, args: &[&str]) -> String {
@@ -789,10 +797,9 @@ mod tests {
         }
 
         fn adapter_at(&self, dir: &std::path::Path) -> super::super::Adapter {
-            super::super::Adapter::File(FileSpace {
-                max_file: MAX_TEST_FILE,
-                ..FileSpace::new(dir.to_path_buf())
-            })
+            super::super::Adapter::File(
+                FileSpace::new(dir.to_path_buf()).with_max_file(MAX_TEST_FILE),
+            )
         }
 
         async fn tree(&self, dir: &std::path::Path) -> conformance::Tree {
@@ -850,11 +857,9 @@ mod tests {
                     .unwrap(),
                     bad: Selection::new(vec!["/a.txt".to_owned()], vec![]).unwrap(),
                     bounded: super::super::Adapter::File(
-                        FileSpace {
-                            max_file: MAX_TEST_FILE,
-                            ..FileSpace::new(root.clone())
-                        }
-                        .with_limits(one_name),
+                        FileSpace::new(root.clone())
+                            .with_max_file(MAX_TEST_FILE)
+                            .with_limits(one_name),
                     ),
                 });
             }
@@ -1271,34 +1276,6 @@ mod tests {
 
     // Suggesting moves, through `moves` on a project of one note that stands on
     // `a.rs`.
-
-    /// Git run on `dir` with the person's own settings shut out: no system file, an
-    /// empty global file, a home of its own, and no `GIT_*` variable of the caller.
-    async fn isolated_git(dir: &std::path::Path, args: &[&str]) {
-        let home = dir.join(".home");
-        tokio::fs::create_dir_all(&home).await.unwrap();
-        let global = home.join("gitconfig");
-        tokio::fs::write(&global, "").await.unwrap();
-        let mut command = Command::new("git");
-        for (name, _) in std::env::vars_os() {
-            if name.to_string_lossy().starts_with("GIT_") {
-                command.env_remove(&name);
-            }
-        }
-        let out = command
-            .env("HOME", &home)
-            .env("XDG_CONFIG_HOME", home.join(".config"))
-            .env("GIT_CONFIG_GLOBAL", &global)
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .arg("-C")
-            .arg(dir)
-            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
-            .args(args)
-            .output()
-            .await
-            .unwrap();
-        assert!(out.status.success(), "git {args:?}: {out:?}");
-    }
 
     const BOOKS: &str = "[[book]]\nname = \"note\"\ndir = \"notes\"\nkey = { prefix = \"N\" }\n[[book.field]]\nname = \"title\"\ntype = \"text\"\nrequired = true\n[[book.link]]\nname = \"files\"\ntarget = \"artifact\"\nspace = \"file\"\nmeans = \"depends\"\n";
 
@@ -1789,10 +1766,8 @@ mod tests {
             Some(CODE.as_bytes().to_vec())
         );
         assert_eq!(git.read_blob_within(&address, len - 1).await.unwrap(), None);
-        let small = FileSpace {
-            max_file: u64::try_from(len - 1).unwrap(),
-            ..FileSpace::new(dir.path().to_path_buf())
-        };
+        let small =
+            FileSpace::new(dir.path().to_path_buf()).with_max_file(u64::try_from(len - 1).unwrap());
         assert_eq!(small.read_back(&address).await.unwrap(), None);
         assert!(
             FileSpace::new(dir.path().to_path_buf())
@@ -2049,10 +2024,7 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let space = FileSpace {
-            max_file: 1000,
-            ..FileSpace::new(root.to_path_buf())
-        };
+        let space = FileSpace::new(root.to_path_buf()).with_max_file(1000);
         // A file past the bound of bytes, and a link out of the root, are names a
         // document can write that a reading cannot tell: the listing that takes them
         // is never all of them.

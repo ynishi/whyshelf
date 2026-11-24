@@ -11,9 +11,9 @@ use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::artifact::Untold;
 
 use super::{FileStates, LEAVES};
-#[cfg(unix)]
-use crate::shelf::readers_tests::{ends, pipe};
 use crate::shelf::state::StateError;
+#[cfg(unix)]
+use crate::shelf::tree_fixtures_tests::{ends, pipe};
 
 fn rel(text: &str) -> RelPath {
     text.parse().unwrap()
