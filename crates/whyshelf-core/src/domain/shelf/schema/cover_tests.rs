@@ -132,6 +132,7 @@ fn table(strength: Option<&str>, include: &[&str], exclude: &[&str]) -> Option<C
         strength: strength.map(str::to_owned),
         include: include.iter().map(|t| (*t).to_owned()).collect(),
         exclude: exclude.iter().map(|t| (*t).to_owned()).collect(),
+        parts: None,
     })
 }
 
@@ -333,6 +334,93 @@ fn the_selections_asked_are_those_validate_reads_and_two_links_that_share_one_as
         .collect();
     let schema = declared_with(decls_, &checks).unwrap();
     assert_eq!(schema.cover_selections().len(), 1);
+}
+
+/// The fixtures with a link `cases` of `spec`, to the files, whose cover over `a`
+/// takes each part whole through `whole`; `tests` compares lines, and beside it
+/// `informed` informs, and `present` compares presence, both to the files.
+fn parts_through(whole: &str) -> Vec<BookSchemaDecl> {
+    let mut decls_ = decls();
+    let tests = link_decl(&mut decls_, "spec", "tests");
+    tests.propagation = Propagation::Depends;
+    tests.compare = Some(CompareDecl {
+        kind: "lines".to_owned(),
+        ignore: vec![],
+    });
+    let tests = tests.clone();
+    let mut cases = tests.clone();
+    cases.name = "cases".to_owned();
+    cases.cover = Some(CoverDecl::Table {
+        strength: None,
+        include: vec!["a".to_owned()],
+        exclude: vec![],
+        parts: Some(PartsDecl {
+            whole: whole.to_owned(),
+        }),
+    });
+    let mut informed = tests.clone();
+    informed.name = "informed".to_owned();
+    informed.propagation = Propagation::Informs;
+    let mut present = tests;
+    present.name = "present".to_owned();
+    present.compare = Some(CompareDecl {
+        kind: "presence".to_owned(),
+        ignore: vec![],
+    });
+    let spec = decls_.iter_mut().find(|b| b.name == "spec").unwrap();
+    spec.links.extend([cases, informed, present]);
+    decls_
+}
+
+#[test]
+fn parts_are_taken_whole_only_through_a_link_of_the_same_book_that_depends_and_reads_content() {
+    // A link of the book, to artifacts, that depends and compares its content.
+    let schema = declared_with(parts_through("tests"), &read_by_file(&["a"], &[])).unwrap();
+    let cover = schema
+        .book("spec")
+        .unwrap()
+        .artifact_links()
+        .get("cases")
+        .unwrap();
+    let cover = cover.cover.as_ref().expect("a cover");
+    assert_eq!(cover.parts_whole().map(EntryName::as_str), Some("tests"));
+    // A cover with no `parts` takes none whole.
+    let mut plain = decls();
+    link_decl(&mut plain, "spec", "tests").cover = table(None, &["a"], &[]);
+    let schema = declared_with(plain, &read_by_file(&["a"], &[])).unwrap();
+    let tests = schema
+        .book("spec")
+        .unwrap()
+        .artifact_links()
+        .get("tests")
+        .unwrap();
+    assert_eq!(tests.cover.as_ref().unwrap().parts_whole(), None);
+
+    // Any other link, or none, is refused, and named with why: a link that informs or
+    // compares presence never stands for a part, nor does a link into a book, nor a
+    // link of another book (`design.specs`), which the book does not declare.
+    for (whole, why) in [
+        ("informed", PartsProblem::NotDepends),
+        ("present", PartsProblem::Presence),
+        ("grounds", PartsProblem::IntoABook),
+        ("specs", PartsProblem::NoSuchLink),
+        ("nothing", PartsProblem::NoSuchLink),
+    ] {
+        let problems = declared_with(parts_through(whole), &read_by_file(&["a"], &[])).unwrap_err();
+        assert!(
+            matches!(
+                &problems[..],
+                [SchemaProblem::BadParts { book, link, whole: named, why: w }]
+                    if book == "spec" && link.as_str() == "cases" && named == whole && *w == why
+            ),
+            "{whole}: {problems:?}"
+        );
+        let text = problems[0].to_string();
+        assert!(
+            text.contains("`cases`") && text.contains(&format!("`{whole}`")),
+            "{text}"
+        );
+    }
 }
 
 #[test]

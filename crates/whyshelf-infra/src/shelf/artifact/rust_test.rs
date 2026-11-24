@@ -249,23 +249,33 @@
 //! file. A test listed lives where "Where a name lives" (below) says of the file it
 //! is listed of.
 //!
-//! Nothing is passed over in silence. The listing is [`NameListing::Some`] with why,
-//! and never all of them, when what the space `file` would not list whole is so (more
-//! files than it lists, a listing of the state left short, a file a reading cannot
-//! tell), when a file taken cannot be read, is not UTF-8, does not lex or nests too
-//! deep, when something in a file may make a test the scan does not see, when a
-//! test's name
-//! cannot be written as a name of the space, when it takes more tests than the
-//! bound of names of a listing
-//! ([`ScanLimits::names`](super::file::ScanLimits::names)), and when it would read
-//! more files, or more bytes in all, than one listing reads
-//! ([`ScanLimits::files`](super::file::ScanLimits::files),
+//! Nothing is passed over in silence. A file taken that cannot be read, is not UTF-8,
+//! does not lex or nests too deep, and one in which something may make a test the
+//! scan does not see, is a part of the listing ([`NameListing::Parted`]), never
+//! listed whole: the file whole, in the space `file` (its path as written, the name
+//! the space `file` gives it), with why (the first thing found that may make a test,
+//! or why it cannot be read), and the tests found in it, or that it could not be read
+//! at all ([`PartRead`]). A file read with no test found in it, beside something that
+//! may make one, is a part as any other: whether it holds a test cannot be told. A
+//! cover that takes each part whole reaches it through the link it names for parts,
+//! one that could not be read as well (a document names the file as for any file, and
+//! the space `file` reads it, whatever its bytes are); to any other the listing is not
+//! the whole. The listing is
+//! [`NameListing::Some`] with why, and never all of them, when what keeps the whole
+//! selection from being listed is so, which says nothing of which file is missing:
+//! what the space `file` would not list whole (more files than it lists, a listing of
+//! the state left short, a file a reading cannot tell), a test's name that cannot be
+//! written as a name of the space, a file to be a part whose path is no name of the
+//! space `file`, more tests than the bound of names of a listing
+//! ([`ScanLimits::names`](super::file::ScanLimits::names), the tests of the parts
+//! counted with the others), and more files, or more bytes in all, than one listing
+//! reads ([`ScanLimits::files`](super::file::ScanLimits::files),
 //! [`ScanLimits::total_bytes`](super::file::ScanLimits::total_bytes)): it stops
-//! there, and says so. The size of a file is looked at before it is opened, so a
-//! file past the bytes left is not read, and no listing reads past the bound. The reason names the first few files, each
-//! with the first thing found, and counts the rest; a file with nothing that may make
-//! a test, and with no test, adds nothing. When the state cannot list the files
-//! (outside a Git repository, a Git that cannot be run), no listing is made:
+//! there, and says so, the tests found in the parts among the names. The size of a
+//! file is looked at before it is opened, so a file past the bytes left is not read,
+//! and no listing reads past the bound. A file with nothing that may make a test, and
+//! with no test, adds nothing. When the state cannot list the files (outside a Git
+//! repository, a Git that cannot be run), no listing is made:
 //! [`NameListing::CannotList`] with why, and no error. A side the run does not read is
 //! an error of the whole ask.
 //!
@@ -374,8 +384,8 @@ use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, NameListing, NotASelection, PrefixMove, Selection,
-    SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
+    ArtifactName, ArtifactReading, Comparison, ListingPart, NameListing, NotASelection, PartRead,
+    PrefixMove, Selection, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
@@ -879,6 +889,9 @@ impl RustTestSpace {
         let limits = *self.lister.limits();
         let limit = limits.names;
         let mut found = BTreeSet::new();
+        // The names listed, of the files listed whole and of the parts alike: the
+        // bound of names is of all of them.
+        let mut listed = 0usize;
         let mut unwritten = 0usize;
         let mut unlisted = Unlisted::default();
         // The files and the bytes the listing has read, held to the bounds of what
@@ -906,28 +919,34 @@ impl RustTestSpace {
                     break;
                 }
                 Err(why) => {
-                    unlisted.add(why.to_string());
+                    unlisted.unread(path, &why)?;
                     continue;
                 }
             };
-            if let Some(maker) = walked.maker {
-                unlisted.add(format!(
-                    "{path}: {maker} may make a test, and macros are not expanded"
-                ));
-            }
+            let mut here = BTreeSet::new();
+            let mut past = false;
             for name in walked.names {
                 let Ok(name) = name else {
                     unwritten += 1;
                     continue;
                 };
-                if found.contains(&name) {
+                if found.contains(&name) || here.contains(&name) {
                     continue;
                 }
-                if found.len() == limit {
+                if listed == limit {
                     causes.push(Cause::PastNames { limit });
-                    break 'files;
+                    past = true;
+                    break;
                 }
-                found.insert(name);
+                listed += 1;
+                here.insert(name);
+            }
+            match walked.maker {
+                Some(maker) => unlisted.made(path, &maker, here)?,
+                None => found.extend(here),
+            }
+            if past {
+                break 'files;
             }
         }
         if let Some(count) = NonZeroUsize::new(unwritten) {
@@ -936,10 +955,14 @@ impl RustTestSpace {
                 of: Unit::Tests,
             });
         }
-        if !unlisted.is_empty() {
-            causes.push(Cause::Own(reason(unlisted.to_string())?));
+        let (parts, unnamed) = unlisted.into_parts();
+        if let Some(count) = NonZeroUsize::new(unnamed) {
+            causes.push(Cause::Unnameable {
+                count,
+                of: Unit::Files,
+            });
         }
-        file::listing(found, causes).map_err(RustTestError::Reason)
+        file::listing(found, causes, parts).map_err(RustTestError::Reason)
     }
 
     /// The tests of the file at `path` at `side`, read as `resolve` reads it, and the
@@ -1059,41 +1082,48 @@ struct Walked {
     maker: Option<String>,
 }
 
-/// Why a listing of the tests of files is not all of them, as the adapter says it:
-/// each file that may hold a test the scan cannot see, with the first thing that may
-/// make one, or that cannot be read, with why; the first [`Unlisted::SHOWN`] of them
-/// in the order of the files, and how many more, so that a reason stays small
-/// whatever a selection takes.
+/// The files a listing of tests could not list whole, as the adapter says them: the
+/// one place a part of its listing and its why are made. Each is a part, the file
+/// whole in the space `file` ([`file::name_of`]), in the order of the files: one that
+/// may hold a test the scan cannot see, with the first thing in it that may make one
+/// and the tests found in it, or one that cannot be read, with why. A file whose path
+/// is no name of the space `file` cannot be a part, and is counted.
 #[derive(Debug, Default)]
 struct Unlisted {
-    shown: Vec<String>,
-    more: usize,
+    parts: Vec<ListingPart>,
+    unnamed: usize,
 }
 
 impl Unlisted {
-    /// How many files are named in a reason.
-    const SHOWN: usize = 5;
-
-    fn add(&mut self, why: String) {
-        if self.shown.len() < Self::SHOWN {
-            self.shown.push(why);
-        } else {
-            self.more = self.more.saturating_add(1);
-        }
+    /// The file at `path` holds `maker`, which may make a test the scan does not see,
+    /// beside the tests `found` in it.
+    fn made(
+        &mut self,
+        path: &RelPath,
+        maker: &str,
+        found: BTreeSet<ArtifactName>,
+    ) -> Result<(), RustTestError> {
+        let why = format!("{maker} may make a test, and macros are not expanded");
+        self.add(path, why, PartRead::Found(found))
     }
 
-    fn is_empty(&self) -> bool {
-        self.shown.is_empty()
+    /// The file at `path` cannot be read, for `why`.
+    fn unread(&mut self, path: &RelPath, why: &Untellable) -> Result<(), RustTestError> {
+        self.add(path, why.to_string(), PartRead::Unread)
     }
-}
 
-impl fmt::Display for Unlisted {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.shown.join("; "))?;
-        if self.more > 0 {
-            write!(f, "; and {} more file(s)", self.more)?;
+    fn add(&mut self, path: &RelPath, why: String, read: PartRead) -> Result<(), RustTestError> {
+        let why = reason(why)?;
+        match file::name_of(path) {
+            Some(key) => self.parts.push(ListingPart::new(key, why, read)),
+            None => self.unnamed = self.unnamed.saturating_add(1),
         }
         Ok(())
+    }
+
+    /// The parts, and how many files could be none.
+    fn into_parts(self) -> (Vec<ListingPart>, usize) {
+        (self.parts, self.unnamed)
     }
 }
 
@@ -2682,6 +2712,12 @@ mod tests {
                 ")".repeat(MAX_DEPTH)
             );
             write(&root, "src/deep.rs", &deep).await;
+            write(
+                &root,
+                "src/made.rs",
+                "#[derive(thiserror::Error)]\nenum E {}\n#[test]\nfn t() {}\n",
+            )
+            .await;
 
             let mut tree = conformance::Tree::of(self.adapter_at(&root));
             tree.present = vec![n("src/a.rs::one"), n("src/a.rs::tests::inner")];
@@ -2728,6 +2764,12 @@ mod tests {
                                 ..ScanLimits::default()
                             }),
                     ),
+                    // A derive of a crate may make a test: the file is a part, the
+                    // file whole in the space `file`.
+                    parts: Some(conformance::PartsCase {
+                        selection: select(&["src/made.rs"]),
+                        of: super::super::Adapter::File(file::FileSpace::new(root.clone())),
+                    }),
                 });
             }
             #[cfg(unix)]
@@ -3672,11 +3714,34 @@ mod tests {
         space.list(Side::After, &select(include)).await.unwrap()
     }
 
+    /// Why a listing is not all: its why, or each part's, after the part's name.
     fn why_of(listing: &NameListing) -> String {
         match listing {
             NameListing::Some { why, .. } => why.as_str().to_owned(),
+            NameListing::Parted { parts, .. } => parts
+                .iter()
+                .map(|part| format!("{}: {}", part.key().name(), part.why()))
+                .collect::<Vec<_>>()
+                .join("; "),
             other => panic!("a listing that is not all: {other:?}"),
         }
+    }
+
+    /// The one part of the listing of `file` alone: the file whole in the space
+    /// `file`, with what was read of it and why, beside no name listed whole.
+    fn one_part(listing: &NameListing, file: &str) -> (PartRead, String) {
+        let NameListing::Parted { found, parts } = listing else {
+            panic!("{file}: a part: {listing:?}");
+        };
+        assert!(found.is_empty(), "{file}: listed whole: {found:?}");
+        assert_eq!(parts.len(), 1, "{file}: {parts:?}");
+        let part = parts.first();
+        assert_eq!(
+            part.key(),
+            &file::name_of(&file.parse::<RelPath>().unwrap()).unwrap(),
+            "{file}: the part is the file whole, in the space file"
+        );
+        (part.read().clone(), part.why().as_str().to_owned())
     }
 
     /// `files` under a new root, in a repository of Git (untracked, so listed as files
@@ -3810,36 +3875,63 @@ mod tests {
             return;
         };
         let space = RustTestSpace::new(dir.path().to_path_buf());
-        for (file, found, maker) in [
-            ("call.rs", vec!["call.rs::a"], "the macro call `proptest!`"),
-            ("only_call.rs", vec![], "the macro call `opaque!`"),
+        // A file read, with what may make a test, is a part with the tests found in
+        // it (none, it may be); one that does not lex or nests too deep (past
+        // `MAX_DEPTH`) is a part that could not be read, told apart from one read
+        // with no test in it.
+        let found = |names_found: &[&str]| PartRead::Found(names(names_found));
+        for (file, read, maker) in [
+            (
+                "call.rs",
+                found(&["call.rs::a"]),
+                "the macro call `proptest!`",
+            ),
+            ("only_call.rs", found(&[]), "the macro call `opaque!`"),
             (
                 "module.rs",
-                vec!["module.rs::m::a"],
+                found(&["module.rs::m::a"]),
                 "`#[my_attr]` on the module `m`",
             ),
-            ("inner.rs", vec!["inner.rs::a"], "`#![my_inner]`"),
-            ("main.rs", vec![], "`#[tokio::main]` on the function `main`"),
-            ("rstest.rs", vec![], "`#[rstest]` on the function `a`"),
-            ("lex.rs", vec![], "does not parse as Rust"),
-            ("deep.rs", vec![], "deeper than"),
+            ("inner.rs", found(&["inner.rs::a"]), "`#![my_inner]`"),
+            (
+                "main.rs",
+                found(&[]),
+                "`#[tokio::main]` on the function `main`",
+            ),
+            ("rstest.rs", found(&[]), "`#[rstest]` on the function `a`"),
+            ("lex.rs", PartRead::Unread, "does not parse as Rust"),
+            ("deep.rs", PartRead::Unread, "deeper than"),
         ] {
             let listing = listing_of(&space, &[file]).await;
-            let NameListing::Some { found: listed, why } = &listing else {
-                panic!("{file}: {listing:?}");
-            };
-            assert_eq!(listed, &names(&found), "{file}");
-            assert!(why.as_str().starts_with(file), "{file}: {why}");
-            assert!(why.as_str().contains(maker), "{file}: {why}");
+            let (part_read, why) = one_part(&listing, file);
+            assert_eq!(part_read, read, "{file}");
+            assert!(why.contains(maker), "{file}: {why}");
         }
         // Attributes that are inert, on a module and on functions, keep it whole.
         assert_eq!(
             listing_of(&space, &["inert.rs"]).await,
             NameListing::All(names(&["inert.rs::m::a"]))
         );
-        // Each file is named, the first few, and the rest counted.
-        let all = why_of(&listing_of(&space, &["*.rs"]).await);
-        assert!(all.ends_with("; and 3 more file(s)"), "{all}");
+        // Each file that is not whole is a part of its own, in the order of the files,
+        // and the file that is whole is listed by name beside them.
+        let NameListing::Parted { found, parts } = listing_of(&space, &["*.rs"]).await else {
+            panic!("the files in parts");
+        };
+        assert_eq!(found, names(&["inert.rs::m::a"]));
+        let keys: Vec<&str> = parts.iter().map(|p| p.key().name().as_str()).collect();
+        assert_eq!(
+            keys,
+            [
+                "call.rs",
+                "deep.rs",
+                "inner.rs",
+                "lex.rs",
+                "main.rs",
+                "module.rs",
+                "only_call.rs",
+                "rstest.rs"
+            ]
+        );
     }
 
     #[tokio::test]
@@ -3857,11 +3949,22 @@ mod tests {
             .await
             .unwrap();
         let listing = listing_of(&RustTestSpace::new(dir.path().to_path_buf()), &["*.rs"]).await;
-        let NameListing::Some { found, why } = &listing else {
+        let NameListing::Parted { found, parts } = &listing else {
             panic!("{listing:?}");
         };
         assert_eq!(found, &names(&["a.rs::a"]));
-        assert!(why.as_str().contains("bytes.rs is not UTF-8"), "{why}");
+        // `big.rs` is read (a comment), and holds no test; `bytes.rs` cannot be read.
+        assert_eq!(parts.len(), 1, "{parts:?}");
+        assert_eq!(parts.first().key().name().as_str(), "bytes.rs");
+        assert_eq!(parts.first().read(), &PartRead::Unread);
+        assert!(
+            parts
+                .first()
+                .why()
+                .as_str()
+                .contains("bytes.rs is not UTF-8"),
+            "{parts:?}"
+        );
         // A file past the bound of bytes is one a reading cannot tell, as for `file`.
         let small = RustTestSpace::new(dir.path().to_path_buf()).with_max_file(64);
         let why = why_of(&listing_of(&small, &["a.rs", "big.rs"]).await);
@@ -4064,6 +4167,10 @@ mod tests {
                 with("#[derive(Debug, serde::Serialize)]\nstruct S;"),
             ),
             ("enum.rs", with("#[derive(thiserror::Error)]\nenum E {}")),
+            (
+                "derive_only.rs",
+                "#[derive(thiserror::Error)]\nenum E {}\n".to_owned(),
+            ),
             ("trait.rs", with("#[my_macro]\ntrait T {}")),
             ("const.rs", with("#[my_macro]\nconst X: u8 = 1;")),
             ("static.rs", with("#[my_macro]\nstatic Y: u8 = 1;")),
@@ -4109,13 +4216,23 @@ mod tests {
             ("inner.rs", "`#[my_macro]` on an item in the module `m`"),
         ] {
             let listing = listing_of(&space, &[file]).await;
-            let NameListing::Some { found, why } = &listing else {
-                panic!("{file}: an attribute that may make a test is passed over: {listing:?}");
-            };
-            assert_eq!(found.len(), 1, "{file}: the test is still found");
-            assert!(why.as_str().starts_with(file), "{file}: {why}");
-            assert!(why.as_str().contains(maker), "{file}: {why}");
+            let (read, why) = one_part(&listing, file);
+            assert!(
+                matches!(&read, PartRead::Found(found) if found.len() == 1),
+                "{file}: the test is still found: {read:?}"
+            );
+            assert!(why.contains(maker), "{file}: {why}");
         }
+        // A derive of a crate in a file with no test: a part read, with no test found.
+        let (read, why) = one_part(
+            &listing_of(&space, &["derive_only.rs"]).await,
+            "derive_only.rs",
+        );
+        assert_eq!(read, PartRead::Found(BTreeSet::new()));
+        assert!(
+            why.contains("`#[derive(thiserror::Error)]` on an item"),
+            "{why}"
+        );
         // The derives of the standard library and the built-in attributes keep it
         // whole.
         assert_eq!(
@@ -4313,11 +4430,13 @@ mod tests {
             ),
         ] {
             let listing = listing_of(&space, &[file]).await;
-            let NameListing::Some { found: listed, why } = &listing else {
-                panic!("{file}: a test macro of a crate is passed over: {listing:?}");
-            };
-            assert_eq!(listed, &names(&found), "{file}: each is a test of its name");
-            assert!(why.as_str().contains(maker), "{file}: {why}");
+            let (read, why) = one_part(&listing, file);
+            assert_eq!(
+                read,
+                PartRead::Found(names(&found)),
+                "{file}: each is a test of its name"
+            );
+            assert!(why.contains(maker), "{file}: {why}");
         }
         // The test attribute of the language alone keeps it whole.
         assert_eq!(
@@ -4346,11 +4465,13 @@ mod tests {
             ("cfg.rs", "`#[serial]` on the test `a`"),
         ] {
             let listing = listing_of(&space, &[file]).await;
-            let NameListing::Some { found, why } = &listing else {
-                panic!("{file}: an attribute beside the test is passed over: {listing:?}");
-            };
-            assert_eq!(found, &names(&[format!("{file}::a").as_str()]), "{file}");
-            assert!(why.as_str().contains(maker), "{file}: {why}");
+            let (read, why) = one_part(&listing, file);
+            assert_eq!(
+                read,
+                PartRead::Found(names(&[format!("{file}::a").as_str()])),
+                "{file}"
+            );
+            assert!(why.contains(maker), "{file}: {why}");
         }
         // The test named is still there to resolve: only the listing is not whole.
         let read = space.resolve(&asks(&["made.rs::a"])).await.unwrap();

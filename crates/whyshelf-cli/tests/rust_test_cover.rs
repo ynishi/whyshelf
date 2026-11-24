@@ -5,9 +5,10 @@
 //!
 //! `check` fails while a test is reached by no document and names it, and passes
 //! once a document names it, or once it is exempted with `judge exempt --artifact`.
-//! A file in which a macro may make a test the scan does not see keeps the listing
-//! from being whole, so `check` of the error cover is not clean and says which file
-//! and what in it; a line of the `exclude` takes the file out of the cover. A
+//! A file in which a macro may make a test the scan does not see is a part of the
+//! listing, which the cover takes whole through the link `tests` (`parts = { whole =
+//! "tests" }`): `check` of the error cover is not clean while no document names the
+//! file under `tests`, says which file and what in it, and passes once one does. A
 //! document that spells a test otherwise than the source does (`foo` for `r#foo`)
 //! does not reach it, though it names the one test.
 
@@ -54,22 +55,35 @@ fn git(project: &Project, args: &[&str]) {
 }
 
 /// The declaration of a note book whose link `cases` names tests (the preset `test`)
-/// and covers those of the `.rs` files under `src`, leaving out `exclude`.
-fn covering(exclude: &[&str]) -> String {
-    let quoted: Vec<String> = exclude.iter().map(|f| format!("\"{f}\"")).collect();
-    format!(
-        "{BOOKS}[[book.link]]\nname = \"cases\"\ntarget = \"artifact\"\npreset = \"test\"\ncover = {{ include = [\"src/**/*.rs\"], exclude = [{}] }}\n",
-        quoted.join(", ")
+/// and covers those of the `.rs` files under `src`, taking each part of the listing
+/// whole through `tests`, a link to files that depends on them and compares lines.
+const COVERING: &str = "[[book.link]]\nname = \"tests\"\ntarget = \"artifact\"\nspace = \"file\"\nmeans = \"depends\"\ncompare = \"lines\"\n\n[[book.link]]\nname = \"cases\"\ntarget = \"artifact\"\npreset = \"test\"\ncover = { include = [\"src/**/*.rs\"], parts = { whole = \"tests\" } }\n";
+
+fn covering() -> String {
+    format!("{BOOKS}{COVERING}")
+}
+
+/// A list of names, as the front matter writes one.
+fn quoted(names: &[&str]) -> String {
+    let quoted: Vec<String> = names.iter().map(|t| format!("\"{t}\"")).collect();
+    format!("[{}]", quoted.join(", "))
+}
+
+/// The note, its link `cases` writing `tests` and its link `tests` writing `files`.
+fn note_with(tests: &[&str], files: &[&str]) -> String {
+    NOTE.replace(
+        "title: \"A note\"\n",
+        &format!(
+            "title: \"A note\"\ncases: {}\ntests: {}\n",
+            quoted(tests),
+            quoted(files)
+        ),
     )
 }
 
 /// The note, its link `cases` writing `tests`.
 fn note_on(tests: &[&str]) -> String {
-    let quoted: Vec<String> = tests.iter().map(|t| format!("\"{t}\"")).collect();
-    NOTE.replace(
-        "title: \"A note\"\n",
-        &format!("title: \"A note\"\ncases: [{}]\n", quoted.join(", ")),
-    )
+    note_with(tests, &[])
 }
 
 /// Two tests in a module of tests, and a test spelled raw.
@@ -83,10 +97,10 @@ const ALL: [&str; 3] = [
 
 /// A project whose note names `named` under `cases`, over `src/a.rs`, in a Git
 /// repository.
-fn project(name: &str, exclude: &[&str], named: &[&str]) -> Project {
+fn project(name: &str, named: &[&str]) -> Project {
     let project = Project::with(
         &format!("rust-test-cover-{name}"),
-        &covering(exclude),
+        &covering(),
         &note_on(named),
     );
     fs::create_dir_all(project.0.join("src")).unwrap();
@@ -116,17 +130,14 @@ fn failed(output: &Output) -> serde_json::Value {
 #[test]
 fn an_error_cover_over_tests_fails_check_while_a_test_is_named_by_no_document_and_passes_once_one_names_it()
  {
-    let project = project(
-        "gap",
-        &[],
-        &["src/a.rs::tests::one", "src/a.rs::tests::r#foo"],
-    );
+    let project = project("gap", &["src/a.rs::tests::one", "src/a.rs::tests::r#foo"]);
     let answer = failed(&project.run(&["check"]));
     assert_eq!(answer["clean"], false);
     assert_eq!(
         answer["artifact_uncovered"],
         serde_json::json!([{
-            "book": "note", "link": "cases", "name": "src/a.rs::tests::two", "space": "rust-test", "severity": "error"
+            "book": "note", "link": "cases", "name": "src/a.rs::tests::two", "space": "rust-test", "severity": "error",
+            "of": "name", "whole": null
         }])
     );
     // The tests of the file are listed whole, by function.
@@ -148,7 +159,6 @@ fn an_error_cover_over_tests_fails_check_while_a_test_is_named_by_no_document_an
 fn a_test_exempt_from_the_cover_passes_check() {
     let project = project(
         "exempt",
-        &[],
         &["src/a.rs::tests::one", "src/a.rs::tests::r#foo"],
     );
     failed(&project.run(&["check"]));
@@ -172,38 +182,107 @@ fn a_test_exempt_from_the_cover_passes_check() {
 }
 
 #[test]
-fn a_file_where_a_macro_may_make_a_test_fails_the_cover_by_name_until_the_exclude_takes_it_out() {
-    let project = project("maker", &[], &ALL);
-    // Its test is found, but what the macro writes is not seen.
+fn a_file_where_a_macro_may_make_a_test_is_a_part_a_gap_until_tests_names_it_whole() {
+    let project = project("maker", &ALL);
+    // Its test is found, but what the macro writes is not seen. A file read with no
+    // test found in it, beside something that may make one, is a gap as well: whether
+    // it holds a test cannot be told.
     fs::write(
         project.0.join("src/arch.rs"),
         "arch_lint::check!();\n\n#[test]\nfn holds() {}\n",
     )
     .unwrap();
+    fs::write(project.0.join("src/derived.rs"), "opaque!(X);\n").unwrap();
     let answer = failed(&project.run(&["check"]));
+    assert_eq!(
+        answer["artifact_uncovered"],
+        serde_json::json!([
+            {"book": "note", "link": "cases", "name": "src/arch.rs", "space": "file", "severity": "error",
+             "of": "part", "whole": "tests"},
+            {"book": "note", "link": "cases", "name": "src/derived.rs", "space": "file", "severity": "error",
+             "of": "part", "whole": "tests"}
+        ])
+    );
     let link = &answer["artifact_cover"][0];
     assert_eq!(link["completeness"], "partial", "{link}");
+    assert_eq!(link["assessed_whole"], true, "{link}");
+    assert_eq!(link["parts_whole"], "tests", "{link}");
+    assert_eq!(link["gaps"], 2, "{link}");
     let why = link["why"].as_str().unwrap();
     assert!(
-        why.contains("src/arch.rs: the macro call `check!` may make a test"),
+        why.contains("`src/arch.rs` in `file` (the macro call `check!` may make a test"),
         "{why}"
     );
+    // A person who holds the file to hold no test says so, with a reason.
+    ok(&project.run(&[
+        "judge",
+        "exempt",
+        "--artifact",
+        "src/derived.rs",
+        "--from",
+        "note.cases",
+        "--reason",
+        "the macro writes no test",
+    ]));
+    // `cover` tells each part with what was read of it and how it stands.
+    let cover = ok(&project.run(&["cover"]));
+    assert_eq!(
+        cover["links"][0]["parts"][0],
+        serde_json::json!({
+            "name": "src/arch.rs", "space": "file", "read": "found",
+            "found": ["src/arch.rs::holds"],
+            "why": "the macro call `check!` may make a test, and macros are not expanded",
+            "stands": "gap", "exemption": null
+        })
+    );
 
+    // Named whole under `tests`, the other part is reached, and the check passes.
     fs::write(
-        project.0.join(".whyshelf/books.toml"),
-        covering(&["src/arch.rs"]),
+        project.0.join("notes/N-1.md"),
+        note_with(&ALL, &["src/arch.rs"]),
     )
     .unwrap();
     let answer = ok(&project.run(&["check"]));
-    assert_eq!(answer["artifact_cover"][0]["completeness"], "all");
+    assert_eq!(answer["artifact_uncovered"], serde_json::json!([]));
     assert_eq!(answer["artifact_cover"][0]["gaps"], 0);
+    assert_eq!(answer["artifact_cover"][0]["reached"], 4);
+    assert_eq!(answer["artifact_cover"][0]["exempt"], 1);
+
+    // A test written in the exempt part later is not hidden by the exemption, which
+    // says a part holds none: the part is a gap again, and the exemption is told
+    // with the test found in it.
+    fs::write(
+        project.0.join("src/derived.rs"),
+        "opaque!(X);\n\n#[test]\nfn later() {}\n",
+    )
+    .unwrap();
+    let output = project.run(&["check"]);
+    let answer = failed(&output);
+    assert_eq!(
+        answer["artifact_uncovered"][0]["name"], "src/derived.rs",
+        "{answer}"
+    );
+    let unneeded = &answer["artifact_exemption_unneeded"][0];
+    assert_eq!(unneeded["name"], "src/derived.rs", "{answer}");
+    assert_eq!(unneeded["why"], "names_found", "{unneeded}");
+    assert!(
+        unneeded["detail"]
+            .as_str()
+            .unwrap()
+            .contains("`src/derived.rs::later`"),
+        "{unneeded}"
+    );
+    assert!(
+        stderr(&output).contains("names are found in the part now"),
+        "{}",
+        stderr(&output)
+    );
 }
 
 #[test]
 fn a_document_that_spells_a_test_otherwise_than_the_source_does_not_reach_it() {
     let project = project(
         "spelling",
-        &[],
         &[
             "src/a.rs::tests::one",
             "src/a.rs::tests::two",

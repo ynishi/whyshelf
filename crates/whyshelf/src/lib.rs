@@ -1647,31 +1647,50 @@
 //!
 //! Beside them `check` answers, for the covering links to artifacts, five more lists
 //! (the answer's version stays 1: fields are only added). `artifact_uncovered` lists
-//! each name nobody reaches as `{"book", "link", "name", "space", "severity"}`;
+//! each name or part nobody reaches as `{"book", "link", "name", "space", "severity",
+//! "of", "whole"}`, with `of` `name` (`whole` null) or `part` (`whole` the link of
+//! `parts = { whole = "<link>" }` the part is to be named under);
 //! `artifact_exempt`, `artifact_exemption_unneeded` and `artifact_exemption_repeated`
 //! list the exemptions of artifacts as `exempt`, `exemption_unneeded` and
 //! `exemption_repeated` list those of documents, with `name` and `space` in the place
 //! of `doc` (and, for `artifact_exemption_unneeded`, `why` one of `reached`,
-//! `not_declared`, `no_cover`, `other_space` or `not_listed`); and `artifact_cover`
+//! `not_declared`, `no_cover`, `other_space`, `not_listed` or `names_found`: an
+//! exemption of a part stands only while no name is found in it, so one in which
+//! names are found now leaves the part a gap until a document names it under the link
+//! of parts, and is told here and on stderr); and `artifact_cover`
 //! lists each covering link as `{"book", "link", "space", "severity", "selection":
-//! {"include", "exclude"}, "completeness", "why", "selects_nothing", "selected",
-//! "reached", "exempt", "gaps", "detail"}`, with `completeness` `all`, `partial`,
-//! `cannot_list` or `not_asked` (`why` says why when it is not `all`) and the counts
-//! null unless it is `all`. A gap is told only of a listing that is `all`. `clean` is
-//! false for a gap of an `error` link, for such a link whose `completeness` is not
-//! `all`, and for such a link that `selects_nothing`. On stderr, for a `warn` link,
-//! `check` writes a line for each name nobody reaches (`warning: <name> in <space> is
-//! reached by no <book>.<link> (cover = "warn")`, the name and the space each in
-//! backticks), one for each such link whose listing is not `all` or that selects
-//! nothing, and one for each exemption of an artifact no longer needed (with its
-//! `judge withdraw`) or repeated, as it does for documents.
+//! {"include", "exclude"}, "completeness", "why", "parts_whole", "assessed_whole",
+//! "selects_nothing", "selected", "reached", "exempt", "gaps", "problems", "detail"}`,
+//! with `completeness` `all`, `partial`, `cannot_list` or `not_asked` (`why` says why
+//! when it is not `all`), `parts_whole` the link of `parts = { whole = "<link>" }`
+//! (null when the cover declares none), `assessed_whole` true when the listing is
+//! `all` or is in parts the cover takes whole through `parts_whole` and the link has
+//! no `problems`, and the counts (of names and parts) null unless it is
+//! `assessed_whole`. A link with `problems` (a part in another space than that of
+//! `parts_whole`) is assessed in nothing: it is not `assessed_whole`, its counts are
+//! null, it tells no gap, and no exemption from it can be told needed or not. A gap is told only of a link that is `assessed_whole`; a
+//! part that is a gap, whatever was read of it (one read with no name found in it as
+//! well), is in `artifact_uncovered` in the space it is in, and is exempt by that
+//! name with `judge exempt --artifact <name> --from <book>.<covering link>`. `clean`
+//! is false for a gap of an `error` link, for such a link that is not
+//! `assessed_whole`, for such a link that `selects_nothing`, and for a link of either
+//! strength with `problems`. On stderr, for a `warn` link, `check`
+//! writes a line for each name nobody reaches (`warning: <name> in <space> is reached
+//! by no <book>.<link> (cover = "warn")`, the name and the space each in backticks,
+//! and for a part, `, a part taken whole through <book>.<link of parts>` after it),
+//! one for each such link that is not `assessed_whole` or that selects nothing, and
+//! one for each exemption of an artifact no longer needed (with its `judge
+//! withdraw`) or repeated, as it does for documents.
 //!
 //! `cover` answers `{"schema_problems": [...], "links": [...], "uncovered": [...],
 //! "exempt": [...], "exemption_unneeded": [...], "exemption_repeated": [...],
 //! "health": ...}`: each link is the entry of `artifact_cover` with `names`, each
-//! name the link takes (when `completeness` is `all`) as `{"name", "stands",
-//! "exemption"}` with `stands` `reached`, `exempt` (and the record id) or `gap`; the
-//! lists are those of `check`, of the link asked for with `--link` or of every one.
+//! name the link takes (when it is `assessed_whole`) as `{"name", "stands",
+//! "exemption"}` with `stands` `reached`, `exempt` (and the record id) or `gap`, and
+//! `parts`, each part of a listing the cover takes whole as `{"name", "space",
+//! "read", "found", "why", "stands", "exemption"}` with `read` `found` or `unread`
+//! and `stands` as for a name; the lists are those of `check`, of the link asked for
+//! with `--link` or of every one.
 //! A `--link` that is no covering link to artifacts is a request error (exit 2).
 //! `judge exempt --artifact` answers each exemption with `artifact` and `space` in
 //! the place of `doc`, null for the one that is not.
@@ -1687,7 +1706,8 @@
 //! "space", "compare", "ignore"}`), `means`, `count`, `cover` (true for either
 //! strength, of a link into a book or to artifacts), `cover_severity` (`warn`,
 //! `error`, or null when `cover` is false), `selection` (`{"include", "exclude"}` of
-//! a link to artifacts that covers, as written; null for any other),
+//! a link to artifacts that covers, as written; null for any other), `parts_whole`
+//! (the link of `parts = { whole = "<link>" }` of such a cover; null otherwise),
 //! `preset` (the preset a link to artifacts was expanded from, or null) and
 //! `preset_by_default` (whether that preset is the default), as the declaration
 //! writes them, its presets expanded, and in its order, with one exception: the

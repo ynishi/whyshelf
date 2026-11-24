@@ -111,7 +111,8 @@ fn an_error_cover_fails_check_while_a_file_is_reached_by_no_document_and_passes_
     assert_eq!(
         answer["artifact_uncovered"],
         serde_json::json!([{
-            "book": "note", "link": "files", "name": "src/b.rs", "space": "file", "severity": "error"
+            "book": "note", "link": "files", "name": "src/b.rs", "space": "file", "severity": "error",
+            "of": "name", "whole": null
         }])
     );
     // The file outside the selection is no gap, and the listing is the whole.

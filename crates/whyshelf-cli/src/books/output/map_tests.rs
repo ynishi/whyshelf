@@ -204,6 +204,7 @@ fn the_json_holds_the_books_and_links_as_data() {
             "cover": false,
             "cover_severity": null,
             "selection": null,
+            "parts_whole": null,
             "preset": null,
             "preset_by_default": false,
         })
@@ -219,6 +220,7 @@ fn the_json_holds_the_books_and_links_as_data() {
             "cover": true,
             "cover_severity": "error",
             "selection": null,
+            "parts_whole": null,
             "preset": null,
             "preset_by_default": false,
         })
@@ -297,6 +299,7 @@ fn the_json_tells_the_expanded_values_and_the_preset_of_each_link() {
             "cover": false,
             "cover_severity": null,
             "selection": null,
+            "parts_whole": null,
             "preset": "file",
             "preset_by_default": true,
         })

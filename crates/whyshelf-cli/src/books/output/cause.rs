@@ -640,6 +640,7 @@ pub(super) fn unneeded_word(why: &Unneeded) -> &'static str {
         Unneeded::Cover(CoverMiss::NotListed) => "not_listed",
         Unneeded::NotValid(_) => "not_valid",
         Unneeded::DecidedAgainst(_) => "decided_against",
+        Unneeded::NamesFound { .. } => "names_found",
     }
 }
 
@@ -707,6 +708,10 @@ impl Namer<'_> {
                 "the document is decided against, and no covering link expects to reach it"
                     .to_owned()
             }
+            Unneeded::NamesFound { names } => format!(
+                "names are found in the part now ({}): the exemption no longer keeps it out of the gaps of `{book}.{link}`, so name the file whole under the link of parts",
+                listed(names.iter(), Mark::Backtick, Join::Comma)
+            ),
         };
         format!("{exemption} exempts {subject} from `{book}.{link}` and is not needed: {because}")
     }

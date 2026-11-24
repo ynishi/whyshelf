@@ -204,6 +204,15 @@ pub trait NameList: SpaceAdapter {
     /// project is not where the adapter can list from) is [`NameListing::CannotList`],
     /// not an error. An error is for what stops the whole ask. A selection that
     /// [`select`](Self::select) refuses is [`NameListing::CannotList`] with why.
+    ///
+    /// A listing whose only shortfall is parts the adapter cannot list whole is
+    /// [`NameListing::Parted`]: `found` holds every name of what it listed whole, and
+    /// no name found in a part, which the part's
+    /// [`PartRead`](crate::domain::shelf::artifact::PartRead) holds instead; each part
+    /// is given once, with why, and its key is a name of its own space (another
+    /// adapter's, it may be) that the adapter of that space answers as there at the
+    /// same side. What keeps the whole selection from being listed is
+    /// [`NameListing::Some`], never parts.
     fn list(
         &self,
         side: Side,

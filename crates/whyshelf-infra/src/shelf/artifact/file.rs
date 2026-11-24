@@ -234,8 +234,9 @@ use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathGlob, RelPath};
 use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ContentAddress, NameListing, NamePrefix, NotASelection, PrefixMove, Renamed,
-    Selection, SelectionList, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
+    ArtifactKey, ArtifactName, ContentAddress, NameListing, NamePrefix, NotASelection, PrefixMove,
+    Renamed, Selection, SelectionList, Space, SpaceAsks, SpacePrefixes, SpaceReadings,
+    SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::ledger::{GoneName, NameSuggestions, PATH_ONLY_SPACE};
 use whyshelf_core::domain::shelf::placement::Placement;
@@ -427,6 +428,18 @@ pub(super) async fn placed_only(
         Placed::Files { files, .. } => Placement::Only(files),
         Placed::Unplaced(why) => Placement::Unplaced(NonBlank::new(why)?),
     })
+}
+
+/// The artifact of this space the file at `path` is: its key, the path as written
+/// as its name; none when the path is no name of the space (longer than a name may
+/// be). The one making of a key of this space from a path, for the spaces whose names
+/// start with a path of it, which name a file whole by it (`rust-test`, for a part of
+/// its listing).
+pub(super) fn name_of(path: &RelPath) -> Option<ArtifactKey> {
+    let name = ArtifactName::new(path.as_str()).ok()?;
+    // The name of this space is one, by the test of this module.
+    let space = Space::new(FILE_SPACE).ok()?;
+    Some(ArtifactKey::new(space, name))
 }
 
 /// What is said of a text of a selection that is no pattern, when what says which
@@ -861,6 +874,8 @@ mod tests {
                             .with_max_file(MAX_TEST_FILE)
                             .with_limits(one_name),
                     ),
+                    // A file is listed whole or not at all: this space has no part.
+                    parts: None,
                 });
             }
             #[cfg(unix)]
@@ -929,6 +944,27 @@ mod tests {
     #[test]
     fn the_space_of_the_files_is_the_one_an_old_record_names() {
         assert_eq!(FILE_SPACE, PATH_ONLY_SPACE);
+    }
+
+    #[test]
+    fn the_key_of_a_file_is_its_path_as_written_in_this_space_and_reads_back_to_it() {
+        for text in ["src/a.rs", "crates/x/tests/Common.rs", "a b/c.rs"] {
+            let path: RelPath = text.parse().unwrap();
+            let key = name_of(&path).unwrap();
+            // The name a listing of this space gives the file, in this space.
+            assert_eq!(
+                key,
+                ArtifactKey::new(
+                    Space::new(FILE_SPACE).unwrap(),
+                    ArtifactName::new(text).unwrap()
+                )
+            );
+            // The one reader of the grammar of the names reads it back as the path.
+            assert_eq!(path_of(key.name()).unwrap(), path, "{text}");
+        }
+        // A path longer than a name may be is no name of the space.
+        let long: RelPath = format!("{}.rs", "a".repeat(5000)).parse().unwrap();
+        assert_eq!(name_of(&long), None);
     }
 
     #[test]
@@ -1945,6 +1981,7 @@ mod tests {
             NameListing::All(found) | NameListing::Some { found, .. } => {
                 found.iter().map(|n| n.as_str().to_owned()).collect()
             }
+            NameListing::Parted { parts, .. } => panic!("the space file has no part: {parts:?}"),
             NameListing::CannotList(why) => panic!("no listing: {why}"),
         }
     }

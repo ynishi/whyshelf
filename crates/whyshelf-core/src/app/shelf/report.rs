@@ -17,7 +17,7 @@ use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec, TwoOrMore};
 use crate::domain::shelf::artifact::{Artifact, ArtifactKey, Untold};
 use crate::domain::shelf::build::{BookTally, DocPresence, InvalidDoc, NowNamed, SkippedFile};
-use crate::domain::shelf::coverage::{CoverAssessment, LinkCover};
+use crate::domain::shelf::coverage::{Assessed, CoverAssessment, LinkCover};
 use crate::domain::shelf::doc::{Doc, DocKey, KeyCollision, UnresolvedLink};
 use crate::domain::shelf::exemption::Unneeded;
 use crate::domain::shelf::filter::StatusFilterAsk;
@@ -241,6 +241,22 @@ pub struct UncoveredArtifact {
     pub artifact: ArtifactKey,
     /// How strongly the link expects to reach it.
     pub severity: CoverSeverity,
+    /// What it is of the link's listing: a name, or a part taken whole.
+    pub of: UncoveredOf,
+}
+
+/// What an artifact a covering link expects and nobody reaches is of its listing, as
+/// the assessment of coverage told it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UncoveredOf {
+    /// A name the listing holds, in the space of the link.
+    Name,
+    /// A part the listing could not list whole, which the cover takes whole: reached
+    /// only through the link `whole` of the book.
+    Part {
+        /// The link the cover takes each part whole through.
+        whole: EntryName,
+    },
 }
 
 /// An exemption of an artifact that stands and takes the place of a gap.
@@ -437,15 +453,21 @@ impl BooksCheck {
     /// | an `error` cover | is clean when |
     /// |---|---|
     /// | of documents, or of names of artifacts | no document and no name is a gap of it |
-    /// | of names of artifacts | the listing of the names its selection takes is the whole ([`Completeness::All`](crate::domain::shelf::artifact::Completeness::All)): a listing that is partial, cannot be made or was not asked proves no absence of a gap, so it fails |
-    /// | of names of artifacts | its selection takes at least one name: one that takes none expects nothing, which is a mistake of the declaration more than a fulfilled one |
+    /// | of names of artifacts | the listing of the names its selection takes is assessed whole ([`LinkCover::is_whole`]): the whole ([`Completeness::All`](crate::domain::shelf::artifact::Completeness::All)), or in parts that the cover takes whole (`parts`); a listing that is partial, cannot be made or was not asked proves no absence of a gap, so it fails |
+    /// | of names of artifacts | no part of its listing is a gap of it: a part, whatever was read of it, that no document reaches through the link of `parts` and no exemption keeps out |
+    /// | of names of artifacts | its selection takes at least one name or part: one that takes none expects nothing, which is a mistake of the declaration more than a fulfilled one |
     ///
-    /// A document or a name a link of strength [`Warn`](CoverSeverity::Warn) fails
-    /// to reach is listed in `uncovered` (`artifacts.uncovered` for a name) with its
-    /// strength and leaves the check clean, as `absent` and `unknown` do, and so do
-    /// a `warn` cover that selects nothing or whose listing is not the whole. A
-    /// document or a name exempt from a link is not a gap of it, whatever the
-    /// strength, and an exemption no longer needed leaves the check clean too.
+    /// A covering link to artifacts with a problem ([`Assessed::Unsound`]: a part in
+    /// another space than the link of `parts`) fails it whatever its strength. A
+    /// document, a name or a part a link of strength [`Warn`](CoverSeverity::Warn)
+    /// fails to reach is listed in `uncovered` (`artifacts.uncovered` for a name or a
+    /// part) with its strength and leaves the check clean, as `absent` and `unknown`
+    /// do, and so do a `warn` cover that selects nothing or whose listing is not
+    /// assessed whole. A document, a name or a part exempt from a link is not a gap of
+    /// it, whatever the strength, and an exemption no longer needed leaves the check
+    /// clean too.
+    ///
+    /// [`LinkCover::is_whole`]: crate::domain::shelf::coverage::LinkCover::is_whole
     pub fn is_clean(&self) -> bool {
         match self {
             Self::SchemaInvalid(_) => false,
@@ -457,8 +479,12 @@ impl BooksCheck {
                     && cover
                         .links()
                         .iter()
+                        .all(|link| !matches!(link.assessed(), Assessed::Unsound(_)))
+                    && cover
+                        .links()
+                        .iter()
                         .filter(|link| link.severity() == CoverSeverity::Error)
-                        .all(|link| link.completeness().is_all() && !link.selects_nothing())
+                        .all(|link| link.is_whole() && !link.selects_nothing())
             }
         }
     }

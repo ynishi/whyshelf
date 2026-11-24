@@ -1,0 +1,178 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "1a957a63000a22619f54e1a4504600d5c352ccfd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:64283251a265f709a0ddf7ec6ca57331f8fb5a67af5c4be2ace5f17d19c706ee",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/textdiff.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "82fb332c7d4e338183db3727bdbe9cf3856750a7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:624e0c7b91de3ae023408ee7ca4f5ce5a38f9fb51f0c89e1907c5e3aa6b317c9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "49b692c071996155224ff92bfc11f8e4659a502f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a472c3deabec95e56feb781dcbbc22670447bcf55afd8ad6d38389b5efe2b74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0d06a047bbaa309c89a1d042e6e3b4d4fc9ac2fd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:91358f88fda5403c5db2436a5528d8a1d82f338080b509a544e531525f20460e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "15438da9bc8d0cd40806c9bd31b33b6a1dff226e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94764bb140e397d0abc15683e76086bc530de516a33c9563da7755fa0dc4a899",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "98f84d171e35cb42ef0f064db4e3fa52317078da",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7cc9e806e513c8102dbcc2b8613b1c44a410902b06d00e8a7c75d811cde60d25",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/snapshot.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5ce44d3289fd5682822768e56a208f252fc83cd6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9abd4e39efb864f0552f67a7a8bf0700ac8a900b4912008f5291335a76708637",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b32970fb5533cef9d6d9673a29d824f3d630a149",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bc8bd35dfd5ceb09ef4321fc61a6d40a1bd656e4c7b7b5b095467aca93149b91",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "aea99f69b14b05ce7f02d5f9742e28186182a94d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a87cca64c098f0d3d592b806caa6fcb561ce75b7c249f9b0c7b4eb86c93aa1c7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/tree_fixtures_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795543666020,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0e4e9a9d264df7a0338203288590f0b9a6b5ec3d",
+      "hash": "sha256:3588744daad16f3b85676117140282d1ffb704caa82584d6adc7e4235257ec77",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "6"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fa37-74bf-bbd8-1dbc0e039102"
+    },
+    {
+      "address": "9e35d3f7c2d1f74657a0fc24ef027fd45090170f",
+      "hash": "sha256:bf4d38258564cd819c20864b4715464f1cf2cfb7f54276dbcf3975396bd9bcf6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    }
+  ],
+  "id": "01a20ebe-1946-72b1-bf35-2eeee3641275",
+  "kind": "decision",
+  "reason": "Listings answer a file that cannot be listed whole as a part, and a cover takes parts whole through one declared link (#120 stage C); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "a3cdf8dfcb1ce7e9123fc80140414637d04b0998",
+  "seen": "sha256:3e19e34afecea68999f2768535ea2dc3b1bcce91a4023e19c56c71207f188ed5",
+  "seen_address": "2129c2f3db97caa4fab1de6c1d1c67443443a50e",
+  "subject": "01a1c3d2-fcc8-780b-9a64-87c28c477246",
+  "v": 1,
+  "verb": "approve"
+}

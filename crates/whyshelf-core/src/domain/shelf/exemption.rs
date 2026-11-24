@@ -35,12 +35,17 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 
 use crate::domain::id::DocId;
-use crate::domain::nonempty::NonEmptyVec;
+use crate::domain::nonempty::{NonEmptySet, NonEmptyVec};
 use crate::domain::words::{Join, Mark, listed};
 
-use super::artifact::{ArtifactKey, Completeness, ListedNames, Space};
+use super::artifact::{
+    ArtifactKey, ArtifactName, Completeness, ListedNames, ListingPart, PartRead, Space,
+};
 use super::build::{FailureTag, Shelf};
-use super::cover::{Decided, Reached, covering_reach, decided_of};
+use super::cover::{
+    Decided, ListingRead, Reached, covering_reach, decided_of, part_reach, read_listing,
+    whole_space_of,
+};
 use super::doc::{DocKey, DocLabel};
 use super::ledger::{Exempt, ExemptOf, ExemptSubject, JudgementId, Ledger, NotStanding};
 use super::schema::{ArtifactCover, BookName, CoverSeverity, EntryName, Schema};
@@ -162,6 +167,15 @@ pub enum Unneeded {
     /// The document was decided against ([`NotStanding`], which says how): no
     /// covering link expects to reach it.
     DecidedAgainst(NotStanding),
+    /// The artifact is a part of the listing in which these names are found now: an
+    /// exemption of a part stands only while no name is found in it, so this one no
+    /// longer keeps the part out of the gaps, and is to be looked at again; the part
+    /// is a gap until a document names it under the link the cover takes parts whole
+    /// through.
+    NamesFound {
+        /// The names found in the part.
+        names: NonEmptySet<ArtifactName>,
+    },
 }
 
 /// How an exemption of `of` reads now: needed, with the strength of the link;
@@ -200,9 +214,14 @@ impl ExemptionReading {
 /// | | otherwise | [`ExemptionReading::Needed`] |
 /// | an artifact | the link is no covering link of the names of the artifact's space now ([`artifact_cover_of`]) | [`Unneeded::Cover`] |
 /// | | the link reaches the name now, from a document that counts | [`Unneeded::Reached`], with those documents |
-/// | | the names the link's selection takes are not all listed | [`ExemptionReading::CannotTell`] |
+/// | | the names the link's selection takes are not all listed, or nothing of the link is assessed (a part of its listing in another space than the link of parts) | [`ExemptionReading::CannotTell`] |
 /// | | the name is not among them | [`Unneeded::Cover`] of [`CoverMiss::NotListed`] |
 /// | | otherwise | [`ExemptionReading::Needed`] |
+/// | an artifact of the space of the link the cover takes parts whole through | the link reaches it through that link now, from a document that counts | [`Unneeded::Reached`] |
+/// | | the listing of the link's selection is neither whole nor in parts, or nothing of the link is assessed | [`ExemptionReading::CannotTell`] |
+/// | | it is no part of the listing | [`Unneeded::Cover`] of [`CoverMiss::NotListed`] |
+/// | | it is a part in which names are found | [`Unneeded::NamesFound`], with the names: the part is a gap again |
+/// | | otherwise (a part read with no name found in it, or unread) | [`ExemptionReading::Needed`] |
 ///
 /// What is listed is `listed`, read by [`ListedNames::of`] from what the command
 /// asked of the adapters; this reads none of it itself.
@@ -229,7 +248,7 @@ pub(super) fn read_exemption(
         ExemptSubject::Doc(id) => {
             match read_doc(shelf, decided, reached, *id, of.book(), of.link()) {
                 Ok(severity) => ExemptionReading::Needed(severity),
-                Err(why) => ExemptionReading::Unneeded(why),
+                Err(why) => ExemptionReading::Unneeded(why.into()),
             }
         }
         ExemptSubject::Artifact(artifact) => {
@@ -242,7 +261,31 @@ pub(super) fn read_exemption(
                 ArtifactRead::CannotTell(completeness) => {
                     ExemptionReading::CannotTell(completeness)
                 }
+                ArtifactRead::NamesFound(names) => {
+                    ExemptionReading::Unneeded(Unneeded::NamesFound { names })
+                }
             }
+        }
+    }
+}
+
+/// Why an exemption of a document is not needed: [`Unneeded`] without the reason only
+/// a part of a listing has ([`Unneeded::NamesFound`]), so that what refuses an
+/// exemption of a document has no case that cannot come.
+enum DocUnneeded {
+    Reached { by: NonEmptyVec<DocId> },
+    Cover(CoverMiss),
+    NotValid(FailureTag),
+    DecidedAgainst(NotStanding),
+}
+
+impl From<DocUnneeded> for Unneeded {
+    fn from(why: DocUnneeded) -> Self {
+        match why {
+            DocUnneeded::Reached { by } => Self::Reached { by },
+            DocUnneeded::Cover(miss) => Self::Cover(miss),
+            DocUnneeded::NotValid(tag) => Self::NotValid(tag),
+            DocUnneeded::DecidedAgainst(status) => Self::DecidedAgainst(status),
         }
     }
 }
@@ -255,22 +298,22 @@ fn read_doc(
     id: DocId,
     book: &BookName,
     link: &EntryName,
-) -> Result<CoverSeverity, Unneeded> {
+) -> Result<CoverSeverity, DocUnneeded> {
     let doc = shelf.state_of(id).valid_or_failure();
     let doc_book = doc.as_ref().ok().map(|d| &d.key().book);
-    let severity = cover_of(shelf.schema(), book, link, doc_book).map_err(Unneeded::Cover)?;
+    let severity = cover_of(shelf.schema(), book, link, doc_book).map_err(DocUnneeded::Cover)?;
     if let Err(failure) = doc {
-        return Err(Unneeded::NotValid(failure.tag()));
+        return Err(DocUnneeded::NotValid(failure.tag()));
     }
     if let Decided::Against(status) = decided(id) {
-        return Err(Unneeded::DecidedAgainst(status));
+        return Err(DocUnneeded::DecidedAgainst(status));
     }
     let from = reached
         .doc_from(id, book, link)
         .map(|from| from.iter().copied().collect::<Vec<_>>())
         .and_then(|from| NonEmptyVec::from_vec(from).ok());
     match from {
-        Some(by) => Err(Unneeded::Reached { by }),
+        Some(by) => Err(DocUnneeded::Reached { by }),
         None => Ok(severity),
     }
 }
@@ -283,6 +326,7 @@ enum ArtifactRead {
     Cover(CoverMiss),
     Reached { by: NonEmptyVec<DocId> },
     CannotTell(Completeness),
+    NamesFound(NonEmptySet<ArtifactName>),
 }
 
 /// The reading of an exemption of an artifact.
@@ -296,19 +340,106 @@ fn read_artifact(
 ) -> ArtifactRead {
     let cover = match artifact_cover_of(shelf.schema(), book, link, artifact.space()) {
         Ok(cover) => cover,
+        Err(miss @ CoverMiss::OtherSpace { .. }) => {
+            return match part_cover_of(shelf.schema(), book, link, artifact.space()) {
+                Some((space, cover, whole)) => {
+                    read_part(reached, listed, artifact, book, space, cover, whole)
+                }
+                None => ArtifactRead::Cover(miss),
+            };
+        }
         Err(miss) => return ArtifactRead::Cover(miss),
     };
-    let from = reached
-        .artifact_from(book, link, artifact.name())
-        .map(|from| from.iter().copied().collect::<Vec<_>>())
-        .and_then(|from| NonEmptyVec::from_vec(from).ok());
-    if let Some(by) = from {
+    if let Some(by) = reached_by(reached, book, link, artifact) {
         return ArtifactRead::Reached { by };
     }
-    match listed.names(artifact.space(), cover.selection()) {
-        Err(completeness) => ArtifactRead::CannotTell(completeness),
-        Ok(names) if names.contains(artifact.name()) => ArtifactRead::Needed(cover.severity()),
-        Ok(_) => ArtifactRead::Cover(CoverMiss::NotListed),
+    let whole_space = whole_space_of(shelf, book, cover);
+    match read_listing(listed, artifact.space(), cover, whole_space) {
+        ListingRead::NotWhole(completeness) => ArtifactRead::CannotTell(completeness),
+        // Nothing of the link is assessed: whether the name is expected cannot be told.
+        ListingRead::OtherSpace(_) => {
+            ArtifactRead::CannotTell(listed.completeness(artifact.space(), cover.selection()))
+        }
+        ListingRead::Whole { names, .. } if names.contains(artifact.name()) => {
+            ArtifactRead::Needed(cover.severity())
+        }
+        ListingRead::Whole { .. } => ArtifactRead::Cover(CoverMiss::NotListed),
+    }
+}
+
+/// The documents that reach `artifact` through the link `link` of the book `book`,
+/// when some do.
+fn reached_by(
+    reached: &Reached,
+    book: &BookName,
+    link: &EntryName,
+    artifact: &ArtifactKey,
+) -> Option<NonEmptyVec<DocId>> {
+    reached
+        .artifact_from(book, link, artifact.name())
+        .map(|from| from.iter().copied().collect::<Vec<_>>())
+        .and_then(|from| NonEmptyVec::from_vec(from).ok())
+}
+
+/// The space of the link `link` of the book `book`, its cover and the link the cover
+/// takes each part whole through, when that link is of `space`: what an artifact of
+/// `space` can be a part of.
+fn part_cover_of<'a>(
+    schema: &'a Schema,
+    book: &BookName,
+    link: &EntryName,
+    space: &Space,
+) -> Option<(&'a Space, &'a ArtifactCover, &'a EntryName)> {
+    let links = schema.book(book)?.artifact_links();
+    let kind = links.get(link)?;
+    let cover = kind.cover.as_ref()?;
+    let whole = cover.parts_whole()?;
+    (links.get(whole)?.space == *space).then_some((&kind.space, cover, whole))
+}
+
+/// The reading of an exemption of a part from the covering link, by the rules of how a
+/// part stands that [`coverage::assess`](super::coverage::assess) reads too
+/// (`part_reach`, `read_listing`): unneeded once a document reaches it through the
+/// link the cover takes parts whole through; not told while nothing of the link is
+/// assessed; unneeded once the listing holds it as no part. And it stands only while
+/// no name was found in the part: an exemption says a part holds no name, so one in
+/// which names are found now no longer clears it, which is told with the names, and
+/// the part is a gap until a document names it under the link of parts. Otherwise it
+/// is needed, whatever else was read of the part (none found in it, or unread).
+fn read_part(
+    reached: &Reached,
+    listed: &ListedNames,
+    artifact: &ArtifactKey,
+    book: &BookName,
+    space: &Space,
+    cover: &ArtifactCover,
+    whole: &EntryName,
+) -> ArtifactRead {
+    let by = part_reach(reached, book, whole, artifact)
+        .map(|from| from.iter().copied().collect::<Vec<_>>())
+        .and_then(|from| NonEmptyVec::from_vec(from).ok());
+    if let Some(by) = by {
+        return ArtifactRead::Reached { by };
+    }
+    match read_listing(listed, space, cover, Some(artifact.space())) {
+        ListingRead::NotWhole(completeness) => ArtifactRead::CannotTell(completeness),
+        ListingRead::OtherSpace(_) => {
+            ArtifactRead::CannotTell(listed.completeness(space, cover.selection()))
+        }
+        ListingRead::Whole { parts, .. } => {
+            match parts
+                .iter()
+                .find(|part| part.key() == artifact)
+                .map(ListingPart::read)
+            {
+                None => ArtifactRead::Cover(CoverMiss::NotListed),
+                Some(PartRead::Found(names)) => match NonEmptySet::from_set(names.clone()) {
+                    Ok(names) => ArtifactRead::NamesFound(names),
+                    Err(_) => ArtifactRead::Needed(cover.severity()),
+                },
+                Some(PartRead::Unread) => ArtifactRead::Needed(cover.severity()),
+            }
+        }
     }
 }
 
@@ -369,6 +500,21 @@ pub enum ExemptRefusal {
         link: EntryName,
         /// The documents it is reached from, by their keys, in the order of identity.
         by: Vec<DocKey>,
+    },
+    /// The artifact is a part of the listing in which names are found: an exemption
+    /// says a part holds none, so it would not stand at once; a document names the part
+    /// under the link of parts instead.
+    #[error(
+        "names are found in it ({}): an exemption from {book}.{link} stands only for a part in which none is found; name it whole under the link of parts",
+        listed(.names.iter(), Mark::Backtick, Join::Comma)
+    )]
+    NamesFound {
+        /// The book.
+        book: BookName,
+        /// The link.
+        link: EntryName,
+        /// The names found in the part.
+        names: NonEmptySet<ArtifactName>,
     },
     /// The names the link's selection takes are not all listed, so that whether the
     /// artifact is reached by the link, or is one it expects, cannot be told: the
@@ -445,14 +591,14 @@ pub fn frame_exempt(
         of.link(),
     ) {
         Ok(_) => None,
-        Err(Unneeded::Cover(miss)) => Some(not_covering(&of, miss)),
-        Err(Unneeded::NotValid(tag)) => Some(ExemptRefusal::DocNotValid { id, tag }),
-        Err(Unneeded::DecidedAgainst(status)) => Some(ExemptRefusal::DecidedAgainst {
+        Err(DocUnneeded::Cover(miss)) => Some(not_covering(&of, miss)),
+        Err(DocUnneeded::NotValid(tag)) => Some(ExemptRefusal::DocNotValid { id, tag }),
+        Err(DocUnneeded::DecidedAgainst(status)) => Some(ExemptRefusal::DecidedAgainst {
             id,
             key: shelf.doc(id).map(|doc| doc.key().clone()),
             status,
         }),
-        Err(Unneeded::Reached { by }) => Some(reached_refusal(shelf, &of, &by)),
+        Err(DocUnneeded::Reached { by }) => Some(reached_refusal(shelf, &of, &by)),
     };
     first_exemption(ledger, of, refusal)
 }
@@ -487,6 +633,11 @@ pub fn frame_exempt_artifact(
         ArtifactRead::Needed(_) => None,
         ArtifactRead::Cover(miss) => Some(not_covering(&of, miss)),
         ArtifactRead::Reached { by } => Some(reached_refusal(shelf, &of, &by)),
+        ArtifactRead::NamesFound(names) => Some(ExemptRefusal::NamesFound {
+            book: of.book().clone(),
+            link: of.link().clone(),
+            names,
+        }),
         ArtifactRead::CannotTell(completeness) => Some(ExemptRefusal::CannotTell {
             book: of.book().clone(),
             link: of.link().clone(),

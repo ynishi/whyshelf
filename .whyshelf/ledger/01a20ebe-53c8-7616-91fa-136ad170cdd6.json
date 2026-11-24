@@ -1,0 +1,203 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "b760a80192ca1dad0de23688ee1d2a4f36f0fb9c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:25fcc3e452c0aac82a75f49d384bd93fa38969602b79a227b2944b5b8acd14e1",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "232249ff21fbacbb525ad957925d501bf0bcf726",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4a8ea75405a30b9a6ef298d0f1f7f01ebdc12267921130bd17604afefb01800c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/dispatch.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b9442a9c333a8163fbaa21fbf90d519ad68c8b08",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fbaf15c574084683b2f50dbdb80b4c80497399b4d9a8db3b516e7a874cf1881f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/exemption/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "36cee17ab282036599f8b0af65a9dfa80b6fc16d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:498c6b777c60f39dd91941f3b1eb433d057facfbd1eefb445b6b77e3dc8f07e5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b31242a288426a2efecf4e4caacbffca6914193c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fec6e48107a0f736b3d50e23c739d574d7b4f2e545e8f4229e12bd23a98aadab",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9edf0c75fd79a6e15aa3eb0ad6afe3affccfee68",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:db1ad24f0d6eaf7d394a9337cba166f2d5edde61a1fb792e9b676f664c4e9073",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "abceb4e93b1cdd3a893e28c4e2d4367cb0710b61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c738a47b70b40fc0db1c682a8e6cd0d8817d75bcd7335993dee8d25c9978a8dd",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/scope_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "aa3c72dda03be46adbdfc0bbed97266c46e51fe6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5d3937a7c050fbb94eac1e801f2d898a3809c05c7806daa42adb563b3bbd01d4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/conformance.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5ce44d3289fd5682822768e56a208f252fc83cd6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9abd4e39efb864f0552f67a7a8bf0700ac8a900b4912008f5291335a76708637",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9af5a53c7809fe491b0538ea305d226dc570d2bb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6a5f2005218c6a6527e7befaebaa0ca6bd92a5605c37100e04c08b906dc64ff2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/git.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b32970fb5533cef9d6d9673a29d824f3d630a149",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bc8bd35dfd5ceb09ef4321fc61a6d40a1bd656e4c7b7b5b095467aca93149b91",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "aea99f69b14b05ce7f02d5f9742e28186182a94d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a87cca64c098f0d3d592b806caa6fcb561ce75b7c249f9b0c7b4eb86c93aa1c7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/tree_fixtures_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795543666020,
+  "expires": null,
+  "frame": [
+    {
+      "address": "2866b277280d6dddd8e9b1780faabb2157dbf3a5",
+      "hash": "sha256:fe0b0d9bf855db38e57c08f45298bd3ec6e055ea1b7a6613127b299bf1b090c2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "93"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fbcb-f119-7232-9db9-1d7c146688c7"
+    }
+  ],
+  "id": "01a20ebe-53c8-7616-91fa-136ad170cdd6",
+  "kind": "decision",
+  "reason": "Listings answer a file that cannot be listed whole as a part, and a cover takes parts whole through one declared link (#120 stage C); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "a3cdf8dfcb1ce7e9123fc80140414637d04b0998",
+  "seen": "sha256:4737fd3c10e40f54240ad2bd238ea7c560ef074769ce748ab9029b6d8ae58348",
+  "seen_address": "fcf82fd46c3a07630671bf50b4a5dd845d6514c1",
+  "subject": "01a1fbcc-63ae-71c8-9eda-7e8bbe22f26e",
+  "v": 1,
+  "verb": "approve"
+}

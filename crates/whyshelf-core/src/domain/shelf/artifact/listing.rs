@@ -15,10 +15,10 @@
 //! |---|---|---|
 //! | [`Selection`] | the texts to include (at least one) and to exclude, as a link declares them | a declaration of a link ([`ArtifactCover`](super::super::schema::ArtifactCover)) |
 //! | [`SelectionCheck`] | whether the space reads the selection: yes, not a selection of it (why), or the space lists nothing (why) | the adapter, without I/O |
-//! | [`NameListing`] | the names the selection takes that are there now: all of them, some of them (why), or none can be listed (why) | the adapter |
+//! | [`NameListing`] | the names the selection takes that are there now: all of them, some of them (why), all but the parts it could not list whole (each a [`ListingPart`]: its key, why, and the names found in it or that it could not be read, [`PartRead`]), or none can be listed (why) | the adapter |
 //! | [`Listings`] | what was asked, by (space, selection): nothing, or each answer | the application, for the commands that read an artifact cover |
 //! | [`Completeness`] | whether a listing is the whole: all, partial (why), cannot list (why), or not asked | [`ListedNames::of`] |
-//! | [`ListedNames`] | for each (space, selection), its completeness and, when all, its names | [`ListedNames::of`], the only reader of the variants of [`NameListing`] |
+//! | [`ListedNames`] | for each (space, selection), its completeness and, when all, its names; when in parts, its names and its parts, for a cover that takes each part whole | [`ListedNames::of`], the only reader of the variants of [`NameListing`] |
 //!
 //! ```text
 //!   adapter ──select──► SelectionCheck ──┐
@@ -35,9 +35,9 @@ use std::fmt;
 
 use thiserror::Error;
 
-use crate::domain::nonempty::NonBlank;
+use crate::domain::nonempty::{NonBlank, NonEmptyVec, TextLiteral};
 
-use super::{ArtifactName, Space};
+use super::{ArtifactKey, ArtifactName, Space};
 
 /// Which list of a [`Selection`] a text is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -169,9 +169,65 @@ pub enum NameListing {
         /// Why it stopped.
         why: NonBlank,
     },
+    /// Every name of what the adapter could list whole (`found`), and the parts it
+    /// could not, each told apart ([`ListingPart`]): a part may hold names the adapter
+    /// does not see, so the listing is never counted as all of them. Only a cover that
+    /// takes each part whole, through the one link it declares for parts, reads past
+    /// that ([`ArtifactCover::parts_whole`](super::super::schema::ArtifactCover::parts_whole));
+    /// to any other, it is a listing that is not the whole. What keeps the whole
+    /// selection from being listed (a bound, a listing of the state left short) is
+    /// [`Some`](Self::Some), never parts.
+    Parted {
+        /// The names of what was listed whole.
+        found: BTreeSet<ArtifactName>,
+        /// The parts that could not be, each once, in the adapter's order.
+        parts: NonEmptyVec<ListingPart>,
+    },
     /// No listing could be made (the space lists nothing, or nothing here to list
     /// from), with why.
     CannotList(NonBlank),
+}
+
+/// A part of what a selection takes that its adapter could not list whole: the
+/// artifact the part is (its key, in a space the adapter names in its own words, opaque
+/// here as every name is), why it is not whole, and what was read of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListingPart {
+    key: ArtifactKey,
+    why: NonBlank,
+    read: PartRead,
+}
+
+impl ListingPart {
+    /// The part `key`, not listed whole for `why`, of which `read` was read.
+    pub fn new(key: ArtifactKey, why: NonBlank, read: PartRead) -> Self {
+        Self { key, why, read }
+    }
+
+    /// The artifact the part is, as a whole.
+    pub fn key(&self) -> &ArtifactKey {
+        &self.key
+    }
+
+    /// Why it is not listed whole.
+    pub fn why(&self) -> &NonBlank {
+        &self.why
+    }
+
+    /// What was read of it.
+    pub fn read(&self) -> &PartRead {
+        &self.read
+    }
+}
+
+/// What an adapter read of a part it could not list whole.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PartRead {
+    /// It was read, and these names were found in it (none, it may be), beside what
+    /// may make others the adapter does not see.
+    Found(BTreeSet<ArtifactName>),
+    /// It could not be read at all.
+    Unread,
 }
 
 /// What was asked of the adapters for a command that reads an artifact cover: the
@@ -224,26 +280,86 @@ impl fmt::Display for Completeness {
 /// a listing themselves.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListedNames {
-    of: BTreeMap<(Space, Selection), (Completeness, BTreeSet<ArtifactName>)>,
+    of: BTreeMap<(Space, Selection), Read>,
+}
+
+/// One listing, read: how complete it is, the names it holds whole (all of them, or
+/// those beside its parts), and its parts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Read {
+    completeness: Completeness,
+    names: BTreeSet<ArtifactName>,
+    parts: Vec<ListingPart>,
+}
+
+/// How many parts the reason of a listing in parts names, in the order the adapter
+/// gave them; the others are counted, so that the reason stays small whatever a
+/// selection takes.
+const PARTS_SHOWN: usize = 5;
+
+/// What is said of a listing in parts when what says it cannot be made (it never
+/// cannot: it starts with words).
+const IN_PARTS: TextLiteral = TextLiteral::new("parts of it are not listed whole");
+
+/// Why a listing in parts is not the whole, as a cover that does not take its parts
+/// whole is told it: the first few parts, each with why, and how many more.
+fn parts_why(parts: &[ListingPart]) -> NonBlank {
+    let shown: Vec<String> = parts
+        .iter()
+        .take(PARTS_SHOWN)
+        .map(|part| format!("{} ({})", part.key(), part.why()))
+        .collect();
+    let more = parts.len().saturating_sub(PARTS_SHOWN);
+    let mut said = format!("parts of it are not listed whole: {}", shown.join("; "));
+    if more > 0 {
+        said.push_str(&format!("; and {more} more part(s)"));
+    }
+    NonBlank::new(said).unwrap_or_else(|_| NonBlank::from(IN_PARTS))
 }
 
 impl ListedNames {
     /// The listings read: a selection that was asked is as complete as its answer
-    /// says, and one that was not (or nothing was) is [`Completeness::NotAsked`].
+    /// says, and one that was not (or nothing was) is [`Completeness::NotAsked`]. A
+    /// listing in parts ([`NameListing::Parted`]) is [`Completeness::Partial`], with
+    /// its parts named in the reason, and keeps its names and its parts for a cover
+    /// that takes each part whole ([`names_and_parts`](Self::names_and_parts)).
     pub fn of(listings: &Listings) -> Self {
         let of = match listings {
             Listings::NotAsked => BTreeMap::new(),
             Listings::Asked(asked) => asked
                 .iter()
                 .map(|(key, listing)| {
-                    let read = match listing {
-                        NameListing::All(names) => (Completeness::All, names.clone()),
-                        NameListing::Some { why, .. } => {
-                            (Completeness::Partial(why.clone()), BTreeSet::new())
+                    let (completeness, names, parts) = match listing {
+                        NameListing::All(names) => (Completeness::All, names.clone(), Vec::new()),
+                        NameListing::Some { why, .. } => (
+                            Completeness::Partial(why.clone()),
+                            BTreeSet::new(),
+                            Vec::new(),
+                        ),
+                        NameListing::Parted { found, parts } => {
+                            // Each part once, the first an adapter gave of its key.
+                            let mut seen = BTreeSet::new();
+                            let parts: Vec<ListingPart> = parts
+                                .iter()
+                                .filter(|part| seen.insert(part.key().clone()))
+                                .cloned()
+                                .collect();
+                            (
+                                Completeness::Partial(parts_why(&parts)),
+                                found.clone(),
+                                parts,
+                            )
                         }
-                        NameListing::CannotList(why) => {
-                            (Completeness::CannotList(why.clone()), BTreeSet::new())
-                        }
+                        NameListing::CannotList(why) => (
+                            Completeness::CannotList(why.clone()),
+                            BTreeSet::new(),
+                            Vec::new(),
+                        ),
+                    };
+                    let read = Read {
+                        completeness,
+                        names,
+                        parts,
                     };
                     (key.clone(), read)
                 })
@@ -255,9 +371,7 @@ impl ListedNames {
     /// How complete the listing of `selection` in `space` is.
     pub fn completeness(&self, space: &Space, selection: &Selection) -> Completeness {
         self.entry(space, selection)
-            .map_or(Completeness::NotAsked, |(completeness, _)| {
-                completeness.clone()
-            })
+            .map_or(Completeness::NotAsked, |read| read.completeness.clone())
     }
 
     /// The names of `selection` in `space` when the listing is the whole, or else how
@@ -268,24 +382,36 @@ impl ListedNames {
         selection: &Selection,
     ) -> Result<&BTreeSet<ArtifactName>, Completeness> {
         match self.entry(space, selection) {
-            Some((completeness, names)) if completeness.is_all() => Ok(names),
-            Some((completeness, _)) => Err(completeness.clone()),
+            Some(read) if read.completeness.is_all() => Ok(&read.names),
+            Some(read) => Err(read.completeness.clone()),
+            None => Err(Completeness::NotAsked),
+        }
+    }
+
+    /// For a cover that takes each part whole: the names of `selection` in `space`
+    /// and the parts its listing could not list whole, when every name is in one of
+    /// the two (the listing is the whole, with no part, or is in parts); or else how
+    /// complete it is (never [`Completeness::All`]).
+    pub fn names_and_parts(
+        &self,
+        space: &Space,
+        selection: &Selection,
+    ) -> Result<(&BTreeSet<ArtifactName>, &[ListingPart]), Completeness> {
+        match self.entry(space, selection) {
+            Some(read) if read.completeness.is_all() || !read.parts.is_empty() => {
+                Ok((&read.names, &read.parts))
+            }
+            Some(read) => Err(read.completeness.clone()),
             None => Err(Completeness::NotAsked),
         }
     }
 
     /// Every (space, selection) read, with its completeness, in order.
     pub fn completenesses(&self) -> impl Iterator<Item = (&(Space, Selection), &Completeness)> {
-        self.of
-            .iter()
-            .map(|(key, (completeness, _))| (key, completeness))
+        self.of.iter().map(|(key, read)| (key, &read.completeness))
     }
 
-    fn entry(
-        &self,
-        space: &Space,
-        selection: &Selection,
-    ) -> Option<&(Completeness, BTreeSet<ArtifactName>)> {
+    fn entry(&self, space: &Space, selection: &Selection) -> Option<&Read> {
         // The key owns its parts; looked up by a key made of clones.
         self.of.get(&(space.clone(), selection.clone()))
     }
@@ -379,6 +505,99 @@ mod tests {
         assert_eq!(
             listed.completeness(&file, &selection("c")),
             Completeness::NotAsked
+        );
+    }
+
+    #[test]
+    fn a_listing_in_parts_is_not_the_whole_and_gives_its_names_and_parts_only_to_a_cover_of_parts()
+    {
+        let (tests, file) = (space("rust-test"), space("file"));
+        let part = |path: &str, why_text: &str, read: PartRead| {
+            ListingPart::new(
+                ArtifactKey::new(file.clone(), name(path)),
+                why(why_text),
+                read,
+            )
+        };
+        let parts: Vec<ListingPart> = (0..7)
+            .map(|i| part(&format!("p{i}.rs"), "a macro", PartRead::Unread))
+            .collect();
+        let asked = BTreeMap::from([
+            (
+                (tests.clone(), selection("a")),
+                NameListing::Parted {
+                    found: BTreeSet::from([name("a.rs::t")]),
+                    // `b.rs` given twice is one part, the first given.
+                    parts: NonEmptyVec::new(
+                        part(
+                            "b.rs",
+                            "a derive",
+                            PartRead::Found(BTreeSet::from([name("b.rs::u")])),
+                        ),
+                        vec![
+                            part("c.rs", "no file", PartRead::Unread),
+                            part("b.rs", "again", PartRead::Unread),
+                        ],
+                    ),
+                },
+            ),
+            (
+                (tests.clone(), selection("many")),
+                NameListing::Parted {
+                    found: BTreeSet::new(),
+                    parts: NonEmptyVec::from_vec(parts).unwrap(),
+                },
+            ),
+            (
+                (tests.clone(), selection("whole")),
+                NameListing::All(BTreeSet::from([name("w.rs::t")])),
+            ),
+            (
+                (tests.clone(), selection("cut")),
+                NameListing::Some {
+                    found: BTreeSet::from([name("x.rs::t")]),
+                    why: why("cut"),
+                },
+            ),
+        ]);
+        let listed = ListedNames::of(&Listings::Asked(asked));
+        // Not the whole, to every reader that does not take its parts whole; the
+        // reason names each part with why.
+        let Completeness::Partial(said) = listed.completeness(&tests, &selection("a")) else {
+            panic!("a listing in parts is partial");
+        };
+        assert_eq!(
+            said.as_str(),
+            "parts of it are not listed whole: `b.rs` in `file` (a derive); `c.rs` in `file` (no file)"
+        );
+        assert!(listed.names(&tests, &selection("a")).is_err());
+        // The first few parts are named, and the others counted.
+        let Completeness::Partial(many) = listed.completeness(&tests, &selection("many")) else {
+            panic!("a listing in parts is partial");
+        };
+        assert!(many.as_str().ends_with("; and 2 more part(s)"), "{many}");
+        // To a cover that takes its parts whole: the names and the parts.
+        let (names, parts) = listed.names_and_parts(&tests, &selection("a")).unwrap();
+        assert_eq!(names, &BTreeSet::from([name("a.rs::t")]));
+        assert_eq!(
+            parts
+                .iter()
+                .map(|p| p.key().name().as_str())
+                .collect::<Vec<_>>(),
+            ["b.rs", "c.rs"]
+        );
+        // A whole listing has no part; one cut at a bound has nothing to give.
+        assert_eq!(
+            listed.names_and_parts(&tests, &selection("whole")),
+            Ok((&BTreeSet::from([name("w.rs::t")]), &[][..]))
+        );
+        assert_eq!(
+            listed.names_and_parts(&tests, &selection("cut")),
+            Err(Completeness::Partial(why("cut")))
+        );
+        assert_eq!(
+            listed.names_and_parts(&tests, &selection("none")),
+            Err(Completeness::NotAsked)
         );
     }
 

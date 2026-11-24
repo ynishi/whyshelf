@@ -6,11 +6,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::nonempty::{Count, NonBlank, NonEmptySet, TextLiteral};
 
-use super::super::artifact::{Comparison, Selection, SelectionCheck, SelectionChecks, Space};
-use super::link::{CoverRefusal, CoverTo, ReadCover, read_cover};
+use super::super::artifact::{
+    Comparison, ComparisonProblem, Selection, SelectionCheck, SelectionChecks, Space,
+};
+use super::link::{CoverRefusal, CoverTo, PartsLink, ReadCover, read_cover};
 use super::{
     ARTIFACT_TARGET, ArtifactCover, ArtifactLinkKind, ArtifactPropagation, BookDescription,
-    BookDir, BookName, BookRange, BookSchema, BookSchemaDecl, BookScope, Cardinality,
+    BookDir, BookName, BookRange, BookSchema, BookSchemaDecl, BookScope, Cardinality, CompareDecl,
     CoverSeverity, Declared, DeclaredLink, EntryName, FieldDecl, FieldEntryDecl, FieldType,
     FieldTypeDecl, FieldWord, KeyPattern, KeyPatternDecl, KeyPrefix, KeyWord, LinkEntryDecl,
     LinkKind, LinkTargetDecl, NamePlace, Origins, PresetOrigin, Propagation, SchemaProblem, WordAt,
@@ -303,6 +305,9 @@ fn read_links(
     problems: &mut Vec<SchemaProblem>,
 ) -> Declared<EntryName, DraftEntry> {
     let mut links = Declared::default();
+    // The links of the book as declared, for the `parts` of a cover to name one.
+    let declared = entries.clone();
+    let link_of = parts_link_of(&declared);
     for entry in entries {
         let name = match EntryName::new(&entry.name) {
             Ok(name) => name,
@@ -351,7 +356,7 @@ fn read_links(
         } else {
             CoverTo::Artifacts
         };
-        let cover = match read_cover(entry.cover.as_ref(), to) {
+        let cover = match read_cover(entry.cover.as_ref(), to, &link_of) {
             Ok(cover) => cover,
             Err(refusal) => {
                 problems.push(cover_problem(book, name, refusal));
@@ -403,19 +408,16 @@ fn read_links(
                     }
                     ReadCover::Nothing | ReadCover::Book(_) => None,
                 };
-                let comparison = match &entry.compare {
-                    None => Comparison::Bytes,
-                    Some(decl) => match Comparison::parse(&decl.kind, &decl.ignore) {
-                        Ok(comparison) => comparison,
-                        Err(why) => {
-                            problems.push(SchemaProblem::BadComparison {
-                                book: book.to_owned(),
-                                link: name,
-                                why,
-                            });
-                            continue;
-                        }
-                    },
+                let comparison = match comparison_of(entry.compare.as_ref()) {
+                    Ok(comparison) => comparison,
+                    Err(why) => {
+                        problems.push(SchemaProblem::BadComparison {
+                            book: book.to_owned(),
+                            link: name,
+                            why,
+                        });
+                        continue;
+                    }
                 };
                 let propagation = match entry.propagation {
                     Propagation::Depends => ArtifactPropagation::Depends,
@@ -442,6 +444,31 @@ fn read_links(
     links
 }
 
+/// What a link to artifacts compares, as declared: `bytes` when it says none. The one
+/// reading of `compare`, for the link and for the `parts` of a cover that names it.
+fn comparison_of(compare: Option<&CompareDecl>) -> Result<Comparison, ComparisonProblem> {
+    match compare {
+        None => Ok(Comparison::Bytes),
+        Some(decl) => Comparison::parse(&decl.kind, &decl.ignore),
+    }
+}
+
+/// Each link of a book (`entries`) as the reader of `parts` needs to know it, by its
+/// name as written: none, a link into a book, or a link to artifacts with what it
+/// means and compares.
+fn parts_link_of(entries: &[LinkEntryDecl]) -> impl Fn(&str) -> PartsLink + '_ {
+    move |name: &str| match entries.iter().find(|entry| entry.name == name) {
+        None => PartsLink::Undeclared,
+        Some(entry) => match entry.target {
+            LinkTargetDecl::Book(_) => PartsLink::IntoABook,
+            LinkTargetDecl::Artifact => PartsLink::ToArtifacts {
+                propagation: entry.propagation,
+                comparison: comparison_of(entry.compare.as_ref()).ok(),
+            },
+        },
+    }
+}
+
 /// The problem a `cover` that the reader refused is.
 fn cover_problem(book: &str, link: EntryName, refusal: CoverRefusal) -> SchemaProblem {
     let book = book.to_owned();
@@ -450,6 +477,12 @@ fn cover_problem(book: &str, link: EntryName, refusal: CoverRefusal) -> SchemaPr
         CoverRefusal::SelectionOnBookLink => SchemaProblem::SelectionOnBookLink { book, link },
         CoverRefusal::NeedsSelection => SchemaProblem::CoverNeedsSelection { book, link },
         CoverRefusal::Selection(why) => SchemaProblem::BadSelection { book, link, why },
+        CoverRefusal::Parts { whole, why } => SchemaProblem::BadParts {
+            book,
+            link,
+            whole,
+            why,
+        },
     }
 }
 
@@ -510,9 +543,11 @@ pub(super) fn asked_selections(
             if !matches!(entry.target, LinkTargetDecl::Artifact) {
                 continue;
             }
-            let Ok(ReadCover::Artifacts(cover)) =
-                read_cover(entry.cover.as_ref(), CoverTo::Artifacts)
-            else {
+            let Ok(ReadCover::Artifacts(cover)) = read_cover(
+                entry.cover.as_ref(),
+                CoverTo::Artifacts,
+                &parts_link_of(&book.links),
+            ) else {
                 continue;
             };
             if let Some(space) = read_space(

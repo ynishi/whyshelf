@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "020fc239e36698dd0f02fa90a3d1f20d60037489",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:cd0947c606d9aa6197dca7ab62d66bd8553d22365024ea73aa1e88e704644c1b",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/rust_test_cover.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795543666020,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dd7bf7b73d70661bcb542a14e9a378a7e62034f7",
+      "hash": "sha256:40f796d0a6e11fcef53c6f0f2018b41631065dcfbbf54ddb18d095dec70a6282",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "111"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20e06-b79e-7071-b438-62a7fe44a70c"
+    }
+  ],
+  "id": "01a20ebe-6d32-71dd-85d8-df721752e982",
+  "kind": "decision",
+  "reason": "Listings answer a file that cannot be listed whole as a part, and a cover takes parts whole through one declared link (#120 stage C); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "a3cdf8dfcb1ce7e9123fc80140414637d04b0998",
+  "seen": "sha256:25f4743f96b39b0222d826e684a30d4ec8ae8a19bb67e4b8c8be1051b86a82d1",
+  "seen_address": "1b59d430199da1afb69565498bbb27300d7b59b1",
+  "subject": "01a20e06-b79e-7071-b438-62a983fe2477",
+  "v": 1,
+  "verb": "approve"
+}

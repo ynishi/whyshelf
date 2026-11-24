@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "cc7fbabe9e83bcf51fd84f28eb2db896544f3bd5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0d76e0811d14a680b6736b0dbbf210eb6ccb420aad3d9e223727ccb8970a1e2a",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0c5d60efe7bd3708eaf20b758a9395b2672f5446",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:64dc006655879075e4d38ceb7838c9e56ec40e0df46b43306c28e069b2385a61",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "326652d6ca14744f585174f628cba58b3d466335",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7a1773b46c21ccd48c9dac7a6d4d923f383f28392e8a6fd7ad6e8f04b630485f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/map/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "824243efcc292d3085ff9bcf50432b4acff1ca23",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:360508e991ce153764924df96b973265e28a7144fdc140333fccb8c941059f86",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5ce44d3289fd5682822768e56a208f252fc83cd6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9abd4e39efb864f0552f67a7a8bf0700ac8a900b4912008f5291335a76708637",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "40a4375cb3971844cc47616914ddadbf9867c6d1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1268cd00de0f70b0a98c647f6aeb03bb24bb7ddfb2971e5e136f7efde84f1ba4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795543666020,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b4b013c3072c7576e998eb74980d082fbbbb3fe",
+      "hash": "sha256:3e379866f327b70afe6acdbf819f6f9b6a902810c5855c79becb1bd1a19be061",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "53"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7e2-6f31-74e1-8aa9-4de2bd6986d2"
+    }
+  ],
+  "id": "01a20ebe-2f4d-7736-8d57-2685cc083f92",
+  "kind": "decision",
+  "reason": "Listings answer a file that cannot be listed whole as a part, and a cover takes parts whole through one declared link (#120 stage C); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "a3cdf8dfcb1ce7e9123fc80140414637d04b0998",
+  "seen": "sha256:4fff836039815d80bd297e529a5fe506a514de3f56b81886db7efd092b08f941",
+  "seen_address": "f56aa84f441b058e2d794fd63dfecf8045c4d8ac",
+  "subject": "01a1c7e2-7061-7778-9bec-d92f955d4598",
+  "v": 1,
+  "verb": "approve"
+}

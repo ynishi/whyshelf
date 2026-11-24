@@ -6,7 +6,7 @@
 
 use super::super::artifact::{Comparison, Selection, SelectionProblem, Space};
 use super::word::find_word;
-use super::{BookName, DeclWord, KeyPattern, WordOf, Words};
+use super::{BookName, DeclWord, EntryName, KeyPattern, WordOf, Words};
 
 /// How many links of a kind a document holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -177,20 +177,45 @@ pub struct ArtifactLinkKind {
 }
 
 /// What a link to artifacts expects to reach: the names of its space a [`Selection`]
-/// takes, with how strongly ([`CoverSeverity`]).
+/// takes, with how strongly ([`CoverSeverity`]); and, when it declares `parts`, the
+/// link of its book through which each part a listing could not list whole is
+/// expected to be reached, whole.
+///
+/// A cover that declares no `parts` reads a listing in parts as one that is not the
+/// whole ([`NameListing::Parted`](super::super::artifact::NameListing::Parted)), as it
+/// reads any other. One that does takes the names listed by name, and each part as the
+/// one artifact the part is, reached only through that link: a link of the same book,
+/// to artifacts, that depends on what it names and compares its content, as
+/// [`Schema::validate`](super::Schema::validate) holds it to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactCover {
     severity: CoverSeverity,
     selection: Selection,
+    parts_whole: Option<EntryName>,
 }
 
 impl ArtifactCover {
-    /// The names `selection` takes, expected with this strength.
+    /// The names `selection` takes, expected with this strength, with no `parts`.
     pub fn new(severity: CoverSeverity, selection: Selection) -> Self {
         Self {
             severity,
             selection,
+            parts_whole: None,
         }
+    }
+
+    /// The same cover, taking each part whole through the link `whole`.
+    pub fn with_parts_whole(self, whole: EntryName) -> Self {
+        Self {
+            parts_whole: Some(whole),
+            ..self
+        }
+    }
+
+    /// The link of the book through which each part a listing could not list whole is
+    /// taken whole (`parts = { whole = "<link>" }`), when the cover declares one.
+    pub fn parts_whole(&self) -> Option<&EntryName> {
+        self.parts_whole.as_ref()
     }
 
     /// How strongly the names are expected to be reached.
@@ -289,7 +314,7 @@ pub enum CoverDecl {
     /// A word, as written.
     Word(String),
     /// A table of a strength and a selection, for a link to artifacts: `{ strength,
-    /// include, exclude }`, as written.
+    /// include, exclude, parts }`, as written.
     Table {
         /// The strength, as a word, when written (a strength not written is `error`).
         strength: Option<String>,
@@ -297,7 +322,18 @@ pub enum CoverDecl {
         include: Vec<String>,
         /// The texts to leave out, as written.
         exclude: Vec<String>,
+        /// How the parts a listing could not list whole are taken, when written.
+        parts: Option<PartsDecl>,
     },
+}
+
+/// `parts` of the `cover` of a link to artifacts, as declared: `{ whole = "<link>" }`,
+/// the link of the same book through which each part a listing could not list whole
+/// is taken whole.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartsDecl {
+    /// The name of the link, as written.
+    pub whole: String,
 }
 
 /// What a link points at, as the reader of its `cover` needs to know it.
@@ -332,6 +368,86 @@ pub(super) enum CoverRefusal {
     NeedsSelection,
     /// A selection that cannot be made.
     Selection(SelectionProblem),
+    /// `parts` that name no link a part can be taken whole through, as written.
+    Parts {
+        /// The link named, as written.
+        whole: String,
+        /// Why it cannot take a part.
+        why: PartsProblem,
+    },
+}
+
+/// Why the link `parts = { whole = "<link>" }` names cannot take a part whole: a part
+/// is reached only through a link of the same book to artifacts that depends on what
+/// it names and reads its content, so that a link that only informs, or that sees no
+/// edit, never stands for a part.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PartsProblem {
+    /// The book declares no link of that name.
+    #[error("the book declares no link of that name")]
+    NoSuchLink,
+    /// The link points into a book: a part is an artifact.
+    #[error("it points into a book, and a part is an artifact")]
+    IntoABook,
+    /// The link does not depend on what it names (it informs): nothing stands on it.
+    #[error(
+        "it does not mean `depends`, and a part is taken whole only through a link that depends on it"
+    )]
+    NotDepends,
+    /// The link compares that an artifact is there, and sees no edit of it.
+    #[error(
+        "it compares `presence`, and a part is taken whole only through a link that reads its content"
+    )]
+    Presence,
+    /// The link's own `compare` is not one, so what it compares cannot be told.
+    #[error("its `compare` is not one")]
+    NoComparison,
+}
+
+/// A link of the book a `parts` names, as the book declares it: what the reader of
+/// `parts` judges it by. The check of the declaration says it of each name
+/// ([`Schema::validate`](super::Schema::validate)); whether such a link can take a
+/// part is [`read_cover`]'s alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum PartsLink {
+    /// The book declares no link of that name.
+    Undeclared,
+    /// A link into a book.
+    IntoABook,
+    /// A link to artifacts, with what it means and what it compares (none when its
+    /// `compare` is not one).
+    ToArtifacts {
+        /// What it means for freshness.
+        propagation: Propagation,
+        /// What it compares, when that can be read.
+        comparison: Option<Comparison>,
+    },
+}
+
+/// The link `parts` names for a part to be taken whole through, as `link_of` says
+/// the book declares it, or why it cannot take one.
+fn parts_whole(
+    whole: &str,
+    link_of: &dyn Fn(&str) -> PartsLink,
+) -> Result<EntryName, PartsProblem> {
+    match link_of(whole) {
+        PartsLink::Undeclared => Err(PartsProblem::NoSuchLink),
+        PartsLink::IntoABook => Err(PartsProblem::IntoABook),
+        PartsLink::ToArtifacts { propagation, .. } if propagation != Propagation::Depends => {
+            Err(PartsProblem::NotDepends)
+        }
+        PartsLink::ToArtifacts {
+            comparison: None, ..
+        } => Err(PartsProblem::NoComparison),
+        PartsLink::ToArtifacts {
+            comparison: Some(Comparison::Presence),
+            ..
+        } => Err(PartsProblem::Presence),
+        PartsLink::ToArtifacts {
+            comparison: Some(Comparison::Bytes | Comparison::Lines { .. }),
+            ..
+        } => EntryName::new(whole).map_err(|_| PartsProblem::NoSuchLink),
+    }
 }
 
 /// The `cover` of a link as declared, read for what the link points at.
@@ -351,7 +467,19 @@ pub(super) enum CoverRefusal {
 /// | artifacts | `true`, `"error"` or `"warn"` | refused ([`CoverRefusal::NeedsSelection`]) |
 /// | any | a word that is no strength, as the strength of a table or alone | refused ([`CoverRefusal::Word`]) |
 /// | artifacts | a table whose selection cannot be made | refused ([`CoverRefusal::Selection`]) |
-pub(super) fn read_cover(decl: Option<&CoverDecl>, to: CoverTo) -> Result<ReadCover, CoverRefusal> {
+/// | artifacts | a table with `parts = { whole = "<link>" }`, `<link>` a link of the same book (as `link_of` says it declares it) to artifacts that means `depends` and compares `bytes` or `lines` | [`ReadCover::Artifacts`], taking each part whole through `<link>` |
+/// | artifacts | a table with `parts` naming any other link, or none of the book | refused ([`CoverRefusal::Parts`], [`PartsProblem`]) |
+///
+/// The one place what `parts` may name is decided. Whether the parts a listing gives
+/// are of the space of that link is known only once the listing is made, and is the
+/// assessment of coverage's to tell ([`coverage::assess`](super::super::coverage::assess)).
+/// A `parts` over a space whose adapter never answers in parts is no problem: it takes
+/// nothing.
+pub(super) fn read_cover(
+    decl: Option<&CoverDecl>,
+    to: CoverTo,
+    link_of: &dyn Fn(&str) -> PartsLink,
+) -> Result<ReadCover, CoverRefusal> {
     let Some(decl) = decl else {
         return Ok(ReadCover::Nothing);
     };
@@ -372,6 +500,7 @@ pub(super) fn read_cover(decl: Option<&CoverDecl>, to: CoverTo) -> Result<ReadCo
                 strength,
                 include,
                 exclude,
+                parts,
             },
         ) => {
             let severity = match strength {
@@ -382,9 +511,17 @@ pub(super) fn read_cover(decl: Option<&CoverDecl>, to: CoverTo) -> Result<ReadCo
             };
             let selection = Selection::new(include.clone(), exclude.clone())
                 .map_err(CoverRefusal::Selection)?;
-            Ok(ReadCover::Artifacts(ArtifactCover::new(
-                severity, selection,
-            )))
+            let cover = ArtifactCover::new(severity, selection);
+            Ok(ReadCover::Artifacts(match parts {
+                None => cover,
+                Some(PartsDecl { whole }) => {
+                    let link = parts_whole(whole, link_of).map_err(|why| CoverRefusal::Parts {
+                        whole: whole.clone(),
+                        why,
+                    })?;
+                    cover.with_parts_whole(link)
+                }
+            }))
         }
     }
 }

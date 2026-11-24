@@ -107,6 +107,10 @@ pub struct MapLinkOut {
     /// space that it expects to reach, as the declaration writes it; null for any
     /// other link.
     pub selection: Option<SelectionOut>,
+    /// For a link to artifacts whose `cover` declares `parts = { whole = "<link>" }`,
+    /// that link of the book, through which each part of a listing is taken whole;
+    /// null for any other link.
+    pub parts_whole: Option<String>,
     /// The name of the preset a link to artifacts was expanded from, the one it
     /// names or the default; null when there is none, and for a link into a book.
     /// The values in `target` are the link's, whichever it is.
@@ -219,12 +223,16 @@ pub fn map(report: &MapReport) -> MapOut {
             .links
             .iter()
             .map(|link| {
-                let (cover, preset, selection) = match &link.target {
-                    MapTarget::Book { cover, .. } => (*cover, None, None),
+                let (cover, preset, selection, parts_whole) = match &link.target {
+                    MapTarget::Book { cover, .. } => (*cover, None, None, None),
                     MapTarget::Artifact { preset, cover, .. } => (
                         cover.as_ref().map(ArtifactCover::severity),
                         preset.as_ref(),
                         cover.as_ref().map(|c| SelectionOut::of(c.selection())),
+                        cover
+                            .as_ref()
+                            .and_then(ArtifactCover::parts_whole)
+                            .map(ToString::to_string),
                     ),
                 };
                 MapLinkOut {
@@ -250,6 +258,7 @@ pub fn map(report: &MapReport) -> MapOut {
                     cover: cover.is_some(),
                     cover_severity: cover.map(CoverSeverity::word),
                     selection,
+                    parts_whole,
                     preset: preset.map(|p| p.name().to_string()),
                     preset_by_default: preset.is_some_and(PresetOrigin::is_default),
                 }
