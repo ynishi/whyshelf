@@ -457,6 +457,25 @@ and this project adheres to
 
 ### Changed
 
+- A listing says which parts it cannot list whole, and a cover can take each part
+  whole (#120). `rust-test` answers a file it cannot read, or in which something may
+  make a test, as a part of its listing: the file whole in the space `file`, with
+  why and the tests found in it, or that it could not be read. A cover may declare
+  `parts = { whole = "<link>" }`, a link of the same book to artifacts that depends
+  and compares bytes or lines: each part, one read with no test found in it too, is
+  a gap until a document names the file under that link (or `judge exempt
+  --artifact` exempts it, by its name, from the covering link, with a reason, which
+  stands only while no test is found in it: one found later makes the part a gap
+  again and the exemption is told as `names_found`), and a
+  part in another space than that link's keeps `check` from being clean and leaves
+  the link assessed in nothing. A cover with no `parts` reads such a listing as not
+  whole, as before. In the library, `NameListing` has `Parted` (`ListingPart`,
+  `PartRead`), `CoverDecl::Table` has `parts`, `CoverTarget` has `Part`, `LinkCover`
+  tells what it is assessed as (`Assessed`: `Whole` with its names and parts,
+  `NotWhole`, or `Unsound` with its `CoverProblem`s), and `UncoveredArtifact` says
+  whether it is a name or a part (`UncoveredOf`), and `Unneeded` has `NamesFound`;
+  the answers of `check`, `cover` and `map` add `parts_whole`, `assessed_whole`,
+  `problems`, each part, and `of` and `whole` of each artifact nobody reaches.
 - In the library (#112): a `SpaceAdapter` names how it answers where its names
   live (`type Places`, `Answers` with `NamePlaces` or `CannotPlace`), and an
   `ArtifactSource` answers `places`.
