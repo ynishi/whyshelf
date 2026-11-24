@@ -58,7 +58,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
 - **Artifacts and spaces.** What a document stands on outside the books is an artifact named in a *space*:
   - `file`, a path of the project;
   - `rust-item`, a public Rust path, read from the docs `cargo doc` builds. Build them afresh before you check or approve: before they are built a name cannot be told, and docs left from an earlier build are read as they are;
-  - `rust-test`, a test function, `<file>.rs::[<module>::…]<fn>`, read by a shallow scan of the file that runs no program.
+  - `rust-test`, a test function, `<file>.rs::[<module>::…]<fn>`, read by a shallow scan of the file that runs no program; it lists the tests of the files a selection takes, so a link to tests may declare a cover.
 
   Each link says how to compare (`bytes`, `lines` or `presence`). *Presets* (`file`, `rustdoc`, `rustdoc-promise`, `test`) are short names for the usual settings.
 - **Declarations.** A person may declare:

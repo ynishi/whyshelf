@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "f5c818fbb52cec479fda6624222959153f0415da",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c203741e679b66f6243e35b852cc7cf8692ecf2ff3e08bf8050db5922ab785ef",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795531674003,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b3fe550cdfe9ead0d250f7fae35d40a521d38881",
+      "hash": "sha256:9e1c1dfbffbbc9eff7e93ba19aa6d6a667aa7c150b14c9819934104b3e1abfcc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "93"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fbcb-f119-7232-9db9-1d7c146688c7"
+    }
+  ],
+  "id": "01a20e07-4332-744e-a1e4-e3974508df18",
+  "kind": "decision",
+  "reason": "rust-test lists the tests of the files a selection takes, through one Lister shared with file, and says partial with why where it cannot tell every test (#120 part 1); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "209650e47716b3d2e41d95eaeba51b1c3f9bb7b0",
+  "seen": "sha256:7f5ccc059f309ecfd8543e1eda3d30f90e5575195e15651315c294ebe62e3d6a",
+  "seen_address": "7bd60a40717582ae2e5901f52f25222ad96b26ae",
+  "subject": "01a1fbcc-6c50-7638-b3dd-fdc86e5ff03c",
+  "v": 1,
+  "verb": "approve"
+}

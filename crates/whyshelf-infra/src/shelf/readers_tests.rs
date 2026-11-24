@@ -50,6 +50,8 @@ use super::docs::{DocsError, MarkdownDocs};
 use super::ledger::{JsonLedger, LedgerError};
 use super::state::ProjectTree;
 use super::state::files::{FileStates, LEAVES};
+#[cfg(unix)]
+use super::tree_fixtures_tests::{ends, pipe};
 
 /// A root and a directory outside it, side by side in one temporary directory.
 struct Tree {
@@ -206,43 +208,6 @@ async fn t3_a_directory_in_the_place_of_the_declaration_cannot_be_read() {
         .await
         .unwrap_err();
     assert!(matches!(error, BooksError::Io { .. }), "{error:?}");
-}
-
-/// A pipe at `at` under `dir`, when the system can make one (`mkfifo`): opened for
-/// reading, it would wait for a writer, so a test that ends shows it was not opened.
-#[cfg(unix)]
-pub(crate) async fn pipe(dir: &Path, at: &str) -> bool {
-    let full = dir.join(at);
-    if let Some(parent) = full.parent() {
-        tokio::fs::create_dir_all(parent).await.unwrap();
-    }
-    Command::new("mkfifo")
-        .arg(full)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .is_ok_and(|s| s.success())
-}
-
-/// What `read` gives, when it ends. A read that opened the pipe at `pipe` would wait
-/// for a writer: after a while the pipe is opened for writing, which lets that read
-/// end, and the test fails rather than waits.
-#[cfg(unix)]
-pub(crate) async fn ends<F: std::future::Future>(pipe: &Path, read: F) -> F::Output {
-    let wait = std::time::Duration::from_secs(30);
-    match tokio::time::timeout(wait, read).await {
-        Ok(read) => read,
-        Err(_) => {
-            let mut writer = tokio::fs::OpenOptions::new();
-            writer.write(true);
-            let _ = tokio::time::timeout(wait, writer.open(pipe)).await;
-            panic!(
-                "{} was opened, and the read waited for a writer",
-                pipe.display()
-            );
-        }
-    }
 }
 
 /// T27: a pipe in the place of the declaration cannot be told, and is not opened.

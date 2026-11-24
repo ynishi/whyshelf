@@ -194,11 +194,13 @@
 //! now is expected to be reached by a document no decision went against that writes
 //! it in that link, and one that none does is a gap of the strength, as a document is.
 //! Only a space whose adapter lists its names takes one (each adapter's page says
-//! whether it does, and how it reads a selection); for `file`, the regular files Git
-//! lists (tracked, or untracked and not ignored), named by their path under the
-//! root, with `include` and `exclude` as globs over the path (`*` and `?` within a
-//! segment, `**` across segments). A `cover` on a link to a space whose adapter
-//! lists nothing, a strength alone (`cover = true`, `cover = "warn"`) and a table on
+//! whether it does, and how it reads a selection); for `file`, the regular files the
+//! state of the project lists (in the work tree, those Git lists, tracked, or
+//! untracked and not ignored; read through Git, those of the commit or the index),
+//! named by their path under the root, with `include` and `exclude` as globs over the
+//! path (`*` and `?` within a segment, `**` across segments); for `rust-test`, the
+//! test functions of the `.rs` files among those a selection of the same globs
+//! takes. A `cover` on a link to a space whose adapter lists nothing, a strength alone (`cover = true`, `cover = "warn"`) and a table on
 //! a link into a book are problems of the declaration. It fails closed: a listing
 //! that is not the whole (more names than the adapter lists, a name it cannot tell
 //! or cannot write, or no listing at all) proves no gap, so `check` of an `error`

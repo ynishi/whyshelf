@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9b9971dc115e87184236f4450a040ce79d3192e3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5feaf101bb090024125928865f440673bb24337c217263c1477bf2d777c5cdb2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795531674003,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0080b93db1409d7dd08668964b28ac6ada09057a",
+      "hash": "sha256:1f0bbed3d600e6e14ac4e2507d90fb972cfd5444b7f0c0ea06c2e64f63f82892",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    },
+    {
+      "address": "eb6cfea4868db0f2f5bae07dc0bcb91450d86436",
+      "hash": "sha256:5a5349db835027f7c6713ab7232707cdd6652f473b54905c5b8f165688c1414b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "90"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f9c4-5e21-7a3b-9d47-6c1e2b8f0a55"
+    }
+  ],
+  "id": "01a20e07-3c9b-73a1-be03-4925558c7642",
+  "kind": "decision",
+  "reason": "rust-test lists the tests of the files a selection takes, through one Lister shared with file, and says partial with why where it cannot tell every test (#120 part 1); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "209650e47716b3d2e41d95eaeba51b1c3f9bb7b0",
+  "seen": "sha256:d48129d3c63c358336d7ab24913bc90ec8158738d70619e469134c017c9539d5",
+  "seen_address": "42d9ccc18dae3e9a27276fdc4cf37c94c4b52ea0",
+  "subject": "01a1f9c4-5e22-7c18-a6d3-2f9b4e7c1d08",
+  "v": 1,
+  "verb": "approve"
+}

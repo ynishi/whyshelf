@@ -10,6 +10,26 @@ and this project adheres to
 
 ### Added
 
+- `rust-test` lists the tests of the files a selection takes (#120), so a link to
+  tests can declare a cover: a selection is globs over the paths of files, as for
+  `file`, and the files are those the state of the project lists at the side, chosen
+  by the same code as for `file`. A test is named as the source spells it. The
+  listing is not whole where something may make a test the scan does not see (an
+  item macro; an attribute that is not inert on any item, an `impl` or a `struct`
+  among them; a derive other than those of the standard library; an attribute
+  beside the test attribute of a test), and the reason names the file and what in
+  it; past the files or the bytes one listing reads, it stops and says so.
+  `#[proc_macro]`, `#[proc_macro_derive]`, `#[proc_macro_attribute]`,
+  `#[panic_handler]`, every other built-in attribute of the language that is no
+  macro (the Reference's index of built-in attributes: `repr`, `non_exhaustive`,
+  `used`, `link`, `naked` and the rest), an `#[unsafe(…)]` of an inert attribute and
+  a `derive` of the standard library's derives only (`INERT_DERIVES`, by a bare name
+  only when no `use` of the file names an item so) are now inert, so they make no
+  file's listing partial, nor a test not found one that cannot be told. A test
+  attribute that is a path (`#[tokio::test]`) and a module read by `#[path]` from a
+  file that is not `.rs` keep a listing from being whole. The page of the space
+  `file` now says its listing is of the files the state lists (through Git, those of
+  the commit or the index).
 - `impact --within <ref>... [--exit-code]` (#174): whether a change stays inside the
   documents it was meant for. For every document `impact` answers, `within` gives a
   `verdict` (tagged `verdict`: `not_claimed`, `inside`, `outside`, `unproven`,

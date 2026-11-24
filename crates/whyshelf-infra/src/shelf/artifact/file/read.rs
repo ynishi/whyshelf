@@ -11,10 +11,12 @@
 
 use std::collections::BTreeSet;
 use std::io;
+use std::num::NonZeroUsize;
 
 use whyshelf_core::app::shelf::{AtSide, ByteBound, Side, StateList, StateRead, TreeFiles};
+use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet, TextLiteral};
+use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, NameListing, Selection, SpaceAsks, SpaceReadings, Untold,
 };
@@ -24,7 +26,7 @@ use super::super::super::state::paths::{
     named_as_written_in,
 };
 use super::super::super::state::{ProjectTree, StateError};
-use super::{ArtifactError, FileSelection, FileSpace, no_path_reason, path_of};
+use super::{ArtifactError, FileSelection, FileSpace, ScanLimits, no_path_reason, path_of};
 
 #[cfg(test)]
 #[path = "read_tests.rs"]
@@ -78,7 +80,8 @@ impl FileSpace {
                     continue;
                 }
             };
-            let reading = match read_within(&self.state, side, &path, self.max_file).await {
+            let max_file = self.lister.max_file();
+            let reading = match read_within(&self.state, side, &path, max_file).await {
                 Ok(Bounded::Bytes(bytes)) => {
                     // A file may be as large as the bound: a large one is hashed on
                     // a blocking thread.
@@ -98,8 +101,7 @@ impl FileSpace {
                 Ok(Bounded::NoFile) => ArtifactReading::absent(),
                 Ok(Bounded::Outside) => untold(OUTSIDE.to_owned())?,
                 Ok(Bounded::TooLarge) => untold(format!(
-                    "{path} is larger than {} bytes, and is not read",
-                    self.max_file
+                    "{path} is larger than {max_file} bytes, and is not read"
                 ))?,
                 Ok(Bounded::Untold(why)) => ArtifactReading::cannot_tell(why),
                 Err(e) => untold(format!("{path} cannot be read: {e}"))?,
@@ -131,7 +133,7 @@ impl FileSpace {
             return Ok(None);
         };
         Ok(
-            match read_within(&self.state, side, &path, self.max_file).await {
+            match read_within(&self.state, side, &path, self.lister.max_file()).await {
                 Ok(Bounded::Bytes(bytes)) => Some(bytes),
                 Ok(Bounded::NoFile | Bounded::Outside | Bounded::TooLarge | Bounded::Untold(_))
                 | Err(_) => None,
@@ -153,25 +155,155 @@ impl FileSpace {
             Ok(chosen) => chosen,
             Err(not) => return Ok(NameListing::CannotList(not.why().clone())),
         };
+        let takes = |path: &RelPath| {
+            if !chosen.takes(path.as_str()) {
+                return Take::Skip;
+            }
+            match ArtifactName::new(path.as_str()) {
+                Ok(name) => Take::Named(name),
+                Err(_) => Take::Unnameable,
+            }
+        };
+        let most = Some(self.lister.limits().names);
+        let (found, causes) = match self.lister.taken(side, takes, most).await? {
+            Taken::CannotList(why) => return Ok(NameListing::CannotList(why)),
+            Taken::All(found) => (found, Vec::new()),
+            Taken::Some { found, short } => (
+                found,
+                short.into_vec().into_iter().map(Cause::from).collect(),
+            ),
+        };
+        listing(found.into_iter().collect(), causes).map_err(ArtifactError::Reason)
+    }
+}
+
+/// What the selection of an adapter makes of one file the state lists: not taken,
+/// taken as this, or taken with a path that is no name of the space.
+pub(in super::super) enum Take<T> {
+    /// The selection does not take it.
+    Skip,
+    /// The selection takes it, as this.
+    Named(T),
+    /// The selection takes it, and its path is no name (too long for one).
+    Unnameable,
+}
+
+/// The files a selection takes at a side, as a [`Lister`] tells them: all of them,
+/// some of them and why not all, or no listing, with the state's why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in super::super) enum Taken<T> {
+    /// Every file the selection takes that is there, in the order the state lists.
+    All(Vec<T>),
+    /// Some of them, and each thing that kept the listing from being all of them.
+    Some {
+        found: Vec<T>,
+        short: NonEmptyVec<Short>,
+    },
+    /// The state cannot list the files (outside a repository, a Git that cannot be
+    /// run), with its why as it gives it.
+    CannotList(NonBlank),
+}
+
+/// What kept a listing of files from being all of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in super::super) enum Short {
+    /// More than `limit` files were taken, and the listing stopped there.
+    Past { limit: usize },
+    /// The state's listing of the files left some out, with its why (cut at its
+    /// bound, or a file whose path is no path of the project).
+    Left(NonBlank),
+    /// So many files taken of which a reading cannot tell whether they are there.
+    Untold(NonZeroUsize),
+    /// So many files taken whose path is no name.
+    Unnameable(NonZeroUsize),
+}
+
+/// The one choice of the files a selection takes at a side, for every adapter whose
+/// names start with the path of a file (`file`, `rust-test`): the files the state of
+/// the project lists, each kept where a reading would answer it as there
+/// ([`Lister::taken`]). It holds the bounds of a listing ([`ScanLimits`]) and the
+/// bound of bytes of a file, which the adapter that makes it gives: the same values
+/// tell what is there and what a reading reads.
+#[derive(Debug, Clone)]
+pub(in super::super) struct Lister {
+    /// The tree of the project of the run: which adapter of the state it is, is not
+    /// looked at.
+    state: ProjectTree,
+    limits: ScanLimits,
+    /// The most bytes of a file a reading reads.
+    max_file: u64,
+}
+
+impl Lister {
+    /// The lister of the files `state` lists, of the bounds by default
+    /// ([`ScanLimits::default`]), a file being read up to `max_file` bytes.
+    pub(in super::super) fn on(state: ProjectTree, max_file: u64) -> Self {
+        Self {
+            state,
+            limits: ScanLimits::default(),
+            max_file,
+        }
+    }
+
+    /// The same, within `limits`.
+    pub(in super::super) fn with_limits(mut self, limits: ScanLimits) -> Self {
+        self.limits = limits;
+        self
+    }
+
+    /// The same, a file being read up to `max_file` bytes.
+    #[cfg(test)]
+    pub(in super::super) fn with_max_file(mut self, max_file: u64) -> Self {
+        self.max_file = max_file;
+        self
+    }
+
+    /// The bounds of a listing and of a search for moves.
+    pub(in super::super) fn limits(&self) -> &ScanLimits {
+        &self.limits
+    }
+
+    /// The most bytes of a file a reading reads.
+    pub(in super::super) fn max_file(&self) -> u64 {
+        self.max_file
+    }
+
+    /// The files the state lists at `side` that `takes` takes, each kept where a
+    /// reading would answer it as there (`seen`), in the order of the state's
+    /// listing: the rules on the page of the space `file` ("Listing the names of a
+    /// selection"). A file `takes` names is counted against `most`, and once `most`
+    /// of them are found the listing stops at the next; a file a reading cannot tell,
+    /// and one whose path is no name, is counted and kept out, and neither counts
+    /// against `most`; with `most` none, every file the state lists that `takes`
+    /// takes is looked at (nothing is opened but a byte of it), and the bound of what
+    /// is read is the caller's. The state's listing is held to
+    /// [`ScanLimits::listing_bytes`].
+    /// An error only for a reading of the state that stops the whole ask.
+    pub(in super::super) async fn taken<T>(
+        &self,
+        side: Side,
+        takes: impl Fn(&RelPath) -> Take<T>,
+        most: Option<usize>,
+    ) -> Result<Taken<T>, StateError> {
         let bound =
             ByteBound::at_most(u64::try_from(self.limits.listing_bytes).unwrap_or(u64::MAX));
         let (files, left_out) = match self.state.files(side, bound).await? {
             TreeFiles::All(files) => (files, None),
             TreeFiles::Cut { names, why } => (names, Some(why)),
-            TreeFiles::CannotList(why) => return Ok(NameListing::CannotList(why)),
+            TreeFiles::CannotList(why) => return Ok(Taken::CannotList(why)),
         };
-        let mut found = BTreeSet::new();
-        let mut past_names = false;
-        // Files the selection takes whose path is too long for a name: there, but no
-        // document can name them, so the listing is not all of them.
+        let mut found = Vec::new();
+        let mut past = None;
+        // Files taken whose path is no name: there, but no document can name them.
         let mut unnameable = 0usize;
-        // Files the selection takes of which a reading could not tell whether they
-        // are there: never left out as if they were not.
+        // Files taken of which a reading could not tell whether they are there:
+        // never left out as if they were not.
         let mut untold = 0usize;
         // Each directory is read once for the whole listing, not once per file under it.
         let mut dirs = DirNames::new();
         for path in &files {
-            if !chosen.takes(path.as_str()) {
+            let take = takes(path);
+            if matches!(take, Take::Skip) {
                 continue;
             }
             match self.seen(side, path, &mut dirs).await {
@@ -182,55 +314,34 @@ impl FileSpace {
                     continue;
                 }
             }
-            let Ok(name) = ArtifactName::new(path.as_str()) else {
-                unnameable += 1;
-                continue;
-            };
-            if found.len() == self.limits.names {
-                past_names = true;
-                break;
+            match take {
+                Take::Skip => {}
+                Take::Unnameable => unnameable += 1,
+                Take::Named(it) => {
+                    if let Some(limit) = most
+                        && found.len() == limit
+                    {
+                        past = Some(limit);
+                        break;
+                    }
+                    found.push(it);
+                }
             }
-            found.insert(name);
         }
-        if past_names {
-            let why = format!(
-                "the selection takes more than {} names, and the listing stops there",
-                self.limits.names
-            );
-            return NonBlank::new(why)
-                .map(|why| NameListing::Some { found, why })
-                .map_err(ArtifactError::Reason);
-        }
-        // Nothing is passed over in silence: what the state's listing of the files
-        // left out (cut at its bound, or files whose path is no path of the project),
-        // a file the selection takes whose path is no name, or one a reading cannot
-        // tell, keeps the listing from being all of them. Only the causes that apply
-        // are said.
-        let causes: Vec<String> = left_out
-            .map(|why| why.as_str().to_owned())
+        let short: Vec<Short> = past
+            .map(|limit| Short::Past { limit })
             .into_iter()
-            .chain(
-                [
-                    (unnameable, "the selection takes with a path too long for a name"),
-                    (
-                        untold,
-                        "the selection takes that a reading cannot tell (past the bound of bytes, leading out of the project, or not readable)",
-                    ),
-                ]
-                .into_iter()
-                .filter(|(count, _)| *count > 0)
-                .map(|(count, what)| format!("{count} file(s) {what}")),
-            )
+            .chain(left_out.map(Short::Left))
+            .chain(NonZeroUsize::new(untold).map(Short::Untold))
+            .chain(NonZeroUsize::new(unnameable).map(Short::Unnameable))
             .collect();
-        if !causes.is_empty() {
-            return NonBlank::new(causes.join("; "))
-                .map(|why| NameListing::Some { found, why })
-                .map_err(ArtifactError::Reason);
-        }
-        Ok(NameListing::All(found))
+        Ok(match NonEmptyVec::from_vec(short) {
+            Ok(short) => Taken::Some { found, short },
+            Err(_) => Taken::All(found),
+        })
     }
 
-    /// What a listing takes the path to be, as [`resolve`](Self::resolve) would
+    /// What a listing takes the path to be, as a reading of the space `file` would
     /// answer it at `side`: there (a file of at most the bound of bytes, read through
     /// no link out of the root, named as written; the names of each directory read
     /// once, in `dirs`), not there (no file), or what a reading cannot tell (past the
@@ -292,6 +403,107 @@ enum Seen {
     /// error reading the path, a kind of file that is no file, or a file there under
     /// another case than the name the listing gives.
     CannotTell,
+}
+
+/// What keeps a listing of names from being all of them, as an adapter that lists
+/// gathers it: the one place its reason is written is [`listing`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in super::super) enum Cause {
+    /// More than `limit` names were taken, and the listing stopped there.
+    PastNames { limit: usize },
+    /// The state's listing of the files left some out, with its why.
+    Left(NonBlank),
+    /// So many things taken (files, or tests) whose name cannot be written.
+    Unnameable { count: NonZeroUsize, of: Unit },
+    /// So many files taken of which a reading cannot tell whether they are there.
+    Untold(NonZeroUsize),
+    /// The adapter's own reason (what may make a name it cannot see, a file it cannot
+    /// read), which it writes whole.
+    Own(NonBlank),
+}
+
+/// What a count of names that cannot be written is of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in super::super) enum Unit {
+    /// Files, whose path is too long for a name.
+    Files,
+    /// Tests, whose name cannot be written as a name of the space.
+    Tests,
+}
+
+impl From<Short> for Cause {
+    /// The files a [`Lister`] took that it could not name are files.
+    fn from(short: Short) -> Self {
+        match short {
+            Short::Past { limit } => Self::PastNames { limit },
+            Short::Left(why) => Self::Left(why),
+            Short::Untold(count) => Self::Untold(count),
+            Short::Unnameable(count) => Self::Unnameable {
+                count,
+                of: Unit::Files,
+            },
+        }
+    }
+}
+
+impl Cause {
+    /// Where its words stand among the others of a reason.
+    fn rank(&self) -> u8 {
+        match self {
+            Self::PastNames { .. } => 0,
+            Self::Left(_) => 1,
+            Self::Unnameable { .. } => 2,
+            Self::Untold(_) => 3,
+            Self::Own(_) => 4,
+        }
+    }
+
+    /// Its words in a reason.
+    fn said(&self) -> String {
+        match self {
+            Self::PastNames { limit } => {
+                format!("the selection takes more than {limit} names, and the listing stops there")
+            }
+            Self::Left(why) | Self::Own(why) => why.as_str().to_owned(),
+            Self::Unnameable {
+                count,
+                of: Unit::Files,
+            } => format!("{count} file(s) the selection takes with a path too long for a name"),
+            Self::Unnameable {
+                count,
+                of: Unit::Tests,
+            } => format!("{count} test(s) whose name cannot be written as a name of the space"),
+            Self::Untold(count) => format!(
+                "{count} file(s) the selection takes that a reading cannot tell (past the bound of bytes, leading out of the project, or not readable)"
+            ),
+        }
+    }
+}
+
+/// The listing of the names `found`, all of them when nothing kept it from being so
+/// (`causes` is empty), and otherwise some of them with why: the one place the reason
+/// of a listing that is not all is written, for every adapter whose names start with
+/// the path of a file. A listing that stopped at its bound of names says that alone;
+/// otherwise every cause is said, in one order (what the state left out, the names
+/// that cannot be written, the files a reading cannot tell, the adapter's own), apart
+/// by `; `. Nothing is passed over in silence.
+pub(in super::super) fn listing(
+    found: BTreeSet<ArtifactName>,
+    mut causes: Vec<Cause>,
+) -> Result<NameListing, ValueError> {
+    if causes.is_empty() {
+        return Ok(NameListing::All(found));
+    }
+    causes.sort_by_key(Cause::rank);
+    let why = match causes.first() {
+        Some(past @ Cause::PastNames { .. }) => past.said(),
+        _ => causes
+            .iter()
+            .map(Cause::said)
+            .collect::<Vec<_>>()
+            .join("; "),
+    };
+    NonBlank::new(why).map(|why| NameListing::Some { found, why })
 }
 
 /// What reading a named file within a bound of bytes gave, for this space and for
