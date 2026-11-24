@@ -2,7 +2,9 @@
 //! nothing are two units, each upstream first, pending or stale; two chains whose
 //! artifacts live in one file (a file, or two tests of one file) are one unit; and what
 //! could join units unseen (a document divided whose links cannot be read, a file whose
-//! identity cannot be read) is counted in the answer and said on stderr.
+//! identity cannot be read) is counted in the answer and said on stderr; and two chains
+//! whose decisions stand on one upstream deprecated, or name one document not valid, are
+//! one unit that waits on it, with why.
 //!
 //! The project is written once per test from one fixture, with no program but the
 //! binary run.
@@ -25,6 +27,10 @@ key = { prefix = "REQ" }
 name = "title"
 type = "line"
 required = true
+[[book.link]]
+name = "replaces"
+target = "requirement"
+means = "replaces"
 
 [[book]]
 name = "decision"
@@ -264,6 +270,97 @@ fn what_could_join_units_unseen_is_counted_and_said() {
         warning.trim_end(),
         "warning: 1 document whose links cannot be read and 1 file whose identity cannot be read may join units told apart"
     );
+}
+
+/// The project of the two chains, both decisions serving `REQ-3` (identity 7) too, as
+/// `req3` writes its front matter after the key.
+fn on_req3(name: &str, req3: &str) -> Project {
+    let project = project(name, "src/b.rs", "tests/b.rs::two");
+    fs::write(
+        project.0.join("books/requirement/REQ-3.md"),
+        format!("---\nid: \"01a1c4f0-0000-7000-8000-000000000007\"\nkey: \"REQ-3\"\n{req3}---\nThe body.\n"),
+    )
+    .unwrap();
+    for (n, key, code) in [(3, "DEC-1", "src/a.rs"), (4, "DEC-2", "src/b.rs")] {
+        let req = &key[4..];
+        doc(
+            &project,
+            "decision",
+            n,
+            key,
+            key,
+            &format!("serves: [\"REQ-{req}\", \"REQ-3\"]\ncode: [\"{code}\"]\n"),
+        );
+    }
+    project
+}
+
+/// The keys of the documents of the one unit of `answer`, as a set.
+fn the_one_unit(answer: &Value) -> std::collections::BTreeSet<String> {
+    let keys = keys(answer);
+    assert_eq!(keys.len(), 1, "{answer}");
+    keys.into_iter().flatten().collect()
+}
+
+#[test]
+fn two_chains_on_one_upstream_decided_against_are_one_unit_that_waits_on_it() {
+    // Both decisions serve REQ-3 too; once all are approved, REQ-3 is deprecated, REQ-4
+    // replacing it: the decisions and the verifications are stale, and the decisions
+    // cannot be approved again on REQ-3.
+    let project = on_req3("units-refused", "title: \"REQ-3\"\n");
+    let approve = project.run(&["judge", "approve", "--pending", "--reason", "read"]);
+    assert_eq!(approve.status.code(), Some(0), "{}", json(&approve));
+    doc(
+        &project,
+        "requirement",
+        8,
+        "REQ-4",
+        "REQ-4",
+        "replaces: [\"REQ-3\"]\n",
+    );
+    let deprecate = project.run(&["judge", "deprecate", "REQ-3", "--reason", "replaced"]);
+    assert_eq!(deprecate.status.code(), Some(0), "{}", json(&deprecate));
+    let output = project.run(&["units"]);
+    assert_eq!(output.status.code(), Some(0));
+    let answer = json(&output);
+    assert_eq!(
+        the_one_unit(&answer),
+        [
+            "decision:DEC-1",
+            "decision:DEC-2",
+            "verification:V-1",
+            "verification:V-2"
+        ]
+        .map(str::to_owned)
+        .into(),
+    );
+    assert_eq!(
+        answer["units"][0]["waits_on"],
+        json!([{
+            "doc": {"id": "01a1c4f0-0000-7000-8000-000000000007", "key": "requirement:REQ-3"},
+            "waits": "refused",
+            "status": "deprecated",
+        }])
+    );
+}
+
+#[test]
+fn two_chains_whose_links_name_one_document_not_valid_are_one_unit_that_waits_on_it() {
+    // REQ-3 has no title, and was never approved: not divided.
+    let project = on_req3("units-unfollowed", "");
+    let output = project.run(&["units", "--pending"]);
+    assert_eq!(output.status.code(), Some(0));
+    let answer = json(&output);
+    assert_eq!(the_one_unit(&answer).len(), 6, "{answer}");
+    let waits = &answer["units"][0]["waits_on"];
+    assert_eq!(waits.as_array().map(Vec::len), Some(1), "{answer}");
+    assert_eq!(
+        waits[0]["doc"]["id"],
+        "01a1c4f0-0000-7000-8000-000000000007"
+    );
+    assert_eq!(waits[0]["waits"], "unfollowed");
+    assert_eq!(waits[0]["why"], json!(["invalid"]));
+    assert_eq!(answer["untold"], json!({"invalid": 1, "unreadable": 0}));
 }
 
 /// The key of each unit's documents, or its identity when it has no key.

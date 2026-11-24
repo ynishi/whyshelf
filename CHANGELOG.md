@@ -21,11 +21,16 @@ and this project adheres to
   divided hold both back, directly or through what holds such an upstream back in
   turn (that chain joins as the documents divided do, and stops at what holds nothing
   back: an approval that holds, an upstream a new approval may not stand on, and a
-  document divided). Each unit (`units`) lists its `documents` in the order
+  document divided). Documents that wait on one upstream decided against, or on one
+  document their links cannot be followed to, are one unit, and so are those whose
+  links write one key no document has; such an upstream is followed no further.
+  Each unit (`units`) lists its `documents` in the order
   `judge approve` takes them, each with its `standing`; the `files` its artifacts
   live in; its `artifacts`, each with the `documents` that stand on it and its
-  `place` as `reach` writes it; and `waits_on`, the upstreams outside it to approve
-  first, each with its `hold` (`pending` or `awaiting`). An artifact whose place
+  `place` as `reach` writes it; and `waits_on`, the upstreams outside it to mend or
+  approve first, each once, with `waits`: `held` with its `hold` (`pending` or
+  `awaiting`), `refused` with its `status` (`denied`, `deprecated`, `retired`), or
+  `unfollowed` with `why` (`invalid`, `ambiguous`). An artifact whose place
   cannot be told joins only what stands on the same name, and is listed in
   `unplaced`. The files of the documents and of the declaration are no key, so two
   units may write the declaration. What could join units without being seen (a

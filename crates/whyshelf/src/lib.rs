@@ -1157,12 +1157,16 @@
 //!                             through what holds such an upstream back in turn (that chain joins
 //!                             as they do, and stops at what holds nothing back: an approval that
 //!                             holds, an upstream a new approval may not stand on, a document
-//!                             divided). Each unit has its
-//!                             documents in the order `judge approve` takes them, the files its
+//!                             divided). An upstream decided against, a document a link cannot
+//!                             be followed to, and a key no document has join what links resolve
+//!                             to, name or write them, and are followed no further. Each unit has
+//!                             its documents in the order `judge approve` takes them, the files its
 //!                             artifacts live in (`place` as `reach` writes it), and `waits_on`,
-//!                             the upstreams outside it to approve first (`pending` or
-//!                             `awaiting`). An artifact whose place cannot be told joins only
-//!                             what stands on the same name, and is listed in `unplaced`. The
+//!                             the upstreams outside it to mend or approve first (`waits`:
+//!                             `held` with its `hold`, `refused` with its `status`, or
+//!                             `unfollowed` with `why`). An artifact whose place cannot be told
+//!                             joins only what stands on the same name, and is listed in
+//!                             `unplaced`. The
 //!                             files of the documents and of the declaration are not counted.
 //!                             What could join units unseen (a document whose links cannot be
 //!                             read that is divided, or stood on or named by a document divided

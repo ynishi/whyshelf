@@ -5,10 +5,12 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 use whyshelf_core::app::shelf::UnitsReport;
-use whyshelf_core::domain::shelf::units::{Unit, UnitArtifact, UnitDoc, UnplacedArtifact};
+use whyshelf_core::domain::id::DocId;
+use whyshelf_core::domain::shelf::freshness::StandingKind;
+use whyshelf_core::domain::shelf::units::{Unit, UnitArtifact, UnitDoc, UnplacedArtifact, Waits};
 
 use super::reach::PlaceOut;
-use super::words::{hold_word, unread};
+use super::words::{hold_word, unfollowed, unread};
 use super::{DocRef, HealthOut, Namer, standing};
 
 /// One document of a unit.
@@ -34,17 +36,40 @@ pub struct UnitArtifactOut {
     pub place: PlaceOut,
 }
 
-/// An upstream the unit waits on, and why: one outside the documents divided that holds
-/// a document of the unit back.
+/// An upstream outside the documents divided that a document of the unit waits on, and
+/// why, in `waits`. One upstream is one entry, of one kind.
 #[derive(Debug, Serialize, JsonSchema)]
-pub struct WaitOut {
-    /// The upstream.
-    pub doc: DocRef,
-    /// Why it holds them back, a word of the type of `judge approve`'s `upstream_is`;
-    /// here only `pending` (an upstream not divided, without `--pending`) or `awaiting`
-    /// (an approval that awaits the approvals of other names). It is the same for every
-    /// document of the unit it holds back.
-    pub hold: &'static str,
+#[serde(tag = "waits", rename_all = "snake_case")]
+pub enum WaitOut {
+    /// It holds a document of the unit back.
+    Held {
+        /// The upstream.
+        doc: DocRef,
+        /// Why it holds them back, a word of the type of `judge approve`'s
+        /// `upstream_is`; here only `pending` (an upstream not divided, without
+        /// `--pending`) or `awaiting` (an approval that awaits the approvals of other
+        /// names). It is the same for every document of the unit it holds back.
+        hold: &'static str,
+    },
+    /// A new approval may not stand on it, and a link of a document of the unit
+    /// resolves to it.
+    Refused {
+        /// The upstream.
+        doc: DocRef,
+        /// The decision against it, in the words of `status`: `denied`, `deprecated` or
+        /// `retired`.
+        status: &'static str,
+    },
+    /// A link of a document of the unit names it and cannot be followed to it.
+    Unfollowed {
+        /// The upstream.
+        doc: DocRef,
+        /// Why, never empty, each word once, in this order: `invalid` (the one document
+        /// of the key the link writes is invalid) and `ambiguous` (it is of a file that
+        /// writes a key two or more files write). One identity two files carry can be
+        /// both.
+        why: Vec<&'static str>,
+    },
 }
 
 /// One unit: documents that can be mended and approved again apart from every other
@@ -66,10 +91,11 @@ pub struct UnitOut {
     pub files: Vec<String>,
     /// The artifacts its documents stand on, by space and name.
     pub artifacts: Vec<UnitArtifactOut>,
-    /// The upstreams outside the documents divided that hold one of them back, by
+    /// The upstreams outside the documents divided that one of them waits on, by
     /// identity, each once. What those wait on in turn joins the unit too: the
     /// documents of that chain, their artifacts and their files are shared with no
-    /// other unit, and are not listed.
+    /// other unit, and are not listed. An upstream decided against and a document a
+    /// link cannot be followed to are followed no further.
     pub waits_on: Vec<WaitOut>,
 }
 
@@ -150,11 +176,26 @@ impl Namer<'_> {
             waits_on: unit
                 .waits_on()
                 .iter()
-                .map(|(upstream, hold)| WaitOut {
-                    doc: self.doc(*upstream),
-                    hold: hold_word(*hold),
-                })
+                .map(|(upstream, waits)| self.wait(*upstream, waits))
                 .collect(),
+        }
+    }
+
+    fn wait(&self, upstream: DocId, waits: &Waits) -> WaitOut {
+        let doc = self.doc(upstream);
+        match waits {
+            Waits::Held(hold) => WaitOut::Held {
+                doc,
+                hold: hold_word(*hold),
+            },
+            Waits::Refused(status) => WaitOut::Refused {
+                doc,
+                status: standing(StandingKind::from(*status)),
+            },
+            Waits::Unfollowed(whys) => WaitOut::Unfollowed {
+                doc,
+                why: whys.iter().map(|why| unfollowed(*why)).collect(),
+            },
         }
     }
 

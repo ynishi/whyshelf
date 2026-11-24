@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795474668603,
+  "expires": null,
+  "frame": [],
+  "id": "01a20aa1-5c7e-775b-bca0-786df8cd9b25",
+  "kind": "decision",
+  "reason": "Units join on a refused upstream, on a document a link cannot be followed to and on a key no document has (#176 Part B); verified by fmt, clippy, rustdoc, the whole test suite, code review and a blind review",
+  "revision": "bc40715e79c6742b33cb89090e601fd0f2724815",
+  "seen": "sha256:1e6563618ffe6a86a802c65e00d270f24dcae0a3b1c50e6117225d1c50c3b5b5",
+  "seen_address": "2ec338c144a41e2248e6ce1e4c86005c214d19ff",
+  "subject": "01a20aa0-b0cd-70fc-851e-cf34127c9d20",
+  "v": 1,
+  "verb": "approve"
+}

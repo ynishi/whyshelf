@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "e5d80aff45636eb6bb88d971213be93fb21bb420",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:777ac078ddbb0503e6bbbf7103ce91416f2c8c38783c4839e6f8d19293dd97a4",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "a72de66e8519cd70c65680ce76577050479985ca",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:463ad9316cc1beda5182ec13a28d39640462abf75ca66531d182f5126b8193ce",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/units_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0e6439d68bd7bbb306ab2314f2a1f5083e0fe131",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7baf069e9d9d26d6ab6bc201818a3794a19ad37447a06706b5d8a62b00944456",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/doc.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8e8dd7d4bf5b0685f9be9e2ed9570f629a2a52a8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:86f8af2ddfc6b6944b839d378de380e285a60ed67fd203431fb997a3f3d96464",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c177bb41cb9f5a3487beeccf7b01241386131ffc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d77e6c3e488721855c5b4c4741bb345f38c1f31ecb9b17e5086f7d76559d1ec5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/units/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "22784fe76187044092f5207cc03a24a9d5a2a0b2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6acdf75e6ac80182aada7b117959618af3a11776df28087c685296f6616b83fe",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/split_modules.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795474668603,
+  "expires": null,
+  "frame": [
+    {
+      "address": "85680cd163558bf90acbc158c81c6f1d965a2bd6",
+      "hash": "sha256:a958cb1bcd7d886f4d4975093a023abf617101fd6c198a976013a20642dd687b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "107"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a208d2-0bb9-75d2-8714-adc41b7c187b"
+    }
+  ],
+  "id": "01a20aa1-5885-740f-8737-68c59d6ef210",
+  "kind": "decision",
+  "reason": "Units join on a refused upstream, on a document a link cannot be followed to and on a key no document has (#176 Part B); verified by fmt, clippy, rustdoc, the whole test suite, code review and a blind review",
+  "revision": "bc40715e79c6742b33cb89090e601fd0f2724815",
+  "seen": "sha256:6543df7cc4dd3a36ba43ca0e84799394f5bd0ef417b60d0580eb5a0b577c068e",
+  "seen_address": "e294a8d3f5a7e8d1b611813b3bdbab68aedce760",
+  "subject": "01a208d2-0bb9-75d2-8714-adc59a816e73",
+  "v": 1,
+  "verb": "approve"
+}
