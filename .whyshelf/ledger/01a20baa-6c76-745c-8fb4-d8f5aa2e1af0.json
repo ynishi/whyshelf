@@ -1,0 +1,136 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "8fe3420a5e36b603e8a755532bef6debd68128e0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1aa36a7cd4418c1a1e85902f24e872c6fd95141647f83bc6df254b88a091cc19",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/canon.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "15438da9bc8d0cd40806c9bd31b33b6a1dff226e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94764bb140e397d0abc15683e76086bc530de516a33c9563da7755fa0dc4a899",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e73f11625395bcc79d17daebd7146b4ca2bed434",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3ebcd4c444c522416cc30f31ad058455530bb8b29b52e5e006fac48464f40d29",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/revocation_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "fcddd211cb627f5ca51f7f6b841e66cd2c3fdc85",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:81ce633a3bdbf04554f4668671d03cf36da572d3fdcadec7813570ac1ad1a3f9",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "47e2c6c9b0f0d9a8461ab457b9049d72b051b0b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:73798f986fabc1f7508efca306c6ceae359173019f05c91d13e9b89362e36f80",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "758d371e182846862863f3f44a2e791d9fe4dd25",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:64537081fecc633e857446ed77312f12a746afbdb33d12dedcc9e1efbfc7b091",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d740648a9acdbdb54f9fde12cf6df661af4b0dd9",
+      "hash": "sha256:95d308839ddd82cd6b2e8b1255d3783207eda53bcf1e3098ac3385e4212504c6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "2"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c332-3b83-7c08-aeeb-5c338057481e"
+    },
+    {
+      "address": "74372b578812f77ad232998a3ae6850437d50c0a",
+      "hash": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157"
+    }
+  ],
+  "id": "01a20baa-6c76-745c-8fb4-d8f5aa2e1af0",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:128f57b10a17afe9974d4c3c69326a4878e3ffc0f812557ef4a84be9c21ade52",
+  "seen_address": "732890f1367b93b5cbfea87deb2ea653325066f5",
+  "subject": "01a1c4ba-1664-702d-af36-26cafd3b5594",
+  "v": 1,
+  "verb": "approve"
+}

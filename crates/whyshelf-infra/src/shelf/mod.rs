@@ -120,6 +120,8 @@ use docs::MarkdownDocs;
 use git::Git;
 use ledger::JsonLedger;
 use state::files::FileStates;
+use state::git::GitStates;
+use state::{ChangeAsk, GitAfter, ProjectTree};
 use system::{ProjectActor, SystemClock, UuidV7Ids};
 
 /// The directory of whyshelf's own files in a project.
@@ -156,6 +158,10 @@ pub struct Project {
 /// root is not written in it, so an answer that names the way names no local path.
 const FILES_WAY: TextLiteral = TextLiteral::new("files: the project root");
 
+/// The way of a run that compares two ends, when what names it cannot be made (it
+/// never cannot: it starts with the kind of the way).
+const CHANGE_WAY: TextLiteral = TextLiteral::new("two ends of a change");
+
 impl Project {
     /// The adapters of the project at `root`. `actor` is who judges when the
     /// environment says so (`WHYSHELF_ACTOR`, read by the caller); without it the
@@ -180,23 +186,101 @@ impl Project {
         cargo_target_dir: Option<PathBuf>,
     ) -> Result<Self, DispatchError> {
         let root: PathBuf = root.into();
-        let state = FileStates::new(root.clone());
+        let tree = ProjectTree::files(FileStates::new(root.clone()));
+        let way = ReadWay::new(NonBlank::from(FILES_WAY));
+        Self::on(tree, way, root, actor, ran_by, cargo_target_dir)
+    }
+
+    /// The adapters of the project at `root` for a run that compares two ends of a
+    /// change, both read the one way `change` asks ([`ChangeAsk`]): every reader, the
+    /// spaces and the built docs of `rust-item` on the one tree it opens
+    /// ([`GitStates`] or [`FileStates::between`]), and the
+    /// run's way named from what was asked, as written (`git: <since> -> <until>`,
+    /// `git: <since> -> the index`, `files: <before> -> <after>`, with
+    /// `the project root` for an after not asked). `actor`, `ran_by` and
+    /// `cargo_target_dir` are as for [`Project::new`].
+    ///
+    /// An error when the ends cannot be opened as asked ([`OpenError`]), or the
+    /// adapters of the spaces cannot be dispatched to.
+    pub async fn for_change(
+        root: impl Into<PathBuf>,
+        change: ChangeAsk,
+        actor: Option<String>,
+        ran_by: Option<String>,
+        cargo_target_dir: Option<PathBuf>,
+    ) -> Result<Self, OpenError> {
+        let root: PathBuf = root.into();
+        let (tree, way) = match change {
+            ChangeAsk::Git { since, until } => {
+                let after = match &until {
+                    GitAfter::Commit(rev) => rev.clone(),
+                    GitAfter::Index => "the index".to_owned(),
+                };
+                let states = GitStates::open(root.clone(), &since, &until).await?;
+                (ProjectTree::git(states), format!("git: {since} -> {after}"))
+            }
+            ChangeAsk::Files { before, after } => {
+                for dir in std::iter::once(&before).chain(&after) {
+                    match tokio::fs::metadata(dir).await {
+                        // arch-lint: allow(no-sync-io) reason="`meta` is Metadata fetched with `.await`: a pure accessor, no I/O"
+                        Ok(meta) if meta.is_dir() => {}
+                        Ok(_) => return Err(OpenError::NoDirectory { path: dir.clone() }),
+                        Err(e)
+                            if matches!(
+                                e.kind(),
+                                std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+                            ) =>
+                        {
+                            return Err(OpenError::NoDirectory { path: dir.clone() });
+                        }
+                        Err(source) => {
+                            return Err(OpenError::Unreadable {
+                                path: dir.clone(),
+                                source,
+                            });
+                        }
+                    }
+                }
+                let shown = after.as_ref().map_or_else(
+                    || "the project root".to_owned(),
+                    |dir| dir.display().to_string(),
+                );
+                let way = format!("files: {} -> {shown}", before.display());
+                let after = after.unwrap_or_else(|| root.clone());
+                (ProjectTree::files(FileStates::between(before, after)), way)
+            }
+        };
+        let way = ReadWay::new(NonBlank::new(way).unwrap_or_else(|_| NonBlank::from(CHANGE_WAY)));
+        Ok(Self::on(tree, way, root, actor, ran_by, cargo_target_dir)?)
+    }
+
+    /// The adapters of the project at `root`, every reader on the one `tree` (a clone
+    /// of it each), the run's way named `way`: the one assembly both entries share.
+    /// The writers write under `root`, whatever the tree reads.
+    fn on(
+        tree: ProjectTree,
+        way: ReadWay,
+        root: PathBuf,
+        actor: Option<String>,
+        ran_by: Option<String>,
+        cargo_target_dir: Option<PathBuf>,
+    ) -> Result<Self, DispatchError> {
         Ok(Self {
-            books: BooksToml::on(state.clone(), BOOKS_FILE.into()),
-            docs: MarkdownDocs::on(state.clone()),
-            ledger: JsonLedger::on(state.clone(), LEDGER_DIR.into()),
+            books: BooksToml::on(tree.clone(), root.clone(), BOOKS_FILE.into()),
+            docs: MarkdownDocs::on(tree.clone(), root.clone()),
+            ledger: JsonLedger::on(tree.clone(), root.clone(), LEDGER_DIR.into()),
             clock: SystemClock,
             ids: UuidV7Ids,
             artifacts: Spaces::new(Registry::of_project(
-                FileSpace::on(state.clone()),
-                RustItemSpace::on(state.clone(), cargo_target_dir),
-                RustTestSpace::on(state.clone()),
-                JsTestSpace::on(state.clone()),
+                FileSpace::on(tree.clone(), root.clone()),
+                RustItemSpace::on(tree.clone(), cargo_target_dir),
+                RustTestSpace::on(tree.clone()),
+                JsTestSpace::on(tree.clone()),
             ))?,
-            files: FileSpace::on(state),
+            files: FileSpace::on(tree, root.clone()),
             git: Git::new(root.clone()),
             actor: ProjectActor::new(root.clone(), actor, ran_by),
-            way: ReadWay::new(NonBlank::from(FILES_WAY)),
+            way,
             root,
         })
     }
@@ -205,6 +289,66 @@ impl Project {
     pub fn books_file(&self) -> &Path {
         self.books.path()
     }
+}
+
+/// Why the two ends of a change cannot be opened for a run that compares them. What
+/// the person asked that cannot be read as asked (every variant but four) the command
+/// line tells as an error of the request (exit 2); a dispatch that cannot be made, a
+/// Git that cannot be found or run or that fails, and a directory that cannot be looked
+/// at ([`OpenError::Dispatch`], [`OpenError::NoGit`], [`OpenError::Git`],
+/// [`OpenError::Unreadable`]), are of the run and not of the request, told as a run
+/// that failed (exit 3), as an error met while reading is.
+#[derive(Debug, thiserror::Error)]
+pub enum OpenError {
+    /// The adapters of the spaces cannot be dispatched to, as for [`Project::new`].
+    #[error(transparent)]
+    Dispatch(#[from] DispatchError),
+    /// No `git` can be found or started here.
+    #[error("no git can be run here")]
+    NoGit,
+    /// The project is in no Git repository.
+    #[error("{} is not in a Git repository", .root.display())]
+    NotARepository {
+        /// The project root.
+        root: PathBuf,
+    },
+    /// A revision names no commit.
+    #[error("`{rev}` names no commit of the repository")]
+    NotACommit {
+        /// The revision, as written.
+        rev: String,
+    },
+    /// The Git that runs does not know a form a commit is read with.
+    #[error("the git that runs does not know `{option}`, which reading a commit needs")]
+    UnknownOption {
+        /// The form, as written.
+        option: String,
+    },
+    /// The index holds other `.gitattributes` than `HEAD`, so its content cannot be
+    /// converted as a checkout of it would be.
+    #[error(
+        "the index changes .gitattributes, so the index cannot be read as a checkout; ask with --before/--after"
+    )]
+    IndexAttributes,
+    /// A directory of a side is not there, or is no directory.
+    #[error("{} is no directory", .path.display())]
+    NoDirectory {
+        /// The directory, as written.
+        path: PathBuf,
+    },
+    /// What is at a directory of a side could not be looked at (for another reason
+    /// than nothing there): no error of the request, a run that failed.
+    #[error("cannot look at {}", .path.display())]
+    Unreadable {
+        /// The directory, as written.
+        path: PathBuf,
+        /// The operating system's error.
+        #[source]
+        source: std::io::Error,
+    },
+    /// Git could not be asked: no error of the request, a run that failed.
+    #[error(transparent)]
+    Git(#[from] git::GitError),
 }
 
 /// Content read back by the adapter that named its address: the documents' for a

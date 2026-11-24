@@ -3,7 +3,7 @@
 //!
 //! | what | what it does | with |
 //! |---|---|---|
-//! | [`RustItemSpace::resolve`] | finds the build directory of the project at a side, looks up each path in the HTML rustdoc wrote under it, and reads what the item promises from its page | the state of the project ([`FileStates`]) and of its built docs, `toml` |
+//! | [`RustItemSpace::resolve`] | finds the build directory of the project at a side, looks up each path in the HTML rustdoc wrote under it, and reads what the item promises from its page | the tree of the project ([`ProjectTree`]) and of its built docs, `toml` |
 //! | [`RustItemSpace::current`] | the text of what an item promises now | the same |
 //! | [`NamePlaces`] | where an item is defined: the file its page links to as its source, under the directory the manifests give its crate | the same, and the manifests (`Cargo.toml`) of the project, `toml` |
 //! | [`SpaceSuggest`] | for each gone name, the names there are now in the docs that end as it does, found by their content when an approval pinned some | the same |
@@ -189,11 +189,16 @@
 //! root or in cargo's home, and docs built for another target triple (`--target`),
 //! are not read.
 //!
-//! Docs under the root of the side, reached through no link out of it, are read
-//! through the project's tree, so each side reads its own; docs elsewhere are read on
-//! the file system where they are, and a run that reads two sides of a change reads
-//! them at neither (each of their names cannot be told: the place outside the project
-//! is of neither side). A run of one side reads them as before.
+//! Where the docs are is found by names of the side's tree: a relative directory is a
+//! name under its top, and an absolute one is one only under a side read from a
+//! directory. Docs under the root of the side, reached through no link out of it, are
+//! read through the project's tree, so each side reads its own; docs elsewhere are
+//! read on the file system where they are, and a run that reads two sides of a change
+//! reads them at neither (each of their names cannot be told, with the one reason of
+//! the tree: the place outside the project is of neither side). A run of one side
+//! reads them as before. A run that reads a commit holds no build: docs inside the
+//! project are read from the commit, where nothing was built, and docs outside are
+//! told at neither side.
 //!
 //! The docs are read as they are: docs left there by an earlier build, of an item
 //! or a crate the project no longer has, read as there. Build them afresh before a
@@ -405,11 +410,11 @@ mod path;
 mod promise;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use whyshelf_core::app::shelf::{
-    Answers, CannotList, DirListing, NamePlaces, NamePrefixes, NoReadBack, Side, SpaceAdapter,
-    SpaceSuggest, StateList,
+    Answers, Beyond, CannotList, DirListing, NamePlaces, NamePrefixes, NoReadBack, Side,
+    SpaceAdapter, SpaceSuggest, StateList,
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
@@ -422,15 +427,14 @@ use whyshelf_core::domain::shelf::ledger::{GoneName, NameSuggestions};
 use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::{BuiltinPresets, PresetName, PresetValues, Propagation};
 
-use super::super::state::StateError;
 use super::super::state::files::FileStates;
+use super::super::state::{ProjectTree, StateError};
 use super::file::{self, Bounded};
 use catalog::CatalogLimits;
 use crates::Crates;
 use docs_tree::{DocsAt, DocsTree, placed};
 pub use layout::{GENERATOR_MARK, ITEM_KINDS, MEMBER_KINDS};
 use lookup::{Found, Lookup};
-use outside_docs::OUTSIDE;
 #[cfg(test)]
 use outside_docs::list;
 use path::RustPath;
@@ -586,7 +590,7 @@ impl SpaceSuggest for RustItemSpace {
 pub struct RustItemSpace {
     /// The state of the project the settings of the build, and the built docs in it,
     /// are read from: every reading of the space, its search for moves too.
-    state: FileStates,
+    state: ProjectTree,
     /// `CARGO_TARGET_DIR`, as the caller read it.
     target_dir: Option<PathBuf>,
     /// The most bytes of a page read.
@@ -598,12 +602,12 @@ impl RustItemSpace {
     /// `target_dir` the value of `CARGO_TARGET_DIR` (read by the caller; none when it
     /// is not set).
     pub fn new(root: PathBuf, target_dir: Option<PathBuf>) -> Self {
-        Self::on(FileStates::new(root), target_dir)
+        Self::on(ProjectTree::files(FileStates::new(root)), target_dir)
     }
 
     /// The items of the project `state` reads, with `target_dir` as for
     /// [`new`](Self::new).
-    pub fn on(state: FileStates, target_dir: Option<PathBuf>) -> Self {
+    pub fn on(state: ProjectTree, target_dir: Option<PathBuf>) -> Self {
         Self {
             state,
             target_dir: target_dir.filter(|dir| !dir.as_os_str().is_empty()),
@@ -632,7 +636,7 @@ impl RustItemSpace {
         side: Side,
         asks: &SpaceAsks,
     ) -> Result<SpaceReadings, RustItemError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let mut readings = SpaceReadings::new();
         let mut paths = Vec::new();
         for (name, comparisons) in asks {
@@ -682,7 +686,7 @@ impl RustItemSpace {
         side: Side,
         name: &ArtifactName,
     ) -> Result<Option<Vec<u8>>, RustItemError> {
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let Ok(path) = RustPath::parse(name.as_str()) else {
             return Ok(None);
         };
@@ -711,7 +715,7 @@ impl RustItemSpace {
         /// What an item that is not in the docs is placed as.
         const NOT_IN_THE_DOCS: TextLiteral =
             TextLiteral::new("no item of the built docs has the name, so its source is not known");
-        self.state.dir(side)?;
+        self.state.reads(side)?;
         let mut placed = BTreeMap::new();
         let mut paths = Vec::new();
         for name in names {
@@ -769,18 +773,17 @@ impl RustItemSpace {
     }
 
     /// The lookup of the built docs of `side`, or why there is none: where they are
-    /// cannot be told ([`docs_at`](Self::docs_at)), or they are outside the project
-    /// in a run of two sides, which cannot read them alike.
+    /// cannot be told ([`docs_at`](Self::docs_at)), or they are where the run cannot
+    /// read them ([`DocsAt::Untold`]: outside the project in a run of two sides).
     async fn lookup_at(&self, side: Side) -> Result<Result<Lookup, String>, RustItemError> {
         let at = match self.docs_at(side).await {
             Ok(at) => at,
             Err(why) => return Ok(Err(why)),
         };
-        if matches!(at, DocsAt::Outside(_)) && !self.state.one_side() {
-            return Ok(Err(NonBlank::from(OUTSIDE).into_string()));
-        }
-        let docs = DocsTree::of(&self.state, side, at).await?;
-        Ok(Ok(Lookup::on(docs, side, self.max_page)))
+        Ok(match DocsTree::of(&self.state, side, at).await? {
+            Ok(docs) => Ok(Lookup::on(docs, side, self.max_page)),
+            Err(why) => Err(why.as_str().to_owned()),
+        })
     }
 
     /// The directory rustdoc writes the docs of the project in, as the project is
@@ -788,30 +791,29 @@ impl RustItemSpace {
     /// space reads.
     #[cfg(test)]
     async fn docs(&self) -> Result<PathBuf, String> {
-        Ok(match self.docs_at(Side::After).await? {
-            DocsAt::Inside(docs) => self.state.root().join(docs.as_str()),
-            DocsAt::Outside(docs) => docs,
-        })
+        match self.docs_at(Side::After).await? {
+            DocsAt::Inside(docs) => self
+                .state
+                .path_of(Side::After, &docs)
+                .map_err(|e| e.to_string()),
+            DocsAt::Outside { docs, .. } => Ok(docs),
+            DocsAt::Untold(why) => Err(why.as_str().to_owned()),
+        }
     }
 
     /// Where rustdoc writes the docs of the project at `side` (the rule on the page
     /// of the module, each place read from the tree of that side), or why it cannot be
     /// told: `CARGO_TARGET_DIR`, then the cargo settings, then beside a `Cargo.toml`.
-    /// A directory relative to the root is the side's; inside the side's directory,
-    /// and reached through no link out of it, the docs are in the project
-    /// ([`DocsAt::Inside`]), and else outside it.
+    /// Which of them names the directory is told here; where that directory is, by
+    /// names of the side's tree, is told by `placed` alone.
     async fn docs_at(&self, side: Side) -> Result<DocsAt, String> {
-        let top = self
-            .state
-            .dir(side)
-            .map_err(|e| e.to_string())?
-            .to_path_buf();
+        self.state.reads(side).map_err(|e| e.to_string())?;
         let dir = match &self.target_dir {
             Some(dir) => Some(dir.clone()),
             None => self.configured_target_dir(side).await?,
         };
         let docs = match dir {
-            Some(dir) => top.join(dir).join("doc"),
+            Some(dir) => dir.join("doc"),
             None => {
                 let beside = match self.state.list(side, None).await {
                     Ok(DirListing::All(entries) | DirListing::Cut { entries, .. }) => entries
@@ -820,12 +822,22 @@ impl RustItemSpace {
                     Ok(DirListing::NotADir(_)) | Err(_) => false,
                 };
                 if !beside {
+                    let top = self
+                        .state
+                        .beyond_path(
+                            side,
+                            &Beyond {
+                                dir: None,
+                                parts: Vec::new(),
+                            },
+                        )
+                        .map_err(|e| e.to_string())?;
                     return Err(format!(
                         "where the docs are built is not known: CARGO_TARGET_DIR is not set, no cargo setting at {} names build.target-dir, and it has no Cargo.toml",
                         top.display()
                     ));
                 }
-                top.join(TARGET_DIR_NAME).join("doc")
+                Path::new(TARGET_DIR_NAME).join("doc")
             }
         };
         placed(&self.state, side, docs)
@@ -1479,6 +1491,21 @@ mod tests {
             .await
             .unwrap();
         assert!(unknown_why(&found[&n("demo::Shelf")]).is_some());
+    }
+
+    #[tokio::test]
+    async fn a_build_directory_written_with_a_leading_dot_is_inside_the_project() {
+        let root = tempfile::tempdir().unwrap();
+        let r = root.path();
+        write(r, "target/doc/demo/index.html", "").await;
+        for written in ["./target", "target"] {
+            let space = RustItemSpace::new(r.to_path_buf(), Some(PathBuf::from(written)));
+            assert_eq!(
+                space.docs_at(Side::After).await,
+                Ok(DocsAt::Inside("target/doc".parse().unwrap())),
+                "{written}"
+            );
+        }
     }
 
     /// A page laid out whole, as rustdoc lays out that of an item: a sidebar with a

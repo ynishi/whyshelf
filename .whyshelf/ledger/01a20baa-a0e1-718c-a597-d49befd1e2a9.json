@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "580cec579dd6d8a5f3655f7d6bbd57aebc3668db",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:77c449c76cd297286247987fce154b640ae5cbf1935d0a32a2e92465781d074c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "824243efcc292d3085ff9bcf50432b4acff1ca23",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:360508e991ce153764924df96b973265e28a7144fdc140333fccb8c941059f86",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/preset_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "45b59648cfd2f87c9e15f6b1bdce3500b609c269",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6659070796b261566da29e5cd8206eab3426ee57c8935b22f8ef23d0906d439f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/word_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "36ab8473fa6c8d4d48757048c465dc425a52836f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:79cca0dad4aac1aba23c19513f4e969e43f080f76050088f3d28b39d8671166b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8819b57b4637e9fa5d39561a09e0405a9fa1b0f5",
+      "hash": "sha256:080d007ba972da3b5fe236cd9e15973593256727f2efb10cc06aa39008ff2986",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "73"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e170-61cb-728f-adea-c80c24e72315"
+    }
+  ],
+  "id": "01a20baa-a0e1-718c-a597-d49befd1e2a9",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:a83bf20f49262972846862dbb4a66b7eb65fc2abaacf3e9422d289fa72e99135",
+  "seen_address": "7174d9a1c5315921f9a4f731944220b5a2cc920c",
+  "subject": "01a1e170-7f3e-758f-9c98-158cee74311f",
+  "v": 1,
+  "verb": "approve"
+}

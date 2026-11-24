@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "67d63fc52dcc2c61826206d889115b234870d4dc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:ebd357d1e965e40dccad4fa00a8627b32a56d6c54a312b3648859d4d9af4f498",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "79f8aa274d0d3e6523ca6a400a3351ccffc13f5c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f765d2a8b2b5c539bfcf2d80baeaf07b45beb3cd86e3f6277764854243754905",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "47e2c6c9b0f0d9a8461ab457b9049d72b051b0b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:73798f986fabc1f7508efca306c6ceae359173019f05c91d13e9b89362e36f80",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bdacefc0a24b96235859601f12133843cbdba093",
+      "hash": "sha256:3f352f6daad36095a71a70ecd5f9e473b96a9a86e7fc5d73b9d176156fab3af4",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "81"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f0ce-5b0a-7405-b5a1-fb50213d286a"
+    }
+  ],
+  "id": "01a20baa-adfa-74d7-aad8-af5777b8ee32",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:7c5bf34be6221e5e53f67747919a49e729cb7ff6c96d2276f7776f791d078d74",
+  "seen_address": "c5345e83d832170345ad7c47e00cc8469a520fa5",
+  "subject": "01a1f0ce-bdab-70b7-8fd2-2cf2ca609114",
+  "v": 1,
+  "verb": "approve"
+}

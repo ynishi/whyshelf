@@ -140,7 +140,7 @@ use super::ledger::{
     ApprovalPins, DeclaredNow, DeclaredStatus, FramePin, JudgedAt, JudgementId, Ledger,
     LedgerProblem, NotStanding, PinNow, Quorum, ReadBy, ReadPin, Reading, SubjectPins,
 };
-use super::schema::{BookName, CoverSeverity, EntryName, Propagation};
+use super::schema::{ArtifactPropagation, BookName, CoverSeverity, EntryName, Propagation};
 
 /// The documents that take the place of a deprecated one.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -523,6 +523,36 @@ impl Cause {
             }
             Self::InCycle { cycle } => Some((Origin::Cycle(*cycle), OriginEvent::Cycle)),
         }
+    }
+
+    /// The names of the artifact pin this cause stands on, through the moves declared
+    /// of it: the name it wrote, each name a move took it from, and the name it is
+    /// read as now; none for a cause that stands on no artifact pin. What tells
+    /// whether a cause stands on a name that, written another way before a move,
+    /// could not be told.
+    pub fn pin_names(&self) -> Vec<&ArtifactKey> {
+        let pin = match self {
+            Self::ArtifactChanged { pin, .. }
+            | Self::ArtifactGone { pin }
+            | Self::ArtifactArrived { pin, .. }
+            | Self::ArtifactComparisonChanged { pin, .. }
+            | Self::ArtifactMoved { pin, .. } => pin,
+            Self::Via { .. }
+            | Self::SelfChanged { .. }
+            | Self::SelfNotValid(_)
+            | Self::LinksChanged { .. }
+            | Self::ArtifactLinksChanged { .. }
+            | Self::Expired { .. }
+            | Self::UpstreamNotValid { .. }
+            | Self::UpstreamChanged { .. }
+            | Self::UpstreamDeclared { .. }
+            | Self::InCycle { .. } => return Vec::new(),
+        };
+        let mut names = vec![pin.pin().artifact()];
+        names.extend(pin.moved().into_iter().flat_map(|moved| moved.moved_from()));
+        names.push(pin.read_as());
+        names.dedup();
+        names
     }
 
     /// Where this cause starts ([`Cause::located`] without the event); the origin is
@@ -1055,6 +1085,72 @@ impl OriginGroup {
     }
 }
 
+/// The degradation of a standing that is a degraded approval: the one judgement of
+/// whether an approval does not hold, which [`Assessment::degraded`] and
+/// [`Assessment::holding`] both read.
+fn degradation_of(standing: &Standing) -> Option<&Degradation> {
+    match standing.freshness() {
+        Some(Freshness::Degraded(degradation)) => Some(degradation),
+        Some(Freshness::Fresh) | None => None,
+    }
+}
+
+/// A name an approval stands on through a `depends` link that its adapter cannot tell
+/// about now ([`Notice::ArtifactUnknown`]): whether the approval holds cannot be said
+/// while it lasts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UntoldPin {
+    /// The link.
+    pub link: EntryName,
+    /// The space and the name as written.
+    pub artifact: ArtifactKey,
+    /// Why it cannot be told.
+    pub why: Untold,
+}
+
+/// Whether the approval of one document holds, at one side, as `stale` and its gate
+/// read it (DEC-26). Not what holds an approval back from being made, which is
+/// [`order::Hold`](super::order::Hold). Made by [`Assessment::holding`] alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Holding {
+    /// The assessment of that side lists no standing for the identity (no file and no
+    /// record there): a fact, not a judgement of a standing.
+    NotThere,
+    /// No decision stands.
+    Pending,
+    /// A decision against it stands.
+    Against(NotStanding),
+    /// It holds.
+    Holds(HoldsAs),
+    /// It holds as far as can be told, and it stands on names that cannot be told
+    /// about now.
+    CannotTell {
+        /// How it holds.
+        holds_as: HoldsAs,
+        /// The names that cannot be told.
+        untold: NonEmptyVec<UntoldPin>,
+    },
+    /// It does not hold, at this level, starting there; with the names it stands on
+    /// that cannot be told too.
+    DoesNotHold {
+        /// How strongly.
+        level: Severity,
+        /// Where it starts ([`Assessment::roots_of`]).
+        roots: Vec<RootCause>,
+        /// The names that cannot be told.
+        untold: Vec<UntoldPin>,
+    },
+}
+
+/// How an approval that holds holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldsAs {
+    /// Fresh, its quorum met.
+    Fresh,
+    /// Fresh, awaiting approvals of other names ([`FreshnessLevel::Awaiting`]).
+    Awaiting,
+}
+
 /// The standing of every document, and what is wrong around them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Assessment {
@@ -1083,15 +1179,86 @@ impl Assessment {
     /// Every approval that no longer holds ([`Freshness::Degraded`]), by identity,
     /// with its degradation: the one place the set of degraded approvals is read from
     /// the standings. What `--stale` takes ([`order::stale`](super::order::stale)),
-    /// the entries of `stale`, the origins ([`Assessment::origins`]), the moves
-    /// `check` lists and the documents `units` divides are all read from it.
+    /// the origins ([`Assessment::origins`]), the moves `check` lists and the
+    /// documents `units` divides are all read from it; the entries of `stale` read the
+    /// same one judgement of a document through [`Assessment::holding`], which shares
+    /// it (`degradation_of`).
     pub(crate) fn degraded(&self) -> impl Iterator<Item = (DocId, &Degradation)> {
         self.standings
             .iter()
-            .filter_map(|(id, standing)| match standing.freshness() {
-                Some(Freshness::Degraded(degradation)) => Some((*id, degradation)),
-                Some(Freshness::Fresh) | None => None,
+            .filter_map(|(id, standing)| degradation_of(standing).map(|d| (*id, d)))
+    }
+
+    /// The names the approval of `id` stands on through a `depends` link that their
+    /// adapter cannot tell about now ([`Notice::ArtifactUnknown`]), in the order of its
+    /// notices: none for a document that is no approval. The one place they are
+    /// picked out; [`Assessment::holding`] reads them.
+    pub(crate) fn untold_of(&self, shelf: &Shelf, id: DocId) -> Vec<UntoldPin> {
+        if !matches!(self.standings.get(&id), Some(Standing::Approved { .. })) {
+            return Vec::new();
+        }
+        let depends: BTreeSet<&EntryName> = shelf
+            .doc(id)
+            .map(|doc| {
+                doc.artifact_links_of(ArtifactPropagation::Depends)
+                    .into_iter()
+                    .map(|(link, _)| link)
+                    .collect()
             })
+            .unwrap_or_default();
+        self.notices_of(id)
+            .iter()
+            .filter_map(|notice| match notice {
+                Notice::ArtifactUnknown {
+                    link,
+                    artifact,
+                    why,
+                } if depends.contains(link) => Some(UntoldPin {
+                    link: link.clone(),
+                    artifact: artifact.clone(),
+                    why: why.clone(),
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Whether the approval of `id` holds, as `stale` and its gate read it (DEC-26):
+    /// the one entry, for one document, of whether it holds, does not, or cannot be
+    /// told. It judges nothing of its own; it reads, in this order, the standings
+    /// (none listed: [`Holding::NotThere`]), the one judgement of a degraded approval
+    /// (the set of degraded approvals is read from the same one, `degraded`, with its
+    /// level and [`Assessment::roots_of`]), the decision of one that is no approval,
+    /// and of a fresh one whether it awaits names ([`Standing::kind`]); the names that
+    /// cannot be told are picked out in one place (`untold_of`), which this alone
+    /// reads.
+    pub fn holding(&self, shelf: &Shelf, id: DocId) -> Holding {
+        let Some(standing) = self.standings.get(&id) else {
+            return Holding::NotThere;
+        };
+        if let Some(degradation) = degradation_of(standing) {
+            return Holding::DoesNotHold {
+                level: degradation.level(),
+                roots: self.roots_of(id),
+                untold: self.untold_of(shelf, id),
+            };
+        }
+        match standing {
+            Standing::Pending => Holding::Pending,
+            Standing::Against(against) => Holding::Against(against.status()),
+            Standing::Approved { .. } => {
+                let holds_as =
+                    if standing.kind() == StandingKind::Approved(FreshnessLevel::Awaiting) {
+                        HoldsAs::Awaiting
+                    } else {
+                        HoldsAs::Fresh
+                    };
+                match NonEmptyVec::from_vec(self.untold_of(shelf, id)) {
+                    Ok(untold) => Holding::CannotTell { holds_as, untold },
+                    Err(_) => Holding::Holds(holds_as),
+                }
+            }
+        }
     }
 
     /// Where one identity stands: the one answer for any identity, listed or not.

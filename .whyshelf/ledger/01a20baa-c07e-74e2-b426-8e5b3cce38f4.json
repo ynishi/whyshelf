@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "36902b0f12ed91af1891a0a3568cd3f95586b179",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:88a1ae60770e24cc027d8bff94f9cac447d4d588016ff8fa5ff933030cb3b878",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9fe71823a15c72b78f67b7910d5e2de5a82f08fd",
+      "hash": "sha256:5ee09e3c7e5438f9458b5b3eb9e0943cb3ef412b11be6a07443d6e9da7efee0c",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    },
+    {
+      "address": "eb6cfea4868db0f2f5bae07dc0bcb91450d86436",
+      "hash": "sha256:5a5349db835027f7c6713ab7232707cdd6652f473b54905c5b8f165688c1414b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "90"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f9c4-5e21-7a3b-9d47-6c1e2b8f0a55"
+    }
+  ],
+  "id": "01a20baa-c07e-74e2-b426-8e5b3cce38f4",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:d48129d3c63c358336d7ab24913bc90ec8158738d70619e469134c017c9539d5",
+  "seen_address": "42d9ccc18dae3e9a27276fdc4cf37c94c4b52ea0",
+  "subject": "01a1f9c4-5e22-7c18-a6d3-2f9b4e7c1d08",
+  "v": 1,
+  "verb": "approve"
+}

@@ -112,8 +112,8 @@ use whyshelf_core::domain::shelf::build::{
 use whyshelf_core::domain::shelf::doc::normalize;
 
 use super::git::{Git, GitError};
-use super::state::StateError;
 use super::state::files::FileStates;
+use super::state::{ProjectTree, StateError};
 
 /// Why the documents could not be read at all, or a document's file could not be
 /// written. A file that is not a document is not an error: it is a reading that
@@ -174,20 +174,19 @@ pub enum DocsError {
 pub struct MarkdownDocs {
     root: PathBuf,
     git: Git,
-    /// The state of the project the documents are read from.
-    state: FileStates,
+    /// The tree of the project the documents are read from.
+    state: ProjectTree,
 }
 
 impl MarkdownDocs {
     /// The documents of the project at `root`, read at one side (the root as it is).
     pub fn new(root: PathBuf) -> Self {
-        Self::on(FileStates::new(root))
+        Self::on(ProjectTree::files(FileStates::new(root.clone())), root)
     }
 
-    /// The documents of the project `state` reads; they are written under the root of
-    /// the side after.
-    pub fn on(state: FileStates) -> Self {
-        let root = state.root().to_path_buf();
+    /// The documents of the project `state` reads; they are written, and read back by
+    /// their addresses, under `root`.
+    pub fn on(state: ProjectTree, root: PathBuf) -> Self {
         Self {
             git: Git::new(root.clone()),
             root,

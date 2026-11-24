@@ -109,6 +109,214 @@ async fn a_path_that_no_writer_wrote_cannot_be_put_on_disk() {
     assert_eq!(error.source.kind(), std::io::ErrorKind::NotFound);
 }
 
+/// Every file under `from`, copied under `to` (over what is there).
+async fn copy(from: &std::path::Path, to: &std::path::Path) {
+    tokio::fs::create_dir_all(to).await.unwrap();
+    let mut entries = tokio::fs::read_dir(from).await.unwrap();
+    while let Some(entry) = entries.next_entry().await.unwrap() {
+        let (path, target) = (entry.path(), to.join(entry.file_name()));
+        if entry.file_name() == ".git" {
+            continue;
+        }
+        let kind = entry.file_type().await.unwrap();
+        // arch-lint: allow(no-sync-io) reason="`kind` is a FileType fetched with `.await`: a pure accessor, no I/O"
+        if kind.is_dir() {
+            Box::pin(copy(&path, &target)).await;
+        } else {
+            tokio::fs::copy(&path, &target).await.unwrap();
+        }
+    }
+}
+
+/// Whether `git` can be run here; the Git case passes without it.
+async fn git_runs() -> bool {
+    tokio::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .await
+        .is_ok_and(|out| out.status.success())
+}
+
+/// Git run on `dir`, with no `GIT_*` variable of the caller.
+async fn git(dir: &std::path::Path, args: &[&str]) {
+    let mut command = tokio::process::Command::new("git");
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("GIT_") {
+            command.env_remove(&name);
+        }
+    }
+    let out = command
+        .arg("-C")
+        .arg(dir)
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+        .args(["-c", "core.autocrlf=false"])
+        .args(args)
+        .output()
+        .await
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+}
+
+/// Both entries assemble the same adapters on the tree they read: a project for a
+/// change through two directories, and one through Git, writes under its root as
+/// `Project::new` does, names the way it was asked, and reads each end where it is
+/// (an approval made before an edit holds at the end before, and the change made it
+/// not hold).
+#[tokio::test]
+async fn a_project_for_a_change_is_assembled_as_one_of_the_root_and_reads_both_ends() {
+    use super::OpenError;
+    use super::state::{ChangeAsk, GitAfter};
+
+    use whyshelf_core::app::shelf::{JudgeRequest, Judgement};
+    use whyshelf_core::domain::shelf::freshness::{Holding, HoldsAs};
+    use whyshelf_core::domain::shelf::impact::Made;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (before, after) = (dir.path().join("before"), dir.path().join("after"));
+    tokio::fs::create_dir_all(&after).await.unwrap();
+    let mut app = ShelfApp::new(Project::new(&after, Some("t".to_owned()), None, None).unwrap());
+    app.init(Template::Sample.request().unwrap()).await.unwrap();
+    let approve = JudgeRequest {
+        judgement: Judgement::Approve {
+            until: None,
+            reason: None,
+            again: false,
+        },
+        reference: "F-1".parse().unwrap(),
+        by: Default::default(),
+    };
+    app.judge_all(vec![approve]).await.unwrap();
+    copy(&after, &before).await;
+    // The finding is edited after its approval, at the side after only.
+    let finding = after.join("books/finding/F-1.md");
+    let mut text = tokio::fs::read_to_string(&finding).await.unwrap();
+    text.push_str("\nAn edit after the approval.\n");
+    tokio::fs::write(&finding, text).await.unwrap();
+
+    // Read the two ends the wrong way round, and the finding would hold after and not
+    // before: the side before is the copy, the side after the edited root.
+    let made_of_finding = |report: &whyshelf_core::app::shelf::ImpactReport| {
+        let key = |id| report.names_after.key_of(id).map(ToString::to_string);
+        let entry = report
+            .entries
+            .iter()
+            .find(|e| key(e.id()).is_some_and(|k| k.ends_with("F-1")))
+            .expect("the finding");
+        (entry.before().clone(), entry.made().clone())
+    };
+    let ask = ChangeAsk::Files {
+        before: before.clone(),
+        after: None,
+    };
+    let project = Project::for_change(&after, ask, Some("t".to_owned()), None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        project.books_file(),
+        Project::new(&after, None, None, None).unwrap().books_file()
+    );
+    let report = ShelfApp::new(project).impact().await.unwrap();
+    assert_eq!(
+        report.way.as_str(),
+        format!("files: {} -> the project root", before.display())
+    );
+    let (was, made) = made_of_finding(&report);
+    assert_eq!(was, Holding::Holds(HoldsAs::Fresh));
+    assert!(matches!(made, Made::Yes(_)), "{made:?}");
+
+    // The same change through Git: the approval committed, then the edit.
+    if git_runs().await {
+        git(&before, &["init", "-q"]).await;
+        git(&before, &["add", "-A"]).await;
+        git(&before, &["commit", "-q", "-m", "approved"]).await;
+        copy(&after, &before).await;
+        git(&before, &["commit", "-q", "-am", "edited"]).await;
+        let ask = ChangeAsk::Git {
+            since: "HEAD~1".to_owned(),
+            until: GitAfter::Commit("HEAD".to_owned()),
+        };
+        let project = Project::for_change(&before, ask, Some("t".to_owned()), None, None)
+            .await
+            .unwrap();
+        let report = ShelfApp::new(project).impact().await.unwrap();
+        assert_eq!(report.way.as_str(), "git: HEAD~1 -> HEAD");
+        let (was, made) = made_of_finding(&report);
+        assert_eq!(was, Holding::Holds(HoldsAs::Fresh));
+        assert!(matches!(made, Made::Yes(_)), "{made:?}");
+    }
+
+    // A directory that is not there, and Git outside a repository, are not opened.
+    let ask = ChangeAsk::Files {
+        before: dir.path().join("nowhere"),
+        after: None,
+    };
+    let opened = Project::for_change(&after, ask, None, None, None).await;
+    assert!(
+        matches!(opened, Err(OpenError::NoDirectory { .. })),
+        "{opened:?}"
+    );
+    let ask = ChangeAsk::Git {
+        since: "HEAD".to_owned(),
+        until: GitAfter::Index,
+    };
+    let opened = Project::for_change(dir.path(), ask, None, None, None).await;
+    assert!(
+        matches!(
+            opened,
+            Err(OpenError::NotARepository { .. } | OpenError::NotACommit { .. })
+        ),
+        "{opened:?}"
+    );
+}
+
+/// A directory of a side that is not there, or is a file, is an error of the request;
+/// one that cannot be looked at for another reason is the run's, with its cause.
+#[tokio::test]
+async fn a_directory_of_a_side_is_no_directory_only_when_nothing_or_a_file_is_there() {
+    use super::OpenError;
+    use super::state::ChangeAsk;
+
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("a-file");
+    tokio::fs::write(&file, "x").await.unwrap();
+    let ask = |before: std::path::PathBuf| ChangeAsk::Files {
+        before,
+        after: None,
+    };
+    for before in [dir.path().join("nowhere"), file.clone(), file.join("below")] {
+        let opened = Project::for_change(dir.path(), ask(before.clone()), None, None, None).await;
+        assert!(
+            matches!(&opened, Err(OpenError::NoDirectory { path }) if *path == before),
+            "{opened:?}"
+        );
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let locked = dir.path().join("locked");
+        tokio::fs::create_dir(&locked).await.unwrap();
+        tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))
+            .await
+            .unwrap();
+        let opened =
+            Project::for_change(dir.path(), ask(locked.join("inner")), None, None, None).await;
+        tokio::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))
+            .await
+            .unwrap();
+        // One run as a user every directory is open to looks into it, and finds nothing.
+        assert!(
+            matches!(
+                opened,
+                Err(OpenError::Unreadable { .. } | OpenError::NoDirectory { .. })
+            ),
+            "{opened:?}"
+        );
+        if let Err(OpenError::Unreadable { source, .. }) = opened {
+            assert_eq!(source.kind(), std::io::ErrorKind::PermissionDenied);
+        }
+    }
+}
+
 #[tokio::test]
 async fn a_run_of_init_through_the_project_puts_its_files_on_disk_and_each_is_whole() {
     let dir = tempfile::tempdir().unwrap();

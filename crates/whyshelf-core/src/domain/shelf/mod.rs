@@ -420,6 +420,7 @@ pub mod filter;
 mod footing;
 pub mod freshness;
 pub mod graph;
+pub mod impact;
 pub mod ledger;
 pub mod lookup;
 pub mod map;

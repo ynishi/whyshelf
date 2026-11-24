@@ -22,9 +22,11 @@ use crate::domain::shelf::doc::{Doc, DocKey, KeyCollision, UnresolvedLink};
 use crate::domain::shelf::exemption::Unneeded;
 use crate::domain::shelf::filter::StatusFilterAsk;
 use crate::domain::shelf::freshness::{
-    Degradation, Notice, OriginGroup, RootCause, Severity, Standing, StandingKind, Successors,
+    Degradation, Holding, Notice, OriginGroup, RootCause, Severity, Standing, StandingKind,
+    Successors,
 };
 use crate::domain::shelf::graph::Cycle;
+use crate::domain::shelf::impact::ImpactEntry;
 use crate::domain::shelf::ledger::{
     Decision, DeclaredStatus, Exempt, FramePin, FrameRefusal, JudgementId, LeaveOut, LedgerProblem,
     MoveSuggestions, NotAdmitted, PinName, Record, ShortSameMeaning,
@@ -43,6 +45,7 @@ use crate::domain::shelf::units::Units;
 use crate::domain::shelf::untold::UntoldName;
 
 use super::ports::UnreadableRecord;
+use super::state::ReadWay;
 
 /// The keys of the valid documents of the shelf, so that a surface can write a
 /// document by its key and not only by its identity, and what each upstream a record
@@ -714,6 +717,26 @@ pub struct UnitsReport {
     pub health: Health,
 }
 
+/// The result of `impact`: the two ends of a change, read the one way the run names,
+/// and for every document whether its approval held, holds, and whether the change
+/// adds a cause that makes it not hold. The rules are on the page of
+/// [`impact`](crate::domain::shelf::impact).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImpactReport {
+    /// How the two ends were read, as the composition root names it.
+    pub way: ReadWay,
+    /// Every document either end lists, by identity.
+    pub entries: Vec<ImpactEntry>,
+    /// The keys of the valid documents before the change.
+    pub names_before: Names,
+    /// The keys of the valid documents after it.
+    pub names_after: Names,
+    /// What is wrong around them before the change.
+    pub health_before: Health,
+    /// What is wrong around them after it.
+    pub health_after: Health,
+}
+
 /// An approval that does not hold, with where it starts to fail.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StaleEntry {
@@ -755,6 +778,10 @@ pub struct StaleReport {
     /// that their adapter cannot tell about now: their freshness is unchanged, and
     /// whether their approvals hold cannot be said.
     pub unknown: Vec<Unknown>,
+    /// The fold of every document's holding ([`Gate::fold`] of each
+    /// [`Gate::from`]), made as the use case asks each document: what
+    /// [`StaleReport::gate`] answers.
+    pub held: Gate,
     /// The keys of the valid documents.
     pub names: Names,
     /// What is wrong around them.
@@ -772,13 +799,24 @@ impl StaleReport {
     /// said while its freshness is unchanged; otherwise [`Gate::Holds`]. A document
     /// still pending has no approval and is no reason to fail, and neither is a
     /// fresh approval still awaiting names (DEC-89): another name settles it.
+    ///
+    /// It is the fold of every document's [`Holding`] ([`Gate::fold`] of
+    /// [`Gate::from`] each), which the use case made as it asked each document.
     pub fn gate(&self) -> Gate {
-        if !self.entries.is_empty() {
-            Gate::DoesNotHold
-        } else if !self.unknown.is_empty() {
-            Gate::CannotTell
-        } else {
-            Gate::Holds
+        self.held
+    }
+}
+
+impl From<&Holding> for Gate {
+    /// What one document's holding says to a gate: the one mapping. A document with
+    /// no approval (none there, pending, decided against) is no reason to fail.
+    fn from(holding: &Holding) -> Self {
+        match holding {
+            Holding::DoesNotHold { .. } => Self::DoesNotHold,
+            Holding::CannotTell { .. } => Self::CannotTell,
+            Holding::NotThere | Holding::Pending | Holding::Against(_) | Holding::Holds(_) => {
+                Self::Holds
+            }
         }
     }
 }
@@ -797,6 +835,20 @@ pub enum Gate {
 }
 
 impl Gate {
+    /// The gate of many: the one place they are folded (DEC-26). One that does not
+    /// hold makes it [`DoesNotHold`](Self::DoesNotHold); else one that cannot be told
+    /// makes it [`CannotTell`](Self::CannotTell); else it [`Holds`](Self::Holds),
+    /// none at all too.
+    pub fn fold(gates: impl IntoIterator<Item = Gate>) -> Gate {
+        gates
+            .into_iter()
+            .fold(Self::Holds, |folded, gate| match (folded, gate) {
+                (Self::DoesNotHold, _) | (_, Self::DoesNotHold) => Self::DoesNotHold,
+                (Self::CannotTell, _) | (_, Self::CannotTell) => Self::CannotTell,
+                (Self::Holds, Self::Holds) => Self::Holds,
+            })
+    }
+
     /// Whether the gate passes: only when it [`Holds`](Self::Holds).
     pub fn passes(self) -> bool {
         matches!(self, Self::Holds)

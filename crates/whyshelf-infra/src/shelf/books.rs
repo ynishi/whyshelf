@@ -130,8 +130,8 @@ mod write;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::state::StateError;
 use super::state::files::FileStates;
+use super::state::{ProjectTree, StateError};
 use super::system::parse_time;
 use serde::Deserialize;
 use whyshelf_core::domain::location::RelPath;
@@ -205,21 +205,21 @@ pub struct BooksToml {
     root: PathBuf,
     file: RelPath,
     path: PathBuf,
-    /// The state of the project the file is read from.
-    state: FileStates,
+    /// The tree of the project the file is read from.
+    state: ProjectTree,
 }
 
 impl BooksToml {
     /// The declaration in the file `file` of the project at `root`, read at one side
     /// (the root as it is).
     pub fn new(root: &Path, file: RelPath) -> Self {
-        Self::on(FileStates::new(root.to_path_buf()), file)
+        let tree = ProjectTree::files(FileStates::new(root.to_path_buf()));
+        Self::on(tree, root.to_path_buf(), file)
     }
 
     /// The declaration in the file `file` of the project `state` reads; it is written
-    /// under the root of the side after.
-    pub fn on(state: FileStates, file: RelPath) -> Self {
-        let root = state.root().to_path_buf();
+    /// under `root`.
+    pub fn on(state: ProjectTree, root: PathBuf, file: RelPath) -> Self {
         Self {
             path: root.join(file.as_str()),
             root,

@@ -77,9 +77,10 @@ use whyshelf_core::domain::shelf::freshness::StandingKind;
 use whyshelf_core::domain::shelf::ledger::{JudgementId, ReaderCount};
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
 use whyshelf_core::domain::shelf::units::UnitsOf;
-use whyshelf_infra::shelf::Project;
 use whyshelf_infra::shelf::init;
+use whyshelf_infra::shelf::state::{ChangeAsk, GitAfter};
 use whyshelf_infra::shelf::system::parse_time;
+use whyshelf_infra::shelf::{OpenError, Project};
 
 pub use args::BooksCommand;
 use args::{Common, Verb};
@@ -264,6 +265,36 @@ pub async fn run(root: Option<PathBuf>, command: BooksCommand) -> ExitCode {
                     return ExitCode::from(Exit::Request as u8);
                 }
             }
+        }
+        // The one command that reads two ends of a change opens them as asked, in place
+        // of the project as it is.
+        BooksCommand::Impact {
+            since,
+            until,
+            index,
+            before,
+            after,
+        } => {
+            let ask = match (since, before) {
+                (Some(since), _) => ChangeAsk::Git {
+                    since,
+                    until: match (index, until) {
+                        (true, _) => GitAfter::Index,
+                        (false, until) => {
+                            GitAfter::Commit(until.unwrap_or_else(|| "HEAD".to_owned()))
+                        }
+                    },
+                },
+                (None, Some(before)) => ChangeAsk::Files { before, after },
+                // The flags' group asks for one of them; clap refuses neither first.
+                (None, None) => {
+                    let message = "name the change: --since or --before".to_owned();
+                    eprintln!("error: {message}");
+                    print(&output::usage(message));
+                    return ExitCode::from(Exit::Request as u8);
+                }
+            };
+            return impact(typed_root, ask).await;
         }
         BooksCommand::Unlinked {
             book,
@@ -977,6 +1008,42 @@ fn failed_run(error: &dyn std::error::Error) -> ExitCode {
     eprintln!("error: {}", chain.join(": "));
     print(&output::failure(chain));
     ExitCode::from(Exit::Failed as u8)
+}
+
+/// `impact` on the project at `root`, its two ends opened as `ask` asks: an end that
+/// cannot be opened so is an error of the request (exit 2), adapters of the spaces
+/// that cannot be dispatched to and a Git that could not be asked a failed run, and an
+/// error met while reading a port's.
+async fn impact(root: Option<PathBuf>, ask: ChangeAsk) -> ExitCode {
+    let project = match Project::for_change(
+        root.unwrap_or_else(|| PathBuf::from(".")),
+        ask,
+        std::env::var(ACTOR_VAR).ok(),
+        std::env::var(RAN_BY_VAR).ok(),
+        std::env::var_os(CARGO_TARGET_DIR_VAR).map(PathBuf::from),
+    )
+    .await
+    {
+        Ok(project) => project,
+        Err(OpenError::Dispatch(error)) => return failed_run(&error),
+        // Git that could not be found, started or asked (it failed or ran past its
+        // time) is no error of the request: the run failed.
+        Err(error @ (OpenError::NoGit | OpenError::Unreadable { .. })) => {
+            return failed_run(&error);
+        }
+        Err(OpenError::Git(error)) => return failed_run(&error),
+        Err(error) => {
+            let message = error.to_string();
+            eprintln!("error: {message}");
+            print(&output::usage(message));
+            return ExitCode::from(Exit::Request as u8);
+        }
+    };
+    let exit = match ShelfApp::new(project).impact().await {
+        Ok(report) => print(&output::impact(&report)),
+        Err(error) => report(&error),
+    };
+    ExitCode::from(exit as u8)
 }
 
 /// Print an error as JSON on stdout and its chain on stderr, and give its exit.

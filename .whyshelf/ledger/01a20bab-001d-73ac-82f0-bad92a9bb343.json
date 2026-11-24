@@ -1,0 +1,83 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7ff954b6281f901aad2f34071d09dc8cdbfac412",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:04374c9eae16ac5af2705a9f259832ad84b49ea1dbb62b6d24c6cd7bc105ea5a",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/impact.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "05646113c4db31b8062cdbe96d86ae8de3ef4901",
+      "hash": "sha256:77147e2598b7c94d1ba3d15c0f55612070edad3dcc135382330d8683a459c3c0",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "103"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7e48255413"
+    },
+    {
+      "address": "d6d06750effaf90c904119631b302dbf6452d682",
+      "hash": "sha256:978c35e2c845f1a1791067667a6693eea9cf58224d65e7233623496043c99e2d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "104"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7fbb63b84f"
+    },
+    {
+      "address": "cd07bedae8f3b9301270f3c8471f1e42db94e96d",
+      "hash": "sha256:6384aab20a649e5a9a6215c8ac7c18708855865adb14309d6e31b9b75d629190",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "106"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a803bf4e2cc"
+    }
+  ],
+  "id": "01a20bab-001d-73ac-82f0-bad92a9bb343",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:f57cf90a5c715e173d6ed86206811293692934c78fa5bccf2aaf1a0daaca975b",
+  "seen_address": "b2ef604c1b83b2e5b7f6e0989e9d660774e3a004",
+  "subject": "01a20baa-2bf0-764d-88ea-9a82af53666d",
+  "v": 1,
+  "verb": "approve"
+}

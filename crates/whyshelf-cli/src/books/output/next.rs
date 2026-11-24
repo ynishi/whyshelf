@@ -460,6 +460,7 @@ mod tests {
                 },
             ],
             unknown: Vec::new(),
+            held: whyshelf_core::app::shelf::Gate::Holds,
             names: Names::default(),
             health: Health::default(),
         };

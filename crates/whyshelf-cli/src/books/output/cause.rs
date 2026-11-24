@@ -18,6 +18,7 @@ use whyshelf_core::domain::shelf::ledger::{ArtifactPin, FramePin, JudgementId, R
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
 use whyshelf_core::domain::words::{Join, Mark, listed};
 
+use super::words::severity;
 use super::{DocRef, Namer, standing};
 
 /// A cause of an approval that does not hold.
@@ -297,7 +298,7 @@ impl Namer<'_> {
                 format!(
                     "{} does not hold ({})",
                     self.pin_said(pin),
-                    self::severity(Severity::from(*carried))
+                    super::words::severity(Severity::from(*carried))
                 ),
             ),
             Cause::LinksChanged {
@@ -762,14 +763,6 @@ fn unknown_detail(artifact: &ArtifactKey, why: &str) -> String {
     format!(
         "{artifact} cannot be told about now ({why}): it changes no freshness, and no approval can be made on it"
     )
-}
-
-fn severity(severity: Severity) -> &'static str {
-    match severity {
-        Severity::Expired => "expired",
-        Severity::Stale => "stale",
-        Severity::Broken => "broken",
-    }
 }
 
 /// The words of a pinned upstream that does not stand as a settled approval: one for

@@ -11,6 +11,12 @@
 //! | [`Git::work_tree_files`]: the files of the work tree Git lists | `git ls-files -z --cached --others --exclude-standard` |
 //! | [`Git::renames_since`]: the renames between a commit and the index | `git rev-parse --verify --quiet <commit>^{commit}`, then `git diff-index --cached --no-ext-diff --no-textconv --ignore-submodules=all --relative --find-renames --name-status -z <commit> --` |
 //! | [`Git::user_name`]: who the project's settings say the user is | `git config --get user.name` |
+//! | the tree of a commit, for [`GitStates`] | `git rev-parse --verify --quiet <rev>^{commit}`, `git rev-parse --show-prefix`, then `git ls-tree -r -t -z --full-tree <commit>` |
+//! | the index, for [`GitStates`] | `git ls-files -s -z`, and `git diff-index --cached --quiet --no-ext-diff --no-textconv HEAD -- ':(top,glob)**/.gitattributes'` (whether its attributes are `HEAD`'s) |
+//! | the blobs of either, for [`GitStates`] | `git --attr-source=<commit> cat-file --filters --path=<path> <oid>` for each file (converted by the attributes of that commit: a batch with `--filters` writes the size of the blob as stored before the content converted, so its answers cannot be read apart), and one `git cat-file --batch -Z` for the texts of the links |
+//! | whether this Git knows each of the forms above, tried once when such a tree is opened | the form itself ([`TreeCall`]): a usage it does not know exits 129 |
+//!
+//! [`GitStates`]: super::state::git::GitStates
 //!
 //! # Running Git: what a call may and may not do
 //!
@@ -18,7 +24,14 @@
 //! for every call, not by each command:
 //!
 //! - **What runs.** The `git` on the path, with an argument list and no shell, at the
-//!   root (`-C`), with stdin closed and no prompt (`GIT_TERMINAL_PROMPT=0`).
+//!   root (`-C`), with stdin closed and no prompt (`GIT_TERMINAL_PROMPT=0`). One call
+//!   is given a stdin, `cat-file --batch -Z` (`Git::blobs`, blobs as stored): what
+//!   flows into it is only the lines this module writes, an oid ended by NUL, each
+//!   checked to be an object name a listing gave. A call that converts a blob of a
+//!   commit (`cat-file --filters`) shuts out the filter drivers as
+//!   `Git::run_converting` does, and reads the attributes of a commit
+//!   (`--attr-source`), not of the work tree. Only a test runs another program than
+//!   `git` (`Git::with_program`).
 //! - **Nothing of the repository chooses a program.** The settings a repository can
 //!   write that name a program a reading could reach are shut out on the command
 //!   line: no file system monitor (`-c core.fsmonitor=`), no attributes file of the
@@ -96,7 +109,7 @@ use std::path::PathBuf;
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use whyshelf_core::app::shelf::RevisionSource;
 use whyshelf_core::domain::location::RelPath;
@@ -237,6 +250,8 @@ pub struct Listing {
 pub struct Git {
     root: PathBuf,
     timeout: Duration,
+    /// The program run: `git` on the path, and nothing else outside a test.
+    program: PathBuf,
 }
 
 impl Git {
@@ -245,12 +260,21 @@ impl Git {
         Self {
             root,
             timeout: TIMEOUT,
+            program: PathBuf::from("git"),
         }
     }
 
     /// The same, each call bounded by `timeout` (for a test of the bound).
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    /// The same, running `program` in place of the `git` on the path: what a test
+    /// stands a Git in with, that knows less than the one installed.
+    #[cfg(test)]
+    pub(crate) fn with_program(mut self, program: PathBuf) -> Self {
+        self.program = program;
         self
     }
 
@@ -267,18 +291,48 @@ impl Git {
     /// own conversions are kept (the module page). `None` too when a driver's name
     /// cannot be written in a `-c`, so it could not be shut out.
     async fn run_converting(&self, args: &[&str]) -> Result<Option<Ran>, GitError> {
+        let Some(shut) = self.drivers_shut_out().await? else {
+            return Ok(None);
+        };
+        self.run_bounded(args, None, &shut).await
+    }
+
+    /// The settings that shut out every filter driver the settings define, or none
+    /// when one cannot be named in a `-c` (or no `git` can run): what a converting
+    /// call runs with.
+    async fn drivers_shut_out(&self) -> Result<Option<Vec<String>>, GitError> {
         let Some(drivers) = self.filter_drivers().await? else {
             return Ok(None);
         };
-        let shut: Vec<String> = drivers
-            .iter()
-            .flat_map(|driver| {
-                ["clean=", "process=", "smudge=", "required=false"]
-                    .map(|setting| format!("filter.{driver}.{setting}"))
-            })
-            .flat_map(|setting| ["-c".to_owned(), setting])
-            .collect();
-        self.run_bounded(args, None, &shut).await
+        Ok(Some(
+            drivers
+                .iter()
+                .flat_map(|driver| {
+                    ["clean=", "process=", "smudge=", "required=false"]
+                        .map(|setting| format!("filter.{driver}.{setting}"))
+                })
+                .flat_map(|setting| ["-c".to_owned(), setting])
+                .collect(),
+        ))
+    }
+
+    /// The command of one call, as the promise of the module page has it, but for its
+    /// stdin: the program, at the root, with the settings and the environment every
+    /// call runs with, `extra` before the command `args`, stdout and stderr piped, and
+    /// killed when dropped.
+    fn command(&self, extra: &[String], args: &[&str]) -> Command {
+        let mut command = Command::new(&self.program);
+        command
+            .arg("-C")
+            .arg(&self.root)
+            .args(SETTINGS)
+            .args(extra)
+            .args(args)
+            .envs(ENVIRONMENT)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        command
     }
 
     /// The names of the filter drivers the settings define, or none when one of them
@@ -338,18 +392,8 @@ impl Git {
             command: command_word.clone(),
             source,
         };
-        let mut command = Command::new("git");
-        command
-            .arg("-C")
-            .arg(&self.root)
-            .args(SETTINGS)
-            .args(extra)
-            .args(args)
-            .envs(ENVIRONMENT)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
+        let mut command = self.command(extra, args);
+        command.stdin(Stdio::null());
         let mut child = match command.spawn() {
             Ok(child) => child,
             // No `git` to run: the same as outside a repository.
@@ -605,6 +649,498 @@ impl Git {
         let name = String::from_utf8_lossy(&out.stdout).trim().to_owned();
         Ok((out.ok() && !name.is_empty()).then_some(name))
     }
+
+    /// The commit `rev` names, as its object name, or none when it names no commit
+    /// (or the root is in no repository, or no `git` runs). A revision that starts
+    /// with `-` is none: it is never passed, so it cannot pass an option.
+    pub(crate) async fn commit(&self, rev: &str) -> Result<Option<String>, GitError> {
+        if rev.is_empty() || rev.starts_with('-') {
+            return Ok(None);
+        }
+        let commit = format!("{rev}^{{commit}}");
+        let Some(out) = self
+            .run(&["rev-parse", "--verify", "--quiet", &commit])
+            .await?
+        else {
+            return Ok(None);
+        };
+        if !out.ok() {
+            return Ok(None);
+        }
+        object_name(&String::from_utf8_lossy(&out.stdout)).map(Some)
+    }
+
+    /// Whether a `git` can be started at all (`git --version`).
+    pub(crate) async fn runs(&self) -> Result<bool, GitError> {
+        Ok(self.run(&["--version"]).await?.is_some_and(|out| out.ok()))
+    }
+
+    /// Where the root is in its repository, from the top of the work tree (`""` at
+    /// the top, `dir/` below it), as the bytes Git wrote (the paths of a listing are
+    /// bytes too, and are compared with it), or none outside a repository.
+    pub(crate) async fn prefix(&self) -> Result<Option<Vec<u8>>, GitError> {
+        let Some(out) = self.run(&["rev-parse", "--show-prefix"]).await? else {
+            return Ok(None);
+        };
+        if !out.ok() {
+            return Ok(None);
+        }
+        let mut prefix = out.stdout;
+        while matches!(prefix.last(), Some(b'\n' | b'\r')) {
+            prefix.pop();
+        }
+        Ok(Some(prefix))
+    }
+
+    /// Whether this Git knows the form `call` reads with, tried once on `commit`: a
+    /// Git that does not exits as it does for a usage it does not know (129). None
+    /// when no `git` runs.
+    pub(crate) async fn knows(
+        &self,
+        call: TreeCall,
+        commit: &str,
+    ) -> Result<Option<bool>, GitError> {
+        let source = format!("{ATTR_SOURCE}={commit}");
+        let ran = match call {
+            TreeCall::AttrSource => {
+                self.run_bounded(
+                    &["rev-parse", "--verify", "--quiet", commit],
+                    None,
+                    &[source],
+                )
+                .await?
+            }
+            TreeCall::Converted => {
+                let mut args = CONVERTED.to_vec();
+                args.extend(["--path=.gitattributes", commit]);
+                self.run_bounded(&args, Some(0), &[source]).await?
+            }
+            TreeCall::Stored => self.run_bounded(&STORED, None, &[]).await?,
+            TreeCall::TreeListing => {
+                let mut args = TREE_LISTING.to_vec();
+                args.push(commit);
+                self.run_bounded(&args, Some(0), &[]).await?
+            }
+            TreeCall::IndexListing => self.run_bounded(&INDEX_LISTING, Some(0), &[]).await?,
+        };
+        let Some(out) = ran else {
+            return Ok(None);
+        };
+        // Only a usage Git does not know says it does not know the form: a trial that
+        // fails otherwise (an object of another kind than the form reads) knew it.
+        Ok(Some(out.cut || out.status.code() != Some(USAGE)))
+    }
+
+    /// Every entry of the tree of `commit` (`ls-tree -r -t -z --full-tree`, trees
+    /// too), within `cap` bytes of the listing: [`TreeListing::Past`] beyond them.
+    pub(crate) async fn tree_entries(
+        &self,
+        commit: &str,
+        cap: usize,
+    ) -> Result<TreeListing, GitError> {
+        let mut args = TREE_LISTING.to_vec();
+        args.push(commit);
+        self.entries(&args, cap, TreeCall::TreeListing).await
+    }
+
+    /// Every entry of the index under the root (`ls-files -s -z`), each with its
+    /// stage, within `cap` bytes: [`TreeListing::Past`] beyond them.
+    pub(crate) async fn index_entries(&self, cap: usize) -> Result<TreeListing, GitError> {
+        self.entries(&INDEX_LISTING, cap, TreeCall::IndexListing)
+            .await
+    }
+
+    async fn entries(
+        &self,
+        args: &[&str],
+        cap: usize,
+        call: TreeCall,
+    ) -> Result<TreeListing, GitError> {
+        let Some(out) = self.run_bounded(args, Some(cap), &[]).await? else {
+            return Err(GitError::Failed {
+                command: call.command(),
+                stderr: "no git can be run".to_owned(),
+            });
+        };
+        if out.cut {
+            return Ok(TreeListing::Past);
+        }
+        if !out.ok() {
+            return Err(GitError::Failed {
+                command: call.command(),
+                stderr: out.said(),
+            });
+        }
+        let index = call == TreeCall::IndexListing;
+        let stdout = out.stdout;
+        tokio::task::spawn_blocking(move || tree_entries_of(&stdout, index))
+            .await
+            .map_err(|e| GitError::Stopped {
+                command: call.command(),
+                why: e.to_string(),
+            })?
+            .map(TreeListing::Entries)
+    }
+
+    /// Whether the `.gitattributes` files of the index are those of `HEAD`, blob for
+    /// blob (no filter run): `diff-index --cached --quiet HEAD` over them.
+    pub(crate) async fn index_attributes_as_head(&self) -> Result<bool, GitError> {
+        let args = [
+            "diff-index",
+            "--cached",
+            "--quiet",
+            "--no-ext-diff",
+            "--no-textconv",
+            "HEAD",
+            "--",
+            ":(top,glob)**/.gitattributes",
+        ];
+        let Some(out) = self.run(&args).await? else {
+            return Ok(false);
+        };
+        match out.status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            _ => Err(GitError::Failed {
+                command: "diff-index",
+                stderr: out.said(),
+            }),
+        }
+    }
+
+    /// The blobs `asks` name, in order, each of at most `keep` bytes held (the rest
+    /// read and counted): converted as a checkout writes them, by the attributes of
+    /// the tree `convert` names with every filter driver shut out, each by its own
+    /// `cat-file --filters` (a batch writes the size of the blob as stored before the
+    /// content converted, so a batch of converted blobs cannot be read apart); or as
+    /// stored when `convert` is none, all by one `cat-file --batch -Z`, its stdin the
+    /// lines written here (the module page). None when a driver could not be shut
+    /// out, or no `git` runs.
+    pub(crate) async fn blobs(
+        &self,
+        convert: Option<&str>,
+        asks: &[BlobAsk],
+        keep: u64,
+    ) -> Result<Option<Vec<Blob>>, GitError> {
+        if asks.is_empty() {
+            return Ok(Some(Vec::new()));
+        }
+        for ask in asks {
+            if !is_object_name(&ask.oid) || ask.path.contains(&0) {
+                return Err(GitError::BadName {
+                    text: ask.oid.clone(),
+                });
+            }
+        }
+        let Some(source) = convert else {
+            return self.stored(asks, keep).await;
+        };
+        if !is_object_name(source) {
+            return Err(GitError::BadName {
+                text: source.to_owned(),
+            });
+        }
+        let Some(mut extra) = self.drivers_shut_out().await? else {
+            return Ok(None);
+        };
+        extra.push(format!("{ATTR_SOURCE}={source}"));
+        let mut blobs = Vec::with_capacity(asks.len());
+        for ask in asks {
+            let path = format!("--path={}", String::from_utf8_lossy(&ask.path));
+            let mut args = CONVERTED.to_vec();
+            args.extend([path.as_str(), ask.oid.as_str()]);
+            match self.counted(&extra, &args, keep).await? {
+                Some(blob) => blobs.push(blob),
+                None => return Ok(None),
+            }
+        }
+        Ok(Some(blobs))
+    }
+
+    /// One call whose stdout is a content: at most `keep` bytes of it held, all of it
+    /// counted; a call that fails is a blob Git cannot give.
+    async fn counted(
+        &self,
+        extra: &[String],
+        args: &[&str],
+        keep: u64,
+    ) -> Result<Option<Blob>, GitError> {
+        let command_word = args.first().copied().unwrap_or("").to_owned();
+        let failed = |source: io::Error| GitError::Run {
+            command: command_word.clone(),
+            source,
+        };
+        let mut command = self.command(extra, args);
+        command.stdin(Stdio::null());
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(source) => return Err(failed(source)),
+        };
+        let (Some(mut stdout), Some(mut stderr)) = (child.stdout.take(), child.stderr.take())
+        else {
+            return Err(failed(io::Error::other("git was started with no pipes")));
+        };
+        let work = async {
+            let read_out = async move {
+                let mut bytes = Vec::new();
+                (&mut stdout).take(keep).read_to_end(&mut bytes).await?;
+                let rest = tokio::io::copy(&mut stdout, &mut tokio::io::sink()).await?;
+                let len = u64::try_from(bytes.len())
+                    .unwrap_or(u64::MAX)
+                    .saturating_add(rest);
+                Ok::<_, io::Error>((len, bytes))
+            };
+            let read_err = async move {
+                let mut err = Vec::new();
+                stderr.read_to_end(&mut err).await?;
+                Ok::<_, io::Error>(err)
+            };
+            let ((len, bytes), _) = tokio::try_join!(read_out, read_err)?;
+            let status = child.wait().await?;
+            Ok::<_, io::Error>((status, len, bytes))
+        };
+        match bounded(self.timeout, command_word.clone(), work).await? {
+            Err(source) => Err(failed(source)),
+            Ok((status, _, _)) if !status.success() => Ok(Some(Blob::Missing)),
+            Ok((_, len, bytes)) => Ok(Some(Blob::There { len, bytes })),
+        }
+    }
+
+    /// The blobs `asks` name, as stored, by one `cat-file --batch -Z`.
+    async fn stored(&self, asks: &[BlobAsk], keep: u64) -> Result<Option<Vec<Blob>>, GitError> {
+        let (extra, args): (Vec<String>, &[&str]) = (Vec::new(), &STORED);
+        let mut input = Vec::new();
+        for ask in asks {
+            input.extend_from_slice(ask.oid.as_bytes());
+            input.push(0);
+        }
+        let failed = |source: io::Error| GitError::Run {
+            command: "cat-file".to_owned(),
+            source,
+        };
+        let mut command = self.command(&extra, args);
+        command.stdin(Stdio::piped());
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(source) => return Err(failed(source)),
+        };
+        let (Some(mut stdin), Some(stdout), Some(mut stderr)) =
+            (child.stdin.take(), child.stdout.take(), child.stderr.take())
+        else {
+            return Err(failed(io::Error::other("git was started with no pipes")));
+        };
+        let count = asks.len();
+        let work = async {
+            let write = async move {
+                stdin.write_all(&input).await?;
+                // stdin is dropped here: Git reads to its end and stops.
+                Ok::<_, io::Error>(())
+            };
+            let read = async move {
+                let mut out = tokio::io::BufReader::new(stdout);
+                let mut blobs = Vec::with_capacity(count);
+                for _ in 0..count {
+                    blobs.push(read_blob_answer(&mut out, keep).await?);
+                }
+                Ok::<_, io::Error>(blobs)
+            };
+            let read_err = async move {
+                let mut err = Vec::new();
+                stderr.read_to_end(&mut err).await?;
+                Ok::<_, io::Error>(err)
+            };
+            let ((), blobs, err) = tokio::try_join!(write, read, read_err)?;
+            let status = child.wait().await?;
+            Ok::<_, io::Error>((status, blobs, err))
+        };
+        match bounded(self.timeout, "cat-file".to_owned(), work).await? {
+            Err(source) => Err(GitError::Failed {
+                command: "cat-file",
+                stderr: source.to_string(),
+            }),
+            Ok((status, _, err)) if !status.success() => Err(GitError::Failed {
+                command: "cat-file",
+                stderr: first_line(&String::from_utf8_lossy(&err)),
+            }),
+            Ok((_, blobs, _)) => Ok(Some(blobs)),
+        }
+    }
+}
+
+/// The exit status of Git for a usage it does not know (an option, a command).
+const USAGE: i32 = 129;
+
+/// The global option a call converts by the attributes of a tree with.
+const ATTR_SOURCE: &str = "--attr-source";
+
+/// The reading of a blob converted by the attributes of a path (`--path=<path>
+/// <oid>` after it).
+const CONVERTED: [&str; 2] = ["cat-file", "--filters"];
+
+/// The reading of blobs as stored, their names on stdin.
+const STORED: [&str; 3] = ["cat-file", "--batch", "-Z"];
+
+/// The listing of the tree of a commit, before the commit.
+const TREE_LISTING: [&str; 5] = ["ls-tree", "-r", "-t", "-z", "--full-tree"];
+
+/// The listing of the index, each entry with its stage.
+const INDEX_LISTING: [&str; 3] = ["ls-files", "-s", "-z"];
+
+/// A form of a call the tree of a commit, or of the index, is read with: the one
+/// definition of what is run, which both the reading and its trial when the tree is
+/// opened (`Git::knows`) read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TreeCall {
+    /// The attributes of a tree, not of the work tree (`--attr-source=<commit>`).
+    AttrSource,
+    /// A blob, converted by those attributes (`cat-file --filters`).
+    Converted,
+    /// Blobs as stored, the texts of links (`cat-file --batch -Z`).
+    Stored,
+    /// The tree of a commit (`ls-tree -r -t -z --full-tree`).
+    TreeListing,
+    /// The index (`ls-files -s -z`).
+    IndexListing,
+}
+
+impl TreeCall {
+    /// The calls a tree of commits is read with, in the order they are tried.
+    pub const OF_COMMITS: [Self; 4] = [
+        Self::AttrSource,
+        Self::Converted,
+        Self::Stored,
+        Self::TreeListing,
+    ];
+
+    /// The form, as it is written.
+    pub fn written(self) -> String {
+        match self {
+            Self::AttrSource => ATTR_SOURCE.to_owned(),
+            Self::Converted => CONVERTED.join(" "),
+            Self::Stored => STORED.join(" "),
+            Self::TreeListing => TREE_LISTING.join(" "),
+            Self::IndexListing => INDEX_LISTING.join(" "),
+        }
+    }
+
+    /// The command it runs.
+    fn command(self) -> &'static str {
+        match self {
+            Self::AttrSource => "rev-parse",
+            Self::Converted => CONVERTED[0],
+            Self::Stored => STORED[0],
+            Self::TreeListing => TREE_LISTING[0],
+            Self::IndexListing => INDEX_LISTING[0],
+        }
+    }
+}
+
+/// What a listing of a tree gave.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TreeListing {
+    /// Every entry.
+    Entries(Vec<TreeEntry>),
+    /// The listing went past the bytes it may hold.
+    Past,
+}
+
+/// One entry of a listing of a tree: its mode, object, stage (0 but for a conflict
+/// of the index) and path as Git wrote it (from the top of the work tree for a
+/// commit, from the root for the index).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TreeEntry {
+    pub(crate) mode: u32,
+    pub(crate) oid: String,
+    pub(crate) stage: u8,
+    pub(crate) path: Vec<u8>,
+}
+
+/// The entries of `ls-tree -z` (`<mode> <type> <oid>\t<path>`) or `ls-files -s -z`
+/// (`<mode> <oid> <stage>\t<path>`), each object name checked.
+fn tree_entries_of(out: &[u8], index: bool) -> Result<Vec<TreeEntry>, GitError> {
+    let bad = |record: &[u8]| GitError::BadName {
+        text: String::from_utf8_lossy(record).into_owned(),
+    };
+    let mut entries = Vec::new();
+    for record in out.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+        let tab = record
+            .iter()
+            .position(|b| *b == b'\t')
+            .ok_or_else(|| bad(record))?;
+        let (head, path) = (&record[..tab], &record[tab + 1..]);
+        let head = std::str::from_utf8(head).map_err(|_| bad(record))?;
+        let words: Vec<&str> = head.split(' ').collect();
+        let (mode, oid, stage) = match (index, words.as_slice()) {
+            (false, [mode, _, oid]) => (*mode, *oid, "0"),
+            (true, [mode, oid, stage]) => (*mode, *oid, *stage),
+            _ => return Err(bad(record)),
+        };
+        if !is_object_name(oid) {
+            return Err(bad(record));
+        }
+        entries.push(TreeEntry {
+            mode: u32::from_str_radix(mode, 8).map_err(|_| bad(record))?,
+            oid: oid.to_owned(),
+            stage: stage.parse().map_err(|_| bad(record))?,
+            path: path.to_vec(),
+        });
+    }
+    Ok(entries)
+}
+
+/// A blob to read: its object, and the path its attributes are read for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BlobAsk {
+    pub(crate) oid: String,
+    pub(crate) path: Vec<u8>,
+}
+
+/// What a blob read was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Blob {
+    /// Its length, and its first bytes, at most as many as were to be held.
+    There { len: u64, bytes: Vec<u8> },
+    /// Git holds no such object.
+    Missing,
+}
+
+/// One answer of `cat-file --batch -Z`: a header ended by NUL (`<oid> <type> <size>`,
+/// or `<oid> missing`), then that many bytes and a NUL.
+async fn read_blob_answer<R: tokio::io::AsyncBufRead + Unpin>(
+    out: &mut R,
+    keep: u64,
+) -> io::Result<Blob> {
+    use tokio::io::AsyncBufReadExt;
+    let unreadable = |what: &str| io::Error::other(format!("cat-file wrote {what}"));
+    let mut header = Vec::new();
+    out.read_until(0, &mut header).await?;
+    if header.pop() != Some(0) {
+        return Err(unreadable("less than an answer"));
+    }
+    let header = String::from_utf8_lossy(&header);
+    let words: Vec<&str> = header.split(' ').collect();
+    let size = match words.as_slice() {
+        [_, "missing"] => return Ok(Blob::Missing),
+        [_, _, size] => size
+            .parse::<u64>()
+            .map_err(|_| unreadable("a header with no size"))?,
+        _ => return Err(unreadable("a header it does not write")),
+    };
+    let mut bytes = Vec::new();
+    (&mut *out)
+        .take(size.min(keep))
+        .read_to_end(&mut bytes)
+        .await?;
+    let rest = size - u64::try_from(bytes.len()).unwrap_or(u64::MAX).min(size);
+    tokio::io::copy(&mut (&mut *out).take(rest), &mut tokio::io::sink()).await?;
+    let mut end = [0u8; 1];
+    out.read_exact(&mut end).await?;
+    if end[0] != 0 {
+        return Err(unreadable("an answer longer than its header says"));
+    }
+    Ok(Blob::There { len: size, bytes })
 }
 
 /// What [`Git::renames_since`] found.
@@ -798,6 +1334,33 @@ mod tests {
         // rename with no score has none.
         assert_eq!(renames[1].from.as_str(), "p");
         assert_eq!(renames[1].similarity, None);
+    }
+
+    /// The prefix is the bytes Git wrote: a directory whose name is not UTF-8 is
+    /// kept as it is, not as its lossy text. Passes without a check where the file
+    /// system refuses such a name (macOS), or no `git` runs.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_prefix_keeps_the_bytes_of_a_directory_that_is_not_utf8() {
+        use std::os::unix::ffi::OsStrExt;
+        let dir = tempfile::tempdir().unwrap();
+        let init = Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["init", "-q"])
+            .output()
+            .await;
+        if !init.is_ok_and(|out| out.status.success()) {
+            eprintln!("note: no git runs here, the test is skipped");
+            return;
+        }
+        let odd = dir.path().join(std::ffi::OsStr::from_bytes(b"d\xff"));
+        if tokio::fs::create_dir(&odd).await.is_err() {
+            eprintln!("note: this file system refuses a name that is not UTF-8, skipped");
+            return;
+        }
+        let git = Git::new(odd);
+        assert_eq!(git.prefix().await.unwrap(), Some(b"d\xff/".to_vec()));
     }
 
     #[tokio::test]

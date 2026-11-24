@@ -41,13 +41,13 @@ use crate::domain::id::DocId;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec};
 use crate::domain::shelf::artifact::{ArtifactKey, Listings};
 use crate::domain::shelf::filter::{StatusFilter, StatusFilterAsk};
-use crate::domain::shelf::freshness::{Cause, Notice, Standing};
+use crate::domain::shelf::freshness::{Cause, Holding, Notice};
+use crate::domain::shelf::impact;
 use crate::domain::shelf::ledger::{JudgedAt, MovedTo, Quorum};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::Foreseen;
 use crate::domain::shelf::reach::Reach;
-use crate::domain::shelf::schema::{ArtifactPropagation, EntryName};
 use crate::domain::shelf::settle::{origins_asked, settle_all};
 use crate::domain::shelf::stats;
 use crate::domain::shelf::trace::{LinkEnd, trace};
@@ -56,13 +56,13 @@ use crate::domain::shelf::units::{self, UnitsOf};
 use super::ShelfApp;
 use super::cover::artifact_lists;
 use super::error::ShelfError;
-use super::load::{Loaded, View, listings_of, load, load_with, now, schema_of};
+use super::load::{Loaded, View, listings_of, load, load_at, load_with, now, schema_of};
 use super::ports::{ArtifactSource, ShelfPort, ShelfRead, port};
 use super::report::{
-    Absent, Awaiting, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, GetReport, MapReport,
-    MovedAway, ReachReport, ReachedArtifact, ReachedDoc, RepeatedExemption, SettledOrigin,
-    StaleEntry, StaleReport, StatsReport, StatusReport, TraceReport, Uncovered, UnitsReport,
-    Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
+    Absent, Awaiting, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, Gate, GetReport,
+    ImpactReport, MapReport, MovedAway, ReachReport, ReachedArtifact, ReachedDoc,
+    RepeatedExemption, SettledOrigin, StaleEntry, StaleReport, StatsReport, StatusReport,
+    TraceReport, Uncovered, UnitsReport, Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 use super::state::Side;
 
@@ -504,6 +504,30 @@ impl<P: ShelfRead> ShelfApp<P> {
         })
     }
 
+    /// Whether a change makes approvals not hold: the two ends of it, read the one way
+    /// the run names ([`ShelfRead::way`]), each judged at the one time read once from
+    /// the clock, so an expiry changes with the records alone; and for every document
+    /// either lists, its holding at each end and what the change made of it. The
+    /// rules are the domain's ([`impact`]).
+    pub async fn impact(&self) -> Result<ImpactReport, ShelfError> {
+        let now = now(&self.ports).await?;
+        let before = load_at(&self.ports, Side::Before, now).await?;
+        let after = load_at(&self.ports, Side::After, now).await?;
+        let (was, is) = (
+            before.assess(&Listings::NotAsked),
+            after.assess(&Listings::NotAsked),
+        );
+        let health = |loaded: &Loaded, assessment| View { loaded, assessment }.health();
+        Ok(ImpactReport {
+            way: self.ports.way(),
+            entries: impact::impact((&before.shelf, &was), (&after.shelf, &is)),
+            names_before: before.names(),
+            names_after: after.names(),
+            health_before: health(&before, &was),
+            health_after: health(&after, &is),
+        })
+    }
+
     /// The approvals that no longer hold, the strongest degradation first, each with
     /// where it starts to fail.
     pub async fn stale(&self) -> Result<StaleReport, ShelfError> {
@@ -513,49 +537,42 @@ impl<P: ShelfRead> ShelfApp<P> {
             loaded: &loaded,
             assessment: &assessment,
         };
-        let mut entries: Vec<StaleEntry> = assessment
-            .degraded()
-            .map(|(id, degradation)| StaleEntry {
-                row: view.row(id),
-                level: degradation.level(),
-                roots: assessment.roots_of(id),
-            })
-            .collect();
+        // Each document is asked once whether its approval holds, and both lists are
+        // made from that answer alone.
+        let mut entries: Vec<StaleEntry> = Vec::new();
+        let mut unknown: Vec<Unknown> = Vec::new();
+        let mut gates = Vec::new();
+        for id in assessment.standings().keys() {
+            let holding = assessment.holding(&loaded.shelf, *id);
+            gates.push(Gate::from(&holding));
+            let untold = match holding {
+                Holding::DoesNotHold {
+                    level,
+                    roots,
+                    untold,
+                } => {
+                    entries.push(StaleEntry {
+                        row: view.row(*id),
+                        level,
+                        roots,
+                    });
+                    untold
+                }
+                Holding::CannotTell { untold, .. } => untold.into_vec(),
+                Holding::NotThere | Holding::Pending | Holding::Against(_) | Holding::Holds(_) => {
+                    continue;
+                }
+            };
+            let key = loaded.shelf.doc(*id).map(|doc| doc.key().clone());
+            unknown.extend(untold.into_iter().map(|pin| Unknown {
+                doc: *id,
+                key: key.clone(),
+                link: pin.link,
+                artifact: pin.artifact,
+                why: pin.why,
+            }));
+        }
         entries.sort_by(|a, b| b.level.cmp(&a.level).then(a.row.id.cmp(&b.row.id)));
-        let unknown = assessment
-            .standings()
-            .iter()
-            .filter(|(_, standing)| matches!(standing, Standing::Approved { .. }))
-            .flat_map(|(id, _)| {
-                let doc = loaded.shelf.doc(*id);
-                let key = doc.map(|doc| doc.key().clone());
-                let depends: BTreeSet<&EntryName> = doc
-                    .map(|doc| {
-                        doc.artifact_links_of(ArtifactPropagation::Depends)
-                            .into_iter()
-                            .map(|(link, _)| link)
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                assessment
-                    .notices_of(*id)
-                    .iter()
-                    .filter_map(move |notice| match notice {
-                        Notice::ArtifactUnknown {
-                            link,
-                            artifact,
-                            why,
-                        } if depends.contains(link) => Some(Unknown {
-                            doc: *id,
-                            key: key.clone(),
-                            link: link.clone(),
-                            artifact: artifact.clone(),
-                            why: why.clone(),
-                        }),
-                        _ => None,
-                    })
-            })
-            .collect();
         // What the approving commands would approve, foreseen once for every origin,
         // and each origin settled with it.
         let foreseen = Foreseen::of(
@@ -572,6 +589,7 @@ impl<P: ShelfRead> ShelfApp<P> {
             entries,
             origins,
             unknown,
+            held: Gate::fold(gates),
             names: loaded.names(),
             health: view.health(),
         })

@@ -48,7 +48,8 @@ use super::artifact::rust_test::RustTestSpace;
 use super::books::{BooksError, BooksToml};
 use super::docs::{DocsError, MarkdownDocs};
 use super::ledger::{JsonLedger, LedgerError};
-use super::state::files::FileStates;
+use super::state::ProjectTree;
+use super::state::files::{FileStates, LEAVES};
 
 /// A root and a directory outside it, side by side in one temporary directory.
 struct Tree {
@@ -1150,7 +1151,7 @@ async fn t32_each_side_reads_the_built_docs_its_own_settings_name() {
         "[build]\ntarget-dir = \"new\"\n",
     )
     .await;
-    let space = RustItemSpace::on(FileStates::between(before, after), None);
+    let space = RustItemSpace::on(ProjectTree::files(FileStates::between(before, after)), None);
     let crates = ["olden", "newer"];
     assert_eq!(built_at(&space, Side::Before, &crates).await, ["olden"]);
     assert_eq!(built_at(&space, Side::After, &crates).await, ["newer"]);
@@ -1165,7 +1166,7 @@ async fn t33_built_docs_outside_the_side_before_are_untold_there_and_read_at_the
     let (before, after) = (t.outside.clone(), t.root.clone());
     write(&after, "env/doc/demo/index.html", &page()).await;
     let space = RustItemSpace::on(
-        FileStates::between(before, after.clone()),
+        ProjectTree::files(FileStates::between(before, after.clone())),
         Some(after.join("env")),
     );
     assert_eq!(built_at(&space, Side::After, &["demo"]).await, ["demo"]);
@@ -1174,10 +1175,115 @@ async fn t33_built_docs_outside_the_side_before_are_untold_there_and_read_at_the
         .await
         .unwrap();
     let why = untold_why(&found[&n("demo")], &Comparison::Presence).unwrap();
+    assert_eq!(why, leaves_text());
+}
+
+// The readers in a run of two sides (DEC-101: such a run cannot read through a link
+// out of the root): the declaration, the ledger and the documents stop and say why,
+// with the one reason of the tree (`LEAVES`); the space `file` cannot tell the name.
+
+/// The one reason of a run of two sides for what the system resolves.
+fn leaves_text() -> String {
+    NonBlank::from(LEAVES).into_string()
+}
+
+/// The project at `root` read as the side after of a run of two sides, the side
+/// before an empty directory beside it.
+async fn two_sides(t: &Tree) -> ProjectTree {
+    let before = t.root.with_file_name("before");
+    tokio::fs::create_dir_all(&before).await.unwrap();
+    ProjectTree::files(FileStates::between(before, t.root.clone()))
+}
+
+/// T39: in a run of two sides, the declaration through a link out of the root cannot
+/// be told, and the reading stops.
+#[cfg(unix)]
+#[tokio::test]
+async fn t39_two_sides_do_not_read_the_declaration_through_a_link_out_of_the_root() {
+    let t = tree().await;
+    write(&t.outside, "books.toml", BOOKS).await;
+    link(&t.outside, &t.root, ".whyshelf").await;
+    let books = BooksToml::on(
+        two_sides(&t).await,
+        t.root.clone(),
+        rel(".whyshelf/books.toml"),
+    );
+    match books.declarations(Side::After).await {
+        Err(BooksError::Untold { why, .. }) => assert_eq!(why, leaves_text()),
+        other => panic!("the declaration cannot be told: {other:?}"),
+    }
+}
+
+/// T40: in a run of two sides, the directory of the ledger, and a record, through a
+/// link out of the root cannot be told, and the reading stops.
+#[cfg(unix)]
+#[tokio::test]
+async fn t40_two_sides_do_not_read_the_ledger_through_a_link_out_of_the_root() {
+    let t = tree().await;
+    tokio::fs::create_dir_all(t.outside.join("ledger"))
+        .await
+        .unwrap();
+    link(t.outside.join("ledger"), &t.root, ".whyshelf/ledger").await;
+    let ledger = JsonLedger::on(two_sides(&t).await, t.root.clone(), rel(".whyshelf/ledger"));
+    match ledger.read(Side::After).await {
+        Err(LedgerError::Untold { why, .. }) => assert_eq!(why, leaves_text()),
+        other => panic!("the ledger cannot be told: {other:?}"),
+    }
+    // A record whose file is a link out of the root.
+    tokio::fs::remove_file(t.root.join(".whyshelf/ledger"))
+        .await
+        .unwrap();
+    write(&t.outside, "r.json", "{}").await;
+    link(t.outside.join("r.json"), &t.root, ".whyshelf/ledger/r.json").await;
+    let ledger = JsonLedger::on(two_sides(&t).await, t.root.clone(), rel(".whyshelf/ledger"));
+    match ledger.read(Side::After).await {
+        Err(LedgerError::Untold { why, .. }) => assert_eq!(why, leaves_text()),
+        other => panic!("the record cannot be told: {other:?}"),
+    }
+}
+
+/// T41: in a run of two sides, the directory of a range, and the file of a document
+/// read now, through a link out of the root cannot be told, and the reading stops.
+#[cfg(unix)]
+#[tokio::test]
+async fn t41_two_sides_do_not_read_the_documents_through_a_link_out_of_the_root() {
+    let t = tree().await;
+    write(&t.outside, "F-1.md", "---\nid: x\n---\n").await;
+    link(&t.outside, &t.root, "docs").await;
+    let docs = MarkdownDocs::on(two_sides(&t).await, t.root.clone());
+    let range = BookRange::of_dir(BookDir::new("docs").unwrap());
+    match docs.read_docs(Side::After, &[range]).await {
+        Err(DocsError::Untold { why, .. }) => assert_eq!(why, leaves_text()),
+        other => panic!("the range cannot be told: {other:?}"),
+    }
+    match docs.current(Side::After, &rel("docs/F-1.md")).await {
+        Err(DocsError::Untold { why, .. }) => assert_eq!(why, leaves_text()),
+        other => panic!("the document's file cannot be told: {other:?}"),
+    }
+}
+
+/// T42: in a run of two sides, a file of the space `file` through the same link is a
+/// name that cannot be told, as in a run of one side.
+#[cfg(unix)]
+#[tokio::test]
+async fn t42_two_sides_tell_a_file_through_a_link_out_of_the_root_as_untold() {
+    use whyshelf_core::app::shelf::SpaceAdapter;
+    let t = tree().await;
+    write(&t.outside, "a.txt", "one").await;
+    link(&t.outside, &t.root, "data").await;
+    let space = FileSpace::on(two_sides(&t).await, t.root.clone());
+    let found = SpaceAdapter::resolve(
+        &space,
+        Side::After,
+        &asks(&["data/a.txt"], Comparison::Bytes),
+    )
+    .await
+    .unwrap();
     assert!(
-        why.contains(
-            "the built docs are outside the project, so the two sides cannot be read alike"
+        matches!(
+            found[&n("data/a.txt")].state(&Comparison::Bytes),
+            ArtifactState::Unknown(_)
         ),
-        "{why}"
+        "{found:?}"
     );
 }

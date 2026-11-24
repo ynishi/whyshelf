@@ -160,6 +160,7 @@ pub fn schemas() -> SchemasOut {
     put("get --approved", schema_for!(ApprovedOut));
     put("trace", schema_for!(TraceOut));
     put("reach", schema_for!(ReachOut));
+    put("impact", schema_for!(ImpactOut));
     put("unlinked", schema_for!(UnlinkedOut));
     put("stale", schema_for!(StaleOut));
     put("units", schema_for!(UnitsOut));
@@ -245,6 +246,7 @@ mod doc;
 mod error;
 mod fmt;
 mod get;
+mod impact;
 mod init;
 mod judge;
 mod map;
@@ -274,6 +276,7 @@ pub use doc::{HealthOut, LinkOut, LinkTargetOut, RootOut, RowOut};
 pub use error::{ErrorOut, error, failure, lines_refused, usage};
 pub use fmt::{FmtOut, fmt, fmt_warnings};
 pub use get::{GetOut, get};
+pub use impact::{ImpactOut, impact};
 pub use init::{InitOut, initialized};
 pub use judge::{
     ChosenApprovedOut, DeclaredAllOut, ExemptedAllOut, JudgedAllOut, MovedAllOut, MovedPrefixOut,
@@ -345,6 +348,7 @@ mod tests {
             "get --approved",
             "trace",
             "reach",
+            "impact",
             "stale",
             "stats",
             "diff",

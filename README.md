@@ -79,6 +79,7 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
 | `units [--pending]` | the approvals that no longer hold (with `--pending`, the pending documents too), divided into units of work that share nothing |
 | `trace <ref>`, `map` | the chain through a document, and the books and their links |
 | `reach <ref>...` | what depends on documents, what all of it stands on, and the files that hold it |
+| `impact (--since <rev> [--until <rev> \| --index] \| --before <dir> [--after <dir>])` | whether a change makes approvals not hold: `yes` with where it starts, `no`, or `cannot_tell` with what cannot be told |
 | `unlinked` | the documents no link reaches, or that hold none |
 | `stats`, `moves` | how the work went, from the ledger; and where pinned files may have moved |
 | `get <ref> --approved`, `diff <ref>` | what an approval saw; and that against now |
@@ -93,6 +94,11 @@ Edit `books/requirement/REQ-1.md` and run `whyshelf stale`. REQ-1 no longer hold
 | `rekey <ref>` | give a document a new key (two branches took one), and rewrite the links that mean it |
 
 Every command prints one JSON document on stdout (`--help` and `--version` aside); warnings and errors also go to stderr.
+
+`impact` reads the project before and after a change **one way**, the same at both ends, and answers for every registered document whether the change adds a cause that makes its approval not hold, by the rule `stale` uses: `yes` (where it starts), `no`, or `cannot_tell` (what cannot be told). A new edit of what already did not hold is a cause added too, so `yes` does not mean the approval held before (`before` says that). The flags choose the way, and the answer's `way` says which was used:
+
+- Git: `--since <rev>` before, and `--until <rev>` or `--index` after (default `HEAD`). It reads the tracked content as a checkout of the repository writes it (no filter driver is run), each commit converted by its own `.gitattributes`; the attributes of your own Git settings (`core.attributesFile` and its default file) and of the system are not read, so nothing outside the repository decides a conversion. `--index` can be read only while the index's `.gitattributes` are `HEAD`'s (otherwise exit 2: ask with the file way), and a path added with `git add -N` reads there as an empty file. It needs a Git that knows `--attr-source`; each converted file costs one process of Git. Nothing is built in a commit, so an approval that stands on a `rust-item` cannot be told this way.
+- Files: `--before <dir>` before, and `--after <dir>` after (default the project root). Prepare the directory before yourself (for example `git worktree add --detach <dir> <rev>`, and build the docs there to ask about `rust-item`); whyshelf makes nothing.
 
 ## In CI
 

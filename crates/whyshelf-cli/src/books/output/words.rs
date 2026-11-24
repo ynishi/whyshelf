@@ -1,13 +1,17 @@
 //! The words more than one answer writes the same way: a plural, a problem of the
 //! declaration, a text as a word of a shell, what an artifact is now, the word of
-//! a standing, why an upstream holds an approval back, why a link cannot be followed
-//! to what it names, how many names read an approval, and who ran the command that
-//! made a record.
+//! a standing, how strongly an approval does not hold, whether one holds at an end of a
+//! change and what the change made of it, why an upstream holds an approval back, why
+//! a link cannot be followed to what it names, how many names read an approval, and
+//! who ran the command that made a record.
 
 use whyshelf_core::domain::actor::{Actor, Attribution};
 use whyshelf_core::domain::shelf::artifact::ArtifactState;
 use whyshelf_core::domain::shelf::doc::Unfollowed;
-use whyshelf_core::domain::shelf::freshness::{FreshnessLevel, StandingKind};
+use whyshelf_core::domain::shelf::freshness::{
+    FreshnessLevel, Holding, HoldsAs, Severity, StandingKind,
+};
+use whyshelf_core::domain::shelf::impact::{Made, Sides};
 use whyshelf_core::domain::shelf::ledger::ReaderCount;
 use whyshelf_core::domain::shelf::order::Hold;
 use whyshelf_core::domain::shelf::schema::SchemaProblem;
@@ -97,6 +101,66 @@ pub fn standing(kind: StandingKind) -> &'static str {
         StandingKind::Approved(FreshnessLevel::Expired) => "expired",
         StandingKind::Approved(FreshnessLevel::Stale) => "stale",
         StandingKind::Approved(FreshnessLevel::Broken) => "broken",
+    }
+}
+
+/// The word of whether an approval holds at one end of a change: the one place the
+/// words are written. The match is exhaustive, so a new holding does not build until
+/// it has a word.
+pub(super) fn holding_word(holding: &Holding) -> &'static str {
+    match holding {
+        Holding::NotThere => "not_there",
+        Holding::Pending => "pending",
+        Holding::Against(_) => "against",
+        Holding::Holds(_) => "holds",
+        Holding::CannotTell { .. } => "cannot_tell",
+        Holding::DoesNotHold { .. } => "does_not_hold",
+    }
+}
+
+/// The level beside a holding: how one that holds holds, the decision against one,
+/// how strongly one does not hold, in the words of a standing and a severity.
+pub(super) fn holding_level(holding: &Holding) -> Option<&'static str> {
+    let holds = |holds_as: &HoldsAs| {
+        standing(StandingKind::Approved(match holds_as {
+            HoldsAs::Fresh => FreshnessLevel::Fresh,
+            HoldsAs::Awaiting => FreshnessLevel::Awaiting,
+        }))
+    };
+    match holding {
+        Holding::NotThere | Holding::Pending => None,
+        Holding::Against(status) => Some(standing(StandingKind::from(*status))),
+        Holding::Holds(holds_as) | Holding::CannotTell { holds_as, .. } => Some(holds(holds_as)),
+        Holding::DoesNotHold { level, .. } => Some(severity(*level)),
+    }
+}
+
+/// The word of what a change made of an approval: the one place the words are
+/// written.
+pub(super) fn made_word(made: &Made) -> &'static str {
+    match made {
+        Made::Yes(_) => "yes",
+        Made::No => "no",
+        Made::CannotTell(_) => "cannot_tell",
+    }
+}
+
+/// The word of which end of a change could not tell.
+pub(super) fn sides_word(sides: Sides) -> &'static str {
+    match sides {
+        Sides::Before => "before",
+        Sides::After => "after",
+        Sides::Both => "both",
+    }
+}
+
+/// The word of how strongly an approval does not hold: the one place the words are
+/// written.
+pub(super) fn severity(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Expired => "expired",
+        Severity::Stale => "stale",
+        Severity::Broken => "broken",
     }
 }
 

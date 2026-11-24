@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "723e0fe9932cb4d06f6cea89bc58ea7bd3927c09",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5d267ae00afb057948bd65a3bdce6749a586e664051460f5b80f8539a1b08ba6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cb4d11c9070721229624c5ecd61926f15c89bde9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0b6c52851039af44fcd37b675df94a2a389cb83cc32b1e949607a63494c0c033",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/promise.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795492040890,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6fe10e2167766012ce32da4666a6f4c8125f788a",
+      "hash": "sha256:bb4c185cc7a9f4359f2fbf4aef4552b18dd870935791be542f85f25ba525b3e9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "83"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f2a3-70f9-7184-8e59-6b255b74caf0"
+    }
+  ],
+  "id": "01a20baa-b0a6-708e-a087-da3a57db71b6",
+  "kind": "decision",
+  "reason": "Both ends of a change read through one adapter (GitStates or FileStates), and impact answers by the comparison stale makes (#112 part D); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and a blind review",
+  "revision": "e80068dc3015b426b8f68a0b062e5a4a64cb09d1",
+  "seen": "sha256:0c5527d1b1b0962d1fabeb61dbfb4e9e10a80f61bd35321bc1d7716c5d21839c",
+  "seen_address": "e597778bce321f51c49d0c0a94d42fdcc4765e40",
+  "subject": "01a1f2a3-70f9-7184-8e59-6b2611579257",
+  "v": 1,
+  "verb": "approve"
+}

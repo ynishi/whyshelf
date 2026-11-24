@@ -20,7 +20,9 @@ fn rel(text: &str) -> RelPath {
 async fn a_file_is_read_within_its_bound_and_a_path_through_a_file_is_no_file() {
     let root = tempfile::tempdir().unwrap();
     write(root.path(), "a.txt", "0123456789").await;
-    let state = FileStates::new(root.path().to_path_buf());
+    let state = ProjectTree::files(crate::shelf::state::files::FileStates::new(
+        root.path().to_path_buf(),
+    ));
     let read = |path: &'static str, max: u64| {
         let state = state.clone();
         async move {
