@@ -10,9 +10,26 @@ and this project adheres to
 
 ### Added
 
-- The command `impact` (#112): whether a change makes approvals not hold. (Whether a
-  change stays inside the documents it was meant for, and an exit status for that,
-  are not part of it.) It reads
+- `impact --within <ref>... [--exit-code]` (#174): whether a change stays inside the
+  documents it was meant for. For every document `impact` answers, `within` gives a
+  `verdict` (tagged `verdict`: `not_claimed`, `inside`, `outside`, `unproven`,
+  `undetermined`, each with what it carries) against the reach of the documents named
+  as the project stood before the change, and whether the gate `passes`. The change
+  reaches a document when it adds a cause that makes its approval not hold
+  (`adds_cause`), takes one away (`removes_cause`), changes what was decided about it
+  (`decided`), puts it on the shelf or takes it off (`on_shelf`), changes its content
+  or what its links name (`edited`), or adds, withdraws or rewrites a record about it
+  (`recorded`); the two holdings differing is not read. A file of the books whose
+  identity cannot be read, or a file of the ledger that is no record, at either end,
+  keeps the gate from passing (`unreadable`). A reference is read at the end before,
+  or at the end after when it names nothing before; one that names no document is a
+  request error (exit 2). `--exit-code` exits 1 unless the gate passes, and requires
+  `--within` (exit 2 without); `--within` alone exits 0. The verdicts, the rule of the
+  gate and the known limits are on the page of `domain::shelf::within`, which also
+  holds `Within`, `Verdict`, `VerdictKind`, `Witness`, `ClaimUntold` and `Unreadable`;
+  beside them `ShelfApp::impact_within`, the field `ImpactReport::within`,
+  `ledger::Record::about` and `doc::Doc::links_named`.
+- The command `impact` (#112): whether a change makes approvals not hold. It reads
   the project before and after the change the same one way, named by the flags:
   through Git (`--since <rev>`, and `--until <rev>` or `--index`; the default after is
   `HEAD`), reading the tracked content as a checkout of the repository writes it, each
