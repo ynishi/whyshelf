@@ -18,7 +18,8 @@ use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, NameListing, Selection, SpaceAsks, SpaceReadings, Untold,
+    ArtifactName, ArtifactReading, ListingPart, NameListing, PartRead, Selection, SpaceAsks,
+    SpaceReadings, Untold,
 };
 
 use super::super::super::state::paths::{
@@ -173,7 +174,8 @@ impl FileSpace {
                 short.into_vec().into_iter().map(Cause::from).collect(),
             ),
         };
-        listing(found.into_iter().collect(), causes).map_err(ArtifactError::Reason)
+        // A file is listed whole, or not at all: this space has no part.
+        listing(found.into_iter().collect(), causes, Vec::new()).map_err(ArtifactError::Reason)
     }
 }
 
@@ -480,19 +482,32 @@ impl Cause {
     }
 }
 
-/// The listing of the names `found`, all of them when nothing kept it from being so
-/// (`causes` is empty), and otherwise some of them with why: the one place the reason
-/// of a listing that is not all is written, for every adapter whose names start with
-/// the path of a file. A listing that stopped at its bound of names says that alone;
-/// otherwise every cause is said, in one order (what the state left out, the names
-/// that cannot be written, the files a reading cannot tell, the adapter's own), apart
-/// by `; `. Nothing is passed over in silence.
+/// The listing of the names `found` and of the `parts` the adapter could not list
+/// whole: all of them when nothing kept it from being so (`causes` and `parts` are
+/// empty); all but the parts, each with its own why, when only parts did
+/// ([`NameListing::Parted`]); and otherwise some of them with why, the names found in
+/// the parts among them, since what keeps the whole selection from being listed says
+/// nothing of which part is missing. The one place the reason of a listing that is not
+/// all is written, for every adapter whose names start with the path of a file. A
+/// listing that stopped at its bound of names says that alone; otherwise every cause
+/// is said, in one order (what the state left out, the names that cannot be written,
+/// the files a reading cannot tell, the adapter's own), apart by `; `. Nothing is
+/// passed over in silence.
 pub(in super::super) fn listing(
-    found: BTreeSet<ArtifactName>,
+    mut found: BTreeSet<ArtifactName>,
     mut causes: Vec<Cause>,
+    parts: Vec<ListingPart>,
 ) -> Result<NameListing, ValueError> {
     if causes.is_empty() {
-        return Ok(NameListing::All(found));
+        return Ok(match NonEmptyVec::from_vec(parts) {
+            Ok(parts) => NameListing::Parted { found, parts },
+            Err(_) => NameListing::All(found),
+        });
+    }
+    for part in parts {
+        if let PartRead::Found(names) = part.read() {
+            found.extend(names.iter().cloned());
+        }
     }
     causes.sort_by_key(Cause::rank);
     let why = match causes.first() {

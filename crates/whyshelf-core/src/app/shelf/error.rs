@@ -590,8 +590,9 @@ impl ShelfError {
                 | ExemptRefusal::AlreadyExemptInRun { .. },
             ) => ErrorClass::Request,
             // As a judgement the model refuses: no valid document, an artifact with
-            // nothing behind it now or that cannot be told now, a pin under a link that
-            // no longer writes its name, or of a document that is not valid.
+            // nothing behind it now or that cannot be told now, a part in which names
+            // are found, a pin under a link that no longer writes its name, or of a
+            // document that is not valid.
             Self::Refused(_)
             | Self::Decision(_)
             | Self::NotAdmitted(_)
@@ -606,7 +607,9 @@ impl ShelfError {
             )
             | Self::SameMeaning(_)
             | Self::ExemptRefused(
-                ExemptRefusal::DocNotValid { .. } | ExemptRefusal::CannotTell { .. },
+                ExemptRefusal::DocNotValid { .. }
+                | ExemptRefusal::CannotTell { .. }
+                | ExemptRefusal::NamesFound { .. },
             ) => ErrorClass::Refused,
             // As a judgement the model refuses what cannot be told or cannot be done now:
             // files that could not be read, so that the writers of a key are not known

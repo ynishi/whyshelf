@@ -125,7 +125,7 @@ async fn the_bound_of_names_counts_only_the_files_taken_as_a_name() {
         .collect();
     let causes = short.into_vec().into_iter().map(Cause::from).collect();
     assert_eq!(
-        listing(names.clone(), causes).unwrap(),
+        listing(names.clone(), causes, Vec::new()).unwrap(),
         NameListing::Some {
             found: names,
             why: why("1 file(s) the selection takes with a path too long for a name"),
@@ -141,7 +141,8 @@ async fn the_bound_of_names_counts_only_the_files_taken_as_a_name() {
     };
     assert_eq!(found, vec![rel("a.rs")]);
     let causes: Vec<Cause> = short.into_vec().into_iter().map(Cause::from).collect();
-    let NameListing::Some { why, .. } = listing(BTreeSet::new(), causes).unwrap() else {
+    let NameListing::Some { why, .. } = listing(BTreeSet::new(), causes, Vec::new()).unwrap()
+    else {
         panic!("some of them");
     };
     assert_eq!(
@@ -223,10 +224,10 @@ async fn the_bounds_a_space_file_is_given_are_the_ones_its_listing_and_its_readi
 fn a_listing_is_all_when_nothing_kept_it_from_being_so_and_says_every_cause_in_one_order() {
     let names: BTreeSet<ArtifactName> = [ArtifactName::new("a.rs").unwrap()].into();
     assert_eq!(
-        listing(names.clone(), Vec::new()).unwrap(),
+        listing(names.clone(), Vec::new(), Vec::new()).unwrap(),
         NameListing::All(names.clone())
     );
-    let said = |causes: Vec<Cause>| match listing(names.clone(), causes).unwrap() {
+    let said = |causes: Vec<Cause>| match listing(names.clone(), causes, Vec::new()).unwrap() {
         NameListing::Some { found, why } => {
             assert_eq!(found, names, "the names found are kept");
             why.into_string()
@@ -268,6 +269,40 @@ fn a_listing_is_all_when_nothing_kept_it_from_being_so_and_says_every_cause_in_o
     assert!(
         !tests.contains("file") && !tests.contains("path"),
         "{tests}"
+    );
+}
+
+#[test]
+fn a_listing_with_parts_alone_is_in_parts_and_one_with_a_cause_of_the_whole_is_some() {
+    let name = |text: &str| ArtifactName::new(text).unwrap();
+    let names: BTreeSet<ArtifactName> = [name("a.rs::t")].into();
+    let key = |path: &str| super::super::name_of(&rel(path)).unwrap();
+    let parts = vec![
+        ListingPart::new(
+            key("b.rs"),
+            why("a derive"),
+            PartRead::Found([name("b.rs::u")].into()),
+        ),
+        ListingPart::new(key("c.rs"), why("no file"), PartRead::Unread),
+    ];
+    // Only parts kept it from being all: each part is told apart, with its why.
+    assert_eq!(
+        listing(names.clone(), Vec::new(), parts.clone()).unwrap(),
+        NameListing::Parted {
+            found: names.clone(),
+            parts: NonEmptyVec::from_vec(parts.clone()).unwrap(),
+        }
+    );
+    // A cause of the whole selection says nothing of which part is missing: some of
+    // the names, the names found in the parts among them, and the cause alone.
+    assert_eq!(
+        listing(names, vec![Cause::Untold(count(1))], parts).unwrap(),
+        NameListing::Some {
+            found: [name("a.rs::t"), name("b.rs::u")].into(),
+            why: why(
+                "1 file(s) the selection takes that a reading cannot tell (past the bound of bytes, leading out of the project, or not readable)"
+            ),
+        }
     );
 }
 

@@ -1068,8 +1068,8 @@ impl PrefixAnswers {
 
 mod listing;
 pub use listing::{
-    Completeness, ListedNames, Listings, NameListing, NotASelection, Selection, SelectionCheck,
-    SelectionChecks, SelectionList, SelectionProblem,
+    Completeness, ListedNames, ListingPart, Listings, NameListing, NotASelection, PartRead,
+    Selection, SelectionCheck, SelectionChecks, SelectionList, SelectionProblem,
 };
 
 #[cfg(test)]

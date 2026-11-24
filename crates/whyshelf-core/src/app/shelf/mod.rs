@@ -209,8 +209,8 @@ pub use report::{
     GetReport, Health, ImpactReport, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport, MovedAway,
     MovesReport, Names, ReachReport, ReachedArtifact, ReachedDoc, RepeatedArtifact,
     RepeatedExemption, Row, SettledOrigin, StaleEntry, StaleReport, StatsReport, StatusReport,
-    TraceReport, Uncovered, UncoveredArtifact, UnitsReport, Unknown, UnlinkedEntry, UnlinkedLists,
-    UnlinkedReport, UnneededArtifact, UnneededExemption, UpstreamEdge, UpstreamEnd,
+    TraceReport, Uncovered, UncoveredArtifact, UncoveredOf, UnitsReport, Unknown, UnlinkedEntry,
+    UnlinkedLists, UnlinkedReport, UnneededArtifact, UnneededExemption, UpstreamEdge, UpstreamEnd,
 };
 pub use run_writes::Edited;
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};

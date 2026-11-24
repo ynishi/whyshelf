@@ -29,11 +29,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
 
-use super::artifact::ArtifactName;
+use super::artifact::{ArtifactKey, ArtifactName, Completeness, ListedNames, ListingPart, Space};
 use super::build::Shelf;
 use super::doc::LinkState;
 use super::ledger::{DeclaredStatus, Ledger, NotStanding};
-use super::schema::{BookName, EntryName};
+use super::schema::{ArtifactCover, BookName, EntryName};
 
 /// What was decided about a document, without what each decision carries: the one
 /// shape that a declared status and a standing both come to. A decision against it
@@ -113,15 +113,104 @@ impl Reached {
     }
 }
 
+/// The documents that reach the part `part` of a listing that the cover of a link of
+/// the book `book` takes whole through its link `whole`, when some do: the one rule of
+/// how a part stands, which the assessment of coverage and the reading of an
+/// exemption of a part both read. A part is expected whatever was read of it, and
+/// nothing but a document that counts and writes its name under `whole` reaches it.
+pub(crate) fn part_reach<'a>(
+    reached: &'a Reached,
+    book: &BookName,
+    whole: &EntryName,
+    part: &ArtifactKey,
+) -> Option<&'a BTreeSet<DocId>> {
+    reached.artifact_from(book, whole, part.name())
+}
+
+/// The listing of the selection of a cover as the cover reads it: by name, and by
+/// part when it takes each part whole through a link of `whole_space`.
+pub(crate) enum ListingRead<'a> {
+    /// Everything it takes is assessed: the names listed, and the parts.
+    Whole {
+        names: &'a BTreeSet<ArtifactName>,
+        parts: &'a [ListingPart],
+    },
+    /// The listing is not the whole, and the cover does not take it whole.
+    NotWhole(Completeness),
+    /// Parts are in another space than the link of parts: no document can reach
+    /// them, and nothing of the link is assessed.
+    OtherSpace(Vec<&'a ListingPart>),
+}
+
+/// How the cover `cover` over `space` reads the listing of its selection, with
+/// `whole_space` the space of the link it takes parts whole through (none when it
+/// declares no `parts`): the one rule of what of a link is assessed, which the
+/// assessment of coverage and the reading of an exemption both read.
+pub(crate) fn read_listing<'a>(
+    listed: &'a ListedNames,
+    space: &Space,
+    cover: &ArtifactCover,
+    whole_space: Option<&Space>,
+) -> ListingRead<'a> {
+    let selection = cover.selection();
+    let Some(whole_space) = whole_space else {
+        return match listed.names(space, selection) {
+            Ok(names) => ListingRead::Whole { names, parts: &[] },
+            Err(completeness) => ListingRead::NotWhole(completeness),
+        };
+    };
+    match listed.names_and_parts(space, selection) {
+        Err(completeness) => ListingRead::NotWhole(completeness),
+        Ok((names, parts)) => {
+            let other: Vec<&ListingPart> = parts
+                .iter()
+                .filter(|part| part.key().space() != whole_space)
+                .collect();
+            if other.is_empty() {
+                ListingRead::Whole { names, parts }
+            } else {
+                ListingRead::OtherSpace(other)
+            }
+        }
+    }
+}
+
+/// The space of the link a cover of the book `book` takes parts whole through, when
+/// it declares one that the book declares.
+pub(crate) fn whole_space_of<'a>(
+    shelf: &'a Shelf,
+    book: &BookName,
+    cover: &ArtifactCover,
+) -> Option<&'a Space> {
+    let whole = cover.parts_whole()?;
+    shelf
+        .schema()
+        .book(book)?
+        .artifact_links()
+        .get(whole)
+        .map(|kind| &kind.space)
+}
+
 /// What the covering links (a [`LinkKind::cover`] or an
 /// [`ArtifactLinkKind::cover`] of some strength) reach from the valid documents
 /// that count (`decided` says what was decided of each, and [`counts`] reads it): the
-/// one place a covering link is followed.
+/// one place a covering link is followed. A link to artifacts that the cover of
+/// another link of its book names for its parts ([`ArtifactCover::parts_whole`]) is
+/// followed as well, so that a part is reached through it.
 ///
 /// [`LinkKind::cover`]: super::schema::LinkKind::cover
 /// [`ArtifactLinkKind::cover`]: super::schema::ArtifactLinkKind::cover
+/// [`ArtifactCover::parts_whole`]: super::schema::ArtifactCover::parts_whole
 pub(crate) fn covering_reach(shelf: &Shelf, decided: impl Fn(DocId) -> Decided) -> Reached {
     let mut reached = Reached::default();
+    let mut wholes: BTreeSet<(&BookName, &EntryName)> = BTreeSet::new();
+    for (book, schema) in shelf.schema().books() {
+        for (_, kind) in schema.artifact_links() {
+            if let Some(whole) = kind.cover.as_ref().and_then(|c| c.parts_whole()) {
+                wholes.insert((book, whole));
+            }
+        }
+    }
     for doc in shelf.docs().values() {
         if !counts(decided(doc.id())) {
             continue;
@@ -141,7 +230,7 @@ pub(crate) fn covering_reach(shelf: &Shelf, decided: impl Fn(DocId) -> Decided) 
             }
         }
         for (name, link) in doc.artifact_links() {
-            if link.kind().cover.is_none() {
+            if link.kind().cover.is_none() && !wholes.contains(&(&doc.key().book, name)) {
                 continue;
             }
             for artifact in link.artifacts() {

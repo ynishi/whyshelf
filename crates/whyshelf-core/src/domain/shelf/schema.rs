@@ -525,6 +525,21 @@ pub enum SchemaProblem {
         /// Why (said in the message, so it is no source as well).
         why: SelectionProblem,
     },
+    /// `parts = { whole = "<link>" }` in the `cover` of a link to artifacts names no
+    /// link a part can be taken whole through ([`PartsProblem`]).
+    #[error(
+        "book `{book}`: the `parts` of the `cover` of the link `{link}` take each part whole through `{whole}`: {why}"
+    )]
+    BadParts {
+        /// The book, as written.
+        book: String,
+        /// The link whose cover declares `parts`.
+        link: EntryName,
+        /// The link `parts` names, as written.
+        whole: String,
+        /// Why it cannot take a part (said in the message, so it is no source as well).
+        why: PartsProblem,
+    },
     /// The selection of a `cover` that the adapter of the space does not read: a text
     /// of it is none of the grammar of the space.
     #[error(
@@ -1094,7 +1109,7 @@ pub(super) use key::parse_tail;
 pub use key::{KeyForm, KeyName, KeyPattern, KeyPrefix, KeyProblem, KeyTail, KeyWord, Slug};
 pub use link::{
     ARTIFACT_TARGET, ArtifactCover, ArtifactLinkKind, ArtifactPropagation, Cardinality, CoverDecl,
-    CoverSeverity, DeclaredLink, LinkKind, Propagation,
+    CoverSeverity, DeclaredLink, LinkKind, PartsDecl, PartsProblem, Propagation,
 };
 pub use name::{
     BookDescription, BookDir, BookName, DescriptionProblem, EntryName, FieldWord, GroupName,

@@ -56,7 +56,8 @@ use super::state::Side;
 pub enum ExemptAsk {
     /// A document, by a reference.
     Doc(Reference),
-    /// An artifact, by its name as a link writes it. The space is the link's.
+    /// An artifact, by its name as a link writes it. The space is the link's, or, for
+    /// a part of a listing the link's cover takes whole, the space the part is in.
     Artifact(ArtifactName),
 }
 
@@ -196,10 +197,11 @@ impl<P: ShelfWrite> ShelfApp<P> {
                         miss,
                     })?
                     .clone();
+                let subject = subject_of(loaded, &request.book, &request.link, space, name, listed);
                 let of = frame_exempt_artifact(
                     &loaded.shelf,
                     &loaded.ledger,
-                    ArtifactKey::new(space, name),
+                    subject,
                     request.book,
                     request.link,
                     listed,
@@ -219,4 +221,31 @@ impl<P: ShelfWrite> ShelfApp<P> {
             record: Exempt::new(record_id, of, by, loaded.now, request.reason),
         })
     }
+}
+
+/// The artifact `name` asked to be exempt from the link `link` of the book `book`:
+/// a part of the listing of the link's selection when the link's cover takes each part
+/// whole and `name` is the name of such a part and of no name listed, which is in the
+/// space the adapter named it in (the space of the link of `parts`); otherwise the
+/// name in the link's `space`.
+fn subject_of(
+    loaded: &Loaded,
+    book: &BookName,
+    link: &EntryName,
+    space: Space,
+    name: ArtifactName,
+    listed: &ListedNames,
+) -> ArtifactKey {
+    let part = artifact_cover_of(loaded.shelf.schema(), book, link, &space)
+        .ok()
+        .filter(|cover| cover.parts_whole().is_some())
+        .and_then(|cover| listed.names_and_parts(&space, cover.selection()).ok())
+        .filter(|(names, _)| !names.contains(&name))
+        .and_then(|(_, parts)| {
+            parts
+                .iter()
+                .find(|part| part.key().name() == &name)
+                .map(|part| part.key().clone())
+        });
+    part.unwrap_or_else(|| ArtifactKey::new(space, name))
 }

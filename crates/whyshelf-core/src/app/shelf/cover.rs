@@ -25,7 +25,7 @@
 use std::collections::BTreeSet;
 
 use crate::domain::shelf::artifact::ArtifactKey;
-use crate::domain::shelf::coverage::{CoverAssessment, NameCover};
+use crate::domain::shelf::coverage::{Assessed, CoverAssessment, NameCover, PartCover};
 use crate::domain::shelf::exemption::{ExemptionReading, artifact_cover_of, artifact_space_of};
 use crate::domain::shelf::ledger::Ledger;
 use crate::domain::shelf::schema::{BookName, EntryName};
@@ -36,7 +36,7 @@ use super::load::{View, listings_of, load_with, now, schema_of};
 use super::ports::ShelfRead;
 use super::report::{
     ArtifactCoverLists, CoverReport, ExemptArtifact, RepeatedArtifact, UncoveredArtifact,
-    UnneededArtifact,
+    UncoveredOf, UnneededArtifact,
 };
 use super::state::Side;
 
@@ -68,14 +68,35 @@ pub(super) fn artifact_lists(
     let asked = |book: &BookName, link: &EntryName| only.is_none_or(|ask| ask.is(book, link));
     let mut lists = ArtifactCoverLists::default();
     for link in cover.links().iter().filter(|l| asked(l.book(), l.link())) {
-        for (name, state) in link.names() {
+        let Assessed::Whole { names, parts } = link.assessed() else {
+            continue;
+        };
+        let uncovered = |artifact: ArtifactKey, of: UncoveredOf| UncoveredArtifact {
+            book: link.book().clone(),
+            link: link.link().clone(),
+            artifact,
+            severity: link.severity(),
+            of,
+        };
+        for (name, state) in names {
             if *state == NameCover::Gap {
-                lists.uncovered.push(UncoveredArtifact {
-                    book: link.book().clone(),
-                    link: link.link().clone(),
-                    artifact: ArtifactKey::new(link.space().clone(), name.clone()),
-                    severity: link.severity(),
-                });
+                lists.uncovered.push(uncovered(
+                    ArtifactKey::new(link.space().clone(), name.clone()),
+                    UncoveredOf::Name,
+                ));
+            }
+        }
+        // A part is of a cover that takes parts whole, through its link of parts.
+        if let Some(whole) = link.parts_whole() {
+            for (part, state) in parts {
+                if *state == PartCover::Gap {
+                    lists.uncovered.push(uncovered(
+                        part.key().clone(),
+                        UncoveredOf::Part {
+                            whole: whole.clone(),
+                        },
+                    ));
+                }
             }
         }
     }

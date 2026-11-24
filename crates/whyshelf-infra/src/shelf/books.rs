@@ -38,7 +38,11 @@
 //!                                  # optional: every name of the space the selection takes
 //!                                  # is expected to be reached by a document (a space that
 //!                                  # lists its names: `file`); `strength` "error" (default)
-//!                                  # or "warn"; `exclude` optional
+//!                                  # or "warn"; `exclude` optional; `parts = { whole =
+//!                                  # "<link>" }` optional: each part the listing cannot
+//!                                  # list whole is expected to be reached whole through
+//!                                  # that link of the book (one that depends and reads
+//!                                  # the content)
 //!
 //! [[book.link]]
 //! name = "code"
@@ -138,7 +142,7 @@ use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::schema::{
     ARTIFACT_TARGET, BookRuleDecl, BookSchemaDecl, CoverDecl, DecideDecl, DecideKind, DefaultsDecl,
     FieldEntryDecl, FieldPresence, FieldTypeDecl, GroupDecl, KeyPatternDecl, LinkTargetDecl,
-    MemberDecl, PresetDecl, RuleDecl, RuleTime, ScopeDecl, ShelfDecl, WrittenBookDecl,
+    MemberDecl, PartsDecl, PresetDecl, RuleDecl, RuleTime, ScopeDecl, ShelfDecl, WrittenBookDecl,
     WrittenLinkDecl, WrittenPresetValues,
 };
 
@@ -534,7 +538,7 @@ struct LinkDto {
 #[derive(Debug, Deserialize)]
 #[serde(
     untagged,
-    expecting = "`cover` takes true, false, \"error\" or \"warn\" (for a link to artifacts, a table of `strength`, `include` and `exclude`)"
+    expecting = "`cover` takes true, false, \"error\" or \"warn\" (for a link to artifacts, a table of `strength`, `include`, `exclude` and `parts`)"
 )]
 enum CoverDto {
     Truth(bool),
@@ -550,6 +554,15 @@ struct CoverTableDto {
     strength: Option<String>,
     include: Vec<String>,
     exclude: Vec<String>,
+    parts: Option<PartsDto>,
+}
+
+/// `parts` of the `cover` of a link to artifacts: the link each part a listing could
+/// not list whole is taken whole through, as written; the domain checks it.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PartsDto {
+    whole: String,
 }
 
 impl<'de> Deserialize<'de> for CoverTableDto {
@@ -562,6 +575,7 @@ impl<'de> Deserialize<'de> for CoverTableDto {
             include: Vec<String>,
             #[serde(default)]
             exclude: Vec<String>,
+            parts: Option<PartsDto>,
         }
 
         struct OfAMap;
@@ -582,11 +596,13 @@ impl<'de> Deserialize<'de> for CoverTableDto {
             strength,
             include,
             exclude,
+            parts,
         } = deserializer.deserialize_map(OfAMap)?;
         Ok(Self {
             strength,
             include,
             exclude,
+            parts,
         })
     }
 }
@@ -645,10 +661,12 @@ impl BookDto {
                             strength,
                             include,
                             exclude,
+                            parts,
                         }) => CoverDecl::Table {
                             strength,
                             include,
                             exclude,
+                            parts: parts.map(|PartsDto { whole }| PartsDecl { whole }),
                         },
                     }),
                 })
@@ -1029,6 +1047,7 @@ means = "informs"
                 strength: Some("warn".to_owned()),
                 include: vec!["src/**/*.rs".to_owned()],
                 exclude: vec!["src/gen/**".to_owned()],
+                parts: None,
             })
         );
         // The strength and the exclusions left out are not written, for the domain to
@@ -1040,10 +1059,35 @@ means = "informs"
                 strength: None,
                 include: vec!["a".to_owned()],
                 exclude: Vec::new(),
+                parts: None,
             })
         );
-        // A key the table does not have is refused, as in every table of the file.
+        // `parts` names the link each part is taken whole through, as written.
+        let decls = parse(&tests_link(
+            "cover = { include = ['a'], parts = { whole = 'tests' } }\n",
+        ))
+        .unwrap();
+        assert_eq!(
+            decls.books[0].links[0].cover,
+            Some(CoverDecl::Table {
+                strength: None,
+                include: vec!["a".to_owned()],
+                exclude: Vec::new(),
+                parts: Some(PartsDecl {
+                    whole: "tests".to_owned()
+                }),
+            })
+        );
+        // A key the table does not have is refused, as in every table of the file,
+        // and so is a `parts` with no `whole` or another key.
         assert!(parse(&tests_link("cover = { include = ['a'], sometimes = 1 }\n")).is_err());
+        assert!(parse(&tests_link("cover = { include = ['a'], parts = {} }\n")).is_err());
+        assert!(
+            parse(&tests_link(
+                "cover = { include = ['a'], parts = { whole = 'tests', more = 1 } }\n"
+            ))
+            .is_err()
+        );
     }
 
     #[test]

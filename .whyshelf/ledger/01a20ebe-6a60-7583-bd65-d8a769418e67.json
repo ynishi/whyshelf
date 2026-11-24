@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "aa3c72dda03be46adbdfc0bbed97266c46e51fe6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5d3937a7c050fbb94eac1e801f2d898a3809c05c7806daa42adb563b3bbd01d4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/conformance.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "344522d8d7da428e3e3b90a1c31c5301456d0f56",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:cb1ca03f8d2ef75ff84b27324b5b693057e441453b35e5434b2da3c09a0ba32b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file/read_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "020726be97f2262e4926686a41a73b4426253986",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:38956301c2852fde9d50470b7873a0dc9be83ccea785239580dd76c2cca723ee",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3649accafbfa5c5fc02474e3e94ed3810eceaf30",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1aaecc3bf06caf119a9e292e6dfb09fdb702f697046b057432cb3391cea347d0",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795543666020,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dd7bf7b73d70661bcb542a14e9a378a7e62034f7",
+      "hash": "sha256:40f796d0a6e11fcef53c6f0f2018b41631065dcfbbf54ddb18d095dec70a6282",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "111"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20e06-b79e-7071-b438-62a7fe44a70c"
+    }
+  ],
+  "id": "01a20ebe-6a60-7583-bd65-d8a769418e67",
+  "kind": "decision",
+  "reason": "Listings answer a file that cannot be listed whole as a part, and a cover takes parts whole through one declared link (#120 stage C); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "a3cdf8dfcb1ce7e9123fc80140414637d04b0998",
+  "seen": "sha256:12ede6475212e876c2d6b629ec2d8e55f6c96fa21046f4148b238d34dfa85e74",
+  "seen_address": "f8b809fd7e4001f4efd43dbc584beab4f07ac461",
+  "subject": "01a20e06-b79e-7071-b438-62a87fc86be8",
+  "v": 1,
+  "verb": "approve"
+}

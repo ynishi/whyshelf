@@ -63,9 +63,9 @@ use std::path::Path;
 
 use whyshelf_core::app::shelf::CannotPlace;
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, ArtifactState, Comparison, ContentAddress, NameListing,
-    PrefixMove, Renamed, Selection, SelectionCheck, Space, SpacePrefixes, SpaceReadings,
-    SpaceRenamed, Untold,
+    ArtifactKey, ArtifactName, ArtifactReading, ArtifactState, Comparison, ContentAddress,
+    NameListing, PrefixMove, Renamed, Selection, SelectionCheck, Space, SpacePrefixes,
+    SpaceReadings, SpaceRenamed, Untold,
 };
 use whyshelf_core::domain::shelf::placement::Placement;
 use whyshelf_core::domain::shelf::schema::BuiltinPresets;
@@ -185,6 +185,18 @@ pub(super) struct ListCase {
     pub(super) bad: Selection,
     /// The adapter over the tree with its bound of names at one.
     pub(super) bounded: Adapter,
+    /// For an adapter that answers a listing in parts: a selection it lists so.
+    pub(super) parts: Option<PartsCase>,
+}
+
+/// What an adapter that answers a listing in parts is asked: a selection of the tree
+/// it lists in parts, and the adapter of the space its parts are named in, over the
+/// same tree.
+pub(super) struct PartsCase {
+    /// A selection the adapter lists in parts.
+    pub(super) selection: Selection,
+    /// The adapter of the space of the parts.
+    pub(super) of: Adapter,
 }
 
 impl Tree {
@@ -674,6 +686,47 @@ async fn check_listing(
             );
         }
         answer => panic!("{space}: past a bound of names it is not all of them: {answer:?}"),
+    }
+
+    // A listing in parts: each part is a key of another space, which the adapter of
+    // that space answers as there, at the side the listing was made at, and the
+    // listing is the same again.
+    if let Some(parts) = &case.parts {
+        let listing = ask::list(adapter, &parts.selection).await;
+        let NameListing::Parted { parts: listed, .. } = &listing else {
+            panic!("{space}: the selection of the hook is listed in parts, not {listing:?}");
+        };
+        let (of_space, _) = ask::named(&parts.of);
+        // Each part is given once (the promise of the ask; the domain keeps the first
+        // of a key, and an adapter that gives one twice fails here).
+        let keys: BTreeSet<&ArtifactKey> = listed.iter().map(|part| part.key()).collect();
+        assert_eq!(
+            keys.len(),
+            listed.len(),
+            "{space}: each part of a listing is given once: {listed:?}"
+        );
+        for part in listed.iter() {
+            assert_eq!(
+                part.key().space().as_str(),
+                of_space,
+                "{space}: the part {} is named in the space of the hook",
+                part.key()
+            );
+            let name = part.key().name().clone();
+            let found = ask::resolve(&parts.of, std::slice::from_ref(&name)).await;
+            for state in told(&found[&name]) {
+                assert!(
+                    matches!(state, ArtifactState::Present(_)),
+                    "{space}: the part {} is not there in its space: {state:?}",
+                    part.key()
+                );
+            }
+        }
+        assert_eq!(
+            ask::list(adapter, &parts.selection).await,
+            listing,
+            "{space}: the listing in parts again"
+        );
     }
 }
 

@@ -1,0 +1,161 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "63d2dce8c7cdc31e15c2b3b6b7a7d65474be7291",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4d6639509ce966ffaefc9093b243510083ba8cd05959ba60bcbc21d2f863859e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "58ce46bac1cbe950e731538a57a74ded42673da7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:dfa9d1c95f54657a4d273dca1c6dcc00f50bd7eb7d2723bdda59dde7fc8e475e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e487ef31061452a9cfec86ab5821b61d097e868",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add768ddd5406e06645e18dda7518815a659d1f748b4a8cb827a8c355216144d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3d81d12432bd413ff606fc1186baac4de452268f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0d2b31f38f3108a75ff8da317e5f0e32a8b470f7dc1809501681cfc5e02f2e71",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "965c2b66bd4dbf86ba31a3b121992f3f20ba7dce",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0d36a5ffeeecee0760d5a81d72d70854384c575da5a118f47a29f670f045cc58",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9ab09115d28eab89e793ca6c234617e4ae97e576",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:10cde3508647333e07bd52f3e58b7a0185eab1d1dc3347db9aa5816ac1df3c17",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2e8ae01fff885b856d85e263d367e6061cdde083",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:c179349b0ecf6e76e497108d64ba172b1ebc806be5d84b04853db8ed457f02a4",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5ce44d3289fd5682822768e56a208f252fc83cd6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9abd4e39efb864f0552f67a7a8bf0700ac8a900b4912008f5291335a76708637",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "40a4375cb3971844cc47616914ddadbf9867c6d1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1268cd00de0f70b0a98c647f6aeb03bb24bb7ddfb2971e5e136f7efde84f1ba4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795543666020,
+  "expires": null,
+  "frame": [
+    {
+      "address": "29f85e7daad22edd540f8203d25570015c2f901e",
+      "hash": "sha256:0e28d87ef7fd94af64d800e7d7168dee93917e568ad032e8a4f62d70b9f904f9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c45a-279c-7672-ac87-9afd9c344dc8"
+    }
+  ],
+  "id": "01a20ebe-1c02-7706-9d1a-d0700dc47a9e",
+  "kind": "decision",
+  "reason": "Listings answer a file that cannot be listed whole as a part, and a cover takes parts whole through one declared link (#120 stage C); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "a3cdf8dfcb1ce7e9123fc80140414637d04b0998",
+  "seen": "sha256:38d1ebdb1799195f4e7a078afb3ecb4dcfd6e89dcff18444255fafcf5405c286",
+  "seen_address": "c9ee0abf230a0c3d340519086554c780cc6c943a",
+  "subject": "01a1c45a-27fd-75bc-a433-f3e0233f0f72",
+  "v": 1,
+  "verb": "approve"
+}
