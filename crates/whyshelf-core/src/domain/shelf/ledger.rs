@@ -1212,7 +1212,7 @@ use pin::{NameForm, StandsOn};
 pub use readers::{
     ApprovalKind, Asked, Before, LeaveOut, Quorum, ReadBy, ReaderCount, Readers, Reading, Taking,
 };
-pub use record::{Record, RecordHash, Revocation};
+pub use record::{Record, RecordAbout, RecordHash, Revocation};
 
 #[cfg(test)]
 use super::artifact::{ArtifactReadings, Comparison, ComparisonProblem, Space, Untold};

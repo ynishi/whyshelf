@@ -8,11 +8,11 @@
 //! | I2 | a cause is compared by the document that holds it (the last of its root's way) and the cause itself, so another way to the same cause is no new one: what the change adds is the causes after that were not before (before, only when it did not hold) |
 //! | I3 | of those, a cause that starts at an artifact ([`Cause::located`]) the document holding it stood on, before, by a name that could not be told is `uncertain`: it may have been there before the change; every other is `certain` (a cause that starts nowhere of its own, or not at an artifact, stands on no such name). The name is matched through the moves declared of the pin ([`Cause::pin_names`]): a move the change declares leaves the name before at the old one |
 //! | I4 | [`Made`]: after, not holding with a certain cause, [`Made::Yes`]; else an uncertain cause, [`Made::CannotTell`] from the side before (both, when the side after has names that cannot be told too); else, after, not holding or not told, with names that cannot be told, [`Made::CannotTell`] from the side after (such a name may hide a cause), or from both when the side before could not tell the same name; each name listed once; else [`Made::No`] |
+//! | I5 | `changed`: the two holdings differ |
 //!
 //! A cause added is one the end before did not hold: a new edit of what already did
 //! not hold before is a cause added too, so [`Made::Yes`] does not say the approval
 //! held before the change ([`ImpactEntry::before`] does).
-//! | I5 | `changed`: the two holdings differ |
 //!
 //! What cannot be told is what the adapters and the assessment said cannot be
 //! ([`UntoldPin`], [`Holding::CannotTell`]), carried as it is: no new kind is made.
@@ -137,26 +137,47 @@ impl ImpactEntry {
 /// Every document either end lists, by identity, with its holding at each end and
 /// what the change made of it (the rules on the page of the module).
 pub fn impact(before: (&Shelf, &Assessment), after: (&Shelf, &Assessment)) -> Vec<ImpactEntry> {
-    let ids: BTreeSet<DocId> = before
+    rows_of(before, after)
+        .into_iter()
+        .map(|id| row(id, before, after))
+        .collect()
+}
+
+/// [`impact`] of a change and of the change read backwards (the two ends swapped),
+/// each identity's two rows paired: both directions are built from the one set of
+/// identities, so neither can lack a row the other has.
+pub(crate) fn both_ways(
+    before: (&Shelf, &Assessment),
+    after: (&Shelf, &Assessment),
+) -> Vec<(ImpactEntry, ImpactEntry)> {
+    rows_of(before, after)
+        .into_iter()
+        .map(|id| (row(id, before, after), row(id, after, before)))
+        .collect()
+}
+
+/// The identities of the rows (I1): every one either end's standings list.
+fn rows_of(before: (&Shelf, &Assessment), after: (&Shelf, &Assessment)) -> BTreeSet<DocId> {
+    before
         .1
         .standings()
         .keys()
         .chain(after.1.standings().keys())
         .copied()
-        .collect();
-    ids.into_iter()
-        .map(|id| {
-            let was = before.1.holding(before.0, id);
-            let is = after.1.holding(after.0, id);
-            let made = made(&was, &is, |holder| before.1.holding(before.0, holder));
-            ImpactEntry {
-                id,
-                before: was,
-                after: is,
-                made,
-            }
-        })
         .collect()
+}
+
+/// One identity's row, read from `before` to `after`.
+fn row(id: DocId, before: (&Shelf, &Assessment), after: (&Shelf, &Assessment)) -> ImpactEntry {
+    let was = before.1.holding(before.0, id);
+    let is = after.1.holding(after.0, id);
+    let made = made(&was, &is, |holder| before.1.holding(before.0, holder));
+    ImpactEntry {
+        id,
+        before: was,
+        after: is,
+        made,
+    }
 }
 
 /// The causes of a holding that does not hold, and the names it cannot tell.

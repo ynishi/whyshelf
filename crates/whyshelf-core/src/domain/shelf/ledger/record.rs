@@ -6,7 +6,9 @@ use crate::domain::actor::Attribution;
 use crate::domain::hash::ContentHash;
 use crate::domain::nonempty::{NonBlank, NonEmptySet};
 
-use super::{Decision, Exempt, JudgedAt, JudgementId, Moved, SameMeaning};
+use crate::domain::id::DocId;
+
+use super::{Decision, Exempt, JudgedAt, JudgementId, Moved, SameMeaning, SameMeaningOf};
 
 /// The withdrawal of earlier decisions and declarations of the same meaning,
 /// whoever made them and whatever they are about. It has no subject and no frame.
@@ -67,6 +69,19 @@ impl RecordHash {
     }
 }
 
+/// What a record is about, as the record itself says it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordAbout<'a> {
+    /// One document: a decision's subject, the document a declaration of the same
+    /// meaning or an exemption is about.
+    Doc(DocId),
+    /// The records it withdraws (a revocation).
+    Records(&'a NonEmptySet<JudgementId>),
+    /// An artifact alone: a move, a declaration of the same meaning or an exemption of
+    /// an artifact.
+    Artifact,
+}
+
 impl Record {
     /// The identity of the record.
     pub fn id(&self) -> JudgementId {
@@ -76,6 +91,20 @@ impl Record {
             Self::SameMeaning(s) => s.id,
             Self::Moved(m) => m.id,
             Self::Exempt(e) => e.id,
+        }
+    }
+
+    /// What the record is about, read from its own fields: the one place it is told.
+    pub fn about(&self) -> RecordAbout<'_> {
+        match self {
+            Self::Decision(d) => RecordAbout::Doc(d.subject()),
+            Self::Revocation(r) => RecordAbout::Records(&r.targets),
+            Self::SameMeaning(s) => match s.of() {
+                SameMeaningOf::Doc { id, .. } => RecordAbout::Doc(*id),
+                SameMeaningOf::Artifact { .. } => RecordAbout::Artifact,
+            },
+            Self::Moved(_) => RecordAbout::Artifact,
+            Self::Exempt(e) => e.of().doc().map_or(RecordAbout::Artifact, RecordAbout::Doc),
         }
     }
 }

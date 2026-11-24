@@ -1,0 +1,83 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7ff954b6281f901aad2f34071d09dc8cdbfac412",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:04374c9eae16ac5af2705a9f259832ad84b49ea1dbb62b6d24c6cd7bc105ea5a",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/impact.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795503800005,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4972900f40504da70ced14a02dc16b149d6aadf5",
+      "hash": "sha256:406a73ec920cdbe93f363c889e98f124f257fc91109f8100359f79c620be5a79",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "103"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7e48255413"
+    },
+    {
+      "address": "d6d06750effaf90c904119631b302dbf6452d682",
+      "hash": "sha256:978c35e2c845f1a1791067667a6693eea9cf58224d65e7233623496043c99e2d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "104"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7fbb63b84f"
+    },
+    {
+      "address": "4ddb39b58a72793dc580554fba5b372537ffaa73",
+      "hash": "sha256:13f6359d0bd033547ce85ee7367a65d4642fa5f922aba19955d6d6a67c2bf555",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "106"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a803bf4e2cc"
+    }
+  ],
+  "id": "01a20c5d-d981-7501-b3b7-966be255b191",
+  "kind": "decision",
+  "reason": "impact --within tells whether a change stays inside the documents it was meant for, and --exit-code fails on what is outside, unproven or undetermined (#174); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "0c0198a967f78d6eef3b28fd3b21468f0b134c5b",
+  "seen": "sha256:f57cf90a5c715e173d6ed86206811293692934c78fa5bccf2aaf1a0daaca975b",
+  "seen_address": "b2ef604c1b83b2e5b7f6e0989e9d660774e3a004",
+  "subject": "01a20baa-2bf0-764d-88ea-9a82af53666d",
+  "v": 1,
+  "verb": "approve"
+}

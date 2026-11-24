@@ -413,6 +413,17 @@ impl ResolvedLink {
     }
 }
 
+/// What one key of a link names, as [`Doc::links_named`] reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkNamed<'a> {
+    /// The valid document it resolves to.
+    Doc(DocId),
+    /// A key that resolves to no document, as written.
+    Written(&'a str),
+    /// An artifact.
+    Artifact(&'a ArtifactKey),
+}
+
 /// What one link of a document comes to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LinkState {
@@ -766,6 +777,34 @@ impl Doc {
     /// with no state in it when the document wrote none.
     pub fn links(&self) -> &BTreeMap<EntryName, Link> {
         &self.links
+    }
+
+    /// What each of its links names, by name, in the order written: a document a key
+    /// resolves to, by its identity; a key that resolves to none, as written; an
+    /// artifact, by its space and name. It reads the links alone, not what the
+    /// documents and artifacts named hold now, so two readings of a document whose
+    /// links name the same are alike here. The one place it is read.
+    pub fn links_named(&self) -> BTreeMap<&EntryName, Vec<LinkNamed<'_>>> {
+        let docs = self.links.iter().map(|(name, link)| {
+            let named = link
+                .states()
+                .iter()
+                .map(|state| match state {
+                    LinkState::Resolved(target) => LinkNamed::Doc(target.id()),
+                    LinkState::Unresolved(link) => LinkNamed::Written(link.written()),
+                })
+                .collect();
+            (name, named)
+        });
+        let artifacts = self.artifact_links.iter().map(|(name, link)| {
+            let named = link
+                .artifacts()
+                .iter()
+                .map(|artifact| LinkNamed::Artifact(artifact.key()))
+                .collect();
+            (name, named)
+        });
+        docs.chain(artifacts).collect()
     }
 
     /// The links of one meaning for freshness, by name.

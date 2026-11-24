@@ -15,6 +15,7 @@
 //! | [`get`](ShelfApp::get) | no | [`GetReport`]: one document, its standing, notices and root causes |
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
 //! | [`reach`](ShelfApp::reach) | no | [`ReachReport`]: the named documents and every document that depends on one of them, the artifacts all of them stand on with where each lives, the files of the project all of it is in, and what may depend on them that could not be read |
+//! | [`impact`](ShelfApp::impact) | no | [`ImpactReport`]: the two ends of a change, read the one way the run names, and for every document whether its approval held, holds, and whether the change adds a cause that makes it not hold; with [`impact_within`](ShelfApp::impact_within), whether the change stays inside the reach of named documents before it, a verdict per document |
 //! | [`unlinked`](ShelfApp::unlinked) | no | [`UnlinkedReport`]: the problems of the declaration, or the documents linked neither way, those no link reaches and those that hold none, those decided against apart |
 //! | [`stale`](ShelfApp::stale) | no | [`StaleReport`]: the approvals that no longer hold, with where they start to fail and what can settle each origin, and whether a gate passes ([`StaleReport::gate`]) |
 //! | [`units`](ShelfApp::units) | no | [`UnitsReport`]: the approvals that no longer hold (and, asked, the pending documents) divided into units of work that share nothing, each with its documents upstream first, the files its artifacts live in and the upstreams it waits on, and the artifacts whose place cannot be told |
@@ -172,6 +173,8 @@ mod tests;
 mod units_tests;
 #[cfg(test)]
 mod unlinked_tests;
+#[cfg(test)]
+mod within_tests;
 
 pub use adapter::{
     Answers, AsyncVisit, CannotList, CannotPlace, CannotSuggest, ListWay, NameList, NamePlaces,

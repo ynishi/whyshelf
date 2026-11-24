@@ -201,7 +201,10 @@ pub enum BooksCommand {
     /// told). The way is the flags': through Git with `--since` (and `--until` or
     /// `--index`), or through two directories with `--before` (and `--after`); both
     /// ways at once, or neither, is a request error (exit 2), and so is an end that
-    /// cannot be opened as asked. It writes nothing, and the exit is 0.
+    /// cannot be opened as asked. With `--within`, it also answers for every document
+    /// whether the change reaches it and, if so, whether it is inside the reach of the
+    /// documents named as the project stood before the change (`within`). It writes
+    /// nothing, and the exit is 0 unless `--exit-code` is given.
     #[command(group(clap::ArgGroup::new("way").required(true).args(["since", "before"])))]
     Impact {
         /// The commit before the change: a revision Git reads.
@@ -220,6 +223,21 @@ pub enum BooksCommand {
         /// The directory of the project after the change (default the project root).
         #[arg(long, requires = "before")]
         after: Option<PathBuf>,
+        /// The documents the change is meant for: keys, identifiers or short
+        /// identifiers, each read at the end before the change, or at the end after
+        /// when it names nothing before (a document the change adds). A key only the
+        /// ledger knows before the change names the identity it had then; to name a
+        /// document that took that key since, give its identifier. Their reach is the
+        /// documents named and those that depend on them, transitively, on the shelf
+        /// before the change. A reference that names no document, or several, is a
+        /// request error (exit 2).
+        #[arg(long, num_args = 1.., value_name = "REFERENCE")]
+        within: Vec<Reference>,
+        /// Exit 1 when the gate does not pass (`within.passes` is false), otherwise 0.
+        /// The verdicts and when the gate passes are on the page of the library's
+        /// `domain::shelf::within`. It requires `--within`.
+        #[arg(long, requires = "within")]
+        exit_code: bool,
     },
     /// The documents linked neither way, those no link reaches and those that hold
     /// none, those decided against apart; exit 0 whenever the declaration can be

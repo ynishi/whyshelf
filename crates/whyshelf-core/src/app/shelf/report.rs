@@ -43,6 +43,7 @@ use crate::domain::shelf::snapshot::{ItemCompared, Retrieval, Snapshot, Snapshot
 use crate::domain::shelf::stats::Stats;
 use crate::domain::shelf::units::Units;
 use crate::domain::shelf::untold::UntoldName;
+use crate::domain::shelf::within::Within;
 
 use super::ports::UnreadableRecord;
 use super::state::ReadWay;
@@ -719,8 +720,10 @@ pub struct UnitsReport {
 
 /// The result of `impact`: the two ends of a change, read the one way the run names,
 /// and for every document whether its approval held, holds, and whether the change
-/// adds a cause that makes it not hold. The rules are on the page of
-/// [`impact`](crate::domain::shelf::impact).
+/// adds a cause that makes it not hold; and, asked of named documents, whether the
+/// change stays inside their reach. The rules are on the pages of
+/// [`impact`](crate::domain::shelf::impact) and
+/// [`within`](crate::domain::shelf::within).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImpactReport {
     /// How the two ends were read, as the composition root names it.
@@ -735,6 +738,11 @@ pub struct ImpactReport {
     pub health_before: Health,
     /// What is wrong around them after it.
     pub health_after: Health,
+    /// Whether the change stays inside the reach of the named documents before it,
+    /// when documents were named ([`ShelfApp::impact_within`]); none otherwise.
+    ///
+    /// [`ShelfApp::impact_within`]: super::ShelfApp::impact_within
+    pub within: Option<Within>,
 }
 
 /// An approval that does not hold, with where it starts to fail.

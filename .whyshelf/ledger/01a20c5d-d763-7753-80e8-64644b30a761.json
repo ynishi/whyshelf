@@ -1,0 +1,139 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "97bf0d227ea6c4a618cfe703c991dfbcceabd75c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:00423b5e2ab6dac0170266fdb232c556e83699323c9ad76a5ed933f26c2a5048",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/side_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e3baab9a9aea7a76b0cc1433722371add5a42205",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d2639dde9390e6de5f61181a67bd726de3b7d372ae121203f73d046e4568ddde",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "946d74e89a597f784b464133b1840dc5547a5806",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21459723832a5af17fca70c3257448b162ca18055139d1b3ba740c576e95283e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/impact/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5a2186804aec8e911f4c339840c9c0b5efb77da6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bb3261dd723b19e9ce010cfd9b553cd6f5dee9f70f93d6a455fb30798f51921d",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/project_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "20ff9eb4f7a25648ac6b72a24d82eb8cedcdf271",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e26bdbcba1af50f1d111df03754dae9dcd67397906e0052460c3848e9c78b1a2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/state/git_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795503800005,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4972900f40504da70ced14a02dc16b149d6aadf5",
+      "hash": "sha256:406a73ec920cdbe93f363c889e98f124f257fc91109f8100359f79c620be5a79",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "103"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7e48255413"
+    },
+    {
+      "address": "d6d06750effaf90c904119631b302dbf6452d682",
+      "hash": "sha256:978c35e2c845f1a1791067667a6693eea9cf58224d65e7233623496043c99e2d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "104"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7fbb63b84f"
+    },
+    {
+      "address": "4ddb39b58a72793dc580554fba5b372537ffaa73",
+      "hash": "sha256:13f6359d0bd033547ce85ee7367a65d4642fa5f922aba19955d6d6a67c2bf555",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "106"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a803bf4e2cc"
+    }
+  ],
+  "id": "01a20c5d-d763-7753-80e8-64644b30a761",
+  "kind": "decision",
+  "reason": "impact --within tells whether a change stays inside the documents it was meant for, and --exit-code fails on what is outside, unproven or undetermined (#174); verified by fmt, clippy, rustdoc, the whole test suite, code review, rule-judge and two blind reviews",
+  "revision": "0c0198a967f78d6eef3b28fd3b21468f0b134c5b",
+  "seen": "sha256:b30db284ddfa441ec5d68b1057d025ed677cd0f3ba431428cb9b2eb2259043d5",
+  "seen_address": "d460043a8ac9bf8fbcdefb729fc85c1adf9299fe",
+  "subject": "01a20baa-2bf0-764d-88ea-9a81d4711de0",
+  "v": 1,
+  "verb": "approve"
+}

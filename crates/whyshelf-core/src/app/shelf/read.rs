@@ -1,5 +1,5 @@
 //! The use cases that only read: `check`, `map`, `status`, `get`, `trace`, `reach`,
-//! `stale`, `units`, `stats`.
+//! `impact`, `stale`, `units`, `stats`.
 //!
 //! Each builds the schema, the shelf and the ledger ([`load`](super::load)) and asks
 //! the entries of the domain; none writes, and the type they are generic over
@@ -13,6 +13,7 @@
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
 //! | `reach` | [`resolve`] for each reference, then the reach of the documents named ([`reach`](crate::domain::shelf::reach): the walk down, the artifacts each document reached stands on), where each artifact lives ([`ArtifactSource::places`]), the files of all of it, and the same as `status` for every document reached |
+//! | `impact` | both ends of the change, read at one time, and [`assess`] of each, then [`impact`](crate::domain::shelf::impact::impact); with references ([`impact_within`](ShelfApp::impact_within)), each resolved at the end before (at the end after when it names nothing before), the walk down from them on the end before ([`reach`](crate::domain::shelf::reach)), `impact` of the change read backwards, and the gate ([`within`](crate::domain::shelf::within)) |
 //! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], what can settle each origin ([`origins_asked`] of the origins, what the approving commands would approve foreseen once, [`Foreseen::of`], then [`settle_all`]), and the names approvals stand on that cannot be told now |
 //! | `units` | [`assess`], then [`units::plan`](crate::domain::shelf::units::plan) (the approvals that are [`Freshness::Degraded`], and, asked, the pending documents, with what each stands on and what holds it back), where the artifacts they stand on live ([`ArtifactSource::places`]), then [`units::divide`](crate::domain::shelf::units::divide) |
 //! | `stats` | [`stats::of`](crate::domain::shelf::stats::of), from the ledger and the keys of the shelf; [`assess`] only for the health |
@@ -38,6 +39,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::id::DocId;
+use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec};
 use crate::domain::shelf::artifact::{ArtifactKey, Listings};
 use crate::domain::shelf::filter::{StatusFilter, StatusFilterAsk};
@@ -47,11 +49,12 @@ use crate::domain::shelf::ledger::{JudgedAt, MovedTo, Quorum};
 use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::Foreseen;
-use crate::domain::shelf::reach::Reach;
+use crate::domain::shelf::reach::{Reach, walk};
 use crate::domain::shelf::settle::{origins_asked, settle_all};
 use crate::domain::shelf::stats;
 use crate::domain::shelf::trace::{LinkEnd, trace};
 use crate::domain::shelf::units::{self, UnitsOf};
+use crate::domain::shelf::within::End;
 
 use super::ShelfApp;
 use super::cover::artifact_lists;
@@ -95,6 +98,49 @@ pub(super) fn identity(loaded: &Loaded, reference: &Reference) -> Result<DocId, 
         Resolution::NotAKeyOfAnyBook => Err(ShelfError::NotAKeyOfAnyBook {
             reference: reference.clone(),
         }),
+    }
+}
+
+/// The documents references name across the two ends of a change: each at the end
+/// before, or, only when it names nothing there, at the end after, whose answer (a
+/// document or an error) is then the answer. A reference names nothing before when
+/// no document has it there, and when the declaration before cannot read it as one:
+/// a book the change adds, or a key only the declaration after takes.
+// The error is read once and ends the use case; it is not a hot path.
+#[allow(clippy::result_large_err)]
+fn named_across(
+    before: &Loaded,
+    after: &Loaded,
+    references: &NonEmptyVec<Reference>,
+) -> Result<NonEmptySet<DocId>, ShelfError> {
+    let one = |reference: &Reference| match identity(before, reference) {
+        Err(
+            ShelfError::NotFound { .. }
+            | ShelfError::UnknownBook { .. }
+            | ShelfError::NotAKeyOf { .. }
+            | ShelfError::NotAKeyOfAnyBook { .. },
+        ) => identity(after, reference),
+        answered => answered,
+    };
+    let mut named = NonEmptySet::new(one(references.first())?, []);
+    for reference in references.iter().skip(1) {
+        named.insert(one(reference)?);
+    }
+    Ok(named)
+}
+
+/// The files of the ledger of one end that are no record that could be read.
+fn unread_records(loaded: &Loaded) -> Vec<RelPath> {
+    loaded.unreadable.iter().map(|u| u.file.clone()).collect()
+}
+
+/// One end of a change as the gate reads it.
+fn end_of<'a>(loaded: &'a Loaded, unreadable_records: &'a [RelPath]) -> End<'a> {
+    End {
+        shelf: &loaded.shelf,
+        ledger: &loaded.ledger,
+        records: &loaded.records,
+        unreadable_records,
     }
 }
 
@@ -510,21 +556,74 @@ impl<P: ShelfRead> ShelfApp<P> {
     /// either lists, its holding at each end and what the change made of it. The
     /// rules are the domain's ([`impact`]).
     pub async fn impact(&self) -> Result<ImpactReport, ShelfError> {
+        self.impact_of(None).await
+    }
+
+    /// [`impact`](Self::impact), and whether the change stays inside the reach of the
+    /// documents the references name, as the shelf stood before it: for every
+    /// document, whether the change reaches it and where it stands against that
+    /// reach. The rules are the domain's ([`within`](crate::domain::shelf::within)).
+    ///
+    /// A reference is resolved at the end before the change; only when it names
+    /// nothing there (no document has it, or the declaration before cannot read it: a
+    /// book the change adds, a key only the declaration after takes) is it resolved
+    /// at the end after (so a document the change adds can be named), and that end's
+    /// answer, a document or an error, is the answer. An error is the one it is for
+    /// `get`.
+    pub async fn impact_within(
+        &self,
+        references: &NonEmptyVec<Reference>,
+    ) -> Result<ImpactReport, ShelfError> {
+        self.impact_of(Some(references)).await
+    }
+
+    /// The one reading of both ends of a change, and the gate on it when `within`
+    /// names documents.
+    async fn impact_of(
+        &self,
+        within: Option<&NonEmptyVec<Reference>>,
+    ) -> Result<ImpactReport, ShelfError> {
         let now = now(&self.ports).await?;
         let before = load_at(&self.ports, Side::Before, now).await?;
         let after = load_at(&self.ports, Side::After, now).await?;
+        let named = match within {
+            Some(references) => Some(named_across(&before, &after, references)?),
+            None => None,
+        };
         let (was, is) = (
             before.assess(&Listings::NotAsked),
             after.assess(&Listings::NotAsked),
         );
+        let ends = ((&before.shelf, &was), (&after.shelf, &is));
+        let (entries, within) = match named {
+            None => (impact::impact(ends.0, ends.1), None),
+            // Both directions from one set of identities, each row paired with its
+            // other; the rows of the answer are the forward ones, as `impact` builds them.
+            Some(named) => {
+                let rows = impact::both_ways(ends.0, ends.1);
+                let walked = walk(&named, &before.shelf);
+                let (unread_before, unread_after) =
+                    (unread_records(&before), unread_records(&after));
+                let gate = crate::domain::shelf::within::within(
+                    named,
+                    walked,
+                    end_of(&before, &unread_before),
+                    end_of(&after, &unread_after),
+                    &rows,
+                );
+                let entries = rows.into_iter().map(|(forward, _)| forward).collect();
+                (entries, Some(gate))
+            }
+        };
         let health = |loaded: &Loaded, assessment| View { loaded, assessment }.health();
         Ok(ImpactReport {
             way: self.ports.way(),
-            entries: impact::impact((&before.shelf, &was), (&after.shelf, &is)),
+            entries,
             names_before: before.names(),
             names_after: after.names(),
             health_before: health(&before, &was),
             health_after: health(&after, &is),
+            within,
         })
     }
 
