@@ -1,0 +1,128 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:650e935fff8cadcb5e53c88fa42b258e5bcfb171e7acb1addab91fd79dd2414d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs::each_class_of_error_has_its_exit_status",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0a5bfbed2fed69202b92ac3fd4b428b00f88859b1ef1a5d703b9ee188c454f97",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs::the_error_json_names_the_class_and_keeps_the_messages",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8cfc9e4825a59a8fc9380733296194fb65d3d80c281d26f153e282b0f365c534",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/exit_tests.rs::the_error_json_of_an_ambiguous_reference_lists_the_candidates",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ad095f3a610c6ca88a3a0976f810bcd385eb480b9201a9128144317abbb4b168",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/same_meaning_tests.rs::the_schema_of_judge_same_and_judge_withdraw_has_their_fields",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "c9348a2df64eed53532c0a849d1984f5b9ed9a0d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:08b7ed4c7836d8afabdcaed068f0c2955df73e0d6a65e0330327479c377b5d4e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795612975048,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1b87bc28bf8099cb7ccbadd2a10c0f2bb5aec6c4",
+      "hash": "sha256:111d123a2acd3ae494e683d8addc65004213bf6be50aa4f7161f83c6ce4a6310",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "30"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d626-73e6-9e17-45d0aef14328"
+    },
+    {
+      "address": "a0fd6d7c9569173efcc54a424e59fc4fb1320f63",
+      "hash": "sha256:cf9125b01846eca0cd37787576126b89184375347877f62c68a93b275816df30",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d99a-72ad-86a3-e75931d0b50a"
+    },
+    {
+      "address": "ec2f4abc7c0b28d7a26689284802a8b803d178f6",
+      "hash": "sha256:2c015d02097e935ce6b0c7e74ce03fb6467536d1858d5e82a91f700d9c548a53",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "32"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dcde-76e2-a624-77aadb435255"
+    },
+    {
+      "address": "8ea9966b54a032c0bd52b4fa8d9ba4f612763c3e",
+      "hash": "sha256:0d9ebbcb94bc5a1af2d9dab8f06e4b89349ed39c7e025cac11ff3b01c70980ed",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-dfd2-7125-a8b3-7f3af22d2fce"
+    }
+  ],
+  "id": "01a212df-a8e7-7316-a75b-c6f456d255b9",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the cli sources: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus found no point in these",
+  "revision": "22a17a7dd9b7f640091f3186ba9bc1912bdc8115",
+  "seen": "sha256:c3c6a1fe7298e512e2c3c9f06d0c7a785e7fc0bb7d1d19f98aa95a3812adb33c",
+  "seen_address": "e8b89ec1b2c54e2fd615aa6f1e353afb7097e8b2",
+  "subject": "01a1c4ba-1a9f-7201-9b7f-62a0f1be9e14",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,14 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795609061002,
+  "book": "verification",
+  "id": "01a212a4-0834-72b8-a9e7-bd6fff53af4a",
+  "kind": "exempt",
+  "link": "cases",
+  "reason": "The readers of the command line (args.rs) and of the lines of new --from (books/new_lines.rs) hold no test: rust-test cannot list them whole for the derives of clap's Parser and of serde's Deserialize and schemars' JsonSchema on their items, which it does not expand, and no verification names them as evidence of their own; the exemption stands only while no test is found in them (DEC-112)",
+  "subject": {
+    "name": "crates/whyshelf-cli/src/books/new_lines.rs",
+    "space": "file"
+  },
+  "v": 1
+}

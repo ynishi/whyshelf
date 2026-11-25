@@ -1,0 +1,210 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:3635954ab7fd67ee0e8dd1b98e844ff241e4574464fc573c07ca9189c45174f0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::a_line_has_no_field_the_shape_does_not_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9dc965c327e50de1d553eed5af87d3a6a63a99e38fc567aa706885b509ebd56d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::a_line_with_no_entries_is_a_line_with_none_given",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6f66159ab5ed22de3dbad18d6777f0754b687d2187bc70c8c69b24a4928cce01",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::a_null_entry_of_a_line_is_an_entry_with_no_value",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:21ebb74b9eb458333d340b8e484dfb056706763e026493982cdcb76a900eba17",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::every_line_that_cannot_be_read_is_told_with_its_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bcc7aceb177594079555ed65603fb8a2f5da5f7d4f68299d5a0624cbf6a8e3e6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::lines_are_requests_numbered_by_their_line_with_blank_lines_counted",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1b2856bf6e6ec28ec3870066e5a71a3e94b63828e22d94a603a5531ba39a2717",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::new_parses_from_alone_and_refuses_it_with_a_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6eab59d794f74f5341afaa18d0399b250473bf8b3de51dccc4c7465083d7abaf",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::the_values_of_a_line_are_given_as_typed_and_a_name_twice_is_kept_twice",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a5d5c1d2e092486c746582386732230db0998310aed3d4a879703be8f44b0085",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_file_that_cannot_be_read_is_a_failed_run_and_one_with_no_line_a_request_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f621d0deba6ac6278514d040cc534920fe2d423eb763dc73d1a54e0e04ba8c0d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_line_refused_writes_nothing_and_every_refused_line_is_told_with_its_number",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f74891c66a7fadc7a351e4874a6bd99ca5f91b2f9487b99354c65cc1aa38038b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_line_that_is_no_json_object_of_the_shape_is_told_with_its_line_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0daf6014c65b59b71c1814f46b513d8c0db4229a77526eb6c5eff2bdc86dbbe5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_line_with_no_entries_is_read_and_judged_by_its_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4e4885b6b599a773ee82925d47199f08595f3041a66e80b91b62890485e1dded",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_name_given_where_no_document_is_linked_is_refused_with_its_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1c03578203001bed854c3476b76633cdfdc3034bc9ed1ae54f3fcb2a75ef2c87",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_name_no_line_has_refuses_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b869ee5dc4ba6cf7367bc543530911bdbecaaef4b604ec5573938cd7062f1d8f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_name_stands_for_the_key_of_its_line_and_the_file_has_the_key",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b499928ccf243486896a56332cd2ece294312770300a9e7dec3e1419ac885db0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::an_entry_given_twice_in_a_line_is_refused_with_the_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5202928cb8220d939aae46066b615e47ddd9d6d0f20ece6c2baaaf73f5269b7a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::every_row_with_a_fault_of_the_request_is_told_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7e6deabf1e957c2654a731978f2c0657868f04c7f2d3cd9d7fb9e25e8aee1c4b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::from_is_not_given_with_a_book_or_a_book_with_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b7799873b9efe1c9942177a14a671c72e2ae0a3802bd8efe8c7ed757c70c7b99",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::names_that_link_in_a_ring_are_written_in_the_order_of_the_file",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:69a9a4b9846c3e5e95c3518358b26efb3fc5d9444c8f1df5f6740716a08c3323",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::new_of_one_document_is_answered_as_it_was",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:dbff69e3d2e223b94f2c06635f2ef580ee4e2aee47ad8ff9e304a6335f5691a7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::schema_has_the_answer_and_the_shape_of_a_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:61546dcf734f4deca33c3e4001e8785767d48fa155481061c733a41f53814e83",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::the_documents_of_a_file_are_written_and_told_in_one_answer",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5b466ee495a59f317dc734dff44b05e368cc7413839bfc9b88c671444acfc409",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::the_standard_input_is_a_file_named_dash",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fdcdbaf4c8ae00346b2afd49d061c130c98ff0fe5e0aa530eed862248274bc41",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::twenty_five_lines_are_twenty_five_documents",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795612966643,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c634e82e5a2b52fe232d878103c8fcdd5c408c4d",
+      "hash": "sha256:6cadfdc0cff2847fe48ebe362769681584fe3ccab541e762c9debf027fbb6b17",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "75"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e3a5-6ee3-7525-839f-9b046ea44760"
+    }
+  ],
+  "id": "01a212df-977d-7160-95fa-ce4ed285c194",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the cli sources: tests named by function under cases; the body gains or narrows the sentences its named tests assert; blind review by Opus (from the change only) read each test against the body, its eight points checked against the code and fixed",
+  "revision": "22a17a7dd9b7f640091f3186ba9bc1912bdc8115",
+  "seen": "sha256:ef3a9cf80b85171cb0560a79582f6f8664e44c55e4666fe7f05d6ea225f3b7e5",
+  "seen_address": "bd4b9a08d96858060b835a23c372010379291141",
+  "subject": "01a1e3b3-06f7-72bf-8831-ebc6ff84bf06",
+  "v": 1,
+  "verb": "approve"
+}

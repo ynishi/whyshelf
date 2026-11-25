@@ -1,0 +1,126 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:13cf360877200d0d07ed1bdf6bc9a5cd060adfdd6ceb8cfb5dc621404ec60fa2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::each_cause_is_a_line_in_the_order_it_first_appears",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:047c81b42306228d97c92e91347c051205881757a9b342cf3be022aa6b9f9f87",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::four_documents_show_three_keys_and_say_how_many_more",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bc139e8894d18ab7ef4c919f237408cf34297b1b2953340a5d5664d1d4ebe82f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::four_names_show_three_and_say_how_many_more",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:dddceea66822a6ec282a56ff77da681c9701a8ef229e1105bdf28f48c9b7da75",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::no_answer_reads_in_the_plural_form_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:76757250e4a0c05324979e5451632afd4cacac471bc5a4c405ef2d0be3f42b42",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::one_document_writing_one_name_by_two_links_is_the_singular_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cb5c3c42985b46f3c65a239a6976f93e3d88fe00f99d5787c0796058f9f78fe3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::one_name_in_two_documents_is_one_name_and_two_documents",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:723ef5c77000b04881759991ddfaa0625bbacbbd3e2c5c4b38aec0d2a29c4bc5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::one_pair_is_the_line_it_always_was",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:53a2ee9c32ad05a6816031fee19442156eddccb8241a952370db18e07cfd311d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::stale_writes_a_cause_once_with_its_own_words",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9a48c88a38c0101fb4b0cda03a33997d21d52813dd1d329b9ac779127b20c540",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::the_lines_of_causes_stand_between_the_gaps_and_the_names_with_nothing_behind_them",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f0b94e244c371d129bbed085003c079df45eefc36bd8f7fac4d190b2ba01aff8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::two_documents_are_named_by_their_keys",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bb747cc3bc9f41546d1c336894f06af6d59ab200b5a75739b8132f3588bf471d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/untold_tests.rs::two_names_of_one_document_are_one_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "5378974f0842e63034bcd91592df32e5fac61607",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9793e5997369b263042565e5298647743dbf2a63ada0dfa23451d464d048a4c0",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/untold.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795612966643,
+  "expires": null,
+  "frame": [
+    {
+      "address": "72b66d75adbf24c8596bcaabf9a745918d611775",
+      "hash": "sha256:32cb187d100e8eef092018017daa514abc8600501551e6fc3a5010779854e789",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "69"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1d9f7-a611-74b7-88a2-a58381f213dc"
+    }
+  ],
+  "id": "01a212df-943e-7667-bc63-3ca0ffa5f371",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the cli sources: tests named by function under cases; the body gains or narrows the sentences its named tests assert; blind review by Opus (from the change only) read each test against the body, its eight points checked against the code and fixed",
+  "revision": "22a17a7dd9b7f640091f3186ba9bc1912bdc8115",
+  "seen": "sha256:ebdc97821cc4014f565b4a55fb304e1e3533a14d84901ea119d99bcb0d0acc58",
+  "seen_address": "76375b94f5bb8d9a794dfa006b5057616d92dc58",
+  "subject": "01a1d9f7-b95d-734c-b32e-ff3280f1907c",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795612980467,
+  "expires": null,
+  "frame": [],
+  "id": "01a212df-bd3e-7757-87cb-b1ad2a4d5cf5",
+  "kind": "decision",
+  "reason": "#120 stage R: the finding of the batch over the cli sources, its counts measured on the branch and its review points as fixed",
+  "revision": "22a17a7dd9b7f640091f3186ba9bc1912bdc8115",
+  "seen": "sha256:5344b761164bd58fbf0a8709c765c9e64ff8348489e6e200285366d2f1f330f5",
+  "seen_address": "6c29c7343a670bb2163e15afa147f13c9a40f2b2",
+  "subject": "01a212a4-3c90-70d6-afa7-ad749a156dab",
+  "v": 1,
+  "verb": "approve"
+}

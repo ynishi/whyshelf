@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:dbb247b71d8fb4365a43a32e7cb46345922dfa7d140fe49268e223394014d2c9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::an_entry_with_plus_equals_is_one_item_as_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a1c98c6a25f3f39b349f256cdfd7b6c2592e416319a700a1ebeea17276668f57",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::plus_equals_with_no_name_is_refused_and_a_value_may_hold_equals",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5629cecc115b6a76ed6280e29ce6b28cf420778411b082585bdc17c0f218f3f5",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::an_item_for_a_field_that_is_no_list_is_a_request_error_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:da4dda16eee73123bda7fa7727a72708c659442d6235faaea672d8f0d39a9fe3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::an_item_for_a_link_is_a_key_trimmed_and_an_empty_item_is_an_item_blank",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:56348b8e5c8c853470199fc5205ebec204c48c7e469690a27fc4d5bd6aafcc6e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::an_item_keeps_its_commas_and_follows_the_split_items_in_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:31c725ed8298992bfdbf8bed453954e9998d1977a9e422ad391bf3f96d824ebd",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::an_item_of_nothing_for_a_list_field_is_an_item_blank_after_the_items_before_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b6d2f9cd3723066d65b0d978328ac85a45446f780ff677e2a1ea45ab9e8029cd",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::items_alone_make_the_list",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795612975048,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0d523c0e6b5d7eb05e55bfea2ce892ebc4a70ea1",
+      "hash": "sha256:db53c5c3cfd6a4800cfb2a2b2c50b05e6e86ff1a553329fdcbdd5ee96a09a95b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "24"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4e9-62d4-72e8-bf6a-0b974af9ea91"
+    }
+  ],
+  "id": "01a212df-aa1f-7300-8810-b940eda7f65c",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the cli sources: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus found no point in these",
+  "revision": "22a17a7dd9b7f640091f3186ba9bc1912bdc8115",
+  "seen": "sha256:f8593e8c1813914e08c3dafc6c23e280a95b37dd0fec3f2d7c4f548a27c059c3",
+  "seen_address": "e639c69b4d0347d4d7e37a2ed91817146a12faf2",
+  "subject": "01a1c4e9-6379-7470-911e-6db69d926799",
+  "v": 1,
+  "verb": "approve"
+}
