@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "aafcf63de1812d8d8ca0c91c713acc45e9598735",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:36d8da689430303d8cc02ddb9f290f35a23052762f05f37431e67ed174091dc4",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/verification_spread.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795583263793,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a82bcf0fda363a00e5bb0d826f4ad8b66f7143f9",
+      "hash": "sha256:dc0c69800aed01d09980bb6b6293af0358d22b49367a4b15c42cd2607d64bca4",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "56"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c877-8fbd-7353-9e60-cfe043fb39a9"
+    },
+    {
+      "address": "52e78eab0a9fca9c92d8a6814185b075053cd249",
+      "hash": "sha256:ea4262d3c6c3035d1dc2ce3c3d93152a90a7c542b37bdc4cc548dc702f61b654",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "112"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2102b-3567-73b5-a69f-5a6bc7544b7c"
+    }
+  ],
+  "id": "01a2111a-5103-74d0-ae49-06ad3b833fe9",
+  "kind": "decision",
+  "reason": "#120: the guard lists each region once (the include of the cover of cases, and the files of the end-to-end tests where a helper lies outside it) and reads every file in that one listing, instead of asking the spaces of each file alone; V-49 says a file the include takes placed in no one file, a region rust-test cannot tell, and spaces that answer otherwise within one run (the tree changed while read); code review (high), rule-judge (arch) and a blind review by Opus found no must-fix, their points fixed",
+  "revision": "5ef6619b45048a79aac0879a0c00f4d61e731817",
+  "seen": "sha256:eaeeb953b91bf60e27d7ed1a5190ef9e9b25faab993d998d4898aea1fba974af",
+  "seen_address": "37ffcb9ad86efbdf3177447853fb9572fa315015",
+  "subject": "01a1c877-9138-726f-9e0d-817c5f8f866f",
+  "v": 1,
+  "verb": "approve"
+}
