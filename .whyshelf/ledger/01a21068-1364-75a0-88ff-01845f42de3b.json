@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:546f7b3aca48827c1f335872c20a6628f6fc82c59095606b8fa6c15892f5d485",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs::a_declaration_that_cannot_be_used_is_as_it_is_for_status",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5018e6f770121154d7805bf631eec02ec7cd84f33b61f6b681e8b505f4e0a323",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs::a_filter_that_does_not_fit_the_declaration_is_every_problem_and_a_request_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:45766143bc22d744f61ea7ff0ec1fc4952fb307843f08208edcf5b77a9ba923e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs::a_value_no_book_reads_is_a_problem",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c6903acd7da65255848e042c1993ec13322e3c4d2dd12fde4f7f910a90bc551c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs::status_is_status_filtered_with_nothing_asked",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9c021d03d8732d8df085f74f2389b7835da81c33eae0f5534e61e5d5dc3790bf",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs::the_health_and_the_names_are_of_the_whole_project",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f4526878058f72bab22d532a5fcd2211fce94de0c931a3527c5f926598ce5065",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs::the_kinds_of_filter_combine",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ddd23c2b1d26ae83fa3fe966f7587c85df4065918bad4c6e603e526c68ea70e6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/status_filter_tests.rs::the_rows_are_those_that_pass_and_the_filter_comes_back_as_given",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "9850630df27b99ca33c121cb11981e6749f27d35",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5b03233d77d4755652c360f34c6673aa500f2dbf039bce7a26b79d0eac5a4844",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/status_ask_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "87fc7cc46ca5c4d3815d44df476abd74a05f27a7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f12019dc300847e65a866317120673f1a563e47902de0cd6631feae55d4f7c7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "15dfdba4725af3eb8f621da3e306486ff0032390",
+      "hash": "sha256:78bb4bbd2b5111d439eec7a9cc1ca14d83756fd758164f7234c161103a50b1dc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a21068-1364-75a0-88ff-01845f42de3b",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:f45b99cb2ad0d8e32a212023e18a7053e3ce1d418cde9b46de61272dea4d41d8",
+  "seen_address": "8a56006523d8960763de9f218923670be788c9b9",
+  "subject": "01a1da61-c7c5-7789-ac4f-8edd5fa71741",
+  "v": 1,
+  "verb": "approve"
+}

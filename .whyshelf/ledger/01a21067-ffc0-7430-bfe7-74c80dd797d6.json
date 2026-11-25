@@ -1,0 +1,244 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:476c710e56a9d198ff60c62df2ca7070a0520094e05adc81d6c4a2104d2c38d2",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs::a_new_document_whose_name_the_adapter_says_is_none_is_refused_and_not_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f1687010827e7a9e8e4df406f4620fd69d8029280e2285a416abb7ae1c6ae612",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs::a_pinned_name_that_later_cannot_be_told_is_a_notice_and_the_approval_stays_fresh",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:37d9340f8a21b9f75f23a465097f32f65ab3c4e4c0413642781578d0c27ead0e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs::a_space_the_source_does_not_offer_and_a_link_with_no_space_are_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3a37f74c5e6e278a490d8a0f79edebd41fd97395fc7511098ae9b799cbbaa931",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs::a_text_the_adapter_says_is_no_name_makes_the_document_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2ce74b00c7cccc238759bd06e2a04e2e77a72c8460e40d3664afd68f436a9de6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs::an_approval_on_a_name_that_cannot_be_told_is_refused_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:56d51a91d05bacc68a14f06fb5d969bb5ab12c6cdfa62efb270c88cd74867db7",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs::one_address_from_two_spaces_is_read_back_by_each_space_s_adapter",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:829519bddcd5a38f1a904cffa3ba281370445714ea8abe3fdcc85ddfb34c6d40",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/space_tests.rs::the_same_name_in_two_spaces_is_two_artifacts",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "232249ff21fbacbb525ad957925d501bf0bcf726",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4a8ea75405a30b9a6ef298d0f1f7f01ebdc12267921130bd17604afefb01800c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/dispatch.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9e487ef31061452a9cfec86ab5821b61d097e868",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:add768ddd5406e06645e18dda7518815a659d1f748b4a8cb827a8c355216144d",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "49b692c071996155224ff92bfc11f8e4659a502f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5a472c3deabec95e56feb781dcbbc22670447bcf55afd8ad6d38389b5efe2b74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "0d06a047bbaa309c89a1d042e6e3b4d4fc9ac2fd",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:91358f88fda5403c5db2436a5528d8a1d82f338080b509a544e531525f20460e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "15438da9bc8d0cd40806c9bd31b33b6a1dff226e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94764bb140e397d0abc15683e76086bc530de516a33c9563da7755fa0dc4a899",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b477824f027d5c12b6d4982450f3458f282c7f61",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6ade3237bc3b00612988868b792584abd00c515c38fb9b3a4ddbec379098a296",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5ce44d3289fd5682822768e56a208f252fc83cd6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9abd4e39efb864f0552f67a7a8bf0700ac8a900b4912008f5291335a76708637",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4a2cc18f98239d05482effa06946d9d2efc7c5b9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:86097caf588641e94cf1d6dc9fc984a0a80a598b98699d947d5780b3ae2ec19e",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/registry.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "47e2c6c9b0f0d9a8461ab457b9049d72b051b0b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:73798f986fabc1f7508efca306c6ceae359173019f05c91d13e9b89362e36f80",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "52742451b255b109683b0f4e72ddf784277cae6d",
+      "hash": "sha256:396dbbf0430120d2a819e65987bc767f28d271cb80461d7b41e40106d44a7099",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "44"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bb53-7733-93f1-bf8478b9df23"
+    },
+    {
+      "address": "5e1c17298ddd8bb542797aba6eb0d5290479c9a7",
+      "hash": "sha256:a16bbcf75527d6ddc5de0d1a09d38e3463e3138a4b8465865cc117582afe941f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bc99-7728-b8d7-deea06f9c49b"
+    },
+    {
+      "address": "e4894a2b3e0e23aa63e7a3936ccc1ddaf023bd48",
+      "hash": "sha256:728a8801003dacb50886f495ac9a9d364b391f894c9a8a5f95e67250e8a23e73",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "46"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bf0d-70d9-a6b0-d454e6662c4d"
+    }
+  ],
+  "id": "01a21067-ffc0-7430-bfe7-74c80dd797d6",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:05512f35c7c53eec2f7d1284cd598ff0f74fbd4fac95c8692f019808978b4e09",
+  "seen_address": "b64f160bf9f2deeffcb18c5d1ea39848a0334ccd",
+  "subject": "01a1c60b-c0d7-702a-9bc0-a229ded269d9",
+  "v": 1,
+  "verb": "approve"
+}

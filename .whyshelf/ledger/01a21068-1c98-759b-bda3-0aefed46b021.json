@@ -1,0 +1,182 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a96e61ebe97dee76145203ecd2a60a1acf564e855a5e48fd6f4ea53491ac3991",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::a_write_that_fails_part_way_says_what_was_written_and_what_was_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ed828fcac350dec627bdbc529a848f6021ff5ebc92ccc06d5b43eaca823b3edc",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::another_file_that_appears_before_its_write_stops_the_run_before_the_documents",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:255b3ba077c080032aaae1540245586a7228080a4366d3d7d0beb9f57d6d8403",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::a_file_replanned_to_another_key_is_put_on_disk_and_the_file_that_was_taken_is_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:43b833575d5bca2af055ef7b48557f9b891696506b5decadbaa581429b3065aa",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::a_run_that_stops_part_way_and_cannot_put_what_it_wrote_on_disk_says_both",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c14d5cd034c54f3536a033762b3ab93af4a810cb915876a0a130836b038ba721",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::a_run_that_writes_nothing_puts_nothing_on_disk",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:eb0d9a0acb1e4b1e58bb2cfde4947efacaeb590461e625db21be753fd02672ac",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::files_all_written_and_not_put_on_disk_are_not_durable_and_are_kept_and_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1a8d7eb5f95b4168369278d068a86a77a9a01eff4b5fc083c95d3adc1e6a07c4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_puts_the_declaration_the_file_and_the_documents_on_disk_once",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6e9d39dea7ffe499f5fdaf711e7e2d85fa35734a75f8fa3bc948d94bb685d340",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_that_cannot_put_what_it_wrote_on_disk_is_not_durable_and_keeps_everything",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0c2e96e12fee471ac58afc8bdfff2ff0563d78be396defbd7e650b89e149ea8f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_that_is_refused_before_it_writes_puts_nothing_on_disk",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:468315083eb7cd503048110be2600683b830ebeea26596e81119752b5b580a0e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_that_stops_at_a_file_in_the_way_puts_the_declaration_on_disk",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:25abaa542f4758ff37dc66a708bd00c89e7d1e6c4eb367139851631e87ab1813",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_that_stops_part_way_and_cannot_put_what_it_wrote_on_disk_says_both",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:de20e40287b5ffe988cffbcbc515322bb60b29809dd34017147b25ca6d8cfdc3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::new_doc_puts_its_one_file_on_disk",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8af4b0e8d16d6f2348d786901b1a61e5590cca8a4676cb13fb8bc6f45ea25af0",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::new_docs_puts_every_file_on_disk_once_after_the_last_write",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:422d5726e9167c9e49b0b9eb15e05ff0edbd81f4bc806d04b1d4959afa3cca65",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::no_module_but_run_writes_calls_a_create_port",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0e3e2aeb3399a9fb49b26dbc049782590314a40f5e1c5f4ddb5687c271681683",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::the_futures_of_the_use_cases_that_write_are_send",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "6f932469c2bd66a79408963fac6f1d33ea44870a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:71c9375a856eb89b5b215612fecf236425f4af26a622453f23f6ac18250a5c8f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fake_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4d92db33e38617bd5254f7448a6369595c18612a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d2635da08b0134817369f20e89c4a9abea941e1be1b8e19ed47e61ce346271a7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5a2186804aec8e911f4c339840c9c0b5efb77da6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bb3261dd723b19e9ce010cfd9b553cd6f5dee9f70f93d6a455fb30798f51921d",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/project_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "fbcc6e0d325c707cb322ece5f42b03ce74b33d55",
+      "hash": "sha256:17c19b03e1169cc1c823545de8078bd69720ac3e0191752f308c1b7cb0816d13",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "79"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1efb4-5387-738e-92c2-897542094cc7"
+    }
+  ],
+  "id": "01a21068-1c98-759b-bda3-0aefed46b021",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:5544baa07a9f7f2953520593cd33e8b1632c3424209f0064c6baebb94a6a91e3",
+  "seen_address": "fef3be3f8aeb3b8119c6b8f17bae85828c0549bf",
+  "subject": "01a1efb4-acca-7266-a1c9-eaf0a9ce7b94",
+  "v": 1,
+  "verb": "approve"
+}

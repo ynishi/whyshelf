@@ -1,0 +1,168 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:dbe23b103032d50069df38c5f18bb2899aa12ef1b7e6be4993d444aca3941b42",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::a_field_given_with_nothing_is_not_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:30e9c1e0073202b325508cb5e2f16ba3a70ff2015e6682b1fcd78fcb8582d791",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::a_null_entry_is_given_to_the_domain_and_not_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:31c725ed8298992bfdbf8bed453954e9998d1977a9e422ad391bf3f96d824ebd",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::an_item_of_nothing_for_a_list_field_is_an_item_blank_after_the_items_before_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "d30e3fb41de3c458fe4af4b8f4567319c2373b0f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a7587bfb8a165c081182e5b4e651129c4e4dc8c76ed056d88a72b2a719db2a10",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/nonempty.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8aad8fce505ed6a9c04010d8b37b46fa26cb4547",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:42a85d00cf0e20e51dfbd1ee89032cb0c8c366944528533dd85b479af03cd00c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/empty_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "3a5865bb0282c4185acb9242c703db72f02218d2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6b4d61fd833ddd9bad566927a87f980056db8ac79e6d817b360a85c10e51d34f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ed5e75d4545baa1ba254bcf2118e70e7655fecdc",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1308dc41b8c653ff429a807d47ed6007f79b77d19c9d36c42e2a08c1eb3f592a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "76c05e0124e2edc0aa46347c0e95da9cfb4d727f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:40e201d94a06c9f3ba91fc1b28b4e999a0dc9981b5a98f1c1454058d7805b028",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/doc.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "87fc7cc46ca5c4d3815d44df476abd74a05f27a7",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2f12019dc300847e65a866317120673f1a563e47902de0cd6631feae55d4f7c7",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/filter.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e6cedbdf71abbb2b21b7f7856f417b0ca0ce44ed",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21201c1d7dda3f9ff2e730cff9788bf51d846191b4d086a449f5ecfb3f7766c5",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "dac7228e8be0de1c65851d37fcfe0793ba3b5ab2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:100c97437a38f5d490cf6ac99f80453540088d1821905fb628347e67b46fb9c7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4937a046e315e71bc5f4a581e4c734265afbc1b0",
+      "hash": "sha256:16441793e0701b6a5c293308826f0028ce5f8fb44f3d80f87a16f35a644eb9bd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "76"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e4f4-a1a7-70a3-a224-a7b68ad2e076"
+    }
+  ],
+  "id": "01a21068-1950-746f-86b7-955114b66411",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:a01a4fea243bd140cf5cc79fa9ccd3d40283a3e09b59cd453dfb983aa3dab908",
+  "seen_address": "1513fbf6b856d63ad7dd12e31d9be04a07935e25",
+  "subject": "01a1e4f4-dfa9-7048-ba05-6ab46b9c87f7",
+  "v": 1,
+  "verb": "approve"
+}

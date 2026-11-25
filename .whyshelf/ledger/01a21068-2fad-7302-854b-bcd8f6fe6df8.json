@@ -1,0 +1,132 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:7f20a1d7c44c2fd4b845e0cb1f0429f1ea1ff4f990e12a62b0030a20a95ab834",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/side_tests.rs::impact_reads_both_sides_at_one_time_and_answers_each_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:72640ef20c5e80b1303296c6b9492c44348ec8be13b38f9d48ca58382278ec6b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs::the_fold_takes_what_does_not_hold_over_what_cannot_be_told_over_what_holds",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a7ef1b97c0dac25818bf23face5edd24db0d8ecfb3a7ff07e60bb2351ad0da3a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs::the_gate_is_the_fold_of_each_documents_holding",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "946d74e89a597f784b464133b1840dc5547a5806",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:21459723832a5af17fca70c3257448b162ca18055139d1b3ba740c576e95283e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/impact/tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5a2186804aec8e911f4c339840c9c0b5efb77da6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bb3261dd723b19e9ce010cfd9b553cd6f5dee9f70f93d6a455fb30798f51921d",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/project_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "20ff9eb4f7a25648ac6b72a24d82eb8cedcdf271",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e26bdbcba1af50f1d111df03754dae9dcd67397906e0052460c3848e9c78b1a2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/state/git_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4972900f40504da70ced14a02dc16b149d6aadf5",
+      "hash": "sha256:406a73ec920cdbe93f363c889e98f124f257fc91109f8100359f79c620be5a79",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "103"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7e48255413"
+    },
+    {
+      "address": "d6d06750effaf90c904119631b302dbf6452d682",
+      "hash": "sha256:978c35e2c845f1a1791067667a6693eea9cf58224d65e7233623496043c99e2d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "104"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7fbb63b84f"
+    },
+    {
+      "address": "4ddb39b58a72793dc580554fba5b372537ffaa73",
+      "hash": "sha256:13f6359d0bd033547ce85ee7367a65d4642fa5f922aba19955d6d6a67c2bf555",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "106"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a803bf4e2cc"
+    }
+  ],
+  "id": "01a21068-2fad-7302-854b-bcd8f6fe6df8",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:b30db284ddfa441ec5d68b1057d025ed677cd0f3ba431428cb9b2eb2259043d5",
+  "seen_address": "9e1b2661c987d21419d37ca595c6a68f635b073b",
+  "subject": "01a20baa-2bf0-764d-88ea-9a81d4711de0",
+  "v": 1,
+  "verb": "approve"
+}

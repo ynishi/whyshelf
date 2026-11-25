@@ -1,0 +1,115 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:ad0e3424b80e4800d06fa7c3d4ffb57067c2b2e746e2ace577c1c991d8563163",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs::an_actor_named_in_the_request_does_not_ask_the_port",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0111f4703539db636bcd13a3f78743da1d1c9c786bb143491d2a6ceb28a33011",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs::an_actor_named_in_the_request_wins_over_the_ports",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:928bf92a152a799e8be6e78e64f6b151b0a70004e813bb02ce48cef75bd7b962",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs::with_no_actor_in_the_request_the_ports_is_used",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "fc62088c1055be556a17b998e56022f5f760dd4f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e52a129d11123a002edf3bd549f13ab1032ed851369e845ca190d970a965eb54",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/actor.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "ed78081898f239099af12d9920d20d82165b84b3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0175bb57361579365c6f80650f2bf9051ecec2367fcd8f934356d11545e72f74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/id.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c9058de5c53627c5b7d311075c3a93673bd4e279",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9c33d7ead0e073e4b0e19406c514d67530dcb0a435edba5be796bab80152bd71",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "18043f59ad21212c02248de6ae6190ae95685067",
+      "hash": "sha256:2b40c7219de6e63b98ee933e423a47e71e0a67775e325f5689d0966fabf8c6be",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "34"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e310-703a-82cc-fecc69ebdc07"
+    },
+    {
+      "address": "12b9000513a1af84240cb975aa08345c7d3187c4",
+      "hash": "sha256:cc1e046186585cdfd094bb911bd9ac0b3dfbf4dde33d9ea9b2ef0294b03781bb",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "35"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e6b5-775e-9fa6-11ec41ab044a"
+    }
+  ],
+  "id": "01a21067-fb26-77ea-ab09-bf9750786fd2",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:004675956edd3fddb92deac8dc692eb4249d7d5af36d3836e1a27325dd5c243a",
+  "seen_address": "c6ed43c688029718c1b7a4d5a0a084c2ddbda88f",
+  "subject": "01a1c4ba-1b8f-732a-b8df-96833f6bcad2",
+  "v": 1,
+  "verb": "approve"
+}

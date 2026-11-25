@@ -1,0 +1,70 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a7d5f01dd13fb70977a3445fdc495f95137161384debac72325dbb90b3b46ef1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_tests.rs::the_decisions_of_one_run_share_one_time",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "ed78081898f239099af12d9920d20d82165b84b3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0175bb57361579365c6f80650f2bf9051ecec2367fcd8f934356d11545e72f74",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/id.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "140e3151030bd1375a3dd4ca99929daa69ee66c8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5253bba0cc8c3d0ec29e6618390529c540e161537760442cf95242b08dd4bd2a",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/stats/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9e8133613cd52c97a9dd7d639001062f760b08e0",
+      "hash": "sha256:bde5ee1f7d6b8466bfbdd041cadea99aec7e35e52bfcbdbb413d37626963283a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "55"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c847-f192-7237-ad26-fff5f77b2194"
+    }
+  ],
+  "id": "01a21068-08d4-74bc-99df-4b4f1db41dde",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:5b41f0118bac56429aa4d3edcb8e462e7ebddf098ac3b9f3db82b22b431ee6c7",
+  "seen_address": "ae2133c65d8ff57c21e122f5e2dd02ebdc313a6d",
+  "subject": "01a1c847-f2fc-7120-845b-b62463334965",
+  "v": 1,
+  "verb": "approve"
+}

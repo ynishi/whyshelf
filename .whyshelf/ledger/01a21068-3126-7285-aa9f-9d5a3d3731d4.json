@@ -1,0 +1,118 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:653d97c1a1a9cd82642696e93ee1d1e38c5c4a400795811e65f3457e408ab7be",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/within_tests.rs::a_document_of_a_book_the_change_adds_is_named_at_the_end_after",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e579880761ba67a61a8d725fae50f6cb6b88357a4cbdae5285b713c551977589",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/within_tests.rs::a_document_the_change_adds_is_named_at_the_end_after",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:642304d8523b00c0f27674e1c8d289c6f718cb173daf94e9548943efd317c62f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/within_tests.rs::a_key_the_change_gave_another_document_names_the_one_before",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9f049e8268b0b4dcf3327359061ba6f5543896593cfb4210de6b5def0957018b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/within_tests.rs::a_reference_that_names_no_document_is_the_error_of_the_end_that_answered",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:68c26a6c6cd1096ae1c2a62b7e2ad117c4fcfaa5217430e7e9ced0b4747dcca1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/within_tests.rs::impact_answers_no_gate_and_impact_within_answers_the_gate_beside_the_same_rows",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "81584ff86ed6c9ad959a42afa01e5185c802e13a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0a907be114a1462369294dc770acc069f416da190d34340656e90f16f5510f67",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/within/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ea24270782868fe8ebcf273ae93e11641ff23c45",
+      "hash": "sha256:6f47af16aa2bdfe61d574f21b89af76fada84513c298e0179684ab8290ad8b73",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "110"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20c5d-7de1-71a3-a910-8338570a7a72"
+    },
+    {
+      "address": "3405b78b90541c14660ff4a50a1594489d231cb2",
+      "hash": "sha256:e8d4bab80d3621199a31bf05b523382af6c93bcd9eda78170081f1a813e65f53",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "108"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20c5d-7de1-71a3-a910-8339cc620342"
+    },
+    {
+      "address": "576616b3eeb9b159fa9fde17c0ba89f3845f74cd",
+      "hash": "sha256:988c283af04a5ab3b1c89a5d26be14989c968bb364e94d12fd4dbfa90f07d230",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "109"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20c5d-7de1-71a3-a910-833a5306917a"
+    }
+  ],
+  "id": "01a21068-3126-7285-aa9f-9d5a3d3731d4",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:8b91444cf206ea4462ebc5677940df1cca1f1399ae3f6d20a0ac8fff97c9e90c",
+  "seen_address": "8a3d8738285db144de665077a70698d07697c047",
+  "subject": "01a20c5d-7de1-71a3-a910-833b52f224ce",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:2c170b659b54df874dbc102fe151b76dc2f652c73c05f301d715a70d3eead739",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs::a_write_that_fails_before_any_record_was_written_is_its_own_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:216c720d2492d43457567e492d4cb33331800b90b396b6524f9c68e6a2ea01ea",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs::a_write_that_fails_part_way_is_told_as_the_records_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ce0420d1617d6905b9675e925a700e2f2a3ec6b3e6d25290cd76d3c91f676104",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs::every_use_case_puts_its_records_on_disk_once_with_the_path_of_each",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:662544056b0f144e21ba532898a0ce8d333eff90987f7060a309abe3225fae2a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs::no_module_but_run_writes_appends_a_record",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0e51c8be3dee681e34d7b8180a1c962c8c937a06d6ff9453ea6d240e36b735c4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/ledger_run_tests.rs::records_all_written_and_not_put_on_disk_are_not_durable_and_are_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "47e2c6c9b0f0d9a8461ab457b9049d72b051b0b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:73798f986fabc1f7508efca306c6ceae359173019f05c91d13e9b89362e36f80",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bdacefc0a24b96235859601f12133843cbdba093",
+      "hash": "sha256:3f352f6daad36095a71a70ecd5f9e473b96a9a86e7fc5d73b9d176156fab3af4",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "81"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f0ce-5b0a-7405-b5a1-fb50213d286a"
+    }
+  ],
+  "id": "01a21068-1f6e-71cd-8a81-2f30bd60e085",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:7c5bf34be6221e5e53f67747919a49e729cb7ff6c96d2276f7776f791d078d74",
+  "seen_address": "dbfef19be7a19b6c169d8e6d4d16f24244ca1167",
+  "subject": "01a1f0ce-bdab-70b7-8fd2-2cf2ca609114",
+  "v": 1,
+  "verb": "approve"
+}

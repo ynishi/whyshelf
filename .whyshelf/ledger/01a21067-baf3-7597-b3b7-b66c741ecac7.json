@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795571560150,
+  "expires": null,
+  "frame": [],
+  "id": "01a21067-baf3-7597-b3b7-b66c741ecac7",
+  "kind": "decision",
+  "reason": "#120 stage T2: the findings of the trial batch over the application of whyshelf-core, measured on its branch",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:4cd377bef62e814e8aeb6129c57463b4c04c0c12e747c5410b85eb1273200143",
+  "seen_address": "3f3fa625bbd9ccf5bbc2ce44f20e6c257a0a7cc8",
+  "subject": "01a21067-5b80-74e4-991c-6cd5b0a998c1",
+  "v": 1,
+  "verb": "approve"
+}

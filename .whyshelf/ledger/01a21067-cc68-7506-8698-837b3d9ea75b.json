@@ -1,0 +1,70 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:4a024ef45fc6a705e49dfd62ff97f9acb19b1cf61ee38e8191b3e6dec9af2512",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::a_denial_and_a_retirement_are_recorded_with_their_reasons",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9f4824e5ff035acb9de1310a3df811f085e6de38f954900c06fb93efedb08aa6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::a_failing_port_is_an_error_of_the_run_not_an_answer",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:687af85780e84824dd8da90f3827a35b0a9dee0ad43e0eada4dac9858debcfe9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::a_row_carries_the_decision_that_stands_with_who_when_and_why",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9b1fd0b823f97dc853a372eb2e770656e1ecedb4c528e9f735606c0e283f4aaa",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::revoke_withdraws_the_standing_decision_and_needs_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a6b59666eb945a72431e7011e1c1f96b53c130a1d6ce96b85fd1f4c3405c9b03",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::status_lists_every_document_pending_before_any_decision",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795571564670,
+  "expires": null,
+  "frame": [
+    {
+      "address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+      "hash": "sha256:8a7484e072bdb063dd1c2cfc2af5c5ac0d055149aa9ee10f83fc58495f330902",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "40"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c577-33e1-735e-b992-19f40a27438a"
+    }
+  ],
+  "id": "01a21067-cc68-7506-8698-837b3d9ea75b",
+  "kind": "decision",
+  "reason": "#120 stage T2: tests of the application named by function under cases; the body gains or corrects the sentence the named tests assert; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:74cbd62c2efb61fd253a32b3fa34e0d90acc8f898a188cada7cee6a3196f94d8",
+  "seen_address": "2a3e8f2a91ca356e390c87b795c795f96676177a",
+  "subject": "01a1c577-367b-725d-b911-25170a16cfd6",
+  "v": 1,
+  "verb": "approve"
+}

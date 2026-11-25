@@ -1,0 +1,147 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a9fdfb5ea682796cb5c00247c2b77ef2b0c3224c5872e3fe2c2791af79c5f488",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::a_broken_upstream_leaves_the_named_one_out_as_standing_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e228a2b642781498cc97ff02ec8a7867622575884df5d79403a0f62c60bd5cd4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::a_named_document_that_is_not_pending_is_an_error_of_the_request",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cb77fbd8f97abe546f146f576faf5614fc26ab93e2f7b2376a72e16c4d7a9f81",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::a_named_document_that_is_not_valid_is_not_pending",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:13670055b046cef1b0b2fbad29f94febd1f9d7b180524f945b7ba8563c50ee55",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::a_reference_takes_itself_and_its_pending_upstream_only",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6b228d12ebf179557e2d41a1002d5d1bcdad3e79577d2f316762380b6b8790fe",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::a_refused_one_does_not_stop_the_rest",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:14d0811d103cb4f543d15f327ccefd7a29bbe53729b008404cb69d5c7947213e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::a_stale_document_on_a_pending_one_is_decided_after_it_in_one_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8487c977dc85377ee689f517adf49dae9b2098cd54ecdbc17ea9cb7d5d566c5e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::a_stale_upstream_under_pending_alone_is_not_approved_and_holds_the_named_one_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f6e65c2d17f6174538a8dac0e282e6d0ba9254e6c0106c3d883c5767d8131f5a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::a_superseded_pending_document_is_taken_with_its_replacement",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:54a0b46dc95e17c6020909133e6c8ae399b826145506c0f0be8299df8b939dd3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::an_upstream_stale_only_through_one_the_run_approves_holds_nothing_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2141c1d4ffc3ec0fbc68ef08fb7cbe01d17771a33f3e88e9b01f731d74050a52",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::every_pending_document_is_approved_upstream_first_a_withdrawn_one_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:79ab26978e7d2f5d7980dc58f7f2a478aeb0bc6c3ec101aea05b5dee04aa6584",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::nothing_pending_is_an_empty_run_that_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f970fc65f0df24eb315805c0c21e0ac7ea5fd81db34924acd6e720646e853f07",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::pending_and_stale_together_are_one_run_upstream_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0c1ada9206fc54dcc4e4b112ed7be612be684328364fad5651096d433a549abb",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::the_approvals_of_one_run_share_one_time",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:404944fb39c54710a935adf3f0cf5b4790789536d762bb20a1d9da8db9384287",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_pending_tests.rs::until_and_actor_reach_every_record",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "8e8dd7d4bf5b0685f9be9e2ed9570f629a2a52a8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:86f8af2ddfc6b6944b839d378de380e285a60ed67fd203431fb997a3f3d96464",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/order.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ea65505cd15e7247347a1239fbc02e9f0f4c1986",
+      "hash": "sha256:3816927150bad7efa5e8e105e6f178a4a598ca68b6277726b76c540a341c6bef",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a21068-1019-736f-aae1-3e04187e05de",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:5b1c2f7ab122b40b82fda145d65666ad2572b1bc4857745be1c93d22d6f6559c",
+  "seen_address": "171a41a8b9f1cf7b2ca31191cb69e7f883d2d38e",
+  "subject": "01a1c9f3-b108-73b3-b1df-7e62e073cb0b",
+  "v": 1,
+  "verb": "approve"
+}
