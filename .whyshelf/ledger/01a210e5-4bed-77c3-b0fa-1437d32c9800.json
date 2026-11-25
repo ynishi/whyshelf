@@ -1,0 +1,129 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:4c162051128eaf0a039c3e332e9b3277a22ab172c72c344a24072e9e004570e4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_kind_the_rule_neither_names_nor_defaults_is_open",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9c5869021fa1b5cd3a4d49a8438194239c7b8f7c08b0efeaf6671ea10db98038",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_member_is_in_the_group_only_for_the_records_made_in_its_time",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a709093813b26214adaf450207e9b681c77dfcf0087735bba0cbcaf3a8218a47",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_project_that_declares_no_rule_admits_every_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:aa823538ba0be1307c0f0bb06b19543a0ed39b8824afd98d7f03ed43bb7fc4c7",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_is_accepted_for_writing_only_when_the_rule_admits_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:80cbee9d35399ee23cc099bfe1b731eb798715253003b58fbda26f25f80a3dfc",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_is_read_with_the_book_it_names_else_the_one_its_document_is_in_else_decide",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:744d41fb904544854889f85ec1f55d14f22d46fa014471a279dc75ebadc17ef4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_made_before_since_is_unruled",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1d70a4c955356c60da60ac88a3ae60d5e57e35bddf37156821e0192686fe5162",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_not_admitted_is_withdrawn_by_a_name_admitted_to_revoke_and_by_no_other",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5da7343ca5782dbd538cce9ed3019c1bb396859650303e8cae6cdbdc6b71a680",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_that_names_no_book_keeps_its_form_and_one_that_names_one_reads_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5923de989fe87246bc176c37542433032ebbb2db97394e57000cff659f7d7f51",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_the_rule_does_not_admit_is_not_used_and_is_a_problem_of_the_ledger",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "40a4375cb3971844cc47616914ddadbf9867c6d1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1268cd00de0f70b0a98c647f6aeb03bb24bb7ddfb2971e5e136f7efde84f1ba4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795579785864,
+  "expires": null,
+  "frame": [
+    {
+      "address": "74372b578812f77ad232998a3ae6850437d50c0a",
+      "hash": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157"
+    },
+    {
+      "address": "9ace93bd6fff1be46a68ad5b488ded85fa507d0e",
+      "hash": "sha256:6599ee1d0b6414293d727c077a050734aa210b98e3b0fb8e0b64a6823ee85138",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "88"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c41-7b18-8d07-3f9a5e2b6c40"
+    }
+  ],
+  "id": "01a210e5-4bed-77c3-b0fa-1437d32c9800",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the core domain: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "ee3f8544e23d045665d55f4caa525897016356d5",
+  "seen": "sha256:be029a812eddc8b619055a8ac21f0257d987839bc61cec11abe650dbb5650612",
+  "seen_address": "22b9bac11db475eb466dd40bffa0aca59ceecb6d",
+  "subject": "01a1f6a0-2c41-7d05-b6a1-9e4c2d7f3a63",
+  "v": 1,
+  "verb": "approve"
+}

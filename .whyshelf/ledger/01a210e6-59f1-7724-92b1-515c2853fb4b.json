@@ -1,0 +1,136 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:ad0e3424b80e4800d06fa7c3d4ffb57067c2b2e746e2ace577c1c991d8563163",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs::an_actor_named_in_the_request_does_not_ask_the_port",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0111f4703539db636bcd13a3f78743da1d1c9c786bb143491d2a6ceb28a33011",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs::an_actor_named_in_the_request_wins_over_the_ports",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:928bf92a152a799e8be6e78e64f6b151b0a70004e813bb02ce48cef75bd7b962",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/actor_tests.rs::with_no_actor_in_the_request_the_ports_is_used",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9d5c21fb540adf8d672c22d7420755a30d2306bee5b5b297f0c6fdd6c30ed0ef",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/id.rs::tests::a_doc_id_converts_back_to_the_entity_id",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:80741c5e2dfab8adf8a5ef5eaadeb23cf5165b96040d2229d10ec00757be4a08",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/id.rs::tests::a_doc_id_is_read_in_the_one_form_it_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0776b4343a0e94fac2eedb43285f27954c5915828e629b43e8f71af8a69f4d61",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/id.rs::tests::an_entity_id_is_read_only_in_its_one_written_form",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8830b5c4d53bc7944ed696561510f8ee3264420b2c6e0acc9612af65737acc56",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/id.rs::tests::entity_id_requires_version_7",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d7b3cdc9120de3139e6f676c07611d2100d80a7da1ce95ad4a8ecaee32f17ebe",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/id.rs::tests::entity_id_text_round_trip",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "fc62088c1055be556a17b998e56022f5f760dd4f",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:e52a129d11123a002edf3bd549f13ab1032ed851369e845ca190d970a965eb54",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/actor.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c9058de5c53627c5b7d311075c3a93673bd4e279",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9c33d7ead0e073e4b0e19406c514d67530dcb0a435edba5be796bab80152bd71",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795579850139,
+  "expires": null,
+  "frame": [
+    {
+      "address": "18043f59ad21212c02248de6ae6190ae95685067",
+      "hash": "sha256:2b40c7219de6e63b98ee933e423a47e71e0a67775e325f5689d0966fabf8c6be",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "34"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e310-703a-82cc-fecc69ebdc07"
+    },
+    {
+      "address": "12b9000513a1af84240cb975aa08345c7d3187c4",
+      "hash": "sha256:cc1e046186585cdfd094bb911bd9ac0b3dfbf4dde33d9ea9b2ef0294b03781bb",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "35"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e6b5-775e-9fa6-11ec41ab044a"
+    }
+  ],
+  "id": "01a210e6-59f1-7724-92b1-515c2853fb4b",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the core domain, read again for its body: besides naming tests by function under cases, the body gains, corrects or narrows the sentences its named tests assert; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "ee3f8544e23d045665d55f4caa525897016356d5",
+  "seen": "sha256:f57ed2d7db4a90040e591c63ce478a7f8f7c1d3f695dbda8f24c381958627777",
+  "seen_address": "a4575a75f302fcd899f138fc0210ead9a7d60ad0",
+  "subject": "01a1c4ba-1b8f-732a-b8df-96833f6bcad2",
+  "v": 1,
+  "verb": "approve"
+}

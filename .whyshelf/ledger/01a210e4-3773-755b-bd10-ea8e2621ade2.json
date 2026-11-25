@@ -1,0 +1,14 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795579714346,
+  "book": "verification",
+  "id": "01a210e4-3773-755b-bd10-ea8e2621ade2",
+  "kind": "exempt",
+  "link": "cases",
+  "reason": "These source files of the core domain hold no test: rust-test cannot list them whole only for the derive of thiserror's Error, and no verification names them as evidence of their own; the exemption stands only while no test is found in them (DEC-112)",
+  "subject": {
+    "name": "crates/whyshelf-core/src/domain/shelf/exemption.rs",
+    "space": "file"
+  },
+  "v": 1
+}

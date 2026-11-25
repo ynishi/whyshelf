@@ -1,0 +1,14 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795579731596,
+  "book": "verification",
+  "id": "01a210e4-8a93-71dd-b15f-9ce94fed0d40",
+  "kind": "exempt",
+  "link": "cases",
+  "reason": "The canonical words of a record (ledger/canon.rs) and the names of the schema (schema/name.rs) hold no test: rust-test cannot list them whole for the derive of thiserror's Error and for a macro of the file (tags!, name_type!) that writes a type and its methods and no test, and no verification names them as evidence of their own; the exemption stands only while no test is found in them (DEC-112)",
+  "subject": {
+    "name": "crates/whyshelf-core/src/domain/shelf/schema/name.rs",
+    "space": "file"
+  },
+  "v": 1
+}

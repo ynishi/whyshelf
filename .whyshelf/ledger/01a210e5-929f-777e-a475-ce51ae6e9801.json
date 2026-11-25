@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:365ac7e9034c231920e4fcb637d4f15d44a16378db1b15c95ebc08197598f54c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs::a_new_document_with_a_blank_required_title_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c3a3c8b1c87ba3496a47c5f2a3a511b4be8ebb4697d110f011a23f9b36b9e41d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::a_blank_required_field_is_told_before_a_missing_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:68c57c8bd3bfe3e3e4d46a13f0680a06cdad956f9addc0bc681756b83d1a2cfa",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::a_required_field_must_be_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b65b14fb6af90844a2286e31019ad002d451474b6e60c8fb5a175730a0f3bb86",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::a_required_list_with_no_item_is_empty",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:97c12cb56cffc1037b82b79d94c86419d15578b56fa1449d4c63f87d5988c2d9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::a_required_text_that_says_nothing_is_empty",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:82fa6553c96498b55c61c697f92171e0731c305376d33db66501078229373f4a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::a_required_text_with_a_character_is_a_value_even_after_a_line_break",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795579785864,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e13d05bc1936377803393317fe8891510af71920",
+      "hash": "sha256:d8caf3008602620e52125c0652685b85f92db5e452408e79d42b44cf44195d7b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "72"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1df93-423e-76d2-9471-d810f8e8c543"
+    }
+  ],
+  "id": "01a210e5-929f-777e-a475-ce51ae6e9801",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the core domain: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "ee3f8544e23d045665d55f4caa525897016356d5",
+  "seen": "sha256:9c526c9d224a82422155ab1b363dfa28ca7a8385eb8fd2f676dc93024a69aace",
+  "seen_address": "389fa31cf44569b69928e78e164bfaec0627ca20",
+  "subject": "01a1df93-44b2-7279-9b91-45f43cd24adf",
+  "v": 1,
+  "verb": "approve"
+}
