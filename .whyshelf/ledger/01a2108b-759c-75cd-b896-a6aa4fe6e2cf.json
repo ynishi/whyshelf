@@ -1,0 +1,126 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:43ba8c6f8c989dfb4407ef6dfc17d67e8fed7301c7b114737ed7db82589a8e6d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_blank_variable_names_no_one_and_a_blank_flag_is_a_wrong_request",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c2152822b83dc5c894f366b500fb49c8b935eb5c93ce6c174cc93ef7c55dca16",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_ran_by_given_on_the_command_line_is_kept_beside_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:91d3fffdd6b60eeaa4becdbc3d6ccfe0fc518ec0af3ae0e98f3b87edf477f56a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_ran_by_that_is_the_actor_is_one_name_whoever_gave_either",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:90b91c2d1ecdf6af296615d8aeb408858626d769f74283e96983813c9e6c15c5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_revocation_keeps_who_ran_the_command_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a11e66821992c95ddff7b6ad3d58cdcea1584b4c3f8878439ab0dc435ad0f734",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::every_judge_verb_takes_a_ran_by",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f465d8fd5debc967be6c28532e14e142defa39de0979a0721928eed34bbb8864",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::gits_user_name_and_the_projects_files_are_not_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7cb7dd76f0fb810e2e3e4a23444bce2e75233be49a445c43b81a0fe5d94806d3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_answers_show_who_ran_the_command_beside_the_actor_and_null_when_it_is_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d46b602765f5bd2955e20cb19b91a762404447eaed2007d10d37de3fa8ebd00e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_command_line_wins_over_the_variable_for_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:161094d5aaf5368737ee42fa5d4a88fff819f4d935c897bd0caf894dcac2fef0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_exemptions_check_lists_show_who_ran_the_command_beside_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b8bd151478c0ffde74244c66468296a9f4405495062d4aad8994c5434a93c7ea",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_variable_names_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cadb2a8f483f35def74de63b56f01fcd88b66675389a165b06777693a0232107",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/repository_ledger.rs::the_repository_s_ledger_reads_with_no_unreadable_record_and_no_problem",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a9b2fd3c4ceba61ffda41404197124792b3fb23d",
+      "hash": "sha256:d1cbb29f21ce6cbdc780eea2f9611ecbb427d583290301d8825f4234a4b8981d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "91"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f9a4-bea7-7778-ac4a-a68538d58570"
+    }
+  ],
+  "id": "01a2108b-759c-75cd-b896-a6aa4fe6e2cf",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:280ce524cf5d5c387fa906abde39f373d84353bd7a09d1df63b55e9ba25e3249",
+  "seen_address": "22fdbef9ffa3ec07ee38a1650df588936eb6a9d3",
+  "subject": "01a1f9a5-0a13-76af-a15b-b7d44cac4f3b",
+  "v": 1,
+  "verb": "approve"
+}

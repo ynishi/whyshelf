@@ -1,0 +1,70 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:6c65be0f919ee3926b7fc66c9410892da3b6d423abba2b1bb40f642f0df35858",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_test_in_a_file_that_does_not_parse_is_unknown_and_no_approval_stands_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:70058739cdd250ed4afe4d0f1bb7f05d2059cfcc1d10a056577f2f04fa2be154",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_text_out_of_the_grammar_makes_the_verification_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:55646021af5e026ac3f1a28ad9e8ad2ea2aedc688aeb61c9dd5066ef4e8893d3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_verification_stands_on_the_text_of_the_tests_it_names",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0080b93db1409d7dd08668964b28ac6ada09057a",
+      "hash": "sha256:1f0bbed3d600e6e14ac4e2507d90fb972cfd5444b7f0c0ea06c2e64f63f82892",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    }
+  ],
+  "id": "01a2108b-a418-77b9-b41f-48e2037444ae",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:71d508657b3910cb0bd0b86a8cc23352a12e9ef6d85dd8f881236ea757d9ce44",
+  "seen_address": "26a16874eaf49994c54aec3b7e83b34c7b6f80ba",
+  "subject": "01a1cad2-3c53-7056-a5ba-b95678ef107e",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:0239fd10674f10e6e0814d6bf6c7b28b0685f83bc9afb09cb441b8c31da6c81a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::stale_names_where_the_degradations_start",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a2108b-958b-77a4-8b38-4b9143f6a2d9",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:f0d024aee4843f41683dc9aff36557fefe56a55ba61c442c56d473bfa528e548",
+  "seen_address": "649bd97ccb67bf25e68c1b9cbef37ec636896966",
+  "subject": "01a1c765-24a9-7452-abc1-0e695ee0321d",
+  "v": 1,
+  "verb": "approve"
+}

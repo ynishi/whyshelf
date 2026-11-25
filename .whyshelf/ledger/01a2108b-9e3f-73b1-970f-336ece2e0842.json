@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:3cc748714d3065f14eba75a14cc66ee75c76bb2f49ab18f85dfc6473b23a5618",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stats.rs::stats_answers_from_the_ledger_and_the_same_twice",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8876d91dcb71a0cffc95e975f31606df559767b09a9eee5cc374c5765ff22f6d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stats.rs::stats_creates_and_changes_no_file",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9e8133613cd52c97a9dd7d639001062f760b08e0",
+      "hash": "sha256:bde5ee1f7d6b8466bfbdd041cadea99aec7e35e52bfcbdbb413d37626963283a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "55"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c847-f192-7237-ad26-fff5f77b2194"
+    },
+    {
+      "address": "3400dbc2f7d06a0abae6df7e3c489bd5f4a8f624",
+      "hash": "sha256:d6fe01cfa0864a168ed390e185d99b585cb5416067bf091d402792186f174438",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "57"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8ad-9bab-71bd-a155-f52d9ae7d16d"
+    }
+  ],
+  "id": "01a2108b-9e3f-73b1-970f-336ece2e0842",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:4a6933a73c69f531940b9f70719531f4c7f5a7f401002d82f80a23bb4d93a767",
+  "seen_address": "fae2a60a0f5114c3ce0185beb313289139290a7b",
+  "subject": "01a1c847-f478-75b4-991d-1d40b11c87a8",
+  "v": 1,
+  "verb": "approve"
+}

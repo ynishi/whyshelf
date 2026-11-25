@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:d6bb56bd9faec44b001dfd0dc79238fc338c6754db6eba0401a0540eb002fbcd",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::a_book_and_a_field_answer_the_decisions_that_name_the_issue",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8280cfa2b1d675fe0ba262c8e20ab8732e4f81f94212856fdd3d90e0ada60189",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::a_filter_that_is_no_request_is_exit_2_and_changes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0d78487186edc7cecd7f8b28bcb56b6ef2f8c07bb99b14767cc398a9692b6f3f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::arguments_that_are_no_filter_are_a_usage_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d47405d2705d504f24b83934ea7d3e94eddfbe200a4c710530e46871b7feccdd",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::every_problem_of_a_filter_is_listed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:42de256e0f75dee796d69d896820cd6b4c55fc9585041b3affc67690cc019c56",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::no_filter_is_every_document_and_the_filters_are_empty",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9d61039322831d2bbd312daacb299eb6dcf42a1d3a6737a7c5ce354a1b044687",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_answer_carries_the_filters_as_given_with_the_standings_in_a_fixed_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4d6aa46eaf545e435d34853c54c162c537fe00b941752849f2567e212b8da8de",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_health_is_of_the_whole_project_whatever_the_rows",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:12d1a1768e2a3e3bee2fa1cddff6ceb5ebba27024ebc0739a173370a41effe8d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_schema_of_status_has_the_filters",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:692b40e73b6a7d4e651192db4094973dd51849ac6ee83c1bf2128f7546013520",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_three_filters_combine_and_a_repeated_kind_is_either",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573889052,
+  "expires": null,
+  "frame": [
+    {
+      "address": "15dfdba4725af3eb8f621da3e306486ff0032390",
+      "hash": "sha256:78bb4bbd2b5111d439eec7a9cc1ca14d83756fd758164f7234c161103a50b1dc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a2108b-4d16-7506-a2b7-e8c53bcb8b17",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: tests named by function under cases; the body gains, corrects or narrows the sentences its named tests assert; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:d1f217231d5bc5a61e03783b769b54d1be179a2f46ca45424603a9e5f277b5af",
+  "seen_address": "293369a666c28aebfea8615662b32969e8095b3e",
+  "subject": "01a1da61-caff-75ca-b22e-99dc05dc7b25",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:f93706f8a995a174771f82cae5ccaae325b479fa72001a7cbb008001f4291424",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs::a_number_too_large_for_the_parser_is_told_as_too_large",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:35e84d7af1c6ac59ceebc4f7507062093cace543cec78ce1a107feccc5f58862",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs::every_value_a_front_matter_does_not_hold_is_told",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:636344d820957ff875035b5cac6b1b5698aa77b87a37ee14f450fd90c836c5a8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::a_negative_number_beyond_the_parser_is_told_as_too_small",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:61b0868838cae4878fae306e8111120432ab79d1b0e497445eed9092b2ea9871",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::a_number_beyond_the_parser_is_told_beside_another_value",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a5d81d4ed936f637eb6b014c3bd134fa949162d6db1a7583977b85490a1f9470",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::fmt_tells_every_value_of_a_file_it_leaves_alone",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f060d42ac9a6d9faa7afef7bbb77d47bd5664d6e60d32fdb80d6b84597d5f4c3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::one_value_is_told_once_and_a_held_value_not_at_all",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b8ea968deb59188d8ff3cde538a075b5774cd4dabbeb879bc4f20bf8e5a15361",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::other_kinds_are_each_told",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573889052,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0ced39a5f1260a35d1e8baa2643b39f64e43ae8e",
+      "hash": "sha256:8ad46af5101b0517cee87c54e3b4343b7b611aaacb28f10841550b8946bbd88e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    }
+  ],
+  "id": "01a2108b-4b3d-75e3-8596-8a403c1c715a",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: tests named by function under cases; the body gains, corrects or narrows the sentences its named tests assert; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:35989fdca9026156e234ee9e2d6b199262f9966525397f7f4c5d144cf920de58",
+  "seen_address": "1fea3173443967d5ea55fc521a07b4eba5febb16",
+  "subject": "01a1cc04-8636-721f-a251-50df70adcd68",
+  "v": 1,
+  "verb": "approve"
+}

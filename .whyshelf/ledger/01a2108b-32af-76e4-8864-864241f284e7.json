@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795573884792,
+  "expires": null,
+  "frame": [],
+  "id": "01a2108b-32af-76e4-8864-864241f284e7",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the findings of the batch, measured on its branch",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:91036a57761eeae10834ad1a5e9e57e8b1a46d9e326c0824c88fd83a5746fe0e",
+  "seen_address": "d87df5386122196be7c84d0fb95345568bdeec5d",
+  "subject": "01a2108a-e574-7381-80e3-3c580ce915df",
+  "v": 1,
+  "verb": "approve"
+}

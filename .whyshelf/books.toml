@@ -102,7 +102,7 @@ ignore = ["//"]
 name = "cases"              # depends: the test functions that show it holds, by name; editing one makes stale only what names it (DEC-112)
 target = "artifact"
 preset = "test"
-cover = { strength = "error", include = ["crates/whyshelf-core/src/app/**/*.rs"], parts = { whole = "tests" } }
+cover = { strength = "error", include = ["crates/whyshelf-core/src/app/**/*.rs", "crates/whyshelf-cli/tests/**/*.rs"], parts = { whole = "tests" } }
 [[book.link]]
 name = "checks"             # depends: a changed decision makes its check stale
 target = "decision"

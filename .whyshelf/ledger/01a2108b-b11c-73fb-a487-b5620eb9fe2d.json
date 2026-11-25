@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:0cf129c490d1f4c2bc44d593c236e5d450a2eb898a3bfbc511c65c18a0d86406",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::every_why_of_an_unneeded_exemption_is_told_on_the_binary",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:90f44e4d92f0908c81531d2155071585458ddf1ea4241744683f64545b195f05",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/problem_wording.rs::a_key_that_is_neither_a_word_nor_a_table_still_fails_the_read_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a2fa89c7828b427be552837d4dad00e94925102495f62c3405188850aba855ba",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/problem_wording.rs::a_word_of_a_key_the_declaration_does_not_have_is_a_problem_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:52bcd205c4a6265abede56e16496967433adc2126828a8425a76a3638e27115b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/problem_wording.rs::a_word_of_without_front_matter_the_declaration_does_not_have_is_a_problem_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9193e2db45e7147a833b130def660507119b2297",
+      "hash": "sha256:bd33674244776dfaca1ea52173249f486ebbd6e475075203bb60643bff40983d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "78"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ef3c-6465-7073-b56b-81f10c2dfc24"
+    }
+  ],
+  "id": "01a2108b-b11c-73fb-a487-b5620eb9fe2d",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:0f62e0d255786928711ef21df6cd2ae8498e3f006efadba2fd09a7e38dc7f447",
+  "seen_address": "e0385588015286540da22c93ea84807a9aff37cf",
+  "subject": "01a1ef3c-9c33-72b2-8f83-0bd85d27a41c",
+  "v": 1,
+  "verb": "approve"
+}

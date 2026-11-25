@@ -1,0 +1,126 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:fa96eef29f385c523d7e229dffc631b6d1c52936c0f6da31787191a5e9b3fd23",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::a_cover_of_a_strength_alone_on_a_link_to_artifacts_is_a_problem_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8dd05fbd966020cb2db1fbd342f856bb6b12b01c704cbe149bb110db93161a23",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::a_cover_whose_names_cannot_be_listed_fails_instead_of_passing_unseen",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e13e5fe0c3da51e056c10d256835d765ba83a0e188944e7f7317878f5f048b11",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::a_file_exempt_from_an_error_cover_passes_check_and_is_listed_apart",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c726099beb0b2921f036212d7f731293ea5952a17495afb921f02a000197a3cc",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::a_selection_a_space_does_not_read_is_a_problem_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:03370461e9ac36073981405d601ec48ce6c2848440a21c721ed41408f9043425",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::a_selection_that_takes_no_file_fails_an_error_cover",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:931702a74dc46786b9a0fcaf7839e4e62cd53667386ea2937abafe99bc907aba",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::a_warn_cover_lists_the_same_gap_and_check_exits_0",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c1c34871f9822f09114b7cc7c3abd9242557043eee7e7980f8e7af0bab2efcdc",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::after_a_moved_declaration_the_exemption_of_the_old_name_is_not_listed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a10a59ace29046929d41e540a9d4e282710da1ef49cb8a94fb4524882e885ee3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::an_artifact_and_a_document_are_not_exempted_together",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b75667d35f2e505163c4f1d98d1aa6a8ba24f3387e6ebcac4df82c3e0e4497c7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::an_error_cover_fails_check_while_a_file_is_reached_by_no_document_and_passes_once_one_links_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f2a25c06b8d9e025a359fffe2751682f8eb287b19e6696ed1d745f086ce1294c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::cover_tells_each_name_per_link_and_fails_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:52152a09585848bc4e86e1d1ed94d3721877bf33acf181b7c923c65badc4b1dd",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/artifact_cover.rs::map_and_the_schema_show_the_selection_of_a_covering_link",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "2866b277280d6dddd8e9b1780faabb2157dbf3a5",
+      "hash": "sha256:fe0b0d9bf855db38e57c08f45298bd3ec6e055ea1b7a6613127b299bf1b090c2",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "93"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fbcb-f119-7232-9db9-1d7c146688c7"
+    }
+  ],
+  "id": "01a2108b-7ab7-74f9-a8a5-eaed89f9adea",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:7f5ccc059f309ecfd8543e1eda3d30f90e5575195e15651315c294ebe62e3d6a",
+  "seen_address": "c7b93e8e6cd65caa13dbe895d359b286ed2a095a",
+  "subject": "01a1fbcc-6c50-7638-b3dd-fdc86e5ff03c",
+  "v": 1,
+  "verb": "approve"
+}

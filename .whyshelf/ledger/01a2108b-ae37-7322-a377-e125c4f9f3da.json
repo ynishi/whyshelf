@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:fb83ae1828140cb984f4ffafa6f51a4ae094a06c72e8c03448020b83f82c46ea",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::a_file_at_every_key_tried_is_one_refusal_that_says_what_to_do_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e24ea64b5aa016a31593c55b44ef94da8868eaaf1cb49614630f41ba47d9e335",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::a_file_whose_front_matter_cannot_be_read_does_not_stop_new_with_no_key",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a0329665422076625071cf6c87fa3d3d317bed50cc9fd2da18cacd5cd44d1c98",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::a_key_that_was_asked_for_is_still_refused_when_it_is_taken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:94290e138250f82e9be98c397ecf33b9a0aa4cb322b6cb4643b434ab3da6fddb",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::runs_of_new_with_no_key_at_once_each_write_a_document_at_a_key_of_their_own",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1c84b492fab3aac713f325a5f31e52fdfd7d07e11ab10cce9ed9092434aa3870",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::the_help_of_key_says_how_many_keys_are_passed_over",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6435d5a6b20e37fee75a605ed4b3ab33aa3b3095",
+      "hash": "sha256:a166c621a3f56d49226550e2ea032d1f19420c217245e5fe4a269f66fe9c1209",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "74"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e20f-84aa-7350-905c-6c3af70e7219"
+    }
+  ],
+  "id": "01a2108b-ae37-7322-a377-e125c4f9f3da",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:565c181b4faefcf0210ccb87be044a149f365d2cf80ff63fbd0e69c1b158d8cd",
+  "seen_address": "6106859ea2779fcfa75488bcd701f314bc8f6be6",
+  "subject": "01a1e20f-ab27-753e-af1b-85e0f2f11c60",
+  "v": 1,
+  "verb": "approve"
+}

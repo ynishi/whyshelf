@@ -1,0 +1,115 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:20db7a6a0616ba5d0e47faa6d0f30ef9f1b455c08b36b40dd95e5109a8a25c38",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel.rs::keys_taken_on_two_branches_are_found_on_the_merge_result_and_renumbering_keeps_the_approvals",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:afc76b9d0f3daa1fd944a7832ec3ba04c26cb7afe149d49d946fc0231f73ea56",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_document_nothing_decides_is_refused_with_every_such_document_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1ea641a2e4fa97208bbdba1239e53f791beebccd49c448efe0c5119612a24ed8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_dry_run_is_the_same_plan_checked_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:23a4412fa3c534b3f925eccac6b34ef25dd691fab5226451ac44689ecdfffe4b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_file_with_conflict_markers_left_in_it_stops_the_rekey_and_is_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d27da07f91deb37df5b6e7da80e942571e1e9fcafa8b5869ec1a2cb38db3883a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_link_that_means_both_keeps_the_old_key_and_gains_the_new_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3fb365f44dcbebbf4fd07e441e17d408819ee29a83b01d64208ea2cf8669a1f7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_link_that_no_approval_decides_is_decided_by_a_word_and_the_files_are_rewritten",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0a73afb7b7d7f888eaed40b3f9a5e440f0e239effcf6b68a50dead9ddec40ad0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::nobody_else_writing_the_key_every_link_to_it_follows_with_no_word",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "2a8f99d19aa38815bad6ac8870dd6d6a775c16a2",
+      "hash": "sha256:593bb90fa66a9a019321f887ebbf7ab6dbbe48980a8ea29e481fe74ab5816c64",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "36"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ea98-7060-acb2-b3c19c484a89"
+    },
+    {
+      "address": "e2aed96b03458edf9098bce20af62add178aac0e",
+      "hash": "sha256:20c45ea5b73eef914c693eaf331d1db7dfe4c981757a65c5d0ba7063e8fc8625",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "94"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fc08-2361-765b-8902-8a5ae113e22a"
+    }
+  ],
+  "id": "01a2108b-7d97-72b7-b754-ff50e95c1775",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:dc73f662395577d6d60853ca0eae66a42f2814847c99d5573ea335febe072370",
+  "seen_address": "f1f444c8867c88a0737aab11dd4884b826e3a866",
+  "subject": "01a1fc08-9e76-72a9-b3b2-4640e97ab58d",
+  "v": 1,
+  "verb": "approve"
+}
