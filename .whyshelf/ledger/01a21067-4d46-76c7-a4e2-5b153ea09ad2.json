@@ -1,0 +1,14 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795571532281,
+  "book": "verification",
+  "id": "01a21067-4d46-76c7-a4e2-5b153ea09ad2",
+  "kind": "exempt",
+  "link": "cases",
+  "reason": "The errors of the use cases (error.rs) and the ports (ports.rs) hold no test: rust-test cannot list them whole only for the derive of thiserror's Error, and no verification rests on these files as evidence of their own; the exemption stands only while no test is found in them (DEC-112)",
+  "subject": {
+    "name": "crates/whyshelf-core/src/app/shelf/error.rs",
+    "space": "file"
+  },
+  "v": 1
+}

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:ecb62dd8ec0a19d1e308be8727509313bc68e75b6d2000710538e92fddce1d2b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs::a_shelf_whose_approvals_hold_passes_and_a_pending_document_does_not_fail_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:12da870fd3c6047c8d8b78999e0e6fce544c643c1d3f8b9e4eb83fcd32dafdb5",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs::an_approval_on_a_name_that_cannot_be_told_now_fails_while_it_stays_fresh",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:00f1323e7c1afa565cbee3951e48a87f09141144ecfb97cb8d5de7ce57d778e6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs::an_approval_that_does_not_hold_fails",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:69e18e122760e2baa1492695bb6ae8633fd720520b0e8b4ed3e1258dc92a8562",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/stale_gate_tests.rs::an_approval_that_only_expired_fails",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a5fafec30328bb4853ae5f52b12cd7e3d8b6da26",
+      "hash": "sha256:7c69ef722d8d07713a4b4d0b6df27c59b8b57bfe59f2e71fa16dabd58a76fd4f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "26"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c532-68dc-71dd-a7c8-35e9618f81f6"
+    }
+  ],
+  "id": "01a21068-224f-716c-903d-2bda2fec1bac",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:3f623ad950c4df18d757767c4dc48348934ac804789a6758b397862261721f60",
+  "seen_address": "fd4193bbc7b81298fa03f8d6f4f66276e9aa8987",
+  "subject": "01a1f896-c2b6-7071-bc5f-832eb20788b2",
+  "v": 1,
+  "verb": "approve"
+}

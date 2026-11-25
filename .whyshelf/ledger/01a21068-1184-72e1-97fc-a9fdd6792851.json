@@ -1,0 +1,105 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:fcabbd70cefe86a4c7dc83109ff804dfce70e0ab56860aeb171618092d73ff20",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/exempt_tests.rs::a_refused_exemption_writes_nothing_of_its_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:791057598ef703c467c1d6b6d7e480b1ea614ef7ac7d5c8c8dcc6144e16ec7c7",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/exempt_tests.rs::an_exemption_is_unneeded_once_the_link_reaches_the_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b0fd84d95fca022c88ee31f7585436feebe295a30cd189873f9980d1c298893b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/exempt_tests.rs::an_exemption_is_withdrawn_by_its_record_id",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d13a5e7f7175d8786c9727da316e6065fa542c187ccb591908caba791157d53a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/exempt_tests.rs::an_exemption_under_a_true_cover_makes_check_clean_and_is_listed_apart",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:62dc774b7aa6181d2ccbf171bd6fca1d84c088523b220e82191bdb38f2cc8a9e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/exempt_tests.rs::an_exemption_unneeded_at_once_is_refused_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ed9e6a196e90aecffb6fffa08819f75becde88eda84b68eeb60fd1cffb19dc70",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/exempt_tests.rs::two_exemptions_of_one_document_from_one_link_are_listed_as_repeated",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "c2c60a419cdacf685168c7e6f9b1094ae7c8c15a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f76a9613648fd987a281900ee05d22329efba58ed8d58b7477fe83cc81689b5c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b31242a288426a2efecf4e4caacbffca6914193c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fec6e48107a0f736b3d50e23c739d574d7b4f2e545e8f4229e12bd23a98aadab",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795571574057,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    }
+  ],
+  "id": "01a21068-1184-72e1-97fc-a9fdd6792851",
+  "kind": "decision",
+  "reason": "#120 stage T2: the files of the application named whole under tests are named instead by their tests under cases, each test where the body says what it shows; only the lines tests and cases changed; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "d58db6180dbb5527878c0c73d06a9f31eb9146f7",
+  "seen": "sha256:8b73afc4a26e873ffa19b02281f0653d1b0ba9f736bdfc04b2a18924732b15bd",
+  "seen_address": "c75781f3e96fafa09e1876259a73fd0c164c878b",
+  "subject": "01a1cae7-1aa8-740a-9ad6-de66b9638908",
+  "v": 1,
+  "verb": "approve"
+}
