@@ -11,6 +11,7 @@
 //! | `map` | [`Schema::declared`], then [`ShelfMap::of`]; nothing else is read |
 //! | `status` | [`assess`]: every identity's [`Standing`], with [`Ledger::status_of`] beside it; with a filter ([`status_filtered`](ShelfApp::status_filtered)), [`StatusFilter::new`] against the declaration and [`StatusFilter::admits`] per identity |
 //! | `get` | [`resolve`] for the reference, then the same as `status` for the one document, and [`Assessment::roots_of`] |
+//! | `book_links` | [`Shelf::book_of`] of each valid document, and [`Doc::links_named`] of those of the book (the artifacts alone), and [`Shelf::invalid_files_in`] |
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
 //! | `reach` | [`resolve`] for each reference, then the reach of the documents named ([`reach`](crate::domain::shelf::reach): the walk down, the artifacts each document reached stands on), where each artifact lives ([`ArtifactSource::places`]), the files of all of it, and the same as `status` for every document reached |
 //! | `impact` | both ends of the change, read at one time, and [`assess`] of each, then [`impact`](crate::domain::shelf::impact::impact); with references ([`impact_within`](ShelfApp::impact_within)), each resolved at the end before (at the end after when it names nothing before), the walk down from them on the end before ([`reach`](crate::domain::shelf::reach)), `impact` of the change read backwards, and the gate ([`within`](crate::domain::shelf::within)) |
@@ -21,6 +22,9 @@
 //! [`Schema::declared`]: crate::domain::shelf::schema::Schema::declared
 //! [`ShelfMap::of`]: crate::domain::shelf::map::ShelfMap::of
 //! [`Shelf::tally_by_book`]: crate::domain::shelf::build::Shelf::tally_by_book
+//! [`Shelf::book_of`]: crate::domain::shelf::build::Shelf::book_of
+//! [`Shelf::invalid_files_in`]: crate::domain::shelf::build::Shelf::invalid_files_in
+//! [`Doc::links_named`]: crate::domain::shelf::doc::Doc::links_named
 //! [`assess`]: crate::domain::shelf::freshness::assess
 //! [`Ledger::status_of`]: crate::domain::shelf::ledger::Ledger::status_of
 //! [`Ledger::same_meaning_short`]: crate::domain::shelf::ledger::Ledger::same_meaning_short
@@ -42,6 +46,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec};
 use crate::domain::shelf::artifact::{ArtifactKey, Listings};
+use crate::domain::shelf::doc::LinkNamed;
 use crate::domain::shelf::filter::{StatusFilter, StatusFilterAsk};
 use crate::domain::shelf::freshness::{Cause, Holding, Notice};
 use crate::domain::shelf::impact;
@@ -50,6 +55,7 @@ use crate::domain::shelf::lookup::{Reference, Resolution, resolve};
 use crate::domain::shelf::map::ShelfMap;
 use crate::domain::shelf::order::Foreseen;
 use crate::domain::shelf::reach::{Reach, walk};
+use crate::domain::shelf::schema::BookName;
 use crate::domain::shelf::settle::{origins_asked, settle_all};
 use crate::domain::shelf::stats;
 use crate::domain::shelf::trace::{LinkEnd, trace};
@@ -62,10 +68,11 @@ use super::error::ShelfError;
 use super::load::{Loaded, View, listings_of, load, load_at, load_with, now, schema_of};
 use super::ports::{ArtifactSource, ShelfPort, ShelfRead, port};
 use super::report::{
-    Absent, Awaiting, BookCount, BooksCheck, DownstreamEdge, ExemptEntry, Gate, GetReport,
-    ImpactReport, MapReport, MovedAway, ReachReport, ReachedArtifact, ReachedDoc,
-    RepeatedExemption, SettledOrigin, StaleEntry, StaleReport, StatsReport, StatusReport,
-    TraceReport, Uncovered, UnitsReport, Unknown, UnneededExemption, UpstreamEdge, UpstreamEnd,
+    Absent, Awaiting, BookCount, BookLinks, BookLinksReport, BooksCheck, DownstreamEdge,
+    ExemptEntry, Gate, GetReport, ImpactReport, MapReport, MovedAway, ReachReport, ReachedArtifact,
+    ReachedDoc, RepeatedExemption, SettledOrigin, StaleEntry, StaleReport, StatsReport,
+    StatusReport, TraceReport, Uncovered, UnitsReport, Unknown, UnneededExemption, UpstreamEdge,
+    UpstreamEnd,
 };
 use super::state::Side;
 
@@ -430,6 +437,60 @@ impl<P: ShelfRead> ShelfApp<P> {
             names: loaded.names(),
             health: view.health(),
         })
+    }
+
+    /// What each valid document of the book `book` names in its links to artifacts,
+    /// read once at the side after as a check reads them: each link in which it names
+    /// an artifact, with the artifacts it names in the order written, by their space
+    /// and name ([`Doc::links_named`], the one place a document's links are
+    /// read; a blank item, a null, an empty list or a text is told there, and a file
+    /// that writes one that is no name is no valid document). Beside them, every file
+    /// of the book that is no valid document ([`Shelf::invalid_files_in`], a file with
+    /// no `id:` among them): what it names cannot be told. Nothing is decided here.
+    ///
+    /// A book the declaration does not declare is [`ShelfError::UnknownBook`], never
+    /// an empty answer; a declaration that is not sound is [`ShelfError::Schema`].
+    ///
+    /// [`Doc::links_named`]: crate::domain::shelf::doc::Doc::links_named
+    /// [`Shelf::invalid_files_in`]: crate::domain::shelf::build::Shelf::invalid_files_in
+    pub async fn book_links(&self, book: &BookName) -> Result<BookLinksReport, ShelfError> {
+        let loaded = load(&self.ports).await?;
+        let shelf = &loaded.shelf;
+        if shelf.schema().book(book).is_none() {
+            return Err(ShelfError::UnknownBook {
+                reference: None,
+                book: book.clone(),
+            });
+        }
+        let docs = shelf
+            .docs()
+            .iter()
+            .filter(|(id, _)| shelf.book_of(**id) == Some(book))
+            .map(|(_, doc)| BookLinks {
+                key: doc.key().clone(),
+                file: doc.origin().clone(),
+                links: doc
+                    .links_named()
+                    .into_iter()
+                    .filter_map(|(name, named)| {
+                        let artifacts: Vec<ArtifactKey> = named
+                            .into_iter()
+                            .filter_map(|named| match named {
+                                LinkNamed::Artifact(key) => Some(key.clone()),
+                                LinkNamed::Doc(_) | LinkNamed::Written(_) => None,
+                            })
+                            .collect();
+                        (!artifacts.is_empty()).then(|| (name.clone(), artifacts))
+                    })
+                    .collect(),
+            })
+            .collect();
+        let not_valid = shelf
+            .invalid_files_in(book)
+            .iter()
+            .map(|file| file.origin().clone())
+            .collect();
+        Ok(BookLinksReport { docs, not_valid })
     }
 
     /// What a document is linked to, and what is linked to it, each node with where

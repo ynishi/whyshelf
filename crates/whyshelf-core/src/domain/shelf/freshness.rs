@@ -1506,7 +1506,7 @@ pub fn assess(shelf: &Shelf, ledger: &Ledger, now: JudgedAt, listings: &Listings
         standings,
         notices,
         cycles,
-        invalid: invalid_files(shelf),
+        invalid: shelf.invalid_files(),
         ledger_problems: ledger.problems().to_vec(),
         cover,
     }
@@ -1595,17 +1595,6 @@ fn stand_in_order(cx: &Cx<'_>, order: Vec<DocId>) -> Standings {
         statuses,
         same_meaning,
     }
-}
-
-/// Every invalid file, whether or not its identity could be read.
-fn invalid_files(shelf: &Shelf) -> Vec<InvalidDoc> {
-    shelf
-        .invalid()
-        .values()
-        .flat_map(|docs| docs.iter().cloned())
-        .chain(shelf.unreadable().iter().cloned())
-        .chain(shelf.anonymous().iter().cloned())
-        .collect()
 }
 
 /// The freshness of the approval that stands, from what its pins come to now

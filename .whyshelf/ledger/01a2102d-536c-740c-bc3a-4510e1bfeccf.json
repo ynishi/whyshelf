@@ -1,0 +1,96 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::BookLinksReport",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ShelfApp::book_links",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::Shelf::invalid_files",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::Shelf::invalid_files_in",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795567732993,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9db87ce77a0bfbccccf40dded4dcc5788569d9c0",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    },
+    {
+      "address": "537ad92c67cad3f36024aa45964f6604c6a23a47",
+      "hash": "sha256:da4400e50c4645fbb1ed3c9028302053e58da039407d2a8e91d092ebc33f2f00",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1cad2-34df-74f6-b9c7-64f09ffc1dd4"
+    }
+  ],
+  "id": "01a2102d-536c-740c-bc3a-4510e1bfeccf",
+  "kind": "decision",
+  "reason": "#120 stage T: the rule of naming tests by function under cases, parts taken whole through tests and no exclude (DEC-112), and DEC-56's shared helpers as the .rs files of each tests/<dir>/ holding a mod.rs; blind review by Opus (from the issue and the change only) found no must-fix, its points fixed",
+  "revision": "9694a1cdc3843e30e7393cf18216408ba95cf98f",
+  "seen": "sha256:ea4262d3c6c3035d1dc2ce3c3d93152a90a7c542b37bdc4cc548dc702f61b654",
+  "seen_address": "52e78eab0a9fca9c92d8a6814185b075053cd249",
+  "subject": "01a2102b-3567-73b5-a69f-5a6bc7544b7c",
+  "v": 1,
+  "verb": "approve"
+}

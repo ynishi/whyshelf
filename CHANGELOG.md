@@ -10,6 +10,10 @@ and this project adheres to
 
 ### Added
 
+- `ShelfApp::book_links` (#120): the names each document of a book writes in its
+  links to artifacts, read once, with the files of the book that are no valid
+  document; `Shelf::invalid_files` and `Shelf::invalid_files_in`, the one place the
+  files that are no valid document are joined.
 - `rust-test` lists the tests of the files a selection takes (#120), so a link to
   tests can declare a cover: a selection is globs over the paths of files, as for
   `file`, and the files are those the state of the project lists at the side, chosen
@@ -821,6 +825,9 @@ and this project adheres to
 
 ### Fixed
 
+- `judge exempt --artifact` (#120): when parts of the listing of a cover are in
+  another space than its link of parts, the name is no longer taken as a part, and
+  the exemption is refused as one that cannot be told.
 - `stale` offers `judge approve <ref>` (with `--until`, `--actor`, or for a
   pending upstream) only when the frame would take the approval: no longer for
   an approval on an upstream decided against, of a document that is not valid,

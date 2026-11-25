@@ -1,18 +1,25 @@
 //! Tests of `exempt` over the in-memory fake: an exemption under a `true` cover makes
 //! `check` clean and is listed apart; a run of several is written whole; a refusal
 //! writes nothing; a link added later makes the exemption unneeded; `withdraw` takes
-//! it back.
+//! it back; an artifact's name is taken for a part only as the cover reads the
+//! listing.
+
+use std::collections::BTreeSet;
 
 use crate::domain::actor::{Actor, Attribution};
-use crate::domain::nonempty::NonBlank;
+use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::shelf::artifact::{ListingPart, NameListing, PartRead, Space};
 use crate::domain::shelf::build::DocReading;
 use crate::domain::shelf::exemption::{CoverMiss, ExemptRefusal, Unneeded};
 use crate::domain::shelf::freshness::Notice;
 use crate::domain::shelf::ledger::{Exempt, ExemptOf, JudgedAt, JudgementId, Record};
 use crate::domain::shelf::lookup::Reference;
-use crate::domain::shelf::schema::{BookName, CoverDecl, CoverSeverity, EntryName};
+use crate::domain::shelf::schema::{BookName, CoverDecl, CoverSeverity, EntryName, PartsDecl};
 
-use super::fake_tests::{FakeShelf, block_on, decls, docid, eid, fr, sp};
+use super::fake_tests::{
+    FakeShelf, aname, artifact, block_on, decls, docid, eid, file, file_space, fr, other_space,
+    reason, sp,
+};
 use super::{
     BooksCheck, ErrorClass, ExemptAsk, ExemptRequest, JudgeRequest, Judgement, ShelfApp,
     ShelfError, WithdrawRequest,
@@ -307,4 +314,107 @@ fn an_exemption_is_withdrawn_by_its_record_id() {
     assert!(listed.is_empty(), "{listed:?}");
     // Withdrawn, the document may be exempted again.
     assert!(block_on(app.exempt(vec![exempt("FR-2")])).is_ok());
+}
+
+/// The fake's books with a link `cases` of the spec, to the space `other`, covering
+/// `src/**` and taking each part whole through `tests` (to the files); `other` lists
+/// `listing`.
+fn app_cases(listing: NameListing) -> ShelfApp<FakeShelf> {
+    let mut covering = decls();
+    let spec = covering
+        .iter_mut()
+        .find(|b| b.name == "spec")
+        .expect("the fake declares it");
+    let mut cases = spec
+        .links
+        .iter()
+        .find(|l| l.name == "tests")
+        .expect("the fake declares it")
+        .clone();
+    cases.name = "cases".to_owned();
+    cases.space = Some("other".to_owned());
+    cases.cover = Some(CoverDecl::Table {
+        strength: None,
+        include: vec!["src/**".to_owned()],
+        exclude: Vec::new(),
+        parts: Some(PartsDecl {
+            whole: "tests".to_owned(),
+        }),
+    });
+    spec.links.push(cases);
+    let fake = FakeShelf::new().with_files(vec![file(
+        "specs/sp-3.md",
+        3,
+        "SP-3",
+        "t",
+        &[("cases", &["src/z.rs::t"])],
+    )]);
+    *fake.decls.lock().unwrap() = covering;
+    fake.list_names(&other_space(), listing);
+    ShelfApp::new(fake)
+}
+
+/// A listing of `other` with the name `src/z.rs::t` and one part, `b.rs`, unread, in
+/// `space_of_parts`.
+fn parted(space_of_parts: &Space) -> NameListing {
+    NameListing::Parted {
+        found: BTreeSet::from([aname("src/z.rs::t")]),
+        parts: NonEmptyVec::new(
+            ListingPart::new(
+                artifact(space_of_parts, "b.rs"),
+                reason("a macro"),
+                PartRead::Unread,
+            ),
+            Vec::new(),
+        ),
+    }
+}
+
+fn exempt_artifact(name: &str) -> ExemptRequest {
+    ExemptRequest {
+        subject: ExemptAsk::Artifact(aname(name)),
+        book: BookName::new("spec").unwrap(),
+        link: EntryName::new("cases").unwrap(),
+        reason: NonBlank::new("holds no test").unwrap(),
+        by: Default::default(),
+    }
+}
+
+#[test]
+fn a_name_is_taken_for_a_part_only_when_the_cover_reads_the_listing_whole_with_its_parts() {
+    // Read whole with its parts: the name of a part is that part, in the space of the
+    // link of parts.
+    let mut app = app_cases(parted(&file_space()));
+    let done = block_on(app.exempt(vec![exempt_artifact("b.rs")])).unwrap();
+    assert_eq!(done[0].artifact(), Some(&artifact(&file_space(), "b.rs")));
+
+    // A part in another space than the link of parts: nothing of the link is
+    // assessed, so no part is taken; the name is read in the link's space, and the
+    // exemption is refused as one that cannot be told.
+    let mut app = app_cases(parted(&Space::new("third").unwrap()));
+    let err = block_on(app.exempt(vec![exempt_artifact("b.rs")])).unwrap_err();
+    assert!(
+        matches!(
+            &err,
+            ShelfError::ExemptRefused(ExemptRefusal::CannotTell { .. })
+        ),
+        "{err:?}"
+    );
+    assert_eq!(app.ports().append_count(), 0);
+
+    // A listing that is not the whole: the name is read in the link's space, and
+    // refused alike.
+    let mut app = app_cases(NameListing::Some {
+        found: BTreeSet::from([aname("src/z.rs::t")]),
+        why: reason("cut at a bound"),
+    });
+    let err = block_on(app.exempt(vec![exempt_artifact("b.rs")])).unwrap_err();
+    assert!(
+        matches!(
+            &err,
+            ShelfError::ExemptRefused(ExemptRefusal::CannotTell { .. })
+        ),
+        "{err:?}"
+    );
+    assert_eq!(app.ports().append_count(), 0);
 }

@@ -122,7 +122,8 @@ Review blind: give the reviewer the issue and the branch, not a summary of the
 change, which keeps the review inside the summary. The reviewer starts from
 whyshelf — `status`, `stale` and `check`, then `get` and `trace` of the documents
 that name the issue (or, for a change of code alone, of the documents whose
-`rustdoc` or `tests` name the changed files), and `get --approved` and `diff` of
+`rustdoc`, `tests` or `cases` (whose names start with the path of the file)
+name the changed files), and `get --approved` and `diff` of
 the approved ones — follows their `rustdoc` items and `tests` into the code, and
 reads the diff for what the documents did not lead to. This is the one place the
 procedure is written.
@@ -221,11 +222,20 @@ issue -> finding -> requirement / decision / verification (pending)
 - `whyshelf check` is clean and `whyshelf stale` is empty before a PR goes up:
   `just check`, and so CI, fails otherwise (`just books`). An approval made with
   `--until` fails it once it expires. Pending documents pass it; approve them.
-- `tests` is a link to artifacts in the space `file`, through the default of
-  `.whyshelf/books.toml` (`[defaults] artifact = "file"`): its names are
-  paths, compared as written, case included. Write a path as Git tracks it (`Justfile`, not `justfile`), or it
-  names no file, on every system. `check` lists the names with nothing there
-  (`absent`) and those that cannot be told now (`unknown`).
+- `tests` names files whole, by path, in the space `file` through the default
+  of `.whyshelf/books.toml`: its names are paths, compared as written, case
+  included. Write a path as Git tracks it (`Justfile`, not `justfile`), or it
+  names no file, on every system. `cases` names test functions
+  (`<file>.rs::<module>::<fn>`, the preset `test`). Which of the two names a
+  file follows from the include of the cover of `cases`: DEC-112. `check` lists
+  the names with nothing there (`absent`) and those that cannot be told now
+  (`unknown`); it lists a part of a listing that is not reached with `of: part`
+  and the link to name it under (`whole`, here `tests`); `whyshelf cover` tells
+  each part's reason, what was read of it and how it stands. Name that file
+  whole under `tests`, or, when no test is found in it or it could not be read,
+  exempt it with a reason
+  (`whyshelf judge exempt --artifact <path> --from verification.cases --reason …`),
+  which stands only while no test is found in it (DEC-112).
 
 Everything else is RustDoc: crate and module docs (`//!`) and item docs (`///`),
 with diagrams as ASCII in code blocks tagged `text`; concepts, file formats,

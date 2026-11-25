@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "326242a1f4ecf296218e09ac752826424f757192",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2e124a03f35b06ef3ba7397d107ccc3135828bea754e012b0a499fa99c80a893",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c2c60a419cdacf685168c7e6f9b1094ae7c8c15a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f76a9613648fd987a281900ee05d22329efba58ed8d58b7477fe83cc81689b5c",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b31242a288426a2efecf4e4caacbffca6914193c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:fec6e48107a0f736b3d50e23c739d574d7b4f2e545e8f4229e12bd23a98aadab",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/exempt_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795567610583,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    }
+  ],
+  "id": "01a2102b-72c3-744e-af27-c5194dc8a505",
+  "kind": "decision",
+  "reason": "#120 stage T0: subject_of reads the listing through cover::read_listing; a part in another space than the link of parts is no longer chosen and its exemption is refused as cannot tell; blind review by Opus (from the issue and the change only) found no must-fix, its points fixed",
+  "revision": "9954f40bab911fc3e5a74557f452cb85bebbe22c",
+  "seen": "sha256:8b73afc4a26e873ffa19b02281f0653d1b0ba9f736bdfc04b2a18924732b15bd",
+  "seen_address": "06f9347c1cf95df628de13b1a9c5af08dc3ffb43",
+  "subject": "01a1cae7-1aa8-740a-9ad6-de66b9638908",
+  "v": 1,
+  "verb": "approve"
+}

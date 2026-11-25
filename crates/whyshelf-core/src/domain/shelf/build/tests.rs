@@ -1275,6 +1275,62 @@ fn tally_by_book_counts_valid_docs_and_invalid_files_per_book() {
 }
 
 #[test]
+fn the_files_that_are_no_valid_document_are_the_invalid_the_unreadable_and_the_anonymous_in_that_order()
+ {
+    let s = shelf(vec![
+        fr(1, &[]),
+        // With no `id:`: anonymous.
+        DocReading::Parsed {
+            origin: path("findings/a.md"),
+            entries: entries(&[("key", text("FR-2")), ("title", text("t"))]),
+            body: String::new(),
+        },
+        // An identity that cannot be read: unreadable.
+        DocReading::Unparsed {
+            origin: path("findings/b.md"),
+            id: ReadId::Unreadable,
+            why: RawProblem::Syntax { line: None },
+        },
+        // No title: invalid, its identity read.
+        reading("findings/c.md", 3, "FR-3", &[]),
+        // Invalid, of another book.
+        reading("specs/sp-4.md", 4, "SP-4", &[]),
+    ]);
+    let origins = |files: Vec<InvalidDoc>| -> Vec<String> {
+        files
+            .iter()
+            .map(|file| file.origin().as_str().to_owned())
+            .collect()
+    };
+    assert_eq!(
+        origins(s.invalid_files()),
+        [
+            "findings/c.md",
+            "specs/sp-4.md",
+            "findings/b.md",
+            "findings/a.md"
+        ]
+    );
+    // Of one book, by the book each file is under, in the same order.
+    assert_eq!(
+        origins(s.invalid_files_in(&finding())),
+        ["findings/c.md", "findings/b.md", "findings/a.md"]
+    );
+    assert_eq!(
+        origins(s.invalid_files_in(&BookName::new("spec").unwrap())),
+        ["specs/sp-4.md"]
+    );
+    // The tally counts the same three: one of each kind.
+    assert_eq!(
+        s.tally_by_book()[&finding()],
+        BookTally {
+            valid: 1,
+            invalid: 3
+        }
+    );
+}
+
+#[test]
 fn tally_by_book_lists_an_empty_declared_book_with_zeros() {
     let s = shelf(vec![fr(1, &[])]);
     assert_eq!(

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cfad16efc544710750692455535156d9f5bb4464",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1c070b7adf1ba503b5c9e1b205b995842c3a6e3a3eeb035f70ac60d519811220",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/rust_item_promise.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795567668012,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6fe10e2167766012ce32da4666a6f4c8125f788a",
+      "hash": "sha256:bb4c185cc7a9f4359f2fbf4aef4552b18dd870935791be542f85f25ba525b3e9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "83"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f2a3-70f9-7184-8e59-6b255b74caf0"
+    }
+  ],
+  "id": "01a2102c-5922-7539-8897-840d9be6aafa",
+  "kind": "decision",
+  "reason": "DEC-56: name the helpers of the end-to-end tests the files named use; only the tests line changed, each gaining crates/whyshelf-cli/tests/common/mod.rs as the guard named; blind review by Opus found no must-fix",
+  "revision": "9954f40bab911fc3e5a74557f452cb85bebbe22c",
+  "seen": "sha256:a7ca9f695200fd188a57dbd9aac376eefcfc575998c860fee4c68f90adb6984c",
+  "seen_address": "c33e55d4d5146e283974130dda1682252379f4cd",
+  "subject": "01a1f2a3-70f9-7184-8e59-6b27a3ca8978",
+  "v": 1,
+  "verb": "approve"
+}

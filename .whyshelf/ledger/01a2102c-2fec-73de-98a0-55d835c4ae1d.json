@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795567659034,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9db87ce77a0bfbccccf40dded4dcc5788569d9c0",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    }
+  ],
+  "id": "01a2102c-2fec-73de-98a0-55d835c4ae1d",
+  "kind": "decision",
+  "reason": "#120 stage T: the rule of naming tests by function under cases, parts taken whole through tests and no exclude (DEC-112), and DEC-56's shared helpers as the .rs files of each tests/<dir>/ holding a mod.rs; blind review by Opus (from the issue and the change only) found no must-fix, its points fixed",
+  "revision": "9954f40bab911fc3e5a74557f452cb85bebbe22c",
+  "seen": "sha256:dc0c69800aed01d09980bb6b6293af0358d22b49367a4b15c42cd2607d64bca4",
+  "seen_address": "a82bcf0fda363a00e5bb0d826f4ad8b66f7143f9",
+  "subject": "01a1c877-8fbd-7353-9e60-cfe043fb39a9",
+  "v": 1,
+  "verb": "approve"
+}

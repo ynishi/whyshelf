@@ -2262,11 +2262,43 @@ impl Shelf {
         &self.anonymous
     }
 
+    /// Every file that is no valid document, whether or not its identity could be
+    /// read: those whose identity could be read ([`Shelf::invalid`]), then those whose
+    /// identity could not ([`Shelf::unreadable`]), then those with no `id:` entry
+    /// ([`Shelf::anonymous`]). The one place the three are joined.
+    pub fn invalid_files(&self) -> Vec<InvalidDoc> {
+        self.invalid
+            .values()
+            .flat_map(|docs| docs.iter().cloned())
+            .chain(self.unreadable.iter().cloned())
+            .chain(self.anonymous.iter().cloned())
+            .collect()
+    }
+
+    /// The files of the book `book` that are no valid document ([`Shelf::invalid_files`],
+    /// in its order): each file is of the book `Schema::membership` puts the file in.
+    pub fn invalid_files_in(&self, book: &BookName) -> Vec<InvalidDoc> {
+        self.invalid_files()
+            .into_iter()
+            .filter(|file| self.book_of_file(file.origin()) == Some(book))
+            .collect()
+    }
+
+    /// The book `Schema::membership` puts the file `origin` in, or none when it is
+    /// under no book's directory: the one place the shelf's counts of files ask it.
+    fn book_of_file(&self, origin: &RelPath) -> Option<&BookName> {
+        match self.schema.membership(origin) {
+            Membership::In(book) => Some(book.name()),
+            Membership::Outside => None,
+        }
+    }
+
     /// How many valid documents and how many invalid files each book holds.
     ///
     /// Every file is counted in the book `Schema::membership` puts it in, valid or
-    /// not, readable identity or not: one rule for both counts. Every declared book is
-    /// listed, an empty one with zeros.
+    /// not, readable identity or not: one rule for both counts, and the invalid files
+    /// are those of [`Shelf::invalid_files_in`]. Every declared book is listed, an
+    /// empty one with zeros.
     pub fn tally_by_book(&self) -> BTreeMap<BookName, BookTally> {
         let mut tally: BTreeMap<BookName, BookTally> = self
             .schema
@@ -2274,25 +2306,22 @@ impl Shelf {
             .keys()
             .map(|name| (name.clone(), BookTally::default()))
             .collect();
-        let mut count = |origin: &RelPath, valid: bool| {
-            if let Membership::In(book) = self.schema.membership(origin)
-                && let Some(entry) = tally.get_mut(book.name())
-            {
-                if valid {
-                    entry.valid += 1;
-                } else {
-                    entry.invalid += 1;
-                }
-            }
-        };
         for doc in self.docs.values() {
-            count(doc.origin(), true);
+            if let Some(entry) = self
+                .book_of_file(doc.origin())
+                .and_then(|book| tally.get_mut(book))
+            {
+                entry.valid += 1;
+            }
         }
-        for invalid in self.invalid.values().flat_map(NonEmptyVec::iter) {
-            count(invalid.origin(), false);
-        }
-        for no_id in self.unreadable.iter().chain(&self.anonymous) {
-            count(no_id.origin(), false);
+        // One pass over the files, by the rule of `invalid_files_in`.
+        for file in self.invalid_files() {
+            if let Some(entry) = self
+                .book_of_file(file.origin())
+                .and_then(|book| tally.get_mut(book))
+            {
+                entry.invalid += 1;
+            }
         }
         tally
     }

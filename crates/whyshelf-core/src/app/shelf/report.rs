@@ -610,6 +610,32 @@ pub struct GetReport {
     pub health: Health,
 }
 
+/// The result of [`book_links`](super::ShelfApp::book_links): what each document of
+/// one book names in its links to artifacts, and the files of the book that are no
+/// valid document, read once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BookLinksReport {
+    /// The valid documents of the book, each with its links to artifacts.
+    pub docs: Vec<BookLinks>,
+    /// The files of the book that are no valid document
+    /// ([`Shelf::invalid_files_in`](crate::domain::shelf::build::Shelf::invalid_files_in)):
+    /// what they name cannot be told, and `check` says why.
+    pub not_valid: Vec<RelPath>,
+}
+
+/// What one valid document of a book names in its links to artifacts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BookLinks {
+    /// The key of the document.
+    pub key: DocKey,
+    /// The file it is read from.
+    pub file: RelPath,
+    /// Each link in which the document names an artifact, with the artifacts it
+    /// names, in the order written, as [`Doc::links_named`] reads them: by their space
+    /// and name. A link it names no artifact in is not there.
+    pub links: BTreeMap<EntryName, Vec<ArtifactKey>>,
+}
+
 /// What a link of a document, followed upstream, comes to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpstreamEnd {
