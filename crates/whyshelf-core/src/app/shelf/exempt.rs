@@ -35,6 +35,7 @@ use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{
     ArtifactKey, ArtifactName, ListedNames, Listings, Selection, Space,
 };
+use crate::domain::shelf::cover::{ListingRead, read_listing, whole_space_of};
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::exemption::{
     ExemptRefusal, artifact_cover_of, artifact_space_of, frame_exempt, frame_exempt_artifact,
@@ -224,10 +225,12 @@ impl<P: ShelfWrite> ShelfApp<P> {
 }
 
 /// The artifact `name` asked to be exempt from the link `link` of the book `book`:
-/// a part of the listing of the link's selection when the link's cover takes each part
-/// whole and `name` is the name of such a part and of no name listed, which is in the
-/// space the adapter named it in (the space of the link of `parts`); otherwise the
-/// name in the link's `space`.
+/// a part of the listing of the link's selection when the cover reads that listing
+/// whole with its parts ([`read_listing`], the one rule of what of a link is
+/// assessed) and `name` is the name of such a part and of no name listed, which is in
+/// the space the adapter named it in (the space of the link of `parts`); otherwise
+/// the name in the link's `space`, of which [`frame_exempt_artifact`] says what
+/// stands, and refuses it when nothing of the link is assessed.
 fn subject_of(
     loaded: &Loaded,
     book: &BookName,
@@ -236,16 +239,19 @@ fn subject_of(
     name: ArtifactName,
     listed: &ListedNames,
 ) -> ArtifactKey {
-    let part = artifact_cover_of(loaded.shelf.schema(), book, link, &space)
+    let shelf = &loaded.shelf;
+    let part = artifact_cover_of(shelf.schema(), book, link, &space)
         .ok()
-        .filter(|cover| cover.parts_whole().is_some())
-        .and_then(|cover| listed.names_and_parts(&space, cover.selection()).ok())
-        .filter(|(names, _)| !names.contains(&name))
-        .and_then(|(_, parts)| {
-            parts
-                .iter()
-                .find(|part| part.key().name() == &name)
-                .map(|part| part.key().clone())
+        .and_then(|cover| {
+            match read_listing(listed, &space, cover, whole_space_of(shelf, book, cover)) {
+                ListingRead::Whole { names, parts } if !names.contains(&name) => parts
+                    .iter()
+                    .find(|part| part.key().name() == &name)
+                    .map(|part| part.key().clone()),
+                ListingRead::Whole { .. }
+                | ListingRead::NotWhole(_)
+                | ListingRead::OtherSpace(_) => None,
+            }
         });
     part.unwrap_or_else(|| ArtifactKey::new(space, name))
 }
