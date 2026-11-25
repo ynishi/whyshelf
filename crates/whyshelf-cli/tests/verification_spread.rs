@@ -23,6 +23,9 @@
 //! itself nowhere else; the rule tests write only temporary projects of their own. It
 //! reads no front matter and no grammar of the names: a name's file is what its space
 //! places it in, and whether a file's tests are listed whole is rust-test's answer.
+//! Each region (the include of the cover, and the files of the end-to-end tests when a
+//! helper lies outside it) is listed once, and a file is read in the listing of its
+//! region: a listing that is not whole tells nothing of any file of it.
 //!
 //! What it does not see:
 //!
@@ -69,6 +72,9 @@ const E2E: &str = "crates/whyshelf-cli/tests/";
 /// The files of the crates.
 const CRATES: &str = "crates/**/*.rs";
 
+/// The files of Rust of the end-to-end tests, where their helpers are.
+const E2E_RUST: &str = "crates/whyshelf-cli/tests/**/*.rs";
+
 /// The most verifications that may name one file of the end-to-end tests.
 const MOST: usize = 2;
 
@@ -87,9 +93,11 @@ struct Named {
     cases: Vec<ArtifactKey>,
 }
 
-/// What rust-test's listing of one file says of its tests: none, the file is a part
-/// of the listing (with why), tests listed one by one, or the listing cannot tell
-/// (cut at a bound, or not made). The one place the four are told apart.
+/// What rust-test's listing of a region says of the tests of one file of it: none,
+/// the file is a part of the listing (with why), tests listed one by one, or the
+/// listing cannot tell (cut at a bound, or not made). [`grouped`] sorts the names and
+/// the parts of the listing to their files, and [`keep_in`] is the one place the four
+/// are told apart.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Keep {
     NoTests,
@@ -98,21 +106,73 @@ enum Keep {
     CannotTell(Completeness),
 }
 
-/// The `Keep` of the listing of one file, as the domain reads a listing with its
-/// parts (`ListedNames::names_and_parts`): what is a part is the listing's answer.
-fn kept_whole(read: Result<(&BTreeSet<ArtifactName>, &[ListingPart]), Completeness>) -> Keep {
-    match read {
-        Err(completeness) => Keep::CannotTell(completeness),
-        Ok((_, parts)) if !parts.is_empty() => Keep::Part(
-            parts
-                .iter()
-                .map(|part| part.why().as_str())
-                .collect::<Vec<_>>()
-                .join("; "),
-        ),
-        Ok((names, _)) if names.is_empty() => Keep::NoTests,
-        Ok((names, _)) => Keep::Split(names.clone()),
+/// What rust-test lists of the files of one region, by file: the names it lists one
+/// by one, and why each part is not listed whole.
+#[derive(Debug, Default)]
+struct Tests {
+    names: BTreeMap<RelPath, BTreeSet<ArtifactName>>,
+    parts: BTreeMap<RelPath, Vec<String>>,
+}
+
+/// The `Keep` of `file` in the one listing of its region, read as the domain reads a
+/// listing with its parts (`ListedNames::names_and_parts`): what is a part is the
+/// listing's answer, and a listing that is not whole tells nothing of any file.
+fn keep_in(tests: &Result<Tests, Completeness>, file: &RelPath) -> Keep {
+    let tests = match tests {
+        Err(completeness) => return Keep::CannotTell(completeness.clone()),
+        Ok(tests) => tests,
+    };
+    if let Some(whys) = tests.parts.get(file) {
+        Keep::Part(whys.join("; "))
+    } else if let Some(names) = tests.names.get(file) {
+        Keep::Split(names.clone())
+    } else {
+        Keep::NoTests
     }
+}
+
+/// The names of a listing by the file each is placed in (`placed`, through
+/// [`file_of`]), and its parts by the file of their key among `files`, with a problem
+/// for a name or a part of no file of `files`: it is not met unless the tree changes
+/// while it is read, for both spaces place a file's name in that file alone.
+fn grouped(
+    placed: &BTreeMap<ArtifactKey, RelPath>,
+    parts: &[ListingPart],
+    files: &BTreeMap<RelPath, ArtifactKey>,
+) -> (Tests, Vec<String>) {
+    let mut tests = Tests::default();
+    let mut problems = Vec::new();
+    for (key, file) in placed {
+        if files.contains_key(file) {
+            tests
+                .names
+                .entry(file.clone())
+                .or_default()
+                .insert(key.name().clone());
+        } else {
+            problems.push(format!(
+                "{} places {} in {file}, which the selection of its listing does not take ({DEC})",
+                key.space(),
+                key.name()
+            ));
+        }
+    }
+    let by_key: BTreeMap<&ArtifactKey, &RelPath> =
+        files.iter().map(|(file, key)| (key, file)).collect();
+    for part in parts {
+        match by_key.get(part.key()) {
+            Some(file) => tests
+                .parts
+                .entry((*file).clone())
+                .or_default()
+                .push(part.why().as_str().to_owned()),
+            None => problems.push(format!(
+                "rust-test gives the part {}, which is no file its selection takes ({DEC})",
+                part.key()
+            )),
+        }
+    }
+    (tests, problems)
 }
 
 fn space(text: &str) -> Space {
@@ -336,12 +396,11 @@ async fn placed(
 /// name places it in.
 async fn files_taken(
     app: &App,
-    include: Vec<String>,
+    selection: &Selection,
     cannot: impl Fn(&Completeness) -> String,
 ) -> Result<BTreeMap<RelPath, ArtifactKey>, Vec<String>> {
     let file = space(FILE_SPACE);
-    let selection = selection_of(include).map_err(|e| vec![e])?;
-    let names = listed(app, &file, &selection)
+    let names = listed(app, &file, selection)
         .await
         .map_err(|e| vec![e])?
         .map_err(|c| vec![cannot(&c)])?;
@@ -358,23 +417,63 @@ async fn files_taken(
 
 /// The files of the crates.
 async fn rust_files(app: &App) -> Result<BTreeMap<RelPath, ArtifactKey>, Vec<String>> {
-    files_taken(app, vec![CRATES.to_owned()], |c| {
+    let selection = selection_of(vec![CRATES.to_owned()]).map_err(|e| vec![e])?;
+    files_taken(app, &selection, |c| {
         format!("the files of the crates cannot all be listed: {c}")
     })
     .await
 }
 
-/// The files the include of the cover of `link` takes: none without a cover.
-async fn include_taken(app: &App, link: &TestLink) -> Result<BTreeSet<RelPath>, Vec<String>> {
+/// A selection read once: the files of the space file it takes, each by its key, and
+/// what rust-test's one listing of it says of their tests.
+struct Region {
+    files: BTreeMap<RelPath, ArtifactKey>,
+    tests: Result<Tests, Completeness>,
+}
+
+/// The region of `include`: the space file lists it and places its names, and
+/// rust-test lists it once, read with its parts, its names placed at once.
+async fn region(
+    app: &App,
+    include: Vec<String>,
+    cannot: impl Fn(&Completeness) -> String,
+) -> Result<Region, Vec<String>> {
+    let selection = selection_of(include).map_err(|e| vec![e])?;
+    let files = files_taken(app, &selection, cannot).await?;
+    let rust_test = space(RUST_TEST_SPACE);
+    let read = listing(app, &rust_test, &selection)
+        .await
+        .map_err(|e| vec![e])?;
+    let tests = match read.names_and_parts(&rust_test, &selection) {
+        Err(completeness) => Err(completeness),
+        Ok((names, parts)) => {
+            let keys: BTreeSet<ArtifactKey> = names
+                .iter()
+                .map(|name| ArtifactKey::new(rust_test.clone(), name.clone()))
+                .collect();
+            let (at, mut problems) = placed(app, &keys).await?;
+            let (tests, more) = grouped(&at, parts, &files);
+            problems.extend(more);
+            if !problems.is_empty() {
+                return Err(problems);
+            }
+            Ok(tests)
+        }
+    };
+    Ok(Region { files, tests })
+}
+
+/// The region of the include of the cover of `link`: none without a cover.
+async fn include_region(app: &App, link: &TestLink) -> Result<Option<Region>, Vec<String>> {
     let Some(cover) = &link.cover else {
-        return Ok(BTreeSet::new());
+        return Ok(None);
     };
     let name = &link.name;
-    let taken = files_taken(app, cover.selection().include().to_vec(), |c| {
+    region(app, cover.selection().include().to_vec(), |c| {
         format!("the files the include of {name} takes cannot all be listed: {c}")
     })
-    .await?;
-    Ok(taken.into_keys().collect())
+    .await
+    .map(Some)
 }
 
 /// The text of `file` at the side after, through the port.
@@ -510,77 +609,46 @@ fn uses(
     (used, problems)
 }
 
-/// The `Keep` of each file asked, each asked once.
-#[derive(Default)]
-struct Keeps(BTreeMap<RelPath, Result<Keep, String>>);
-
-impl Keeps {
-    /// The `Keep` of `file`: the space file is asked whether the path takes that file
-    /// alone, and rust-test lists it.
-    async fn of(
-        &mut self,
-        app: &App,
-        files: &BTreeMap<RelPath, ArtifactKey>,
-        file: &RelPath,
-    ) -> Result<Keep, String> {
-        if let Some(known) = self.0.get(file) {
-            return known.clone();
-        }
-        let answer = listing_of(app, files, file).await;
-        self.0.insert(file.clone(), answer.clone());
-        answer
-    }
+/// The regions the `Keep`s are read from: the include of the cover, and the files of
+/// the end-to-end tests, read only when a helper lies outside the include.
+struct Keeps {
+    include: Option<Region>,
+    e2e: Option<Region>,
 }
 
-/// Whether `file` can be asked alone, and its `Keep`.
-async fn listing_of(
-    app: &App,
-    files: &BTreeMap<RelPath, ArtifactKey>,
-    file: &RelPath,
-) -> Result<Keep, String> {
-    let selection =
-        selection_of(vec![file.as_str().to_owned()]).map_err(|e| format!("{file}: {e}"))?;
-    let taken = match listed(app, &space(FILE_SPACE), &selection).await? {
-        Ok(taken) => taken,
-        Err(c) => return Err(format!("the space file cannot tell {file} alone: {c}")),
-    };
-    // For a file outside the files of the crates (another extension, or outside
-    // `crates/`), the space file is asked where the one name it took lives: the guard
-    // reads no grammar of the names.
-    let alone = match (taken.len(), taken.iter().next()) {
-        (1, Some(name)) => match files.get(file) {
-            Some(key) => key.name() == name,
-            None => {
-                let key = ArtifactKey::new(space(FILE_SPACE), name.clone());
-                let (at, problems) = placed(app, &BTreeSet::from([key.clone()]))
-                    .await
-                    .map_err(|problems| problems.join("; "))?;
-                if !problems.is_empty() {
-                    return Err(problems.join("; "));
-                }
-                at.get(&key) == Some(file)
-            }
-        },
-        _ => false,
-    };
-    if taken.is_empty() {
-        return Err(format!(
-            "{file} is no file Git lists (check says absent, unless Git ignores it)"
-        ));
+impl Keeps {
+    /// The `Keep` of `file` when the include takes it, or none.
+    fn included(&self, file: &RelPath) -> Option<Keep> {
+        self.include
+            .as_ref()
+            .filter(|region| region.files.contains_key(file))
+            .map(|region| keep_in(&region.tests, file))
     }
-    if !alone {
-        let mut first: Vec<&str> = taken.iter().take(3).map(ArtifactName::as_str).collect();
-        if taken.len() > 3 {
-            first.push("…");
+
+    /// The `Keep` of a helper of the end-to-end tests: from the include when it takes
+    /// it, else from the region of the end-to-end tests, read the first time it is
+    /// needed. A helper that region does not take fails the run: as every helper is a
+    /// file of the crates under it, that is met only when the tree changed while it was
+    /// read (the spaces answer otherwise of the same files within one run).
+    async fn helper(&mut self, app: &App, file: &RelPath) -> Result<Keep, Vec<String>> {
+        if let Some(keep) = self.included(file) {
+            return Ok(keep);
         }
-        return Err(format!(
-            "the path {file} is a pattern of other files too ({}): it cannot be asked alone",
-            first.join(", ")
-        ));
+        if self.e2e.is_none() {
+            let e2e = region(app, vec![E2E_RUST.to_owned()], |c| {
+                format!("the files of the end-to-end tests cannot all be listed: {c}")
+            })
+            .await?;
+            self.e2e = Some(e2e);
+        }
+        let e2e = self.e2e.as_ref().expect("read above");
+        if !e2e.files.contains_key(file) {
+            return Err(vec![format!(
+                "{file} is a helper of the end-to-end tests that {E2E_RUST} does not take (DEC-56)"
+            )]);
+        }
+        Ok(keep_in(&e2e.tests, file))
     }
-    let rust_test = space(RUST_TEST_SPACE);
-    let read = listing(app, &rust_test, &selection).await?;
-    Ok(kept_whole(read.names_and_parts(&rust_test, &selection)))
 }
 
 /// The files a verification names: those of the names under `tests` and under the
@@ -612,14 +680,16 @@ async fn run(root: &Path) -> Result<Vec<String>, Vec<String>> {
     let link = test_link(&map)?;
     let docs = links_of(&app, &link.name).await?;
     let files = rust_files(&app).await?;
-    let taken = include_taken(&app, &link).await?;
+    let mut keeps = Keeps {
+        include: include_region(&app, &link).await?,
+        e2e: None,
+    };
     let keys: BTreeSet<ArtifactKey> = docs
         .values()
         .flat_map(|named| named.tests.iter().chain(&named.cases))
         .cloned()
         .collect();
     let (placed, mut problems) = placed(&app, &keys).await?;
-    let mut keeps = Keeps::default();
     let name = &link.name;
 
     // The names under the link with the preset test, and the files named whole, over
@@ -630,22 +700,21 @@ async fn run(root: &Path) -> Result<Vec<String>, Vec<String>> {
                 continue;
             };
             let n = test.name();
-            if !taken.contains(file) {
+            let Some(keep) = keeps.included(file) else {
                 problems.push(format!(
                     "{key}: {n} under {name} is a test of {file}, which the include of its cover does not take: name {file} whole under tests, or add its region to the include in the same change ({DEC})"
                 ));
                 continue;
-            }
-            match keeps.of(&app, &files, file).await {
-                Err(why) => problems.push(format!("{key}: {why}")),
-                Ok(Keep::Part(why)) => problems.push(format!(
+            };
+            match keep {
+                Keep::Part(why) => problems.push(format!(
                     "{key}: {n} under {name} is a test of {file}, whose tests cannot all be listed ({why}): name {file} whole under tests ({DEC})"
                 )),
-                Ok(Keep::CannotTell(c)) => problems.push(format!(
+                Keep::CannotTell(c) => problems.push(format!(
                     "{key}: {n} under {name} is a test of {file}, of which rust-test cannot tell the tests ({c}) ({DEC})"
                 )),
-                Ok(Keep::Split(names)) if names.contains(n) => {}
-                Ok(Keep::Split(_) | Keep::NoTests) => problems.push(format!(
+                Keep::Split(names) if names.contains(n) => {}
+                Keep::Split(_) | Keep::NoTests => problems.push(format!(
                     "{key}: {file} holds no test {n} (check says absent or gap; also when spelled otherwise than listed) ({DEC})"
                 )),
             }
@@ -654,18 +723,17 @@ async fn run(root: &Path) -> Result<Vec<String>, Vec<String>> {
             let Some(file) = placed.get(whole) else {
                 continue;
             };
-            if !taken.contains(file) {
+            let Some(keep) = keeps.included(file) else {
                 continue;
-            }
-            match keeps.of(&app, &files, file).await {
-                Err(why) => problems.push(format!("{key}: {why}")),
-                Ok(Keep::Split(_)) => problems.push(format!(
+            };
+            match keep {
+                Keep::Split(_) => problems.push(format!(
                     "{key}: {file} is taken by the include of {name}: name its tests by function under {name}, not the file under tests ({DEC})"
                 )),
-                Ok(Keep::CannotTell(c)) => problems.push(format!(
+                Keep::CannotTell(c) => problems.push(format!(
                     "{key}: {file} is named whole under tests, and rust-test cannot tell its tests ({c}) ({DEC})"
                 )),
-                Ok(Keep::NoTests | Keep::Part(_)) => {}
+                Keep::NoTests | Keep::Part(_) => {}
             }
         }
     }
@@ -699,16 +767,15 @@ async fn run(root: &Path) -> Result<Vec<String>, Vec<String>> {
             {
                 problems.push(why);
             }
-            match keeps.of(&app, &files, file).await {
-                Ok(Keep::NoTests) => {}
-                Err(why) => problems.push(why),
-                Ok(Keep::CannotTell(c)) => problems.push(format!(
+            match keeps.helper(&app, file).await? {
+                Keep::NoTests => {}
+                Keep::CannotTell(c) => problems.push(format!(
                     "{file} is under the helpers {E2E}{dir}/, and rust-test cannot tell whether it holds a test ({c}) (DEC-56)"
                 )),
-                Ok(Keep::Part(_) | Keep::Split(_)) if declared.contains(dir) => problems.push(format!(
+                Keep::Part(_) | Keep::Split(_) if declared.contains(dir) => problems.push(format!(
                     "{file} is a helper of the end-to-end tests and holds a test or something that may make one: move it to a feature's file or drop it (DEC-56)"
                 )),
-                Ok(Keep::Part(_) | Keep::Split(_)) => problems.push(format!(
+                Keep::Part(_) | Keep::Split(_) => problems.push(format!(
                     "{file} holds a test, or something that may make one, and no file declares `mod {dir};`, so it is not compiled: move the test to a feature's file or remove it (DEC-56)"
                 )),
             }
@@ -782,9 +849,12 @@ async fn candidates() {
     let files = rust_files(&app)
         .await
         .unwrap_or_else(|p| panic!("{}", p.join("\n")));
-    let taken = include_taken(&app, &link)
-        .await
-        .unwrap_or_else(|p| panic!("{}", p.join("\n")));
+    let keeps = Keeps {
+        include: include_region(&app, &link)
+            .await
+            .unwrap_or_else(|p| panic!("{}", p.join("\n"))),
+        e2e: None,
+    };
     let keys: BTreeSet<ArtifactKey> = docs
         .values()
         .flat_map(|named| named.tests.iter().chain(&named.cases))
@@ -801,13 +871,15 @@ async fn candidates() {
             used.insert(file, uses(file, &tokens, &helpers).0);
         }
     }
-    let mut keeps = Keeps::default();
     for (key, named) in &docs {
         let whole: Vec<&RelPath> = named.tests.iter().filter_map(|k| placed.get(k)).collect();
         let mut region = Vec::new();
-        for file in whole.iter().filter(|file| taken.contains(**file)) {
-            let names = match keeps.of(&app, &files, file).await {
-                Ok(Keep::Split(names)) => names.iter().map(|n| n.as_str().to_owned()).collect(),
+        for (file, keep) in whole
+            .iter()
+            .filter_map(|file| keeps.included(file).map(|keep| (file, keep)))
+        {
+            let names = match keep {
+                Keep::Split(names) => names.iter().map(|n| n.as_str().to_owned()).collect(),
                 _ => Vec::new(),
             };
             let by: Vec<&str> = docs
@@ -1331,42 +1403,68 @@ async fn a_file_the_include_takes_is_named_whole_only_when_its_tests_are_not_lis
 }
 
 #[tokio::test]
-async fn a_file_is_asked_alone_or_why_it_cannot_be_is_said() {
-    let scratch = project(
-        "alone",
-        None,
-        &[],
-        &[("crates/x/a.rs", ONE), ("crates/x/*.rs", ONE)],
+async fn a_file_whose_path_is_a_pattern_is_read_from_the_one_listing_as_any_other() {
+    let cover = "{ include = [\"crates/x/**\"], parts = { whole = \"tests\" } }";
+    let files = [("crates/x/a.rs", ONE), ("crates/x/*.rs", ONE)];
+    let by_function = project(
+        "pattern",
+        Some(cover),
+        &[("[]", "[\"crates/x/a.rs::one\", \"crates/x/*.rs::one\"]")],
+        &files,
     );
-    let app = ShelfApp::new(Project::new(&scratch.0, None, None, None).unwrap());
-    let files = rust_files(&app).await.unwrap();
-    let a: RelPath = "crates/x/a.rs".parse().unwrap();
-    assert!(
-        matches!(listing_of(&app, &files, &a).await, Ok(Keep::Split(names)) if names.len() == 1)
-    );
-    let star: RelPath = "crates/x/*.rs".parse().unwrap();
-    assert!(
-        listing_of(&app, &files, &star)
-            .await
-            .unwrap_err()
-            .contains("is a pattern of other files too")
-    );
-    let gone: RelPath = "crates/x/gone.rs".parse().unwrap();
-    assert!(
-        listing_of(&app, &files, &gone)
-            .await
-            .unwrap_err()
-            .contains("is no file Git lists")
-    );
+    assert_eq!(guard(&by_function.0).await, Vec::<String>::new());
 
-    let outside = Scratch::new("alone-no-git");
-    outside.write(".whyshelf/books.toml", declaration(None));
-    outside.write("crates/x/a.rs", ONE);
-    let app = ShelfApp::new(Project::new(&outside.0, None, None, None).unwrap());
-    let err = listing_of(&app, &files, &a).await.unwrap_err();
-    assert!(
-        err.starts_with("the space file cannot tell crates/x/a.rs alone: "),
-        "{err}"
+    let whole = project(
+        "pattern-whole",
+        Some(cover),
+        &[("[\"crates/x/*.rs\"]", "[]")],
+        &files,
+    );
+    let problems = guard(&whole.0).await;
+    assert_eq!(problems.len(), 1, "{problems:#?}");
+    assert_has(
+        &problems,
+        "crates/x/*.rs is taken by the include of cases: name its tests by function under cases",
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_file_the_include_takes_reached_through_a_link_is_refused() {
+    let cover = "{ include = [\"x/src/**\"], parts = { whole = \"tests\" } }";
+    let refused = "file places x/src/b.rs in x/src/a.rs, x/src/b.rs: a test file of this repository is reached through no link";
+    for (test, cases) in [
+        ("include-link", "[]"),
+        ("include-link-named", "[\"x/src/a.rs::one\"]"),
+    ] {
+        let linked = project(test, Some(cover), &[("[]", cases)], &[("x/src/a.rs", ONE)]);
+        std::os::unix::fs::symlink(linked.0.join("x/src/a.rs"), linked.0.join("x/src/b.rs"))
+            .unwrap();
+        let problems = guard(&linked.0).await;
+        assert_eq!(problems.len(), 1, "{problems:#?}");
+        assert_has(&problems, refused);
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_rust_file_of_the_crates_reached_through_a_link_is_refused_before_any_region_is_read() {
+    let linked = project(
+        "crates-link",
+        Some(COVER),
+        &[],
+        &[("crates/x/src/a.rs", ONE)],
+    );
+    std::os::unix::fs::symlink(
+        linked.0.join("crates/x/src/a.rs"),
+        linked.0.join("crates/x/src/b.rs"),
+    )
+    .unwrap();
+    let problems = guard(&linked.0).await;
+    assert_eq!(problems.len(), 1, "{problems:#?}");
+    assert_has(
+        &problems,
+        "file places crates/x/src/b.rs in crates/x/src/a.rs, crates/x/src/b.rs: a test file of this repository is reached through no link",
     );
 }
 
@@ -1375,47 +1473,94 @@ fn a_listing_says_no_test_a_part_tests_one_by_one_or_that_it_cannot_tell() {
     use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
     use whyshelf_core::domain::shelf::artifact::{NameListing, PartRead};
     let rust_test = space(RUST_TEST_SPACE);
-    let selection = selection_of(vec!["a.rs".to_owned()]).unwrap();
-    // Read as the domain reads a listing, with its parts.
-    let keep = |answer: NameListing| {
+    let selection = selection_of(vec!["*.rs".to_owned()]).unwrap();
+    let path = |text: &str| -> RelPath { text.parse().unwrap() };
+    let file_key =
+        |text: &str| ArtifactKey::new(space(FILE_SPACE), ArtifactName::new(text).unwrap());
+    let (a, b) = (path("a.rs"), path("b.rs"));
+    // The one listing takes both files.
+    let files = BTreeMap::from([(a.clone(), file_key("a.rs")), (b.clone(), file_key("b.rs"))]);
+    let name = ArtifactName::new("a.rs::one").unwrap();
+    let at_a = |names: &BTreeSet<ArtifactName>| -> BTreeMap<ArtifactKey, RelPath> {
+        names
+            .iter()
+            .map(|n| (ArtifactKey::new(rust_test.clone(), n.clone()), a.clone()))
+            .collect()
+    };
+    // Read as the domain reads a listing, with its parts, each name placed in a.rs.
+    let read = |answer: NameListing| -> Result<Tests, Completeness> {
         let listings = Listings::Asked(BTreeMap::from([(
             (rust_test.clone(), selection.clone()),
             answer,
         )]));
-        kept_whole(ListedNames::of(&listings).names_and_parts(&rust_test, &selection))
+        ListedNames::of(&listings)
+            .names_and_parts(&rust_test, &selection)
+            .map(|(names, parts)| {
+                let (tests, problems) = grouped(&at_a(names), parts, &files);
+                assert_eq!(problems, Vec::<String>::new());
+                tests
+            })
     };
-    let name = ArtifactName::new("a.rs::one").unwrap();
     let why = |text: &str| NonBlank::new(text).unwrap();
-    assert_eq!(keep(NameListing::All(BTreeSet::new())), Keep::NoTests);
+
+    let none = read(NameListing::All(BTreeSet::new()));
+    assert_eq!(keep_in(&none, &a), Keep::NoTests);
+    assert_eq!(keep_in(&none, &b), Keep::NoTests);
+
+    let one = read(NameListing::All(BTreeSet::from([name.clone()])));
     assert_eq!(
-        keep(NameListing::All(BTreeSet::from([name.clone()]))),
+        keep_in(&one, &a),
         Keep::Split(BTreeSet::from([name.clone()]))
     );
-    let part = ListingPart::new(
-        ArtifactKey::new(space(FILE_SPACE), ArtifactName::new("a.rs").unwrap()),
-        why("a macro may make a test"),
-        PartRead::Found(BTreeSet::from([name.clone()])),
+    assert_eq!(keep_in(&one, &b), Keep::NoTests);
+
+    // The part of b makes b a part, and not a.
+    let part = |of: &str| {
+        ListingPart::new(
+            file_key(of),
+            why("a macro may make a test"),
+            PartRead::Found(BTreeSet::new()),
+        )
+    };
+    let parted = read(NameListing::Parted {
+        found: BTreeSet::from([name.clone()]),
+        parts: NonEmptyVec::new(part("b.rs"), Vec::new()),
+    });
+    assert_eq!(
+        keep_in(&parted, &a),
+        Keep::Split(BTreeSet::from([name.clone()]))
     );
     assert_eq!(
-        keep(NameListing::Parted {
-            found: BTreeSet::new(),
-            parts: NonEmptyVec::new(part, Vec::new()),
-        }),
+        keep_in(&parted, &b),
         Keep::Part("a macro may make a test".to_owned())
     );
-    // A listing that could not be made, or was cut at a bound, tells nothing: it is
-    // neither a part nor the file's tests.
-    assert!(matches!(
-        keep(NameListing::CannotList(why("outside Git"))),
-        Keep::CannotTell(Completeness::CannotList(_))
-    ));
-    assert!(matches!(
-        keep(NameListing::Some {
-            found: BTreeSet::from([name]),
-            why: why("past the bound of names"),
-        }),
-        Keep::CannotTell(Completeness::Partial(_))
-    ));
+
+    // A listing that could not be made, or was cut at a bound, tells nothing of any
+    // file of its region: it is neither a part nor a file's tests.
+    let cannot = read(NameListing::CannotList(why("outside Git")));
+    let cut = read(NameListing::Some {
+        found: BTreeSet::from([name.clone()]),
+        why: why("past the bound of names"),
+    });
+    for file in [&a, &b] {
+        assert!(matches!(
+            keep_in(&cannot, file),
+            Keep::CannotTell(Completeness::CannotList(_))
+        ));
+        assert!(matches!(
+            keep_in(&cut, file),
+            Keep::CannotTell(Completeness::Partial(_))
+        ));
+    }
+
+    // A name or a part of no file of the region is said, not read as of another.
+    let elsewhere = BTreeMap::from([(
+        ArtifactKey::new(rust_test.clone(), ArtifactName::new("c.rs::one").unwrap()),
+        path("c.rs"),
+    )]);
+    let (tests, problems) = grouped(&elsewhere, &[part("c.rs")], &files);
+    assert!(tests.names.is_empty() && tests.parts.is_empty());
+    assert_eq!(problems.len(), 2, "{problems:#?}");
 }
 
 #[tokio::test]
@@ -1527,6 +1672,42 @@ async fn a_verification_over_an_end_to_end_file_names_the_helpers_it_uses() {
         ],
     );
     assert_eq!(guard(&other.0).await, Vec::<String>::new());
+}
+
+#[tokio::test]
+async fn a_helper_the_include_takes_is_read_from_the_include_and_no_other_region() {
+    let cover =
+        "{ include = [\"crates/whyshelf-cli/tests/**/*.rs\"], parts = { whole = \"tests\" } }";
+    let user = ("crates/whyshelf-cli/tests/a.rs", "mod common;\n");
+    let helper: RelPath = "crates/whyshelf-cli/tests/common/mod.rs".parse().unwrap();
+    for (test, text, refused) in [
+        ("include-helper-test", "#[test]\nfn t() {}\n", true),
+        ("include-helper-none", "pub fn help() {}\n", false),
+    ] {
+        let helped = project(test, Some(cover), &[], &[user, (helper.as_str(), text)]);
+        let problems = guard(&helped.0).await;
+        if refused {
+            assert_eq!(problems.len(), 1, "{problems:#?}");
+            assert_has(
+                &problems,
+                "common/mod.rs is a helper of the end-to-end tests and holds a test or something that may make one",
+            );
+        } else {
+            assert_eq!(problems, Vec::<String>::new());
+        }
+
+        // The Keep is the include's: the region of the end-to-end tests is not read.
+        let app = ShelfApp::new(Project::new(&helped.0, None, None, None).unwrap());
+        let map = mapped(&app).await.unwrap();
+        let link = test_link(&map).unwrap();
+        let mut keeps = Keeps {
+            include: include_region(&app, &link).await.unwrap(),
+            e2e: None,
+        };
+        let keep = keeps.helper(&app, &helper).await.unwrap();
+        assert_eq!(matches!(keep, Keep::Split(_)), refused, "{keep:?}");
+        assert!(keeps.e2e.is_none());
+    }
 }
 
 #[tokio::test]
