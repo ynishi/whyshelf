@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:272a3b0f9210ccc8bde2409d9b0bd64f471f30bcaa09c6a271a39d8234de0d46",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::an_upstream_stale_only_through_a_pending_one_the_run_approves_holds_nothing_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:08b496bd0cc45f18ceded12d85b476e9166279d47744099e5d35b2507ed23205",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_and_stale_together_are_one_run_upstream_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d99a4e072d903540ed7f57d17053ae755565e1e3252fdbc48597a0589308bed6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_approves_the_sample_upstream_first_and_leaves_nothing_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cb65a453c7b66f4cb5b28e3f7ebc061c8bd41d51fad68d264b75171d379cb8b5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_needs_a_reason_and_takes_no_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f8d8756ec08af9422bbdadc6afab956382625596ceeeac628af5ed97d8ef62ed",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_of_v_1_takes_what_it_stands_on_through_depends_links_only",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5a9fcf7dfe5c15db08d9c877d41b33525aba7746c8cb57939781e84b14fb4147",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_stale_alone_takes_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bcb57db9949eb1d88fcd748131450d805851e6aa17b429b2f17e6a79f50e903c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::the_command_init_gives_approves_its_four_documents_and_no_other",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573889052,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ea65505cd15e7247347a1239fbc02e9f0f4c1986",
+      "hash": "sha256:3816927150bad7efa5e8e105e6f178a4a598ca68b6277726b76c540a341c6bef",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a2108b-44d9-713f-b5b6-c7e68934e53d",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: tests named by function under cases; the body gains, corrects or narrows the sentences its named tests assert; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:42daea713ac335aaa5fe0e89968b8d063a11410d7cdbd84cae8c638686e78a58",
+  "seen_address": "f2cd74102b9ac59606c195b58221cd2cb0140a63",
+  "subject": "01a1c9f3-b3c3-738c-a1ed-412012185ef6",
+  "v": 1,
+  "verb": "approve"
+}

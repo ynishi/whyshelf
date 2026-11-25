@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c194abdd55c070cce0f0d3cfc6cca79bb3c185ebcc9511f2907783c09ae4781b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::a_crate_whose_docs_are_not_built_is_unknown_and_no_approval_stands_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f75adad27fb9179d53b197e004a1f43e1c141c87652e4ae3d78144a8b89490b4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::a_link_of_the_preset_rustdoc_stands_on_the_items_being_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d697682820820cd09a070aa3b5c24d643bd6c27902e869068e8a9f822a2c389e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::a_text_that_is_no_rust_path_makes_the_document_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9ae441541ef91f0dd421800b1e130e16e4eb039c985f99e0a33f73e32a308c5a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::the_gate_fails_while_an_approval_stands_on_a_name_that_cannot_be_told",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bccd4cfbd9e43686410f91eac539bb5e15e68a45",
+      "hash": "sha256:acec6b3176e3573a973d990d130f9afa3478d287b218feef3116b5a3d7943008",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "54"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c811-cfe5-739d-9535-559effdfed85"
+    }
+  ],
+  "id": "01a2108b-9cd7-73ae-b101-dc979406f6f2",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:539e1fdd15fa96db2070406f94d826b8df4363ef7fb2dc6bfb6d4efebc99b227",
+  "seen_address": "dbac97ab072955fd410a2917e160bd5cc792965d",
+  "subject": "01a1c811-de0a-70c2-aff0-e988ee3e70e0",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,42 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:bc9367e9c29ee749bbe40d74cf3dc9f90ef6467ca8c4cd16a1fe8f28599df494",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::names_of_one_crate_whose_docs_are_not_built_are_one_line_and_the_answer_keeps_each",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "72b66d75adbf24c8596bcaabf9a745918d611775",
+      "hash": "sha256:32cb187d100e8eef092018017daa514abc8600501551e6fc3a5010779854e789",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "69"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1d9f7-a611-74b7-88a2-a58381f213dc"
+    }
+  ],
+  "id": "01a2108b-a870-73ec-b990-161790c63924",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:d34664795800eac597cc6176a9f9ed52a5ebc8682d4f6c0f35c87a04bc677945",
+  "seen_address": "aa1f44cce185f571fd7f3c85177dde8ab24c57bf",
+  "subject": "01a1d9f7-ca9a-714b-aad6-4b46373c5273",
+  "v": 1,
+  "verb": "approve"
+}

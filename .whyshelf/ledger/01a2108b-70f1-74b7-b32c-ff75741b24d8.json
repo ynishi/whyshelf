@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:3b4d599399490e0f5fd079cfcc6633b5a0986d87a1fe78dc6f76e8e3c8465ec9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::a_project_that_declares_no_rule_takes_any_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:662441ae14d5fe1c8eeb1ef200345f437999407b884113652f2895fb32d98f4d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::a_record_written_by_hand_under_that_name_fails_check_until_an_admitted_name_withdraws_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1c75bf71cacac1cc28c95913a0b4f54d754a6dee23906b686faadbd02c99a1bf",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::an_approval_by_a_name_the_rule_does_not_admit_is_refused_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:648fa58f3b6405f22b54369e17938d018a67277ef28c04da75c1830d43f0e457",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::approve_stale_leaves_out_what_the_actor_may_not_approve",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9ace93bd6fff1be46a68ad5b488ded85fa507d0e",
+      "hash": "sha256:6599ee1d0b6414293d727c077a050734aa210b98e3b0fb8e0b64a6823ee85138",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "88"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c41-7b18-8d07-3f9a5e2b6c40"
+    }
+  ],
+  "id": "01a2108b-70f1-74b7-b32c-ff75741b24d8",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:f7cde4ba49a9a7995d8a45e467492d50641e4f5a5590d19be124117404f83678",
+  "seen_address": "15fde1f3e58230647c169639a22f388953a7bd29",
+  "subject": "01a1f6a0-2c41-7c62-a4e9-1b7d8c3f0e52",
+  "v": 1,
+  "verb": "approve"
+}

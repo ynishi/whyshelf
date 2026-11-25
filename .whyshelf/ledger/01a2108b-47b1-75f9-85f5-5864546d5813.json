@@ -1,0 +1,126 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:31b59715537994978c3d9de1ab6d050db288922974abf7c7b3f83371c74bbdb6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_document_named_twice_in_a_run_is_refused_as_such",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:12ba6678bd20a130a802a5ebd9967b84eca27bdd64e4327dca1bd2bce0b3854a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_document_no_file_carries_names_nothing_even_with_an_exemption_of_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3896fab76fdc7094f9681815ec5487f5acc5da97abf942bc61e57e813d5324c2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_finding_exempt_from_a_warn_cover_is_listed_apart_and_unneeded_once_grounded",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5d13183dad418b0cc4fe8eedb085a322c1e385d88b8d2a4e177143324978da6e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_note_exempt_from_a_true_cover_leaves_check_clean_until_it_is_seen",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5f64f00194d2d0454802c6d756bba464a66dec7db16f88ea7729c5ec0c3c07d5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_refused_exemption_exits_2_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:06b1be63ebb065019ea0769440b2e9ff2b8e8b15ad011658dcc61076f84a298c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_from_one_of_two_covering_links_leaves_the_other_a_gap",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8f4ce81d0c3d1ce5e2071ac9254614bd19f738adcb589d70f3c110c8769bc299",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_unneeded_at_once_exits_2_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7a9d056cfc3765e7e178530964ca2e800fe3d65f97be78ecd62e0048eb3f8072",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_withdrawn_leaves_the_gap_as_it_was",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c13c3d9cdb1362aad416da4f18d54e16e551b15a20e94b849af3402a7f34f2d7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_withdrawn_twice_is_refused_and_one_may_be_made_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0cf129c490d1f4c2bc44d593c236e5d450a2eb898a3bfbc511c65c18a0d86406",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::every_why_of_an_unneeded_exemption_is_told_on_the_binary",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b047cc390f1a3992e59ddf497112313636329e69634d1da3748101def5629439",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::two_exemptions_of_one_note_from_one_link_are_warned_of_as_repeated",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573889052,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    }
+  ],
+  "id": "01a2108b-47b1-75f9-85f5-5864546d5813",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: tests named by function under cases; the body gains, corrects or narrows the sentences its named tests assert; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:67fb64515dc2e9d4730645f044e8c309f48d553996a7966c95dd8737a3ea7d76",
+  "seen_address": "466368c8ae643177ec205471b1a003bd9fbbb3fe",
+  "subject": "01a1cae7-1da6-7457-af7a-69b5b81ebcc9",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:526e73c916eba99dfbcb7a5851b5592ac2b2c1694e2173afcfbf7dfbb3ab847b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve.rs::another_actors_approval_of_the_same_content_is_written_and_then_repeats",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:923837b9d2f76e298862ddbb3b503a7dbc4dc326a95428a84ea4e6722c7af2c9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve.rs::approving_a_fresh_approval_again_leaves_it_out_and_again_writes_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f26ff95e68f9361e0506d0ab8aa735d27ae4255e",
+      "hash": "sha256:9d14da9916d17d8fcde903af0de472992e7d646fc471d1ce50ee033d319b7dbd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "58"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8cf-dfdb-771f-bea4-6b65c56de737"
+    }
+  ],
+  "id": "01a2108b-9fb4-75d8-b1de-7b3ec4cd41a5",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:a2696b61d64017c64a9f2f4b5c3d4d44518edeb0428484d5f0f078bb694a4b35",
+  "seen_address": "1f028752d29c6ce5bc14702891e40563bea93720",
+  "subject": "01a1c8cf-e77f-7466-8e8c-cf03a522db1d",
+  "v": 1,
+  "verb": "approve"
+}

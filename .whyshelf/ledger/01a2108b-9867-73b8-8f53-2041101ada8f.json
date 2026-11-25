@@ -1,0 +1,42 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:cadb2a8f483f35def74de63b56f01fcd88b66675389a165b06777693a0232107",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/repository_ledger.rs::the_repository_s_ledger_reads_with_no_unreadable_record_and_no_problem",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "e4894a2b3e0e23aa63e7a3936ccc1ddaf023bd48",
+      "hash": "sha256:728a8801003dacb50886f495ac9a9d364b391f894c9a8a5f95e67250e8a23e73",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "46"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bf0d-70d9-a6b0-d454e6662c4d"
+    }
+  ],
+  "id": "01a2108b-9867-73b8-8f53-2041101ada8f",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:0c7448460969b5289f1bf1e6a8b0b35790bbecc2c8d6e7df32c4f67b23e7fe6c",
+  "seen_address": "aed7f7e6478bd438a049030acdf69b1dfeff321f",
+  "subject": "01a1c765-2707-72a5-97a0-25758305061d",
+  "v": 1,
+  "verb": "approve"
+}

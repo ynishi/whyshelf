@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:f94e6de6820cfa2c7bafaddfcb22697eed7f7f23415f6c4058eb6cabd7da5e6f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_test_cover.rs::a_document_that_spells_a_test_otherwise_than_the_source_does_not_reach_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a58eee52e5391cb0b8bbb03faf2f9f37699d65c40008dd69f8b6209c56e5ac55",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_test_cover.rs::a_file_where_a_macro_may_make_a_test_is_a_part_a_gap_until_tests_names_it_whole",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:25e32f4c27290059e23a9df2d2d1420b5ba4c3e14c8c899704d5215867a6b08a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_test_cover.rs::a_test_exempt_from_the_cover_passes_check",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9ece378d2e41d44b44850edc83a87323676791fb10b26b68fed142a0ff9ca619",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_test_cover.rs::an_error_cover_over_tests_fails_check_while_a_test_is_named_by_no_document_and_passes_once_one_names_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573889052,
+  "expires": null,
+  "frame": [
+    {
+      "address": "dd7bf7b73d70661bcb542a14e9a378a7e62034f7",
+      "hash": "sha256:40f796d0a6e11fcef53c6f0f2018b41631065dcfbbf54ddb18d095dec70a6282",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "111"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20e06-b79e-7071-b438-62a7fe44a70c"
+    }
+  ],
+  "id": "01a2108b-57b8-7406-964b-3e326cb4349e",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: tests named by function under cases; the body gains, corrects or narrows the sentences its named tests assert; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:ec0262a96674d21134bad60ad2b4386439fa66af0987b39302d02283d48fee91",
+  "seen_address": "8ca9ce714f9e951b8eee53d1bd7d1b0dfc44b0c3",
+  "subject": "01a20e06-b79e-7071-b438-62a983fe2477",
+  "v": 1,
+  "verb": "approve"
+}

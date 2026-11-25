@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:6fbf4b0eafa220dc885d5920d1db67848044f32d1d9a40d69ad025fd605fd0ea",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves_rust_item.rs::a_module_moved_under_another_parent_with_a_sibling_left_has_the_narrow_prefix_that_stands",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d8cc4d5453cc7717efb5cac29e8769e200d83d2157c0df866e07417edacf2dfd",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves_rust_item.rs::a_module_that_became_another_has_its_items_at_their_new_paths_and_one_prefix",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6f3866af24f0ca81454cc401311db83b9385278407b0385d420bcc0e8723ec0a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves_rust_item.rs::a_prefix_with_a_name_left_in_the_old_module_is_refused_by_moves_and_by_judge_moved",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:154a8f0e4385fb2b0d21e2005d3f894c3490377540bedcecbcc76368f594cbee",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves_rust_item.rs::when_no_name_ends_as_a_gone_one_does_there_is_no_candidate",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795573898337,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9d85c71fc6aa6e8f8680f15c8ff144a86a6d401b",
+      "hash": "sha256:15e4de5579378addb80477b068aa86f5c3602279ad08664599ab7efef5e4c2e6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "96"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fd22-7aea-7470-903b-78df35942cc6"
+    }
+  ],
+  "id": "01a2108b-8315-7522-b9e0-d376240f89d6",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the end-to-end tests: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, the shared helper named whole where a file uses it; blind review by Opus (from the issue and the change only) read each test against the body; no must-fix, its points fixed",
+  "revision": "5080ddd16f0d664881ac84c24cbaf2c5bc3c8cc5",
+  "seen": "sha256:fcb8a611ac47d6641cee6493693cdd0d86ec76a699bf203daee3acac58ba612b",
+  "seen_address": "e432786a6c6f70b8b1f524439b5081b48f621c9e",
+  "subject": "01a1fd22-84b5-715b-96fa-8e294b655e92",
+  "v": 1,
+  "verb": "approve"
+}
