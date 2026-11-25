@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "ffa4b460a552420e0c99f9c753a776ce83fc9f75",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2d6105f6199ad2584836dd90df85aa7db1865ceb98ee76367ed2e31fd37e0c49",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/verification_spread.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795567662089,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a82bcf0fda363a00e5bb0d826f4ad8b66f7143f9",
+      "hash": "sha256:dc0c69800aed01d09980bb6b6293af0358d22b49367a4b15c42cd2607d64bca4",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "56"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c877-8fbd-7353-9e60-cfe043fb39a9"
+    },
+    {
+      "address": "52e78eab0a9fca9c92d8a6814185b075053cd249",
+      "hash": "sha256:ea4262d3c6c3035d1dc2ce3c3d93152a90a7c542b37bdc4cc548dc702f61b654",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "112"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2102b-3567-73b5-a69f-5a6bc7544b7c"
+    }
+  ],
+  "id": "01a2102c-3bb3-734f-8772-c57ddcf319cb",
+  "kind": "decision",
+  "reason": "#120 stage T: verification_spread.rs rewritten to check, through the port, the link with the preset test and its cover, the names under it placed by rust-test, the helpers of the end-to-end tests and the spread of a file, and to fail where rust-test cannot tell; blind review of the guard by Opus found no must-fix, its points fixed",
+  "revision": "9954f40bab911fc3e5a74557f452cb85bebbe22c",
+  "seen": "sha256:0c9164213a21d697459452a117b9ffd664fa88e4ffedb9279fa6f94ce6c81af4",
+  "seen_address": "5cf8c4c54531c6116b11b12c62126d067ff3db30",
+  "subject": "01a1c877-9138-726f-9e0d-817c5f8f866f",
+  "v": 1,
+  "verb": "approve"
+}

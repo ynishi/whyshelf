@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "affb9fd3ccf86dc0d1731c857559a56ff40e4c20",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:3a54b64f4314f2aa32b08c17b7fe6e694dd8129c5f785302f8c900c493e86de7",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/common/mod.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "119ddc605fe010c252c34396842d47c912fd2f76",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:67dbc1593ffd7170a1a88401ee34a40152bd05b950fcc105d96d0eab01996f3a",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/fmt_drop.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "231c3bd61a7655d38b18c36da08866fdf60c83a5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7b94a40c6ea34cc6d4b1ba7fb986fe0d621cf32989861d923c49cc0c1a093e57",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/status_with.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795567668012,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1ad892133660c7b0f9117f01c225a6bf658e4e82",
+      "hash": "sha256:9252f2e982a2bdd5db185b629ae2567f4ae2ff6f1fb771d9a3f5566ae3b1dbf6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "82"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f1fb-7f05-73a9-ae21-ace8fdbcb80e"
+    }
+  ],
+  "id": "01a2102c-5749-7620-b020-1ae3cfbe4228",
+  "kind": "decision",
+  "reason": "DEC-56: name the helpers of the end-to-end tests the files named use; only the tests line changed, each gaining crates/whyshelf-cli/tests/common/mod.rs as the guard named; blind review by Opus found no must-fix",
+  "revision": "9954f40bab911fc3e5a74557f452cb85bebbe22c",
+  "seen": "sha256:a595c02a2f249ec936f7178e0e2ad019be0797808d0b81fd0ab618f1998fd5ce",
+  "seen_address": "08266d0524fc3e09d321e5503e3cdb8422ce7b6e",
+  "subject": "01a1f1fb-7f05-73a9-ae21-aceaed03021c",
+  "v": 1,
+  "verb": "approve"
+}

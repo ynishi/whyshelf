@@ -155,11 +155,8 @@ pub struct PlanDiffers {
 /// valid document and for a file the shelf has nothing of.
 fn problems_of(shelf: &Shelf, file: &RelPath) -> Vec<DocProblem> {
     shelf
-        .invalid()
-        .values()
-        .flat_map(|docs| docs.iter())
-        .chain(shelf.unreadable())
-        .chain(shelf.anonymous())
+        .invalid_files()
+        .iter()
         .filter(|doc| doc.origin() == file)
         .flat_map(|doc| doc.problems().iter().cloned())
         .collect()

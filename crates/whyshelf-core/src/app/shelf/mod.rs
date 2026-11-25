@@ -13,6 +13,7 @@
 //! | [`status`](ShelfApp::status) | no | [`StatusReport`]: every document's declared status and standing |
 //! | [`status_filtered`](ShelfApp::status_filtered) | no | [`StatusReport`]: the documents that pass a filter by book, standing and field, with the filter as given; a filter that does not fit the declaration is [`ShelfError::Filter`] |
 //! | [`get`](ShelfApp::get) | no | [`GetReport`]: one document, its standing, notices and root causes |
+//! | [`book_links`](ShelfApp::book_links) | no | [`BookLinksReport`]: what each valid document of one book names in its links to artifacts, and the files of the book that are no valid document; a book not declared is [`ShelfError::UnknownBook`] |
 //! | [`trace`](ShelfApp::trace) | no | [`TraceReport`]: links up and down, each node with its standing |
 //! | [`reach`](ShelfApp::reach) | no | [`ReachReport`]: the named documents and every document that depends on one of them, the artifacts all of them stand on with where each lives, the files of the project all of it is in, and what may depend on them that could not be read |
 //! | [`impact`](ShelfApp::impact) | no | [`ImpactReport`]: the two ends of a change, read the one way the run names, and for every document whether its approval held, holds, and whether the change adds a cause that makes it not hold; with [`impact_within`](ShelfApp::impact_within), whether the change stays inside the reach of named documents before it, a verdict per document |
@@ -120,6 +121,8 @@ mod artifact_cover_tests;
 #[cfg(test)]
 mod artifact_tests;
 #[cfg(test)]
+mod book_links_tests;
+#[cfg(test)]
 mod comparison_tests;
 #[cfg(test)]
 mod cover_tests;
@@ -204,13 +207,14 @@ pub use ports::{
 };
 pub use rekey::{RekeyReport, RekeyRequest, Rekeyed};
 pub use report::{
-    Absent, ApprovedItem, ApprovedReport, ArtifactCoverLists, Awaiting, BookCount, BooksCheck,
-    CoverReport, DiffItem, DiffReport, DownstreamEdge, ExemptArtifact, ExemptEntry, Gate,
-    GetReport, Health, ImpactReport, Judged, JudgedAll, LeftOut, LeftOutWhy, MapReport, MovedAway,
-    MovesReport, Names, ReachReport, ReachedArtifact, ReachedDoc, RepeatedArtifact,
-    RepeatedExemption, Row, SettledOrigin, StaleEntry, StaleReport, StatsReport, StatusReport,
-    TraceReport, Uncovered, UncoveredArtifact, UncoveredOf, UnitsReport, Unknown, UnlinkedEntry,
-    UnlinkedLists, UnlinkedReport, UnneededArtifact, UnneededExemption, UpstreamEdge, UpstreamEnd,
+    Absent, ApprovedItem, ApprovedReport, ArtifactCoverLists, Awaiting, BookCount, BookLinks,
+    BookLinksReport, BooksCheck, CoverReport, DiffItem, DiffReport, DownstreamEdge, ExemptArtifact,
+    ExemptEntry, Gate, GetReport, Health, ImpactReport, Judged, JudgedAll, LeftOut, LeftOutWhy,
+    MapReport, MovedAway, MovesReport, Names, ReachReport, ReachedArtifact, ReachedDoc,
+    RepeatedArtifact, RepeatedExemption, Row, SettledOrigin, StaleEntry, StaleReport, StatsReport,
+    StatusReport, TraceReport, Uncovered, UncoveredArtifact, UncoveredOf, UnitsReport, Unknown,
+    UnlinkedEntry, UnlinkedLists, UnlinkedReport, UnneededArtifact, UnneededExemption,
+    UpstreamEdge, UpstreamEnd,
 };
 pub use run_writes::Edited;
 pub use same_meaning::{Declared, DeclaredAbout, SameMeaningAbout, SameMeaningRequest};
