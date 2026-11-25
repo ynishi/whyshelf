@@ -1,0 +1,189 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:2f6a3f3c3331bc62a531411bdf7b9139bbfebb7439c539eadc2228bd04407822",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::a_document_not_asked_about_is_not_taken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4d3a323f137ef3d96df870fc755177388f141bd66b2c560fa1545fca9dd19579",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::a_gone_artifact_is_looked_for_and_declared_moved_and_never_approved_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:29c0cd5e786626c89459acd5e8c4a01a5711132701d165a12e1165c1e3a2c37a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::a_lapsed_approval_is_approved_again_with_a_new_expiry_and_not_by_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fd4673cbd7723c12378092396abf3da50af94dfe059a1533fc1c00ef0f29586a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::a_pending_upstream_is_approved_and_approving_again_would_change_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3f1622f227c40ae1d767fb282531d789651469e6fd9dbdc45ac2a9d1ef67cf40",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_approval_by_name_the_frame_refuses_is_not_listed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c4b6b07a7fe84d2c6ab41c852d335871bc630b3f237a512204bec6540402e365",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_artifact_that_arrived_or_a_link_that_changed_is_read_and_approved_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6b14777b907afd5a77453a55ced4cd272e5b53fd18744edb5178031d410c99a3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_edited_artifact_is_declared_about_by_its_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c8314317529bbc5431ce1a2441d71ad0df90b9dc92e42ea022daadfa65ab0365",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_edited_document_is_read_declared_and_approved_again_in_that_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:443f6925e09faa03c44067094c26e1489aa0d758f509026b97b2006ac21d8d9e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_expiry_beside_an_edit_lists_both_and_the_second_drops_the_expiry",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:954187884079ed1c5089927f7cd839b7010c56ec99ce6f6a32ad0115a66e795b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_origin_none_of_whose_approvals_the_shelf_takes_has_no_approve_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e9f96030d44a837a46008e3dc2e4718ee27c6eb5f1b751d49252279ed544a829",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_upstream_that_awaits_is_approved_by_another_name_and_not_by_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:21c5077f9447d3fb90c9515f9aa9d5601d64d1a6444c3670f77310ebca03edcc",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::approving_again_is_listed_only_for_the_events_it_settles",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:070282122eb42dafac574ecdfb9f8b6e34c13ba57d60e58c562b4beef445880f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::many_events_and_approvals_list_a_settlement_once",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:abdc9f691f7c8d41d2ba9c9ae3ee10becd455487598430f73a74625e3a9fde89",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::origins_asked_names_the_documents_the_settlements_approve_by_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f9e124d9d486e020a94cc5d75e7d9142c4423f72b62cf86ae38ccab2f92d4bcc",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::the_declaration_is_read_and_approved_again_and_nothing_is_declared_about_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cfc7c8574abcd5842efca3a9c3e3bfcb0bda434ff3fc3254833f23dff33c5c86",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::the_diff_is_of_an_approval_that_holds_the_edit_and_not_of_one_that_only_lapsed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2df831a33aa50783c323499f8053c50cf3256f95def1bfb963d95adf8fc524c4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::the_diff_is_of_the_smallest_approval_that_holds_the_cause_and_not_one_below_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:13ce6a3830a953f8412957e2c893bcdfef78c3db76c0b56f086a25d8b372a0fe",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::what_has_no_command_has_no_settlement",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "4ebfa87912d57b112570d3dde6e16b3b3d8494d5",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:168a43f7a4528081b9e18a7dfe95a62b5b1da2678a702cdf3ee7e76a3c1a0bfc",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/next.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "071abe99c4f952ef27b50baeca2ea7061555e361",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:4fa7f3e36ad831b02dbc1be206605d3f579bc737cd315ec3393e73eefe10897e",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/origin_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795579785864,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a80c141845f7b47b4e1a75336439e3e44d517bd8",
+      "hash": "sha256:9cfd853526bcfecc0dba18c734c28d9e86c2eaa21b9b9798f7258b21b4859674",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a210e5-8f78-72cd-a0a7-470b320460cd",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the core domain: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "ee3f8544e23d045665d55f4caa525897016356d5",
+  "seen": "sha256:44ea3b2940106f1dc17a66f441826c1d3af3835fdceee6eadebf2365e7a3420c",
+  "seen_address": "1993edda969189e62f98a1055404879d8af1c8c6",
+  "subject": "01a1db32-2f0d-760c-b870-8844f72644d6",
+  "v": 1,
+  "verb": "approve"
+}

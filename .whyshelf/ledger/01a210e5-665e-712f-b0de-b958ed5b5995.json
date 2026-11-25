@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:b8c655c85f2be3bfb395b126d511f5610aa3d707ab93cbed5df2c45aaec1640c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_declared_book_with_no_document_is_empty_and_a_book_not_declared_is_an_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:44ac02a6dd53352a46700a09ca8183dc19cdc7f687f9eb55e8393aa2fa066101",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_file_of_the_book_that_is_no_valid_document_is_named_apart_with_no_id_among_them",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d37d5388b60105cc509281d0fe75051a276075f6f12d0c3ffc64c91fc62b33d0",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_null_an_empty_list_and_a_blank_text_name_nothing_and_are_valid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5717bf8e0fcc92beb400cde1fa6e9fefb573fffc9f697dc6dbd032a7b5d325b1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::each_document_of_the_book_names_its_artifacts_in_the_order_written_and_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2dbf12f219274896df9a1963167832da96cd5bf69e5a07dd5f990e556d0683ec",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_counts_an_unreadable_file_as_invalid_in_its_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:30a422856a4aa852240f270a3bc8681c91182171089a1be54e0b965d1c5344d1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_counts_valid_docs_and_invalid_files_per_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:212ff05e161a4b448bcc1bb1ccedcee9234b15f8308a6d5d194a8e8c98021f00",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_lists_an_empty_declared_book_with_zeros",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1ea6968897a96d61934af8257f46570bd59d138ff700289c6337ffec52812896",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::the_files_that_are_no_valid_document_are_the_invalid_the_unreadable_and_the_anonymous_in_that_order",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795579785864,
+  "expires": null,
+  "frame": [
+    {
+      "address": "52e78eab0a9fca9c92d8a6814185b075053cd249",
+      "hash": "sha256:ea4262d3c6c3035d1dc2ce3c3d93152a90a7c542b37bdc4cc548dc702f61b654",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "112"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2102b-3567-73b5-a69f-5a6bc7544b7c"
+    }
+  ],
+  "id": "01a210e5-665e-712f-b0de-b958ed5b5995",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the core domain: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "ee3f8544e23d045665d55f4caa525897016356d5",
+  "seen": "sha256:f9d5bb073e90d876c698929b41f26951d232abab6ddc424194a8679793b0816f",
+  "seen_address": "1dac71f07ede651d28c29194be758ea0f21ee3e4",
+  "subject": "01a2102b-3567-73b5-a69f-5a6cf95957a8",
+  "v": 1,
+  "verb": "approve"
+}

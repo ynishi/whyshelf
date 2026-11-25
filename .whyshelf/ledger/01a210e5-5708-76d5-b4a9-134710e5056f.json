@@ -1,0 +1,147 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:2889920b9080b0ac91e0167d8cf9792bc4aca7b95dcaeedacc82cab38cc49608",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_denied_replacer_named_as_a_successor_is_refused_and_nothing_more_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7bff9dfb27ea3a3d0dd299c51f7f6a232cafb8e0c23e8cf820fe0367600f5b06",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_deprecation_naming_a_successor_is_written_and_says_its_successors",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:524184c3b1fbafb2f8e144a12821940d6457fd8120c84ace90e68eaed67bb079",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_deprecation_naming_no_successor_needs_none",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:19f0d3a497d9923c7aa466d8f7b638466c2331572edb31c8f3fc28416a6884fb",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_refused_successor_in_a_run_writes_none_of_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a7fe84d4f88c6192658cf6abe0af83e22912c5c2abdaf1ac4a69f7c06b402052",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_successor_that_does_not_replace_the_document_is_refused_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cff1d57b7dcb75603a8f24edb9fa3c5f9c6bf08996453c24e5e69bf1156d11e9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::links_of_gives_the_links_of_one_meaning",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:20930b4cc9ba4a07940ff559afd758c346130204d6739af59ed9384ba6a46cd1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::replacers_are_the_valid_documents_that_replace_a_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f46f0fa511cbcb644d2c7da5b5d33accafdb726edacdf41779177f631c0e4d46",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_denied_retired_or_deprecated_replacer_is_no_successor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fd5cdc78c2fd6f9d07a7a609c6898676e88c02c7a9081d4061a8bb1601b7646b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_document_nothing_replaces_has_no_successor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0eadab0e13d3c6cbbf68c06950ef5d1938e44343ff945cfaa0decd0f117b334c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_downstream_of_a_deprecation_whose_only_replacer_is_denied_is_broken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:31854a046beae5cffc5fc0001da13bb9d0bbaf9f1bac546043c7272f8461f317",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_downstream_of_a_deprecation_with_a_successor_is_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d4513069968f4b62e0b4c008fdc1dfb60242ee887568100d9441cb9bb2d05f5c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_downstream_of_a_deprecation_with_no_successor_is_broken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6774a81c22cca43464d386851f6081f94222161e5b06ffce64d2fde01dd7ed08",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_pending_replacer_is_a_successor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8e2e59c99a44d9362eb9e9f0ad4d9ba7f9ecdb30e5d8a1e78eb6798e762d48d0",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::an_approved_replacer_is_a_successor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:79c87e0e0c1f9194577043ca57dfd0f19d31d2bf00054d1808f64ef13da3e9ac",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::every_pending_or_approved_replacer_is_counted_smallest_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9b8e8338f465ff818e441a1f528a779ff3c3df8e3c3aea8555e2b4c5a58ffef0",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::the_chain_of_successors_is_not_followed",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795579785864,
+  "expires": null,
+  "frame": [
+    {
+      "address": "25b7169b718ca6e43644f2c59e670afc90a9d03d",
+      "hash": "sha256:3973c62711ce992505e8435ad40c0ba88a1877e05e4bb806fd7666311527ef84",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "16"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-136c-718f-b63c-ca159f35530a"
+    }
+  ],
+  "id": "01a210e5-5708-76d5-b4a9-134710e5056f",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the core domain: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "ee3f8544e23d045665d55f4caa525897016356d5",
+  "seen": "sha256:0c7899d62c5ac309934fdd6a17e3c2860f1ee9a3c14afbc68949cd73cb630084",
+  "seen_address": "528d3aa2c111e4fda60b15adc6051fc5efb739dc",
+  "subject": "01a1c4ba-17ad-715e-afe9-e9a4d2a848c2",
+  "v": 1,
+  "verb": "approve"
+}

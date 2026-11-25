@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:f2ed8b09ba81ab5705434fc81df43d87f000072f3f6d10dd56d3da999362d248",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::a_chosen_key_chosen_again_asks_the_artifact_source_once",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2e5a568dc8d580362dad00e4d1a91ea6505fdb2cf5143eeffb30240f93766d95",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::a_chosen_key_whose_file_appears_before_the_write_is_followed_by_the_next_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:38161f341072ff927e082d233cce0e7f0863a4deddcc1ea72530399b9d2ec5dc",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::a_file_whose_front_matter_cannot_be_read_does_not_stop_a_new_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b4f633343de85281b76ca5ea1d70c3b11db1d2f1e3991cdaeff650bfa2c1c742",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::a_given_key_whose_file_appears_before_the_write_is_refused_and_not_moved",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fcec727ab7a9ff61ee2a829c1503ee0a0eba40177e423f643b2ff937ca468f34",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::a_key_chosen_again_that_has_no_next_is_the_error_of_the_next_key",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5402abd2af4b7cf1ef7e66aef6deba779d7e75bad16f61ed2e0a7e21d873c234",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::after_sixty_four_keys_with_a_file_each_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9dc0f2d33e489f59602d38d1d1fe88d02d3c7db75b4a4e439d2e8c1e793a1c70",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/new_tests.rs::the_number_after_the_longest_is_refused_by_the_grammar",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795579785864,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6435d5a6b20e37fee75a605ed4b3ab33aa3b3095",
+      "hash": "sha256:a166c621a3f56d49226550e2ea032d1f19420c217245e5fe4a269f66fe9c1209",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "74"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e20f-84aa-7350-905c-6c3af70e7219"
+    }
+  ],
+  "id": "01a210e5-95c2-75f2-bb84-463649e9678e",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the core domain: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus (from the issue and the change only) read each test against the body; its must-fix and points fixed",
+  "revision": "ee3f8544e23d045665d55f4caa525897016356d5",
+  "seen": "sha256:9bf9c80301cce82b111e4d744f2c1b9b58d199f55993813d5b6f682f27e1f07a",
+  "seen_address": "1c19160152d0aef4faa173339842ca7c344f1990",
+  "subject": "01a1e20f-a71c-759a-bb2c-533dd2e9c8cd",
+  "v": 1,
+  "verb": "approve"
+}
