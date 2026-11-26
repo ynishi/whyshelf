@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795666645318,
+  "expires": null,
+  "frame": [],
+  "id": "01a21612-9983-7241-9f64-caac5af4d5af",
+  "kind": "decision",
+  "reason": "#120 stage R: the finding of the batch over the infrastructure, its counts measured on the branch and its review points as fixed",
+  "revision": "753c890769af9bed96acef1c31d54f51e2a935e1",
+  "seen": "sha256:82a2fc68cb7d3c3e600a43bbed352dc04550f5d34676f4df8b95e40707e459d6",
+  "seen_address": "ec0398b13bc47f3c040684fe92d4c74455661b39",
+  "subject": "01a21612-4001-716a-8d79-0b9938966a0b",
+  "v": 1,
+  "verb": "approve"
+}

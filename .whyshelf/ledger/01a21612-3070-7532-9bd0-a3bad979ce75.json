@@ -1,0 +1,14 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795666615582,
+  "book": "verification",
+  "id": "01a21612-3070-7532-9bd0-a3bad979ce75",
+  "kind": "exempt",
+  "link": "cases",
+  "reason": "The source files of the infrastructure's init, its project and its state of a tree (shelf/init.rs, shelf/mod.rs, shelf/state/mod.rs) hold no test: rust-test cannot list them whole for the derive of thiserror's Error on their items, which it does not expand (their other derives are the standard library's), and no verification names them as evidence of their own; the exemption stands only while no test is found in them (DEC-112)",
+  "subject": {
+    "name": "crates/whyshelf-infra/src/shelf/state/mod.rs",
+    "space": "file"
+  },
+  "v": 1
+}
