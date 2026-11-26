@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795676520490,
+  "expires": null,
+  "frame": [],
+  "id": "01a216a9-5014-70e1-84ce-e7839bb408cf",
+  "kind": "decision",
+  "reason": "#120 stage M: the findings of the move, each number traced to the findings of the batches, a commit, the ledger on main or the maintainer's measurement; a blind review by Opus checked every sum and source, its 27 points fixed",
+  "revision": "2f0e1dcb53b06b6b0e1758f449d3eb22e86e6793",
+  "seen": "sha256:12a47b66f59fa5ce46e2feadca58e8c1209da972848f9cd75d1a5aa1e16f4313",
+  "seen_address": "89fea09a798b3e0ffefd290e94d24fbdedd14598",
+  "subject": "01a216a8-f793-7697-b0cf-5b254692789c",
+  "v": 1,
+  "verb": "approve"
+}
