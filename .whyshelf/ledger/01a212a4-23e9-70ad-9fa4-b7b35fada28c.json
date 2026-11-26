@@ -1,0 +1,14 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795609070684,
+  "book": "verification",
+  "id": "01a212a4-23e9-70ad-9fa4-b7b35fada28c",
+  "kind": "exempt",
+  "link": "cases",
+  "reason": "The entry point of the binary (main.rs) holds no test: rust-test cannot list it whole for the attribute tokio::main on main, which it does not expand, and no verification names it as evidence of its own; the exemption stands only while no test is found in it (DEC-112)",
+  "subject": {
+    "name": "crates/whyshelf-cli/src/main.rs",
+    "space": "file"
+  },
+  "v": 1
+}

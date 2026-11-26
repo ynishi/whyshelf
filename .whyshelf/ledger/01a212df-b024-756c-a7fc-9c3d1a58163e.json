@@ -1,0 +1,239 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:3b0891f44d427a2bdcf738f0fd9b424ba73ee0ad36255218e5f72070e528d4e9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cause_tests.rs::an_exemption_of_a_document_decided_against_is_told_the_same_whichever_decision",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:71feb5e23a10ee5666bccedadb71f9d459b4ab73a841b67e2a55b908e20afd22",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs::a_hold_the_runs_own_approval_makes_is_not_foreseen",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e0bb0cd6e42af8fef6488fd0937d2ac3059033d35e312d1226e84a13c264869b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs::an_upstream_the_frame_refuses_does_not_end_the_search_for_one_that_holds_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c80b96c5626568a400e7f9996e20ed983ad703032303d233977cfd7601f99f7f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs::what_a_run_is_foreseen_to_approve_again_on_a_deprecated_upstream_is_what_it_approves",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e2a9cc947825b874b167481f090ab8d1731198511b8f6c9abb320f0a01cb04d5",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/approve_stale_tests.rs::what_a_run_is_foreseen_to_approve_again_on_an_artifact_not_told_is_what_it_approves",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2490f53fdcc272eb8bbde1f7b21b3059620c25bb9868270271141a7f78262a00",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs::a_cycle_an_approval_would_close_among_the_frames_is_not_foreseen",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8ff5e25874a5416ac7cf43095ad440a9ce5254e15ee122b71562a82ec4f5165e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs::a_new_approval_may_stand_on_an_upstream_unless_a_decision_against_it_stands",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4858550958a835a2e00700809d2a42d632933b208fa47e5785dacaa366e41212",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs::an_approval_on_a_pending_upstream_is_taken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2fc807ed005b663c3754f297ff360b9660d85bb940e833f705cc5b55e5c0f201",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/tests.rs::what_the_shelf_and_the_declared_statuses_refuse_is_foreseen_as_the_frame_refuses_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "05c767a93feccfa07732827b90819b32cb19814e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:94a06ba4141d6522902364d58ee6d9325f20ed2ad501a84309fee603927def3c",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "dddfc07525b67c86bee10e50839aaa3c398e8538",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a6a1a6544ca1c36c4d04f07e8763df02c0627746cf53695d47d55ff469d57c32",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output/cause.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "47435c986f70edd78b7e6fe346b32eb2d7074a9a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:24dc6b8a1fbf5cbc098c1750241c518fd6d04b9d9940eeed0e3b8555bc45b4f5",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/upstream_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e6fab0d26ae95daf85195a93a58bd2fa8f46d03e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6a6b93763ff2d9365c884a4215016e44862bf4988af1cee7aa10e61ed5db1965",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795612975048,
+  "expires": null,
+  "frame": [
+    {
+      "address": "525343890867ccef51b5ad13d2cbb8bd114c090d",
+      "hash": "sha256:95ddf2961bb70764cb66bf788e055d497050b669b6c6f2ccd3e7dbab9f6ede02",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "5"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c333-d435-7f4d-abb6-036e89451d8b"
+    },
+    {
+      "address": "56d14a79192f6a254551c86a1d3832ac79361bba",
+      "hash": "sha256:07622dcbe7f5d6b212e1eee0b7c6389ea29b214ce3272b38c3415482d1c4d1ab",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "15"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-131c-70e3-ae5e-e8e75931bc90"
+    },
+    {
+      "address": "b9f7bf18c2f806edf8706eb024654596741e2927",
+      "hash": "sha256:8d5c07353d2285bcbe95f0fa4f772221dd3ad68c3d8b51cb99429bd1e8e0957f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "51"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c6a9-7880-7658-9fdc-915180d46b03"
+    },
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    },
+    {
+      "address": "a80c141845f7b47b4e1a75336439e3e44d517bd8",
+      "hash": "sha256:9cfd853526bcfecc0dba18c734c28d9e86c2eaa21b9b9798f7258b21b4859674",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    },
+    {
+      "address": "b4b58bc6542fbffd22bd8339bed96d34bc7fe992",
+      "hash": "sha256:4440a5a7c3bfffe0a910a409dc57df30f4801f6480f4300af0cb512b932df532",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "97"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2018b-8730-7780-ae0d-cbfe389fed66"
+    }
+  ],
+  "id": "01a212df-b024-756c-a7fc-9c3d1a58163e",
+  "kind": "decision",
+  "reason": "#120 stage R, batch over the cli sources: the test files named whole under tests are named instead by their tests under cases, each test where the body says what it shows, and the parts where tests are found named whole; blind review by Opus found no point in these",
+  "revision": "22a17a7dd9b7f640091f3186ba9bc1912bdc8115",
+  "seen": "sha256:07156c01bc7864a377677d4d578ab1440d6230a0dd94f8340e9b0b54eac1f5bc",
+  "seen_address": "c9c469f82d97c54a6d49d041d172833440f02595",
+  "subject": "01a2018b-cea2-707b-891b-8a7e19cacd2e",
+  "v": 1,
+  "verb": "approve"
+}
