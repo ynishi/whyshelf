@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795663089768,
+  "expires": null,
+  "frame": [],
+  "id": "01a215dc-579b-7665-9880-629f05c97f77",
+  "kind": "decision",
+  "reason": "#120 stage R: the finding of the batch over the integration tests of the core, its counts measured on the branch and its review points as fixed",
+  "revision": "db5b6495f9545b86dc4be342d097d34008ef005e",
+  "seen": "sha256:f07d4816ed3b8befacc14b7df44671bbbc33295a3514459ec1517ac8d9f8892d",
+  "seen_address": "5f3f0106aaa66eb5b45bb7e90aaf0d0e61d4341b",
+  "subject": "01a215dc-1a6c-7065-a6f4-8c974310c965",
+  "v": 1,
+  "verb": "approve"
+}
