@@ -1,0 +1,332 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:13e4e1ca04daa34853652fdca587167f5fbb8e2fe369e9fa98a781b3b6bac374",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs::a_change_of_the_links_to_artifacts_gives_the_space_only_when_every_name_agrees",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:79ec1966d08685467c5885b62016fd62ae8692afe504f0bbc69c460ec3cee3e8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/comparison_tests.rs::an_artifact_that_cannot_be_told_is_unknown_and_not_absent_in_diff_and_trace",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5b4f11d67fd8c46167b8419e23ca17299c5e0be5654380029d3c45edfd064be6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/textdiff.rs::tests::a_changed_line_is_removed_and_added_with_its_context",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2750adb052ba7914e218b5e1d0e8723c7e88e1b04d7f9427877df0d7bbadc052",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/textdiff.rs::tests::a_text_from_nothing_and_to_nothing_are_all_added_and_all_removed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a34fa08318deb92dbf0773bbc0496d26dbcd6054a55fe0eb260da18ec8ebd097",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/textdiff.rs::tests::an_insertion_keeps_the_lines_around_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7d8d9c7bc45a8ffdba2ceef231725c205a90e8698d6148ccfc63cd5ffdb52ef3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/textdiff.rs::tests::changes_far_apart_are_two_hunks_and_near_ones_are_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1095889f7e4d30197142674b5920e285a8b49d9c68c105dbed39a95e2dda6f64",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/textdiff.rs::tests::the_same_text_has_no_diff",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d754821daefa2cd0562b50eae99f42bc6cc959fbbc46d38f21fc14d0501a327e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs::a_shelf_with_no_link_to_artifacts_asks_the_artifact_source_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d6778f5c4e214d55307ce20fa7f68c6a9661ea748b2898a6c87af10dc7719b52",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs::a_test_edited_after_the_approval_makes_it_stale_and_diff_shows_both_contents",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:be9716950748a00e3f9ce06081ccb5b8d5818d88cf03739a44231ff6981aee66",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs::a_test_that_arrives_and_one_that_goes_are_stale_and_broken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:878e94b45f05c262032d05fa9929664b18a23a94196b187d4f2529a1201088a6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs::an_approval_records_the_addresses_of_what_it_stood_on_and_the_revision",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d7d4e5213eee8160bae151d7186db7920f60b055bac88803e6912c1ef49ba532",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs::content_approved_and_never_committed_is_an_address_that_cannot_be_read",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:01cbfb639c951d57c42899ebbbddd6799968497fb16e2c2c9eea38f77dcecd26",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs::outside_version_control_an_approval_keeps_no_address_and_holds_the_same",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9e63b1b5ccee8bc618251da603701775a2650b545996f87fed68ceab54d8cee9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs::show_approved_reads_back_the_upstream_as_it_was_pinned",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:000f1a0ca37844d9351b3cbbf002e8f98983ebaae2b22ca2d8ebeb77746fd989",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/artifact_tests.rs::what_no_approval_stands_about_has_nothing_to_show",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2f8d6c43bd22d48d308b152ab50307e3e9d78651f17e54f7948bf8278d85b156",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs::a_path_is_an_artifact_there_or_not_and_never_a_link_that_cannot_be_followed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4d65ea122d6bc6c396d878dd7b06653812d858a94165f7c97fcd850a11bff39e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/artifact_tests.rs::the_hash_of_a_document_does_not_cover_its_links_to_artifacts",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fa6d44a928bbe0962a58743f91516b06f1801acf7a73315f58e765a054ad9640",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::a_changed_artifact_makes_the_approval_stale_and_is_its_root",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c0c4fcad66cf4f1907dfd2bceff76474c403f872162c8b6760e58d568b2a7074",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::a_downstream_of_a_document_whose_artifact_changed_is_stale_through_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5cbcaae59fbaff079ec30b20d3ec4ff33a39590574dfaacde747a4a6c617767b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::a_path_written_or_dropped_since_is_a_change_of_the_links_to_artifacts",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:326f3716da89834222bac930a7a523125bb1bbf030e5c2fe1a3c6de21f21277e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::addresses_and_revisions_never_change_a_freshness",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:06248095c1e3946a1f46edb33ca4f9b3ed94abdead04ab5b479302bcb852e4e6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::an_artifact_absent_then_and_now_changes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:708ee949488c3b510199b096cf75a311efb65aa62a34b5b3dba014e334e09c3f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::an_artifact_that_arrived_makes_the_approval_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:dc054df306f830239bc1a48dd33112d040c33f60627bc9c4ea3116c958c1de43",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::an_artifact_that_is_unchanged_keeps_the_approval_fresh",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a8aedbd93f5ff0efd1e891f03176ef6d4b97ea19d7e98b6ef2a589fe129c94f5",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::an_artifact_that_went_breaks_the_approval",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0074630c56eb168c0d073525bdab711b6650e7cc6a4850fad4bc6105262f4f50",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/artifact_tests.rs::an_informs_link_to_an_artifact_changes_no_freshness",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b6c7c50138064c2e4897969ce459bdbffeae3b61f03533c30cb06bdd1b90aed3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs::an_absent_artifact_with_an_address_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:08070e2415f6769a476c4b16eb26bc9113066abb8b0791c646377e2fd07325d9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs::an_address_that_is_no_opaque_value_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cb6174df566d47f40ebcb01ca8bf24b959c51d65c2b261ae60f0aff776fcd2c8",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs::an_approval_pins_every_artifact_of_a_depends_link_present_or_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f06ba84e46c8c0211a73ee19b86b35171e101bac5af2182dbce753ad8d942852",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/artifact_tests.rs::an_artifact_that_is_not_there_is_pinned_and_refuses_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:688ca13e61e92cef0afbec765f8d90564d03798e9464e84eccbdc31d732a67d6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/snapshot.rs::tests::a_retrieval_is_read_or_says_why_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9ac5be35a47609d78681cfc33c0b3a8869ae11067e00529124b2b583eec8b174",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/snapshot.rs::tests::an_artifact_pinned_absent_has_not_changed_while_nothing_is_there_and_has_once_it_comes",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "c9348a2df64eed53532c0a849d1984f5b9ed9a0d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:08b7ed4c7836d8afabdcaed068f0c2955df73e0d6a65e0330327479c377b5d4e",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/src/books/output.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5ce44d3289fd5682822768e56a208f252fc83cd6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9abd4e39efb864f0552f67a7a8bf0700ac8a900b4912008f5291335a76708637",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b32970fb5533cef9d6d9673a29d824f3d630a149",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bc8bd35dfd5ceb09ef4321fc61a6d40a1bd656e4c7b7b5b095467aca93149b91",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "aea99f69b14b05ce7f02d5f9742e28186182a94d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a87cca64c098f0d3d592b806caa6fcb561ce75b7c249f9b0c7b4eb86c93aa1c7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/tree_fixtures_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795776803062,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0e4e9a9d264df7a0338203288590f0b9a6b5ec3d",
+      "hash": "sha256:3588744daad16f3b85676117140282d1ffb704caa82584d6adc7e4235257ec77",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "6"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fa37-74bf-bbd8-1dbc0e039102"
+    },
+    {
+      "address": "9e35d3f7c2d1f74657a0fc24ef027fd45090170f",
+      "hash": "sha256:bf4d38258564cd819c20864b4715464f1cf2cfb7f54276dbcf3975396bd9bcf6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    }
+  ],
+  "id": "01a21ca3-774f-77d5-9896-00cf06a1b701",
+  "kind": "decision",
+  "reason": "#205 follow-up: these verifications name readers_tests.rs whole under tests, a file name that pins the file's own bytes and follows no helper, so the helper file its tests use, tree_fixtures_tests.rs, is named with it again as before #205; #205 had dropped it on the wrong ground. Checked on the installed 0.2.0: an edit of that helper made none of them stale before, and the names are as they were before #205",
+  "revision": "dd02fd8296e0656bc56ffcb4e8d8f133fac5141a",
+  "seen": "sha256:27839788743153e529ca1beaecdae7b98498f268971a3d2f45de1c4e8afb047f",
+  "seen_address": "64bdf278a4dedf6e78e5b47bf3d0b38b01cf0aba",
+  "subject": "01a1c3d2-fcc8-780b-9a64-87c28c477246",
+  "v": 1,
+  "verb": "approve"
+}
