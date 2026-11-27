@@ -47,7 +47,13 @@ jobs:
       - uses: actions/checkout@v7
       # rust-toolchain.toml pins the version and components.
       - run: rustup show active-toolchain
+      # The action's key holds Cargo.lock and the members' manifests, not the
+      # root manifest, where the profiles are. Without it a change of a
+      # profile restores the old build as a full match, builds every
+      # dependency again and saves nothing.
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ hashFiles('Cargo.toml') }}
       - uses: extractions/setup-just@v4
       - uses: taiki-e/install-action@v2
         with:
