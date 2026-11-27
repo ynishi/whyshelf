@@ -1,5 +1,6 @@
 //! The answer of `stale`: the approvals that do not hold, where their degradations
-//! start with the commands that can settle each, and the lines it writes on stderr.
+//! start with the commands that can settle each and the approvals the frame refuses,
+//! and the lines it writes on stderr.
 
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -9,6 +10,7 @@ use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::untold::untold_causes;
 
 use super::untold::{STALE_UNTOLD, untold_line};
+use super::words::{approve_phrase, approve_word};
 use super::{
     ArtifactNamed, DocNamed, DocRef, HealthOut, Namer, NextRoot, RootOut, RowOut, UnknownOut,
 };
@@ -54,8 +56,26 @@ pub struct OriginOut {
     /// what an edit means, so none of them is said for you. Each carries the `--root`
     /// the run had; empty for an origin nothing can be typed for, and when that root
     /// is no UTF-8 text. What settles what is in the manual, under "What settles an
-    /// origin".
+    /// origin". An approval the frame refuses is not here: it is in `withheld`.
     pub next: Vec<String>,
+    /// The approvals that would settle it and are not offered in `next`, because the
+    /// frame refuses them now, each with why; in the order of the list `next` has.
+    /// Empty when the frame refuses none, and whatever the `--root`.
+    pub withheld: Vec<WithheldOut>,
+}
+
+/// An approval that would settle the origin and is not offered in `next`, because the
+/// frame refuses it now. It is told, not offered: no command is written for it.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct WithheldOut {
+    /// The document the approval would be of.
+    pub doc: DocRef,
+    /// Which approval: `pending` (of a pending upstream), `as_another` (by a name that
+    /// has not approved it) or `until` (again, with a new expiry).
+    pub approve: &'static str,
+    /// Why the frame refuses it: the sentence `judge approve --stale` gives for a
+    /// document it leaves out as refused.
+    pub detail: String,
 }
 
 /// The thing an origin is.
@@ -80,11 +100,25 @@ pub enum StartOut {
 /// The lines `stale` writes on stderr: one per cause that stands behind names an
 /// approval stands on that cannot be told now, in the order the causes first
 /// appear in `unknown`, each naming the approving document or documents. The rule
-/// that gathers is [`untold_causes`]; the answer on stdout keeps every name.
+/// that gathers is [`untold_causes`]; the answer on stdout keeps every name. Then one
+/// per approval the frame refuses (`withheld`), in the order of the origins and, in
+/// each, of its `withheld`, as `judge approve --stale` says a document it leaves out
+/// as refused, with the kind of approval said.
 pub fn stale_warnings(report: &StaleReport) -> Vec<String> {
+    let namer = Namer(&report.names);
+    let withheld = report.origins.iter().flat_map(|origin| &origin.withheld);
     untold_causes(&report.unknown)
         .into_iter()
         .map(|cause| untold_line(&cause, &STALE_UNTOLD))
+        .chain(withheld.map(|withheld| {
+            let doc = namer.doc(withheld.approval.doc());
+            format!(
+                "warning: {} is not offered an approval {}: {}",
+                doc.key.unwrap_or(doc.id),
+                approve_phrase(&withheld.approval),
+                withheld.why
+            )
+        }))
         .collect()
 }
 
@@ -106,6 +140,15 @@ pub fn stale(report: &StaleReport, root: NextRoot<'_>) -> StaleOut {
             .iter()
             .map(|settled| OriginOut {
                 next: super::next::commands(&settled.next, &report.names, root),
+                withheld: settled
+                    .withheld
+                    .iter()
+                    .map(|withheld| WithheldOut {
+                        doc: namer.doc(withheld.approval.doc()),
+                        approve: approve_word(&withheld.approval),
+                        detail: withheld.why.to_string(),
+                    })
+                    .collect(),
                 start: match &settled.group.origin {
                     Origin::Doc(id) => StartOut::Doc(DocNamed {
                         doc: namer.doc(*id),

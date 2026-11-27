@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a3942d67fb0deadbec519640d1d5cbef053490aed3ef7292824103de08b099a3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::a_book_and_a_field_answer_the_decisions_that_name_the_issue",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d540d522afc2cc938b3dd21691d08802969f476d51d51bd8ecc7a3f47201228f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::a_filter_that_is_no_request_is_exit_2_and_changes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7038c02385b08203ac9e63afe96bcceaaca00b56f391fedf1161686996342149",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::arguments_that_are_no_filter_are_a_usage_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:98f1ce1fc67f21743568b03ab39066dbc53b5848dd0644d7842f501dec81e266",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::every_problem_of_a_filter_is_listed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d6d437aa38e96cc524b74b8699991e802c49165b6812275e26e692928d56fb0e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::no_filter_is_every_document_and_the_filters_are_empty",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:09862dd374ab31e19bf94491134e493f2bd15cca6e6f81871f6d78d9c860fc58",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_answer_carries_the_filters_as_given_with_the_standings_in_a_fixed_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:640a4f9d3ca9b8c978c58cbd0c69f73c18f8b61af13a71442de11ba19f2433cd",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_health_is_of_the_whole_project_whatever_the_rows",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2f73401ce82212fe27cf9cc9bb7452ac7cc977adeeb37f97c7397df735875b7e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_schema_of_status_has_the_filters",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8b046f48b86142f35bcf367664f8abe316757e777724d45564720146b054577e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_three_filters_combine_and_a_repeated_kind_is_either",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "15dfdba4725af3eb8f621da3e306486ff0032390",
+      "hash": "sha256:78bb4bbd2b5111d439eec7a9cc1ca14d83756fd758164f7234c161103a50b1dc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a21d53-4e74-72d2-8e35-20a856860a74",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:d1f217231d5bc5a61e03783b769b54d1be179a2f46ca45424603a9e5f277b5af",
+  "seen_address": "f162bc2f2cabb16827a52086d740648e0b7f8316",
+  "subject": "01a1da61-caff-75ca-b22e-99dc05dc7b25",
+  "v": 1,
+  "verb": "approve"
+}

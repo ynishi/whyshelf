@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:95bd0532196be75c07441613dd1e3bc750192c777c92180acdf186f928fc220f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::a_fresh_approval_with_its_names_is_not_listed_as_awaiting_by_check",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9b0818a8ac2b4fb19a05982f89c6712a4a43f7cdbb06a3e6e662abd563f25c19",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::with_two_names_asked_an_approval_awaits_the_second_and_again_once_the_first_lapses",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1fee4494b324b790563306a7337bda79c4e34e8b",
+      "hash": "sha256:960bd0b9091653ef170864b44f6c10f8472eb053f89a46182e4e02c4addf5cbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "89"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74"
+    }
+  ],
+  "id": "01a21d53-92d8-7632-b5c4-e0c2e55d34e5",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:efa1472fa7db2ddfdd3ffd96842bd90680d0644f7cb65d9e7ccd4aa6eeda94fe",
+  "seen_address": "d6ad903b5a2cbb99f1e6e53e428e48dc66b12dc1",
+  "subject": "01a1f6a0-2c42-7b6d-9e14-7c3a2f8d1b95",
+  "v": 1,
+  "verb": "approve"
+}

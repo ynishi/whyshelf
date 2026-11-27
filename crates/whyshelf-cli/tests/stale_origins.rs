@@ -10,7 +10,9 @@ use std::process::{Command, Output};
 use std::thread::sleep;
 use std::time::Duration;
 
-use common::{BOOKS, NOTE, Project, in_seconds, json};
+use common::{
+    NOTE, Project, in_seconds, json, linked_books, note, origins_of, stderr_lines, succeeded,
+};
 
 #[test]
 fn stale_names_where_the_degradations_start() {
@@ -106,33 +108,6 @@ fn run_next(project: &Project, command: &[String], fills: &[&str]) -> Output {
         .env("WHYSHELF_ACTOR", "tester")
         .output()
         .expect("the binary runs")
-}
-
-fn succeeded(output: &Output) {
-    assert_eq!(
-        output.status.code(),
-        Some(0),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn origins_of(project: &Project) -> serde_json::Value {
-    json(&project.run(&["stale"]))["origins"].clone()
-}
-
-/// A project of notes `N-1` .. that stand on one another (`on`) and on files.
-fn linked_books() -> String {
-    format!(
-        "{BOOKS}[[book.link]]\nname = \"on\"\ntarget = \"note\"\nmeans = \"depends\"\n\
-         [[book.link]]\nname = \"files\"\ntarget = \"artifact\"\nspace = \"file\"\nmeans = \"depends\"\n"
-    )
-}
-
-fn note(n: u32, entries: &str) -> String {
-    format!(
-        "---\nid: \"01a1c4f0-0000-7000-8000-00000000000{n}\"\nkey: \"N-{n}\"\ntitle: \"Note {n}\"\n{entries}---\nThe body.\n"
-    )
 }
 
 /// `N-1` approved, then its body edited.
@@ -304,9 +279,23 @@ fn a_pending_upstream_whose_link_names_a_denied_document_is_not_offered_its_appr
     fs::write(project.0.join("notes/N-3.md"), note(3, "")).unwrap();
     succeeded(&project.run(&["judge", "deny", "N-3", "--reason", "not a note"]));
     succeeded(&project.run(&["judge", "approve", "N-1"]));
-    let origins = origins_of(&project);
+    let stale = project.run(&["stale"]);
+    let origins = json(&stale)["origins"].clone();
     assert_eq!(origins[0]["start"]["doc"]["key"], "note:N-2", "{origins}");
     assert_eq!(next_of(&project), Vec::<Vec<String>>::new());
+    // It is told why, in the answer and on stderr, and not offered as a command.
+    let denied = "the link `on` names note:N-3, which is denied: an approval cannot stand on it";
+    let withheld = &origins[0]["withheld"];
+    assert_eq!(withheld.as_array().map(Vec::len), Some(1), "{origins}");
+    assert_eq!(withheld[0]["doc"]["key"], "note:N-2", "{origins}");
+    assert_eq!(withheld[0]["approve"], "pending", "{origins}");
+    assert_eq!(withheld[0]["detail"], denied, "{origins}");
+    assert_eq!(
+        stderr_lines(&stale),
+        [format!(
+            "warning: note:N-2 is not offered an approval as pending: {denied}"
+        )]
+    );
     // The approval it no longer offers is refused when it is run.
     assert_ne!(
         project.run(&["judge", "approve", "N-2"]).status.code(),
@@ -362,6 +351,22 @@ fn the_schema_of_stale_has_next_for_each_origin() {
             .contains(&serde_json::json!("next")),
         "{origin}"
     );
+    // What is withheld is told apart from `next`: a document, a word and a sentence.
+    assert_eq!(origin["properties"]["withheld"]["type"], "array");
+    assert!(
+        origin["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("withheld")),
+        "{origin}"
+    );
+    let withheld = &schema["outputs"]["stale"]["$defs"]["WithheldOut"];
+    let properties = withheld["properties"].as_object().unwrap();
+    for name in ["doc", "approve", "detail"] {
+        assert!(properties.contains_key(name), "{name} in {withheld}");
+    }
+    assert_eq!(properties["approve"]["type"], "string");
+    assert_eq!(properties["detail"]["type"], "string");
     // The shape only grew: the version stays.
     assert_eq!(schema["version"], 1);
 }

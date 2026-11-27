@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:8dcc2569d85c59a1149b38b65860f06df84e093f91ccf85a15427f0ebd10a403",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::an_upstream_stale_only_through_a_pending_one_the_run_approves_holds_nothing_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:56037ff16ffaa8af30b381f9d3adf75486f32e893a575e3f8d5c6deda2e356c9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_and_stale_together_are_one_run_upstream_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9743cecfe0af99e163b7962a4196dafe21522706d64f7e6bc7351fb07d2f51b1",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_approves_the_sample_upstream_first_and_leaves_nothing_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:28e5d331acba6abbe58c06a021fac6c3bd63b4eba5041b025cd457c1f96f0336",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_needs_a_reason_and_takes_no_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f38a747d29b613d6922d55e1ffe256cde169703dd89f9a0723d6ca3107f2044c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_of_v_1_takes_what_it_stands_on_through_depends_links_only",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7e71c27d440b20b44f53be93c73c2c918d7bca49a92bf56554a1482f6fc16adc",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_stale_alone_takes_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5d1b8b44ab93739d6bdc317c6660a0377fa00e910b546de9439281c8821f8fce",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::the_command_init_gives_approves_its_four_documents_and_no_other",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ea65505cd15e7247347a1239fbc02e9f0f4c1986",
+      "hash": "sha256:3816927150bad7efa5e8e105e6f178a4a598ca68b6277726b76c540a341c6bef",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a21d53-22ef-74ef-891f-db6905b1cfd3",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:42daea713ac335aaa5fe0e89968b8d063a11410d7cdbd84cae8c638686e78a58",
+  "seen_address": "c8fb27870d9991085f59a1e560860676f0012638",
+  "subject": "01a1c9f3-b3c3-738c-a1ed-412012185ef6",
+  "v": 1,
+  "verb": "approve"
+}

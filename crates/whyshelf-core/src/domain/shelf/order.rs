@@ -116,14 +116,16 @@ impl OriginsAsked {
 /// What the approving commands `stale` can offer would approve, foreseen once for
 /// the shelf before any of them is run, with the origins it was asked about: what
 /// `--stale` would approve again ([`stale_taken`]), and, for each document the
-/// settlements of those origins approve by name ([`OriginsAsked`]), whether the frame
-/// takes an approval of it.
+/// settlements of those origins approve by name ([`OriginsAsked`]), what the frame
+/// says of an approval of it: that it takes it, or the [`FrameRefusal`] with which it
+/// refuses.
 ///
 /// An approval by name is a run of one, which writes nothing before it, so the frame
 /// it meets is [`frame_approve`] on the ledger as it is, the cycle among the frames
 /// of approvals included; why `--stale` is foreseen otherwise is [`stale_taken`]'s.
-/// A document it was not asked about is not taken: an approval of it is offered only
-/// once the frame was asked. The origins are settled with it by
+/// A document it was not asked about is neither taken nor refused: an approval of it
+/// is offered only once the frame was asked, and a refusal is not read into it. The
+/// origins are settled with it by
 /// [`settle_all`](super::settle::settle_all), so the ones it was asked about are the
 /// ones settled. What only the person who runs it decides is not foreseen: whether
 /// the rules admit the name, a name that already approved the content (which repeats
@@ -174,10 +176,14 @@ impl Foreseen {
         &self.again
     }
 
-    /// Whether the frame takes an approval of `doc`; see [`Foreseen`] for one it was
+    /// What the frame says of an approval of `doc`; see [`Foreseen`] for one it was
     /// not asked about.
-    pub(super) fn frame_takes(&self, doc: DocId) -> bool {
-        matches!(self.framed.get(&doc), Some(Ok(())))
+    pub(super) fn framed(&self, doc: DocId) -> Framed<'_> {
+        match self.framed.get(&doc) {
+            Some(Ok(())) => Framed::Taken,
+            Some(Err(why)) => Framed::Refused(why),
+            None => Framed::NotAsked,
+        }
     }
 
     /// The origins it was asked about, in the order they were given.
@@ -189,6 +195,19 @@ impl Foreseen {
     pub(super) fn into_groups(self) -> Vec<OriginGroup> {
         self.groups
     }
+}
+
+/// What the frame says of an approval of one document, as [`Foreseen::framed`]
+/// answers: the three are kept apart, so that a refusal is not read as a document the
+/// frame was never asked about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Framed<'a> {
+    /// The frame takes the approval.
+    Taken,
+    /// The frame refuses the approval, for this reason.
+    Refused(&'a FrameRefusal),
+    /// The frame was not asked about the document.
+    NotAsked,
 }
 
 /// What stands about a document that is not pending: a decision. There is no

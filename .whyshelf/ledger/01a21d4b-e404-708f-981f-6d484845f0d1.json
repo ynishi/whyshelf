@@ -1,0 +1,101 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::settle::Approval",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::settle::Settled",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::settle::Settlement",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::settle::Withheld",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::settle::settle_all",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795787837521,
+  "expires": null,
+  "frame": [
+    {
+      "address": "813d169554f1182a4e70db639c72a9d2e99cc6ef",
+      "hash": "sha256:3089dc8bc851dd3981ccadb8dc5d8292a699315d044d77287a3421a757f1ccb3",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1db32-29d7-737d-bea9-8794eb43f223"
+    }
+  ],
+  "id": "01a21d4b-e404-708f-981f-6d484845f0d1",
+  "kind": "decision",
+  "reason": "An approval by name the frame refuses is told at its origin with the frame's refusal, in the answer and on stderr, and is not written as a command, decided in the one place that settles an origin, as DEC-114 says, and tested in the domain, in the answer and on the binary (#184); checked by an independent design review, a code review and the full test suite",
+  "revision": "497b59ef15153159c4bcff270664f5a6ae9f69bf",
+  "seen": "sha256:ac1ae1dfec2f4142f6ddfda1b0527bc5163ded12d41f2c7f2566d6e3a15cdbb7",
+  "seen_address": "d92405f6833b15f00c30e2451a7d9bbf09874421",
+  "subject": "01a21d4b-86b5-7116-a322-e10c714d1c2d",
+  "v": 1,
+  "verb": "approve"
+}

@@ -465,9 +465,11 @@ fn what_a_decision_about_an_upstream_is_to_what_stands_on_it_is_read_once() {
             .flat_map(|group| group.degraded.iter().copied())
             .collect();
         let taking_all = Foreseen::of_parts(degraded, BTreeMap::new());
-        let settles = groups
-            .iter()
-            .any(|group| settlements(group, &taking_all).contains(&Settlement::ApproveStale));
+        let settles = groups.iter().any(|group| {
+            settlements(group, &taking_all)
+                .next
+                .contains(&Settlement::ApproveStale)
+        });
         assert_eq!(
             settles, expect.approving_again_settles,
             "{what}: approving again"

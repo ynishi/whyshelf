@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:05b818158d79e29c1d02463225bd08ecbfb028f27a0bc1e4ee58fb82039d4de0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves_rust_item.rs::a_module_moved_under_another_parent_with_a_sibling_left_has_the_narrow_prefix_that_stands",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ac57062ddebe34735abd0a9d2295ea72a56f503e4e4d90592c83227790e1c216",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves_rust_item.rs::a_module_that_became_another_has_its_items_at_their_new_paths_and_one_prefix",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:223a976d5792401bc1c9e9ab9971fe807b7ee3f84c0b1eaced0b6d3826c5a689",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves_rust_item.rs::a_prefix_with_a_name_left_in_the_old_module_is_refused_by_moves_and_by_judge_moved",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b3a0c8ba96a18451b1a770b738aedd206df17dd86fc0a55d3c360b538562d068",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves_rust_item.rs::when_no_name_ends_as_a_gone_one_does_there_is_no_candidate",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9d85c71fc6aa6e8f8680f15c8ff144a86a6d401b",
+      "hash": "sha256:15e4de5579378addb80477b068aa86f5c3602279ad08664599ab7efef5e4c2e6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "96"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fd22-7aea-7470-903b-78df35942cc6"
+    }
+  ],
+  "id": "01a21d53-ae90-76de-84f1-8984d03345eb",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:fcb8a611ac47d6641cee6493693cdd0d86ec76a699bf203daee3acac58ba612b",
+  "seen_address": "3b2bc2f9742d3385ee5bd89dccefeea877877018",
+  "subject": "01a1fd22-84b5-715b-96fa-8e294b655e92",
+  "v": 1,
+  "verb": "approve"
+}

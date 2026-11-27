@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795787837521,
+  "expires": null,
+  "frame": [],
+  "id": "01a21d4b-e2d9-7177-85bb-6911f36efccf",
+  "kind": "decision",
+  "reason": "An approval by name the frame refuses is told at its origin with the frame's refusal, in the answer and on stderr, and is not written as a command, decided in the one place that settles an origin, as DEC-114 says, and tested in the domain, in the answer and on the binary (#184); checked by an independent design review, a code review and the full test suite",
+  "revision": "497b59ef15153159c4bcff270664f5a6ae9f69bf",
+  "seen": "sha256:e856dea3980777a52f168dec4611f4ba87086bd1c4c90f2ec694b77785738a23",
+  "seen_address": "a09bf15f22af591c6f75f615ca95c032d1e1133a",
+  "subject": "01a21d4b-7349-7093-b034-8bcfea7345f2",
+  "v": 1,
+  "verb": "approve"
+}

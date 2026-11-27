@@ -327,6 +327,8 @@ mod map_tests;
 #[cfg(test)]
 mod same_meaning_tests;
 #[cfg(test)]
+mod stale_tests;
+#[cfg(test)]
 mod stats_tests;
 #[cfg(test)]
 mod untold_tests;

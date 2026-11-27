@@ -410,6 +410,7 @@ const SPLITS: &[Split] = &[
             ("stale", "named"),
             ("stale", "next"),
             ("stale", "untold"),
+            ("stale", "words"),
             ("stats", "named"),
             ("stats", "summary"),
             ("status", "doc"),
@@ -437,7 +438,7 @@ const SPLITS: &[Split] = &[
             ("snapshot", 2),
             ("summary", 7),
             ("untold", 4),
-            ("words", 15),
+            ("words", 17),
         ],
         public: &[
             "AbsentOut",

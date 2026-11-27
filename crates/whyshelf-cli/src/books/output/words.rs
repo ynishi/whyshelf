@@ -2,7 +2,8 @@
 //! declaration, a text as a word of a shell, what an artifact is now, the word of
 //! a standing, how strongly an approval does not hold, whether one holds at an end of a
 //! change and what the change made of it, how a change reaches a document and how one
-//! is inside the reach, why an upstream holds an approval back, why
+//! is inside the reach, why an upstream holds an approval back, which approval by name
+//! an origin is told of, why
 //! a link cannot be followed to what it names, how many names read an approval, and
 //! who ran the command that made a record.
 
@@ -16,6 +17,7 @@ use whyshelf_core::domain::shelf::impact::{Made, Sides};
 use whyshelf_core::domain::shelf::ledger::ReaderCount;
 use whyshelf_core::domain::shelf::order::Hold;
 use whyshelf_core::domain::shelf::schema::SchemaProblem;
+use whyshelf_core::domain::shelf::settle::Approval;
 use whyshelf_core::domain::shelf::within::{InsideBy, Witness};
 
 /// Who ran the command that made a record, as every answer that shows the record's
@@ -198,6 +200,29 @@ pub(super) fn hold_word(hold: Hold) -> &'static str {
         Hold::Stale => "stale",
         Hold::Awaiting => "awaiting",
         Hold::LeftOut => "left_out",
+    }
+}
+
+/// The word of which approval by name `stale` tells of, as a value of an answer: the
+/// one place the words are written. The model's [`Approval`] has no serde, and these
+/// words are the answer's, so the model's value is turned into them here. The match is
+/// exhaustive, so a new kind does not build until it has a word.
+pub(super) fn approve_word(approval: &Approval) -> &'static str {
+    match approval {
+        Approval::Pending(_) => "pending",
+        Approval::AsAnother(_) => "as_another",
+        Approval::Until(_) => "until",
+    }
+}
+
+/// The phrase of which approval by name `stale` tells of, as a line a person
+/// reads: the one place the phrases are written, beside [`approve_word`], whose kinds
+/// they say.
+pub(super) fn approve_phrase(approval: &Approval) -> &'static str {
+    match approval {
+        Approval::Pending(_) => "as pending",
+        Approval::AsAnother(_) => "by another name",
+        Approval::Until(_) => "with a new expiry",
     }
 }
 
