@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c5eafbd9ab0c75c95295aa3046f4dade0df629e8bd2196980c027b3eafc3eef3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::a_pending_upstream_whose_approval_would_close_a_cycle_of_frames_says_so",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:82b8951353c27a0a9020942c2a914b701be89a99a2620e2798c2d93eba17fc63",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::a_pending_upstream_whose_link_names_what_cannot_be_told_is_not_offered_its_approval",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:81144e54e02d22f24c1f09de61ba2a7266703766e0091e4b13e54c650b0934ef",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::a_refusal_told_at_one_origin_is_told_at_the_origin_it_keeps_an_approval_from_too",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795787837521,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d92405f6833b15f00c30e2451a7d9bbf09874421",
+      "hash": "sha256:ac1ae1dfec2f4142f6ddfda1b0527bc5163ded12d41f2c7f2566d6e3a15cdbb7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "114"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d4b-86b5-7116-a322-e10c714d1c2d"
+    }
+  ],
+  "id": "01a21d4b-e64e-70fc-b441-6fa52f60dea6",
+  "kind": "decision",
+  "reason": "An approval by name the frame refuses is told at its origin with the frame's refusal, in the answer and on stderr, and is not written as a command, decided in the one place that settles an origin, as DEC-114 says, and tested in the domain, in the answer and on the binary (#184); checked by an independent design review, a code review and the full test suite",
+  "revision": "497b59ef15153159c4bcff270664f5a6ae9f69bf",
+  "seen": "sha256:9e783300a3fdc442dddf146150bbaddc91ad71e2524844a13e5e43e4e49af928",
+  "seen_address": "41e37fe9459edf010fe52c641ac589a5a5019e27",
+  "subject": "01a21d4b-abbe-74f6-8e30-6a8aa76bf539",
+  "v": 1,
+  "verb": "approve"
+}

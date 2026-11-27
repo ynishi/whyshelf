@@ -4,7 +4,10 @@
 //! What can settle an origin is decided once, by the model
 //! ([`settle_all`](whyshelf_core::domain::shelf::settle::settle_all)); this module
 //! only says each [`Settlement`] in the words of the command line, and decides
-//! nothing about whether it applies.
+//! nothing about whether it applies. An approval the frame refuses is not among
+//! them: the model tells it apart
+//! ([`Settled::withheld`](whyshelf_core::domain::shelf::settle::Settled::withheld)),
+//! and no command is written for it.
 //!
 //! The words are drawn from the definition of the command line itself
 //! ([`CommandFactory`]), by [`word`], so that a command or an argument renamed there
@@ -18,7 +21,7 @@ use clap::CommandFactory;
 use whyshelf_core::app::shelf::Names;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::shelf::doc::DocKey;
-use whyshelf_core::domain::shelf::settle::{SameSubject, Settlement};
+use whyshelf_core::domain::shelf::settle::{Approval, SameSubject, Settlement};
 
 use super::{NextRoot, shell_word};
 use crate::args::Cli;
@@ -130,14 +133,14 @@ fn command(settlement: &Settlement, names: &Names, program: &str) -> String {
             reason(&["judge", "moved"]),
             shell_word(WHY_SAME_THING)
         ),
-        Settlement::ApprovePending(id) => format!(
+        Settlement::Approve(Approval::Pending(id)) => format!(
             "{program} {} {} {} {}",
             word(&approve, None),
             doc(id),
             reason(&approve),
             shell_word(WHY_HOLDS)
         ),
-        Settlement::ApproveAsAnother(id) => format!(
+        Settlement::Approve(Approval::AsAnother(id)) => format!(
             "{program} {} {} {} {} {} {}",
             word(&approve, None),
             doc(id),
@@ -146,7 +149,7 @@ fn command(settlement: &Settlement, names: &Names, program: &str) -> String {
             reason(&approve),
             shell_word(WHY_HOLDS)
         ),
-        Settlement::ApproveUntil(id) => format!(
+        Settlement::Approve(Approval::Until(id)) => format!(
             "{program} {} {} {} {} {} {}",
             word(&approve, None),
             doc(id),
@@ -261,9 +264,9 @@ mod tests {
             Settlement::DeclareSame(SameSubject::Artifact(file("tests/a.rs"))),
             Settlement::FindMoves,
             Settlement::DeclareMoved(file("tests/a.rs")),
-            Settlement::ApprovePending(docid(1)),
-            Settlement::ApproveAsAnother(docid(1)),
-            Settlement::ApproveUntil(docid(1)),
+            Settlement::Approve(Approval::Pending(docid(1))),
+            Settlement::Approve(Approval::AsAnother(docid(1))),
+            Settlement::Approve(Approval::Until(docid(1))),
             Settlement::ApproveStale,
         ]
     }
@@ -449,6 +452,7 @@ mod tests {
                         held: NonEmptySet::new((OriginEvent::Edited, docid(1)), []),
                     },
                     next: vec![Settlement::FindMoves],
+                    withheld: Vec::new(),
                 },
                 SettledOrigin {
                     group: OriginGroup {
@@ -457,6 +461,7 @@ mod tests {
                         held: NonEmptySet::new((OriginEvent::NotValid, docid(2)), []),
                     },
                     next: Vec::new(),
+                    withheld: Vec::new(),
                 },
             ],
             unknown: Vec::new(),
@@ -492,7 +497,7 @@ mod tests {
             }) if references.is_empty()
         ));
         let line = &commands(
-            &[Settlement::ApproveUntil(docid(1))],
+            &[Settlement::Approve(Approval::Until(docid(1)))],
             &names(),
             NextRoot::Current,
         )[0];

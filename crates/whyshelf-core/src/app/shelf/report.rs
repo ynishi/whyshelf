@@ -38,7 +38,7 @@ use crate::domain::shelf::reach::Unwalked;
 use crate::domain::shelf::schema::{
     Approvals, BookDir, BookName, CoverSeverity, EntryName, Propagation, SchemaProblem,
 };
-use crate::domain::shelf::settle::Settlement;
+use crate::domain::shelf::settle::{Settlement, Withheld};
 use crate::domain::shelf::snapshot::{ItemCompared, Retrieval, Snapshot, SnapshotItem};
 use crate::domain::shelf::stats::Stats;
 use crate::domain::shelf::units::Units;
@@ -808,12 +808,13 @@ pub struct StaleEntry {
     pub roots: Vec<RootCause>,
 }
 
-/// An origin of stale approvals with what can settle it.
+/// An origin of stale approvals with what can settle it, and the approvals the frame
+/// refuses.
 ///
-/// Why they come together: what can settle an origin is read once, in the domain
-/// ([`settle_all`]), from the origin and from what the approving commands are
-/// foreseen to approve, and a surface writes it in its own words; the application
-/// only puts the two side by side.
+/// Why they come together: what can settle an origin, and what the frame refuses of
+/// it, are read once, in the domain ([`settle_all`]), from the origin and from what
+/// the approving commands are foreseen to approve, and a surface writes them in its
+/// own words; the application only puts them side by side.
 ///
 /// [`settle_all`]: crate::domain::shelf::settle::settle_all
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -822,6 +823,9 @@ pub struct SettledOrigin {
     pub group: OriginGroup,
     /// What can settle it, in the order a person would try it.
     pub next: Vec<Settlement>,
+    /// The approvals that would settle it and are not in `next`, because the frame
+    /// refuses them, each with the refusal.
+    pub withheld: Vec<Withheld>,
 }
 
 /// The result of `stale`: the approvals that no longer hold.

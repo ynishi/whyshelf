@@ -15,7 +15,7 @@
 //! | `trace` | [`resolve`], then [`trace`](domain_trace), and the same as `status` for every document it reaches |
 //! | `reach` | [`resolve`] for each reference, then the reach of the documents named ([`reach`](crate::domain::shelf::reach): the walk down, the artifacts each document reached stands on), where each artifact lives ([`ArtifactSource::places`]), the files of all of it, and the same as `status` for every document reached |
 //! | `impact` | both ends of the change, read at one time, and [`assess`] of each, then [`impact`](crate::domain::shelf::impact::impact); with references ([`impact_within`](ShelfApp::impact_within)), each resolved at the end before (at the end after when it names nothing before), the walk down from them on the end before ([`reach`](crate::domain::shelf::reach)), `impact` of the change read backwards, and the gate ([`within`](crate::domain::shelf::within)) |
-//! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], what can settle each origin ([`origins_asked`] of the origins, what the approving commands would approve foreseen once, [`Foreseen::of`], then [`settle_all`]), and the names approvals stand on that cannot be told now |
+//! | `stale` | [`assess`]: the approvals that are [`Freshness::Degraded`], with [`Assessment::roots_of`], what can settle each origin, and the approvals the frame refuses of it ([`origins_asked`] of the origins, what the approving commands would approve foreseen once, [`Foreseen::of`], then [`settle_all`]), and the names approvals stand on that cannot be told now |
 //! | `units` | [`assess`], then [`units::plan`](crate::domain::shelf::units::plan) (the approvals that are [`Freshness::Degraded`], and, asked, the pending documents, with what each stands on and what holds it back), where the artifacts they stand on live ([`ArtifactSource::places`]), then [`units::divide`](crate::domain::shelf::units::divide) |
 //! | `stats` | [`stats::of`](crate::domain::shelf::stats::of), from the ledger and the keys of the shelf; [`assess`] only for the health |
 //!
@@ -743,7 +743,11 @@ impl<P: ShelfRead> ShelfApp<P> {
         );
         let origins = settle_all(foreseen)
             .into_iter()
-            .map(|(group, next)| SettledOrigin { group, next })
+            .map(|(group, settled)| SettledOrigin {
+                group,
+                next: settled.next,
+                withheld: settled.withheld,
+            })
             .collect();
         Ok(StaleReport {
             entries,

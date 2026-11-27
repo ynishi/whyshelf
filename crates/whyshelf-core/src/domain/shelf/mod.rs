@@ -77,9 +77,10 @@
 //!                                                        judged in again;
 //!                                                      Foreseen::of ──► Foreseen (what the
 //!                                                        approving commands of stale would approve)
-//!   settle    ──► freshness, artifact, order           origins_asked ──► OriginsAsked;
-//!                                                      settle_all ──► Settlement (what can settle
-//!                                                        an origin: read, declare, approve)
+//!   settle    ──► freshness, artifact, ledger, order   origins_asked ──► OriginsAsked;
+//!                                                      settle_all ──► Settled (what can settle
+//!                                                        an origin: read, declare, approve; and the
+//!                                                        approvals the frame refuses, with why)
 //!   units     ──► doc, build, ledger, graph,           plan ──► UnitsPlan (what does not hold,
 //!                 freshness, order, footing,             what each stands on and what holds it
 //!                 placement                              back, and the places to ask);
@@ -198,7 +199,7 @@
 //! | where one identity stands, listed or not | [`Assessment::standing_of`] | a [`Standing`] |
 //! | where a degradation starts | [`Assessment::roots_of`] | [`RootCause`]s |
 //! | where a cause starts and what happened there | [`Cause::located`](freshness::Cause::located), gathered by [`Assessment::origins`](freshness::Assessment::origins) | an [`Origin`](freshness::Origin) and an [`OriginEvent`](freshness::OriginEvent); per origin, the events and the approvals that hold a cause there |
-//! | what can settle each origin | [`origins_asked`](settle::origins_asked), for the documents the settlements approve by name, then [`Foreseen::of`](order::Foreseen::of), for what the approving commands would approve (what `--stale` would approve again, [`order::stale_taken`], and whether the frame takes each approval by name), then [`settle_all`](settle::settle_all) | the [`Settlement`](settle::Settlement)s of each origin, read first, then declare, then approve |
+//! | what can settle each origin | [`origins_asked`](settle::origins_asked), for the documents the settlements approve by name, then [`Foreseen::of`](order::Foreseen::of), for what the approving commands would approve (what `--stale` would approve again, [`order::stale_taken`], and what the frame says of each approval by name), then [`settle_all`](settle::settle_all) | the [`Settled`](settle::Settled) of each origin: its [`Settlement`](settle::Settlement)s, read first, then declare, then approve, and the approvals the frame refuses, each with its [`FrameRefusal`](ledger::FrameRefusal) |
 //! | which documents a run of approvals takes: the expired or stale ones, or the pending ones | [`order::stale`], [`order::pending`] and [`order::pending_upstream`] (one document: [`order::pending_of`]), from an [`Assessment`] | the identities, with the broken ones told apart for `stale` |
 //! | the order a set of approvals is judged in again | [`upstream_first`](order::upstream_first), from the links and the pins | the identities, upstream first |
 //! | which documents that do not hold (and, asked, which pending ones) share nothing, so that each part can be mended and approved again apart | [`units::plan`], then [`units::divide`] with where the artifacts live, by the rules of [`units`] | [`Units`](units::Units): the units, each with its documents upstream first, its files, its artifacts and the upstreams it waits on, and the artifacts whose place cannot be told |

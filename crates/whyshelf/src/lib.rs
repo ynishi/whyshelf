@@ -968,6 +968,16 @@
 //! included. What only the person writes (the name, the time) is not foreseen
 //! ([`domain::shelf::order::Foreseen`]).
 //!
+//! An approval the frame refuses is not given in `next`: it is told in the origin's
+//! `withheld`, one entry for each, with the document it would be of (`doc`), which
+//! approval it is (`approve`: `pending`, `as_another` or `until`) and why the frame
+//! refuses it (`detail`, the sentence `judge approve --stale` gives for a document it
+//! leaves out as refused). No command is written for it, and `withheld` does not
+//! depend on `--root`. Each is also a line on stderr, `warning: <key> is not offered an
+//! approval <as pending | by another name | with a new expiry>: <detail>`, after those
+//! of the names that cannot be told now. An origin the frame refuses nothing of has an
+//! empty `withheld`.
+//!
 //! `--stale` is listed last, and only when it would take an approval under the
 //! origin. Three things to know before using it:
 //!
@@ -1191,8 +1201,10 @@
 //!   stale [--exit-code]       the approvals that no longer hold, strongest first, with their roots,
 //!                             and their origins: each document, artifact, cycle or the declaration where
 //!                             they start, with the approvals it degrades and the commands that can
-//!                             settle it (`next`, see "What settles an origin"), and the names
-//!                             approvals stand on that cannot be told now (`unknown`)
+//!                             settle it (`next`, see "What settles an origin"), the approvals
+//!                             the frame refuses, with why (`withheld`, each also a line on
+//!                             stderr), and the names approvals stand on that cannot be told
+//!                             now (`unknown`)
 //!                             (exit 1 with --exit-code when there is any, or when an
 //!                             approval stands on a name that cannot be told now)
 //!   units [--pending]         the approvals that no longer hold (with --pending, the pending

@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:6dcc4ae1e77108758a61a99138b2f2752fbcbbf9f46b33a7973574cf07e2b837",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stale_tests.rs::each_approval_the_frame_refuses_is_told_with_its_document_kind_and_sentence",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9f1f99d52c2cbf0f8563a04d7be4df854ecfe9f67ea8ff066145a9ce9cde4219",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stale_tests.rs::each_withheld_approval_is_one_line_with_its_kind_and_the_same_document_twice_is_two_lines",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1c14262062b51d9264e0de5910419e0f86c5bfa83d015c7a72451974fc9ba12a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stale_tests.rs::nothing_withheld_is_no_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0c2bec02a75004e85f89237d9fbbb15a6d3a53c0781bcd9377a19cec6abac6ab",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stale_tests.rs::what_is_withheld_is_told_when_the_root_is_no_text_and_no_command_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1e64b647e9fe46c30ecb1504a4a75388a1b950fae35a1756d3f8427f60909c20",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::a_pending_upstream_the_frame_refuses_is_withheld_whatever_the_refusal",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1b401864f8887139e8d4c00c4c11de0ccba83cef37674a84941da74b9baa78c9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_approval_the_frame_takes_is_listed_and_nothing_is_withheld",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:19859ebffbeefd40822256fe9bd32436b4ef6fd9b27eb5fdd53292bf88210af6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::by_name_is_the_approval_of_each_kind_and_none_of_the_other_settlements",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:28a672aabcfc253f55987d7073177e4b4a4de4921f4b31cc021ceabe803195f9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::two_approvals_of_one_document_the_frame_refuses_are_two_withheld_in_the_order_of_the_list",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795787837521,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d92405f6833b15f00c30e2451a7d9bbf09874421",
+      "hash": "sha256:ac1ae1dfec2f4142f6ddfda1b0527bc5163ded12d41f2c7f2566d6e3a15cdbb7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "114"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d4b-86b5-7116-a322-e10c714d1c2d"
+    }
+  ],
+  "id": "01a21d4b-e527-7430-b4d3-3138210c71e8",
+  "kind": "decision",
+  "reason": "An approval by name the frame refuses is told at its origin with the frame's refusal, in the answer and on stderr, and is not written as a command, decided in the one place that settles an origin, as DEC-114 says, and tested in the domain, in the answer and on the binary (#184); checked by an independent design review, a code review and the full test suite",
+  "revision": "497b59ef15153159c4bcff270664f5a6ae9f69bf",
+  "seen": "sha256:538a3959e554c08c9ff019bf8569f708ffba1150696aa8100c9382051eebbc79",
+  "seen_address": "0317f54b7da0b6f40c565a87a903d61db23ed80b",
+  "subject": "01a21d4b-9962-772f-a34b-385acaeb1c07",
+  "v": 1,
+  "verb": "approve"
+}

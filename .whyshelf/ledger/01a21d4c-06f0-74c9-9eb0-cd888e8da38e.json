@@ -1,0 +1,134 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::freshness::Cause::located",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::freshness::OriginEvent",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::freshness::OriginGroup",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::Foreseen",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::order::OriginsAsked",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::settle::Settlement",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::settle::origins_asked",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::settle::settle_all",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795787843421,
+  "expires": null,
+  "frame": [
+    {
+      "address": "813d169554f1182a4e70db639c72a9d2e99cc6ef",
+      "hash": "sha256:3089dc8bc851dd3981ccadb8dc5d8292a699315d044d77287a3421a757f1ccb3",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "31"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1db32-29d7-737d-bea9-8794eb43f223"
+    }
+  ],
+  "id": "01a21d4c-06f0-74c9-9eb0-cd888e8da38e",
+  "kind": "decision",
+  "reason": "What settles an origin now returns what is withheld beside what is listed, the three approvals by name are one type a settlement carries, and stale tells each approval the frame refuses (#184); REQ-31 is grounded on F-92 too, DEC-71 names DEC-114, and V-79 names two tests by their new names; what these documents claim and the tests they name still hold, checked by an independent code review and the full test suite",
+  "revision": "497b59ef15153159c4bcff270664f5a6ae9f69bf",
+  "seen": "sha256:5d50ad7d65f6701af822daa5d562237f7a590e5683349a719a359bc7f69fdf97",
+  "seen_address": "013b686360d50d678797cb31d05b6a8bdd09f327",
+  "subject": "01a1db32-2c6f-7019-be31-9436bee5c856",
+  "v": 1,
+  "verb": "approve"
+}
