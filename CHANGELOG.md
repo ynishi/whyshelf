@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- This repository's books: the nine verifications that name the reader tests of
+  whyshelf-infra whole under `tests` name again the helper file those tests use.
+  A file named whole pins only its own bytes and follows no helper, so its
+  helpers are named with it; 0.2.0 had dropped the name, and an edit of that
+  helper made none of them stale (#205).
+
 ## [0.2.0] - 2026-11-27
 
 ### Added
