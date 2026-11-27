@@ -1,0 +1,182 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c0d9230b33f8ee4f82513ac385e49e6c74a82513172aa8ecc4fac9ffe9b4fc00",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::a_write_that_fails_part_way_says_what_was_written_and_what_was_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f4145dc4019e195498eabcb5b7ef712355a3ca85163b5b12a875798c11f91670",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::another_file_that_appears_before_its_write_stops_the_run_before_the_documents",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7242d4edf26c28f590f4218b645102d124d1a54c1cd003db7400d27d06c2f748",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::a_file_replanned_to_another_key_is_put_on_disk_and_the_file_that_was_taken_is_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a377ace5616d9e202e99cfd0bc45473317547becdd1a12d9b0a65e5fc32861ec",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::a_run_that_stops_part_way_and_cannot_put_what_it_wrote_on_disk_says_both",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7b91a03da2d00f6a14888bf3a72d2bd55fa871807b97e0133ea88295748c4e59",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::a_run_that_writes_nothing_puts_nothing_on_disk",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3eb33b26ccd78895a53b3be6080d263f8aa4feea0ca30bb42d12783dd386a0cc",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::files_all_written_and_not_put_on_disk_are_not_durable_and_are_kept_and_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d8f04852463996fefc9a47a25cb7cf9e0011ba3c29b98ea5b6688a1d1e491527",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_puts_the_declaration_the_file_and_the_documents_on_disk_once",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f55a0dd6732b43dbb311e22102cea0b61c44c791dd25ce59ac6e1b893a2e8114",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_that_cannot_put_what_it_wrote_on_disk_is_not_durable_and_keeps_everything",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9effbe98a7df179f450a60e4d47458d35213b22e19544da360db4530cf9ead33",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_that_is_refused_before_it_writes_puts_nothing_on_disk",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6dddee681243ee03ff0e10e1d577546e3717af37a49daee842f45dc285f34a05",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_that_stops_at_a_file_in_the_way_puts_the_declaration_on_disk",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b44fd1a4ffb59b201335193bbf3a58643ef74f07b917d38aa1832c2406703e3d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::init_that_stops_part_way_and_cannot_put_what_it_wrote_on_disk_says_both",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:74309a4166371c9d7fc60b03788bd2febafcda053f16077d5bf17a3b2f181a4e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::new_doc_puts_its_one_file_on_disk",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:03d0fc8dc04fbe6113136c07ba4b10f72b591c601aaf2cb44e62106efcde26c4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::new_docs_puts_every_file_on_disk_once_after_the_last_write",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bae78b17f055011004b9957faa9cba2bdc23bf8f1ebb271b698623ec6e3993c6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::no_module_but_run_writes_calls_a_create_port",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fa6ef4363b31e1487f914436f1158cc6a4d77d33c5030ac0caf0ee891b330b8d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/run_writes_tests.rs::the_futures_of_the_use_cases_that_write_are_send",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "6f932469c2bd66a79408963fac6f1d33ea44870a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:71c9375a856eb89b5b215612fecf236425f4af26a622453f23f6ac18250a5c8f",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/app/shelf/fake_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4d92db33e38617bd5254f7448a6369595c18612a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d2635da08b0134817369f20e89c4a9abea941e1be1b8e19ed47e61ce346271a7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/create.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5a2186804aec8e911f4c339840c9c0b5efb77da6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bb3261dd723b19e9ce010cfd9b553cd6f5dee9f70f93d6a455fb30798f51921d",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/project_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "fbcc6e0d325c707cb322ece5f42b03ce74b33d55",
+      "hash": "sha256:17c19b03e1169cc1c823545de8078bd69720ac3e0191752f308c1b7cb0816d13",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "79"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1efb4-5387-738e-92c2-897542094cc7"
+    }
+  ],
+  "id": "01a21b5c-d762-7756-bdb7-dc23115310cc",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:5544baa07a9f7f2953520593cd33e8b1632c3424209f0064c6baebb94a6a91e3",
+  "seen_address": "fef3be3f8aeb3b8119c6b8f17bae85828c0549bf",
+  "subject": "01a1efb4-acca-7266-a1c9-eaf0a9ce7b94",
+  "v": 1,
+  "verb": "approve"
+}

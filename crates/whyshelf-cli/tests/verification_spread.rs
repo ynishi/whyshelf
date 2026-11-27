@@ -7,11 +7,13 @@
 //!   function under `cases`, and names a file whole under `tests` only when rust-test
 //!   lists no test of it one by one (none in it, or a part of the listing); a name
 //!   under `cases` is a test of a file the include takes, which rust-test lists whole
-//!   and holds the name. The file of a test is where rust-test places it, in one file.
-//! - A verification over a file of the end-to-end tests that uses the helpers of a
-//!   directory (`mod <dir>;`, with `crates/whyshelf-cli/tests/<dir>/mod.rs`) names
-//!   every file of that directory under `tests`; such a helper holds no test nor
-//!   anything that may make one (DEC-56).
+//!   and holds the name. The file of a test is its own file, the one its name begins
+//!   with: rust-test places a test in its own file and the files it holds, and the
+//!   guard reads the own one.
+//! - No verification names a file of the helpers of the end-to-end tests (a directory
+//!   `mod <dir>;` declares, with `crates/whyshelf-cli/tests/<dir>/mod.rs`), under
+//!   `tests` or under the test link: the texts of the tests that reach them hold them.
+//!   Such a helper holds no test nor anything that may make one (DEC-56).
 //! - No file under `crates/whyshelf-cli/tests/` but those helpers is named, whole or
 //!   by its tests, by more than two verifications, so an edit of one feature's tests
 //!   leaves the approvals of the others fresh (DEC-56).
@@ -31,7 +33,7 @@
 //!
 //! - the helpers of other crates and of `#[cfg(test)]` modules, and the files a test
 //!   reads whole (`include!`, `include_str!`, `include_bytes!`): their naming is not
-//!   asked, so an edit of one makes stale no verification that does not name it;
+//!   asked, as rust-test holds them in the text of the tests that reach them;
 //! - a `mod` that a macro of an end-to-end file writes when it is expanded, and a
 //!   `mod <name>;` inside an inline module (`mod m { mod common; }`): only the tokens
 //!   written at the top of the file are read.
@@ -336,15 +338,36 @@ async fn links_of(app: &App, link: &EntryName) -> Result<BTreeMap<String, Named>
         .collect())
 }
 
-/// The one file `placement` puts `key` in, or why the guard cannot read it as one:
-/// a test file of this repository is reached through no link (DEC-112).
+/// The one file of `files` that the name of `key` begins with, as `<file>::…`; none
+/// when no file or more than one is.
+fn own_file<'a>(key: &ArtifactKey, files: &'a BTreeSet<RelPath>) -> Option<&'a RelPath> {
+    let mut own = files.iter().filter(|file| {
+        key.name()
+            .as_str()
+            .strip_prefix(file.as_str())
+            .is_some_and(|rest| rest.starts_with("::"))
+    });
+    match (own.next(), own.next()) {
+        (Some(file), None) => Some(file),
+        _ => None,
+    }
+}
+
+/// The file `key` is of, or why the guard cannot tell it: the one file of a placement
+/// of one file; of a placement of more (a test lives in its own file and the files it
+/// holds), the one file of them the name begins with, `<file>::…` (DEC-112). A file
+/// of this repository is reached through no link, so a placement of several files in
+/// which no single one is the name's own is refused.
 fn file_of(key: &ArtifactKey, placement: &Placement) -> Result<RelPath, String> {
     match placement {
         Placement::Only(files) if files.as_set().len() == 1 => {
             Ok(files.as_set().iter().next().expect("one").clone())
         }
+        Placement::Only(files) if own_file(key, files.as_set()).is_some() => {
+            Ok(own_file(key, files.as_set()).expect("checked").clone())
+        }
         Placement::Only(files) | Placement::Partly(files) => Err(format!(
-            "{} places {} in {}: a test file of this repository is reached through no link, so the guard reads a test as of one file ({DEC})",
+            "{} places {} in {}: a test file of this repository is reached through no link, and no single one of them is the file the name begins with, so the guard cannot tell the file a test is of ({DEC})",
             key.space(),
             key.name(),
             files
@@ -740,7 +763,6 @@ async fn run(root: &Path) -> Result<Vec<String>, Vec<String>> {
 
     // The helpers of the end-to-end tests (DEC-56).
     let helpers = cli_helpers(&files);
-    let mut used: BTreeMap<&RelPath, BTreeSet<String>> = BTreeMap::new();
     let mut declared: BTreeSet<String> = BTreeSet::new();
     for (file, key) in cli_tests(&files) {
         let tokens = match text_of(&app, key, file)
@@ -755,8 +777,7 @@ async fn run(root: &Path) -> Result<Vec<String>, Vec<String>> {
         };
         let (dirs, wrong) = uses(file, &tokens, &helpers);
         problems.extend(wrong);
-        declared.extend(dirs.iter().cloned());
-        used.insert(file, dirs);
+        declared.extend(dirs);
     }
     for (dir, of) in &helpers {
         for file in of {
@@ -781,24 +802,20 @@ async fn run(root: &Path) -> Result<Vec<String>, Vec<String>> {
             }
         }
     }
+    // The texts of the tests that reach a helper hold it, so no verification names one.
+    let shared: BTreeSet<&RelPath> = helpers.values().flatten().collect();
     for (key, named) in &docs {
-        let whole: BTreeSet<&RelPath> = named.tests.iter().filter_map(|k| placed.get(k)).collect();
         for file in named_files(named, &placed) {
-            for dir in used.get(file).into_iter().flatten() {
-                for helper in &helpers[dir] {
-                    if !whole.contains(helper) {
-                        problems.push(format!(
-                            "{key} names {file}, which uses the helpers {E2E}{dir}/, and does not name {helper} under tests (DEC-56)"
-                        ));
-                    }
-                }
+            if shared.contains(file) {
+                problems.push(format!(
+                    "{key} names {file}, a shared helper of the end-to-end tests, under tests or under {name}: drop the name, the tests that use it hold it (DEC-56)"
+                ));
             }
         }
     }
 
     // No file of the end-to-end tests but the helpers is named by more than two
     // (DEC-56).
-    let shared: BTreeSet<&RelPath> = helpers.values().flatten().collect();
     let mut namers: BTreeMap<&RelPath, Vec<&str>> = BTreeMap::new();
     for (key, named) in &docs {
         for file in named_files(named, &placed) {
@@ -834,8 +851,7 @@ async fn this_repository_names_its_tests_as_its_decisions_say() {
 
 /// For each verification, what it names under `tests`, the files of the include it
 /// names whole with the tests rust-test lists in each and the verifications that name
-/// it, and the helpers of the end-to-end tests it should name: one line
-/// `CANDIDATE <JSON>` each, for a batch of the move to be planned from. It fails
+/// it: one line `CANDIDATE <JSON>` each, for a batch of the move to be planned from. It fails
 /// nothing.
 #[tokio::test]
 #[ignore = "prints the candidates of a batch; run it by hand"]
@@ -844,9 +860,6 @@ async fn candidates() {
     let map = mapped(&app).await.expect("the declaration");
     let link = test_link(&map).unwrap_or_else(|p| panic!("{}", p.join("\n")));
     let docs = links_of(&app, &link.name)
-        .await
-        .unwrap_or_else(|p| panic!("{}", p.join("\n")));
-    let files = rust_files(&app)
         .await
         .unwrap_or_else(|p| panic!("{}", p.join("\n")));
     let keeps = Keeps {
@@ -861,16 +874,6 @@ async fn candidates() {
         .cloned()
         .collect();
     let (placed, _) = placed(&app, &keys).await.expect("the places");
-    let helpers = cli_helpers(&files);
-    let mut used: BTreeMap<&RelPath, BTreeSet<String>> = BTreeMap::new();
-    for (file, key) in cli_tests(&files) {
-        if let Ok(tokens) = text_of(&app, key, file)
-            .await
-            .and_then(|text| tokens_of(file, &text))
-        {
-            used.insert(file, uses(file, &tokens, &helpers).0);
-        }
-    }
     for (key, named) in &docs {
         let whole: Vec<&RelPath> = named.tests.iter().filter_map(|k| placed.get(k)).collect();
         let mut region = Vec::new();
@@ -889,20 +892,10 @@ async fn candidates() {
                 .collect();
             region.push(serde_json::json!({ "file": file.as_str(), "names": names, "namers": by }));
         }
-        let missing: Vec<&str> = named_files(named, &placed)
-            .into_iter()
-            .flat_map(|file| used.get(file).into_iter().flatten())
-            .flat_map(|dir| &helpers[dir])
-            .filter(|helper| !whole.contains(helper))
-            .map(RelPath::as_str)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
         let line = serde_json::json!({
             "verification": key,
             "tests": whole.iter().map(|f| f.as_str()).collect::<Vec<_>>(),
             "region": region,
-            "helpers": missing,
         });
         println!("CANDIDATE {line}");
     }
@@ -1192,15 +1185,52 @@ fn a_name_lives_in_one_file_or_the_guard_cannot_read_it() {
         file_of(&key, &Placement::Only(files(&["crates/x/src/a.rs"]))),
         Ok("crates/x/src/a.rs".parse().unwrap())
     );
-    for placement in [
-        Placement::Only(files(&["crates/x/src", "crates/y/a.rs"])),
-        Placement::Partly(files(&["crates/x/src/a.rs"])),
+    // A test lives in its own file and the files it holds: the guard reads the own one,
+    // the file the name begins with.
+    assert_eq!(
+        file_of(
+            &key,
+            &Placement::Only(files(&[
+                "crates/x/src/a.rs",
+                "crates/x/src/fixtures_tests.rs"
+            ]))
+        ),
+        Ok("crates/x/src/a.rs".parse().unwrap())
+    );
+    // `a.rs` is no prefix of `ab.rs::one` as `a.rs::`: a name is of the file before `::`.
+    let other = ArtifactKey::new(
+        space(RUST_TEST_SPACE),
+        ArtifactName::new("crates/x/src/ab.rs::one").unwrap(),
+    );
+    assert_eq!(
+        file_of(
+            &other,
+            &Placement::Only(files(&["crates/x/src/a.rs", "crates/x/src/ab.rs"]))
+        ),
+        Ok("crates/x/src/ab.rs".parse().unwrap())
+    );
+    // None of the files is the name's own, or a name of a file (no `::`) has several.
+    let file_key = ArtifactKey::new(
+        space(FILE_SPACE),
+        ArtifactName::new("crates/x/src/a.rs").unwrap(),
+    );
+    for (key, placement) in [
+        (
+            &key,
+            Placement::Only(files(&["crates/x/src", "crates/y/a.rs"])),
+        ),
+        (
+            &key,
+            Placement::Only(files(&["crates/x/src/b.rs", "crates/x/src/c.rs"])),
+        ),
+        (
+            &file_key,
+            Placement::Only(files(&["crates/x/src/a.rs", "crates/x/src/b.rs"])),
+        ),
+        (&key, Placement::Partly(files(&["crates/x/src/a.rs"]))),
     ] {
-        assert!(
-            file_of(&key, &placement)
-                .unwrap_err()
-                .contains("is reached through no link")
-        );
+        let why = file_of(key, &placement).unwrap_err();
+        assert!(why.contains("is reached through no link"), "{why}");
     }
     let why = whyshelf_core::domain::nonempty::NonBlank::new("the adapter's reason").unwrap();
     assert_eq!(
@@ -1564,7 +1594,7 @@ fn a_listing_says_no_test_a_part_tests_one_by_one_or_that_it_cannot_tell() {
 }
 
 #[tokio::test]
-async fn a_verification_over_an_end_to_end_file_names_the_helpers_it_uses() {
+async fn a_verification_naming_a_shared_helper_of_the_end_to_end_tests_is_refused() {
     let helper = (
         "crates/whyshelf-cli/tests/common/mod.rs",
         "pub fn help() {}\n",
@@ -1600,7 +1630,7 @@ async fn a_verification_over_an_end_to_end_file_names_the_helpers_it_uses() {
     assert_eq!(
         problems,
         [
-            "V-1 names crates/whyshelf-cli/tests/a.rs, which uses the helpers crates/whyshelf-cli/tests/common/, and does not name crates/whyshelf-cli/tests/common/mod.rs under tests (DEC-56)"
+            "V-2 names crates/whyshelf-cli/tests/common/mod.rs, a shared helper of the end-to-end tests, under tests or under cases: drop the name, the tests that use it hold it (DEC-56)"
         ]
     );
 

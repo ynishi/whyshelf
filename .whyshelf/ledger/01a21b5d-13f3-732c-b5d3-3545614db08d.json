@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:1cd05d03738ec5bb6c87211c2460863e8745d8d8fcfa5032917c4fbf979bd404",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/read_by.rs::a_repeated_word_is_either_and_the_filters_are_carried_as_given",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:189cd4f240a5d634fc7812745cb7c0ef7364f07b7fb49c830e4d6d4344a20952",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/read_by.rs::a_word_that_is_no_count_is_a_request_error_with_the_words_there_are",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:14912ef55346eb69bc03842667daf7265237b8bd792c1d2b04d63e3a2bf1e169",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/read_by.rs::an_approval_every_reading_of_which_lapsed_is_read_by_nobody",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fc88a43e1532d32490d307cd648c78d4271e412e554f2ce1ca7cac74dd34b452",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/read_by.rs::an_approval_is_read_by_one_then_by_several_and_by_one_again_after_an_edit",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "90747d92b8360fa7dc4f064c890706f6e8e2ec27",
+      "hash": "sha256:c10d93847e5782b68ece8109b8d09fdd6594f5524f60279c046f6ef5f7ff9659",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "95"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fca1-7324-77ae-ade6-30bb419c262e"
+    }
+  ],
+  "id": "01a21b5d-13f3-732c-b5d3-3545614db08d",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:be2616114c7ce5d8c93d0c6d19f13f7f0b07532956dfb725e5d41401c35f262b",
+  "seen_address": "21600439be084e6ae59db237bfe9603a63ec4ff3",
+  "subject": "01a1fca1-cd62-7167-ad7f-9402fd9635fc",
+  "v": 1,
+  "verb": "approve"
+}

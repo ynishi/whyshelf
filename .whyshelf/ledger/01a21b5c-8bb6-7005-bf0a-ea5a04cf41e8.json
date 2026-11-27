@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:fa41eed379323b0cc62dbd6b1ea8e54f83b98ff2352da6127fd0ff73c330047e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::an_upstream_stale_only_through_a_pending_one_the_run_approves_holds_nothing_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6d21edc7bf227c055696b6539afd81b286b54cfb6914976824fc3adcb5795563",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_and_stale_together_are_one_run_upstream_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:59d119c6840af8fedc8be470b0135f168d69e9da1f0c0a035a899a50d659fb3f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_approves_the_sample_upstream_first_and_leaves_nothing_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ddc671112551c01ddaace9abc32ed8320e8f1cba20beb3df4bee8c307ac5618a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_needs_a_reason_and_takes_no_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:35b06c063b267235430a054236d9bf3e714d542a6aae86e44e59a27bb6dbc47d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_of_v_1_takes_what_it_stands_on_through_depends_links_only",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f11b9163dc6a2c54bdb899b3647e0b46dfe78f09d9f33611ecbe223f699d2267",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_stale_alone_takes_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:322d65cf7c0708da34eb4d4f066985bd8e2be1bc597f4ffda7efca154c66532a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::the_command_init_gives_approves_its_four_documents_and_no_other",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ea65505cd15e7247347a1239fbc02e9f0f4c1986",
+      "hash": "sha256:3816927150bad7efa5e8e105e6f178a4a598ca68b6277726b76c540a341c6bef",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a21b5c-8bb6-7005-bf0a-ea5a04cf41e8",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:42daea713ac335aaa5fe0e89968b8d063a11410d7cdbd84cae8c638686e78a58",
+  "seen_address": "c8fb27870d9991085f59a1e560860676f0012638",
+  "subject": "01a1c9f3-b3c3-738c-a1ed-412012185ef6",
+  "v": 1,
+  "verb": "approve"
+}

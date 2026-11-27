@@ -1,0 +1,147 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:1cbd775f0038fbe25bb3fb4efdf19cba53a3d2557fac6ad111709a3d6740ce09",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_denied_replacer_named_as_a_successor_is_refused_and_nothing_more_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8339d916d483d3b21b70bdf90e40dae62668967c565f0b37f3e3d64ff84895e7",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_deprecation_naming_a_successor_is_written_and_says_its_successors",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c0b8aad3ba77955be17382eadd0bbd6e44adcbf4eb4e966441ece0c0d8e0baba",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_deprecation_naming_no_successor_needs_none",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d3684aa7d3de3415249e498cc7b3db74713d0387184360ba60c6db24ca41f5fa",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_refused_successor_in_a_run_writes_none_of_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:807ac7e04abb62ca4075514e4bbf6b6fce26c2ca42ce1c9e11b0dad65bdd602b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/successor_tests.rs::a_successor_that_does_not_replace_the_document_is_refused_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:dfaff80664965e5ac8fb536f58a5838490bf8dbe38543fd2770a5ef3c72ab080",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::links_of_gives_the_links_of_one_meaning",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8e242daef27d406694c0d0db17bc09f4618604b8611df8a18a5d0e008cd72672",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::replacers_are_the_valid_documents_that_replace_a_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6edfc74f147ef77cf96035522e4474a7319e13f3e0f9394ef99f9caa6a580635",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_denied_retired_or_deprecated_replacer_is_no_successor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fd37add4a16aed03defff4c32c2b97cbdcc8c5e584e4f5bf83bd75d447d231c8",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_document_nothing_replaces_has_no_successor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c6294e11a4514753edb0f1169bbaa6fd01c41ea9983e76d7670b886a9925a7e3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_downstream_of_a_deprecation_whose_only_replacer_is_denied_is_broken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d9aa63e7f1940efb2698ecfb6d75087d52764fb9947dcddb49db15fb0ae45a10",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_downstream_of_a_deprecation_with_a_successor_is_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8471a8cfcab9858aea4aae1643c9d8ddb47062f3721e07ff63c0450089926de2",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_downstream_of_a_deprecation_with_no_successor_is_broken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a8e439aeabc84511977c8cd0324c61ae688a3d9ce064fc91dcdb24cea9f69713",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::a_pending_replacer_is_a_successor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a992656ef739cfb45d9320f76cdebb35ca38498bc46d9ee17cff3c2490adc088",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::an_approved_replacer_is_a_successor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:19be97ba6615cea58b362c9a8f1a8b091035c8f5ff3ad9555f85ea9c5db35693",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::every_pending_or_approved_replacer_is_counted_smallest_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f920711dae9c40696150934841d26f168a01a59fe52ab7a88049672f41e1f55e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/successor_tests.rs::the_chain_of_successors_is_not_followed",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "25b7169b718ca6e43644f2c59e670afc90a9d03d",
+      "hash": "sha256:3973c62711ce992505e8435ad40c0ba88a1877e05e4bb806fd7666311527ef84",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "16"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-136c-718f-b63c-ca159f35530a"
+    }
+  ],
+  "id": "01a21b5c-1dd7-774c-9e12-9d4b2f8d0dd0",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:0c7899d62c5ac309934fdd6a17e3c2860f1ee9a3c14afbc68949cd73cb630084",
+  "seen_address": "528d3aa2c111e4fda60b15adc6051fc5efb739dc",
+  "subject": "01a1c4ba-17ad-715e-afe9-e9a4d2a848c2",
+  "v": 1,
+  "verb": "approve"
+}

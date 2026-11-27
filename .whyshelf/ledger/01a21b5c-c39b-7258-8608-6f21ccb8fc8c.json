@@ -1,0 +1,392 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:13a7252ad96b77a87cc68bbd746ae7206dc6e9f2867d416d93b09dc137b9fcdd",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::a_link_to_a_document_made_after_it_is_resolved",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7f1f8223a51a0d01b8914e8eb9b02d124b7f77c21167111cd8db6fa78fc80c2a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::several_documents_refused_are_told_together_with_their_rows",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c796eb4b7649889d85f5bc8192128c33b1d125192608d47124a06dbaee6d2c37",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::the_documents_made_are_heads_when_no_other_stands_on_them",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:809bd52940d56342f0d9316d95fff148ce200540f86994436f6348196d484fac",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_file_at_every_key_tried_after_two_were_written_is_part_way",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fafe0e7ce34b1c39824ebc822f78b9355d1e46ba469aabcaad98e79ff2d697ff",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_file_that_appears_mid_run_moves_only_the_row_it_was_taken_from",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:62049550a0116147b4979f4459ac53f6b459b5a63025ff8e56b26b33d6ac050b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_key_asked_for_that_is_taken_after_two_were_written_is_part_way",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c60fecf4b6a4b8ecf3a1dc9264cd3587d489191978b0cc913ed043ff06f0ddfb",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_name_of_nothing_among_the_items_is_an_empty_item_of_its_row",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8e85f57a6311259c34b2d1ed2c020f8803d305a8bf289276f1a24d8638b78203",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_name_that_stands_for_no_row_refuses_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3220c838b9ad0ae336c6f22c201ee1b0c58aab660a45ee12ca4356f01416136f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_ring_of_names_goes_on_when_the_first_written_is_taken_and_stops_when_the_second_is",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3670dc1450b7fafcac9944257991afd982ccb112d5d11c2d1d33bbf05b21b7f6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_truth_value_and_a_whole_number_are_kept_as_they_are",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:38ec86d97af7b446023bc707a102c71cb65a3f9e4bc04f62fe0d6948f4e6bc7f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_typed_item_is_trimmed_and_an_empty_one_is_an_item_blank_of_its_row",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0d54526dc2240ea25ba96e96679b3baa638f1032ff41170ce7e4fda2813ed8d9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::a_write_that_fails_after_the_first_is_part_way_with_what_was_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3bcb13af5b716b01c0ffbaebd65f5e510ae555aa6dd5886704c333c655ab8045",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::an_empty_name_is_refused_with_the_row",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:eeea90af73149e1f6615efe157894427c6ed740cc9248be24911bc2ddb4a55b9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::an_empty_run_writes_nothing_and_reads_the_shelf",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1a2e473f4635f819174c561698494248f42ff32970a0647b1195f875a73ab55e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::an_entry_given_as_a_value_and_as_items_is_given_twice_and_neither_replaces_the_other",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9da58759ba9110803866dcbe734b9f701ecd1507c34f76f257b8df322de3c92e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::an_entry_twice_in_a_row_is_refused_with_the_row",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a386b35c95652cdc4cea0ff8dc71171e182ff00039e70b71de8930412fe5267c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::every_row_with_a_fault_of_the_request_is_told_and_the_run_is_not_planned",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d4d1ada69254747b8d001feb70864e0833aa278800cb1be358e4abd5e2305a8f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::names_are_written_as_keys_and_the_row_named_is_written_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9bad852162fa3fe2fbffaf1638ec4a600e82a4e7fbffba22b7a16b2583709331",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::one_row_is_told_as_new_always_told_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:303205c4314c1fc6491860226a1261c1b9dd7d79aa97da2af51aa2e2723e27ca",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::one_row_refused_writes_nothing_and_tells_every_row_refused_with_its_number",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:282ba6699eaa2d4dd033dee87c1a91461ac4a85cc431d131f9acd18fa5d8de85",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::the_name_of_a_row_in_a_text_list_is_refused_where_it_is_given",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:410269cab77fbb7aa444d723b6100c5df49d46c699487fe07c6a3692ab670a6f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_many_tests.rs::twenty_five_rows_read_the_shelf_and_ask_the_artifacts_once_and_are_written_in_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:90551204193295bc9092d9d7bbfcd791e2849de5d627ec119dd28a7399efc7ec",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_key_asked_for_that_a_file_writes_is_refused_with_its_row",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cf8d07564e3e6a1eebf2dbeb4f129eb72dde3a5d680a2991aa05decaa7f09a03",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_key_that_was_asked_for_is_not_chosen_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:07a108c6086a2b62c41a598e05080d386af04274a676938806af3d75b23f1cce",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_name_given_to_two_rows_is_one_problem_naming_them_and_no_second_one_for_a_link",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bd5805426ba4e1525c3bdf06afddca304728c3d1bbd716517f81935fa5fa0285",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_name_no_row_has_is_refused_with_the_row_and_the_link",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:021dfd6e362ca96c9145a14bc3f39768d127d6f60c1ea921f80756a6a896858a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_name_of_a_row_of_another_book_than_the_link_points_into_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1144527b9d0e8e3933874e8b0c84d7b71114520030630fab0c040b1e670104e2",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_name_of_a_row_of_the_book_the_link_points_into_is_taken_across_books",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0c1c0fa2b2d88ed900df4593a1ead1e587c7a2778cd8ad93d77d92f6298c8721",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_name_stands_for_the_key_of_its_row_and_the_link_is_resolved_whichever_comes_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ba44328b0a994c05cc0d318a9dbaea6dd0fb98bdc55c911f62bcc3353c0a220a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_next_number_the_range_does_not_take_is_no_next_key",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:be8d3e842071c7d844deeb1579415b9dc3027fdb942d450c18c23fd91fd35958",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_number_after_the_highest_that_the_grammar_has_no_room_for_is_no_next_key",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b42ea10fec1a5fa0a770f9c1693b1ac30ff7dfa35b3cbeac9323b3b2801962e8",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_place_that_is_not_in_the_order_is_answered_as_asked",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:10de1ee89f6589d72c7d222eae957ff3cf4bcb5c1374c8e1259b36c6e4e5f8be",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_row_already_written_that_does_not_name_the_row_taken_is_no_trouble",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0700379eeece1e104eabacbdaa1408b6a7e5203abd1d14fa5d7d2485ed49ea5f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_row_already_written_that_names_the_row_taken_leaves_the_run_stuck",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e590e6cf7e3259182a2f185e262f4fa771a371c86b05af4c7234fc8975e1fde9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_row_gives_up_after_its_own_sixty_four_keys_naming_its_first_and_last",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b10bf01376dccd6660621eaa5b15a0f7b5f5c6deaf9f046dc53242ba4569d5c3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_row_taken_after_another_was_taken_is_followed_by_the_highest_number_of_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4df106e01b83a34caf36b1096aa7fa3f549605a79b258a19293570d1f6c118a7",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_row_that_names_itself_resolves_to_itself",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5602e4dd6cffcc6050c5421c1f544ec5b203eaef5c226b0a538505c320fa5b7c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_row_with_no_key_in_a_book_of_slugs_or_an_unknown_book_is_refused_with_its_row",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ba92a0cfa1efbb9dd00c557afe846dd87dc2525a040824760b1e434c851b2ae4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_run_judges_a_row_as_the_shelf_judges_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e7123e52e2419414681b395210e7e5fb73a3c247f48abf1f52fe50d98e3f2e03",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_run_on_a_shelf_with_a_schema_reads_nothing_else_of_the_shelf",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a64838a3cbebad52ef0e22858c059f3a123c5314fdbc38fbe1d5f9c075fbae62",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::a_run_whose_every_row_is_moved_once_is_written_whatever_the_number_of_rows",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a520401bfd520d96b282f8ca8d9ef12e0ec922018b1de0050c9482358ca6f274",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::chosen_keys_are_counted_for_each_book_on_its_own",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:725bb63ee7896932c8480a37f2080513877b5e2310bcce1bb1a350b6f2d9c1df",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::chosen_keys_pass_over_the_keys_asked_for_and_the_keys_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d4feae6922d704ba6127d8ea85f37082bc17969769cdece440d34c50b1d24935",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::heads_follow_the_depends_rule_order_uses",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:59e68f12006da1f63d3afac1658e2f028a479a1e55fc9dc8e6a91ed1388480be",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::keys_asked_for_by_two_rows_are_one_problem_naming_both_rows",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b2042e19e535168dd23db49a3e038f45368f627f7f3865594a52fa1b8c7c5a20",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::names_in_a_ring_are_resolved_and_the_ring_stays_in_the_order_of_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c4b43e2758f36aa19cb2d02f175edc83426ad19d4620cda862ba199d37465232",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::one_row_refused_refuses_the_run_and_every_row_refused_is_told_with_its_number",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a9e6d54b1e6e769907d4415e0e33d672da617bb367419ac29c4b20b76600ae75",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::only_the_row_taken_is_given_another_key_and_the_rows_that_name_it_follow",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2971d96072b38d64c50587a9a811d4294f36fb20e0e3dacbe32bb8d2801485f1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::the_heads_are_the_documents_of_the_run_no_other_stands_on",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cbe6102f64906f9fe801a70647e3ab8e40b4a02096f998103ac99df0a79ea2c8",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::the_other_row_of_a_ring_is_not_given_another_key_when_the_first_is_taken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c4a8bf25ab31aa9c2d0f28aeaf4c883a557ac289c7aaecca3b5e981cef69a1b4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/plan_tests.rs::the_run_gives_up_after_sixty_four_keys_with_the_first_and_the_last_named",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c634e82e5a2b52fe232d878103c8fcdd5c408c4d",
+      "hash": "sha256:6cadfdc0cff2847fe48ebe362769681584fe3ccab541e762c9debf027fbb6b17",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "75"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e3a5-6ee3-7525-839f-9b046ea44760"
+    }
+  ],
+  "id": "01a21b5c-c39b-7258-8608-6f21ccb8fc8c",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:3a71280e74d65a335f3a6e84a6403d5d6da9b365a1567faca246891fa5cac026",
+  "seen_address": "5e36a67abadfbbf28c306336cb5b9571acf4a95e",
+  "subject": "01a1e3b3-030c-712d-9a54-69a61e8b7cf4",
+  "v": 1,
+  "verb": "approve"
+}

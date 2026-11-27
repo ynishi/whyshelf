@@ -1,0 +1,315 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:6a4d5739385557ad3457a3fe5e8b9772c3256e547372077f589b55d83abd6d3f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_declared_move_with_the_link_rewritten_keeps_the_approval_fresh",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:986790f2f3829d2c232a0954267dfff7fa1955f22a50a8aaec9588cf77a8bd57",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_link_left_on_the_old_name_with_no_declaration_is_broken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:68ad9bb6f5e2c27443e443eff18a82786d7e0541b96ad170eaafc7a021e7d479",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_link_still_on_the_old_name_is_stale_and_checked",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e9d089de7af533118d3a7f48d8d00bc44184f5fd9610c183d1847ffb706b4d00",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_move_with_an_edit_is_stale_with_the_change_at_the_new_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:87af08733d3d689cc29bb0e00596c31c6db05bd8cf73fdfc9f0852be1c96fbab",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_name_moved_away_cannot_be_moved_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:68c2ed766ea31c27b942f96e9433b48ce87b747801ebf2d41ec84e5ab3c8b11b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_name_only_a_pending_document_links_is_not_known",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c98661697581211b180e4845a09760d9d0af7032f705897e1c85d19857046a79",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_name_pinned_as_absent_after_its_move_cannot_be_moved_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b51a1e1e6e0f31ac14558a79708a245000e9fb84ffac0096f220b565f7c3f783",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_new_approval_after_a_move_pins_the_new_name_and_repeats_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:864117ea4f2de3bf25f88c356a7a0619019c28e983ff1a4ad5b0972be191431d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::a_run_of_moves_is_written_whole_or_not_at_all",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6a43f3e1c5e01a673bff199d00493575272ce78c65f65fa6be46b0df8f9edd17",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::refused_moves_write_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d62a14259c67d35d07ae4f1d7a25abf218f5afccb02b12587b4928c42af439ed",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moved_tests.rs::withdrawing_a_move_reads_the_pin_as_written_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:25d1f752b068637e4e63d648a3776812a305aaf16f4d187ee674973196e493ad",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_chain_of_moves_is_read_to_its_end",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:04e66ee9f66e21d39568ce0fb0e4579f4619eb7dd87044e3cad5f66c9c63aacb",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_link_on_a_middle_name_of_a_chain_is_one_cause",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:32dbba0aa563cc812a98bcee5f50491a11ec6f47c90738face280b1c8a21dfc1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_link_on_the_middle_name_of_a_way_back_is_one_cause",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:322ef31256ad160f771b9f0a265b534638bab08684872e9a0b3de81c0cc9beec",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_link_still_on_the_old_name_is_one_cause_and_no_change_of_the_link",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2a43c9a3f0dc82b2acc1c538fc5c36174131e371d7937d990c22cb6233c3fb53",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_link_that_drops_a_moved_pin_names_what_it_wrote",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f7d509e3b216d680b6d6f921fcde9e2c659c8a087dba8036736d94766a6ed310",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_move_in_another_space_reads_no_pin_of_this_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b9e8a92705033cd4512d904ac8d9a0aa378b778ddb2f72db82e55e46d9d989b2",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_move_onto_a_name_another_approval_pins_is_a_change_of_that_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cfe0e57cfbfdf69469dffb8498ef192b8c9feb4f875487b5175e7dfbf80c5802",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_move_with_an_edit_is_a_change_at_the_new_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7114d5520019184e5616991d7806da0de0e78420a2c5c9af911965605fe80848",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_pin_made_after_the_declaration_is_read_as_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9bfb8db2e45723596db32f8ebff17a2f3021c4587b69182c285bb626528c3ae8",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::a_pin_of_a_name_as_absent_is_read_as_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4313b8375464c62a836e9931327ce8ca3198feecb0d34aacab32fb2d25168ed6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::an_edit_declared_before_the_move_still_keeps_the_meaning_after_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c0dbf1fef121441cf069960d44dcc8a77490fa9c721c41d8f0ccb7134fbb1afd",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::an_edit_with_a_move_can_be_declared_to_keep_the_meaning_at_the_new_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:349b57c5e85e47419aa502fd6add387ea3ff3a74904ba6699f86f3f8a4c84b22",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::an_unchanged_move_leaves_the_approval_as_it_was",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3fc27c3272b80fd35b1c74c9abd1ffd61afb99e18d8a7ed9563bc58c0eb85198",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::of_two_moves_of_one_name_at_one_time_the_larger_identity_is_followed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:01b3f4b691186235707fea97fdc608dde12ee9252ddbf9a260f211a422ee3b92",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/moved_tests.rs::the_old_name_there_again_is_another_thing_and_the_link_is_still_told",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9943af66dc1c4e9f5a58f2ffbf1ede48cd810262c30050f2ef1b7634cac69ac0",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_chain_of_moves_is_followed_in_order_of_time",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:15f1001fb96c73be11de79297f75b7413d57d8d3253d36a5af17ebe82bacb436",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_declaration_of_a_move_survives_its_canonical_form",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d430c583c0a98cfebf9d79387ccda51818bbfb7ebaf9fc0f4795b3d11797770f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_declaration_of_a_move_that_is_not_one_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:33415422137d1f84b7fb4bfb1f869271a4ff7380e7a7d64403b8a9e1a2168646",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_ledger_of_old_records_reads_every_pin_as_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2136e761b35c10a58c6e564ce6d0805452f0d1bb6bf3570ab10507a3fba56534",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_move_back_ends_at_the_name_pinned_and_leaves_the_middle_name_behind",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0c6b921b05cac72f7ac146d8371764ee4ed80fcc3db9fb7fc1dde396e71eab72",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_move_in_another_space_survives_its_canonical_form",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:861c839962bc6a234622039417a1b46aa1a1fe4e413a40bb3f9b95bbabca3a65",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_move_of_another_space_or_withdrawn_moves_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9016a31c7c52cb1eb29bca3c54ebbcdd3a187429e7661a510e695cc350d8f56d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_move_stands_when_the_old_name_is_empty_and_the_new_one_is_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:86a1de795b26e1459caf2756ed88e7231d39f5389b881a8aa4309e809e441507",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_name_pinned_only_as_absent_after_a_move_cannot_be_moved_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c1c27591949a423c3180b37eba25e24835b23e8b5dfc42df642e363688419404",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_pin_made_before_a_move_is_read_as_the_new_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1bf034dd6b6a94a192da477a628be90e709810f9cf99272b3666bd4f07918900",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_pin_of_a_record_written_before_spaces_is_read_through_a_move",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1824ad3c9c21b2479b6958eeef4999a248a4090b559f8752b5d137d5c0aedf71",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::each_pin_is_read_at_the_time_of_its_approval_and_the_status_keeps_it_as_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:eb7e32b5af4b843647162b80ded06ac6303f98eb980001ea5f231094c34e6dc8",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::of_two_moves_of_one_name_at_one_time_the_larger_identity_is_followed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4d6826805ad50e56a794dd375d040dd88a761461a11b02090c978d7495050533",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::the_space_of_a_move_is_the_one_a_pin_is_read_as_the_old_name_in",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "431d4b1e794961b1ef1767ea3db5debc18d78e7b",
+      "hash": "sha256:30e6e11b84fb90a5af811e25fa8637aa65f92e5f41c716515d5b686941f42254",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "59"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c912-1826-76a6-838e-509c842f7e41"
+    }
+  ],
+  "id": "01a21b5c-7a64-74fa-9544-82c7dfb85323",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:e71bdd61d8852314a32e07294707b6756e29ea14bf6cc1ddc03fa28dfbca08a7",
+  "seen_address": "749b49dd30346f7a31fab0eb926335719368df53",
+  "subject": "01a1c912-19c0-7572-98be-116b5c92ca97",
+  "v": 1,
+  "verb": "approve"
+}

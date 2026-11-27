@@ -1,0 +1,70 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:8c51d75da8fb5f89c5859f84998b42b49ff258c6cccc98b87d0f0674494911bf",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::a_file_at_every_key_tried_is_one_refusal_that_says_what_to_do_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c1720573f355ba1c0d84f65c69fd965759ef0135835ebbcac04c0662ecdfb9af",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::a_file_whose_front_matter_cannot_be_read_does_not_stop_new_with_no_key",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8f32e5c18e6234b0cb4b984a8eabd6f008c49998482a7a28e895724fcd66f704",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::a_key_that_was_asked_for_is_still_refused_when_it_is_taken",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:267f74e4deeadb53e8a883cf4e75901a5c33240e95370f086df88d70e7df0e07",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::runs_of_new_with_no_key_at_once_each_write_a_document_at_a_key_of_their_own",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:dd8f50a199902cc73e08a5d0c10e40b551c436f6414a42e55de5ef402347a6d3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel_new.rs::the_help_of_key_says_how_many_keys_are_passed_over",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6435d5a6b20e37fee75a605ed4b3ab33aa3b3095",
+      "hash": "sha256:a166c621a3f56d49226550e2ea032d1f19420c217245e5fe4a269f66fe9c1209",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "74"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e20f-84aa-7350-905c-6c3af70e7219"
+    }
+  ],
+  "id": "01a21b5c-c129-770b-baa6-52690616dd60",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:565c181b4faefcf0210ccb87be044a149f365d2cf80ff63fbd0e69c1b158d8cd",
+  "seen_address": "1218577a394490db3a8ddd2455380e3fede7de54",
+  "subject": "01a1e20f-ab27-753e-af1b-85e0f2f11c60",
+  "v": 1,
+  "verb": "approve"
+}

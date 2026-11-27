@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:b1bd4d0616cafa92f4141685ba761120bd5c001004ab2972d95dffa324ecc3f5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_front_matter_that_is_broken_is_still_invalid_when_files_with_none_are_skipped",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b3616553a03bc3469247872aab61f207cc9e41bf688142522d616246e9e21af2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_link_to_a_key_whose_file_is_excluded_resolves_as_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:00ce47b3b02a30956f12a99512cb1e883de23b54c4041675316df89f822bc0e7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_range_that_is_not_sound_is_a_problem_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a1f134ca56d6d1ec7411a6bf76ab1526b481b0e411b48310e0f99e0031af2cb4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_thematic_break_in_the_middle_of_a_file_is_no_front_matter",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:68aab93d1675e3d61eb59bd826dca04c3835f8539d090fee10fb9042ff50c50c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::an_exclude_and_skip_make_the_check_clean_and_tell_what_was_skipped",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c435862d6eea2a572d258d4c47e368de97a48b34c72ea1540d8bb0488a9479e0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::new_into_a_path_the_range_does_not_take_is_refused_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0a137d141ae991e43708a1d8e1f41750b6e17704f9e4b25cc67580050aafe682",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::skip_alone_skips_the_files_of_the_subdirectory_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:162b5f3673219c9bdaa132410e8b073d0785d37389e2f704e3c053a8decaa5f7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::what_an_exclude_leaves_out_is_not_looked_at_even_when_it_could_not_be_read",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ef51a0516e0fc632cefb840386946922343f3787a325e721bcf53609ecb16408",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::with_no_setting_every_file_without_a_front_matter_is_invalid",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "317875fca9349eb4ffeba4368823e91ed90e677b",
+      "hash": "sha256:8c09c8abb00416dc3aa924e1806b349a35d04e200d084a802ccb81822ca66a34",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "63"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
+    }
+  ],
+  "id": "01a21b5c-90a7-71ca-a973-ba94c9ff936b",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:34fb16654f17e779621e7dd6a12c839c74b96931afc82c9ecc22d63968f7524f",
+  "seen_address": "38435bf0055aa62244fbbe17dcd1a9cdcbd77072",
+  "subject": "01a1ca93-52da-772f-b994-aa8b79f1fd65",
+  "v": 1,
+  "verb": "approve"
+}

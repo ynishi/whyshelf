@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:8cf303a5f669a5babe53190023e85cc4ab206d69a592a0de0ac2714e45a3f4e4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve.rs::another_actors_approval_of_the_same_content_is_written_and_then_repeats",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:39061cd32000c0ebdfc81021a90aca72dccb8d9bbd24ae16f5e552d795ccadc2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve.rs::approving_a_fresh_approval_again_leaves_it_out_and_again_writes_it",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f26ff95e68f9361e0506d0ab8aa735d27ae4255e",
+      "hash": "sha256:9d14da9916d17d8fcde903af0de472992e7d646fc471d1ce50ee033d319b7dbd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "58"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8cf-dfdb-771f-bea4-6b65c56de737"
+    }
+  ],
+  "id": "01a21b5c-77ec-7084-bd95-c01040c7142e",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:a2696b61d64017c64a9f2f4b5c3d4d44518edeb0428484d5f0f078bb694a4b35",
+  "seen_address": "d911e412218bed247ebfeae46a0e9c3bb6c8cbcc",
+  "subject": "01a1c8cf-e77f-7466-8e8c-cf03a522db1d",
+  "v": 1,
+  "verb": "approve"
+}

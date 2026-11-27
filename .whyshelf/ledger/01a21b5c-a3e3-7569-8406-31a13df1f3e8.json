@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:37054ae9908e36687a119da834f36d9a796a0a33f38412c2f0bf229ccb503d44",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/js_tests.rs::a_test_in_a_file_that_does_not_lex_is_unknown_and_no_approval_stands_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6d53bdd4ffdb88780d55ce2d7572835cb25f8bb7b5ca31d3bea23ea8e6736630",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/js_tests.rs::a_text_out_of_the_grammar_makes_the_verification_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ff5523aa0d5c5bc45ca8bef7afc641671cbc868ae8557d00feab5561d02882a3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/js_tests.rs::a_verification_stands_on_the_text_of_the_test_calls_it_names",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "43f06e1c521039f504c59418b68322685a80e246",
+      "hash": "sha256:f2016633a50701c0c919bad83e485e59222aeda46c56917a8123b5e4ae6c7c59",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "68"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb78-d2d4-770d-9d90-5aa3f5577115"
+    }
+  ],
+  "id": "01a21b5c-a3e3-7569-8406-31a13df1f3e8",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:4e999c6ae2cde6c4933cff2574579d0e0b74edd1aa3f397a59690a52fa1a3e18",
+  "seen_address": "8d1d95c8809d470f2b4ef553529dabf2164d18c7",
+  "subject": "01a1cb78-d7ac-744a-9c93-9945b8e199b1",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:9eefe0be6b2711a18b9d37024f02886a2d597a4532f34ea951307f401e324a7d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves.rs::a_pinned_file_moved_unchanged_is_named_with_its_new_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:669ce139e41ed525c8b6fe6e269ab53ea891b7a7d5d2d591ca323add392b06df",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves.rs::a_pinned_file_moved_with_an_edit_is_named_by_gits_rename_detection",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b53d2bb9daefd43d8ae10555a1af3469c4fc0385cb426b0ef75b8d6f2c0e2431",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves.rs::nothing_gone_is_an_empty_answer",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2cdf2fc5f23acbf21adee989bbc62b50d82664af9e27fd848e4cb4a12008cef9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves.rs::outside_git_the_content_is_found_and_the_note_says_why_renames_were_not",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a62ae7682e25304886acc68cd237b34b358453ec",
+      "hash": "sha256:ca489565a7c7318de8e62eeca652efad4af7d092e73feac3582753b85dfd058b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "60"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6"
+    }
+  ],
+  "id": "01a21b5c-81bf-7122-a07a-af975115ad24",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:1568324a75741b09215ea0c93c1a24f91dfe2df9b1a5ed77e30039c36899d376",
+  "seen_address": "a1e43da01a02e8f26f3eb8e1828716c65631fb3a",
+  "subject": "01a1c952-62b7-758a-a32f-5b59538e7dfa",
+  "v": 1,
+  "verb": "approve"
+}

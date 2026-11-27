@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:ac2c323e18bb91758f07891160cfab141d3aaf1fa5db6a043560a737f1c4592c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/fmt.rs::fmt_writes_a_crlf_file_and_a_body_with_trailing_white_space_normalized",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9d2c7cbf3e22b08e0733f093784121d25ec6a4df71ac57f965d3e0f976ddf2a5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/fmt.rs::fmt_writes_an_approved_file_in_the_form_and_its_approval_holds",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4bf1e23b6aa06e20c49a1e5ee6aac8efeb1744b3",
+      "hash": "sha256:9afad7f4e49382e60101c43961b7eff455aa4f212f347d9f4481ec51bf8ca281",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "52"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+    }
+  ],
+  "id": "01a21b5c-5d29-7404-8c58-92aba91cc344",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:63d12d81fd2c0463b8556a8ef48b5ad322a900889692c7fd937f76dfd9b7ca2d",
+  "seen_address": "d6b1fbb47cc0894fe74b59f45d14b99eca757f01",
+  "subject": "01a1c7ad-0a7f-7355-b2db-c8107c1a1177",
+  "v": 1,
+  "verb": "approve"
+}

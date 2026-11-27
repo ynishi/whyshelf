@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:dee939bbdddf319b58dc1b8209a92547b9ad589a2a3f5daba52fbf8501234081",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_test_in_a_file_that_does_not_parse_is_unknown_and_no_approval_stands_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6445f7e957c7827785a6255cca49f8e9c4d102718d7ee0f3b40b5f9683b88d99",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_text_out_of_the_grammar_makes_the_verification_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:499366b2d183f15cd05be40235c0eb62bd4c1d96eab84755e8cddb04d3255a23",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_verification_stands_on_the_text_of_the_tests_it_names",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0080b93db1409d7dd08668964b28ac6ada09057a",
+      "hash": "sha256:1f0bbed3d600e6e14ac4e2507d90fb972cfd5444b7f0c0ea06c2e64f63f82892",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    }
+  ],
+  "id": "01a21b5c-956d-7600-8472-47ce21fc9539",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:71d508657b3910cb0bd0b86a8cc23352a12e9ef6d85dd8f881236ea757d9ce44",
+  "seen_address": "e81b14d956d81ce1e87e09e35886092b54b8fc1d",
+  "subject": "01a1cad2-3c53-7056-a5ba-b95678ef107e",
+  "v": 1,
+  "verb": "approve"
+}

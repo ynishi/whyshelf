@@ -1,0 +1,140 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:85ea19784613ba9fa23907548d6b7ebc879f83fbe44608a4750c95fa0fb2820d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/quorum_tests.rs::a_fresh_approval_short_of_names_is_shown_awaiting_and_a_degraded_one_keeps_its_level",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bb2d3c0ad409827dc5bc4059f3e009cc94cc37d9bc4b5904913263e6895c3443",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/quorum_tests.rs::an_upstream_short_of_names_stales_and_holds_back_what_stands_on_it_even_expired",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:795490769a93337e2cd957d64f4d586e6986c55b4613c76a0b78279f145c7647",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::a_name_that_declared_an_artifact_edit_under_its_old_name_adds_nothing_under_the_new",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f463106c005d0f6d567890e7c3bf5026c0a53de0f3da255eeab830b93770de50",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::a_name_that_declared_an_edge_adds_nothing_by_declaring_it_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:aca175a5426bf96e9fa88bca7b19c511b94c3db8f89d0f5a7ee8e5a3caa3fb66",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::a_reader_whose_own_latest_reading_lapsed_counts_no_more_whoever_approved_last",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:dcb8adb250254463fb16fe57e31195972bc7e0cfdf1c24f9bb34e3f58d10bbdd",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_approval_is_short_until_another_name_approves_the_same_content",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:09db72afe9a0c821b768a162add73db32bdaf1654284655a0a2b3ed2876884cb",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_approval_no_rule_reads_needs_one_name_lapsed_or_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6c9a0939f6b03a83b8666aaf47d3e8fd7c71353e6b12fb11974760ba36077911",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_artifact_edge_is_counted_over_every_name_of_the_pins_way_as_freshness_reads_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:19aeeb670d35d5cb7d1e8c10ac76550b9d23d0bb806713767da1ddb4ce0ccaca",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_edge_needs_the_least_its_declarations_need_so_a_declaration_added_takes_nothing_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:770d6f877d3846cc16bd74518e2e084bc0ec81d8050e37ac4a25ac479e0c6477",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_edge_no_pin_that_stale_reads_now_meets_is_not_told",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1f9819dc2ea5464c0a3485cad101552e15ea98b166fcaa26f7def7ccd5e86f29",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_edit_is_joined_once_as_many_names_declare_it_as_its_rule_asks_for",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1b5ca6873d409b7486dfa7c8a24b35cfadad436d382ccc6f86223ca17946c38d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::the_names_are_counted_per_edge_not_per_way",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ecb3892492f7539377514a40895190a0c98e2187e7cb8ccaa2538c5b628007fe",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_upstream_that_awaits_is_approved_by_another_name_and_not_by_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "40a4375cb3971844cc47616914ddadbf9867c6d1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1268cd00de0f70b0a98c647f6aeb03bb24bb7ddfb2971e5e136f7efde84f1ba4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1fee4494b324b790563306a7337bda79c4e34e8b",
+      "hash": "sha256:960bd0b9091653ef170864b44f6c10f8472eb053f89a46182e4e02c4addf5cbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "89"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74"
+    }
+  ],
+  "id": "01a21b5c-f512-72de-b8fa-aafd2b8dca0f",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:00455c126d60569ec8d148449c9947ff3412c1e71b8b8978794d9a17ef98d0b2",
+  "seen_address": "20517ae2f5ad630e58a6c35c5acc709aef180e3c",
+  "subject": "01a1f6a0-2c42-7c3f-a8d2-4e6b1f9c2d07",
+  "v": 1,
+  "verb": "approve"
+}

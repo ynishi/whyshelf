@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:ec2118cebd76979e83d6279d377fb15f46861829797fd0ff40b5f9b91a0eb254",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_document_named_twice_in_a_run_is_refused_as_such",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:237ea3e2ca717251a97c197663fd3d3d14a925ecebd293d351ac039d0cb7d7fa",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_document_no_file_carries_names_nothing_even_with_an_exemption_of_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fedc55948570febdb4e932c68b9e3cc13e1bdec2981816745ecb4c3b353cb2ef",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_finding_exempt_from_a_warn_cover_is_listed_apart_and_unneeded_once_grounded",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:334982916766770d05da8715ebc1d79eaddfa13ec45fa85216054d449821ab92",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_note_exempt_from_a_true_cover_leaves_check_clean_until_it_is_seen",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6a174f99a28edeae5251353783837934d4fe6e5bdc5cc082644a61b0bdf7a2d3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_refused_exemption_exits_2_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:01f67556830d6c0c391c1ce9715265cef33044d0f672a27d8a1218b77002b21f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_from_one_of_two_covering_links_leaves_the_other_a_gap",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8ad339515b795fd6a8760583b46c069c15d94c5911997cfa57bf53ef3389d0d0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_unneeded_at_once_exits_2_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4cdadcd7884bed654ff1adeae04da15e21f21bf96a6156c67ff0fc6d3a51b57f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_withdrawn_leaves_the_gap_as_it_was",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9324da4162fc98fa25f2795fd880dea150a61033012fee49db63b737ce05cbff",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_withdrawn_twice_is_refused_and_one_may_be_made_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7d701ddeae0459907a2346971e23a3f9f801bfbfb89dafc390081234830264b6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::every_why_of_an_unneeded_exemption_is_told_on_the_binary",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8c0b64b001a166934efec78b6793389ffc4a63ad04bf418353933237da63afe6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::two_exemptions_of_one_note_from_one_link_are_warned_of_as_repeated",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    }
+  ],
+  "id": "01a21b5c-9a38-7698-ba27-39716a692a34",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:67fb64515dc2e9d4730645f044e8c309f48d553996a7966c95dd8737a3ea7d76",
+  "seen_address": "499959b023e5d6df9753fb5e970cb7d65afff164",
+  "subject": "01a1cae7-1da6-7457-af7a-69b5b81ebcc9",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c08472e1b82a6f03104a74102616b430dc1ddaec3777634ebf50c896aef97020",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_promise.rs::a_link_that_changes_from_the_preset_rustdoc_to_rustdoc_promise_changes_its_comparison",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a0856351a419da22bebd3196299b2c58833b17dee126d1c6f59c2d783cf46cbe",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_promise.rs::an_approval_stands_on_what_an_item_promises_in_the_docs_cargo_doc_writes",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6fe10e2167766012ce32da4666a6f4c8125f788a",
+      "hash": "sha256:bb4c185cc7a9f4359f2fbf4aef4552b18dd870935791be542f85f25ba525b3e9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "83"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f2a3-70f9-7184-8e59-6b255b74caf0"
+    }
+  ],
+  "id": "01a21b5c-e62f-70b8-8f3d-27cce6a13b7c",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:a7ca9f695200fd188a57dbd9aac376eefcfc575998c860fee4c68f90adb6984c",
+  "seen_address": "c76936df90d8c388a15ea848f59c03851f05ed98",
+  "subject": "01a1f2a3-70f9-7184-8e59-6b27a3ca8978",
+  "v": 1,
+  "verb": "approve"
+}
