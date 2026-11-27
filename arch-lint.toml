@@ -204,8 +204,9 @@ doc = "books/decision/DEC-98.md"
 # tree through Git, itself. Each module is a reader's part that reads (its writer, its
 # reading back by address and its search for moves are modules of their own). Their
 # tests are a file of their own, which may set up a tree on the file system, except in
-# rust_test.rs, js_test.rs and rust_item.rs, whose tests are inline: there each line of
-# a test that sets up a tree carries its own allow, and the rest of the file is held.
+# rust_test.rs, js_test.rs, rust_item.rs, rust_test/tree.rs and targets.rs, whose tests
+# are inline: there each line of a test that sets up a tree carries its own allow, and
+# the rest of the file is held.
 [[scopes]]
 name = "readers"
 paths = [
@@ -214,6 +215,8 @@ paths = [
     "crates/whyshelf-infra/src/shelf/ledger/read.rs",
     "crates/whyshelf-infra/src/shelf/artifact/file/read.rs",
     "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/rust_test/tree.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/targets.rs",
     "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
     "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
     "crates/whyshelf-infra/src/shelf/artifact/rust_item/lookup.rs",

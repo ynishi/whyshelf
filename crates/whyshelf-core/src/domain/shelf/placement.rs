@@ -8,7 +8,7 @@
 //!
 //! | answer | the files | an example |
 //! |---|---|---|
-//! | [`Placement::Only`] | the thing is these files and nothing else | `file`: the path written; `rust-test`: the file before `::` |
+//! | [`Placement::Only`] | the thing is these files and nothing else | `file`: the path written; `rust-test`: the file before `::`, and the files of the helpers its text holds |
 //! | [`Placement::Partly`] | these files hold the thing, and something outside them does too | `rust-item`: the file an item is defined in, while its docs come from the build |
 //! | [`Placement::Unplaced`] | the adapter cannot say, and why | a text that is no name of the space; a name read through a link that leaves the root |
 //!

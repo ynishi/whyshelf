@@ -642,6 +642,15 @@ and this project adheres to
   part, or a module renamed inside it does not. A module declared out of line
   and a file `include!` reads are not followed. An approval of a test made
   before reads as stale once, unless nothing is beside it.
+- The text of a `rust-test` name holds the helpers the test reaches (#205): the
+  modules and items of its crate that compile only under test, found by the paths
+  its text writes, in any file, and the files its includes read (as a hash).
+  Editing a shared helper (`tests/common/mod.rs`, a `fixtures_tests` module) makes
+  stale the approvals of exactly the tests that use it, so no verification names
+  one by hand any more, and a guard fails when one does. An approval of a test that
+  holds something is stale once on upgrade, since its text changed; a test that
+  holds nothing keeps its approval. `rust-test` places a test in its own file and
+  the files it holds.
 - The origins of `stats` match an artifact's pin by the name it is read as now
   through the declared moves, as freshness reads it (#154): a pin of the old
   name before a move and one of the new name after it are one pin, counted

@@ -108,6 +108,7 @@ mod names;
 mod registry;
 pub mod rust_item;
 pub mod rust_test;
+mod targets;
 
 use whyshelf_core::app::shelf::Spaces;
 
