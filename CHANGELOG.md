@@ -8,7 +8,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `RawProblem` has a new variant, `ConflictMarkers`: a match over it that names
+  every variant no longer builds (#166).
+- `check` and `health` write no `id` for a file left with both sides of a merge
+  conflict whose sides show different identities; they wrote the identity of the
+  side the file opens with (#166).
+
 ### Fixed
+
+- A file that a merge left both sides of a conflict in, where the conflict
+  touches a front matter, is told by `check` as holding merge conflict markers,
+  not as YAML that cannot be read, and is never skipped. When its sides show
+  different identities, or one shows none, the documents of both sides are
+  `unknown` in `status` until the conflict is resolved, not `gone` or `invalid`:
+  the side the file opens with was told as invalid in that file, and the other
+  side as gone. When every side shows the one identity, the file is that
+  document's, and invalid. While such a file is in the tree, a document no file
+  carries is `unknown` too, as with any file whose identity cannot be read
+  (#166).
 
 - This repository's books: the nine verifications that name the reader tests of
   whyshelf-infra whole under `tests` name again the helper file those tests use.

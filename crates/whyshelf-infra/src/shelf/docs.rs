@@ -216,8 +216,9 @@ fn not_text(origin: RelPath) -> DocReading {
 ///    [`RawProblem::Unclosed`].
 /// 2. Otherwise, set aside a leading byte order mark (U+FEFF) and every blank line
 ///    before the first line with anything on it. When there is no such line (the
-///    empty text, a text of blank lines, a lone mark), or that line does not begin
-///    with `---`, the text holds *no front matter at all*
+///    empty text, a text of blank lines, a lone mark), or that line neither
+///    begins with `---` nor starts a merge conflict (4.), the text holds *no front
+///    matter at all*
 ///    ([`FrontMatterStart::None`]): a Markdown file that begins with a heading or
 ///    a paragraph, with `---` only later (a thematic break), is one.
 /// 3. Otherwise that line begins with `---` and is not the exact opening at the
@@ -228,6 +229,11 @@ fn not_text(origin: RelPath) -> DocReading {
 ///    a mistyped delimiter is not passed over. In a book that does not skip, the
 ///    shelf tells it as [`RawProblem::NoFrontMatter`], as before a book could skip
 ///    (`Shelf::told`).
+/// 4. Otherwise that line is the start of a merge conflict (`<<<<<<<`,
+///    [`Marker::Start`]): the text may be a file whose two sides each open a front
+///    matter ([`FrontMatterStart::MarkerOpens`]). Only the shape of the line is
+///    judged here; whether the text is a conflict of front matters is
+///    [`conflict`]'s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FrontMatterStart<'a> {
     /// The first line is `---`; `rest` is the text after it.
@@ -238,14 +244,68 @@ enum FrontMatterStart<'a> {
     /// The first line with anything on it begins with `---`, but is not the exact
     /// opening at the first byte.
     BadOpening,
+    /// The first line with anything on it starts a merge conflict.
+    MarkerOpens,
     /// No front matter at all.
     None,
+}
+
+/// Whether a line is the delimiter of a front matter, opening or closing: exactly
+/// `---`, without its line break. The one place the question is answered.
+fn is_delimiter(line: &str) -> bool {
+    line.trim_end_matches('\n') == "---"
+}
+
+/// Whether a line tries to be the delimiter that opens a front matter: it begins
+/// with `---`. One that is not exactly the delimiter ([`is_delimiter`]) is a
+/// mistyped opening. The one place the question is answered.
+fn tries_to_open(line: &str) -> bool {
+    line.starts_with("---")
+}
+
+/// A line of the markers a merge conflict leaves in a text.
+///
+/// ```text
+///   <<<<<<< ours        Start    the side that was here
+///   ||||||| base        Base     the common ancestor (diff3 and zdiff3 only)
+///   =======             Middle   between the sides
+///   >>>>>>> theirs      End      the side that came
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Marker {
+    Start,
+    Base,
+    Middle,
+    End,
+}
+
+/// The marker a line is, if it is one: seven of the marker's character, then white
+/// space or the end of the line. The one place the shape of a marker is known. The
+/// length is fixed at seven; the `conflict-marker-size` attribute is not read.
+fn marker(line: &str) -> Option<Marker> {
+    let line = line.trim_end_matches('\n');
+    [
+        ("<<<<<<<", Marker::Start),
+        ("|||||||", Marker::Base),
+        ("=======", Marker::Middle),
+        (">>>>>>>", Marker::End),
+    ]
+    .into_iter()
+    .find_map(|(seven, marker)| {
+        let rest = line.strip_prefix(seven)?;
+        rest.chars()
+            .next()
+            .is_none_or(char::is_whitespace)
+            .then_some(marker)
+    })
 }
 
 /// How a text, already normalized by [`normalize`], stands to a front matter
 /// ([`FrontMatterStart`]).
 fn front_matter_start(normalized: &str) -> FrontMatterStart<'_> {
-    if let Some(rest) = normalized.strip_prefix("---\n") {
+    if let Some((first, rest)) = normalized.split_once('\n')
+        && is_delimiter(first)
+    {
         return FrontMatterStart::Opens { rest };
     }
     let first_with_content = normalized
@@ -253,29 +313,47 @@ fn front_matter_start(normalized: &str) -> FrontMatterStart<'_> {
         .unwrap_or(normalized)
         .lines()
         .find(|line| !line.is_empty());
-    if first_with_content.is_some_and(|line| line.starts_with("---")) {
-        FrontMatterStart::BadOpening
-    } else {
-        FrontMatterStart::None
+    match first_with_content {
+        Some(line) if tries_to_open(line) => FrontMatterStart::BadOpening,
+        Some(line) if marker(line) == Some(Marker::Start) => FrontMatterStart::MarkerOpens,
+        _ => FrontMatterStart::None,
     }
 }
 
 /// A file's text as a reading.
+///
+/// A file whose front matter cannot be read is also asked whether it is a merge
+/// conflict that touches its front matter (`conflict`); if it is, that is what it
+/// is said to be, and its identity is the one the sides agree on.
 pub fn read(origin: RelPath, text: &str) -> DocReading {
     let text = normalize(text);
-    let id = || seen_id(&text).map_or(ReadId::Unreadable, ReadId::Read);
-    let unparsed = |why| DocReading::Unparsed {
+    let unparsed = |why, id| DocReading::Unparsed {
         origin: origin.clone(),
-        id: id(),
+        id,
         why,
+    };
+    // The reading of a file whose front matter opens with a line both sides share
+    // and could not be read: a conflict if it is one, else for `why`, with the id
+    // `lines` show.
+    let unread = |why, lines| match conflict(&text, Opened::Common) {
+        Some(id) => unparsed(RawProblem::ConflictMarkers, id),
+        None => unparsed(why, seen_id(lines)),
     };
     let rest = match front_matter_start(&text) {
         FrontMatterStart::Opens { rest } => rest,
-        FrontMatterStart::BadOpening => return unparsed(RawProblem::BadOpening),
-        FrontMatterStart::None => return unparsed(RawProblem::NoFrontMatter),
+        FrontMatterStart::BadOpening => {
+            return unparsed(RawProblem::BadOpening, ReadId::Unreadable);
+        }
+        FrontMatterStart::MarkerOpens => {
+            return match conflict(&text, Opened::None) {
+                Some(id) => unparsed(RawProblem::ConflictMarkers, id),
+                None => unparsed(RawProblem::NoFrontMatter, ReadId::Unreadable),
+            };
+        }
+        FrontMatterStart::None => return unparsed(RawProblem::NoFrontMatter, ReadId::Unreadable),
     };
     let Some((yaml, body)) = split_closing(rest) else {
-        return unparsed(RawProblem::Unclosed);
+        return unread(RawProblem::Unclosed, rest.lines());
     };
     match entries(yaml) {
         Ok(entries) => DocReading::Parsed {
@@ -283,10 +361,10 @@ pub fn read(origin: RelPath, text: &str) -> DocReading {
             entries,
             body: body.to_owned(),
         },
-        Err(Unread::Whole(why)) => unparsed(why),
+        Err(Unread::Whole(why)) => unread(why, yaml.lines()),
         Err(Unread::Values(values)) => DocReading::Unheld {
             origin,
-            id: id(),
+            id: seen_id(yaml.lines()),
             values,
         },
     }
@@ -296,7 +374,7 @@ pub fn read(origin: RelPath, text: &str) -> DocReading {
 fn split_closing(rest: &str) -> Option<(&str, &str)> {
     let mut offset = 0;
     for line in rest.split_inclusive('\n') {
-        if line.trim_end_matches('\n') == "---" {
+        if is_delimiter(line) {
             return Some((&rest[..offset], &rest[offset + line.len()..]));
         }
         offset += line.len();
@@ -839,29 +917,200 @@ fn quoted(text: &str) -> String {
     out
 }
 
-/// The `id:` a text shows, found by looking at its lines only: for a file that could
-/// not be read. `None` when no line gives one, and when the lines give two (a merge
-/// conflict that left both sides does not say which is the document's).
-fn seen_id(text: &str) -> Option<DocId> {
-    let mut lines = text.lines();
-    if lines.next() != Some("---") {
+/// The `id:` a line gives, if it is an `id:` line with a value that is a [`DocId`]:
+/// the one place a line is read for an identity.
+fn id_of(line: &str) -> Option<DocId> {
+    let value = line.strip_prefix("id:")?;
+    let value = value.split(" #").next().unwrap_or(value).trim();
+    let Ok(id) = value.trim_matches(['"', '\'']).parse::<DocId>() else {
         return None;
-    }
-    let mut found = BTreeSet::new();
-    for line in lines.take_while(|line| *line != "---") {
-        let Some(value) = line.strip_prefix("id:") else {
-            continue;
-        };
-        let value = value.split(" #").next().unwrap_or(value).trim();
-        if let Ok(id) = value.trim_matches(['"', '\'']).parse::<DocId>() {
-            found.insert(id);
-        }
-    }
-    let mut ids = found.into_iter();
+    };
+    Some(id)
+}
+
+/// The identity in `ids`: the one, when they are exactly one.
+fn the_one(ids: BTreeSet<DocId>) -> Option<DocId> {
+    let mut ids = ids.into_iter();
     match (ids.next(), ids.next()) {
         (Some(id), None) => Some(id),
         _ => None,
     }
+}
+
+/// The identity a file that could not be read shows, found by looking at the lines
+/// it is given only: [`ReadId::Read`] when they give exactly one `id:`,
+/// [`ReadId::Unreadable`] when none gives one and when they give two (a file does
+/// not say which is the document's). Which lines are the front matter's is the
+/// caller's.
+fn seen_id<'a>(lines: impl Iterator<Item = &'a str>) -> ReadId {
+    the_one(lines.filter_map(id_of).collect()).map_or(ReadId::Unreadable, ReadId::Read)
+}
+
+/// How the front matter of a file that holds merge conflict markers was opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Opened {
+    /// By the line `---` the sides share, outside every conflict: the first line of
+    /// the text ([`FrontMatterStart::Opens`]).
+    Common,
+    /// By nothing outside the conflict: the first line of the text starts it
+    /// ([`FrontMatterStart::MarkerOpens`]), so a side opens its own front matter
+    /// or has none.
+    None,
+}
+
+/// Where a line is in a merge conflict.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Span {
+    /// Outside every conflict: both sides hold the line.
+    Common,
+    /// After `<<<<<<<`: ours.
+    Ours,
+    /// After `|||||||`: the common ancestor, which is no side's.
+    Base,
+    /// After `=======`: theirs.
+    Theirs,
+}
+
+/// How a side stands to its front matter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Matter {
+    /// The side has none, or has not opened it yet.
+    NotOpened,
+    Open,
+    Closed,
+    /// The side's part begins with a line that begins with `---` and is not the
+    /// opening: a mistyped delimiter.
+    Mistyped,
+}
+
+/// What `conflict` has seen of a side of a conflict, ours or theirs: its front
+/// matter and the identities in it.
+#[derive(Debug)]
+struct ConflictSide {
+    matter: Matter,
+    ids: BTreeSet<DocId>,
+}
+
+/// Whether a file that could not be read is a merge conflict that touches its front
+/// matter, and the identity it shows if it is: the one place that is decided.
+///
+/// The file holds two documents, ours and theirs, one on each side of a conflict,
+/// and each side has the front matter its own lines give: what the sides share is
+/// both's, a line between `<<<<<<<` and `=======` ours only, between `=======` and
+/// `>>>>>>>` theirs only, and the common ancestor (`|||||||`) is neither's. A side
+/// opens a front matter as a text does (`opened` says how): by the line `---`
+/// shared, or, for a text that starts with the conflict, by `---` as the first line
+/// of its part of the conflict the text starts with. A side whose part begins with
+/// a line that begins with `---` and is not exactly that (`----`, `--- x`) tried to
+/// open one and did not, as [`FrontMatterStart::BadOpening`]: it touches the front
+/// matter and shows no identity, so a mistyped delimiter is not passed over as a
+/// file with no front matter. One that opens with anything else has none, a `---`
+/// later in it is a thematic break, and so is one that begins a side of a later
+/// conflict, which is in the body. A `---` after the opening closes it, and an
+/// `id:` is the side's only while its front matter is open.
+///
+/// The conflict touches the front matter when a conflict that ends (`>>>>>>>`)
+/// starts while a side's front matter is open, or opens one. `None` when none does,
+/// and when no side opened a front matter, so the file is read as it would be
+/// without this. Otherwise `Some`: [`ReadId::Read`] when every side that opened one
+/// shows the same single identity, [`ReadId::Unreadable`] when they differ or one
+/// shows none or several (which of them the file is, is not said).
+fn conflict(text: &str, opened: Opened) -> Option<ReadId> {
+    let start = match opened {
+        Opened::Common => Matter::Open,
+        Opened::None => Matter::NotOpened,
+    };
+    let mut sides = [
+        ConflictSide {
+            matter: start,
+            ids: BTreeSet::new(),
+        },
+        ConflictSide {
+            matter: start,
+            ids: BTreeSet::new(),
+        },
+    ];
+    let mut span = Span::Common;
+    // The line is the first of the part of a side, which opens its front matter.
+    let mut first = false;
+    // The conflict is the one the text starts with: only there does a side open a
+    // front matter of its own.
+    let mut opening = opened == Opened::None;
+    let mut hunk_touches = false;
+    let mut touched = false;
+    // The line that opens a front matter is the first of the text.
+    let lines = text.lines().skip(usize::from(opened == Opened::Common));
+    for line in lines {
+        let first_here = std::mem::take(&mut first);
+        match (marker(line), span) {
+            (Some(Marker::Start), Span::Common) => {
+                span = Span::Ours;
+                first = true;
+                hunk_touches = sides.iter().any(|side| side.matter == Matter::Open);
+                continue;
+            }
+            (Some(Marker::Base), Span::Ours) => {
+                span = Span::Base;
+                continue;
+            }
+            (Some(Marker::Middle), Span::Ours | Span::Base) => {
+                span = Span::Theirs;
+                first = true;
+                continue;
+            }
+            (Some(Marker::End), Span::Ours | Span::Base | Span::Theirs) => {
+                span = Span::Common;
+                touched |= hunk_touches;
+                opening = false;
+                continue;
+            }
+            _ => {}
+        }
+        let held: &[usize] = match span {
+            Span::Common => &[0, 1],
+            Span::Ours => &[0],
+            Span::Base => &[],
+            Span::Theirs => &[1],
+        };
+        for &at in held {
+            let side = &mut sides[at];
+            match side.matter {
+                Matter::NotOpened if opening && first_here && tries_to_open(line) => {
+                    side.matter = if is_delimiter(line) {
+                        Matter::Open
+                    } else {
+                        Matter::Mistyped
+                    };
+                    hunk_touches = true;
+                }
+                Matter::Open if is_delimiter(line) => side.matter = Matter::Closed,
+                Matter::Open => side.ids.extend(id_of(line)),
+                Matter::NotOpened | Matter::Closed | Matter::Mistyped => {}
+            }
+        }
+    }
+    if !touched {
+        return None;
+    }
+    let mut shown = BTreeSet::new();
+    let mut any_opened = false;
+    for side in sides {
+        if side.matter == Matter::NotOpened {
+            continue;
+        }
+        any_opened = true;
+        if side.matter == Matter::Mistyped {
+            return Some(ReadId::Unreadable);
+        }
+        let Some(id) = the_one(side.ids) else {
+            return Some(ReadId::Unreadable);
+        };
+        shown.insert(id);
+    }
+    if !any_opened {
+        return None;
+    }
+    Some(the_one(shown).map_or(ReadId::Unreadable, ReadId::Read))
 }
 
 #[cfg(test)]
@@ -2033,5 +2282,222 @@ mod tests {
         assert!(!skipped("----\nid: x\n----\n"));
         assert!(!skipped("---\njust: [\n---\n"));
         assert!(!skipped(&format!("---\nid: {ID}\n---\n")));
+    }
+
+    const ID_B: &str = "019a6f3e-0000-7000-8000-000000000002";
+    const ID_C: &str = "019a6f3e-0000-7000-8000-000000000003";
+
+    /// Why a file that could not be read could not, and the identity it shows.
+    fn unread(text: &str) -> (RawProblem, ReadId) {
+        let DocReading::Unparsed { why, id, .. } = read(origin(), text) else {
+            panic!("unparsed: {text:?}");
+        };
+        (why, id)
+    }
+
+    fn identity(id: &str) -> ReadId {
+        ReadId::Read(id.parse().unwrap())
+    }
+
+    /// A file both of whose sides are a whole document, as Git leaves an add/add.
+    fn both_sides(ours: &str, theirs: &str) -> String {
+        format!(
+            "---\n<<<<<<< ours\nid: {ours}\nkey: S-1\n---\nOurs.\n=======\nid: {theirs}\nkey: S-2\n---\nTheirs.\n>>>>>>> theirs\n"
+        )
+    }
+
+    #[test]
+    fn a_file_that_holds_both_sides_of_two_documents_is_a_conflict_of_no_one_identity() {
+        assert_eq!(
+            unread(&both_sides(ID, ID_B)),
+            (RawProblem::ConflictMarkers, ReadId::Unreadable)
+        );
+    }
+
+    #[test]
+    fn a_conflict_inside_the_front_matter_of_one_document_keeps_its_identity() {
+        let text = format!(
+            "---\nid: {ID}\n<<<<<<< ours\ntitle: x\n=======\ntitle: y\n>>>>>>> theirs\n---\nBody.\n"
+        );
+        assert_eq!(unread(&text), (RawProblem::ConflictMarkers, identity(ID)));
+    }
+
+    #[test]
+    fn two_sides_that_show_the_same_identity_are_a_conflict_of_that_identity() {
+        assert_eq!(
+            unread(&both_sides(ID, ID)),
+            (RawProblem::ConflictMarkers, identity(ID))
+        );
+    }
+
+    #[test]
+    fn a_file_that_starts_with_a_marker_reads_the_front_matter_each_side_opens() {
+        let text = format!(
+            "<<<<<<< ours\n---\nid: {ID}\n---\n=======\n---\nid: {ID_B}\n---\n>>>>>>> theirs\n"
+        );
+        assert_eq!(
+            unread(&text),
+            (RawProblem::ConflictMarkers, ReadId::Unreadable)
+        );
+    }
+
+    #[test]
+    fn a_side_that_is_empty_leaves_the_identity_of_the_other() {
+        let text = format!("<<<<<<< ours\n---\nid: {ID}\nkey: F-3\n---\n=======\n>>>>>>> theirs\n");
+        assert_eq!(unread(&text), (RawProblem::ConflictMarkers, identity(ID)));
+    }
+
+    #[test]
+    fn a_side_whose_id_cannot_be_read_leaves_the_file_with_no_one_identity() {
+        let text = both_sides(ID, ID_B).replace(&format!("id: {ID_B}"), "id: not-an-id");
+        assert_eq!(
+            unread(&text),
+            (RawProblem::ConflictMarkers, ReadId::Unreadable)
+        );
+    }
+
+    #[test]
+    fn an_id_in_a_conflict_of_the_body_is_not_the_identity() {
+        let text = format!(
+            "---\nid: {ID}\n<<<<<<< ours\ntitle: x\n=======\ntitle: y\n>>>>>>> theirs\n---\nBody.\n<<<<<<< ours\nid: {ID_C}\n=======\nid: {ID_C}\n>>>>>>> theirs\n"
+        );
+        assert_eq!(unread(&text), (RawProblem::ConflictMarkers, identity(ID)));
+    }
+
+    /// A file with the common ancestor of a conflict (diff3, zdiff3) in it.
+    fn with_ancestor(ours: &str, theirs: &str) -> String {
+        format!(
+            "---\n<<<<<<< ours\nid: {ours}\n---\nOurs.\n||||||| base\nid: {ID_C}\n---\nBase.\n=======\nid: {theirs}\n---\nTheirs.\n>>>>>>> theirs\n"
+        )
+    }
+
+    #[test]
+    fn a_common_ancestor_between_two_different_sides_is_no_side() {
+        assert_eq!(
+            unread(&with_ancestor(ID, ID_B)),
+            (RawProblem::ConflictMarkers, ReadId::Unreadable)
+        );
+    }
+
+    #[test]
+    fn the_identity_of_a_common_ancestor_is_not_counted() {
+        assert_eq!(
+            unread(&with_ancestor(ID, ID)),
+            (RawProblem::ConflictMarkers, identity(ID))
+        );
+    }
+
+    #[test]
+    fn a_front_matter_that_is_not_yaml_with_a_conflict_only_in_its_body_is_a_syntax_error() {
+        let text = format!(
+            "---\nid: {ID}\njust: [\n---\nBody.\n<<<<<<< ours\nx\n=======\ny\n>>>>>>> theirs\n"
+        );
+        let (why, id) = unread(&text);
+        assert!(matches!(why, RawProblem::Syntax { .. }), "{why:?}");
+        assert_eq!(id, identity(ID));
+    }
+
+    #[test]
+    fn a_conflict_that_never_ends_is_no_conflict() {
+        let text = format!("---\n<<<<<<< ours\nid: {ID}\nkey: x\n=======\nkey: y\n");
+        assert_eq!(unread(&text), (RawProblem::Unclosed, identity(ID)));
+    }
+
+    #[test]
+    fn a_text_that_starts_with_a_marker_and_has_no_front_matter_on_either_side_has_none() {
+        assert_eq!(
+            unread("<<<<<<< ours\nplain\n=======\nother\n>>>>>>> theirs\n"),
+            (RawProblem::NoFrontMatter, ReadId::Unreadable)
+        );
+    }
+
+    #[test]
+    fn a_line_with_more_or_other_than_seven_marker_characters_is_no_marker() {
+        for line in ["<<<<<<<<", "<<<<<<<x", "=======x", "======", "||||||||"] {
+            assert_eq!(marker(line), None, "{line}");
+        }
+        for (line, expected) in [
+            ("<<<<<<<", Marker::Start),
+            ("<<<<<<< ours", Marker::Start),
+            ("|||||||", Marker::Base),
+            ("=======", Marker::Middle),
+            (">>>>>>> theirs", Marker::End),
+        ] {
+            assert_eq!(marker(line), Some(expected), "{line}");
+        }
+        let text =
+            format!("<<<<<<<<\n---\nid: {ID}\n---\n=======\n---\nid: {ID_B}\n---\n>>>>>>>>\n");
+        assert_eq!(
+            unread(&text),
+            (RawProblem::NoFrontMatter, ReadId::Unreadable)
+        );
+    }
+
+    #[test]
+    fn a_side_that_starts_with_a_mistyped_opening_is_a_conflict_of_no_one_identity() {
+        for opening in ["----", "--- x"] {
+            let text = format!(
+                "<<<<<<< ours\n{opening}\nid: {ID}\n{opening}\n=======\nplain\n>>>>>>> theirs\n"
+            );
+            assert_eq!(
+                unread(&text),
+                (RawProblem::ConflictMarkers, ReadId::Unreadable),
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_thematic_break_after_a_marker_does_not_open_a_front_matter() {
+        let text = "<<<<<<< ours\n# Readme\ntext\n---\nmore\n=======\n# Readme\ntext\n---\nmore\n>>>>>>> theirs\n";
+        assert_eq!(
+            unread(text),
+            (RawProblem::NoFrontMatter, ReadId::Unreadable)
+        );
+    }
+
+    #[test]
+    fn a_side_of_a_later_conflict_that_begins_with_a_thematic_break_opens_no_front_matter() {
+        let text = format!(
+            "<<<<<<< ours\n# Readme\n=======\n# Read me\n>>>>>>> theirs\ntext\n<<<<<<< ours\n---\nid: {ID}\n---\n=======\nmore\n>>>>>>> theirs\n"
+        );
+        assert_eq!(
+            unread(&text),
+            (RawProblem::NoFrontMatter, ReadId::Unreadable)
+        );
+    }
+
+    #[test]
+    fn a_front_matter_that_is_read_stays_read_whatever_its_body_holds() {
+        let text = format!(
+            "---\nid: {ID}\nkey: S-1\n---\nBody.\n<<<<<<< ours\nx\n=======\ny\n>>>>>>> theirs\n"
+        );
+        let DocReading::Parsed { entries, body, .. } = read(origin(), &text) else {
+            panic!("parsed");
+        };
+        assert_eq!(entries["key"], RawValue::Text("S-1".to_owned()));
+        assert!(body.contains("<<<<<<< ours"), "{body}");
+    }
+
+    #[test]
+    fn a_front_matter_that_is_not_closed_and_has_no_marker_shows_the_id_of_any_line() {
+        let text = format!("---\nkey: x\nbody: y\nid: {ID}\n");
+        assert_eq!(unread(&text), (RawProblem::Unclosed, identity(ID)));
+    }
+
+    #[test]
+    fn a_mistyped_opening_is_said_so_whatever_markers_follow() {
+        for text in [
+            format!("----\nid: {ID}\n<<<<<<< ours\nx\n=======\ny\n>>>>>>> theirs\n----\n"),
+            format!(
+                "\n---\n<<<<<<< ours\nid: {ID}\n---\n=======\nid: {ID_B}\n---\n>>>>>>> theirs\n"
+            ),
+        ] {
+            assert_eq!(
+                unread(&text),
+                (RawProblem::BadOpening, ReadId::Unreadable),
+                "{text:?}"
+            );
+        }
     }
 }

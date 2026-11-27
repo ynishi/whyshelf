@@ -374,6 +374,16 @@
 //! matter, so under `skip` it is invalid, not skipped: exclude it, or begin it
 //! otherwise.
 //!
+//! A file that a merge left both sides of a conflict in (`<<<<<<<`, `=======` and
+//! `>>>>>>>` lines) where the conflict touches a front matter is told by `check` as
+//! holding merge conflict markers, not as YAML that cannot be read, and is never
+//! skipped; a conflict only in the body of a file whose front matter reads is not told.
+//! When its sides show different identities, or one of them shows none, the file is
+//! one whose identity cannot be read, so the documents of both sides are `unknown` in
+//! `status`, naming it, until the conflict is resolved, and neither `gone` nor
+//! `invalid`; when every side shows the one identity, the file is that document's, and
+//! invalid.
+//!
 //! `map` gives, for each book, `include`, `exclude` and `without_front_matter` as
 //! written, each null when not written.
 //!

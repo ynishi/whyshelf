@@ -166,8 +166,9 @@ impl RawValue {
 /// does not hold is not this: the mapping is read, and each such value is an
 /// [`UnheldValue`].
 ///
-/// The adapter's YAML parser finds these, because a mapping built in memory cannot
-/// show a key that was written twice.
+/// The adapter finds these: its YAML parser, because a mapping built in memory
+/// cannot show a key that was written twice, and its reading of the text, for the
+/// shape of the lines (an opening, a closing, the markers of a merge conflict).
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum RawProblem {
     /// The file has no front matter: no line `---` opens it. A file that has one is
@@ -206,6 +207,13 @@ pub enum RawProblem {
     /// The front matter is YAML, but not a mapping.
     #[error("the front matter is not a mapping")]
     NotAMapping,
+    /// The file holds the markers of a merge conflict that touch its front matter:
+    /// both sides of the conflict are still in it, so it does not say which is the
+    /// document's. It is not YAML's fault, and is not told as such.
+    #[error(
+        "the file holds merge conflict markers: resolve the conflict and remove the lines that begin with `<<<<<<<`, `=======` and `>>>>>>>`"
+    )]
+    ConflictMarkers,
 }
 
 /// A value of a front matter that is none of no value, a text, a whole number, a
