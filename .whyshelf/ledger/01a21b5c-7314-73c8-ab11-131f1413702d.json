@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:7102590736a161198f4fb650cf838a17582879814739d535cd7ffb8aa90f6a9b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::a_cjk_name_is_aligned_by_its_display_width_and_cut_by_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d14ec452a9ef8a227c3bb17f5789f4265aac2f4ba7b0d441e279d1276a79ef98",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::a_duration_is_hours_and_minutes_and_a_time_is_utc_to_the_second",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d5cb5ed959af8efdb33c1d31b4aa8d2b559d38bf500296767ce2683188aaaa61",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::a_list_drawn_short_says_how_many_it_shows_of_how_many",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cb1dc690f36edbe9990c2594a2c27af7dbf99b69d1cefa3c0f15c2278a9c9164",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::a_small_answer_is_drawn_section_by_section_in_aligned_columns",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:28060e89ca86ef9c96aa5734f776c352bf7c9d9fc81b48c28f0ab8fbbfc9805f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::a_time_rfc_3339_cannot_write_is_its_milliseconds_and_said_so",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b3bb54b5aac7e17493b1518179b9741970c87f4acac1ca32f40b835ae69bf0fb",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::an_artifact_outside_the_files_is_named_with_its_space",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:59fffb548a7ca5d6036a9767f87ecdaabc4dfd2a771f91873e8a6dac21756ca5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::an_empty_ledger_says_so_in_every_section",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8831189ab5c74b1a3d4e1a3a7a5618372960ab83f628596e195fd2bdf0a1571b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::every_line_stays_under_the_width_and_a_long_name_is_cut",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:773d0c9f4fbb475681a63e3b7f4cd4ea6e76da7085ab171eef484fd458d76bb9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/stats_tests.rs::the_same_answer_is_the_same_text",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "c9058de5c53627c5b7d311075c3a93673bd4e279",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9c33d7ead0e073e4b0e19406c514d67530dcb0a435edba5be796bab80152bd71",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/system.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3400dbc2f7d06a0abae6df7e3c489bd5f4a8f624",
+      "hash": "sha256:d6fe01cfa0864a168ed390e185d99b585cb5416067bf091d402792186f174438",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "57"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c8ad-9bab-71bd-a155-f52d9ae7d16d"
+    }
+  ],
+  "id": "01a21b5c-7314-73c8-ab11-131f1413702d",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:18f6a11a1f7e98ad3ca6a7595bd30be410d525f8328ec6915beef0aa693a7a34",
+  "seen_address": "7acf0f17c0ade8998d4168f32f853cd4a9f3b1cb",
+  "subject": "01a1c8ad-9d35-7282-94a1-975d88e8c664",
+  "v": 1,
+  "verb": "approve"
+}

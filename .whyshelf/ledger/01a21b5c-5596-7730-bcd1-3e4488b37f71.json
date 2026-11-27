@@ -1,0 +1,42 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:d2b0dd11ca99a04abc06a5dbf1b3b594b9db1eada3df1c5182f42dcf89e8ee48",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::stale_names_where_the_degradations_start",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a21b5c-5596-7730-bcd1-3e4488b37f71",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:f0d024aee4843f41683dc9aff36557fefe56a55ba61c442c56d473bfa528e548",
+  "seen_address": "32c7dbfc294e8c32316b7f4aedcdfc51f5ea3717",
+  "subject": "01a1c765-24a9-7452-abc1-0e695ee0321d",
+  "v": 1,
+  "verb": "approve"
+}

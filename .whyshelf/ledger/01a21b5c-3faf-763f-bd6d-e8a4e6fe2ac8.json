@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:aecb92d5b9440c2d9c72529096198cfd7f5cd0def2db26a3666dff4311d7f655",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/unlinked_tests.rs::a_book_that_is_not_declared_is_a_request_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9396184487fa58f468eb37b95fd19bb88963c3418a7cb0923e82e382ab3e1f85",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/unlinked_tests.rs::a_declaration_that_cannot_be_used_is_its_problems_with_the_lists_asked_for_empty",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4a3ecdb290e187d83238eec6d3214d166f73e00ac1210a28af04750fabe6bf37",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/unlinked_tests.rs::a_lone_document_of_a_wiki_is_isolated",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a8488bb1aaf9aad3ecaa8bcadd8d8d8210f4277121a520d7e3a3563068c43688",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/unlinked_tests.rs::every_list_by_default_with_the_documents_decided_against_apart",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4e86f40947efb5e66a912dd041f041c984e07401234962e27a42af1a63e4c86a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/unlinked_tests.rs::the_book_and_one_question_narrow_the_answer",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0a3483d75665f89f0e2551319e2221e2a188355312999e9ce61292d457671ab7",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs::a_holder_decided_against_reaches_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:756af4ae38c0e6cc50b9d69e547bc79b779e04e1bafff4151a21ce17dc2bb3d6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs::a_replaces_link_says_nothing_of_what_may_be_and_a_book_cut_off_is_left_out",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cb04282811e9b031a743f2f3b43bb8fe1ce46ea400bc14ba73dd0150419ce5ef",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs::every_meaning_counts_and_no_link_to_itself",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:79974cd51391880a65a83608221ecf7897bddf28c4be13cbd4b263207bacce79",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs::links_into_the_own_book_count_for_what_may_be",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4977dd842aa7a9d9f0c67e264e4990d94ea2a0cf64b5046c7607250f5d6fb220",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs::only_valid_documents_are_asked_about",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e32002babae6fde27a0bcd8a04c1a98e2441cd5e905666f2f80e5b04ad3e6e88",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace/linkage_tests.rs::the_answers_are_disjoint",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "573dc5ef3fcd0ec4d1b9d4ef061d37ecf56d23b0",
+      "hash": "sha256:85f4c818721f36f774e93d3e9edf25469f44c19ccc46b4d76040798211c9c323",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "49"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c671-1d95-725c-bd74-8b605650d16c"
+    }
+  ],
+  "id": "01a21b5c-3faf-763f-bd6d-e8a4e6fe2ac8",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:55f96286ec885bbac4531ec6946fa0575870b64e56ee02208d0d4bf24eed13cf",
+  "seen_address": "1ab0c09751de3a737e9223f704e18eb099379a8a",
+  "subject": "01a1c671-1e88-731a-a996-a78758d9570d",
+  "v": 1,
+  "verb": "approve"
+}

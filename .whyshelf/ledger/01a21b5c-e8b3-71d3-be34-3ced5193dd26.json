@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "aa3c72dda03be46adbdfc0bbed97266c46e51fe6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5d3937a7c050fbb94eac1e801f2d898a3809c05c7806daa42adb563b3bbd01d4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/conformance.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "5ce44d3289fd5682822768e56a208f252fc83cd6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9abd4e39efb864f0552f67a7a8bf0700ac8a900b4912008f5291335a76708637",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "2d452d8c8c5295b13a8a6be300eeedf4b8a92fc1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1abcc0c12d1c9bef29d8a0f6c6018ce0ca7308567a6155957b30b25294cd940b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "723e0fe9932cb4d06f6cea89bc58ea7bd3927c09",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:5d267ae00afb057948bd65a3bdce6749a586e664051460f5b80f8539a1b08ba6",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "dad035626ddda3666d80d8df5433c3c6c0b1655a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:cb937a0ef0da9b1da38b2aaae40e3085a4dfd32da9840a8d6100bdea952b4980",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c02eb247d359220a392feddf256b702b141b05e5",
+      "hash": "sha256:c1ebbb9f1923845f237938764f1e5209530a1eea75e635ba5c207e9a231b57d0",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "84"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-16db-7158-a8f3-5fb875ef9cb6"
+    },
+    {
+      "address": "8b30c059c954ca4982b781be4527b247e4cc8510",
+      "hash": "sha256:969bb9324d7a31ca9dff838217cea880755d22fffc21e5c71aac4b22e02f1edf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "85"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-569c-711e-af85-e6456a1155fc"
+    }
+  ],
+  "id": "01a21b5c-e8b3-71d3-be34-3ced5193dd26",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:f32f6154acbd5a846cb7dcabd0d3f10b00f8ddde4afe52f8822cc1457be31bcc",
+  "seen_address": "37618529e3fd999fb33c27b209372c5385212543",
+  "subject": "01a1f3d1-807b-7752-9685-97d1055a7641",
+  "v": 1,
+  "verb": "approve"
+}

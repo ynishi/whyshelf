@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:54b792ab6c5a4ec101c71032e2faa631d067d8d5aac916eccbaeddb57b634739",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::a_book_and_a_field_answer_the_decisions_that_name_the_issue",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:00fb695079ae86c7e00dbdc6aa3b12db7597d6f330ded245ed89cfde0ceaa6d4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::a_filter_that_is_no_request_is_exit_2_and_changes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0c718adcaf5001ba6d69d94fe76aaa144b1cc2bb16cf99c375fa4ed4ca327952",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::arguments_that_are_no_filter_are_a_usage_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:88e9ce3de6d9748581cb20cdca41d4380047f19615d07b61d66e3cbadefc437f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::every_problem_of_a_filter_is_listed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6df3bb013d15d326340992855c1d9de2b0edb50607cd9092eb9c92c4a47896d0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::no_filter_is_every_document_and_the_filters_are_empty",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:48e454be6cb9a8ce5afe0c245395fd072e3714a414f34a398c4b7cbbab106f99",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_answer_carries_the_filters_as_given_with_the_standings_in_a_fixed_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b79e7d349305c23975913ef924b1825c0b021acd8a6efb0598213757f8bdbfa9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_health_is_of_the_whole_project_whatever_the_rows",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:effd940d2befbdcfac58b118e4d074e3b96bfb9a56f438449ec5eb3d767574af",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_schema_of_status_has_the_filters",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bb780772b7e2dbb42b7017a6d686e46802a61459c6e4b233641326a1fea35379",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_three_filters_combine_and_a_repeated_kind_is_either",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "15dfdba4725af3eb8f621da3e306486ff0032390",
+      "hash": "sha256:78bb4bbd2b5111d439eec7a9cc1ca14d83756fd758164f7234c161103a50b1dc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a21b5c-adb6-72a0-8326-92abf8c0601b",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:d1f217231d5bc5a61e03783b769b54d1be179a2f46ca45424603a9e5f277b5af",
+  "seen_address": "f162bc2f2cabb16827a52086d740648e0b7f8316",
+  "subject": "01a1da61-caff-75ca-b22e-99dc05dc7b25",
+  "v": 1,
+  "verb": "approve"
+}

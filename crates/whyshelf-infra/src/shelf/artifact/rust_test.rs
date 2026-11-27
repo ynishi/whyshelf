@@ -4,7 +4,7 @@
 //!
 //! | what | what it does | with |
 //! |---|---|---|
-//! | [`RustTestSpace::resolve`] | reads each file named, by the rules of the space `file`, lexes it once, and finds each test named in it by a shallow scan of its items; the text of a test is what is compared | [`file`](mod@file), `proc-macro2` |
+//! | [`RustTestSpace::resolve`] | reads each file named, by the rules of the space `file`, lexes it once, and finds each test named in it by a shallow scan of its items; the text of a test, with what it holds of the modules of its crate, is what is compared | [`file`](mod@file), the manifests (`Cargo.toml`) of the project, `proc-macro2`, `sha2` |
 //! | [`RustTestSpace::current`] | the text of a named test now | the same |
 //! | [`NameList::list`] | the tests of the `.rs` files a selection takes, the files being those the state of the project lists, chosen as the space `file` chooses them | [`file`](mod@file), the state of the project, `proc-macro2` |
 //! | [`presets`] | the preset `test`: the space, `compare = "bytes"`, `means = "depends"` | values |
@@ -19,7 +19,9 @@
 //!          ├─ does not lex, or nests too deep ──► cannot tell
 //!          └─ its items scanned, then those of each inline module named (every twin)
 //!               ├─ found: the function's tokens, then the items beside it in its
-//!               │  test part, doc attributes left out ──► there (its text)
+//!               │  test part, doc attributes left out, then what it holds
+//!               │    ├─ what it holds cannot be told (R5) ──► cannot tell
+//!               │    └─ ──► there (its text)
 //!               ├─ not found, and a twin on the way is out of line (`mod x;`) ──► cannot tell
 //!               ├─ not found, and a macro on the way may make it ──► cannot tell
 //!               └─ not found ──► absent
@@ -123,9 +125,10 @@
 //! found, every inline module of its test part is scanned too, for the items beside
 //! it (what is compared, below). Each module named is every inline module
 //! (`mod tests { … }`) of the name in the items before it: twins
-//! under their own `#[cfg]` are each searched, as twin functions are joined. A twin
-//! declared out of line (`mod x;`) is not followed: a test not found in the inline
-//! ones cannot be told.
+//! under their own `#[cfg]` are each searched, as twin functions are joined. To find
+//! the test, a twin declared out of line (`mod x;`) is not followed: a test not found
+//! in the inline ones cannot be told. (What a test holds follows such a module to its
+//! file: what a test holds, below.)
 //!
 //! In them, the test is each function of the name that carries a test attribute:
 //! an outer attribute whose path's last segment is `test`, or a `cfg_attr` whose
@@ -142,7 +145,8 @@
 //! not found, the answer is "cannot tell" rather than "absent" if, in the file or a
 //! module searched (or on the way to it):
 //!
-//! - an item macro is called (`include!` among them, which reads another file);
+//! - an item macro is called (`include!` among them, whose file's items are not
+//!   scanned for a test);
 //! - a module carries an attribute other than the inert ones below (an attribute
 //!   macro may rewrite the module);
 //! - a function of the name carries such an attribute (`#[rstest]` may make it a
@@ -162,7 +166,7 @@
 //! # What is compared
 //!
 //! A test means what the helpers beside it do, so its text is its own text, then
-//! the text of the items beside it in its test part:
+//! the text of the items beside it in its test part, then what it holds:
 //!
 //! - Its own text is the function item's tokens as the source has them, from its
 //!   first outer attribute to the end of its body (twins joined, in the order of
@@ -191,10 +195,10 @@
 //!   in the part, is left out, the test itself among them. So each line beside is
 //!   one item, with its depth and every attribute over it, none of them a test, and
 //!   the text tells where the test ends.
-//! - A module declared out of line (`mod common;`), an `include!` and a fixture the
-//!   test reads are not followed: only the tokens that declare them are in the
-//!   part. The code outside the part (the code under test, beside inline tests) is
-//!   not compared.
+//! - A module declared out of line in the part (`mod common;`) and an `include!` are
+//!   the tokens that declare them, beside; what of their files the test holds comes
+//!   after (what a test holds, below). The code compiled always outside the part (the
+//!   code under test, beside inline tests) is not compared.
 //! - Nothing is parsed or resolved: an item is its tokens, and no call is followed.
 //!
 //! Each piece is printed as `proc-macro2` prints a token stream, each doc attribute
@@ -219,13 +223,111 @@
 //! file is read up to [`MAX_FILE_BYTES`] and scanned to [`MAX_DEPTH`] brackets
 //! (finding the test, above).
 //!
+//! # What a test holds
+//!
+//! Some of the helpers a test reaches are in other files: a module compiled only under
+//! test that its text names (`#[cfg(test)] mod fixtures_tests;`, `tests/common/mod.rs`),
+//! and a file an include reads. Its text holds them, so that an edit of a helper makes
+//! stale the tests that use it, and those only where a name says which. The crates are
+//! the targets of the manifests of the project (each library, binary, integration test,
+//! bench and example of the package at the root and of each member of its workspace),
+//! and the modules of a target are read from its root file: the file of a module
+//! declared out of line is found by the rules of the language (`x.rs` or `x/mod.rs`,
+//! under the directory of the stem of a file that is neither a root nor a `mod.rs`, an
+//! inline module a step of the directory, and `#[path]`). An item is compiled only under
+//! test when a `cfg` that holds only under test (as for a test part, above) is on it,
+//! outer or inner, or on a module around it, or when it is of an integration test; any
+//! other item is compiled always. A module compiled only under test counts from the
+//! outermost one of its file: the modules inline in it are its text, and one in another
+//! file is another.
+//!
+//! - **R1** A test holds such a module of a target its file is in when a path names it:
+//!   a path in the test's text (its own, and the items beside), in the items of the
+//!   modules compiled only under test of its file outside its parts and outside the
+//!   modules of its file it may hold, or in the held text of a module or residue item
+//!   it already holds; each once. A path is a run of two or more identifiers joined by
+//!   `::`, or a leaf of a `use` tree (`use a::{b, c::d as e}` is `a::b` and `a::c::d`),
+//!   and is resolved from the module it is written in: `crate` is the root of the
+//!   target, `super` the parent, `self` that module, and a first segment that is a
+//!   module of it is that module. A segment that is no module (a name a `use` brought
+//!   in, an alias of a module of code, a glob, the prelude) leaves the segments from it
+//!   as names that hold a module of the same name; `::x` (another crate) and a `super`
+//!   above the root name nothing. So `use crate::fixtures_tests as fx;` names
+//!   `fixtures_tests`, and `fx::seed()` after it the same. The body of a `macro_rules!`
+//!   is resolved where the macro is called, so all its segments are such names, and so
+//!   is a lone identifier in the arguments of a macro that is not of the standard
+//!   library or a logging one (`suite!(fixtures_tests)`). A lone identifier anywhere
+//!   else (a local, a parameter, a field) names no module. A test never holds a module
+//!   of its file that it is in, nor one in its test part, which its text already is.
+//! - **R2** Such a module is held by every test of its target when a name of it can be
+//!   used without the module's name: it defines a `macro_rules!` with
+//!   `#[macro_export]`, it stands under `#[macro_use]`, a public glob `use` of a test
+//!   residue brings its names in (`pub use M::*`, `pub(…)` too), it holds an `impl`
+//!   whose self type it does not declare, or it is the root of the crate (the file of
+//!   an integration test, which its modules reach as `crate` and `super`).
+//! - **R2b** The items compiled only under test of a module of code, but modules
+//!   (`#[cfg(test)] impl Shelf { fn seeded() … }`, `#[cfg(test)] use …`), are its test
+//!   residue, and each is held by name (an identifier, where R1 holds a module by a
+//!   path): a `fn`, `const`,
+//!   `static`, `struct`, `enum`, `union`, `type` or `macro_rules!` when an identifier of
+//!   its name stands in the test's text or in what it holds; an inherent `impl` when
+//!   one of the names of its associated items is a member name there, and a `trait`
+//!   when its name stands there as an identifier or one of its items' is a member name
+//!   there. A member name is an identifier right after `.` or `::` (`.seeded(`,
+//!   `Shelf::EMPTY`, `<X as Tr>::m`), since an associated item is reached only so, or a
+//!   lone identifier in the arguments of a macro that is not of the standard library or
+//!   a logging one (`check!(shelf, seeded)`); a local of the same word is none. Held by every test of the
+//!   target, since a test uses them with no name it writes: a trait `impl` (`==`,
+//!   `format!`, `.into()`, `?` reach it), a derive that holds only under test on an item
+//!   of code (`#[cfg_attr(test, derive(…))]`), an `impl` with no associated item, and an
+//!   item macro call. A residue `use` in a module is held by every test in that
+//!   module's subtree of the modules of the target, whatever file it is in (`use
+//!   super::*` reaches it), and a public one also by a test that names what it brings
+//!   in (its last segment or its alias). What a held item names is followed as R1
+//!   says. The items held of one module are one part, those items only, in the order
+//!   of the file. R2b held every residue item by every test of the target once; on
+//!   this repository that made nearly every approval stale at once, and an edit of a
+//!   residue item stale a whole crate, so the residue is held by name. A `mod` item
+//!   declares a module and is no use of it: `#[cfg(test)] mod fixtures_tests;` is held
+//!   by the tests that name it, not by every test.
+//! - **R3** An item compiled always, the code under test, is never held: `use
+//!   super::*` reaching it changes nothing.
+//! - **R4** An include (`include!`, `include_str!`, `include_bytes!`) in the text of
+//!   the test or of what it holds, with a literal path, relative to the file of the
+//!   call, is held as the SHA-256 of the bytes of the file it reads.
+//! - **R5** What a test holds cannot be told, with why, only where it would reach what
+//!   cannot be read: a module out of line whose file is not there or cannot be read, or
+//!   whose `#[path]` is not one literal, reached by its name or standing under
+//!   `#[macro_use]`; an include whose path is no literal (`concat!`, `env!`), leaves the
+//!   root, or names a file that is not there; for the tests of a file in no target,
+//!   while something of the project could not be read (a manifest, a member written as
+//!   a pattern that is not read, a directory not listed whole, a module of a target
+//!   whose file cannot be read, which the file may be under); and for every test of a
+//!   target whose modules are past [`MAX_TREE_FILES`] files or [`MAX_TREE_BYTES`]
+//!   bytes. Cannot tell leaves an approval as it is, with a notice; it is not toward
+//!   stale, so its forms are few. A file in no target, while all was read, holds
+//!   nothing.
+//!
+//! A module held is printed as the items beside a test are, doc attributes left out
+//! and its tests too, so a module of tests only is not held. After the test's own text
+//! and the items beside it come, when it holds anything, an empty line, then each
+//! module held and each part of the residue items held, as a line `@ <file> <module>` (the module's
+//! path in its target, from `crate`) and its held text, in the order of the file and
+//! then of the module, then each include as a line `@@ <path> <64 hex>`, in the order
+//! of the paths. No item starts with `@`, and a path holds no line break. A test that
+//! holds nothing has the text it had before tests held anything, so its approval stays
+//! fresh.
+//!
+//! Each file is read as the file of a test is (up to [`MAX_FILE_BYTES`], lexed to
+//! [`MAX_DEPTH`]), once in a reading, whatever tests ask for it.
+//!
 //! # The answers
 //!
 //! | answer | when |
 //! |---|---|
 //! | there | the test is found, with its text |
 //! | absent | no file is there; or it is scanned, and has no module or no function of the name with a test attribute, and nothing on the way may make one |
-//! | cannot tell | a symbolic link on the path leaves the root or is broken; the file cannot be read, is too large, is not UTF-8, does not lex, or nests too deep; or the test is not found, and a twin of a module on the way is declared out of line or a macro on the way may make it |
+//! | cannot tell | a symbolic link on the path leaves the root or is broken; the file cannot be read, is too large, is not UTF-8, does not lex, or nests too deep; the test is not found, and a twin of a module on the way is declared out of line or a macro on the way may make it; or the test is found, and what it holds cannot be told (R5) |
 //! | not a name | the text is not of the grammar above |
 //!
 //! # Listing the names of a selection
@@ -314,16 +416,24 @@
 //!
 //! # Where a name lives
 //!
-//! A test lives, whole ([`Placement::Only`]), in the files the file its name writes
-//! before `::` is read from, as the space `file` places that path: the path as written
-//! when no link is on it, there or not (a test that is not there lives where it would
-//! be); with links inside the root on its way, each link entry and the name they lead
-//! to. A link that leaves the root or is broken, a kind of file that cannot be told,
-//! and a text that is not of the grammar (by the grammar alone, with nothing read)
-//! place it nowhere ([`Placement::Unplaced`]), with the reason `resolve` gives.
+//! A test lives, whole ([`Placement::Only`]), in the files its text is read from: the
+//! file its name writes before `::`, the file of each module it holds and each file its
+//! includes read (what a test holds, above), each as the space `file` places a path:
+//! the path as written when no link is on it; with links inside the root on its way,
+//! each link entry and the name they lead to. A test that is not there lives where it
+//! would be, in its file alone, and one whose file cannot be read where that file is
+//! placed. A link that leaves the root or is broken, or a kind of file that cannot be
+//! told, on the way to any of the files, places it nowhere ([`Placement::Unplaced`]),
+//! with the reason `resolve` gives; so does what it holds when it cannot be told, the
+//! reason naming the files that were told; and so does a text that is not of the
+//! grammar, by the grammar alone, with nothing read.
 //!
 //! # Known limits
 //!
+//! - A space reads the trees of the project's crates once for each side, when its first
+//!   test is found (a reading that finds no test reads none), and keeps them for its
+//!   life. A space is built for one run, so a source edited while one space lives is not
+//!   seen by it; build another space to read the project again.
 //! - The text holds the items beside the test in its test part, not only those it
 //!   calls: an edit of a helper there makes every test of the part stale, the tests
 //!   that do not call it among them. Split the part into modules that hold only
@@ -341,22 +451,28 @@
 //!   approval of the test stays fresh. This is accepted only there: items at one
 //!   depth, in one order, across sibling modules; any other move, a swap of two
 //!   items of one name across a module's boundary among them, changes the text.
-//! - What is outside the test part is not compared: a helper outside it under
-//!   `#[cfg(test)]` (a function at the top of a file of code that only tests use,
-//!   or one shared with the tests of other files), a module declared out of line
-//!   and the file it is, a file `include!` reads, a fixture the test reads, and the
-//!   outer attributes of the module that is the part and of the modules on the way
-//!   to it (a `cfg` that stops one from being compiled among them; an inner
-//!   `#![cfg(..)]` of the part is an item beside). An edit of any of them leaves an
-//!   approval of the test fresh; name such a file whole beside the test.
+//! - What is outside the test part and not held is not compared: a fixture the test
+//!   reads as it runs (`std::fs::read`), a file an include in the definition of a
+//!   macro reads (`include_str!($path)`), and the outer attributes of the module that
+//!   is the part and of the modules on the way to it (a `cfg` that stops one from
+//!   being compiled among them; an inner `#![cfg(..)]` of the part is an item beside).
+//!   An edit of any of them leaves an approval of the test fresh; name such a file
+//!   whole beside the test.
+//! - A module is held by a path that resolves to it, not by an identifier of its name:
+//!   a local or a parameter named `tests` holds nothing. A name that no module
+//!   resolves (a `use` alias, a glob, a macro's body) falls back to the module of that
+//!   name anywhere in the target, which is toward stale; a module reached by `super`
+//!   alone, from a module in another file of it, is not held. What a module of its file
+//!   outside its parts names counts only once that module is held.
 //! - The file is read whether or not a crate compiles it: a test in a file no
-//!   crate includes (no `mod` names it), or under a `cfg` never set, reads as there.
+//!   crate includes (no `mod` names it), or under a `cfg` never set, reads as there,
+//!   and, in no target, holds nothing.
 //! - The file is lexed and scanned, not parsed: one whose tokens lex but which is no
 //!   valid Rust is read as far as its items can be told, and an item in it may be
 //!   missed.
-//! - A module declared out of line (`mod x;`, `#[path] mod x;`) is in another file,
-//!   which is not followed: a test under it cannot be told. Name the test by the
-//!   file of the module instead.
+//! - To find a test, a module declared out of line (`mod x;`, `#[path] mod x;`) is
+//!   not followed: a test under it cannot be told. Name the test by the file of the
+//!   module instead.
 //! - A test a macro writes is not in the source as a function: it cannot be told
 //!   when a macro on the way is seen (above), and reads as absent when an attribute
 //!   macro on another item (a `struct`, an `impl`) makes it.
@@ -382,7 +498,7 @@ use whyshelf_core::app::shelf::{
 };
 use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::nonempty::{NonBlank, NonEmptyVec};
+use whyshelf_core::domain::nonempty::{NonBlank, NonEmptySet, NonEmptyVec};
 use whyshelf_core::domain::shelf::artifact::{
     ArtifactName, ArtifactReading, Comparison, ListingPart, NameListing, NotASelection, PartRead,
     PrefixMove, Selection, SpaceAsks, SpacePrefixes, SpaceReadings, SpaceRenamed,
@@ -395,6 +511,10 @@ use super::super::state::StateError;
 use super::super::state::files::FileStates;
 use super::Spelled;
 use super::file::{self, Bounded, Cause, FileSelection, Lister, Take, Taken, Unit};
+
+mod tree;
+
+use tree::{Held, ModuleTrees, Reached, Refs, TreeBounds};
 
 /// The name of the space this adapter resolves names in.
 pub const RUST_TEST_SPACE: &str = "rust-test";
@@ -412,6 +532,15 @@ pub const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 /// by recursion, so the bound keeps a file from exhausting the stack; code people
 /// write nests far less.
 pub const MAX_DEPTH: usize = 128;
+
+/// The most module files the modules of one crate are read from, for what a test
+/// holds; past it, what a test of the crate holds cannot be told. Each file is still
+/// read within [`MAX_FILE_BYTES`] and [`MAX_DEPTH`].
+pub const MAX_TREE_FILES: usize = 4096;
+
+/// The most bytes of the module files of one crate read, for what a test holds; past
+/// it, what a test of the crate holds cannot be told.
+pub const MAX_TREE_BYTES: u64 = 256 * 1024 * 1024;
 
 /// The attributes that make no item and rewrite none (with those of a tool, and a
 /// `cfg_attr` of them): one of them on an item does not make a test that is not found
@@ -535,9 +664,9 @@ const KEYWORDS: &[&str] = &[
 /// The presets this adapter offers: one, [`TEST_PRESET`], for a link to the tests
 /// that show a document holds, that stands on each token of them
 /// (`space` [`RUST_TEST_SPACE`], `compare = "bytes"`, `means = "depends"`): an edit
-/// of a test, or of an item beside it in its test part, makes the approvals that
-/// name it stale, one of another test in the file does not, and a test that goes
-/// away breaks them.
+/// of a test, of an item beside it in its test part, or of what it holds, makes the
+/// approvals that name it stale, one of another test in the file does not, and a test
+/// that goes away breaks them.
 pub fn presets() -> BuiltinPresets {
     let values = PresetValues {
         space: Some(RUST_TEST_SPACE.to_owned()),
@@ -620,8 +749,8 @@ impl NameList for RustTestSpace {
 }
 
 impl NamePlaces for RustTestSpace {
-    /// A test lives in the files of the file its name writes before `::`, whole: the
-    /// module page, "Where a name lives".
+    /// A test lives in the files of the file its name writes before `::` and of what
+    /// it holds, whole: the module page, "Where a name lives".
     async fn places(
         &self,
         side: Side,
@@ -629,14 +758,43 @@ impl NamePlaces for RustTestSpace {
     ) -> Result<BTreeMap<ArtifactName, Placement>, RustTestError> {
         self.state.reads(side)?;
         let mut placed = BTreeMap::new();
+        let mut by_file: BTreeMap<RelPath, Vec<(&ArtifactName, TestName)>> = BTreeMap::new();
         for name in names {
-            let placement = match TestName::parse(name.as_str()) {
-                Ok(test) => file::placed_only(&self.state, side, &test.file)
-                    .await
-                    .map_err(RustTestError::Reason)?,
-                Err(why) => Placement::Unplaced(reason(why.reason())?),
-            };
-            placed.insert(name.clone(), placement);
+            match TestName::parse(name.as_str()) {
+                Ok(test) => by_file
+                    .entry(test.file.clone())
+                    .or_default()
+                    .push((name, test)),
+                Err(why) => {
+                    placed.insert(name.clone(), Placement::Unplaced(reason(why.reason())?));
+                }
+            }
+        }
+        for (path, tests) in by_file {
+            let wanted: Vec<Wanted> = tests.iter().map(|(_, t)| t.wanted()).collect();
+            let found = self.find_in(side, &path, wanted).await;
+            let found = self.holding(side, &path, found).await;
+            for ((name, _), found) in tests.into_iter().zip(found) {
+                let placement = match &found {
+                    Found::Text(text) => self.placed_holding(side, &path, &text.held).await?,
+                    // What it holds cannot be told: nowhere, the files told named.
+                    Found::CannotTell(why @ Untellable::Helper { told, .. }) => {
+                        let told: Vec<&str> = told.iter().map(RelPath::as_str).collect();
+                        Placement::Unplaced(reason(format!(
+                            "{why}; the files told are {}",
+                            told.join(", ")
+                        ))?)
+                    }
+                    // A test not there lives where it would be; one whose file cannot
+                    // be told, where its file is placed.
+                    Found::Absent | Found::CannotTell(_) => {
+                        file::placed_only(&self.state, side, &path)
+                            .await
+                            .map_err(RustTestError::Reason)?
+                    }
+                };
+                placed.insert(name.clone(), placement);
+            }
         }
         Ok(placed)
     }
@@ -695,6 +853,14 @@ enum Untellable {
     MayBeMade { path: RelPath, by: String },
     #[error("the reading of {path} stopped: {why}")]
     Stopped { path: RelPath, why: String },
+    /// What the test holds cannot be told: where, why, and the files that were told
+    /// (the test's own, and those of what it was found to hold before).
+    #[error("what the test holds cannot be told, at {at}: {why}")]
+    Helper {
+        at: RelPath,
+        why: String,
+        told: Vec<RelPath>,
+    },
 }
 
 /// Where in a file the lexer stopped, when it can say.
@@ -719,6 +885,36 @@ pub struct RustTestSpace {
     /// file read ([`MAX_FILE_BYTES`]): one value for each, for the listing and the
     /// reading alike.
     lister: Lister,
+    /// The bounds the modules of one crate are read within ([`MAX_TREE_FILES`],
+    /// [`MAX_TREE_BYTES`]).
+    tree: TreeBounds,
+    /// The trees of the crates of the project, read once for each side, when a first
+    /// test is found, and shared by every call and every clone of the space. A space is
+    /// built for one run (`shelf/mod.rs` builds one per run), so a source edited while
+    /// one space lives is not seen by it: build another to read the project again.
+    trees: TreeCache,
+}
+
+/// The trees of the crates of a project, one for each [`Side`], read when first asked.
+#[derive(Clone, Default)]
+struct TreeCache(Arc<[tokio::sync::OnceCell<ModuleTrees>; 2]>);
+
+impl fmt::Debug for TreeCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("TreeCache")
+    }
+}
+
+impl TreeCache {
+    /// The trees at `side`, read now when they are not yet. The one place a side is
+    /// mapped to its cell.
+    async fn at(&self, space: &RustTestSpace, side: Side) -> &ModuleTrees {
+        let cell = match side {
+            Side::Before => &self.0[0],
+            Side::After => &self.0[1],
+        };
+        cell.get_or_init(|| ModuleTrees::of(space, side)).await
+    }
 }
 
 impl RustTestSpace {
@@ -732,7 +928,16 @@ impl RustTestSpace {
         Self {
             lister: Lister::on(state.clone(), MAX_FILE_BYTES),
             state,
+            tree: TreeBounds::default(),
+            trees: TreeCache::default(),
         }
+    }
+
+    /// The same, the modules of a crate read within `files` files and `bytes` bytes.
+    #[cfg(test)]
+    fn with_tree_bounds(mut self, files: usize, bytes: u64) -> Self {
+        self.tree = TreeBounds { files, bytes };
+        self
     }
 
     /// The same, listing within `limits`.
@@ -790,6 +995,7 @@ impl RustTestSpace {
         for (path, tests) in by_file {
             let wanted: Vec<Wanted> = tests.iter().map(|(_, _, t)| t.wanted()).collect();
             let found = self.find_in(side, &path, wanted).await;
+            let found = self.holding(side, &path, found).await;
             // The texts may be as large as the file: large ones are hashed on a
             // blocking thread.
             let asked: Vec<BTreeSet<Comparison>> =
@@ -846,10 +1052,63 @@ impl RustTestSpace {
             return Ok(None);
         };
         let found = self.find_in(side, &test.file, vec![test.wanted()]).await;
+        let found = self.holding(side, &test.file, found).await;
         Ok(match found.into_iter().next() {
             Some(Found::Text(text)) => Some(text.joined().into_bytes()),
             Some(Found::Absent | Found::CannotTell(_)) | None => None,
         })
+    }
+
+    /// Each of `found` in the file at `path` at `side`, a test found with what it holds
+    /// ([`ModuleTrees::held_by`]), one whose holding cannot be told as cannot tell. The
+    /// trees are read when a first test is found, once for the life of the space; a
+    /// reading that finds no test reads none.
+    async fn holding(&self, side: Side, path: &RelPath, found: Vec<Found>) -> Vec<Found> {
+        let mut holding = Vec::with_capacity(found.len());
+        for found in found {
+            holding.push(match found {
+                Found::Text(mut text) => {
+                    let trees = self.trees.at(self, side).await;
+                    match trees.held_by(self, side, &text, path).await {
+                        Ok(held) => {
+                            text.held = held;
+                            Found::Text(text)
+                        }
+                        Err(why) => Found::CannotTell(why),
+                    }
+                }
+                other => other,
+            });
+        }
+        holding
+    }
+
+    /// Where a test of the file at `path` that holds `held` lives: the files of its
+    /// own file, of each module it holds and of each file its includes read, each as
+    /// the space `file` places a path; nowhere, with why, when one of them is.
+    async fn placed_holding(
+        &self,
+        side: Side,
+        path: &RelPath,
+        held: &Held,
+    ) -> Result<Placement, RustTestError> {
+        let mut files = BTreeSet::new();
+        for file in held.files(path) {
+            match file::placed_only(&self.state, side, &file)
+                .await
+                .map_err(RustTestError::Reason)?
+            {
+                Placement::Only(placed) => files.extend(placed.iter().cloned()),
+                other @ (Placement::Partly(_) | Placement::Unplaced(_)) => return Ok(other),
+            }
+        }
+        match NonEmptySet::from_set(files) {
+            Ok(files) => Ok(Placement::Only(files)),
+            // The test's own file is among them, so there is one.
+            Err(_) => file::placed_only(&self.state, side, path)
+                .await
+                .map_err(RustTestError::Reason),
+        }
     }
 
     /// The tests of the `.rs` files `selection` takes at `side` (the rules on the
@@ -1599,31 +1858,62 @@ enum Found {
 }
 
 /// The text of a test found, in parts: its own text, then the text of the items
-/// beside it in each of its test parts (what is compared, on the page of the
-/// module). The text of a part is made once and shared by every test of it, since
-/// it may be as large as the file. A part with no item beside is empty, and there
-/// are none when no part has an item beside.
+/// beside it in each of its test parts, then what it holds (what is compared, and
+/// what a test holds, on the page of the module). The text of a part is made once and
+/// shared by every test of it, since it may be as large as the file, and so is the
+/// held text of a module. A part with no item beside is empty, and there are none
+/// when no part has an item beside. What its own text and the items beside name is
+/// kept apart from the text (`reached`, boxed so that what a name comes to stays
+/// small), for what it holds to be found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Text {
     own: String,
     beside: Vec<Arc<str>>,
+    held: Held,
+    reached: Box<Reached>,
 }
 
 impl Text {
+    /// The lines of what it holds, each module held a line `@ <file> <module>` then
+    /// its held text, each include a line `@@ <path> <64 hex>`; none when it holds
+    /// nothing.
+    fn held_lines(&self) -> impl Iterator<Item = String> + '_ {
+        let modules = self
+            .held
+            .modules
+            .iter()
+            .map(|held| format!("@ {} {}\n{}", held.file, held.module, held.text));
+        let includes = self
+            .held
+            .includes
+            .iter()
+            .map(|include| format!("@@ {} {}", include.path, include.hex()));
+        modules.chain(includes)
+    }
+
     /// The bytes of the text joined.
     fn len(&self) -> usize {
-        self.beside
+        let len = self
+            .beside
             .iter()
             .enumerate()
             .fold(self.own.len(), |len, (at, part)| {
                 len.saturating_add(1 + usize::from(at > 0))
                     .saturating_add(part.len())
-            })
+            });
+        match self.held.is_empty() {
+            true => len,
+            false => self.held_lines().fold(len.saturating_add(1), |len, line| {
+                len.saturating_add(1).saturating_add(line.len())
+            }),
+        }
     }
 
     /// The text: its own, then each part beside it on the lines after, two parts
     /// apart by an empty line (no line of a part is empty), so that an item moved
-    /// from one twin part to the other changes the text.
+    /// from one twin part to the other changes the text; then, when it holds
+    /// anything, an empty line and the lines of what it holds. A test that holds
+    /// nothing is its own text and the parts beside it alone.
     fn joined(&self) -> String {
         let mut text = String::with_capacity(self.len());
         text.push_str(&self.own);
@@ -1633,6 +1923,13 @@ impl Text {
                 text.push('\n');
             }
             text.push_str(part);
+        }
+        if !self.held.is_empty() {
+            text.push('\n');
+            for line in self.held_lines() {
+                text.push('\n');
+                text.push_str(&line);
+            }
         }
         text
     }
@@ -1652,7 +1949,11 @@ fn look_up(path: &RelPath, text: &str, wanted: &[Wanted]) -> Vec<Found> {
     wanted
         .iter()
         .map(|w| match find(path, &top, &w.modules, &w.function) {
-            Ok(test) => Found::Text(test.text(&top, &mut parts)),
+            Ok(test) => {
+                let mut text = test.text(&top, &mut parts);
+                text.reached.module = w.modules.iter().map(ToString::to_string).collect();
+                Found::Text(text)
+            }
             Err(found) => found,
         })
         .collect()
@@ -1916,31 +2217,45 @@ impl fmt::Display for Makers {
     }
 }
 
-/// A test found: its own text (twins joined in the order of the file), and the
-/// places of its test parts, in the order of the file.
+/// A test found: its own text (twins joined in the order of the file), what it names,
+/// and the places of its test parts, in the order of the file, each with the inline
+/// modules it is (unraw).
 struct Test {
     own: String,
-    parts: BTreeSet<Vec<usize>>,
+    refs: Refs,
+    parts: BTreeMap<Vec<usize>, Vec<String>>,
 }
+
+/// The text of the items beside in one test part, and what they name, made once for
+/// every test of the part.
+type Part = (Option<Arc<str>>, Arc<Refs>);
 
 impl Test {
     /// Its text: its own, then the items beside it in each test part that is in no
     /// other of them, the text of a part taken from `made` or made into it; a part
-    /// with no item beside is kept empty, unless no part has one.
-    fn text(self, top: &Items, made: &mut BTreeMap<Vec<usize>, Option<Arc<str>>>) -> Text {
+    /// with no item beside is kept empty, unless no part has one. It holds nothing
+    /// yet.
+    fn text(self, top: &Items, made: &mut BTreeMap<Vec<usize>, Part>) -> Text {
         let mut beside: Vec<Option<Arc<str>>> = Vec::new();
+        let mut reached = Reached {
+            own: self.refs,
+            parts: Vec::new(),
+            module: Vec::new(),
+        };
         let mut kept: Option<&Vec<usize>> = None;
         // A place sorts before every place inside it, so a part inside one kept
         // follows it at once.
-        for part in &self.parts {
+        for (part, inline) in &self.parts {
             if kept.is_some_and(|outer| part.starts_with(outer)) {
                 continue;
             }
             kept = Some(part);
-            let text = made
-                .entry(part.clone())
-                .or_insert_with(|| printed_part(top, part));
+            let (text, refs) = made.entry(part.clone()).or_insert_with(|| {
+                let (text, refs) = printed_part(top, part);
+                (text, Arc::new(refs))
+            });
             beside.push(text.clone());
+            reached.parts.push((inline.clone(), refs.clone()));
         }
         let beside = if beside.iter().all(Option::is_none) {
             Vec::new()
@@ -1953,33 +2268,40 @@ impl Test {
         Text {
             own: self.own,
             beside,
+            held: Held::default(),
+            reached: Box::new(reached),
         }
     }
 }
 
 /// Where a list of items the walk is in stands: the index of each module item on
-/// the way from the file, and how many of them lead to the test part, when a
-/// module on the way is one (none: the part is the file).
+/// the way from the file, its name (unraw), and how many of them lead to the test
+/// part, when a module on the way is one (none: the part is the file).
 #[derive(Debug, Clone, Default)]
 struct At {
     path: Vec<usize>,
+    names: Vec<String>,
     part: Option<usize>,
 }
 
 impl At {
-    /// The place of the module at `index` in this list; it starts the test part when
-    /// none is on the way yet and it carries a `cfg` that holds only under test
-    /// (`under_test`, an outer or an inner attribute of it).
-    fn in_module(&self, index: usize, under_test: bool) -> Self {
+    /// The place of the module `name` at `index` in this list; it starts the test
+    /// part when none is on the way yet and it carries a `cfg` that holds only under
+    /// test (`under_test`, an outer or an inner attribute of it).
+    fn in_module(&self, index: usize, name: &Segment, under_test: bool) -> Self {
         let mut path = self.path.clone();
         path.push(index);
+        let mut names = self.names.clone();
+        names.push(name.to_string());
         let part = self.part.or_else(|| under_test.then_some(path.len()));
-        Self { path, part }
+        Self { path, names, part }
     }
 
-    /// The place of the test part: the modules on the way to it (none for the file).
-    fn part(&self) -> Vec<usize> {
-        self.path[..self.part.unwrap_or(0)].to_vec()
+    /// The place of the test part: the modules on the way to it (none for the file),
+    /// by index and by name.
+    fn part(&self) -> (Vec<usize>, Vec<String>) {
+        let depth = self.part.unwrap_or(0);
+        (self.path[..depth].to_vec(), self.names[..depth].to_vec())
     }
 }
 
@@ -2031,7 +2353,7 @@ fn find(
                     .iter()
                     .chain(items.inner.iter().map(|(_, attr)| attr))
                     .any(only_under_test);
-                next_places.push(at.in_module(index, under_test));
+                next_places.push(at.in_module(index, module, under_test));
                 next.push(items);
             }
         }
@@ -2043,7 +2365,8 @@ fn find(
         places = next_places;
     }
     let mut texts = Vec::new();
-    let mut parts = BTreeSet::new();
+    let mut refs = Refs::default();
+    let mut parts = BTreeMap::new();
     for (level, at) in levels.iter().zip(&places) {
         for item in &level.items {
             let Kind::Fn(name) = &item.kind else {
@@ -2053,8 +2376,11 @@ fn find(
                 continue;
             }
             if item.is_test() {
-                texts.push(without_docs(level.tokens_of(item)).to_string());
-                parts.insert(at.part());
+                let tokens = without_docs(level.tokens_of(item));
+                refs.add(tokens.clone());
+                texts.push(tokens.to_string());
+                let (part, inline) = at.part();
+                parts.insert(part, inline);
             } else {
                 for p in item.maker() {
                     makers.add(format!(
@@ -2069,6 +2395,7 @@ fn find(
     } else {
         Ok(Test {
             own: texts.join("\n"),
+            refs,
             parts,
         })
     }
@@ -2077,8 +2404,9 @@ fn find(
 /// The text of the items beside in the test part at `at` (the index of each module
 /// item on the way from the file): its inner attributes, then each item but the
 /// tests on a line of its own, in the order of the file, doc attributes left out
-/// (the rules on the page of the module); none when there is no such item.
-fn printed_part(top: &Items, at: &[usize]) -> Option<Arc<str>> {
+/// (the rules on the page of the module); none when there is no such item. And what
+/// those items name ([`tree::refs_beside`]).
+fn printed_part(top: &Items, at: &[usize]) -> (Option<Arc<str>>, Refs) {
     let mut scanned: Option<Items> = None;
     for &index in at {
         let items = scanned.as_ref().unwrap_or(top);
@@ -2090,7 +2418,7 @@ fn printed_part(top: &Items, at: &[usize]) -> Option<Arc<str>> {
                 ..
             }) => body.stream(),
             // The walk gave the place, so a module is there.
-            _ => return None,
+            _ => return (None, Refs::default()),
         };
         scanned = Some(Items::scan(body));
     }
@@ -2106,7 +2434,12 @@ fn printed_part(top: &Items, at: &[usize]) -> Option<Arc<str>> {
         .map(|tokens| without_docs(tokens).to_string())
         .filter(|line| !line.is_empty())
         .collect();
-    (!lines.is_empty()).then(|| Arc::from(lines.join("\n")))
+    let mut refs = Refs::default();
+    tree::refs_beside(items, &mut refs);
+    (
+        (!lines.is_empty()).then(|| Arc::from(lines.join("\n"))),
+        refs,
+    )
 }
 
 /// The items of a list but its tests, each one line of tokens, pushed onto `lines`

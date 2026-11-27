@@ -1,0 +1,33 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9db87ce77a0bfbccccf40dded4dcc5788569d9c0",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    }
+  ],
+  "id": "01a21b5c-694e-745f-b362-74c6ca9dc7b8",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:c6ee84d20d8d3561098dcb825417b928ddedc9463465b4470ea15573562ca83e",
+  "seen_address": "c7aad9616ffc84caf8be06b2ff4001c1d1e02a49",
+  "subject": "01a1c877-8fbd-7353-9e60-cfe043fb39a9",
+  "v": 1,
+  "verb": "approve"
+}

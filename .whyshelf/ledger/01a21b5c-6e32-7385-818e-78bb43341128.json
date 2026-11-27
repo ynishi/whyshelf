@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "462a2d807947a0644f608e3cf29a8266ff1eec1d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:cc089ffff5cb09c609730ade14a49f6e7ce338165876e879c3291c02970d82ad",
+      "link": "tests",
+      "name": "crates/whyshelf-cli/tests/verification_spread.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c7aad9616ffc84caf8be06b2ff4001c1d1e02a49",
+      "hash": "sha256:c6ee84d20d8d3561098dcb825417b928ddedc9463465b4470ea15573562ca83e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "56"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c877-8fbd-7353-9e60-cfe043fb39a9"
+    },
+    {
+      "address": "8dbfd04081b47210fdcda36617a845eb29e51251",
+      "hash": "sha256:d1fa6f90794b254132ee1d41aa477e97415c94acd431939a88bb97efd575cafe",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "112"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2102b-3567-73b5-a69f-5a6bc7544b7c"
+    }
+  ],
+  "id": "01a21b5c-6e32-7385-818e-78bb43341128",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:eaeeb953b91bf60e27d7ed1a5190ef9e9b25faab993d998d4898aea1fba974af",
+  "seen_address": "37ffcb9ad86efbdf3177447853fb9572fa315015",
+  "subject": "01a1c877-9138-726f-9e0d-817c5f8f866f",
+  "v": 1,
+  "verb": "approve"
+}

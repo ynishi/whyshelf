@@ -1,0 +1,188 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:7388e2612e1c5211d7ce6ee16b917d393918c4975c1b76b222da93ac36925582",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/side_tests.rs::a_load_reads_the_side_after_and_the_clock_once",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d673440072a0e9e836b1da122442a75948871ed0261636e40de16cd793a522f6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/side_tests.rs::a_side_the_run_does_not_read_is_an_error_of_a_port_never_the_other_side",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ce4986103dd07144cc1e99a8724ced6957985d9d808491d46feee4338fddcf42",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/side_tests.rs::each_side_is_read_from_its_own_state_at_the_one_time_given",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:30e1abc822d090ea7e9afabd81401abb798dc21810b7784141f9fa014a2c2d6d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/state.rs::tests::a_bound_of_none_is_read_as_one_and_the_whole_is_past_any_file",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:866528dbf891ff31863073d8d9ca3c8c927e6caad2363c92d27e96e9b829f0ba",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/docs_path.rs::tests::a_place_is_parts_each_a_part_of_a_path_and_the_top_has_none",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "fb11235338e612ae7557733832926ecf7c836235",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6021fcffd041b3d64ca868d43f0e5393545e53e815681c0c6ad4ff5ade7b8248",
+      "link": "tests",
+      "name": "arch-lint.toml",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e6fab0d26ae95daf85195a93a58bd2fa8f46d03e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6a6b93763ff2d9365c884a4215016e44862bf4988af1cee7aa10e61ed5db1965",
+      "link": "tests",
+      "name": "crates/whyshelf-core/tests/architecture.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "344522d8d7da428e3e3b90a1c31c5301456d0f56",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:cb1ca03f8d2ef75ff84b27324b5b693057e441453b35e5434b2da3c09a0ba32b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file/read_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "b32970fb5533cef9d6d9673a29d824f3d630a149",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:bc8bd35dfd5ceb09ef4321fc61a6d40a1bd656e4c7b7b5b095467aca93149b91",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "64e9d85a071c1a75207c161f2e13a88d5acceede",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:14777a4e6de07cc1d1fe41ddd568ccfe243aaa01d76c42df35203ac5585b171d",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/state/files_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4454e88d40e1fcb7c973c23345ebbd3a57888d82",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a056b02aebed2f4b235fb984b8ca9bc8e253a9443ed312bd9d3d215185d2a08f",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/state/paths_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "b2b5dbf0015f228dbf2148769d19903c3a41a328",
+      "hash": "sha256:ac00d5d939dfa765fdda2828554068fbae551619d56ca6422533e350085a6bb3",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "101"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a207dc-7f20-73bc-8120-bdeba2c06f55"
+    },
+    {
+      "address": "6d2b8d7ceaeecde8994c74dc01d4d3f3abea180f",
+      "hash": "sha256:fd8c39576469f8ee570a5d2dcf633e653e6d7c1ebfe134053fb307fcd7c77188",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "102"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a207dc-7f20-73bc-8120-bdecf13534a3"
+    },
+    {
+      "address": "8fe51bdfb5f986fbbae5c383608da1789305a6b0",
+      "hash": "sha256:0269489336085167c42afaa04abe8d1e3f181b33263cc927a6a0d9477e8c3309",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "105"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a207dc-7f20-73bc-8120-bded052d50a0"
+    }
+  ],
+  "id": "01a21b5d-29a2-76fd-98c8-2708112e1c66",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:643d074370a0c4babd6e2dec452e9efc5acc1a90af5471404059f33c8d4701a3",
+  "seen_address": "c3aaedb5d1b9f44e4f54fa1a93ea4fea2f8f4aa1",
+  "subject": "01a207dc-7f20-73bc-8120-bdeedc62c6e9",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:fe19309748411ac3355da3e835d6a2098268ab8d1315ea4c4de5d24b24514df1",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/problem_wording.rs::a_problem_says_the_count_the_type_and_the_book_as_the_declaration_writes_them",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:44a1465ee0f9a77e1f8780e2309e31b694a868ea84ece6ce3f75186bd56fca16",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/problem_wording.rs::a_word_of_a_count_the_declaration_does_not_have_is_a_problem_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8819b57b4637e9fa5d39561a09e0405a9fa1b0f5",
+      "hash": "sha256:080d007ba972da3b5fe236cd9e15973593256727f2efb10cc06aa39008ff2986",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "73"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e170-61cb-728f-adea-c80c24e72315"
+    }
+  ],
+  "id": "01a21b5c-bc2d-76d3-89a0-536b862b062b",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:406c9a55d06b5b1a62022dbdc450ec4418d389cbac8bd3571417c2ca083f3c07",
+  "seen_address": "8df519af620463bb755a74acefa6db9ea51c117e",
+  "subject": "01a1e170-8222-77d2-8161-48b6af0ec0f1",
+  "v": 1,
+  "verb": "approve"
+}

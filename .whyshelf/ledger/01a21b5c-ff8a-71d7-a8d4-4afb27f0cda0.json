@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test::RustTestSpace",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9db87ce77a0bfbccccf40dded4dcc5788569d9c0",
+      "hash": "sha256:13b874d7afd065c1b23c3c6a613c4a3ce72d5086fedf3eb2b4a8e56bd9d53e44",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c502-5c19-703c-9ea3-d898057ff153"
+    },
+    {
+      "address": "537ad92c67cad3f36024aa45964f6604c6a23a47",
+      "hash": "sha256:da4400e50c4645fbb1ed3c9028302053e58da039407d2a8e91d092ebc33f2f00",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1cad2-34df-74f6-b9c7-64f09ffc1dd4"
+    },
+    {
+      "address": "e0c46ae21bc953a796c659a1cc13c0d26ce2987a",
+      "hash": "sha256:84dbb7afe91c0975f6c4069df64cf17775c305bba9f17db63459f57ae4066a19",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "33"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1f0cd-c91f-7248-ac40-b50655ca22d8"
+    }
+  ],
+  "id": "01a21b5c-ff8a-71d7-a8d4-4afb27f0cda0",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:5f2504521e2c38d345ea979bc0976347f64a157ba62da51ec338663d1d6bd828",
+  "seen_address": "f72c164092ddcbe2c26c03ac9557576a965c9bb4",
+  "subject": "01a1f9c4-5e21-7a3b-9d47-6c1e2b8f0a55",
+  "v": 1,
+  "verb": "approve"
+}

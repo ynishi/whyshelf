@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c9bb76257493e3d5bb9a55b98e244589e6829329ff128de7401407cb6a605745",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::a_fresh_approval_with_its_names_is_not_listed_as_awaiting_by_check",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:71ff2429003a155e7a5d84202df8e101dcb8d4f203e1a69429d44663752820ec",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::with_two_names_asked_an_approval_awaits_the_second_and_again_once_the_first_lapses",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1fee4494b324b790563306a7337bda79c4e34e8b",
+      "hash": "sha256:960bd0b9091653ef170864b44f6c10f8472eb053f89a46182e4e02c4addf5cbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "89"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74"
+    }
+  ],
+  "id": "01a21b5c-f29e-71be-8b90-e3fcdc56cab5",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:efa1472fa7db2ddfdd3ffd96842bd90680d0644f7cb65d9e7ccd4aa6eeda94fe",
+  "seen_address": "d6ad903b5a2cbb99f1e6e53e428e48dc66b12dc1",
+  "subject": "01a1f6a0-2c42-7b6d-9e14-7c3a2f8d1b95",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:2e3df3c8ad60e36408eb6728afc8840869c465a5235a0fb1ab76f0f4f95cec70",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_document_whose_links_cannot_be_read_is_counted_and_said_and_a_bad_reference_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7a3ab4ad75c398ba49980765fed730fc9edecf98e612632571aef27225f35043",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_requirement_reaches_its_decision_its_verification_and_what_they_stand_on",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9baff2fa12e27d5f8c11c992cdd6c37382ade791",
+      "hash": "sha256:f758e509ffccab51972f63e9a794df8df49ddf2771d54f2b4b06d4d50bbeee61",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "99"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8e84ae5744"
+    },
+    {
+      "address": "6bb496a5b8e0d4b5b513ca7e7eb6f5d629e9d6f6",
+      "hash": "sha256:8de8c5243d0477e06575fd5f48763ffdb2fceae314023d3d45b05f00709debbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "100"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8f92f2c0bb"
+    }
+  ],
+  "id": "01a21b5d-2e05-734d-a27b-c767cb2700f2",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:f014ab0cdba5b11fbcf080e48d3f82f7c4f41868ed4c6c7045c8847514352d35",
+  "seen_address": "ed9c29a6c8f59fb88cc4d898a1cef1c329be6e44",
+  "subject": "01a20869-ab6e-762c-9771-9e900a99fc74",
+  "v": 1,
+  "verb": "approve"
+}

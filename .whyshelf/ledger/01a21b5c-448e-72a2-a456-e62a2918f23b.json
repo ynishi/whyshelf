@@ -1,0 +1,154 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:d0830414513800f3e39ca07ca72b92b99a48fef16141c19b887dd72811de7b95",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::a_not_covered_notice_serializes_with_its_kind_link_and_severity",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ff6ad74ff39f092858f2dafb3fe9453976b992c6508e0fd543d8e254d9db8ab2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::a_notice_of_another_kind_has_no_severity",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:347f23b199e21827c08c217908e3d249962deaf6f7962fa6c3b798af4de8f275",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::a_warn_gap_is_listed_and_the_check_is_clean",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d039fe12e27bd325d71a5bfd9283d77711d11b08d51266cec3c744588ff28110",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::an_uncovered_document_is_listed_and_the_check_is_not_clean",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9222078eb33e200a467c38b795f980a27c2ba9c79d08746dc00ade82c1b549a4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::only_a_warn_gap_is_a_warning_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:251f2bab872c4a6e9857430ec8af1a58118ed97cffc443ae4c9e06b7631e629d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs::a_link_to_artifacts_that_covers_shows_its_selection_in_the_json_and_the_drawing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d3773a9999861f539b52edf3d5fe4a1d7669f491dcab952b556c2a1f5c0403f0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs::the_json_holds_the_books_and_links_as_data",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:999400578c2c2665e93fe33afc85e81a77c114ca583f5dbb7f1ba7f15ca45611",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs::a_warn_gap_is_listed_with_its_strength_and_leaves_the_check_clean",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d9b3129047fbae7115b3c17df83d4299e03e260ed6b28dd4b0701f1c014ddcea",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs::an_error_gap_fails_the_check",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9a399ea55bd006cc6dfe778b27ece17850d52b9fd1be654cee1e5a6cd6df307c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs::books_check_lists_an_uncovered_document_and_is_not_clean",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:22ef20b4417bcf569596624f5e4e1cea9a357cf309fcf5a7512247bb254b7358",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/cover_tests.rs::each_notice_carries_the_strength_its_link_declares",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8cb4728f92aa27b83e8bd439c9803937f0e044dcbcf28353a68c485b7bc688b4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs::a_cover_word_that_is_no_strength_is_refused_and_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0fb67bc433de1d4042db9dad4e1f1100cede17f3a4e51d2fc1eb29c3299067e5",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs::an_unknown_cover_word_on_a_link_to_artifacts_is_refused_and_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:38c4607bd1d1af77539214bb48323f51045de87324055d02e8621feeff39ee81",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs::cover_is_none_unless_declared",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2744382db3f11b1af13a70d29ff94880a5a307ba4095459ebb84c30f87f0b097",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs::each_accepted_cover_is_read_to_its_strength",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "40a4375cb3971844cc47616914ddadbf9867c6d1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1268cd00de0f70b0a98c647f6aeb03bb24bb7ddfb2971e5e136f7efde84f1ba4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7f1475e48793df1910e2f24a8c2e80cb5b415735",
+      "hash": "sha256:f90ba654512de18d1e2584482cb12204ca1c85ad3480c661fa7085ab1d72b10a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "50"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c690-6834-77b2-8c4a-bd554e7eb233"
+    }
+  ],
+  "id": "01a21b5c-448e-72a2-a456-e62a2918f23b",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:b19f15118eb521cdb2bda9a472dcded6103faa244512f79c08e8c953640965e8",
+  "seen_address": "c811212b7ff0044c341e4c916260935bd3bb2239",
+  "subject": "01a1c690-6934-715f-b849-9529ca617d8a",
+  "v": 1,
+  "verb": "approve"
+}

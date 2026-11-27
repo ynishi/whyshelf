@@ -1,32 +1,27 @@
-//! The crates of the project at a side, read from its manifests: the directory of the
-//! project the source of each crate is under, so that a page of the source in the docs
+//! The crates of the project at a side, as the targets of its manifests give them
+//! ([`Targets`](super::super::targets)): the directory of the project the source of
+//! each crate is under, so that a page of the source in the docs
 //! (`src/<crate>/<path>.html`, rustdoc's name of a file by its crate and its path under
 //! the directory of the crate's root file) names a file of the project.
 //!
 //! | what | what it does |
 //! |---|---|
-//! | `Crates::of` | reads the manifest at the root (`Cargo.toml`): its package, and each member of its workspace by the member's own manifest |
+//! | `Crates::of` | the targets of the project at a side: its libraries and binaries are its crates |
 //! | `Crates::file_of` | the file of the project a page of the source in the docs is of, or why it cannot be told |
 //!
 //! The rule of which manifests are read, which crates a package has and where the
 //! source of each is, is on the page of the space, "Where a name lives"
-//! ([`rust_item`](super)); this module is where it is carried out. A manifest is
-//! parsed as TOML. What could not be read (a manifest, a member that is a pattern this
-//! module does not read or a directory that is a symbolic link, a directory of a
-//! package's source that cannot be listed) is kept with why, and a crate not found
-//! then cannot be told, rather than not one of the project; a directory that is not
-//! there is no such failure, only nothing there.
+//! ([`rust_item`](super)); the targets carry it out, and this module reads no manifest.
+//! What could not be read of the project is kept with why, and a crate not found then
+//! cannot be told, rather than not one of the project.
 //!
 //! This module reads the project through its state alone, as every reader does.
 
-use std::collections::{BTreeMap, BTreeSet};
-
-use whyshelf_core::app::shelf::{DirListing, EntryKind, NotADir, Side, StateList};
+use whyshelf_core::app::shelf::Side;
 use whyshelf_core::domain::location::RelPath;
 
 use super::super::super::state::ProjectTree;
-use super::super::file::{self, Bounded};
-use super::MAX_SETTINGS_BYTES;
+use super::super::targets::{CrateOf, MANIFEST, Targets, Top, shown};
 use super::docs_path::DocsPath;
 
 /// The name rustdoc gives the directory of the pages of the source, at the top of the
@@ -36,93 +31,27 @@ const SOURCE_DIR: &str = "src";
 /// The part rustdoc writes in the path of a page of the source for `..`.
 const UP: &str = "up";
 
-/// The name of a manifest.
-const MANIFEST: &str = "Cargo.toml";
-
-/// The parts of a directory of the project, from its root (none: the root).
-type Dir = Vec<String>;
-
-/// Where the source of a crate is.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Root {
-    /// Under this directory: the directory of the crate's root file.
-    Under(Dir),
-    /// Two packages have a library of the name, under these directories.
-    Two(Dir, Dir),
-}
-
-/// The crates of the project at one side, by the name rustdoc gives each.
+/// The crates of the project at one side, by the name rustdoc gives each: the targets
+/// of the project.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Crates {
-    /// The libraries, by name.
-    libraries: BTreeMap<String, Root>,
-    /// The binaries, by name: a library of the same name is the crate.
-    binaries: BTreeMap<String, Root>,
+    /// The targets of the project.
+    targets: Targets,
     /// What could not be read, each with why: a manifest, a member, a directory of a
-    /// package's source.
+    /// package, or the manifest at the root that is not there.
     unread: Vec<String>,
 }
 
 impl Crates {
-    /// The crates of the project at `side`, read from the manifest at its root and
-    /// those of the members of its workspace.
+    /// The crates of the project at `side`: the targets read from the manifest at its
+    /// root and those of the members of its workspace.
     pub(super) async fn of(state: &ProjectTree, side: Side) -> Self {
-        let mut crates = Self::default();
-        let Some(root) = crates.manifest(state, side, &Dir::new(), true).await else {
-            return crates;
-        };
-        let workspace = root.get("workspace").and_then(toml::Value::as_table);
-        // The edition a member inherits with `edition.workspace = true`.
-        let inherited = workspace
-            .and_then(|w| w.get("package"))
-            .and_then(|p| p.get("edition"))
-            .and_then(toml::Value::as_str)
-            .map(str::to_owned);
-        crates
-            .read_package(state, side, &root, &Dir::new(), inherited.as_deref())
-            .await;
-        let Some(workspace) = workspace else {
-            return crates;
-        };
-        let texts = |key: &str| -> Vec<String> {
-            workspace
-                .get(key)
-                .and_then(toml::Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|item| item.as_str().map(str::to_owned))
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        let excluded: Vec<Dir> = texts("exclude").iter().map(|t| parts_of(t)).collect();
-        let mut members: BTreeSet<Dir> = BTreeSet::new();
-        for member in texts("members") {
-            let pattern = parts_of(&member);
-            // A member written as a path is a member whatever `exclude` says; what a
-            // pattern matches is not, under a path `exclude` names.
-            if !pattern.iter().any(|part| is_pattern(part)) {
-                members.insert(pattern);
-                continue;
-            }
-            match crates.expand(state, side, &member).await {
-                Ok(dirs) => members.extend(
-                    dirs.into_iter()
-                        .filter(|dir| !excluded.iter().any(|out| dir.starts_with(out))),
-                ),
-                Err(why) => crates.unread.push(why),
-            }
+        let targets = Targets::of(state, side).await;
+        let mut unread: Vec<String> = targets.unread().iter().map(ToString::to_string).collect();
+        if targets.top() == Top::Absent {
+            unread.push(format!("the project has no {MANIFEST}"));
         }
-        members.remove(&Dir::new());
-        for dir in &members {
-            if let Some(manifest) = crates.manifest(state, side, dir, false).await {
-                crates
-                    .read_package(state, side, &manifest, dir, inherited.as_deref())
-                    .await;
-            }
-        }
-        crates
+        Self { targets, unread }
     }
 
     /// The file of the project the page of the source `page` is of: the part after
@@ -139,32 +68,28 @@ impl Crates {
                 ));
             }
         };
-        let root = self
-            .libraries
-            .get(krate)
-            .or_else(|| self.binaries.get(krate));
-        let dir = match root {
-            Some(Root::Under(dir)) => dir,
-            Some(Root::Two(one, two)) => {
+        let dir = match self.targets.crate_named(krate) {
+            CrateOf::One(target) => target.root_dir(),
+            CrateOf::Two(one, two) => {
                 return Err(format!(
                     "two packages of the project have a crate `{krate}`, under {} and {}",
-                    shown(one),
-                    shown(two)
+                    shown(&one.root_dir()),
+                    shown(&two.root_dir())
                 ));
             }
-            None if self.unread.is_empty() => {
+            CrateOf::None if self.unread.is_empty() => {
                 return Err(format!(
                     "the crate `{krate}` is no crate of the project's manifests (a dependency, or docs left by an earlier build)"
                 ));
             }
-            None => {
+            CrateOf::None => {
                 return Err(format!(
                     "the crate `{krate}` is no crate of the manifests read, and some could not be: {}",
                     self.unread.join("; ")
                 ));
             }
         };
-        let mut file = dir.clone();
+        let mut file = dir;
         for (at, part) in below.iter().enumerate() {
             let part = match (at + 1 == below.len(), part.strip_suffix(".html")) {
                 (true, Some(name)) => name,
@@ -191,481 +116,6 @@ impl Crates {
             format!("the source of the crate `{krate}` is no path of the project: {e}")
         })
     }
-
-    /// The manifest of the directory `dir`, parsed, or none (with why, kept, when it
-    /// is there and cannot be read, or when `needed` and it is not there).
-    async fn manifest(
-        &mut self,
-        state: &ProjectTree,
-        side: Side,
-        dir: &Dir,
-        needed: bool,
-    ) -> Option<toml::Table> {
-        let mut at = dir.clone();
-        at.push(MANIFEST.to_owned());
-        let shown = at.join("/");
-        let Ok(rel) = shown.parse::<RelPath>() else {
-            self.unread
-                .push(format!("{shown} is no path of the project"));
-            return None;
-        };
-        let bytes = match file::read_within(state, side, &rel, MAX_SETTINGS_BYTES).await {
-            Ok(Bounded::Bytes(bytes)) => bytes,
-            Ok(Bounded::NoFile) => {
-                if needed {
-                    self.unread.push(format!("the project has no {shown}"));
-                }
-                return None;
-            }
-            Ok(Bounded::Outside) => {
-                self.unread.push(format!(
-                    "{shown} leads outside the root of the project, or is broken"
-                ));
-                return None;
-            }
-            Ok(Bounded::TooLarge) => {
-                self.unread
-                    .push(format!("{shown} is larger than {MAX_SETTINGS_BYTES} bytes"));
-                return None;
-            }
-            Ok(Bounded::Untold(why)) => {
-                self.unread.push(format!("{shown} cannot be read: {why}"));
-                return None;
-            }
-            Err(e) => {
-                self.unread.push(format!("{shown} cannot be read: {e}"));
-                return None;
-            }
-        };
-        let parsed = String::from_utf8(bytes)
-            .map_err(|_| format!("{shown} is not UTF-8 text"))
-            .and_then(|text| {
-                text.parse::<toml::Table>()
-                    .map_err(|e| format!("{shown} is not TOML: {e}"))
-            });
-        match parsed {
-            Ok(table) => Some(table),
-            Err(why) => {
-                self.unread.push(why);
-                None
-            }
-        }
-    }
-
-    /// Whether the package the manifest `manifest` of `dir` declares has a library, as
-    /// cargo tells it: its `[lib]`; else, unless `autolib = false`, a file
-    /// `src/lib.rs`.
-    async fn has_library(
-        &mut self,
-        state: &ProjectTree,
-        side: Side,
-        manifest: &toml::Table,
-        dir: &Dir,
-    ) -> bool {
-        if manifest.get("lib").is_some() {
-            return true;
-        }
-        if package_flag(manifest, "autolib") == Some(false) {
-            return false;
-        }
-        self.files_under(state, side, &under(dir, &[SOURCE_DIR]))
-            .await
-            .contains("lib.rs")
-    }
-
-    /// The crates of the package the manifest `manifest` of `dir` declares, if it
-    /// declares one, by the rule on the page of the space: its library
-    /// ([`Self::has_library`]), and its binaries, those its layout holds
-    /// ([`Self::layout_bins`]) when cargo finds them, with each declared one
-    /// (`[[bin]]`) in the place of one of its name. `inherited` is the edition of the
-    /// workspace, for a package that inherits it.
-    async fn read_package(
-        &mut self,
-        state: &ProjectTree,
-        side: Side,
-        manifest: &toml::Table,
-        dir: &Dir,
-        inherited: Option<&str>,
-    ) {
-        let Some(name) = package_name(manifest) else {
-            return;
-        };
-        let library = self.has_library(state, side, manifest, dir).await;
-        let text = |table: &toml::Value, key: &str| {
-            table
-                .get(key)
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned)
-        };
-        let declared: Vec<(String, Option<String>)> = manifest
-            .get("bin")
-            .and_then(toml::Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|bin| Some((text(bin, "name")?, text(bin, "path"))))
-            .collect();
-        let layout = self.layout_bins(state, side, dir, name).await;
-        // Cargo finds binaries by the layout unless told not to; of the edition 2015, a
-        // package that declares one finds none unless told to.
-        let edition = match manifest.get("package").and_then(|p| p.get("edition")) {
-            Some(toml::Value::String(edition)) => Some(edition.as_str()),
-            Some(_) => inherited,
-            None => None,
-        };
-        let auto = package_flag(manifest, "autobins")
-            .unwrap_or(edition.unwrap_or("2015") != "2015" || declared.is_empty());
-        let mut bins: BTreeMap<String, String> = match auto {
-            true => layout.clone(),
-            false => BTreeMap::new(),
-        };
-        for (bin_name, path) in declared {
-            let path = path
-                .or_else(|| layout.get(&bin_name).cloned())
-                .unwrap_or_else(|| match bin_name == name {
-                    true => "src/main.rs".to_owned(),
-                    false => format!("src/bin/{bin_name}.rs"),
-                });
-            bins.insert(bin_name, path);
-        }
-        self.package(manifest, dir, library, bins);
-    }
-
-    /// The binaries the layout of the package `name` at `dir` holds, by name, with
-    /// their paths: `src/main.rs` by the name of the package, and each
-    /// `src/bin/<name>.rs` and `src/bin/<name>/main.rs` by its name.
-    async fn layout_bins(
-        &mut self,
-        state: &ProjectTree,
-        side: Side,
-        dir: &Dir,
-        name: &str,
-    ) -> BTreeMap<String, String> {
-        let mut found = BTreeMap::new();
-        if self
-            .files_under(state, side, &under(dir, &[SOURCE_DIR]))
-            .await
-            .contains("main.rs")
-        {
-            found.insert(name.to_owned(), "src/main.rs".to_owned());
-        }
-        let bin = under(dir, &[SOURCE_DIR, "bin"]);
-        for file in self.files_under(state, side, &bin).await {
-            if let Some(stem) = file.strip_suffix(".rs") {
-                found.insert(stem.to_owned(), format!("src/bin/{file}"));
-            }
-        }
-        for sub in self.dirs_under(state, side, &bin).await {
-            let at = under(&bin, &[sub.as_str()]);
-            if self.files_under(state, side, &at).await.contains("main.rs") {
-                found
-                    .entry(sub.clone())
-                    .or_insert_with(|| format!("src/bin/{sub}/main.rs"));
-            }
-        }
-        found
-    }
-
-    /// The names of the files under `dir`: none when it is not there, and none, with
-    /// why kept as not read, when it cannot be listed.
-    async fn files_under(
-        &mut self,
-        state: &ProjectTree,
-        side: Side,
-        dir: &Dir,
-    ) -> BTreeSet<String> {
-        match self.subfiles(state, side, dir).await {
-            Ok(files) => files,
-            Err(why) => {
-                self.unread.push(why);
-                BTreeSet::new()
-            }
-        }
-    }
-
-    /// The names of the directories under `dir`, as [`Self::files_under`] lists files.
-    async fn dirs_under(&mut self, state: &ProjectTree, side: Side, dir: &Dir) -> Vec<String> {
-        match self.subdirs(state, side, dir).await {
-            Ok(dirs) => dirs,
-            Err(why) => {
-                self.unread.push(why);
-                Vec::new()
-            }
-        }
-    }
-
-    /// The crates of the package the manifest `manifest` of `dir` declares: its library
-    /// when it has one (`library`), and its binaries (`bins`, by name, with their
-    /// paths).
-    fn package(
-        &mut self,
-        manifest: &toml::Table,
-        dir: &Dir,
-        library: bool,
-        bins: BTreeMap<String, String>,
-    ) {
-        let Some(name) = package_name(manifest) else {
-            return;
-        };
-        let text = |table: &toml::Value, key: &str| {
-            table
-                .get(key)
-                .and_then(toml::Value::as_str)
-                .map(str::to_owned)
-        };
-        let lib = manifest.get("lib");
-        let lib_name = lib
-            .and_then(|l| text(l, "name"))
-            .unwrap_or_else(|| name.replace('-', "_"));
-        let lib_path = lib
-            .and_then(|l| text(l, "path"))
-            .unwrap_or_else(|| "src/lib.rs".to_owned());
-        if let Some(root) = root_of(dir, &lib_path).filter(|_| library) {
-            put(&mut self.libraries, lib_name, root);
-        }
-        for (bin_name, path) in bins {
-            if let Some(root) = root_of(dir, &path) {
-                put(&mut self.binaries, bin_name.replace('-', "_"), root);
-            }
-        }
-    }
-
-    /// The directories a member of the workspace names: itself when it is a path,
-    /// and each directory its pattern matches that holds a manifest when it is one.
-    async fn expand(
-        &mut self,
-        state: &ProjectTree,
-        side: Side,
-        member: &str,
-    ) -> Result<Vec<Dir>, String> {
-        let pattern = parts_of(member);
-        if pattern.iter().any(|part| part == "**") {
-            return Err(format!(
-                "the member `{member}` of the workspace holds `**`, which is not read"
-            ));
-        }
-        if pattern.iter().any(|part| part.contains('[')) {
-            return Err(format!(
-                "the member `{member}` of the workspace holds `[`, which is not read"
-            ));
-        }
-        if !pattern.iter().any(|part| is_pattern(part)) {
-            return Ok(vec![pattern]);
-        }
-        let mut dirs: Vec<Dir> = vec![Dir::new()];
-        for part in &pattern {
-            let mut next = Vec::new();
-            for dir in dirs {
-                if !is_pattern(part) {
-                    let mut under = dir;
-                    under.push(part.clone());
-                    next.push(under);
-                    continue;
-                }
-                for entry in self.subdirs(state, side, &dir).await? {
-                    if matches(part, &entry) {
-                        next.push(under(&dir, &[entry.as_str()]));
-                    }
-                }
-                // A directory reached through a link is not walked: what it holds
-                // cannot be told, and is said.
-                for link in self.entries(state, side, &dir, EntryKind::Link).await? {
-                    if matches(part, &link) {
-                        self.unread.push(format!(
-                            "the member {} of the workspace is a symbolic link, which is not followed",
-                            under(&dir, &[link.as_str()]).join("/")
-                        ));
-                    }
-                }
-            }
-            dirs = next;
-        }
-        let mut found = Vec::new();
-        for dir in dirs {
-            if self.subfiles(state, side, &dir).await?.contains(MANIFEST) {
-                found.push(dir);
-            }
-        }
-        Ok(found)
-    }
-
-    /// The names of the directories under `dir`, as the state lists them.
-    async fn subdirs(
-        &self,
-        state: &ProjectTree,
-        side: Side,
-        dir: &Dir,
-    ) -> Result<Vec<String>, String> {
-        self.entries(state, side, dir, EntryKind::Dir).await
-    }
-
-    /// The names of the files under `dir`, as the state lists them.
-    async fn subfiles(
-        &self,
-        state: &ProjectTree,
-        side: Side,
-        dir: &Dir,
-    ) -> Result<BTreeSet<String>, String> {
-        Ok(self
-            .entries(state, side, dir, EntryKind::File)
-            .await?
-            .into_iter()
-            .collect())
-    }
-
-    /// The names of the entries of `kind` under `dir`; none when it is no directory.
-    async fn entries(
-        &self,
-        state: &ProjectTree,
-        side: Side,
-        dir: &Dir,
-        kind: EntryKind,
-    ) -> Result<Vec<String>, String> {
-        let at = match dir.is_empty() {
-            true => None,
-            false => Some(
-                dir.join("/")
-                    .parse::<RelPath>()
-                    .map_err(|e| format!("{} is no path of the project: {e}", dir.join("/")))?,
-            ),
-        };
-        match state.list(side, at.as_ref()).await {
-            Ok(DirListing::All(entries)) => Ok(entries
-                .named
-                .into_iter()
-                .filter(|(_, of)| *of == kind)
-                .filter_map(|(name, _)| name.as_str().rsplit('/').next().map(str::to_owned))
-                .collect()),
-            Ok(DirListing::Cut { why, .. }) => Err(format!(
-                "the directory {} of the workspace is not listed whole: {why}",
-                shown(dir)
-            )),
-            // Not there: nothing; anything else that is no directory cannot be told.
-            Ok(DirListing::NotADir(NotADir::Absent | NotADir::File)) => Ok(Vec::new()),
-            Ok(DirListing::NotADir(NotADir::Elsewhere { .. })) => Err(format!(
-                "{} is reached through a symbolic link, which is not followed",
-                shown(dir)
-            )),
-            Ok(DirListing::NotADir(NotADir::Untold(why))) => {
-                Err(format!("{} cannot be told: {why}", shown(dir)))
-            }
-            Err(e) => Err(format!(
-                "the directory {} cannot be listed: {e}",
-                shown(dir)
-            )),
-        }
-    }
-}
-
-/// `dir` with `parts` under it.
-fn under(dir: &Dir, parts: &[&str]) -> Dir {
-    let mut at = dir.clone();
-    at.extend(parts.iter().map(|part| (*part).to_owned()));
-    at
-}
-
-/// The value of a flag of the `[package]` a manifest declares (`autolib`,
-/// `autobins`), when it writes one.
-fn package_flag(manifest: &toml::Table, flag: &str) -> Option<bool> {
-    manifest
-        .get("package")
-        .and_then(|p| p.get(flag))
-        .and_then(toml::Value::as_bool)
-}
-
-/// The name of the package a manifest declares, if it declares one.
-fn package_name(manifest: &toml::Table) -> Option<&str> {
-    manifest
-        .get("package")
-        .and_then(|p| p.get("name"))
-        .and_then(toml::Value::as_str)
-}
-
-/// Puts the crate `name` under `root`, or tells two of one name apart.
-fn put(crates: &mut BTreeMap<String, Root>, name: String, root: Dir) {
-    match crates.get(&name) {
-        None => {
-            crates.insert(name, Root::Under(root));
-        }
-        Some(Root::Under(dir)) if *dir == root => {}
-        Some(Root::Under(dir)) => {
-            let two = Root::Two(dir.clone(), root);
-            crates.insert(name, two);
-        }
-        Some(Root::Two(..)) => {}
-    }
-}
-
-/// The directory of the root file `path` of a crate of the package at `dir`, with
-/// `.` and `..` read; none when it leads out of the project.
-fn root_of(dir: &Dir, path: &str) -> Option<Dir> {
-    let mut at = dir.clone();
-    let parts = parts_of(path);
-    let (_, above) = parts.split_last()?;
-    for part in above {
-        match part.as_str() {
-            ".." => {
-                at.pop()?;
-            }
-            part => at.push(part.to_owned()),
-        }
-    }
-    Some(at)
-}
-
-/// The parts of a path as a manifest writes it: `/` and `\` between them, the empty
-/// and `.` ones left out.
-fn parts_of(text: &str) -> Dir {
-    text.split(['/', '\\'])
-        .filter(|part| !part.is_empty() && *part != ".")
-        .map(str::to_owned)
-        .collect()
-}
-
-/// Whether a part of a member is a pattern.
-fn is_pattern(part: &str) -> bool {
-    part.contains(['*', '?', '['])
-}
-
-/// Whether the name `name` matches the pattern `part`: `*` any run of characters,
-/// `?` any one, every other character itself. A member with `[` is not read
-/// (`Crates::expand` tells it so), and never comes here.
-fn matches(part: &str, name: &str) -> bool {
-    let (pattern, name): (Vec<char>, Vec<char>) = (part.chars().collect(), name.chars().collect());
-    let (mut p, mut n) = (0, 0);
-    let mut star: Option<(usize, usize)> = None;
-    while n < name.len() {
-        match pattern.get(p) {
-            Some('*') => {
-                star = Some((p, n));
-                p += 1;
-            }
-            Some('?') => {
-                p += 1;
-                n += 1;
-            }
-            Some(c) if *c == name[n] => {
-                p += 1;
-                n += 1;
-            }
-            _ => match star {
-                Some((at, from)) => {
-                    p = at + 1;
-                    n = from + 1;
-                    star = Some((at, from + 1));
-                }
-                None => return false,
-            },
-        }
-    }
-    pattern[p..].iter().all(|c| *c == '*')
-}
-
-/// A directory of the project as a reason writes it.
-fn shown(dir: &Dir) -> String {
-    match dir.is_empty() {
-        true => "the root".to_owned(),
-        false => dir.join("/"),
-    }
 }
 
 /// The parts of a place in the docs, as a reason writes them.
@@ -677,6 +127,7 @@ fn joined(parts: &[&str]) -> String {
 mod tests {
     use std::path::Path;
 
+    use super::super::super::targets::matches;
     use super::super::fixture::write;
     use super::*;
 

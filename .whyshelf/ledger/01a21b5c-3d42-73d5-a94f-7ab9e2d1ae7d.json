@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a2ad106a3ab290829b6cfa87f22d7c8e9a3d98b82d9c7920fc4587d7e9fe96ae",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/map.rs::map_answers_the_books_the_links_and_their_drawing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:da5d527d344a67b973a7c61436963f0a15d5174fa6f4bda66d2225734642a86b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/map.rs::map_of_a_declaration_that_cannot_be_used_is_its_problems_as_check_gives_them",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bac0999d408e1c279c43992dc2812b698e24ee5e",
+      "hash": "sha256:5b166291dcdb398fe20cf946c63645890bec99b616c381db2abf7b24ef6099ba",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "47"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c64b-b4b9-723c-b0d7-3a6afd9617d3"
+    }
+  ],
+  "id": "01a21b5c-3d42-73d5-a94f-7ab9e2d1ae7d",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:05c28b1fde439ebef1a8d756fa3592924ea8430fdec031a4100f3cf396e1503a",
+  "seen_address": "bc2584beb4e73c8d387fce9511de05aa00ca3665",
+  "subject": "01a1c64b-b9cd-7146-b41d-df0d32fecbb3",
+  "v": 1,
+  "verb": "approve"
+}

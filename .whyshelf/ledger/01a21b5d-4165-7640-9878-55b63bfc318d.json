@@ -1,0 +1,111 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:79d81eae614a1eb770ed10cd4a8437b4ceff5ae86ae4d0c09ef2ae28a507422a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::a_change_not_named_as_one_way_is_a_request_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bcff9b505f5f83b5f64ea797d962c72e28919906e890ff524a44e0f082ffc451",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::a_declaration_two_sides_cannot_read_alike_stops_the_reading",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8802352f21d81ccd4c996b77e9538db75c5a330e3819fba657edb31dbdec2c7d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::a_git_that_cannot_be_run_is_a_failed_run_and_no_request_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c01b6bc0cb6878482815abbb3d8e759ccfdb99e4f788161aea852529a8c93165",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::a_name_the_side_after_cannot_tell_cannot_tell_whether_the_change_made_it_not_hold",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:56d10ec6ddb3f2941f095ea8071c4e75e9d75ca1de39993cb064600601bf3aa5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::an_edit_read_through_git_makes_the_approval_on_it_not_hold",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4767495b2c50b342089c4bb437af47579eb6186d352d334b600b38120135fae4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::an_edit_read_through_two_directories_makes_the_approval_on_it_not_hold",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4972900f40504da70ced14a02dc16b149d6aadf5",
+      "hash": "sha256:406a73ec920cdbe93f363c889e98f124f257fc91109f8100359f79c620be5a79",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "103"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7e48255413"
+    },
+    {
+      "address": "d6d06750effaf90c904119631b302dbf6452d682",
+      "hash": "sha256:978c35e2c845f1a1791067667a6693eea9cf58224d65e7233623496043c99e2d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "104"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7fbb63b84f"
+    },
+    {
+      "address": "4ddb39b58a72793dc580554fba5b372537ffaa73",
+      "hash": "sha256:13f6359d0bd033547ce85ee7367a65d4642fa5f922aba19955d6d6a67c2bf555",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "106"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a803bf4e2cc"
+    }
+  ],
+  "id": "01a21b5d-4165-7640-9878-55b63bfc318d",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:9b0341d54e888378bf39da9210baf6bf33d5971372f5c13040ccd847b1e2fef9",
+  "seen_address": "905dabc3a3d229b1ed60ee19da271efa4853bd2b",
+  "subject": "01a20baa-2bf0-764d-88ea-9a82af53666d",
+  "v": 1,
+  "verb": "approve"
+}

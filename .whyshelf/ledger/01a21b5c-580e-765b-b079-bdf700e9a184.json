@@ -1,0 +1,59 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:76cd89945508ff7da8dc0dc54796c81915336211dcc0310f9494b476c9fa09b0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/absent_path.rs::a_path_that_names_no_file_is_told_and_case_counts",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11891129d27429b1a8097e576d0f157c6b3cd482",
+      "hash": "sha256:11cccbc99d5bcad0b080459ad707cac5bce11386aecf2af95545c684c1ce5a1a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-778a-7288-ae20-3289a8a7a718"
+    },
+    {
+      "address": "d7a292650bcffaef1d0c947abe40235c719878dc",
+      "hash": "sha256:c03e03305a381cb0aae097cab40d04c7bfd71505936711141eaa0c160fa3ff01",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "43"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-7849-7632-b126-5a6b72f508b0"
+    }
+  ],
+  "id": "01a21b5c-580e-765b-b079-bdf700e9a184",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:943f43067e99eaf8c356ea9168071ff1522b9ef9da9305c6bc36007d99646e1d",
+  "seen_address": "eb4c92db45e777d6554d8282fc2008b3fde2c94e",
+  "subject": "01a1c765-25d4-76c7-88ae-78e4f8ea1119",
+  "v": 1,
+  "verb": "approve"
+}

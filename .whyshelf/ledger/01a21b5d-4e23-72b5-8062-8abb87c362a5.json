@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:687a7a6e63c2bb792ae21ce1b576ad82e2b9d8333abf8cbabb96c2572d7d62ac",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_declared_book_with_no_document_is_empty_and_a_book_not_declared_is_an_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:381cc396b3e8cbee9651f4b207a2772017c62204807fd1e341cd0d519ee952a5",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_file_of_the_book_that_is_no_valid_document_is_named_apart_with_no_id_among_them",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:aae968cb7c82a32b7d5dc5986dc77db996c9919cf269361a91f83c38a6605ca1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_null_an_empty_list_and_a_blank_text_name_nothing_and_are_valid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f02d5e02cc63b85aa40d7e0649083be7b9776e501f221ed0f5679e24d82c4dfe",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::each_document_of_the_book_names_its_artifacts_in_the_order_written_and_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:eba67a646f7493c2800612c405559a0a35798257fa62b1b4dd38918b9a985bd2",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_counts_an_unreadable_file_as_invalid_in_its_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a31491cedfeeadaca9a8f5dcf3fbea9e4fd09194bb8ca3171f5718e8eb0b10e4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_counts_valid_docs_and_invalid_files_per_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4e4c8d40b82a258e1c151d96317f104e12404a7cdccfb737c97fe6e79965f94f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_lists_an_empty_declared_book_with_zeros",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0fae177a1b9e3718482e93b66ad197f9a64e8d22a158a6df93941b1b9e7548bd",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::the_files_that_are_no_valid_document_are_the_invalid_the_unreadable_and_the_anonymous_in_that_order",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795755338857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8dbfd04081b47210fdcda36617a845eb29e51251",
+      "hash": "sha256:d1fa6f90794b254132ee1d41aa477e97415c94acd431939a88bb97efd575cafe",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "112"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2102b-3567-73b5-a69f-5a6bc7544b7c"
+    }
+  ],
+  "id": "01a21b5d-4e23-72b5-8062-8abb87c362a5",
+  "kind": "decision",
+  "reason": "#205: the text of a rust-test name now holds the test-only modules and items of its crate that the test reaches (paths resolved over the module tree, includes by hash), so the texts of the tests that hold something changed once; DEC-90, DEC-56, DEC-112, V-111 and V-129 rewritten to say so, and the shared helpers dropped from the tests of 59 verifications; checked by the tests of rust_test and its tree, the guard, and a measure of what each helper reaches",
+  "revision": "7affda7a74d0d8ce6ce0e0b61374369533051e04",
+  "seen": "sha256:f9d5bb073e90d876c698929b41f26951d232abab6ddc424194a8679793b0816f",
+  "seen_address": "1dac71f07ede651d28c29194be758ea0f21ee3e4",
+  "subject": "01a2102b-3567-73b5-a69f-5a6cf95957a8",
+  "v": 1,
+  "verb": "approve"
+}
