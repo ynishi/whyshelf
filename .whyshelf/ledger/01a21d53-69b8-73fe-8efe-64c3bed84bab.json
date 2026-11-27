@@ -1,0 +1,196 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:3635954ab7fd67ee0e8dd1b98e844ff241e4574464fc573c07ca9189c45174f0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::a_line_has_no_field_the_shape_does_not_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9dc965c327e50de1d553eed5af87d3a6a63a99e38fc567aa706885b509ebd56d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::a_line_with_no_entries_is_a_line_with_none_given",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6f66159ab5ed22de3dbad18d6777f0754b687d2187bc70c8c69b24a4928cce01",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::a_null_entry_of_a_line_is_an_entry_with_no_value",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:21ebb74b9eb458333d340b8e484dfb056706763e026493982cdcb76a900eba17",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::every_line_that_cannot_be_read_is_told_with_its_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bcc7aceb177594079555ed65603fb8a2f5da5f7d4f68299d5a0624cbf6a8e3e6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::lines_are_requests_numbered_by_their_line_with_blank_lines_counted",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1b2856bf6e6ec28ec3870066e5a71a3e94b63828e22d94a603a5531ba39a2717",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::new_parses_from_alone_and_refuses_it_with_a_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6eab59d794f74f5341afaa18d0399b250473bf8b3de51dccc4c7465083d7abaf",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/new_tests.rs::the_values_of_a_line_are_given_as_typed_and_a_name_twice_is_kept_twice",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1435ea5022f963a215a662b3ef83529c4b0265cb4fab04a716ebc6a989c62040",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_file_that_cannot_be_read_is_a_failed_run_and_one_with_no_line_a_request_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:31cc5fbf06d200dc4716b8cbea62b7326baa323056df8361b6ad1d8b206941be",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_line_refused_writes_nothing_and_every_refused_line_is_told_with_its_number",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:51ea4637d45793086f43c13371071a9446f1a8a40a33f5c7dcbaaa53774a0af3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_line_that_is_no_json_object_of_the_shape_is_told_with_its_line_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:45739dcaa9ad9fbee038a79364023596ce7c446532a0669584552fa197b79912",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_line_with_no_entries_is_read_and_judged_by_its_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:395f0a0b301b3b6cc39d901b98b55e60dfff3dbd791a2ea7922c2580393d694f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_name_given_where_no_document_is_linked_is_refused_with_its_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6db3f88370863e4922370117a6320209863398ae44c5ee4a29e13b124cce7fd4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_name_no_line_has_refuses_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2672e1b90ec5527b2bc3af8a8066d8dc42614f68cafc95316e52cf7b47d6827c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::a_name_stands_for_the_key_of_its_line_and_the_file_has_the_key",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:91c46162ab15d487eab94e5c652c5a13e7f14dd032655b2e2e343e5a5d7733a0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::an_entry_given_twice_in_a_line_is_refused_with_the_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bba97c0aeff68a5fdb67d62a089f7c5030fe044af45b406f88ccd8bcc492cc13",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::every_row_with_a_fault_of_the_request_is_told_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:595c5b3e177fddac05e772baf1d6e43228d374b14b955643e0c734190563cae2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::from_is_not_given_with_a_book_or_a_book_with_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:24f813c9ab5bd0ac9f7b7292596a0180ca9ddc2a13313d3de1c13a8aa9c6d655",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::names_that_link_in_a_ring_are_written_in_the_order_of_the_file",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7e2d36b09774487f39798d25b6e25b26bba9d5e0f5afc5ed294149f01539bab8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::new_of_one_document_is_answered_as_it_was",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:79a4efdede5da8440f438326fcde2e0569f37c0733c99d89bee8eb8b381735b9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::schema_has_the_answer_and_the_shape_of_a_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:800161cc6e7333a415bc852e3abfb01d3f8c23331c405d6f09342cb6191e7d81",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::the_documents_of_a_file_are_written_and_told_in_one_answer",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a82f97980778580f0fb50fbbcfec694ed6489275895880f9a96a3b5cc8af238d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::the_standard_input_is_a_file_named_dash",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:aad5f1e099095f298d078adf3d8ad27f5449043d1d1f0e85514014e15a35c67d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/new_many.rs::twenty_five_lines_are_twenty_five_documents",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c634e82e5a2b52fe232d878103c8fcdd5c408c4d",
+      "hash": "sha256:6cadfdc0cff2847fe48ebe362769681584fe3ccab541e762c9debf027fbb6b17",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "75"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e3a5-6ee3-7525-839f-9b046ea44760"
+    }
+  ],
+  "id": "01a21d53-69b8-73fe-8efe-64c3bed84bab",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:ef3a9cf80b85171cb0560a79582f6f8664e44c55e4666fe7f05d6ea225f3b7e5",
+  "seen_address": "43c0c5266eed26ff74fef866bc18cbdb1333b3e7",
+  "subject": "01a1e3b3-06f7-72bf-8831-ebc6ff84bf06",
+  "v": 1,
+  "verb": "approve"
+}

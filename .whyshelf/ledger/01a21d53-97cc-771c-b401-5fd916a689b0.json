@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:0779fada206393a51d64a0fc94faaa2b0fac160deba53e39cd7ec7143fcc97bf",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_blank_variable_names_no_one_and_a_blank_flag_is_a_wrong_request",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:190b6dcd54e261985d131fed0a3444d64f353f1c490d07e1c76027c7e4d4ac49",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_ran_by_given_on_the_command_line_is_kept_beside_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fd9e38bffb2308d51a41b4d5196d942178b35dd00a59747fc3bb3e5bdcb8f6fd",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_ran_by_that_is_the_actor_is_one_name_whoever_gave_either",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7f42700511b575dfc072cbded107ddd95ad2cafc20f1c169c93b2c6e300a19c0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_revocation_keeps_who_ran_the_command_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1e97870600f7da70c8fe568440190565a0554aa999c7afdd7283a61fa459657f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::every_judge_verb_takes_a_ran_by",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:810343f4f473f4490b72edc5e78dffdc3cf173bdf11b3f3af1be7dd736a7592c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::gits_user_name_and_the_projects_files_are_not_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:89037ea50b3e70b014cc04d3d5892ccb0bd0eeade283756acddfb5b166089f4c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_answers_show_who_ran_the_command_beside_the_actor_and_null_when_it_is_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:143667e2e000ca0cea38d71ef645de4b2db187fcaa2edc18c9bfbd487dc98e0a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_command_line_wins_over_the_variable_for_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e48a0b59c97cc6825e24f2d0c84233790d41fd348d22ea77b3a98157930774f6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_exemptions_check_lists_show_who_ran_the_command_beside_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5e47a81d01c30a20fd06b7c2064d1898006e282e962c1c5cc29c4d135d50a906",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_variable_names_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cadb2a8f483f35def74de63b56f01fcd88b66675389a165b06777693a0232107",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/repository_ledger.rs::the_repository_s_ledger_reads_with_no_unreadable_record_and_no_problem",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a9b2fd3c4ceba61ffda41404197124792b3fb23d",
+      "hash": "sha256:d1cbb29f21ce6cbdc780eea2f9611ecbb427d583290301d8825f4234a4b8981d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "91"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f9a4-bea7-7778-ac4a-a68538d58570"
+    }
+  ],
+  "id": "01a21d53-97cc-771c-b401-5fd916a689b0",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:280ce524cf5d5c387fa906abde39f373d84353bd7a09d1df63b55e9ba25e3249",
+  "seen_address": "9158da0d459ec2445b2675ae91300ef5db279150",
+  "subject": "01a1f9a5-0a13-76af-a15b-b7d44cac4f3b",
+  "v": 1,
+  "verb": "approve"
+}

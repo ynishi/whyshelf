@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:44b605c0bb0de116169ba5887235eb9623430e87dfe183e4dc94525f40d292e1",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs::a_number_too_large_for_the_parser_is_told_as_too_large",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5979035c1f8ab3ffe947a8970cc12df1090cea5f465f863949311eab1425c671",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs::every_value_a_front_matter_does_not_hold_is_told",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f56899001b5c531e40a596e93a043e082192124d93b447181a9b73090397ae80",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::a_negative_number_beyond_the_parser_is_told_as_too_small",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:48af14fb1a8b58a2e30edb3f6b6e352f27c9345a0f6e5288df81719964bec972",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::a_number_beyond_the_parser_is_told_beside_another_value",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d43c3e60ac300f1261a1c90f6953d95194ac134223b1fe055a0ed7ade899909a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::fmt_tells_every_value_of_a_file_it_leaves_alone",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:51116150695b21571a88416a98ffbf8aa80db1e42eafd78551ee5b7d00a7f21c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::one_value_is_told_once_and_a_held_value_not_at_all",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:12073311e7fc7039fbe5b60209dba86c2a3bc9846e24a0bbe0cef5d46ece5175",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::other_kinds_are_each_told",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7b4eea439069930519eff8286a54beaa9e0ce8f0",
+      "hash": "sha256:2809afa617acd5738959210e3f18c67ab8fba2ddcc39ab324c0b03ffc4c6a089",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    }
+  ],
+  "id": "01a21d53-47fc-739b-8776-5a823413a77c",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:35989fdca9026156e234ee9e2d6b199262f9966525397f7f4c5d144cf920de58",
+  "seen_address": "1d1baec1217886182eac551bb46473a0be68e874",
+  "subject": "01a1cc04-8636-721f-a251-50df70adcd68",
+  "v": 1,
+  "verb": "approve"
+}

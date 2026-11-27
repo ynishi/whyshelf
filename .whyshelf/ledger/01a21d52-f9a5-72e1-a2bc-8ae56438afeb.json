@@ -1,0 +1,59 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a91491eb22e70f178d947f84de18f8fcb1fab8a9a6258a3df1e4c581a95b6f52",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/absent_path.rs::a_path_that_names_no_file_is_told_and_case_counts",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "11891129d27429b1a8097e576d0f157c6b3cd482",
+      "hash": "sha256:11cccbc99d5bcad0b080459ad707cac5bce11386aecf2af95545c684c1ce5a1a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-778a-7288-ae20-3289a8a7a718"
+    },
+    {
+      "address": "d7a292650bcffaef1d0c947abe40235c719878dc",
+      "hash": "sha256:c03e03305a381cb0aae097cab40d04c7bfd71505936711141eaa0c160fa3ff01",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "43"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5c5-7849-7632-b126-5a6b72f508b0"
+    }
+  ],
+  "id": "01a21d52-f9a5-72e1-a2bc-8ae56438afeb",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:943f43067e99eaf8c356ea9168071ff1522b9ef9da9305c6bc36007d99646e1d",
+  "seen_address": "eb4c92db45e777d6554d8282fc2008b3fde2c94e",
+  "subject": "01a1c765-25d4-76c7-88ae-78e4f8ea1119",
+  "v": 1,
+  "verb": "approve"
+}

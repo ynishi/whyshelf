@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:6d46fe99c1252adf7bdfda5d15930dce73a5a33eb35431b261271cd6d8c9beb1",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_front_matter_that_is_broken_is_still_invalid_when_files_with_none_are_skipped",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bfe114de630cfc2fcbc0c5928c86616df9bceaac15c949a169f00e292950dc97",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_link_to_a_key_whose_file_is_excluded_resolves_as_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a997401b9fa70e2cc440d563ad61e0d6d297c326d087b03a8280e21f0ad8bd02",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_range_that_is_not_sound_is_a_problem_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:694c98b8b0625483216856121a0c2a104ea252e904e6025f24022b5bddf24ac8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_thematic_break_in_the_middle_of_a_file_is_no_front_matter",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:25a2afa1d0132bd16870ff230da43f69c86f12716c1b6d0bda8ab1ba8d6b8a4c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::an_exclude_and_skip_make_the_check_clean_and_tell_what_was_skipped",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8d2dc2f798f3625278555d72311ae82758b7ab6d7d3e78dd3606c48645414d53",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::new_into_a_path_the_range_does_not_take_is_refused_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:25d48df8ed86850a0fe77e637a44467ec8da4eae0493d45bf31e2287da1768fd",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::skip_alone_skips_the_files_of_the_subdirectory_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7850b8febfdeeb83bf0e861afb6ac393cd6cd0b07da075fd2f0173aa670d5cab",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::what_an_exclude_leaves_out_is_not_looked_at_even_when_it_could_not_be_read",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:74d46f6b4f3f8ca8c62208f9967cf0d74b0ed885cdb5cbca5c15c21c36cd19af",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::with_no_setting_every_file_without_a_front_matter_is_invalid",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "317875fca9349eb4ffeba4368823e91ed90e677b",
+      "hash": "sha256:8c09c8abb00416dc3aa924e1806b349a35d04e200d084a802ccb81822ca66a34",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "63"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
+    }
+  ],
+  "id": "01a21d53-2859-70b9-9d91-a6b5193214f4",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:34fb16654f17e779621e7dd6a12c839c74b96931afc82c9ecc22d63968f7524f",
+  "seen_address": "38435bf0055aa62244fbbe17dcd1a9cdcbd77072",
+  "subject": "01a1ca93-52da-772f-b994-aa8b79f1fd65",
+  "v": 1,
+  "verb": "approve"
+}

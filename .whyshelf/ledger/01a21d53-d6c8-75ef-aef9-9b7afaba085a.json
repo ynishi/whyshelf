@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:3953d0414d989b05c3fb0458345ab94ba860846eb6d73fbfb2d3d0423b94a9e9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_withheld.rs::a_pending_upstream_whose_approval_would_close_a_cycle_of_frames_says_so",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:66bf69e33dced56abea3b63f41e6ff00842d365afc346252aadf5519fae2696b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_withheld.rs::a_pending_upstream_whose_link_names_what_cannot_be_told_is_not_offered_its_approval",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:12bfcf40ddfeb22af7b45b455e12a92a3a601e1948180104e33c68ac9f97a557",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_withheld.rs::a_refusal_told_at_one_origin_is_told_at_the_origin_it_keeps_an_approval_from_too",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d92405f6833b15f00c30e2451a7d9bbf09874421",
+      "hash": "sha256:ac1ae1dfec2f4142f6ddfda1b0527bc5163ded12d41f2c7f2566d6e3a15cdbb7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "114"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d4b-86b5-7116-a322-e10c714d1c2d"
+    }
+  ],
+  "id": "01a21d53-d6c8-75ef-aef9-9b7afaba085a",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:575b76b77b51c171a2683d918e7496cd4b136b74a64c6fea17c1db4b525a8c28",
+  "seen_address": "c8084f3677b2618a9a016ec011475a847a55664a",
+  "subject": "01a21d4b-abbe-74f6-8e30-6a8aa76bf539",
+  "v": 1,
+  "verb": "approve"
+}

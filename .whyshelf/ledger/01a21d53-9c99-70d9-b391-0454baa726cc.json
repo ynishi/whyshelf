@@ -1,0 +1,42 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:f3b4688cefafb301a4a6c5d8398170dde57a299e58e6595046c500f47a066122",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel.rs::keys_taken_on_two_branches_are_found_on_the_merge_result_and_renumbering_keeps_the_approvals",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "31218213a9ce26d9397f23819f98647e0958b0e4",
+      "hash": "sha256:c15896c0c6ffe4d10dceb465872261cef38d08d76211ed9a418f3d3e824a8dae",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "92"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fb17-df61-7261-b4ee-e0a9ecdf00fd"
+    }
+  ],
+  "id": "01a21d53-9c99-70d9-b391-0454baa726cc",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:cbdde60bc900608d04f0d28529c81f9267148d8af2274f43a3582893c7076622",
+  "seen_address": "01cab39839a02f94cbc9a3ac0a2d31bb7ee88fbc",
+  "subject": "01a1fb18-02ed-7353-a00e-3fc9446e9996",
+  "v": 1,
+  "verb": "approve"
+}

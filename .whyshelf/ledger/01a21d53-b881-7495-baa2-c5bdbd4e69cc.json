@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:8b519a01a40ed50417eaea2ce20881f8a730224027848a7fd8ff864d7b992e7a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_document_whose_links_cannot_be_read_is_counted_and_said_and_a_bad_reference_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0dd1d3c90a2228a97e57c5d94f834bcbe26f68cc476616c7b15ac1f494bc6f55",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_requirement_reaches_its_decision_its_verification_and_what_they_stand_on",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9baff2fa12e27d5f8c11c992cdd6c37382ade791",
+      "hash": "sha256:f758e509ffccab51972f63e9a794df8df49ddf2771d54f2b4b06d4d50bbeee61",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "99"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8e84ae5744"
+    },
+    {
+      "address": "6bb496a5b8e0d4b5b513ca7e7eb6f5d629e9d6f6",
+      "hash": "sha256:8de8c5243d0477e06575fd5f48763ffdb2fceae314023d3d45b05f00709debbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "100"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8f92f2c0bb"
+    }
+  ],
+  "id": "01a21d53-b881-7495-baa2-c5bdbd4e69cc",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:f014ab0cdba5b11fbcf080e48d3f82f7c4f41868ed4c6c7045c8847514352d35",
+  "seen_address": "ed9c29a6c8f59fb88cc4d898a1cef1c329be6e44",
+  "subject": "01a20869-ab6e-762c-9771-9e900a99fc74",
+  "v": 1,
+  "verb": "approve"
+}

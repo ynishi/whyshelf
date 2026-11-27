@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:7937b211817dd8a7f06aaa1151f41f742cda830c22196d17c5f7cf6881341993",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/actor.rs::the_actor_given_on_the_command_line_wins_over_the_variable",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cdb8eb46f889868d7dc0ebeb01efcba5e47ce4cd8c5abc5cf5decbafb7d7b814",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/actor.rs::the_variable_wins_over_gits_user_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fac1f7de97214f8ba61b9f2a2f39993c6b34e4ce267e22e1bcb22ddbb8a679a5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/actor.rs::with_no_actor_a_run_that_would_only_repeat_is_refused_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:51a63cdb6581e3e9f52e10d4205e8f64d2468eef96041d4d4d70394b632b359d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/actor.rs::with_no_actor_a_verb_the_documents_state_would_refuse_fails_on_the_name_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f1a2ff4e6dc998c4541ec7215f223fc15e417995ebe07812df4c08cda3739b2b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/actor.rs::with_no_actor_the_judgement_is_refused_and_no_file_names_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:eea668906d35271d5744ffbff1f4205db01f2289d6e16cc16cc6885c6278ee86",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/actor.rs::with_no_variable_gits_user_name_of_the_project_is_used",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "18043f59ad21212c02248de6ae6190ae95685067",
+      "hash": "sha256:2b40c7219de6e63b98ee933e423a47e71e0a67775e325f5689d0966fabf8c6be",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "34"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-e310-703a-82cc-fecc69ebdc07"
+    }
+  ],
+  "id": "01a21d53-090f-7690-8f12-cd26af0e1968",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:62f1d581806e149cde33c443bddea31357a8d6b2ccc79c7995a32a37f8603384",
+  "seen_address": "49910ffa09531bc24cd363bbcb34eb98b98e4c0d",
+  "subject": "01a1c887-35f7-7582-ade1-d6717c584690",
+  "v": 1,
+  "verb": "approve"
+}

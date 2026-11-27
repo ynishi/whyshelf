@@ -1,0 +1,42 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:bafe65813369b91f4349eade28d46d70fb86e2caa869e5b43311faae8ff0f48c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/who_decided.rs::every_row_shows_the_decision_that_stands",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "46c4939df8a0de5c96e7b1d2f3e23c9408a05946",
+      "hash": "sha256:8a7484e072bdb063dd1c2cfc2af5c5ac0d055149aa9ee10f83fc58495f330902",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "40"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c577-33e1-735e-b992-19f40a27438a"
+    }
+  ],
+  "id": "01a21d52-f2a2-7508-9336-b5e503601114",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:131d6ebfe4ad800c98d428c187ed282468b923cede40f52785ce9e7fa9009130",
+  "seen_address": "bd7ea6ee9401722642ceae341a1cd5caf6278b54",
+  "subject": "01a1c765-2316-73a9-a790-6c7f0154d99b",
+  "v": 1,
+  "verb": "approve"
+}

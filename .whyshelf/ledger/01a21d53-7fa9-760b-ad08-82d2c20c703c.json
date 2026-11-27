@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:97279dac7715c1cfb7f7cf05e345c94819c77f0b77ddb0ee9b4126a893910c48",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moved_prefix.rs::a_renamed_module_is_declared_once_and_the_approval_stands_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7dfd84a8187a88e4601aacf9f02a948ab5e42ba55645350ba66b072ce24bd795",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moved_prefix.rs::a_test_left_in_the_old_module_is_refused_by_name_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d00cb5dd620b15cce38dd3506c25a5f33ed4b218e8d3eba0b51fbb8fa3950615",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moved_prefix.rs::nothing_under_the_prefix_and_two_prefixes_that_are_one_are_requests",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a1ffdb7931fcdb9c85f971127f029070e3a888c6ffb0fee2864540e7626c28d5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moved_prefix.rs::the_answer_of_a_prefix_move_has_its_schema",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "28de2319c7a40f142e802423b498ba15a506b3e2",
+      "hash": "sha256:916f6db637041e4b18ad98dc61c728af405ac00ccc952d12f5484c73c2b70453",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "80"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f0ce-3040-7549-bf80-827e6a156a89"
+    }
+  ],
+  "id": "01a21d53-7fa9-760b-ad08-82d2c20c703c",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:5e54bb8d4d7b2244a692391abe68e1fed6e7eb4494d238862a3906ed75b5b6cb",
+  "seen_address": "de41da35421a91dd5fad54b44eddbaf04ccf33a1",
+  "subject": "01a1f0ce-b650-7026-b44b-7c6703334ac0",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:d12c02ea2fc306d7e9a42de9304c03579184a6a3e6a0b8c55a8333616297222f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_document_named_twice_in_a_run_is_refused_as_such",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:57d8e62dcf63563c4912d8fe33432483f3f21f5f230aa371f2777a53926d8221",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_document_no_file_carries_names_nothing_even_with_an_exemption_of_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f78351535d9ac79bd533872f41b0d689aac5318891c8cd9799da929cf58698d2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_finding_exempt_from_a_warn_cover_is_listed_apart_and_unneeded_once_grounded",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a2daaa441e31c87d65ef9faf3c9ad31f0eded0c8159a575115fc19a714b2c73d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_note_exempt_from_a_true_cover_leaves_check_clean_until_it_is_seen",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a0564b7b012c5e5345b049acf53d28b4fe74877aa56ad3380c1371281bde1e60",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_refused_exemption_exits_2_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b6e252ad39d264d4b1b0f81d3d1bbf7324360cdb894a20937bf742a922970765",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_from_one_of_two_covering_links_leaves_the_other_a_gap",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0f2c5d734d9bd4d107ebca2f79b92f59a08cbf495a8c7db8330556203fa6f6cf",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_unneeded_at_once_exits_2_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:40de38b7e7fd600d2cd462f8260221e0e2cbc4d6bb753b8322af771ac79cc3bd",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_withdrawn_leaves_the_gap_as_it_was",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2a0d563a3f81d111e3ddfc613f4ca67d52cd214e41818fed517ccc59b93532ab",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_withdrawn_twice_is_refused_and_one_may_be_made_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2132caefec3ff9fc3273c041195d4823c2bab8fa5c7dff1f3cf59c58287104e2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::every_why_of_an_unneeded_exemption_is_told_on_the_binary",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5a5d8ab955bf7b2a779086f9ffb22fd8771cf1bc7a619d12c4bc2c880b1c80c8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::two_exemptions_of_one_note_from_one_link_are_warned_of_as_repeated",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    }
+  ],
+  "id": "01a21d53-3408-7140-8665-7dbeed51ce04",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:67fb64515dc2e9d4730645f044e8c309f48d553996a7966c95dd8737a3ea7d76",
+  "seen_address": "499959b023e5d6df9753fb5e970cb7d65afff164",
+  "subject": "01a1cae7-1da6-7457-af7a-69b5b81ebcc9",
+  "v": 1,
+  "verb": "approve"
+}

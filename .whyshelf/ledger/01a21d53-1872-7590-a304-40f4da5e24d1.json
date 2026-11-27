@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:30e9d1181f9f18f28a9e54f8d64dd4fe2e3277bc2cfcf99fc322b592a138cc02",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves.rs::a_pinned_file_moved_unchanged_is_named_with_its_new_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:12a89e266e1adac72e682652d4b4bdc1d71062c1a438ee30091057532c8ec9d6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves.rs::a_pinned_file_moved_with_an_edit_is_named_by_gits_rename_detection",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:74fbac16b18e8a50fbdbf82272c9c826ed134ea4e4d1a5f008c16f8cf5afb965",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves.rs::nothing_gone_is_an_empty_answer",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5321918193415bd4e90eb38d10eb96417991db670f787706befc5a011cc7f329",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/moves.rs::outside_git_the_content_is_found_and_the_note_says_why_renames_were_not",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795788294308,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a62ae7682e25304886acc68cd237b34b358453ec",
+      "hash": "sha256:ca489565a7c7318de8e62eeca652efad4af7d092e73feac3582753b85dfd058b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "60"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6"
+    }
+  ],
+  "id": "01a21d53-1872-7590-a304-40f4da5e24d1",
+  "kind": "decision",
+  "reason": "The end-to-end tests of what stale withholds moved to a file of their own, which V-142 names, and five helpers both files use moved to the shared module as they were (#184, DEC-56); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "a72025c834c2984579826cefc26691d653092009",
+  "seen": "sha256:1568324a75741b09215ea0c93c1a24f91dfe2df9b1a5ed77e30039c36899d376",
+  "seen_address": "a1e43da01a02e8f26f3eb8e1828716c65631fb3a",
+  "subject": "01a1c952-62b7-758a-a32f-5b59538e7dfa",
+  "v": 1,
+  "verb": "approve"
+}

@@ -149,6 +149,41 @@ pub(crate) fn json(output: &Output) -> serde_json::Value {
     })
 }
 
+pub(crate) fn succeeded(output: &Output) {
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// The lines a run wrote on stderr.
+pub(crate) fn stderr_lines(output: &Output) -> Vec<String> {
+    String::from_utf8_lossy(&output.stderr)
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+pub(crate) fn origins_of(project: &Project) -> serde_json::Value {
+    json(&project.run(&["stale"]))["origins"].clone()
+}
+
+/// A project of notes `N-1` .. that stand on one another (`on`) and on files.
+pub(crate) fn linked_books() -> String {
+    format!(
+        "{BOOKS}[[book.link]]\nname = \"on\"\ntarget = \"note\"\nmeans = \"depends\"\n\
+         [[book.link]]\nname = \"files\"\ntarget = \"artifact\"\nspace = \"file\"\nmeans = \"depends\"\n"
+    )
+}
+
+pub(crate) fn note(n: u32, entries: &str) -> String {
+    format!(
+        "---\nid: \"01a1c4f0-0000-7000-8000-00000000000{n}\"\nkey: \"N-{n}\"\ntitle: \"Note {n}\"\n{entries}---\nThe body.\n"
+    )
+}
+
 /// The reading commands, each with the arguments it runs with on [`NOTE`].
 pub(crate) const READS: [&[&str]; 16] = [
     &["fmt", "--check"],
