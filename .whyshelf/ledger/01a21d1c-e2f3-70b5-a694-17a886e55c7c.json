@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795784757281,
+  "expires": null,
+  "frame": [],
+  "id": "01a21d1c-e2f3-70b5-a694-17a886e55c7c",
+  "kind": "decision",
+  "reason": "A file whose front matter a merge conflict touches is told as holding conflict markers and shows an identity only when its sides agree, read in one place by the reader of a file, as DEC-113 says, and tested in the reader, the admission and on the binary (#166); checked by an independent design review, a code review and the full test suite",
+  "revision": "c62bc8772bcf4938e8878f75b8adb65153c7f3f7",
+  "seen": "sha256:a62c663e28ffea87121f9bcdc6b434c2ca629ae3525c82d56b473987dc35dffa",
+  "seen_address": "73c99469def1e8264258223bb12ae4ee8bda63ac",
+  "subject": "01a21d1c-01a0-7288-bdc1-d97b82944de5",
+  "v": 1,
+  "verb": "approve"
+}

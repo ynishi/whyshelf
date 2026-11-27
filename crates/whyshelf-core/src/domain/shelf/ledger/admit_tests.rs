@@ -315,6 +315,37 @@ fn a_record_is_read_with_the_book_it_names_else_the_one_its_document_is_in_else_
     assert_eq!(not.book, RecordBook::Shelf);
 }
 
+/// A record that names no book is read with `[decide]` while the only file that may
+/// hold its document is one whose identity cannot be told (a file left in a merge
+/// conflict, one whose `id:` is broken): the document is in no book the shelf knows.
+#[test]
+fn a_record_naming_no_book_is_read_with_decide_when_only_a_file_without_an_identity_may_hold_its_document()
+ {
+    use crate::domain::shelf::build::{DocReading, RawProblem, ReadId};
+
+    let shelf = ruled(rule(&[DecideKind::Approve], None));
+    let unnamed = with_book(&approve_by(&shelf, 1, 1001, "ana", 10), None);
+    assert_eq!(
+        Admit::of(&shelf).book_of(&unnamed),
+        RecordBook::Now(BookName::new("finding").unwrap())
+    );
+
+    let mut decl = ShelfDecl::of_books(decls());
+    decl.decide = rule(&[DecideKind::Approve], None);
+    let schema =
+        Schema::declared(decl, &BuiltinPresets::new(), &spaces(), &Default::default()).unwrap();
+    let unreadable = Shelf::build(
+        &schema,
+        vec![DocReading::Unparsed {
+            origin: "findings/fr-1.md".parse().unwrap(),
+            id: ReadId::Unreadable,
+            why: RawProblem::ConflictMarkers,
+        }],
+        &ArtifactReadings::new(),
+    );
+    assert_eq!(Admit::of(&unreadable).book_of(&unnamed), RecordBook::Shelf);
+}
+
 #[test]
 fn a_record_that_names_no_book_keeps_its_form_and_one_that_names_one_reads_back() {
     let shelf = ruled(rule(&[DecideKind::Approve], None));

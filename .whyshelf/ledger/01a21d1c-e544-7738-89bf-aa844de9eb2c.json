@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c57dae99c25dbbc8ea3170e698f055fd510129abb21199041c03c229fd6312ef",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_naming_no_book_is_read_with_decide_when_only_a_file_without_an_identity_may_hold_its_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "d62dc3796a6924bc022bb908066dfed29b4db226",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d83fc6ee9a8fa47eafb637fa05cd220dfcbaebfd2d3b683ccb9182cf11576f39",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795784757281,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c0c03df32d1a3f7d8adc9b7ba6da54d1a95f9c3c",
+      "hash": "sha256:9b12bab661175c4151ae7ad65268ee603037941739dd60622ca8dea580827b9f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "113"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d1c-14f4-76a5-8d36-a9a72bc6c6a8"
+    }
+  ],
+  "id": "01a21d1c-e544-7738-89bf-aa844de9eb2c",
+  "kind": "decision",
+  "reason": "A file whose front matter a merge conflict touches is told as holding conflict markers and shows an identity only when its sides agree, read in one place by the reader of a file, as DEC-113 says, and tested in the reader, the admission and on the binary (#166); checked by an independent design review, a code review and the full test suite",
+  "revision": "c62bc8772bcf4938e8878f75b8adb65153c7f3f7",
+  "seen": "sha256:50458e133e24df0ff6a17e558f8f586e620be00cb55f7cdfe8ef8bf380e84b3e",
+  "seen_address": "528f8aa01d1cf3831b9a60236917b8e4461ec36f",
+  "subject": "01a21d1c-291c-77b7-8e67-8824d74f1d69",
+  "v": 1,
+  "verb": "approve"
+}

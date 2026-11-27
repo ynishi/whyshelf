@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:ec1b932db5c4ea460088bba21dbae1b4d829f2739772e29f9dceabd3cd84c5c3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_whose_file_is_gone_is_unknown_while_a_conflict_is_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:70f367820f206820d58e10ca41c59947bd058596d818e36c4ff23f7bb16e0446",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_with_no_record_is_looked_up_as_absent_while_a_conflict_may_hold_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:69f5b9f0f2c39bcbe2eebd978490c75cf0b01ed224b40f529c257a8f0a4c5121",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::another_file_of_the_identity_of_a_side_stays_valid_beside_the_conflict",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f3f8ed09ed436604f53c48520601ac74f4a902d46989f18873256a45553b6aca",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::check_names_the_file_as_one_that_holds_conflict_markers_and_gives_it_no_identity",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7802865aabe147ebe0d53a11853d59137754b309f24a034d90be266a32d06e49",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::the_documents_of_both_sides_of_a_file_are_neither_gone_nor_invalid_but_unknown",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7817bb538ff585f809e5bd46531ff959da6b9e0856fabeda73c38d6f2df02227",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::two_sides_of_one_identity_are_that_documents_file_and_invalid_for_its_conflict",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795784757281,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c0c03df32d1a3f7d8adc9b7ba6da54d1a95f9c3c",
+      "hash": "sha256:9b12bab661175c4151ae7ad65268ee603037941739dd60622ca8dea580827b9f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "113"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d1c-14f4-76a5-8d36-a9a72bc6c6a8"
+    }
+  ],
+  "id": "01a21d1c-e66b-7477-bce0-f8d15bed2217",
+  "kind": "decision",
+  "reason": "A file whose front matter a merge conflict touches is told as holding conflict markers and shows an identity only when its sides agree, read in one place by the reader of a file, as DEC-113 says, and tested in the reader, the admission and on the binary (#166); checked by an independent design review, a code review and the full test suite",
+  "revision": "c62bc8772bcf4938e8878f75b8adb65153c7f3f7",
+  "seen": "sha256:59b95a7fa6cd91f29094c7b9438fdf9018827852d0d13af45cb5caa46982a3cf",
+  "seen_address": "7bfc5113374547109cebca8e3367874d60db377c",
+  "subject": "01a21d1c-3dcc-7424-8d7c-f4754d3d404c",
+  "v": 1,
+  "verb": "approve"
+}

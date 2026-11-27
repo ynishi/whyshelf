@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:e78bbba032e9a1c82f7d388f03c5ee2c947400d8b1a2abfcccc4aed091309b85",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs::a_file_edited_between_the_reading_and_the_write_is_left_alone",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:96fa5a4451cbb17dac8ce6e0ece17ed2fb6c1e9fef6ed49b761c749763ea4d31",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs::a_port_that_fails_is_an_error_of_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e5a46eab7eebb495c2a70c0d9d5f704c477b1e32a5758785641e6ab221586659",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs::a_read_only_file_and_a_hard_link_are_left_alone",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:852f5a3688a122b1a6b6eb02faada190fd71071ca965a5288dc8ae9a0950c01d",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs::every_file_is_in_the_form_only_when_none_is_to_write_or_left_alone",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d385fda2e0a76090e307212e23ed274a6645cc639d433f67d4109b678272d2a9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs::fmt_changes_no_hash_and_no_approval",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:58435ff74ebd290bcd878a05513ceed1f2b5360265a644f36b63ab6e5d5eb671",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs::fmt_check_writes_nothing_and_lists_the_files",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:78403553642176496f8f2597b798cebb1389296bdb774e04a998ab2220d742e8",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/fmt_tests.rs::fmt_rewrites_a_file_not_in_the_form_and_leaves_the_rest",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "d62dc3796a6924bc022bb908066dfed29b4db226",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:d83fc6ee9a8fa47eafb637fa05cd220dfcbaebfd2d3b683ccb9182cf11576f39",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795784763260,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4bf1e23b6aa06e20c49a1e5ee6aac8efeb1744b3",
+      "hash": "sha256:9afad7f4e49382e60101c43961b7eff455aa4f212f347d9f4481ec51bf8ca281",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "52"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c7ac-f6cd-72dd-9c19-683d45100164"
+    }
+  ],
+  "id": "01a21d1d-06ce-76d5-9170-3f53f086944b",
+  "kind": "decision",
+  "reason": "The reader of a file gained the reading of a merge conflict (#166), REQ-8 is grounded on F-91 too, and DEC-12 names DEC-113 for a file left in a conflict; what these documents claim and the tests they name still hold, checked by an independent code review and the full test suite",
+  "revision": "c62bc8772bcf4938e8878f75b8adb65153c7f3f7",
+  "seen": "sha256:f7b40dc92efd2111d373f6c5dc80e5f58f7a6e561758bd2c27f3378a7cee9f79",
+  "seen_address": "4b858431f3dee52846d46ac33396760a998988b1",
+  "subject": "01a1c7ad-001a-777b-8fe2-cc8909aaffa0",
+  "v": 1,
+  "verb": "approve"
+}
