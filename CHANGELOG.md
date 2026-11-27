@@ -8,8 +8,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Each origin of `stale` carries `withheld`: the approvals by name that would
+  settle it and the frame refuses now, each with the document it would be of
+  (`doc`), which approval it is (`approve`: `pending`, `as_another` or `until`)
+  and why the frame refuses it (`detail`). No command is written for one, and
+  each is also a line on stderr; before, such an approval was dropped from
+  `next` without a word (#184).
+- In the library (#184): `settle::Approval`, an approval of one document by
+  naming it, `settle::Withheld`, one the frame refuses with its
+  `ledger::FrameRefusal`, and `settle::Settled`, what can be said of an origin
+  (`next` and `withheld`).
+
 ### Changed
 
+- In the library (#184): `settle::settle_all` returns a `settle::Settled` for
+  each origin, and `app::shelf::SettledOrigin` has a new field, `withheld`. The
+  variants `Settlement::ApprovePending`, `ApproveAsAnother` and `ApproveUntil`
+  are now `Settlement::Approve` of `Approval::Pending`, `AsAnother` and `Until`:
+  code that names them no longer builds.
 - `RawProblem` has a new variant, `ConflictMarkers`: a match over it that names
   every variant no longer builds (#166).
 - `check` and `health` write no `id` for a file left with both sides of a merge
