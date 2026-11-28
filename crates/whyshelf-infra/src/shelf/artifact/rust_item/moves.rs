@@ -440,7 +440,7 @@ mod tests {
     use whyshelf_core::domain::shelf::ledger::{Admit, Ledger, NoteKind, PinnedNames};
 
     use super::super::RustItemSpace;
-    use super::super::fixture::{item_page, module_index, write};
+    use super::super::fixture::{item_page, module_index, sources, write};
     use super::*;
     use crate::shelf::Project;
     use crate::shelf::ledger::JsonLedger;
@@ -493,7 +493,8 @@ mod tests {
             RustItemSpace::new(self.root().to_path_buf(), Some(self.build()))
         }
 
-        /// The module (or crate) `dir` of the docs, as `demo/inner`.
+        /// The module (or crate) `dir` of the docs, as `demo/inner`; a crate is one of
+        /// the project, with its source, of which the docs are.
         async fn module(&self, dir: &str) {
             write(
                 &self.build(),
@@ -501,6 +502,9 @@ mod tests {
                 &module_index("A module."),
             )
             .await;
+            if !dir.contains('/') {
+                sources(self.root(), &self.build().join("doc"), &[dir]).await;
+            }
         }
 
         /// The page `at` of the docs, as `demo/struct.Foo.html`, of an item with this
@@ -584,7 +588,7 @@ mod tests {
         limits: &CatalogLimits,
     ) -> Result<Lookup, String> {
         match docs {
-            Ok(docs) => Ok(Lookup::new(root, docs, limits.page_bytes).await),
+            Ok(docs) => Ok(super::super::fixture::walk_lookup(root, docs, limits.page_bytes).await),
             Err(why) => Err(why),
         }
     }
@@ -1347,6 +1351,67 @@ mod tests {
             .map(|(name, _)| name)
             .collect();
         assert_eq!(names, ["demo::m::Foo", "aaa::m::Foo"]);
+    }
+
+    #[tokio::test]
+    async fn docs_not_of_their_sources_are_not_searched_and_each_name_says_why() {
+        let world = old_module("rustdoc").await;
+        world.remove("demo/old").await;
+        world.module("demo/new").await;
+        world
+            .item("demo/new/struct.Foo.html", "pub struct Foo;", "A foo.", &[])
+            .await;
+        let gone = world.gone().await;
+        assert_eq!(gone.len(), 2);
+        // The source edited after the docs were built.
+        write(world.root(), "crates/demo/src/lib.rs", "//! Edited.\n").await;
+        let said = SpaceSuggest::suggest(&world.space(), &gone).await.unwrap();
+        assert_eq!(said.len(), 2);
+        for one in said.values() {
+            assert!(one.candidates.is_empty(), "{one:?}");
+            assert!(
+                matches!(&one.notes[..], [MoveNote::SearchUnavailable { detail }]
+                    if detail.as_str().contains("is not of the sources as they are")
+                        && detail.as_str().contains("crates/demo/src/lib.rs differs")),
+                "{:?}",
+                one.notes
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_docs_of_a_dependency_are_not_searched_for_candidates() {
+        let world = old_module("rustdoc").await;
+        world.remove("demo/old").await;
+        world.module("demo/new").await;
+        world
+            .item("demo/new/struct.Foo.html", "pub struct Foo;", "A foo.", &[])
+            .await;
+        // The docs of a crate that is none of the project's, with a name that ends as
+        // the gone one does in more segments.
+        write(
+            &world.build(),
+            "doc/dep/index.html",
+            &module_index("A dependency."),
+        )
+        .await;
+        write(
+            &world.build(),
+            "doc/dep/old/index.html",
+            &module_index("Old."),
+        )
+        .await;
+        world
+            .item("dep/old/struct.Foo.html", "pub struct Foo;", "A foo.", &[])
+            .await;
+        let gone = world.gone().await;
+        let said = SpaceSuggest::suggest(&world.space(), &gone).await.unwrap();
+        let candidates: Vec<String> = said[&name("demo::old::Foo")]
+            .candidates
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+        assert_eq!(candidates, ["demo::new::Foo"]);
     }
 
     #[tokio::test]

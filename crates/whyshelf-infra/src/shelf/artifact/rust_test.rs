@@ -414,6 +414,12 @@
 //! files a selection takes are those the state of the project lists. It declares no
 //! build directory, and runs no program.
 //!
+//! # What it stands on
+//!
+//! The files of tests (`.rs`) a name names and those of the modules they hold, and the
+//! manifests (`Cargo.toml`) of the project: all of them sources, read as they are. It
+//! reads nothing derived from them, so there is nothing to hold against them.
+//!
 //! # Where a name lives
 //!
 //! A test lives, whole ([`Placement::Only`]), in the files its text is read from: the
@@ -3026,6 +3032,11 @@ mod tests {
             super::super::Adapter::RustTest(
                 RustTestSpace::new(dir.to_path_buf()).with_max_file(MAX_TEST_FILE),
             )
+        }
+
+        /// It reads the files of tests and the manifests themselves.
+        async fn basis(&self, _: &Path) -> conformance::Basis {
+            conformance::Basis::Sources
         }
 
         async fn tree(&self, dir: &Path) -> conformance::Tree {

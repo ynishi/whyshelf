@@ -679,6 +679,9 @@ const UNTOLD: TextLiteral = TextLiteral::new("the state cannot tell what is ther
 fn untold_why(why: Untold) -> NonBlank {
     match why {
         Untold::Said(why) | Untold::NotAName(why) => why,
+        Untold::NotOfSources(not) => {
+            NonBlank::new(not.to_string()).unwrap_or(NonBlank::from(UNTOLD))
+        }
         Untold::NoAnswer | Untold::NotAsked => NonBlank::from(UNTOLD),
     }
 }

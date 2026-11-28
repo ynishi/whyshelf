@@ -69,12 +69,25 @@ use super::state::Side;
 ///   kind, the hash of its content, its reason), however often, in whatever order and
 ///   with whatever else it is asked; the content does not depend on where the tree
 ///   sits, the time or the locale. The address an answer carries, and the suggestions
-///   of where a name moved, are outside this promise.
+///   of where a name moved, are outside this promise. An adapter that reads something
+///   derived, which holds within it the place it was made at, cannot hold it in
+///   another place and answers there that it cannot tell, until it is made again.
 /// - **Content only.** An adapter answers what the content is, never whether it is
 ///   right.
+/// - **Of its sources.** An adapter says, on its page, the sources its answers stand
+///   on: files of the side it is asked. What it answers is told by the content of
+///   those sources, and by nothing else. An adapter that reads something derived
+///   from its sources (a build of them) and not the sources themselves holds what it
+///   reads against them by content, as far as what it reads shows them, says on its
+///   page what it cannot hold, and answers that it cannot tell where what it reads is
+///   not of them
+///   ([`Untold::NotOfSources`](crate::domain::shelf::artifact::Untold::NotOfSources)).
+///   What is a source and what is derived is the role the adapter declares, not
+///   where a thing is (inside the tree or outside it).
 ///
 /// Each adapter writes the definition of its space (its grammar, equal names, the one
-/// thing of a name, its answers, what is compared and where it reads) on its own page.
+/// thing of a name, its answers, what is compared, where it reads and what it stands
+/// on) on its own page.
 pub trait SpaceAdapter: Send + Sync {
     /// The adapter's error: for what stops an ask as a whole, never for one name.
     type Error: Error + Send + Sync + 'static;

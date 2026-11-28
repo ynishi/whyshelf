@@ -7,8 +7,10 @@
 //! a link cannot be followed to what it names, how many names read an approval, and
 //! who ran the command that made a record.
 
+use schemars::JsonSchema;
+use serde::Serialize;
 use whyshelf_core::domain::actor::{Actor, Attribution};
-use whyshelf_core::domain::shelf::artifact::ArtifactState;
+use whyshelf_core::domain::shelf::artifact::{ArtifactState, NotOfSourcesWhy, Untold};
 use whyshelf_core::domain::shelf::doc::Unfollowed;
 use whyshelf_core::domain::shelf::freshness::{
     FreshnessLevel, Holding, HoldsAs, Severity, StandingKind,
@@ -85,6 +87,88 @@ pub(super) fn shell_word(text: &str) -> String {
         text.to_owned()
     } else {
         format!("'{}'", text.replace('\'', r"'\''"))
+    }
+}
+
+/// Why a name cannot be told now, by its kind (`kind`): what the adapter said
+/// (`told`), no answer (`no_answer`), not asked for the comparison (`not_asked`), no
+/// name of the space (`not_a_name`), or what it read is not of its sources
+/// (`not_of_sources`), which alone says what was read, the reason and what to do.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum UntoldOut {
+    /// The adapter said it cannot tell (`why` says why).
+    Told,
+    /// The adapter gave no answer for the name.
+    NoAnswer,
+    /// The adapter was not asked for the link's comparison.
+    NotAsked,
+    /// The text is no name of the space.
+    NotAName,
+    /// What the adapter read is derived from the sources of its answers and is not of
+    /// them as they are.
+    NotOfSources {
+        /// What it read, as the adapter says it (the built docs at a directory).
+        read: String,
+        /// How it is not of the sources.
+        #[serde(flatten)]
+        reason: ReasonOut,
+        /// What a person may do, as the adapter says it.
+        hint: String,
+    },
+}
+
+/// How what an adapter read is not of its sources (`reason`): a file that differs
+/// from its copy (`differs`, with `file`), a copy of a file that is not there
+/// (`gone`, with `file`), no copy of the sources (`no_trace`), or what could not be
+/// read to hold it against them (`unread`, with `what`).
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum ReasonOut {
+    /// A file of the sources differs from the copy of it.
+    Differs {
+        /// The file, as a path of the project.
+        file: String,
+    },
+    /// A copy of a file the sources do not have.
+    Gone {
+        /// The file, where the sources would have it.
+        file: String,
+    },
+    /// No copy of the sources, or none that can be laid beside a file of them.
+    NoTrace,
+    /// What could not be read, or was past a bound.
+    Unread {
+        /// Why, as the adapter says it.
+        what: String,
+    },
+}
+
+/// The kind of why a name cannot be told, as `unknown` of `check` and `stale` writes
+/// it: the one place an [`Untold`] is made into the words of an answer. The match is
+/// exhaustive, so a new kind does not build until it has its words.
+pub(super) fn untold_out(why: &Untold) -> UntoldOut {
+    match why {
+        Untold::Said(_) => UntoldOut::Told,
+        Untold::NoAnswer => UntoldOut::NoAnswer,
+        Untold::NotAsked => UntoldOut::NotAsked,
+        Untold::NotAName(_) => UntoldOut::NotAName,
+        Untold::NotOfSources(not) => UntoldOut::NotOfSources {
+            read: not.read().to_owned(),
+            reason: match not.why() {
+                NotOfSourcesWhy::Differs { file } => ReasonOut::Differs {
+                    file: file.to_string(),
+                },
+                NotOfSourcesWhy::Gone { file } => ReasonOut::Gone {
+                    file: file.to_string(),
+                },
+                NotOfSourcesWhy::NoTrace => ReasonOut::NoTrace,
+                NotOfSourcesWhy::Unread(what) => ReasonOut::Unread {
+                    what: what.to_string(),
+                },
+            },
+            hint: not.hint().to_owned(),
+        },
     }
 }
 

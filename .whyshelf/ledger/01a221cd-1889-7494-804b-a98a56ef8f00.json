@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:861c94c62e67b0c631b3d8436137282ca42f236ba1b09a3f79b67413db1260de",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::a_crate_whose_docs_are_not_built_is_unknown_and_no_approval_stands_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5c4bc981fb38d0bc219a72b3a14e4fa602ec5beec271c533e79454ef547659db",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::a_link_of_the_preset_rustdoc_stands_on_the_items_being_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5d41ecbc9c4b4efe37b197849ba26fed82f34b72fdd115c53ebc2fda8c384555",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::a_text_that_is_no_rust_path_makes_the_document_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:780f4e38808387f53f854cf958c7db5a0b635110d01759ea390a3060e7b0179f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_items.rs::the_gate_fails_while_an_approval_stands_on_a_name_that_cannot_be_told",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795863407184,
+  "expires": null,
+  "frame": [
+    {
+      "address": "da6b7f80d19decb4aaa221ee08a900089ae2b27e",
+      "hash": "sha256:8ba365062086afa6bb84e836ddee30c711abcbc12caa06d085e4d524b0029c54",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "54"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c811-cfe5-739d-9535-559effdfed85"
+    }
+  ],
+  "id": "01a221cd-1889-7494-804b-a98a56ef8f00",
+  "kind": "decision",
+  "reason": "For #225, after its author's review of the whole diff: DEC-84 says the fourth promise, of its sources, and the eight headings; DEC-54 and DEC-96 say the docs are held against the sources and a dependency's docs are not walked; REQ-13 grounds F-94; the tests and helpers these documents name gained the holding of the docs (the fixtures write the sources the docs are of, the conformance hook declares what each adapter stands on, a reason not of the sources is a new kind of unknown), and what each claims still holds, checked by its tests and the full test suite",
+  "revision": "f00aa52e2adfe992659965c175db80cda9371c4d",
+  "seen": "sha256:539e1fdd15fa96db2070406f94d826b8df4363ef7fb2dc6bfb6d4efebc99b227",
+  "seen_address": "dbac97ab072955fd410a2917e160bd5cc792965d",
+  "subject": "01a1c811-de0a-70c2-aff0-e988ee3e70e0",
+  "v": 1,
+  "verb": "approve"
+}

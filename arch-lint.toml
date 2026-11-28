@@ -223,6 +223,8 @@ paths = [
     "crates/whyshelf-infra/src/shelf/artifact/rust_item/catalog.rs",
     "crates/whyshelf-infra/src/shelf/artifact/rust_item/docs_tree.rs",
     "crates/whyshelf-infra/src/shelf/artifact/rust_item/crates.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/rust_item/held.rs",
+    "crates/whyshelf-infra/src/shelf/artifact/rust_item/sited.rs",
 ]
 
 [[restrict-use]]

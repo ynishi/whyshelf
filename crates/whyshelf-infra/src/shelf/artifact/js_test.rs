@@ -312,6 +312,12 @@
 //! (through a symbolic link only while it stays inside the root). It declares no
 //! build directory, and runs no program.
 //!
+//! # What it stands on
+//!
+//! The file of tests a name names, read by the rules of the space `file`: a source,
+//! read as it is. It reads nothing derived from it, so there is nothing to hold
+//! against it.
+//!
 //! # Where a name lives
 //!
 //! A test lives, whole ([`Placement::Only`]), in the files the file its name writes
@@ -3106,6 +3112,11 @@ mod tests {
                 max_file: MAX_TEST_FILE,
                 ..JsTestSpace::new(dir.to_path_buf())
             })
+        }
+
+        /// It reads the files of tests themselves.
+        async fn basis(&self, _: &Path) -> conformance::Basis {
+            conformance::Basis::Sources
         }
 
         async fn tree(&self, dir: &Path) -> conformance::Tree {

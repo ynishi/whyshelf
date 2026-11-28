@@ -121,11 +121,12 @@ fn channel() -> String {
         .expect("a channel in the toolchain file")
 }
 
-/// A project whose note links to these items, with the crate `demo` beside its
-/// books; its docs are built into `build`.
+/// A project whose note links to these items, the crate `demo` at its root (so its
+/// manifest names the crate the docs are held against); its docs are built into
+/// `build`.
 fn project(name: &str, books: &str, items: &[&str], link: &str) -> Project {
     let project = Project::with(name, books, &note(items, link));
-    let krate = project.0.join("crate");
+    let krate = project.0.clone();
     fs::create_dir_all(krate.join("src")).unwrap();
     fs::write(krate.join("Cargo.toml"), CARGO_TOML).unwrap();
     fs::write(krate.join("src/lib.rs"), SOURCE).unwrap();
@@ -142,7 +143,7 @@ fn cargo_doc(project: &Project) {
     let cargo = std::env::var("CARGO").expect("cargo sets CARGO for the tests it runs");
     let output = Command::new(cargo)
         .args(["doc", "--offline", "--no-deps"])
-        .current_dir(project.0.join("crate"))
+        .current_dir(&project.0)
         .env("CARGO_TARGET_DIR", project.0.join("build"))
         .env_remove("RUSTFLAGS")
         .env_remove("RUSTDOCFLAGS")
@@ -188,7 +189,7 @@ fn standing(project: &Project) -> (serde_json::Value, String) {
 
 /// Edit the source of the crate and build its docs again.
 fn edit(project: &Project, from: &str, to: &str) {
-    let path = project.0.join("crate/src/lib.rs");
+    let path = project.0.join("src/lib.rs");
     let text = fs::read_to_string(&path).unwrap();
     assert!(text.contains(from), "{from}");
     fs::write(path, text.replace(from, to)).unwrap();

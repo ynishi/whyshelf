@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:3a102491e5a1350f1c206533e60823307ac344f1bda30774348d755a7dcc6da5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_sources.rs::an_item_added_after_the_docs_were_built_is_not_told_absent_and_is_there_once_they_are_built_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9541230bfcdad62391f8b89a280cef46176399070c254b3a48aecc57aa233ecc",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_sources.rs::an_item_removed_after_the_docs_were_built_is_not_told_there_and_is_gone_once_they_are_built_again",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795863391995,
+  "expires": null,
+  "frame": [
+    {
+      "address": "101e9ebb00e7e402d4257c741ca3c3a99c956777",
+      "hash": "sha256:50430d082f32f189274bd2a7408c7f767727ea2a84611c5cf514015c19686977",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "116"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a221c7-6b1b-7014-bd12-a2bc64a49b96"
+    }
+  ],
+  "id": "01a221cc-cbfe-7748-a11a-b8a555ef3fc7",
+  "kind": "decision",
+  "reason": "For #225: F-94 records the docs of rust-item read older than the sources; DEC-116 adds the promise of its sources and holds the built docs against the sources by content, the whole build at once, with no build run by whyshelf; V-145 and V-146 name the unit, conformance and end-to-end tests of it. Read against the code by its author in a review of the whole diff before the hand-over; checked by the tests they name, which pass, and the full test suite",
+  "revision": "f00aa52e2adfe992659965c175db80cda9371c4d",
+  "seen": "sha256:43adfaf536516f864dcfc92bd35ff881b46d625814e94e3716190af73d206721",
+  "seen_address": "cfecbdda10035ccb3f7befd566824f981769969a",
+  "subject": "01a221c7-6b1b-7014-bd12-a2bef690da2a",
+  "v": 1,
+  "verb": "approve"
+}

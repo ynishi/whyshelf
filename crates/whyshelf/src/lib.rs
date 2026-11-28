@@ -439,10 +439,10 @@
 //! An item whose page cannot be read as that cannot be told for such a comparison,
 //! with why, and is still there for `presence`; so is an item whose own page is too
 //! large (a member is found by reading its type's page, so a too-large page of the
-//! type makes its members cannot-tell for presence too). The docs are read as they are, so docs left
-//! by an earlier build, of an item or a crate since gone, read as there: build them
-//! afresh before you check or approve (`cargo doc --no-deps`; in this repository
-//! `just rust-doc`, which removes the old ones first). A name reached only through
+//! type makes its members cannot-tell for presence too). The docs are held against the
+//! sources they were built from before a page of them is read (below, "Keeping built
+//! docs with the sources"): docs that are not of the sources as they are tell no name
+//! there or absent. A name reached only through
 //! a glob re-export of a public module, a member reached only through a type alias,
 //! and an item hidden from the docs (`#[doc(hidden)]`) read as absent; a member a
 //! type has through `Deref` or a blanket impl reads as there; a raw identifier
@@ -462,6 +462,40 @@
 //!   target = "artifact"
 //!   preset = "rustdoc-promise"   # space = "rust-item", compare = "lines", means = "depends"
 //! ```
+//!
+//! ### Keeping built docs with the sources
+//!
+//! An adapter answers from the content of the sources it says it stands on, and one
+//! that reads something built from them holds what it reads against them. The docs
+//! `cargo doc` writes hold a copy of each file of a crate they document (a page of the
+//! source); `rust-item` lays every such page of the crates of the project beside the
+//! file of the tree it is of, the whole build at once, and when one is not the same
+//! (a file edited, added to a module or taken away since the docs were built), no name
+//! read from those docs is there or absent: each cannot be told, `not_of_sources`
+//! (below), with the file, what was read and what to do. A re-export crosses crates,
+//! so one file that differs holds back the names of every crate. The docs of a crate
+//! that is no crate of the project's manifests (a dependency) are not held, and each of
+//! their names cannot be told the same way, nor is any a candidate of `moves`. whyshelf
+//! builds nothing and runs no program: building the docs again is the project's.
+//!
+//! 1. Build them in the recipe that checks, every time, before it checks: this
+//!    repository's `just check` removes the docs and builds them before the books
+//!    gate.
+//! 2. Run the same recipe in CI, which then builds them from nothing.
+//! 3. A Git hook may help by hand (`post-merge`, `post-checkout`, running the build of
+//!    the docs), but a clone does not copy hooks, so do not lean on one alone.
+//! 4. Know what cannot be held (the page of `whyshelf_infra::shelf::artifact::rust_item`,
+//!    "What it stands on", lists it): a source a build script made and what a macro
+//!    reads from outside the sources, a file read by `include_str!` or
+//!    `include_bytes!`, an item re-exported from a dependency whose version moved, and
+//!    docs built with other features, `cfg` or toolchain can answer old with nothing
+//!    said; a crate with two files that are one page once `..` is dropped, one that
+//!    reads a file outside both the project and the build directory, a tree moved with
+//!    its build directory, and docs that write no page of the source cannot be told,
+//!    though they may be of the sources.
+//!
+//! `check` still exits 0 for such a name (an approval cannot stand on it, and one that
+//! stands is unchanged by it); `stale --exit-code` exits 1 while an approval pins one.
 //!
 //! The space `rust-test` holds the test functions of the project's Rust source,
 //! each by its file and its path in the file: `<file>.rs::<module>::<function>`,
@@ -597,7 +631,12 @@
 //! pinned as absent too: `check` lists it under `absent` (the check stays clean),
 //! `judge approve` under each judgement's `absent`, and its row has an
 //! `artifact_absent` notice. A name its adapter cannot tell about now is listed under
-//! `check`'s `unknown` (the check stays clean) with an `artifact_unknown` notice; an
+//! `check`'s `unknown` (the check stays clean) with an `artifact_unknown` notice, each
+//! with `why`, a sentence, and `kind`: `told` (the adapter said why), `no_answer`,
+//! `not_asked` (not asked for the link's comparison), `not_a_name`, or
+//! `not_of_sources`, which alone has `read` (what the adapter read), `reason`
+//! (`differs` or `gone`, each with the `file` of the project, `no_trace`, or `unread`
+//! with `what`) and `hint` (what to do); an
 //! approval that would pin one is refused, and one already pinned changes nothing of
 //! the approval while it lasts. `check` also writes such names on stderr, as it does
 //! a gap of `warn`, one line for each cause, not for each name: what is mended is
@@ -618,7 +657,7 @@
 //! line of its own, `…, which has nothing behind it`. A gate cannot say an approval
 //! holds that stands on a name that cannot be told, so `stale` lists each name an
 //! approved document pins through a `depends` link that cannot be told now in its
-//! `unknown` (`doc`, `link`, `name`, `space`, `why`, as `check`'s), and
+//! `unknown` (`doc`, `link`, `name`, `space`, `why`, `kind`, as `check`'s), and
 //! `stale --exit-code` exits 1 for one too, with the lines of that rule, worded as a
 //! pin, on stderr (`warning: <key> pins <name> in <space>, which cannot be told now,
 //! …`); its freshness is still unchanged. Afterwards:
@@ -882,11 +921,11 @@
 //! For `rust-item`, the docs keep no history, so a candidate is a name the built docs
 //! have now that ends as the gone one does: of the modules (a directory with an
 //! `index.html`) and the items (a page `<kind>.<Name>.html`) of the crates rustdoc
-//! wrote, those that end with the most segments in common with it, counted from the
-//! last, in each crate (`app::old::m::Foo` has `app::new::m::Foo`, and not
-//! `app::other::Foo` when it has the first; a dependency's `http::Error`, which ends alike in two
-//! segments with `myapp::http::Error`, does not hide `myapp::net::Error`, which does in
-//! one). A member `Type::m` has the members of that name of the types that
+//! wrote for the crates of the project (a dependency's docs are not searched), those
+//! that end with the most segments in common with it, counted from the last, in each
+//! crate (`app::old::m::Foo` has `app::new::m::Foo`, and not `app::other::Foo` when it
+//! has the first; another crate's `http::Error`, which ends alike in two segments with
+//! `myapp::http::Error`, does not hide `myapp::net::Error`, which does in one). A member `Type::m` has the members of that name of the types that
 //! end as `Type` does and whose page has the anchor of `m` (the most alike in each
 //! crate of those, so a type that ends alike in more segments and has no such member
 //! does not hide one that has it), and the names that end as the member does,
@@ -906,14 +945,12 @@
 //! `scan_truncated`. The search stops at 20,000 names, 64 modules deep, 2,000 pages or
 //! 512 MiB of them, and passes over a page of more than 32 MiB (`scan_truncated`,
 //! `unreadable_skipped`, `too_large_skipped`); when where the docs are built cannot be
-//! told, or they are not built, nothing is searched (`search_unavailable`). A name only
-//! a public re-export reaches is not a candidate, a name renamed where it stands
-//! (`m::Foo` to `m::Bar`) has none, and the docs are read as they are, so an item of
-//! docs an earlier build left is a candidate too. The crates of the gone names are
-//! walked first, and the others in the order of their names, so docs built with their
-//! dependencies can reach the bound of names before another crate of the project is
-//! walked: a candidate in a crate not walked is not found, and `scan_truncated` says
-//! the search stopped. A gone name counts toward a move of a prefix (below) only
+//! told, they are not built, or they are not of the sources as they are (above,
+//! "Keeping built docs with the sources"), nothing is searched (`search_unavailable`,
+//! which says why). A name only a public re-export reaches is not a candidate, and a
+//! name renamed where it stands (`m::Foo` to `m::Bar`) has none. The crates of the
+//! gone names are walked first, and the others in the order of their names. A gone
+//! name counts toward a move of a prefix (below) only
 //! through the candidates kept, at most 16: one whose candidate was cut does not.
 //!
 //! A candidate carries every move of a prefix that leads from the gone name to it, the

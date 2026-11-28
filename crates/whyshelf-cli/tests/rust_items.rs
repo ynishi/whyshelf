@@ -6,7 +6,8 @@
 //! edit of an item's docs, and breaks it when the item goes away; `stale
 //! --exit-code` fails while an approval stands on a name that cannot be told.
 //!
-//! The docs are a small tree of HTML laid out as rustdoc writes it, in a build
+//! The docs are a small tree of HTML laid out as rustdoc writes it, with the page of
+//! the source of the crate whose source is at the root of the project, in a build
 //! directory `CARGO_TARGET_DIR` names, so no crate is built and no program but the
 //! binary is run.
 
@@ -31,6 +32,9 @@ preset = "rustdoc"
 "#;
 
 const GENERATOR: &str = "<meta name=\"generator\" content=\"rustdoc\">";
+
+/// The source of the crate `demo` the docs are of: no character HTML escapes.
+const LIB: &str = "//! The demo crate.\npub struct Shelf;\n";
 
 /// A note whose link names these paths.
 fn note(items: &[&str]) -> String {
@@ -78,6 +82,17 @@ impl Project {
         fs::write(dir.join(".whyshelf/books.toml"), BOOKS).unwrap();
         fs::write(dir.join("notes/N-1.md"), note(items)).unwrap();
         fs::write(dir.join("build/doc/demo/index.html"), page(&[], "demo")).unwrap();
+        // The crate the docs are of, and its page of the source: the docs are of the
+        // sources as they are.
+        fs::write(dir.join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(dir.join("src/lib.rs"), LIB).unwrap();
+        fs::create_dir_all(dir.join("build/doc/src/demo")).unwrap();
+        fs::write(
+            dir.join("build/doc/src/demo/lib.rs.html"),
+            format!("<html><head>{GENERATOR}</head><body><pre class=\"rust\"><code>{LIB}</code></pre></body></html>"),
+        )
+        .unwrap();
         let project = Self(dir);
         project.shelf(&["method.build"], "A shelf.");
         project
