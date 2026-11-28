@@ -6,8 +6,9 @@
 //!
 //! | what | what it does |
 //! |---|---|
-//! | `Crates::of` | the targets of the project at a side: its libraries and binaries are its crates |
+//! | `Crates::of` | the targets of the project at a side, from the manifests the space reads (at the root, else in each directory at the top of the tree): its libraries and binaries are its crates |
 //! | `Crates::crate_dir` | the directory of the root file of a crate of the project, or what the crate is instead ([`SourceOf`]) |
+//! | `Crates::path_dependencies` | the crates of the project the package of a crate depends on by a path |
 //! | `Crates::file_of` | the file of the project a page of the source in the docs is of, or what it is instead ([`SourceOf`]) |
 //!
 //! The rule of which manifests are read, which crates a package has and where the
@@ -21,7 +22,7 @@
 //!
 //! | rule | when | the page is of |
 //! |---|---|---|
-//! | 1 | `P` starts with the parts of the build directory, as an absolute path ([`Sited`], either form) | a source a build made ([`SourceOf::MadeByBuild`]) |
+//! | 1 | `P` starts with the parts of the build directory, as an absolute path ([`Sited`], either form), and goes on as the output of a build script does (`<profile>/build/<package>-<hash>/out/…`, the hash 16 hexadecimal digits, or with a target triple before the profile) | a source a build made ([`SourceOf::MadeByBuild`]) |
 //! | 2 | `P` starts with the parts of the root of the project, as an absolute path | the file of the rest of `P` ([`SourceOf::File`]) |
 //! | 3 | `P` has a part `up` (rustdoc's `..`, as older versions write it) | the file `P` names from the directory of the crate's root file, `up` read as `..`; one that climbs past the root leaves the project ([`SourceOf::LeavesProject`]) |
 //! | 4 | any other | the first file of the side of `P` under the directory of the crate's root file, then under each directory above it up to the root: rustdoc drops a `..` of a path and does not say how many there were; with none there, the one under the directory of the crate's root file |
@@ -39,8 +40,8 @@ use super::docs_path::DocsPath;
 use super::sited::Sited;
 
 /// The name rustdoc gives the directory of the pages of the source, at the top of the
-/// docs.
-const SOURCE_DIR: &str = "src";
+/// docs: the one place it is written, read here and by the holding of the docs.
+pub(super) const SOURCE_DIR: &str = "src";
 
 /// The part rustdoc writes in the path of a page of the source for `..`.
 const UP: &str = "up";
@@ -56,7 +57,8 @@ pub(super) enum SourceOf {
     MadeByBuild,
     /// A path that climbs out of the project, or is no path of it.
     LeavesProject,
-    /// The crate is no crate of the project's manifests (a dependency).
+    /// The crate is no crate of the manifests the space reads: a dependency's, or one
+    /// of a package those manifests do not reach.
     NoCrate,
     /// Two packages of the project have a crate of the name, and why it is said so.
     TwoCrates(NonBlank),
@@ -80,7 +82,7 @@ impl SourceOf {
                 parts.join("/")
             )),
             Self::NoCrate => Some(format!(
-                "the crate `{krate}` is no crate of the project's manifests (a dependency)"
+                "the crate `{krate}` is no crate of the manifests read (those at the root, else in each directory at its top)"
             )),
             Self::TwoCrates(why) | Self::ManifestsUnread(why) => Some(why.to_string()),
             Self::NotASourcePage => Some(format!(
@@ -112,12 +114,15 @@ pub(super) struct Crates {
 
 impl Crates {
     /// The crates of the project at `side`: the targets read from the manifest at its
-    /// root and those of the members of its workspace.
+    /// root and those of the members of its workspace, or, with none at the root, from
+    /// the manifest of each directory at its top ([`Targets::of_project`]).
     pub(super) async fn of(state: &ProjectTree, side: Side) -> Self {
-        let targets = Targets::of(state, side).await;
+        let targets = Targets::of_project(state, side).await;
         let mut unread: Vec<String> = targets.unread().iter().map(ToString::to_string).collect();
         if targets.top() == Top::Absent {
-            unread.push(format!("the project has no {MANIFEST}"));
+            unread.push(format!(
+                "the project has no {MANIFEST} at its root, nor in a directory at its top"
+            ));
         }
         Self {
             state: state.clone(),
@@ -157,6 +162,20 @@ impl Crates {
         }
     }
 
+    /// The crates of the project (their names) that the package of the crate `krate`
+    /// depends on by a path: none for a crate that is no one crate of the project.
+    pub(super) fn path_dependencies(&self, krate: &str) -> Vec<String> {
+        match self.targets.crate_named(krate) {
+            CrateOf::One(target) => self
+                .targets
+                .path_dependencies(target)
+                .into_iter()
+                .map(|lib| lib.name.clone())
+                .collect(),
+            CrateOf::Two(..) | CrateOf::None => Vec::new(),
+        }
+    }
+
     /// What the page of the source `page` is of, by the rules of the module page, with
     /// `sited` where the docs were built from and into: a file of the project, or what
     /// it is instead.
@@ -182,8 +201,10 @@ impl Crates {
             Ok(dir) => dir,
             Err(instead) => return instead,
         };
-        // 1: a source the build made, by its whole path.
-        if sited.build.rest(&rest).is_some() {
+        // 1: a source the build made, by its whole path: the output of a build script
+        // under the build directory, and nothing else there (the build directory may be
+        // the root, or above it).
+        if sited.build.rest(&rest).is_some_and(made_by_a_build_script) {
             return SourceOf::MadeByBuild;
         }
         // 2: a file of the project, by its whole path.
@@ -220,6 +241,29 @@ impl Crates {
         }
         file_at_text(&first)
     }
+}
+
+/// Whether `rest`, the parts of a place under the build directory, is in the output of
+/// a build script, as cargo lays it out: `<profile>/build/<package>-<hash>/out/…`, or
+/// `<triple>/<profile>/build/<package>-<hash>/out/…`, the directory of the package
+/// its name, `-` and 16 hexadecimal digits. A file of the project that happens to sit
+/// on a path of those words (`x/build/y/out/z.rs`, the build directory being the root)
+/// is not.
+fn made_by_a_build_script(rest: &[String]) -> bool {
+    [1, 2].into_iter().any(|at| {
+        rest.get(at).is_some_and(|part| part == "build")
+            && rest.get(at + 1).is_some_and(|part| is_package_dir(part))
+            && rest.get(at + 2).is_some_and(|part| part == "out")
+            && rest.len() > at + 3
+    })
+}
+
+/// Whether `part` is the name cargo gives the directory of a package's build output:
+/// a name, `-`, and a hash of 16 hexadecimal digits.
+fn is_package_dir(part: &str) -> bool {
+    part.rsplit_once('-').is_some_and(|(name, hash)| {
+        !name.is_empty() && hash.len() == 16 && hash.chars().all(|c| c.is_ascii_hexdigit())
+    })
 }
 
 /// The file at the parts `parts`, or a path that leaves the project when they are no
@@ -261,15 +305,21 @@ mod tests {
     /// What the page `text` is of, as a file or the reason an item placed by it is
     /// told, where neither the root nor the build directory is a whole path of it.
     async fn of(crates: &Crates, text: &str) -> Result<RelPath, String> {
+        let page = page(text);
+        match source_of(crates, text).await {
+            SourceOf::File(file) => Ok(file),
+            other => Err(other.unplaced(&page).unwrap_or_default()),
+        }
+    }
+
+    /// What the page `text` is of, as the value itself, where neither the root nor the
+    /// build directory is a whole path of it.
+    async fn source_of(crates: &Crates, text: &str) -> SourceOf {
         let sited = Sited {
             root: Forms::new(PathBuf::from("/nowhere/root"), None),
             build: Forms::new(PathBuf::from("/nowhere/build"), None),
         };
-        let page = page(text);
-        match crates.file_of(&page, &sited).await {
-            SourceOf::File(file) => Ok(file),
-            other => Err(other.unplaced(&page).unwrap_or_default()),
-        }
+        crates.file_of(&page(text), &sited).await
     }
 
     async fn crates_at(root: &Path) -> Crates {
@@ -314,11 +364,11 @@ mod tests {
                 .unwrap_err()
                 .contains("out of the project")
         );
-        assert!(
-            of(&crates, "src/serde/lib.rs.html")
-                .await
-                .unwrap_err()
-                .contains("no crate of the project")
+        // A crate the manifests read do not name, every manifest read: no crate of
+        // them, told apart from one not found while a manifest could not be read.
+        assert_eq!(
+            source_of(&crates, "src/serde/lib.rs.html").await,
+            SourceOf::NoCrate
         );
         assert!(of(&crates, "my_demo/struct.A.html").await.is_err());
     }

@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:2d030ae388972e0f81ebd054678e7663657337e686f7547fb581ec98370fe752",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_front_matter_that_is_broken_is_still_invalid_when_files_with_none_are_skipped",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:eddecb911f639a62b277a1aeefe935caf497540a35e40e0e4837b82d346a1867",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_link_to_a_key_whose_file_is_excluded_resolves_as_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e2c284cc8d8c0907ff46e906a7feb013e658f0c7ac7bb757e60c6f307469b05d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_range_that_is_not_sound_is_a_problem_of_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:15f0906a06a505c9f8dd6e8448330176a3afac2ebd8e54446235ada7c452013b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::a_thematic_break_in_the_middle_of_a_file_is_no_front_matter",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:04fe972279cf88b82b2f9d255e35ab01e2abbb05ea46e4fe7f49099a4ea79548",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::an_exclude_and_skip_make_the_check_clean_and_tell_what_was_skipped",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1e3f4b652c980d5ae4f95477c1c6771368d7fab44dc3a21f1e3faa27491523ce",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::new_into_a_path_the_range_does_not_take_is_refused_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:32698e6fb8dfce7d7043911a3313d5f2d6386c13921f4c85fa7dc257ab308b81",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::skip_alone_skips_the_files_of_the_subdirectory_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:757f278c8c09c374d2ac78c7b537f4b23ca1cc0bdc5640172b3b01691da10191",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::what_an_exclude_leaves_out_is_not_looked_at_even_when_it_could_not_be_read",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e022505754b7fb8e92f3565f68f6b6ceece7a7127fcc1e7f149de2b4d959963f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/book_scope.rs::with_no_setting_every_file_without_a_front_matter_is_invalid",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "317875fca9349eb4ffeba4368823e91ed90e677b",
+      "hash": "sha256:8c09c8abb00416dc3aa924e1806b349a35d04e200d084a802ccb81822ca66a34",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "63"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1ca93-4e19-75ff-a0c4-3554a083eccd"
+    }
+  ],
+  "id": "01a2229d-d7c4-72dc-b1ad-f96851f6d12b",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:34fb16654f17e779621e7dd6a12c839c74b96931afc82c9ecc22d63968f7524f",
+  "seen_address": "38435bf0055aa62244fbbe17dcd1a9cdcbd77072",
+  "subject": "01a1ca93-52da-772f-b994-aa8b79f1fd65",
+  "v": 1,
+  "verb": "approve"
+}

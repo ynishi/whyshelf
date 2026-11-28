@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:ddf08336d519f0f93918ff0b0647a6df9e6fa40e815780ddc3e83213e1d7f82f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs::a_number_too_large_for_the_parser_is_told_as_too_large",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6ebd639c96e813385b56edd1d6b970c5ec6d8302d0ea88e5ac1946ec6cfdc25d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs::every_value_a_front_matter_does_not_hold_is_told",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:381e5cf79ccd66ab4f1d77f8ebb3ba7c524ea21fb87f5f05b585a1b05465fd52",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::a_negative_number_beyond_the_parser_is_told_as_too_small",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:96aec3edd8c781f0b26fa42c291748cc7ab3c2110f3c0ed422970a2d9492497e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::a_number_beyond_the_parser_is_told_beside_another_value",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1a5c0be05f0ebda9d545e529b4ff846f763df59af022ec861955ec7b81036cc5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::fmt_tells_every_value_of_a_file_it_leaves_alone",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a75318372a6bb35fff0669e349f17edd947380fc756f253c3db852bb8036d8af",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::one_value_is_told_once_and_a_held_value_not_at_all",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:139d21fabb4e23c0cdfbca23861eed12e2939b9b4a8f41ba5f25cf5bca47b634",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::other_kinds_are_each_told",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a8d7a5e62c5e622ebe10fcd1dd1daf1607b93c6f",
+      "hash": "sha256:1aa1899d9c765c711045357313b86242f074d50687f172de425dab0790db4d15",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    }
+  ],
+  "id": "01a2229d-eb0f-7745-ac9f-98fc9b9addae",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:35989fdca9026156e234ee9e2d6b199262f9966525397f7f4c5d144cf920de58",
+  "seen_address": "1d1baec1217886182eac551bb46473a0be68e874",
+  "subject": "01a1cc04-8636-721f-a251-50df70adcd68",
+  "v": 1,
+  "verb": "approve"
+}

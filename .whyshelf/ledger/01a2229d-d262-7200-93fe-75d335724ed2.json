@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:eee0ef06ae3bc062eb433fef509c9ea5aaf9b59101fbad24a726f0d8850c1b9d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::an_upstream_stale_only_through_a_pending_one_the_run_approves_holds_nothing_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:be09060b2fe85a543214dcd2c1a682d6e8cdb845605b3fb91b92bd36ac564e18",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_and_stale_together_are_one_run_upstream_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fd7ffb12df7fdee7448f880e30cb05b9a38dbb73e28b9d77f616db270a8c2324",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_approves_the_sample_upstream_first_and_leaves_nothing_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:edd888f287faa5cfe2b64cbbf62a162a313d0c03c5ba51fd80101ed0b231b7ac",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_needs_a_reason_and_takes_no_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bb5353431a479b9f2f4bc688314aed09b08c9cc63df005010e82e4cf0702cd64",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_pending_of_v_1_takes_what_it_stands_on_through_depends_links_only",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4a1faf0b8b0a852fa6fff1e863f531c4af1b4c90ee896f41b70e4addebe4e4b8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::approve_stale_alone_takes_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2784cb4ca46f01ef05fe22434f3ff1ad9ea8cc6d59d1fe55335de690b39be5e4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/approve_pending.rs::the_command_init_gives_approves_its_four_documents_and_no_other",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "ea65505cd15e7247347a1239fbc02e9f0f4c1986",
+      "hash": "sha256:3816927150bad7efa5e8e105e6f178a4a598ca68b6277726b76c540a341c6bef",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "62"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c9f3-aee6-7222-8d82-16fea9ebae6a"
+    }
+  ],
+  "id": "01a2229d-d262-7200-93fe-75d335724ed2",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:42daea713ac335aaa5fe0e89968b8d063a11410d7cdbd84cae8c638686e78a58",
+  "seen_address": "c8fb27870d9991085f59a1e560860676f0012638",
+  "subject": "01a1c9f3-b3c3-738c-a1ed-412012185ef6",
+  "v": 1,
+  "verb": "approve"
+}

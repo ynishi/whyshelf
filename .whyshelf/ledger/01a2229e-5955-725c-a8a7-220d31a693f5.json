@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:9ed9df22167feb9ecf554a687c5628164ccf39b69d3ddf155b68f989b766fd39",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_sources.rs::an_item_added_after_the_docs_were_built_is_not_told_absent_and_is_there_once_they_are_built_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5ac5a6ee3afb7ef52dca2882db43b97d8069e217c91c5b4f543e09af182d90fe",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_sources.rs::an_item_removed_after_the_docs_were_built_is_not_told_there_and_is_gone_once_they_are_built_again",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "629daf5b965926f5f577602e2fdad2b01b53ec26",
+      "hash": "sha256:1d40702ee6d3b9d88afd667c6fac3a5cc3c49c30901cb9ee0d70f7ea64e0fe05",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "116"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a221c7-6b1b-7014-bd12-a2bc64a49b96"
+    }
+  ],
+  "id": "01a2229e-5955-725c-a8a7-220d31a693f5",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:43adfaf536516f864dcfc92bd35ff881b46d625814e94e3716190af73d206721",
+  "seen_address": "cfecbdda10035ccb3f7befd566824f981769969a",
+  "subject": "01a221c7-6b1b-7014-bd12-a2bef690da2a",
+  "v": 1,
+  "verb": "approve"
+}

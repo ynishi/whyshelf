@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a252c1929262cf0d2434e9eff418c0dfd7102bc6ab674f9e8fcd354732a00900",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_no_side_shows_whose_file_is_gone_is_gone_while_a_conflict_is_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4e2c1e3331ead35acf136f58ed24cecae2ad25765c327c1eab535b5181b1a508",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_of_a_side_with_no_record_is_found_by_its_id_and_told_unknown_in_the_file",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:faea3847fb0bd6ffa29fcc1fc9b0ce68601bf8c89460dfd037e70719a7ada3c8",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_record_of_a_side_that_names_no_book_is_read_with_the_rule_of_the_book_of_the_file",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b3cde7b06eacf09e961ae32715d6ae7c5a73104baf855e984e4a24cbf6c8de0a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::another_file_of_the_identity_of_a_side_and_the_file_of_the_conflict_are_both_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:37354333fe69f607de441f389a5e0ef058beeb2e3c9fd7968d0d899bfe0de96a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::check_tells_the_identities_the_sides_of_the_file_show",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a532bfdfc662c982fe7480fd9ee41962c8d1c6d62bac7614f0c58aba9daf1704",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::impact_within_does_not_pass_while_a_file_is_left_in_a_conflict",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:05c81fcc0640f9c30ec5178b96e4cdecae37b7b561f5bd17f10c1880787eb60b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::status_of_a_book_lists_the_documents_of_both_sides_with_their_records",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5bf90df4e74430b56db1863db37982f0d46c01fb65fc972d8b94d1555520197f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_file_left_in_a_merge_conflict_whose_sides_are_not_reached_is_counted_and_said",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f82831db2949e1de11c580dea8b35c3afa76a62891547dc88660f4484a017f0d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::a_file_left_in_a_merge_conflict_whose_side_is_divided_is_counted_and_said",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3175d920edc27f300f70db581a479b0d80a3924f",
+      "hash": "sha256:baa66d9c33d1c41d44ccc9e4f6a27f378cd443ccd5040e05987989218d6a08b3",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "115"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a22124-cc85-770f-a545-bfdbd5f53974"
+    }
+  ],
+  "id": "01a2229e-50a5-7166-9041-f1c0e836b8b1",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:a1bd46b32c84416c8d5d8cf5c627a087b80cc059b981b9b1748945b6e55acc31",
+  "seen_address": "687a32f435ba702df457e425404061fc49e096a0",
+  "subject": "01a22125-2876-752b-8a78-b21833a93ac5",
+  "v": 1,
+  "verb": "approve"
+}

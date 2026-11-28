@@ -292,6 +292,52 @@ fn the_lines_of_causes_stand_between_the_gaps_and_the_names_with_nothing_behind_
 }
 
 #[test]
+fn each_unknown_name_of_stale_writes_its_kind_and_only_not_of_sources_its_parts() {
+    use whyshelf_core::domain::location::RelPath;
+    use whyshelf_core::domain::shelf::artifact::{NotOfSources, NotOfSourcesWhy};
+    let said = |text: &str| NonBlank::new(text).unwrap();
+    let file: RelPath = "src/lib.rs".parse().unwrap();
+    let kinds = [
+        (not_built("other"), "told"),
+        (Untold::NoAnswer, "no_answer"),
+        (Untold::NotAsked, "not_asked"),
+        (Untold::NotAName(said("no Rust path")), "not_a_name"),
+        (
+            Untold::NotOfSources(NotOfSources::new(
+                said("the built docs at target/doc"),
+                NotOfSourcesWhy::Differs { file },
+                said("build the docs again"),
+            )),
+            "not_of_sources",
+        ),
+    ];
+    let items: Vec<Unknown> = kinds
+        .iter()
+        .enumerate()
+        .map(|(at, (why, _))| unknown(1, "items", &format!("demo::N{at}"), why))
+        .collect();
+    let answer = serde_json::to_value(stale(&stale_of(items), NextRoot::Current)).unwrap();
+    let unknown = answer["unknown"].as_array().unwrap();
+    assert_eq!(unknown.len(), kinds.len(), "{answer}");
+    for (one, (why, kind)) in unknown.iter().zip(&kinds) {
+        assert_eq!(one["kind"], *kind, "{one}");
+        assert_eq!(one["why"], why.to_string(), "{one}");
+        let parts = ["read", "reason", "file", "what", "hint"];
+        if *kind == "not_of_sources" {
+            assert_eq!(one["read"], "the built docs at target/doc", "{one}");
+            assert_eq!(one["reason"], "differs", "{one}");
+            assert_eq!(one["file"], "src/lib.rs", "{one}");
+            assert_eq!(one["hint"], "build the docs again", "{one}");
+            assert!(one.get("what").is_none(), "{one}");
+        } else {
+            for part in parts {
+                assert!(one.get(part).is_none(), "{kind} has no {part}: {one}");
+            }
+        }
+    }
+}
+
+#[test]
 fn stale_writes_a_cause_once_with_its_own_words() {
     let why = not_built("other");
     let items = vec![

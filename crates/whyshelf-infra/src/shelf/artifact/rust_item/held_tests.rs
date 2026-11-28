@@ -5,8 +5,11 @@
 //! The pages are written by hand in the layout rustdoc 1.95 writes, with words of this
 //! repository only; the end-to-end tests of the command line run `cargo doc`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+use whyshelf_core::app::shelf::{DirListing, EntryKind, NotADir};
+use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
 
 use whyshelf_core::domain::location::RelPath;
 use whyshelf_core::domain::shelf::artifact::{
@@ -288,11 +291,11 @@ async fn held_with(root: &Path, limits: &HoldLimits) -> Result<HeldDocs, NotOfSo
     let at = super::super::docs_tree::placed(&state, Side::After, docs)
         .await
         .unwrap();
-    let tree = DocsTree::of(&state, Side::After, at.clone())
+    let tree = DocsTree::of(&state, Side::After, at)
         .await
         .unwrap()
         .unwrap();
-    let sited = Sited::of(&state, Side::After, &at, &tree).await.unwrap();
+    let sited = Sited::of(&state, Side::After, &tree).await.unwrap();
     let crates = Crates::of(&state, Side::After).await;
     hold(&state, Side::After, tree, crates, sited, limits).await
 }
@@ -385,7 +388,7 @@ async fn a_page_by_the_whole_path_of_the_build_directory_is_not_compared_and_one
     crate_docs(&docs, "demo").await;
     write(&docs, "src/demo/lib.rs.html", &source_page(LIB)).await;
     let built = format!(
-        "{}/debug/build/demo-1/out/made.rs",
+        "{}/debug/build/demo-0123456789abcdef/out/made.rs",
         whole_path(&root.join("out"))
     );
     write(
@@ -500,7 +503,10 @@ async fn a_page_by_the_resolved_path_of_a_build_directory_reached_through_a_link
         .await
         .unwrap();
     assert_ne!(resolved, root.join(TARGET_DIR_NAME));
-    let built = format!("{}/debug/build/demo-1/out/made.rs", whole_path(&resolved));
+    let built = format!(
+        "{}/debug/build/demo-0123456789abcdef/out/made.rs",
+        whole_path(&resolved)
+    );
     write(
         &docs_of(&root),
         &format!("src/demo/{built}.html"),
@@ -527,4 +533,315 @@ async fn the_docs_of_a_side_are_held_once_for_a_space() {
     assert!(space.current(&n("demo")).await.unwrap().is_some());
     let again = RustItemSpace::new(root.to_path_buf(), None);
     assert_eq!(again.current(&shelf).await.unwrap(), None);
+}
+
+/// The reason of the reading of `name`, as a person reads it.
+fn said(found: &SpaceReadings, name: &str) -> String {
+    match found[&n(name)].state(&Comparison::Presence) {
+        ArtifactState::Unknown(untold) => untold.to_string(),
+        other => panic!("{name} is told: {other:?}"),
+    }
+}
+
+#[test]
+fn a_listing_of_the_docs_is_not_there_only_when_nothing_is_and_one_cut_or_failing_is_unread() {
+    use whyshelf_core::app::shelf::Entries;
+    let shown = Path::new("/t/doc/src");
+    let entries = || {
+        let mut entries = Entries::default();
+        entries.named.insert(
+            DocsPath::top().join("lib.rs.html").unwrap(),
+            EntryKind::File,
+        );
+        entries
+    };
+    assert_eq!(
+        of_listing(shown, Ok(DirListing::All(entries()))),
+        Listed::Entries(BTreeMap::from([(
+            "lib.rs.html".to_owned(),
+            EntryKind::File
+        )]))
+    );
+    assert_eq!(
+        of_listing(shown, Ok(DirListing::NotADir(NotADir::Absent))),
+        Listed::Absent
+    );
+    // Cut at a bound: not read as the entries it has.
+    let cut = of_listing(
+        shown,
+        Ok(DirListing::Cut {
+            entries: entries(),
+            why: NonBlank::from(TextLiteral::new("past the bound")),
+        }),
+    );
+    assert!(
+        matches!(&cut, Listed::Unread(why) if why.contains("was cut: past the bound")),
+        "{cut:?}"
+    );
+    assert!(matches!(
+        of_listing(shown, Ok(DirListing::NotADir(NotADir::File))),
+        Listed::NotADir(_)
+    ));
+    let failed = of_listing(
+        shown,
+        Err(StateError::Io {
+            path: shown.to_path_buf(),
+            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        }),
+    );
+    assert!(
+        matches!(&failed, Listed::Unread(why) if why.contains("cannot be listed")),
+        "{failed:?}"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn docs_that_cannot_be_listed_are_unread_and_no_crate_of_the_project_is_told_as_another() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    project(root).await;
+    let locked = |at: std::path::PathBuf, mode: u32| async move {
+        tokio::fs::set_permissions(&at, std::fs::Permissions::from_mode(mode))
+            .await
+            .unwrap();
+    };
+    // The pages of the source cannot be listed: unread, not "no trace".
+    let src = docs_of(root).join("src");
+    locked(src.clone(), 0o000).await;
+    // Run as a user every directory opens to (root), it is no case to test.
+    let refused = tokio::fs::read_dir(&src).await.is_err();
+    let found = read(root, &NAMES).await;
+    locked(src, 0o755).await;
+    if !refused {
+        return;
+    }
+    for name in NAMES {
+        assert!(
+            matches!(not_of(&found, name), Some(NotOfSourcesWhy::Unread(_))),
+            "{name}: {:?}",
+            found[&n(name)]
+        );
+        assert!(
+            !said(&found, name).contains("no crate of the manifests"),
+            "{name}"
+        );
+    }
+    // The docs themselves cannot be listed: unread, not docs that are not built.
+    let docs = docs_of(root);
+    locked(docs.clone(), 0o000).await;
+    let found = read(root, &NAMES).await;
+    locked(docs, 0o755).await;
+    for name in NAMES {
+        assert!(
+            matches!(not_of(&found, name), Some(NotOfSourcesWhy::Unread(_))),
+            "{name}: {:?}",
+            found[&n(name)]
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_symbolic_link_at_the_top_of_the_docs_is_no_crate_and_is_passed_over() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    project(root).await;
+    let outside = tempfile::tempdir().unwrap();
+    write(outside.path(), "far/index.html", &whole("")).await;
+    let docs = docs_of(root);
+    // A link to a file of the root, and one to a directory out of the root.
+    tokio::fs::symlink(root.join("src/lib.rs"), docs.join("linked.html"))
+        .await
+        .unwrap();
+    tokio::fs::symlink(outside.path().join("far"), docs.join("far"))
+        .await
+        .unwrap();
+    let found = read(root, &["demo::Shelf"]).await;
+    assert!(is_there(&found, "demo::Shelf"), "{found:?}");
+}
+
+#[tokio::test]
+async fn with_the_build_directory_at_the_root_a_page_of_a_file_of_the_root_is_compared_and_one_a_build_script_made_is_not()
+ {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    write(root, "Cargo.toml", "[package]\nname = \"demo\"\n").await;
+    write(root, "src/lib.rs", LIB).await;
+    write(root, ".cargo/config.toml", "[build]\ntarget-dir = \".\"\n").await;
+    let docs = root.join("doc");
+    crate_docs(&docs, "demo").await;
+    write(&docs, "src/demo/lib.rs.html", &source_page(LIB)).await;
+    let built = format!(
+        "{}/debug/build/demo-0123456789abcdef/out/made.rs",
+        whole_path(root)
+    );
+    write(
+        &docs,
+        &format!("src/demo/{built}.html"),
+        &source_page("no file's text\n"),
+    )
+    .await;
+    assert!(is_there(&read(root, &["demo::Shelf"]).await, "demo::Shelf"));
+    // A file of the project on a path of the same words, with no package directory of
+    // cargo's form, is compared: it is no output of a build script.
+    write(root, "x/build/y/out/z.rs", "pub fn z() {}\n").await;
+    let alike = format!("{}/x/build/y/out/z.rs", whole_path(root));
+    write(
+        &docs,
+        &format!("src/demo/{alike}.html"),
+        &source_page("pub fn old() {}\n"),
+    )
+    .await;
+    all_not_of(
+        &read(root, &["demo::Shelf"]).await,
+        &["demo::Shelf"],
+        &NotOfSourcesWhy::Differs {
+            file: file("x/build/y/out/z.rs"),
+        },
+    );
+    tokio::fs::remove_file(docs.join(format!("src/demo/{alike}.html")))
+        .await
+        .unwrap();
+    // A file of the root a crate reads by its whole path is compared, the build
+    // directory being the root.
+    write(root, "src/abs.rs", "pub fn abs() {}\n").await;
+    let abs = format!("{}/src/abs.rs", whole_path(root));
+    write(
+        &docs,
+        &format!("src/demo/{abs}.html"),
+        &source_page("pub fn old() {}\n"),
+    )
+    .await;
+    all_not_of(
+        &read(root, &["demo::Shelf"]).await,
+        &["demo::Shelf"],
+        &NotOfSourcesWhy::Differs {
+            file: file("src/abs.rs"),
+        },
+    );
+}
+
+#[tokio::test]
+async fn a_crate_in_a_directory_at_the_top_of_a_project_with_no_manifest_at_its_root_is_held_and_one_deeper_is_none_of_its_crates()
+ {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    write(root, "crate/Cargo.toml", "[package]\nname = \"demo\"\n").await;
+    write(root, "crate/src/lib.rs", LIB).await;
+    let docs = root.join("build/doc");
+    crate_docs(&docs, "demo").await;
+    write(&docs, "src/demo/lib.rs.html", &source_page(LIB)).await;
+    let space = || RustItemSpace::new(root.to_path_buf(), Some(root.join("build")));
+    let asks: SpaceAsks = ["demo::Shelf"]
+        .iter()
+        .map(|name| (n(name), BTreeSet::from([Comparison::Presence])))
+        .collect();
+    let found = space().resolve(&asks).await.unwrap();
+    assert!(is_there(&found, "demo::Shelf"), "{found:?}");
+    write(root, "crate/src/lib.rs", "//! Edited.\n").await;
+    let found = space().resolve(&asks).await.unwrap();
+    all_not_of(
+        &found,
+        &["demo::Shelf"],
+        &NotOfSourcesWhy::Differs {
+            file: file("crate/src/lib.rs"),
+        },
+    );
+
+    // A crate two directories down is none of the manifests read, and is not told as
+    // a dependency.
+    let deeper = tempfile::tempdir().unwrap();
+    let r = deeper.path();
+    write(r, "rust/demo/Cargo.toml", "[package]\nname = \"demo\"\n").await;
+    write(r, "rust/demo/src/lib.rs", LIB).await;
+    let docs = r.join("build/doc");
+    crate_docs(&docs, "demo").await;
+    write(&docs, "src/demo/lib.rs.html", &source_page(LIB)).await;
+    let found = RustItemSpace::new(r.to_path_buf(), Some(r.join("build")))
+        .resolve(&asks)
+        .await
+        .unwrap();
+    let why = said(&found, "demo::Shelf");
+    assert!(
+        why.contains("no Cargo.toml at its root, nor in a directory at its top"),
+        "{why}"
+    );
+    assert!(!why.contains("dependency"), "{why}");
+}
+
+#[tokio::test]
+async fn the_index_of_a_crate_that_was_not_held_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    project(root).await;
+    // An index that is no page at all (a directory): reading it would say so.
+    tokio::fs::create_dir_all(docs_of(root).join("other/index.html"))
+        .await
+        .unwrap();
+    let found = read(root, &["other::Shelf"]).await;
+    assert_eq!(
+        not_of(&found, "other::Shelf"),
+        Some(NotOfSourcesWhy::NoTrace)
+    );
+    let why = said(&found, "other::Shelf");
+    assert!(!why.contains("cannot be read"), "{why}");
+    assert!(!why.contains("dependency"), "{why}");
+}
+
+#[tokio::test]
+async fn docs_of_a_crate_that_depends_by_a_path_on_one_of_the_project_whose_source_they_do_not_hold_have_no_trace()
+ {
+    let dir = tempfile::tempdir().unwrap();
+    let r = dir.path();
+    write(
+        r,
+        "Cargo.toml",
+        "[workspace]\nmembers = [\"a\", \"b\", \"c\"]\n[workspace.dependencies]\nc = { path = \"c\" }\n",
+    )
+    .await;
+    write(
+        r,
+        "a/Cargo.toml",
+        "[package]\nname = \"a\"\n[dependencies]\nb = { path = \"../b\" }\n",
+    )
+    .await;
+    write(
+        r,
+        "b/Cargo.toml",
+        "[package]\nname = \"b\"\n[dependencies]\nc.workspace = true\n",
+    )
+    .await;
+    write(r, "c/Cargo.toml", "[package]\nname = \"c\"\n").await;
+    for package in ["a", "b", "c"] {
+        write(r, &format!("{package}/src/lib.rs"), LIB).await;
+    }
+    // Docs of `a` alone (`cargo doc -p a`): what it re-exports of `b` is in its docs,
+    // and no page of `b`'s source.
+    let docs = docs_of(r);
+    crate_docs(&docs, "a").await;
+    write(&docs, "src/a/lib.rs.html", &source_page(LIB)).await;
+    let found = read(r, &["a::Shelf"]).await;
+    all_not_of(&found, &["a::Shelf"], &NotOfSourcesWhy::NoTrace);
+    let why = said(&found, "a::Shelf");
+    assert!(
+        why.contains(
+            "the docs of `a` hold no page of the source of `b`, which it depends on by a path: build the docs of both"
+        ),
+        "{why}"
+    );
+    // With `b`'s pages, `b` depends on `c` (through the dependencies of the root) and
+    // the docs hold no page of `c`: still no trace, now of `c`.
+    write(&docs, "src/b/lib.rs.html", &source_page(LIB)).await;
+    let found = read(r, &["a::Shelf"]).await;
+    all_not_of(&found, &["a::Shelf"], &NotOfSourcesWhy::NoTrace);
+    let why = said(&found, "a::Shelf");
+    assert!(
+        why.contains("the docs of `b` hold no page of the source of `c`"),
+        "{why}"
+    );
+    // With `c`'s pages too, all are held.
+    write(&docs, "src/c/lib.rs.html", &source_page(LIB)).await;
+    assert!(is_there(&read(r, &["a::Shelf"]).await, "a::Shelf"));
 }

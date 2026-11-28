@@ -230,7 +230,10 @@
 //! and a file an include reads. Its text holds them, so that an edit of a helper makes
 //! stale the tests that use it, and those only where a name says which. The crates are
 //! the targets of the manifests of the project (each library, binary, integration test,
-//! bench and example of the package at the root and of each member of its workspace),
+//! bench and example of the package at the root and of each member of its workspace;
+//! when the root has no `Cargo.toml`, of the package of each directory at the top of
+//! the tree, not one whose name starts with `.`, and of each member of its workspace:
+//! the manifests the space `rust-item` reads, by the one rule of both),
 //! and the modules of a target are read from its root file: the file of a module
 //! declared out of line is found by the rules of the language (`x.rs` or `x/mod.rs`,
 //! under the directory of the stem of a file that is neither a root nor a `mod.rs`, an

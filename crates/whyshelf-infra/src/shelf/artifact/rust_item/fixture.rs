@@ -6,6 +6,7 @@
 //! | what | what it is |
 //! |---|---|
 //! | [`write`] | a file of a tree of docs, its directories made |
+//! | [`sources`], [`manifests`], [`pages`], [`source_page`], [`lib_text`] | the sources hand-written docs are of: the manifests and root files of a workspace of crates, and their pages of the source in the docs; the one fixture of them for the tests of this crate |
 //! | [`page`], [`index`], [`redirect`] | as much of a page as finding a name needs: the anchors of its members, the re-exports of a module, a page that only redirects |
 //! | [`whole`], [`item_page`], [`module_index`] | a page laid out whole, so that what it promises is read |
 
@@ -13,6 +14,8 @@ use std::path::{Path, PathBuf};
 
 use whyshelf_core::app::shelf::Side;
 
+use super::super::super::state::ProjectTree;
+use super::super::super::state::files::FileStates;
 use super::docs_tree::DocsTree;
 use super::held::HeldDocs;
 use super::layout::GENERATOR_MARK;
@@ -22,8 +25,10 @@ use super::lookup::Lookup;
 /// against nothing ([`HeldDocs::for_walk_tests`]): what a test of how a page is walked
 /// makes, with no space around it.
 pub(super) async fn walk_lookup(root: &Path, docs: PathBuf, max_page: u64) -> Lookup {
+    let state = ProjectTree::files(FileStates::new(root.to_path_buf()));
+    let docs = DocsTree::at(root, docs).await;
     Lookup::on(
-        HeldDocs::for_walk_tests(DocsTree::at(root, docs).await, Side::After),
+        HeldDocs::for_walk_tests(&state, docs, Side::After).await,
         max_page,
     )
 }
@@ -31,7 +36,7 @@ pub(super) async fn walk_lookup(root: &Path, docs: PathBuf, max_page: u64) -> Lo
 /// The file `at` under `dir`, with `text`, its directories made. A test that cannot
 /// write its docs stops (this file is no production code, but a page that is not
 /// written is no test).
-pub(super) async fn write(dir: &Path, at: &str, text: &str) {
+pub(crate) async fn write(dir: &Path, at: &str, text: &str) {
     let full = dir.join(at);
     let stop = |e: std::io::Error| panic!("{} cannot be written: {e}", full.display());
     match full.parent() {
@@ -43,7 +48,7 @@ pub(super) async fn write(dir: &Path, at: &str, text: &str) {
 
 /// A page of the source as rustdoc 1.95 lays one out, of the file of text `text`: the
 /// code block of the file, each line after the anchor of its number.
-pub(super) fn source_page(text: &str) -> String {
+pub(crate) fn source_page(text: &str) -> String {
     let mut code = String::new();
     for (at, line) in text.split_inclusive('\n').enumerate() {
         let n = at + 1;
@@ -60,15 +65,21 @@ pub(super) fn source_page(text: &str) -> String {
     )
 }
 
-/// The text of the root file of the crate `krate` that [`sources`] writes.
-pub(super) fn lib_text(krate: &str) -> String {
+/// The text of the root file of the crate `krate` that [`manifests`] writes.
+pub(crate) fn lib_text(krate: &str) -> String {
     format!("//! The crate `{krate}` of a test.\n")
 }
 
-/// The sources of the docs at `docs`: a workspace at `root` with a package of each of
-/// `crates` under `crates/<name>`, each a library `src/lib.rs` of [`lib_text`], and the
-/// page of the source of each in the docs, so that the docs are of these sources.
-pub(super) async fn sources(root: &Path, docs: &Path, crates: &[&str]) {
+/// The sources of the docs at `docs`: [`manifests`] at `root`, and [`pages`] in the
+/// docs, so that the docs are of these sources.
+pub(crate) async fn sources(root: &Path, docs: &Path, crates: &[&str]) {
+    manifests(root, crates).await;
+    pages(docs, crates).await;
+}
+
+/// A workspace at `root` (its `Cargo.toml`, members `crates/*`) with a package of each
+/// of `crates` under `crates/<name>`, each a library `src/lib.rs` of [`lib_text`].
+pub(crate) async fn manifests(root: &Path, crates: &[&str]) {
     write(
         root,
         "Cargo.toml",
@@ -88,6 +99,13 @@ pub(super) async fn sources(root: &Path, docs: &Path, crates: &[&str]) {
             &lib_text(krate),
         )
         .await;
+    }
+}
+
+/// The page of the source of the root file of each of `crates` ([`manifests`]) in the
+/// docs at `docs`.
+pub(crate) async fn pages(docs: &Path, crates: &[&str]) {
+    for krate in crates {
         write(
             docs,
             &format!("src/{krate}/lib.rs.html"),

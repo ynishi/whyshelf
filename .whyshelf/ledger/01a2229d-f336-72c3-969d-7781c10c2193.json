@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:5d505174ce184667e0913972cc0b9ff89f5f7fd5efb6fd41e60ae78bcfe36a6a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::a_gone_file_is_looked_for_and_declared_moved_and_never_approved_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a43270774dc29259092fa00dc9db4d78b4c7b581a33fca3e2b2242b0c0ae12f4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::a_lapsed_approval_is_approved_again_with_a_new_expiry_and_not_by_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0506f45be8235f62020c05738fb248797a9d3e02985f684f918ce41804e9f72e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::a_pending_upstream_is_approved_and_stale_is_not_offered",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:aaaf5e985c3541760f16c3495ef8133abf5686eefbe00faf27e1e6aa3a9481df",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::a_pending_upstream_whose_link_names_a_denied_document_is_not_offered_its_approval",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:14af8910940d4660469cbc8f39afe487a43eb32e07d1d392bd8456b63d963d09",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::an_edited_document_is_read_declared_about_and_approved_again_by_its_next",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:52a7996b44319526494197087f31825bd3c17080f6b95c8527d3bdc1f34a011e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::the_diff_is_of_the_approval_that_holds_the_cause_and_not_one_that_sees_it_through",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:36955f3d5b91f22a43c9cb77fa19baf4adf8afdb705c0ab6594a989bb2bf7674",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::the_last_of_the_next_of_an_edit_approves_again_and_settles_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bc6dcab85ae434833cdee5768412943b3e9390122867830ed623b8d9a2e7f453",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::the_schema_of_stale_has_next_for_each_origin",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "013b686360d50d678797cb31d05b6a8bdd09f327",
+      "hash": "sha256:5d50ad7d65f6701af822daa5d562237f7a590e5683349a719a359bc7f69fdf97",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "71"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1db32-2c6f-7019-be31-9436bee5c856"
+    }
+  ],
+  "id": "01a2229d-f336-72c3-969d-7781c10c2193",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:0d0ce1e4029ceac7324e44bca9cca1b9f591fb18da38d4c6f7e16997eaa063e8",
+  "seen_address": "7e35c56c4494e70dec4e6d3f73ace575b4dc2756",
+  "subject": "01a1db32-31ed-7567-8c87-09f427a88ec3",
+  "v": 1,
+  "verb": "approve"
+}

@@ -67,9 +67,20 @@ and this project adheres to
 - In the library (#225): `Untold` has a new variant, `NotOfSources`, and
   `Untold::as_str` returns a `Cow<str>`: a match that names every variant, or
   code that takes the text as a `&str`, no longer builds.
-- The space `rust-item` tells the names of the docs of a crate that is no crate
-  of the project (a dependency's) as cannot tell, `not_of_sources`, and `moves`
-  no longer finds candidates in them; it answered them and searched them (#225).
+- The space `rust-item` tells the names of the docs of a crate that is none of
+  the manifests it reads (a dependency's, or one of a package those manifests do
+  not reach) as cannot tell, `not_of_sources`, and `moves` no longer finds
+  candidates in them; it answered them and searched them (#225). The manifests
+  read are the `Cargo.toml` at the root with its workspace, and, when the root
+  has none, the `Cargo.toml` of each directory at the top of the tree with its
+  workspace, so a project whose crate is in a directory of its own is answered
+  as before (#228). The space `rust-test` reads the crates of a project by the
+  same rule, so a test of such a crate now holds the helpers it names (an
+  approval of one may go stale once) where its file was in no crate (#228).
+- Docs built for some crates of the project only, where a crate documented
+  depends by a path on a crate of the project whose pages of the source they do
+  not hold, cannot be told (`not_of_sources`, `no_trace`): what it re-exports of
+  that crate has no copy of its files in them (#228).
 
 ### Fixed
 
@@ -80,6 +91,14 @@ and this project adheres to
   cannot be told (`not_of_sources`, with the file and what to do), and `moves`
   searches nothing. It told an item added since as gone, with moves to declare,
   and would have told an item removed since as there (#225).
+- The holding of the docs of `rust-item` tells a directory of the docs that
+  cannot be listed whole (an error, or a listing cut at its bound) as `unread`,
+  with why; it was told as docs not built, or as `no_trace`, and the names of a
+  crate of the project were given the hint of a dependency. A page under the
+  root by its whole path is compared wherever the build directory is
+  (`build.target-dir = "."` included); only the output of a build script under
+  it is not, where every page under a build directory at or above the root was
+  passed over (#228).
 
 - A file left with both sides of a merge conflict whose text starts with the
   marker after a byte order mark is told as holding merge conflict markers too;

@@ -1,0 +1,111 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:cc829f309ff1241e24ca9023763a1484dacbead0b6b7ff4c98577dcf79afc60c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::a_change_not_named_as_one_way_is_a_request_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8de3ac375f7795b3e52629f076df69297c62ea51167f7cb30fc444f45ad7e118",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::a_declaration_two_sides_cannot_read_alike_stops_the_reading",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f187dd959daaf4f27c879d4b513c0fce63f4804dd28686d36c2f2cf43c8af29c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::a_git_that_cannot_be_run_is_a_failed_run_and_no_request_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:72fddf5b580ce9eab2ba33b8711199c8984293af8a5c4c3c449b52e2e884e6b4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::a_name_the_side_after_cannot_tell_cannot_tell_whether_the_change_made_it_not_hold",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:19406860f17d9336f9bf44535bd34c51e974cf5285d480870b694a5ae434f94f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::an_edit_read_through_git_makes_the_approval_on_it_not_hold",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1be467f1e1046c4f5d8c70f3b12e59af0e140b409c8cce15155977061dc98d41",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/impact.rs::an_edit_read_through_two_directories_makes_the_approval_on_it_not_hold",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4972900f40504da70ced14a02dc16b149d6aadf5",
+      "hash": "sha256:406a73ec920cdbe93f363c889e98f124f257fc91109f8100359f79c620be5a79",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "103"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7e48255413"
+    },
+    {
+      "address": "d6d06750effaf90c904119631b302dbf6452d682",
+      "hash": "sha256:978c35e2c845f1a1791067667a6693eea9cf58224d65e7233623496043c99e2d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "104"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a7fbb63b84f"
+    },
+    {
+      "address": "4ddb39b58a72793dc580554fba5b372537ffaa73",
+      "hash": "sha256:13f6359d0bd033547ce85ee7367a65d4642fa5f922aba19955d6d6a67c2bf555",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "106"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20baa-2bf0-764d-88ea-9a803bf4e2cc"
+    }
+  ],
+  "id": "01a2229e-4279-7383-ad62-fb518c620ed9",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:9b0341d54e888378bf39da9210baf6bf33d5971372f5c13040ccd847b1e2fef9",
+  "seen_address": "905dabc3a3d229b1ed60ee19da271efa4853bd2b",
+  "subject": "01a20baa-2bf0-764d-88ea-9a82af53666d",
+  "v": 1,
+  "verb": "approve"
+}

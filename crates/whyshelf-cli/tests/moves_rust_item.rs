@@ -75,16 +75,7 @@ fn run(project: &Project, args: &[&str]) -> Output {
 /// The crate `demo` the docs are of, at the root of the project, and its page of the
 /// source: the docs are of the sources as they are.
 fn sourced(project: &Project) {
-    fs::write(project.0.join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
-    fs::create_dir_all(project.0.join("src")).unwrap();
-    fs::write(project.0.join("src/lib.rs"), LIB).unwrap();
-    let source = project.0.join("build/doc/src/demo/lib.rs.html");
-    fs::create_dir_all(source.parent().unwrap()).unwrap();
-    fs::write(
-        source,
-        format!("<html><head>{GENERATOR}</head><body><pre class=\"rust\"><code>{LIB}</code></pre></body></html>"),
-    )
-    .unwrap();
+    common::demo_sources(&project.0, &project.0.join("build/doc"), LIB);
 }
 
 /// A project whose note names these items of the crate `demo`, all of them in its

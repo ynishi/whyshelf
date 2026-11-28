@@ -43,7 +43,7 @@ use whyshelf_core::domain::shelf::schema::{BookDir, BookRange};
 
 use super::artifact::file::FileSpace;
 use super::artifact::js_test::JsTestSpace;
-use super::artifact::rust_item::{GENERATOR_MARK, RustItemSpace};
+use super::artifact::rust_item::{GENERATOR_MARK, RustItemSpace, fixture};
 use super::artifact::rust_test::RustTestSpace;
 use super::books::{BooksError, BooksToml};
 use super::docs::{DocsError, MarkdownDocs};
@@ -808,49 +808,12 @@ fn index(reexports: &[(&str, &str)]) -> String {
     )
 }
 
-/// The text of the root file of each crate [`sources`] writes.
-const LIB: &str = "//! A crate of a test.\n";
-
-/// The sources of the crates `crates` at `root`: a workspace (its `Cargo.toml`) with a
-/// package of each under `crates/<name>`, each a library `src/lib.rs` of [`LIB`].
-async fn sources(root: &Path, crates: &[&str]) {
-    write(
-        root,
-        "Cargo.toml",
-        "[workspace]\nmembers = [\"crates/*\"]\n",
-    )
-    .await;
-    for krate in crates {
-        write(
-            root,
-            &format!("crates/{krate}/Cargo.toml"),
-            &format!("[package]\nname = \"{krate}\"\n"),
-        )
-        .await;
-        write(root, &format!("crates/{krate}/src/lib.rs"), LIB).await;
-    }
-}
-
-/// The page of the source of the root file of the crate `krate` (of [`sources`]) in
-/// the docs `docs` under `root`, so that those docs are of the sources (DEC-116).
-async fn source_page(root: &Path, docs: &str, krate: &str) {
-    write(
-        root,
-        &format!("{docs}/src/{krate}/lib.rs.html"),
-        &format!(
-            "<!DOCTYPE html><html><head>{GENERATOR_MARK}</head><body><pre class=\"rust\"><code>{LIB}</code></pre></body></html>"
-        ),
-    )
-    .await;
-}
-
 /// A project with a `Cargo.toml`, so its docs are the `doc` of its build directory, holding the crate
 /// `demo`, which re-exports `Thing` from inside the docs and `Near` through a link to
 /// a directory of the root outside the docs.
 async fn docs_tree() -> Tree {
     let t = tree().await;
-    sources(&t.root, &["demo"]).await;
-    source_page(&t.root, "target/doc", "demo").await;
+    fixture::sources(&t.root, &t.root.join("target/doc"), &["demo"]).await;
     write(
         &t.root,
         "target/doc/demo/index.html",
@@ -1062,7 +1025,7 @@ async fn t21_the_built_docs_are_where_the_variable_the_settings_or_the_cargo_tom
         ("env", "variable"),
     ] {
         write(r, &format!("{dir}/doc/{krate}/index.html"), &page()).await;
-        source_page(r, &format!("{dir}/doc"), krate).await;
+        fixture::pages(&r.join(dir).join("doc"), &[krate]).await;
     }
     let space = |target: Option<&str>| RustItemSpace::new(r.clone(), target.map(PathBuf::from));
 
@@ -1077,7 +1040,7 @@ async fn t21_the_built_docs_are_where_the_variable_the_settings_or_the_cargo_tom
         "{why}"
     );
     // Beside the Cargo.toml (the manifest of the crates the docs are of).
-    sources(r, &["beside", "configured", "legacy", "variable"]).await;
+    fixture::manifests(r, &["beside", "configured", "legacy", "variable"]).await;
     assert_eq!(built(space(None)).await, ["beside"]);
     // The settings by their name of today, then the legacy name before it.
     write(r, ".cargo/config.toml", "[build]\ntarget-dir = \"built\"\n").await;
@@ -1142,9 +1105,9 @@ async fn t32_each_side_reads_the_built_docs_its_own_settings_name() {
         write(side, "old/doc/olden/index.html", &page()).await;
         write(side, "new/doc/newer/index.html", &page()).await;
         // The sources the docs are of, at each side.
-        sources(side, &["olden", "newer"]).await;
-        source_page(side, "old/doc", "olden").await;
-        source_page(side, "new/doc", "newer").await;
+        fixture::manifests(side, &["olden", "newer"]).await;
+        fixture::pages(&side.join("old/doc"), &["olden"]).await;
+        fixture::pages(&side.join("new/doc"), &["newer"]).await;
     }
     write(
         &before,
@@ -1173,8 +1136,7 @@ async fn t33_built_docs_outside_the_side_before_are_untold_there_and_read_at_the
     let (before, after) = (t.outside.clone(), t.root.clone());
     write(&after, "env/doc/demo/index.html", &page()).await;
     // The sources the docs are of, at the side after.
-    sources(&after, &["demo"]).await;
-    source_page(&after, "env/doc", "demo").await;
+    fixture::sources(&after, &after.join("env/doc"), &["demo"]).await;
     let space = RustItemSpace::on(
         ProjectTree::files(FileStates::between(before, after.clone())),
         Some(after.join("env")),

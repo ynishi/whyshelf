@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:5afac2279f825e56f0215d66b0a381c838a75c1c04c6f0b1b75d20b52d671bb9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_withheld.rs::a_pending_upstream_whose_approval_would_close_a_cycle_of_frames_says_so",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:861a35f05a256f5480cf539bb4a378f450381e7cf3591eb0d5a19e01cd4b4d45",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_withheld.rs::a_pending_upstream_whose_link_names_what_cannot_be_told_is_not_offered_its_approval",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ec5f44e748752616fcbba86d61a60cacb61fd8e7d9aa601685a43198f9ebf31a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_withheld.rs::a_refusal_told_at_one_origin_is_told_at_the_origin_it_keeps_an_approval_from_too",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d92405f6833b15f00c30e2451a7d9bbf09874421",
+      "hash": "sha256:ac1ae1dfec2f4142f6ddfda1b0527bc5163ded12d41f2c7f2566d6e3a15cdbb7",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "114"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d4b-86b5-7116-a322-e10c714d1c2d"
+    }
+  ],
+  "id": "01a2229e-4dc9-76d9-ac3a-88a7a82183e7",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:575b76b77b51c171a2683d918e7496cd4b136b74a64c6fea17c1db4b525a8c28",
+  "seen_address": "c8084f3677b2618a9a016ec011475a847a55664a",
+  "subject": "01a21d4b-abbe-74f6-8e30-6a8aa76bf539",
+  "v": 1,
+  "verb": "approve"
+}

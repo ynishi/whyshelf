@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:0a8b97481db10afb0481c012eb4281834b9fecf37e9eb870edf42373cc6556ac",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_document_whose_links_cannot_be_read_is_counted_and_said_and_a_bad_reference_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3f6302c863cdebc5d7cb875671378046f25fcaf7c4275777c88e2b2896dd0ff5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_requirement_reaches_its_decision_its_verification_and_what_they_stand_on",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877905440,
+  "expires": null,
+  "frame": [
+    {
+      "address": "f50ab89ed97157345a3e5b9355507f35cb458a53",
+      "hash": "sha256:37ecca4eebb5e924600cef923d52e894a84dae1766039f7bdb7c84c5fb694da5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "99"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8e84ae5744"
+    },
+    {
+      "address": "fb906990637988138770baf16f7a87cc5dba18af",
+      "hash": "sha256:500f6d7c881704e8880370efc435753dd7826db95f95fc341c446742bc477a19",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "100"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8f92f2c0bb"
+    }
+  ],
+  "id": "01a222aa-7334-77f7-a8ec-1c7ade44897a",
+  "kind": "decision",
+  "reason": "For #228, after a second review of the follow-up of #225: DEC-116 says a build script's output is told by cargo's form of the package directory, and that rust-test reads the crates of a project by the one rule of rust-item; DEC-90 and DEC-99 say the same of the manifests read; V-145 and V-111 say what the new tests hold (a link at the top of the docs passed over, a look-alike path compared, the reason that names a crate and the one whose pages are missing, a crate at the top of a project with no manifest at its root read by rust-test). Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "e40bd2805eca166a53dc5600d275581095f5a721",
+  "seen": "sha256:f014ab0cdba5b11fbcf080e48d3f82f7c4f41868ed4c6c7045c8847514352d35",
+  "seen_address": "ed9c29a6c8f59fb88cc4d898a1cef1c329be6e44",
+  "subject": "01a20869-ab6e-762c-9771-9e900a99fc74",
+  "v": 1,
+  "verb": "approve"
+}

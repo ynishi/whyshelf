@@ -31,19 +31,19 @@
 //! This module reads the docs through their tree ([`DocsTree`]) and the files of the
 //! project through its state, as every reader does.
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use whyshelf_core::app::shelf::{
-    AtSide, ByteBound, DirListing, EntryKind, Side, StateList, StateRead,
+    AtSide, ByteBound, DirListing, EntryKind, NotADir, Side, StateList, StateRead,
 };
 use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{NotOfSources, NotOfSourcesWhy};
 
-use super::super::super::state::ProjectTree;
+use super::super::super::state::{ProjectTree, StateError};
 use super::super::file::{self, Bounded};
 use super::super::on_blocking;
 use super::MAX_PAGE_BYTES;
-use super::crates::{Crates, SourceOf};
+use super::crates::{Crates, SOURCE_DIR, SourceOf};
 use super::docs_path::DocsPath;
 use super::docs_tree::{BuiltDocs, DocsTree};
 use super::sited::Sited;
@@ -53,9 +53,6 @@ use super::sited::Sited;
 pub(super) const HINT: TextLiteral = TextLiteral::new(
     "build the docs again from the sources as they are, as the project builds them (such as `cargo doc --no-deps`)",
 );
-
-/// The name rustdoc gives the directory of the pages of the source.
-const SOURCE_DIR: &str = "src";
 
 /// The bounds of one holding: the pages of the source, their bytes in all, one page,
 /// and the depth of their directories.
@@ -92,25 +89,35 @@ pub(super) struct HeldDocs {
     docs: DocsTree,
     /// What the docs are said as.
     read: NonBlank,
-    /// The crates of the project held; none for the tests of the walk, every crate.
-    held: Option<BTreeSet<String>>,
-    /// The crates of the manifests and where the docs were built: none for the tests
-    /// of the walk.
-    sources: Option<(Crates, Sited)>,
+    /// The crates of the project held.
+    held: BTreeSet<String>,
+    /// The crates of the manifests and where the docs were built.
+    sources: (Crates, Sited),
 }
 
 impl HeldDocs {
-    /// The docs `docs` of `side`, held against nothing: the mark the tests of how a
-    /// page is walked use, every crate taken as held.
+    /// The docs `docs` of `side` of the tree `state`, held against nothing: the mark
+    /// the tests of how a page is walked use, each directory at the top of the docs
+    /// taken as a crate held. It is a mark of the one shape [`hold`] makes, so the code
+    /// that reads one has no other to tell apart.
     #[cfg(test)]
-    pub(super) fn for_walk_tests(docs: DocsTree, side: Side) -> Self {
+    pub(super) async fn for_walk_tests(state: &ProjectTree, docs: DocsTree, side: Side) -> Self {
         let read = NonBlank::from(TextLiteral::new("the built docs of a test"));
+        let held = match listed(&docs, side, &DocsPath::top()).await {
+            Listed::Entries(top) => top.into_keys().collect(),
+            Listed::Absent | Listed::NotADir(_) | Listed::Unread(_) => BTreeSet::new(),
+        };
+        let crates = Crates::of(state, side).await;
+        let sited = match Sited::of(state, side, &docs).await {
+            Ok(sited) => sited,
+            Err(e) => panic!("the places of the docs of a test: {e}"),
+        };
         Self {
             side,
             docs,
             read,
-            held: None,
-            sources: None,
+            held,
+            sources: (crates, sited),
         }
     }
 
@@ -125,24 +132,24 @@ impl HeldDocs {
     }
 
     /// The crates of the manifests and where the docs were built, to place a name.
-    pub(super) fn sources(&self) -> Option<(&Crates, &Sited)> {
-        self.sources.as_ref().map(|(crates, sited)| (crates, sited))
+    pub(super) fn sources(&self) -> (&Crates, &Sited) {
+        (&self.sources.0, &self.sources.1)
     }
 
-    /// Whether the docs of the crate `krate` were held: a crate of the project is,
-    /// and any other (a dependency's docs) is not of the sources of the project, with
-    /// no trace of them.
+    /// Whether the docs of the crate `krate` were held: a crate of the manifests read
+    /// is, and any other (a dependency's, or one of a package those manifests do not
+    /// reach) is not of the sources of the project, with no trace of them.
     pub(super) fn crate_of(&self, krate: &str) -> Result<(), NotOfSources> {
-        match &self.held {
-            Some(held) if !held.contains(krate) => Err(NotOfSources::new(
-                reason(format!("the docs of the crate `{krate}` in {}", self.read)),
-                NotOfSourcesWhy::NoTrace,
-                NonBlank::from(TextLiteral::new(
-                    "it is no crate of the project's manifests (a dependency): name an item of a crate of the project",
-                )),
-            )),
-            Some(_) | None => Ok(()),
+        if self.held.contains(krate) {
+            return Ok(());
         }
+        Err(NotOfSources::new(
+            reason(format!("the docs of the crate `{krate}` in {}", self.read)),
+            NotOfSourcesWhy::NoTrace,
+            NonBlank::from(TextLiteral::new(
+                "it is no crate of the manifests read (the one at the root of the project, else the one of each directory at its top): name an item of a crate they name, or make them name it",
+            )),
+        ))
     }
 }
 
@@ -154,9 +161,15 @@ fn reason(text: String) -> NonBlank {
 /// The docs `docs` of `side` held against the files of the side `state` reads, with
 /// the crates of its manifests and `sited` where the docs were built: the mark when
 /// every page of the source of a crate of the project is the text of its file, else
-/// why not, the first in the order of the paths of the pages. Docs that cannot be
-/// listed at all hold nothing to read, and are the mark of no crate: the lookup then
-/// says they are not built, as before.
+/// why not, the first in the order of the paths of the pages. Docs that are not there
+/// (their directory is not) hold nothing to read, and are the mark of no crate: the
+/// lookup then says they are not built, as before. A directory of the docs that cannot
+/// be listed whole (an error, a listing cut at its bound) is unread, with why.
+///
+/// A crate held whose package depends by a path on a crate of the project whose
+/// pages of the source the docs do not hold has no trace: rustdoc writes the items a
+/// crate re-exports from another into its own docs, with no page of the other's
+/// source, when the other is not documented (`cargo doc -p <crate>`).
 pub(super) async fn hold(
     state: &ProjectTree,
     side: Side,
@@ -169,28 +182,46 @@ pub(super) async fn hold(
     let not = |why: NotOfSourcesWhy| NotOfSources::new(read.clone(), why, NonBlank::from(HINT));
     let unread = |text: String| not(NotOfSourcesWhy::Unread(reason(text)));
     let mut held = BTreeSet::new();
-    let Some(top) = names(&docs, side, &DocsPath::top()).await else {
-        return Ok(HeldDocs {
-            side,
-            docs,
-            read,
-            held: Some(held),
-            sources: Some((crates, sited)),
-        });
+    let top = match listed(&docs, side, &DocsPath::top()).await {
+        Listed::Entries(top) => top,
+        Listed::Absent => {
+            return Ok(HeldDocs {
+                side,
+                docs,
+                read,
+                held,
+                sources: (crates, sited),
+            });
+        }
+        Listed::NotADir(why) | Listed::Unread(why) => return Err(unread(why)),
     };
     let src = DocsPath::top().join(SOURCE_DIR);
-    let sourced = match &src {
-        Some(src) if top.contains(SOURCE_DIR) => names(&docs, side, src).await.unwrap_or_default(),
+    let sourced: BTreeSet<String> = match &src {
+        Some(src) if top.contains_key(SOURCE_DIR) => match listed(&docs, side, src).await {
+            Listed::Entries(entries) => entries.into_keys().collect(),
+            Listed::Absent => BTreeSet::new(),
+            Listed::NotADir(why) | Listed::Unread(why) => return Err(unread(why)),
+        },
         _ => BTreeSet::new(),
     };
+    // The directories of crates at the top of the docs; anything else there (a file, a
+    // symbolic link, whatever it leads to) is no crate the build wrote, and is passed
+    // over. A crate of the project is held by its pages of the source, which are listed
+    // apart, so a link at the top hides none.
     let mut built = BTreeSet::new();
-    for name in top.iter().filter(|name| *name != SOURCE_DIR) {
-        if let Some(dir) = DocsPath::top().join(name)
-            && names(&docs, side, &dir)
-                .await
-                .is_some_and(|inside| inside.contains("index.html"))
-        {
-            built.insert(name.clone());
+    for (name, kind) in &top {
+        if name == SOURCE_DIR || *kind != EntryKind::Dir {
+            continue;
+        }
+        let Some(dir) = DocsPath::top().join(name) else {
+            continue;
+        };
+        match listed(&docs, side, &dir).await {
+            Listed::Entries(inside) if inside.contains_key("index.html") => {
+                built.insert(name.clone());
+            }
+            Listed::Entries(_) | Listed::Absent | Listed::NotADir(_) => {}
+            Listed::Unread(why) => return Err(unread(why)),
         }
     }
     let mut pages = Vec::new();
@@ -216,6 +247,23 @@ pub(super) async fn hold(
         }
         pages.extend(found);
         held.insert(krate.clone());
+    }
+    // What a crate held re-exports of a crate of the project it depends on is held
+    // only through the pages of that crate's source.
+    for krate in &held {
+        if let Some(missing) = crates
+            .path_dependencies(krate)
+            .into_iter()
+            .find(|dependency| !held.contains(dependency))
+        {
+            return Err(NotOfSources::new(
+                read.clone(),
+                NotOfSourcesWhy::NoTrace,
+                reason(format!(
+                    "the docs of `{krate}` hold no page of the source of `{missing}`, which it depends on by a path: build the docs of both (such as `cargo doc --no-deps` of every crate of the project)"
+                )),
+            ));
+        }
     }
     pages.sort();
     let mut bytes: u64 = 0;
@@ -298,23 +346,67 @@ pub(super) async fn hold(
         side,
         docs,
         read,
-        held: Some(held),
-        sources: Some((crates, sited)),
+        held,
+        sources: (crates, sited),
     })
 }
 
-/// The names of the entries of `dir` of the docs, none when it cannot be listed whole.
-async fn names(docs: &DocsTree, side: Side, dir: &DocsPath) -> Option<BTreeSet<String>> {
-    match docs.list(side, Some(dir)).await.ok()? {
-        DirListing::All(entries) => Some(
+/// What the listing of a directory of the docs comes to. Only [`Listed::Absent`] is
+/// docs that are not there; a listing cut at its bound, as one that fails, is not read
+/// as the entries it has ([`Listed::Unread`]), as the lookup reads one.
+#[derive(Debug, PartialEq, Eq)]
+enum Listed {
+    /// Its entries, each by the text of its name, with its kind.
+    Entries(BTreeMap<String, EntryKind>),
+    /// Nothing is there.
+    Absent,
+    /// It is there and is no directory, and why it is said so.
+    NotADir(String),
+    /// It cannot be listed whole, and why.
+    Unread(String),
+}
+
+/// The listing of `dir` of the docs.
+async fn listed(docs: &DocsTree, side: Side, dir: &DocsPath) -> Listed {
+    let shown = docs.shown(side, dir);
+    of_listing(&shown, docs.list(side, Some(dir)).await)
+}
+
+/// What the answer `listing` of the directory shown as `shown` comes to: the one place
+/// a listing of the docs is read for the holding.
+fn of_listing(
+    shown: &std::path::Path,
+    listing: Result<DirListing<DocsPath>, StateError>,
+) -> Listed {
+    let shown = shown.display();
+    match listing {
+        Ok(DirListing::All(entries)) => Listed::Entries(
             entries
                 .named
-                .keys()
-                .filter_map(|p| p.file_name().map(str::to_owned))
-                .chain(entries.unnamed.into_keys())
+                .into_iter()
+                .filter_map(|(p, kind)| p.file_name().map(|name| (name.to_owned(), kind)))
+                .chain(
+                    entries
+                        .unnamed
+                        .into_iter()
+                        .map(|(name, entry)| (name, entry.kind)),
+                )
                 .collect(),
         ),
-        DirListing::Cut { .. } | DirListing::NotADir(_) => None,
+        Ok(DirListing::Cut { why, .. }) => {
+            Listed::Unread(format!("the listing of {shown} was cut: {why}"))
+        }
+        Ok(DirListing::NotADir(NotADir::Absent)) => Listed::Absent,
+        Ok(DirListing::NotADir(NotADir::File)) => {
+            Listed::NotADir(format!("{shown} is no directory"))
+        }
+        Ok(DirListing::NotADir(NotADir::Untold(why))) => {
+            Listed::Unread(format!("{shown} cannot be listed: {why}"))
+        }
+        Ok(DirListing::NotADir(NotADir::Elsewhere { .. })) => Listed::Unread(format!(
+            "{shown} is reached through a symbolic link that is not followed"
+        )),
+        Err(e) => Listed::Unread(format!("{shown} cannot be listed: {e}")),
     }
 }
 

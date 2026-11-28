@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:de89af8f81410c1cb19ca0e905904239af0b97d8df770ed0f88c8edb9b5f5fb6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_document_named_twice_in_a_run_is_refused_as_such",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d96d7b2e819857baa5de411e4f5b5c42fcdbbbdb3ea23bb97b8f0b950a231e51",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_document_no_file_carries_names_nothing_even_with_an_exemption_of_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6834f2a6db74cf27ef1553e6d9a4f924d57b7c8a44d61eaa628a9eef873ec854",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_finding_exempt_from_a_warn_cover_is_listed_apart_and_unneeded_once_grounded",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5815c35ea7595b5dee0a9a2bd867df5bb367d78eccda8810ff71e126284e580d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_note_exempt_from_a_true_cover_leaves_check_clean_until_it_is_seen",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3846dae761c87fe485ffec50a6cf8f803729d30e11f226c20b50f64e047e9431",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::a_refused_exemption_exits_2_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:24f08f62ff2158ee24fa27839118105d27451fc2910f55c3bcd2d2b256b49c42",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_from_one_of_two_covering_links_leaves_the_other_a_gap",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d718c785e760ea17303b252d88f3439ed12cf1db0a422f67bcc6af0e9e98208c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_unneeded_at_once_exits_2_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f6f49a127b0bd0ecdc68be3d21e2865c4080e8efdaf1f04cc5b00c453f4e556b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_withdrawn_leaves_the_gap_as_it_was",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bc070f175234ffbdeac00c97158b0f4a17dcd912d75baad192741d181ed366ed",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::an_exemption_withdrawn_twice_is_refused_and_one_may_be_made_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e1b9ace43c26663acfa7a679a59fad422caa69fe67363eecce7c671b1b12888e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::every_why_of_an_unneeded_exemption_is_told_on_the_binary",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:201bac5b8824996eede536c06ff638bcfcfb85a1d608ea7e2375d8b2c09128f6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/exempt.rs::two_exemptions_of_one_note_from_one_link_are_warned_of_as_repeated",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0193bc7e0f490080a21a47519cfd26a1388f514f",
+      "hash": "sha256:bd05152ccc1cab0cfdc1d0db1b9144f80253ee8e034ab3a1a13fbc8f99d8d75b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "65"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cae7-17e9-7631-bef0-e6d4c9095984"
+    }
+  ],
+  "id": "01a2229d-dffa-7507-937d-8513e83d147c",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:67fb64515dc2e9d4730645f044e8c309f48d553996a7966c95dd8737a3ea7d76",
+  "seen_address": "499959b023e5d6df9753fb5e970cb7d65afff164",
+  "subject": "01a1cae7-1da6-7457-af7a-69b5b81ebcc9",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:9ed9df22167feb9ecf554a687c5628164ccf39b69d3ddf155b68f989b766fd39",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_sources.rs::an_item_added_after_the_docs_were_built_is_not_told_absent_and_is_there_once_they_are_built_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5ac5a6ee3afb7ef52dca2882db43b97d8069e217c91c5b4f543e09af182d90fe",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_sources.rs::an_item_removed_after_the_docs_were_built_is_not_told_there_and_is_gone_once_they_are_built_again",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877905440,
+  "expires": null,
+  "frame": [
+    {
+      "address": "c932f121301cf67ff92d1c4fbfb658029fe2acf5",
+      "hash": "sha256:6cf6f9d59858f4d51f5fe31f5e2d28c508d16bef8ff06ba57d9372e5096fdab8",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "116"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a221c7-6b1b-7014-bd12-a2bc64a49b96"
+    }
+  ],
+  "id": "01a222aa-84e8-774b-b90a-31537fc1241f",
+  "kind": "decision",
+  "reason": "For #228, after a second review of the follow-up of #225: DEC-116 says a build script's output is told by cargo's form of the package directory, and that rust-test reads the crates of a project by the one rule of rust-item; DEC-90 and DEC-99 say the same of the manifests read; V-145 and V-111 say what the new tests hold (a link at the top of the docs passed over, a look-alike path compared, the reason that names a crate and the one whose pages are missing, a crate at the top of a project with no manifest at its root read by rust-test). Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "e40bd2805eca166a53dc5600d275581095f5a721",
+  "seen": "sha256:43adfaf536516f864dcfc92bd35ff881b46d625814e94e3716190af73d206721",
+  "seen_address": "cfecbdda10035ccb3f7befd566824f981769969a",
+  "subject": "01a221c7-6b1b-7014-bd12-a2bef690da2a",
+  "v": 1,
+  "verb": "approve"
+}

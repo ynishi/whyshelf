@@ -11,6 +11,8 @@
 //! directory `CARGO_TARGET_DIR` names, so no crate is built and no program but the
 //! binary is run.
 
+mod common;
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -84,15 +86,7 @@ impl Project {
         fs::write(dir.join("build/doc/demo/index.html"), page(&[], "demo")).unwrap();
         // The crate the docs are of, and its page of the source: the docs are of the
         // sources as they are.
-        fs::write(dir.join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
-        fs::create_dir_all(dir.join("src")).unwrap();
-        fs::write(dir.join("src/lib.rs"), LIB).unwrap();
-        fs::create_dir_all(dir.join("build/doc/src/demo")).unwrap();
-        fs::write(
-            dir.join("build/doc/src/demo/lib.rs.html"),
-            format!("<html><head>{GENERATOR}</head><body><pre class=\"rust\"><code>{LIB}</code></pre></body></html>"),
-        )
-        .unwrap();
+        common::demo_sources(&dir, &dir.join("build/doc"), LIB);
         let project = Self(dir);
         project.shelf(&["method.build"], "A shelf.");
         project
@@ -210,6 +204,10 @@ fn a_crate_whose_docs_are_not_built_is_unknown_and_no_approval_stands_on_it() {
     let check = json(&output);
     assert_eq!(check["clean"], true, "{check}");
     assert_eq!(names(&check["unknown"]), ["other::Item"]);
+    // The adapter said why: the kind is `told`, with none of the parts of a reason of
+    // docs not of their sources.
+    assert_eq!(check["unknown"][0]["kind"], "told", "{check}");
+    assert!(check["unknown"][0].get("reason").is_none(), "{check}");
     assert_eq!(check["absent"], serde_json::json!([]));
     let lines = stderr(&output);
     assert_eq!(lines.len(), 1, "{lines:?}");
