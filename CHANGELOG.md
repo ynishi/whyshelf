@@ -16,6 +16,17 @@ and this project adheres to
   and why the frame refuses it (`detail`). No command is written for one, and
   each is also a line on stderr; before, such an approval was dropped from
   `next` without a word (#184).
+- `check` and `health` list, for each invalid file, `sides`: the identities the
+  sides of a merge conflict in it show, when each shows one and they differ
+  (empty for any other file). `reach` and `units` count such a file in `untold`
+  as `sided`, with a warning on stderr, and the gate of `impact --within` lists
+  it in `unreadable` as `sided_before` and `sided_after` and does not pass while
+  one is there (#217).
+- In the library (#217): `ReadId::OneOf` of a `Sides`, made by
+  `ReadId::of_sides`; `MayHold`, the files that may hold a document no file
+  carries; `Resolution::Shown`; `DocProblem::MaybeDuplicateId`;
+  `InvalidDoc::sides`; and `sided` of `Unwalked`, `Unjoined` and
+  `within::Unreadable`.
 - In the library (#184): `settle::Approval`, an approval of one document by
   naming it, `settle::Withheld`, one the frame refuses with its
   `ledger::FrameRefusal`, and `settle::Settled`, what can be said of an origin
@@ -33,6 +44,17 @@ and this project adheres to
 - `check` and `health` write no `id` for a file left with both sides of a merge
   conflict whose sides show different identities; they wrote the identity of the
   side the file opens with (#166).
+- The presence of a document that cannot be told has `shown` beside
+  `unreadable`: a file left in a merge conflict a side of which shows the
+  document is listed under `shown`, and no longer under `unreadable`, which
+  keeps the files whose identity cannot be read. Each end of `untold.shelf` of a
+  verdict of `impact --within` is in that form, `{shown, unreadable}`, and no
+  longer a list of files (#217).
+- In the library (#217): `ReadId` is no longer `Copy`; `DocState::Unknown`,
+  `DocFailure::Unknown`, `DocPresence::Unknown`, `lookup::Absence::Unknown`,
+  `RekeyProblem::Unknown` and the ends of `within::UnknownAt` carry a `MayHold`
+  in place of a list of files; `Resolution` and `DocProblem` have a new variant,
+  and `ReadId` one more: a match that names every variant no longer builds.
 
 ### Fixed
 
@@ -50,6 +72,14 @@ and this project adheres to
   document's, and invalid. While such a file is in the tree, a document no file
   carries is `unknown` too, as with any file whose identity cannot be read
   (#166).
+- A file left in a merge conflict whose sides each show one identity, and not
+  the same one, is held to those identities: a document no file carries and no
+  side shows is `gone`, not `unknown`; a document of a side is found by its
+  identifier, also with no record (`get` tells it `unknown`); a record about one
+  that names no book is read with the book of the file, not with the rule of the
+  whole shelf; `status --book` lists one that has a record under the book of
+  the file; and another file that carries the identifier of a side is invalid,
+  as the file of the conflict is, each naming the other (#217).
 
 - This repository's books: the nine verifications that name the reader tests of
   whyshelf-infra whole under `tests` name again the helper file those tests use.
