@@ -43,7 +43,7 @@ use super::super::super::state::{ProjectTree, StateError};
 use super::super::file::{self, Bounded};
 use super::super::on_blocking;
 use super::MAX_PAGE_BYTES;
-use super::crates::{Crates, SourceOf};
+use super::crates::{Crates, SOURCE_DIR, SourceOf};
 use super::docs_path::DocsPath;
 use super::docs_tree::{BuiltDocs, DocsTree};
 use super::sited::Sited;
@@ -53,9 +53,6 @@ use super::sited::Sited;
 pub(super) const HINT: TextLiteral = TextLiteral::new(
     "build the docs again from the sources as they are, as the project builds them (such as `cargo doc --no-deps`)",
 );
-
-/// The name rustdoc gives the directory of the pages of the source.
-const SOURCE_DIR: &str = "src";
 
 /// The bounds of one holding: the pages of the source, their bytes in all, one page,
 /// and the depth of their directories.

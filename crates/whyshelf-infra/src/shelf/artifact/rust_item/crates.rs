@@ -40,8 +40,8 @@ use super::docs_path::DocsPath;
 use super::sited::Sited;
 
 /// The name rustdoc gives the directory of the pages of the source, at the top of the
-/// docs.
-const SOURCE_DIR: &str = "src";
+/// docs: the one place it is written, read here and by the holding of the docs.
+pub(super) const SOURCE_DIR: &str = "src";
 
 /// The part rustdoc writes in the path of a page of the source for `..`.
 const UP: &str = "up";
@@ -362,7 +362,7 @@ mod tests {
             of(&crates, "src/serde/lib.rs.html")
                 .await
                 .unwrap_err()
-                .contains("no crate of the project")
+                .contains("is no crate of the manifests read")
         );
         assert!(of(&crates, "my_demo/struct.A.html").await.is_err());
     }
