@@ -300,6 +300,13 @@ fn marker(line: &str) -> Option<Marker> {
     })
 }
 
+/// A text without the byte order mark it may begin with: what the first line with
+/// anything on it is looked for in, and what the lines of a conflict are read from.
+/// The one place the mark is set aside.
+fn without_mark(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
 /// How a text, already normalized by [`normalize`], stands to a front matter
 /// ([`FrontMatterStart`]).
 fn front_matter_start(normalized: &str) -> FrontMatterStart<'_> {
@@ -308,9 +315,7 @@ fn front_matter_start(normalized: &str) -> FrontMatterStart<'_> {
     {
         return FrontMatterStart::Opens { rest };
     }
-    let first_with_content = normalized
-        .strip_prefix('\u{feff}')
-        .unwrap_or(normalized)
+    let first_with_content = without_mark(normalized)
         .lines()
         .find(|line| !line.is_empty());
     match first_with_content {
@@ -1038,8 +1043,12 @@ fn conflict(text: &str, opened: Opened) -> Option<ReadId> {
     let mut opening = opened == Opened::None;
     let mut hunk_touches = false;
     let mut touched = false;
-    // The line that opens a front matter is the first of the text.
-    let lines = text.lines().skip(usize::from(opened == Opened::Common));
+    // The line that opens a front matter is the first of the text. A byte order mark
+    // before a marker that starts the text is set aside, as where the first line is
+    // read, so that line is the marker here too.
+    let lines = without_mark(text)
+        .lines()
+        .skip(usize::from(opened == Opened::Common));
     for line in lines {
         let first_here = std::mem::take(&mut first);
         match (marker(line), span) {
@@ -2339,6 +2348,20 @@ mod tests {
             unread(&text),
             (RawProblem::ConflictMarkers, ReadId::Unreadable)
         );
+    }
+
+    #[test]
+    fn a_byte_order_mark_before_the_marker_that_starts_the_text_is_set_aside() {
+        for before in ["\u{feff}", "\u{feff}\n", "\n"] {
+            let text = format!(
+                "{before}<<<<<<< ours\n---\nid: {ID}\nkey: S-1\n---\n=======\n---\nid: {ID}\nkey: S-2\n---\n>>>>>>> theirs\n"
+            );
+            assert_eq!(
+                unread(&text),
+                (RawProblem::ConflictMarkers, identity(ID)),
+                "{before:?}"
+            );
+        }
     }
 
     #[test]

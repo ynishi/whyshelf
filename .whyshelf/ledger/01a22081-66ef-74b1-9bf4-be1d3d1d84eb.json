@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:062fed589c11eec12f2fc4fe5281509ced891d1c1fc5c1537d215d4056e89828",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_whose_file_is_gone_is_unknown_while_a_conflict_is_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f20573151f3f5ecff07c7026656dc2547cc489eaa6d33f57198c7d02221f820b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_with_no_record_is_looked_up_as_absent_while_a_conflict_may_hold_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7b1ae101bea31a9411244198c801f3f76e6f1089013077cdc95080d16e1d617b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::another_file_of_the_identity_of_a_side_stays_valid_beside_the_conflict",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8fde76aaa974ebb027885b2f39e9b51b45c076c2b61a255168ec50943d122979",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::check_names_the_file_as_one_that_holds_conflict_markers_and_gives_it_no_identity",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:497c8264fe505697391a596d6828b6669cf63c2aaa155c37d5c082fe89b7527f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::the_documents_of_both_sides_of_a_file_are_neither_gone_nor_invalid_but_unknown",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9f10e370ed0ed19361ba85cf287d94308b96c32cb83eda5b718b61c854c5a615",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::two_sides_of_one_identity_are_that_documents_file_and_invalid_for_its_conflict",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795841654339,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7d2610b8c2f4f61315a6b8f879801bdd52cfd720",
+      "hash": "sha256:372e60e6a8a65af827135faafe936ca93aff0d13e4427a4d385ab8b8bc7d0c48",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "113"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d1c-14f4-76a5-8d36-a9a72bc6c6a8"
+    }
+  ],
+  "id": "01a22081-66ef-74b1-9bf4-be1d3d1d84eb",
+  "kind": "decision",
+  "reason": "The reading of a conflict sets a byte order mark before the marker that starts the text aside, in the one function the reading of the first line calls too, and DEC-113 and V-139 say so (#221); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "0ca4b65d85edad09af0c7ae487aaa84a1497bbf5",
+  "seen": "sha256:59b95a7fa6cd91f29094c7b9438fdf9018827852d0d13af45cb5caa46982a3cf",
+  "seen_address": "7bfc5113374547109cebca8e3367874d60db377c",
+  "subject": "01a21d1c-3dcc-7424-8d7c-f4754d3d404c",
+  "v": 1,
+  "verb": "approve"
+}
