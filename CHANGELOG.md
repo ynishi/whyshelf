@@ -27,6 +27,15 @@ and this project adheres to
   carries; `Resolution::Shown`; `DocProblem::MaybeDuplicateId`;
   `InvalidDoc::sides`; and `sided` of `Unwalked`, `Unjoined` and
   `within::Unreadable`.
+- Each entry of `unknown` of `check` and `stale` carries `kind`, why the name
+  cannot be told: `told`, `no_answer`, `not_asked`, `not_a_name` or
+  `not_of_sources`; the last has `read` (what was read), `reason` (`differs` or
+  `gone`, each with `file`, `no_trace`, or `unread` with `what`) and `hint`
+  (what to do) (#225).
+- The contract of an adapter has a fourth promise, of its sources, and each
+  adapter's page a heading `What it stands on` (#225).
+- In the library (#225): `Untold::NotOfSources` of a `NotOfSources`, with its
+  `NotOfSourcesWhy`, and `ArtifactReading::not_of_sources`.
 - In the library (#184): `settle::Approval`, an approval of one document by
   naming it, `settle::Withheld`, one the frame refuses with its
   `ledger::FrameRefusal`, and `settle::Settled`, what can be said of an origin
@@ -55,8 +64,22 @@ and this project adheres to
   `RekeyProblem::Unknown` and the ends of `within::UnknownAt` carry a `MayHold`
   in place of a list of files; `Resolution` and `DocProblem` have a new variant,
   and `ReadId` one more: a match that names every variant no longer builds.
+- In the library (#225): `Untold` has a new variant, `NotOfSources`, and
+  `Untold::as_str` returns a `Cow<str>`: a match that names every variant, or
+  code that takes the text as a `&str`, no longer builds.
+- The space `rust-item` tells the names of the docs of a crate that is no crate
+  of the project (a dependency's) as cannot tell, `not_of_sources`, and `moves`
+  no longer finds candidates in them; it answered them and searched them (#225).
 
 ### Fixed
+
+- The space `rust-item` holds the docs `cargo doc` built against the sources of
+  the tree before it reads them: every page of the source the docs hold of a
+  crate of the project is compared with its file, and when one is not the same
+  (an item added or removed since the docs were built), every name of those docs
+  cannot be told (`not_of_sources`, with the file and what to do), and `moves`
+  searches nothing. It told an item added since as gone, with moves to declare,
+  and would have told an item removed since as there (#225).
 
 - A file left with both sides of a merge conflict whose text starts with the
   marker after a byte order mark is told as holding merge conflict markers too;
