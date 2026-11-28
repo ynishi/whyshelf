@@ -1,0 +1,70 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:8528d178d40b20dbbd6208e37d3c1d7b49f724b994288b1879ca61c022a8c181",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::two_chains_on_one_upstream_decided_against_are_one_unit_that_waits_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e59a1d271e50cc809c127c12b5e0f38290bee44952554c790647088b02351bcf",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::two_chains_that_share_nothing_are_two_units_each_upstream_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6d0e39fb61349c36f18f14fa56ed3a7d559c94f4c73932ac24af31c67d9aaf28",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::two_chains_whose_artifacts_live_in_one_file_are_one_unit",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cd949bc9650dd78bf4daff97cb7efff7c12daeb2f8655a53d2f930efabb51a3a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::two_chains_whose_links_name_one_document_not_valid_are_one_unit_that_waits_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f82b909bc7120fcb841ba7c9c7be357520a8b5aff50198b3812f18586efa51d9",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::what_could_join_units_unseen_is_counted_and_said",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0d38e2c9259670d183304863d8d780e987a9b0d3",
+      "hash": "sha256:302492aefe6fb9a5a3a129958aca352d250378b2bfeb12850504213c374e475d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "107"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a208d2-0bb9-75d2-8714-adc41b7c187b"
+    }
+  ],
+  "id": "01a2229e-3ce7-72f1-95ec-c6ee525d5cb5",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:fe504bb960cfefab75537cab9eac338e9dd1aeca571c1040a7002782d8ea11ca",
+  "seen_address": "3002a6e371f1843eade56a27b1407f6195f18b19",
+  "subject": "01a208d2-0bb9-75d2-8714-adc6c7eb06c6",
+  "v": 1,
+  "verb": "approve"
+}

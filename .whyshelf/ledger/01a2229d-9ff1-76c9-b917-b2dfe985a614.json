@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c9caa8a96640bfbf1981309dbaaa4404890cf27fccf7be811a52c270d3fdde77",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/map.rs::map_answers_the_books_the_links_and_their_drawing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0dff7c93efb37b93e0435794d02cda0d831595b78d7e83467c7da4da121eca5c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/map.rs::map_of_a_declaration_that_cannot_be_used_is_its_problems_as_check_gives_them",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "bac0999d408e1c279c43992dc2812b698e24ee5e",
+      "hash": "sha256:5b166291dcdb398fe20cf946c63645890bec99b616c381db2abf7b24ef6099ba",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "47"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c64b-b4b9-723c-b0d7-3a6afd9617d3"
+    }
+  ],
+  "id": "01a2229d-9ff1-76c9-b917-b2dfe985a614",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:05c28b1fde439ebef1a8d756fa3592924ea8430fdec031a4100f3cf396e1503a",
+  "seen_address": "bc2584beb4e73c8d387fce9511de05aa00ca3665",
+  "subject": "01a1c64b-b9cd-7146-b41d-df0d32fecbb3",
+  "v": 1,
+  "verb": "approve"
+}

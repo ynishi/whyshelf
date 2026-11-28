@@ -1,0 +1,42 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:9b580142c4353e8920f9b979eb3bf5b3a4bb91c164ea3561745d09bd26945d8f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel.rs::keys_taken_on_two_branches_are_found_on_the_merge_result_and_renumbering_keeps_the_approvals",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "31218213a9ce26d9397f23819f98647e0958b0e4",
+      "hash": "sha256:c15896c0c6ffe4d10dceb465872261cef38d08d76211ed9a418f3d3e824a8dae",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "92"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fb17-df61-7261-b4ee-e0a9ecdf00fd"
+    }
+  ],
+  "id": "01a2229e-20b3-7326-9fb7-4f238cc9b875",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:cbdde60bc900608d04f0d28529c81f9267148d8af2274f43a3582893c7076622",
+  "seen_address": "01cab39839a02f94cbc9a3ac0a2d31bb7ee88fbc",
+  "subject": "01a1fb18-02ed-7353-a00e-3fc9446e9996",
+  "v": 1,
+  "verb": "approve"
+}

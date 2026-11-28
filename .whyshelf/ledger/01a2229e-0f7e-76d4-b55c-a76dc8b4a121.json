@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "4e5003ee16fb0eb1c48d106f268db63c18ba8461",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:92783ce14867cdbb8cb0685501cf2ad2586775eecdab6cce7d66b5019d1e06fa",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cb4d11c9070721229624c5ecd61926f15c89bde9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0b6c52851039af44fcd37b675df94a2a389cb83cc32b1e949607a63494c0c033",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/promise.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6fe10e2167766012ce32da4666a6f4c8125f788a",
+      "hash": "sha256:bb4c185cc7a9f4359f2fbf4aef4552b18dd870935791be542f85f25ba525b3e9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "83"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f2a3-70f9-7184-8e59-6b255b74caf0"
+    }
+  ],
+  "id": "01a2229e-0f7e-76d4-b55c-a76dc8b4a121",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:0c5527d1b1b0962d1fabeb61dbfb4e9e10a80f61bd35321bc1d7716c5d21839c",
+  "seen_address": "e597778bce321f51c49d0c0a94d42fdcc4765e40",
+  "subject": "01a1f2a3-70f9-7184-8e59-6b2611579257",
+  "v": 1,
+  "verb": "approve"
+}

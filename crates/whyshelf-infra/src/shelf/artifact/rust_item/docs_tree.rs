@@ -137,6 +137,11 @@ impl<S: StateList<RelPath>> UnderTree<S> {
         Self { state, docs, shown }
     }
 
+    /// The directory of the docs, as the project names it.
+    pub(crate) fn docs(&self) -> &RelPath {
+        &self.docs
+    }
+
     fn name(&self, p: &DocsPath) -> Option<RelPath> {
         p.in_project(&self.docs)
     }

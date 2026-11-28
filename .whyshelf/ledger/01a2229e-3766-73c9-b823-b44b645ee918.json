@@ -1,0 +1,66 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:0a8b97481db10afb0481c012eb4281834b9fecf37e9eb870edf42373cc6556ac",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_document_whose_links_cannot_be_read_is_counted_and_said_and_a_bad_reference_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3f6302c863cdebc5d7cb875671378046f25fcaf7c4275777c88e2b2896dd0ff5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_requirement_reaches_its_decision_its_verification_and_what_they_stand_on",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9baff2fa12e27d5f8c11c992cdd6c37382ade791",
+      "hash": "sha256:f758e509ffccab51972f63e9a794df8df49ddf2771d54f2b4b06d4d50bbeee61",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "99"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8e84ae5744"
+    },
+    {
+      "address": "fb906990637988138770baf16f7a87cc5dba18af",
+      "hash": "sha256:500f6d7c881704e8880370efc435753dd7826db95f95fc341c446742bc477a19",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "100"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a20869-ab6e-762c-9771-9e8f92f2c0bb"
+    }
+  ],
+  "id": "01a2229e-3766-73c9-b823-b44b645ee918",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:f014ab0cdba5b11fbcf080e48d3f82f7c4f41868ed4c6c7045c8847514352d35",
+  "seen_address": "ed9c29a6c8f59fb88cc4d898a1cef1c329be6e44",
+  "subject": "01a20869-ab6e-762c-9771-9e900a99fc74",
+  "v": 1,
+  "verb": "approve"
+}

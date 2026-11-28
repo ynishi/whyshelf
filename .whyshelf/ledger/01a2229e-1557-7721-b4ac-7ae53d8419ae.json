@@ -1,0 +1,122 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "9e7e1f13ef40fdba5ee496cab6de80ba4bd57809",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f1e76f2f135cc1e98d93e4a6ce968bb8f5ebd24b40d69c6fd166dc036b7e7313",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/conformance.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "e80ba603c1527dcd3488988ba5b1f6d881de3d7d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:506925d48f02b9d8591eac9409b4710ec09cde1aad769e639395bf546d3e8a85",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "f08199d4562a92513f69727780c1363a8dbc082e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:2150b777e2d8c1c97e40da764e60da771a8163391075d516e1b00a5ad1f10de0",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/js_test.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "4e5003ee16fb0eb1c48d106f268db63c18ba8461",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:92783ce14867cdbb8cb0685501cf2ad2586775eecdab6cce7d66b5019d1e06fa",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "64bcca6e8d34c7fcffef219d66f8c819f8e476ea",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f067b1fc33303e349de6be2697f331b00d5c04cc8bd420dd302638e52983133b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d4f4667ce722f906cbee4737c592b6b74f9552a6",
+      "hash": "sha256:c5e223cede5a4afc2f9a0c5dea69774e4122a9b46eede08701ac6bf2eb140aa9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "84"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-16db-7158-a8f3-5fb875ef9cb6"
+    },
+    {
+      "address": "8b30c059c954ca4982b781be4527b247e4cc8510",
+      "hash": "sha256:969bb9324d7a31ca9dff838217cea880755d22fffc21e5c71aac4b22e02f1edf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "85"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f3c4-569c-711e-af85-e6456a1155fc"
+    }
+  ],
+  "id": "01a2229e-1557-7721-b4ac-7ae53d8419ae",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:bce85ae13a5d6300a1fe8ba69dc6f4df8183ad6d86cd36e536026e70ad330f19",
+  "seen_address": "63f28cdd1d2f7b88bcc69f707e3783a955c29dcf",
+  "subject": "01a1f3d1-807b-7752-9685-97d1055a7641",
+  "v": 1,
+  "verb": "approve"
+}

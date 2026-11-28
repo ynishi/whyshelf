@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:0d1200984fcea4358dec4cd3a6297ffd9bbc24415fb2a04170d6f5112f590d71",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::a_fresh_approval_with_its_names_is_not_listed_as_awaiting_by_check",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3db574d9ff9f80a16de7edc87e6552a7a16b6471908c456f1e784d5efab56d98",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/decide.rs::with_two_names_asked_an_approval_awaits_the_second_and_again_once_the_first_lapses",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1fee4494b324b790563306a7337bda79c4e34e8b",
+      "hash": "sha256:960bd0b9091653ef170864b44f6c10f8472eb053f89a46182e4e02c4addf5cbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "89"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74"
+    }
+  ],
+  "id": "01a2229e-1b07-7180-b363-e31ecb9dbdc8",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:efa1472fa7db2ddfdd3ffd96842bd90680d0644f7cb65d9e7ccd4aa6eeda94fe",
+  "seen_address": "d6ad903b5a2cbb99f1e6e53e428e48dc66b12dc1",
+  "subject": "01a1f6a0-2c42-7b6d-9e14-7c3a2f8d1b95",
+  "v": 1,
+  "verb": "approve"
+}

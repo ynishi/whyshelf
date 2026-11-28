@@ -8,6 +8,8 @@
 //! | what | what it does |
 //! |---|---|
 //! | `Targets::of` | reads the manifest at the root (`Cargo.toml`): its package, and each member of its workspace by the member's own manifest |
+//! | `Targets::of_project` | the same; and, with no manifest at the root, the manifest of each directory at the top of the tree read the same way: the manifests the space `rust-item` reads |
+//! | `Targets::path_dependencies` | the libraries of the project a package depends on by a path, of its own or of its workspace's |
 //! | `Targets::crate_named` | the library or the binary a crate's name is: the library first, and two of them when two packages have a crate of the name under two directories |
 //!
 //! Which manifests are read, and the library and the binaries of a package, are on the
@@ -152,62 +154,158 @@ pub(super) struct Targets {
     targets: Vec<Target>,
     unread: Vec<Unread>,
     top: Top,
+    /// For each package, by its directory, the directories of the packages it depends
+    /// on by a path (`[dependencies]` and `[target.<cfg>.dependencies]`, a `path` of
+    /// its own or of the workspace's `[workspace.dependencies]`).
+    depends: BTreeMap<Dir, BTreeSet<Dir>>,
 }
+
+/// The dependencies of a workspace that name a path, by their key, each with the
+/// directory it names (from the root of the project).
+type SharedPaths = BTreeMap<String, Dir>;
 
 impl Targets {
     /// The targets of the project at `side`, read from the manifest at its root and
     /// those of the members of its workspace.
     pub(super) async fn of(state: &ProjectTree, side: Side) -> Self {
         let mut targets = Self::default();
-        let Some(root) = targets.manifest(state, side, &Dir::new()).await else {
+        targets.read_from(state, side, &Dir::new()).await;
+        targets
+    }
+
+    /// The targets of the project at `side` as the space `rust-item` reads them: those
+    /// of [`of`](Self::of); and, when the root has no manifest, those of the manifest
+    /// of each directory at the top of the tree (not one whose name starts with `.`),
+    /// each read as the root's would be (its package and the members of its
+    /// workspace), in the order of their names. A directory at the top that cannot be
+    /// listed is kept as not read.
+    pub(super) async fn of_project(state: &ProjectTree, side: Side) -> Self {
+        let mut targets = Self::of(state, side).await;
+        if targets.top == Top::Read {
             return targets;
+        }
+        let dirs = match subdirs(state, side, &Dir::new()).await {
+            Ok(dirs) => dirs,
+            Err(why) => {
+                targets.unread.push(why);
+                return targets;
+            }
         };
-        let top = Dir::new();
-        let workspace = targets.note(&top, table_field(&root, "", "workspace"));
+        for name in dirs.into_iter().filter(|name| !name.starts_with('.')) {
+            let base = vec![name];
+            let unread = targets.unread.len();
+            if targets.read_from(state, side, &base).await || targets.unread.len() > unread {
+                targets.top = Top::Read;
+            }
+        }
+        targets
+    }
+
+    /// Reads the manifest of `base` as the one of a root: its package and each member
+    /// of its workspace, the members and `exclude` read from `base`. Whether there is a
+    /// manifest there that was read.
+    async fn read_from(&mut self, state: &ProjectTree, side: Side, base: &Dir) -> bool {
+        let Some(root) = self.manifest(state, side, base).await else {
+            return false;
+        };
+        let top = base.clone();
+        let workspace = self.note(&top, table_field(&root, "", "workspace"));
         // The edition a member inherits with `edition.workspace = true`.
         let shared =
-            workspace.and_then(|w| targets.note(&top, table_field(w, "workspace", "package")));
+            workspace.and_then(|w| self.note(&top, table_field(w, "workspace", "package")));
         let inherited = shared
-            .and_then(|p| targets.note(&top, str_field(p, "workspace.package", "edition")))
+            .and_then(|p| self.note(&top, str_field(p, "workspace.package", "edition")))
             .map(str::to_owned);
-        targets
-            .read_package(state, side, &root, &top, inherited.as_deref())
+        // The dependencies by path a member inherits with `workspace = true`.
+        let paths: SharedPaths = workspace
+            .and_then(|w| self.note(&top, table_field(w, "workspace", "dependencies")))
+            .map(|deps| {
+                deps.iter()
+                    .filter_map(|(key, value)| {
+                        let path = value.as_table()?.get("path")?.as_str()?;
+                        Some((key.clone(), joined_dir(&top, path)?))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.read_package(state, side, &root, &top, inherited.as_deref(), &paths)
             .await;
         let Some(workspace) = workspace else {
-            return targets;
+            return true;
         };
-        let excluded: Vec<Dir> = targets
-            .workspace_texts(workspace, "exclude")
+        let excluded: Vec<Dir> = self
+            .workspace_texts(workspace, "exclude", &top)
             .iter()
-            .map(|t| parts_of(t))
+            .map(|t| under_all(&top, &parts_of(t)))
             .collect();
-        let listed = targets.workspace_texts(workspace, "members");
+        let listed = self.workspace_texts(workspace, "members", &top);
         let mut members: BTreeSet<Dir> = BTreeSet::new();
         for member in listed {
             let pattern = parts_of(&member);
             // A member written as a path is a member whatever `exclude` says; what a
             // pattern matches is not, under a path `exclude` names.
             if !pattern.iter().any(|part| is_pattern(part)) {
-                members.insert(pattern);
+                members.insert(under_all(&top, &pattern));
                 continue;
             }
-            match targets.expand(state, side, &member).await {
+            match self.expand(state, side, &top, &member).await {
                 Ok(dirs) => members.extend(
                     dirs.into_iter()
                         .filter(|dir| !excluded.iter().any(|out| dir.starts_with(out))),
                 ),
-                Err(why) => targets.unread.push(why),
+                Err(why) => self.unread.push(why),
             }
         }
-        members.remove(&Dir::new());
+        members.remove(&top);
         for dir in &members {
-            if let Some(manifest) = targets.manifest(state, side, dir).await {
-                targets
-                    .read_package(state, side, &manifest, dir, inherited.as_deref())
+            if let Some(manifest) = self.manifest(state, side, dir).await {
+                self.read_package(state, side, &manifest, dir, inherited.as_deref(), &paths)
                     .await;
             }
         }
-        targets
+        true
+    }
+
+    /// The crates of the project the package of `target` depends on by a path: the
+    /// library of each package at a directory its manifest names so.
+    pub(super) fn path_dependencies(&self, target: &Target) -> Vec<&Target> {
+        let Some(dirs) = self.depends.get(&target.package) else {
+            return Vec::new();
+        };
+        self.targets
+            .iter()
+            .filter(|other| other.kind == Kind::Lib && dirs.contains(&other.package))
+            .collect()
+    }
+
+    /// Keeps the directories of the packages the manifest `manifest` of `dir` depends
+    /// on by a path: of its `[dependencies]` and each `[target.<cfg>.dependencies]`, a
+    /// table with a `path`, or with `workspace = true` for a key `shared` names. Any
+    /// other dependency names no package of the project, and is passed over.
+    fn keep_dependencies(&mut self, manifest: &toml::Table, dir: &Dir, shared: &SharedPaths) {
+        let mut tables: Vec<&toml::Table> = Vec::new();
+        tables.extend(manifest.get("dependencies").and_then(Value::as_table));
+        if let Some(targets) = manifest.get("target").and_then(Value::as_table) {
+            tables.extend(
+                targets
+                    .values()
+                    .filter_map(|of| of.get("dependencies")?.as_table()),
+            );
+        }
+        let mut found = BTreeSet::new();
+        for (key, value) in tables.into_iter().flatten() {
+            let Some(dep) = value.as_table() else {
+                continue;
+            };
+            if let Some(path) = dep.get("path").and_then(Value::as_str) {
+                found.extend(joined_dir(dir, path));
+            } else if dep.get("workspace").and_then(Value::as_bool) == Some(true) {
+                found.extend(shared.get(key).cloned());
+            }
+        }
+        if !found.is_empty() {
+            self.depends.entry(dir.clone()).or_default().extend(found);
+        }
     }
 
     /// Every target, in the order they were read.
@@ -341,7 +439,7 @@ impl Targets {
     /// layout holds ([`Self::layout_bins`]) when cargo finds them, with each declared
     /// one (`[[bin]]`) in the place of one of its name, and its tests, benches and
     /// examples, found the same way. `inherited` is the edition of the workspace, for a
-    /// package that inherits it.
+    /// package that inherits it, and `shared` its dependencies by a path.
     async fn read_package(
         &mut self,
         state: &ProjectTree,
@@ -349,10 +447,12 @@ impl Targets {
         manifest: &toml::Table,
         dir: &Dir,
         inherited: Option<&str>,
+        shared: &SharedPaths,
     ) {
         let Some(name) = self.package_name(manifest, dir) else {
             return;
         };
+        self.keep_dependencies(manifest, dir, shared);
         let library = self.has_library(state, side, manifest, dir).await;
         // Cargo finds targets by the layout unless told not to; of the edition 2015, a
         // package that declares one of a kind finds none of it unless told to.
@@ -492,18 +592,18 @@ impl Targets {
         found
     }
 
-    /// The strings of the array `key` of the `[workspace]` table of the root manifest:
-    /// none when the key is absent; when it is there and is no array, or an item is no
-    /// string, that is kept as not read.
-    fn workspace_texts(&mut self, workspace: &toml::Table, key: &str) -> Vec<String> {
-        let Some(items) = self.note(&Dir::new(), array_field(workspace, "workspace", key)) else {
+    /// The strings of the array `key` of the `[workspace]` table of the manifest of
+    /// `dir`: none when the key is absent; when it is there and is no array, or an item
+    /// is no string, that is kept as not read.
+    fn workspace_texts(&mut self, workspace: &toml::Table, key: &str, dir: &Dir) -> Vec<String> {
+        let Some(items) = self.note(dir, array_field(workspace, "workspace", key)) else {
             return Vec::new();
         };
         let mut texts = Vec::new();
         let label = format!("an item of `workspace.{key}`");
         for item in items {
             let text = value_as(item, &label, "a string", Value::as_str);
-            texts.extend(self.note(&Dir::new(), text).map(str::to_owned));
+            texts.extend(self.note(dir, text).map(str::to_owned));
         }
         texts
     }
@@ -648,6 +748,7 @@ impl Targets {
         &mut self,
         state: &ProjectTree,
         side: Side,
+        base: &Dir,
         member: &str,
     ) -> Result<Vec<Dir>, Unread> {
         let pattern = parts_of(member);
@@ -666,9 +767,9 @@ impl Targets {
             )));
         }
         if !pattern.iter().any(|part| is_pattern(part)) {
-            return Ok(vec![pattern]);
+            return Ok(vec![under_all(base, &pattern)]);
         }
-        let mut dirs: Vec<Dir> = vec![Dir::new()];
+        let mut dirs: Vec<Dir> = vec![base.clone()];
         for part in &pattern {
             let mut next = Vec::new();
             for dir in dirs {
@@ -889,6 +990,30 @@ fn parts_of(text: &str) -> Dir {
         .filter(|part| !part.is_empty() && *part != ".")
         .map(str::to_owned)
         .collect()
+}
+
+/// The directory `parts` names under `base`.
+fn under_all(base: &Dir, parts: &Dir) -> Dir {
+    base.iter().chain(parts).cloned().collect()
+}
+
+/// The directory the relative path `path` (a `path` of a dependency) names from
+/// `dir`, `..` read; none when it climbs out of the project or is absolute.
+fn joined_dir(dir: &Dir, path: &str) -> Option<Dir> {
+    if path.starts_with(['/', '\\']) || path.contains(':') {
+        return None;
+    }
+    let mut at = dir.clone();
+    for part in path.split(['/', '\\']) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                at.pop()?;
+            }
+            part => at.push(part.to_owned()),
+        }
+    }
+    Some(at)
 }
 
 /// Whether a part of a member is a pattern.

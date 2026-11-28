@@ -585,7 +585,7 @@ async fn the_docs_a_commit_holds_are_held_against_the_sources_of_that_commit() {
     write(
         &r.repo,
         "target/doc/src/demo/lib.rs.html",
-        &page(&format!("<pre class=\"rust\"><code>{LIB}</code></pre>")),
+        &super::super::super::artifact::rust_item::fixture::source_page(LIB),
     )
     .await;
     git(&r.repo, &["add", "-A"]).await;

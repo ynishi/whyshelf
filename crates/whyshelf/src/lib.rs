@@ -473,10 +473,24 @@
 //! (a file edited, added to a module or taken away since the docs were built), no name
 //! read from those docs is there or absent: each cannot be told, `not_of_sources`
 //! (below), with the file, what was read and what to do. A re-export crosses crates,
-//! so one file that differs holds back the names of every crate. The docs of a crate
-//! that is no crate of the project's manifests (a dependency) are not held, and each of
-//! their names cannot be told the same way, nor is any a candidate of `moves`. whyshelf
-//! builds nothing and runs no program: building the docs again is the project's.
+//! so one file that differs holds back the names of every crate. Every page of the
+//! source of a file of the project is compared, wherever the build directory is (the
+//! root itself, with `build.target-dir = "."`, included); only the output of a build
+//! script under it is not. So are docs built for some crates only (`cargo doc -p`)
+//! when a crate documented depends by a path on a crate of the project they hold no
+//! page of the source of: what it re-exports of that crate is written into its own
+//! docs with no copy of the other's files, so such docs cannot be told (`no_trace`).
+//!
+//! The crates of the project are those of the manifests read: the `Cargo.toml` at the
+//! root with its workspace, and, when the root has none, the `Cargo.toml` of each
+//! directory at the top of the tree (not one whose name starts with `.`), each with its
+//! workspace, so that a project whose crate is in a directory of its own is read. The
+//! docs of any other crate (a dependency's, or one of a package those manifests do not
+//! reach, deeper in a project with no manifest at its root or named by no workspace)
+//! are not held, and each of their names cannot be told the same way, nor is any a
+//! candidate of `moves`. A directory of the docs that cannot be listed whole (an error,
+//! or a listing cut at its bound) is `unread`, with why. whyshelf builds nothing and
+//! runs no program: building the docs again is the project's.
 //!
 //! 1. Build them in the recipe that checks, every time, before it checks: this
 //!    repository's `just check` removes the docs and builds them before the books
@@ -491,8 +505,9 @@
 //!    docs built with other features, `cfg` or toolchain can answer old with nothing
 //!    said; a crate with two files that are one page once `..` is dropped, one that
 //!    reads a file outside both the project and the build directory, a tree moved with
-//!    its build directory, and docs that write no page of the source cannot be told,
-//!    though they may be of the sources.
+//!    its build directory, docs that write no page of the source, and the crates of a
+//!    package the manifests read do not reach cannot be told, though they may be of
+//!    the sources.
 //!
 //! `check` still exits 0 for such a name (an approval cannot stand on it, and one that
 //! stands is unchanged by it); `stale --exit-code` exits 1 while an approval pins one.
@@ -921,7 +936,8 @@
 //! For `rust-item`, the docs keep no history, so a candidate is a name the built docs
 //! have now that ends as the gone one does: of the modules (a directory with an
 //! `index.html`) and the items (a page `<kind>.<Name>.html`) of the crates rustdoc
-//! wrote for the crates of the project (a dependency's docs are not searched), those
+//! wrote for the crates of the project (the docs of a crate that is none of the
+//! manifests read are not searched), those
 //! that end with the most segments in common with it, counted from the last, in each
 //! crate (`app::old::m::Foo` has `app::new::m::Foo`, and not `app::other::Foo` when it
 //! has the first; another crate's `http::Error`, which ends alike in two segments with

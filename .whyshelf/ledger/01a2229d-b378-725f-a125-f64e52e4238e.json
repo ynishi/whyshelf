@@ -1,0 +1,42 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:bef72ca3ff37b3f9f1dd7c52ae497c4f2a844bb7ded5be2a27f3888b760c5e78",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::stale_names_where_the_degradations_start",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a2229d-b378-725f-a125-f64e52e4238e",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:f0d024aee4843f41683dc9aff36557fefe56a55ba61c442c56d473bfa528e548",
+  "seen_address": "32c7dbfc294e8c32316b7f4aedcdfc51f5ea3717",
+  "subject": "01a1c765-24a9-7452-abc1-0e695ee0321d",
+  "v": 1,
+  "verb": "approve"
+}

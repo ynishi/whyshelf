@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:24bf391ad2d320279c5ee306abfb16c9d5adbbf8176643b23b8a5235f56cbcd5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::a_document_that_writes_nothing_has_the_hash_of_one_that_leaves_it_out",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b5bd40fa3c8ac8003e4561f04c60928345f995faada93dcd3ee5ae02fddb6ced",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::a_title_of_a_project_init_made_is_one_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d54f86e0fe60042c3a392415d29f6fd98dfefaf70b84c32d9d071f12c115b98b",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::an_id_or_a_key_written_with_no_value_is_told_as_empty",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:42e2b396032118fbe3421a0e47751dea4d0a64465bb76c9497ed41c5741fe9c1",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::an_item_of_a_list_that_says_nothing_makes_the_document_invalid_and_check_names_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ab6dad878871e3a721d5e718dde500242e64d4225d9a2e38453400b2db7c6403",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::an_optional_field_written_empty_or_with_no_value_is_valid_and_shows_no_value",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:76b2e20d6a5af563c3e47975c4afaf7719588aba0c5b5c20c2a600b26bd384fa",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::fmt_leaves_out_a_field_with_no_value_and_the_approval_still_holds",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:20d1c199b5bea3ce8e86ee184c2c7d6423ec65065368923914bc2bc1353a1f54",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::fmt_writes_a_key_with_no_value_as_null_and_reads_it_back_as_the_same_thing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:daf68709a26bc37a6458066a4509c036ff438f4ffbca86e6974788d08d6cc357",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::new_does_not_write_a_field_given_with_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:87410b703724c192e5f0e4585c084ca3669dbf51a3556c238fcc4b2ce2b773e7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::new_from_a_line_with_a_null_entry_writes_it_left_out",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f057d6755da37fadab70155f709e3289b68547f2641f02042b29e58633937ac7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::new_refuses_an_item_that_says_nothing_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5fb96863c30a0fcaafe458612157f77630ae6803a67fa8ec8840636df8630d77",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/empty_values.rs::status_where_with_no_value_is_a_request_that_cannot_be_answered",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4937a046e315e71bc5f4a581e4c734265afbc1b0",
+      "hash": "sha256:16441793e0701b6a5c293308826f0028ce5f8fb44f3d80f87a16f35a644eb9bd",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "76"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1e4f4-a1a7-70a3-a224-a7b68ad2e076"
+    }
+  ],
+  "id": "01a2229e-011a-71aa-81ab-4c0b70ef71cc",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:a1a4abce1b9be5b2f72503676db03eb69d8cd9abde3b0520045f0552dba303c1",
+  "seen_address": "cb28e3d804084a074154753a13d7ab106250e06c",
+  "subject": "01a1e4f4-e2ca-70f8-b581-47184c25b15a",
+  "v": 1,
+  "verb": "approve"
+}

@@ -230,3 +230,23 @@ pub(crate) fn in_seconds(seconds: u64) -> String {
         day_secs % 60
     )
 }
+
+/// The source of the crate `demo` at the root `root` that hand-written docs at `docs`
+/// are of: its manifest, its root file `src/lib.rs` of text `lib` (with no character
+/// HTML escapes), and its page of the source in the docs, as rustdoc lays one out, so
+/// that the docs are of the sources as they are. The one place the end-to-end tests
+/// that write docs by hand write it.
+pub(crate) fn demo_sources(root: &Path, docs: &Path, lib: &str) {
+    fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), lib).unwrap();
+    let page = docs.join("src/demo/lib.rs.html");
+    fs::create_dir_all(page.parent().unwrap()).unwrap();
+    fs::write(
+        page,
+        format!(
+            "<html><head><meta name=\"generator\" content=\"rustdoc\"></head><body><pre class=\"rust\"><code>{lib}</code></pre></body></html>"
+        ),
+    )
+    .unwrap();
+}

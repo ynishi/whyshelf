@@ -163,8 +163,8 @@
 //! by a public re-export (it has no page of its own, nor a module that holds it) is no
 //! candidate, though a lookup of it says it is there. Docs that are not of the sources
 //! are not searched (below, "What it stands on"), and the note `search_unavailable`
-//! says why; the docs of a dependency are not walked, so none of its names is a
-//! candidate. A gone name counts toward a move of a prefix only through the candidates
+//! says why; the docs of a crate that is none of the manifests read are not walked,
+//! so none of its names is a candidate. A gone name counts toward a move of a prefix only through the candidates
 //! kept (at most 16):
 //! one whose candidate was cut does not, and a move that fewer of them carry for that
 //! is not tried. This is
@@ -222,19 +222,27 @@
 //! LF, the last line break as it is). For each crate of the project in the docs (a
 //! directory of a crate with its index, or a directory of its pages of the source),
 //! every such page is laid beside the file of the side it is of (the rules are on the
-//! page of the module that reads the manifests, `crates`, private: a page of a source
-//! a build made, under the build directory by its whole path, is not compared) and
-//! compared byte for byte. One page not as its file makes every name read from those
-//! docs one that cannot be told, not of its sources ([`Untold::NotOfSources`]), with
-//! the first such page in the order of their paths: a re-export crosses crates, so no
-//! crate is told apart. So is a crate of the project whose docs hold no page of the
-//! source, a name two packages give their crates, a page whose file climbs out of the
-//! project, and a manifest that cannot be read. The docs of a crate that is no crate
-//! of the project (a dependency's) are not held, and each of their names cannot be
-//! told, not of its sources: nothing of the project is their source. The holding reads
-//! at most 2,000 pages and 512 MiB of them in all, each page of at most
-//! [`MAX_PAGE_BYTES`], 64 directories deep; past a bound, the docs cannot be held,
-//! and no name of them is told. Docs with no directory at all are not built, as
+//! page of the module that reads the manifests, `crates`, private: a page of the
+//! output of a build script, under the build directory by its whole path, is not
+//! compared, and any other page under the root by its whole path is, wherever the
+//! build directory is, the root itself or a directory above it included) and compared
+//! byte for byte. One page not as its file makes every name read from those docs one
+//! that cannot be told, not of its sources ([`Untold::NotOfSources`]), with the first
+//! such page in the order of their paths: a re-export crosses crates, so no crate is
+//! told apart. So is a crate of the project whose docs hold no page of the source, a
+//! name two packages give their crates, a page whose file climbs out of the project, a
+//! manifest that cannot be read, and a crate in the docs whose package depends by a
+//! path on a crate of the project whose pages of the source the docs do not hold
+//! (built with `cargo doc -p <crate>`, rustdoc writes what a crate re-exports from
+//! another into the docs of the first, with no page of the other's source). The crates
+//! of the project are those of the manifests read ("Where a name lives", below); the
+//! docs of any other crate (a dependency's, or one of a package those manifests do not
+//! reach) are not held, and each of their names cannot be told, not of its sources:
+//! nothing those manifests name is their source. A directory of the docs that cannot
+//! be listed whole (an error, or a listing cut at its bound) cannot be held, and says
+//! why. The holding reads at most 2,000 pages and 512 MiB of them in all, each page of
+//! at most [`MAX_PAGE_BYTES`], 64 directories deep; past a bound, the docs cannot be
+//! held, and no name of them is told. Docs with no directory at all are not built, as
 //! before.
 //!
 //! KNOWN LIMITATION: what is held is that the files of the project the docs hold a
@@ -248,7 +256,9 @@
 //! and `outside/near.rs`: rustdoc writes one over the other); a build whose crate
 //! reads, by `include!` or `#[path]`, a file outside both the project and the build
 //! directory; a tree moved elsewhere with its build directory (building the docs
-//! again mends it); and docs built not to write the pages of the source. Building the
+//! again mends it); docs built not to write the pages of the source; and the crates of
+//! a package the manifests read do not reach (one deeper than a directory at the top
+//! of a project with no manifest at its root, or one no workspace names). Building the
 //! docs again is the project's: the recipe a check runs builds them first (this
 //! repository's `just check` does, as its CI does), and a Git hook can help (one is
 //! not copied by a clone, so it is no more than a help).
@@ -408,8 +418,13 @@
 //! [`MAX_SETTINGS_BYTES`]). A member is a path, or a pattern of `*` and `?` in its
 //! parts, the directories it matches that hold a `Cargo.toml`; a directory under a
 //! path of `exclude` is taken out of what a pattern matches, and a member written as a
-//! path stays. The dependencies of a package (by a path or not) are not read: an item
-//! of one is no crate of the project.
+//! path stays. When the root has no `Cargo.toml`, the manifest of each directory at the
+//! top of the tree (but one whose name starts with `.`) is read the same way, its
+//! package and the members of its workspace, from that directory: a project whose
+//! crate is in a directory of its own (`crate/Cargo.toml`) is read so, and one deeper
+//! is not. The dependencies of a package are not read as crates of the project: an
+//! item of one is none; a dependency by a path on a package of the project is read as
+//! an edge between the two, for the holding of the docs (above).
 //!
 //! The crates of a package are as cargo makes them:
 //!
@@ -431,7 +446,8 @@
 //! path; when the docs cannot be read or the item is not in them (absent, or cannot
 //! be told, as `resolve` says); when its page cannot be read or links to no page of
 //! the source; when the docs are not of the sources as they are, or the crate is none
-//! of the manifests (a dependency), two packages have it, or something that might have
+//! of the manifests read (a dependency's, or one they do not reach), two packages have
+//! it, or something that might have
 //! it cannot be read (a manifest, a member written with `**` or `[`, a member directory
 //! that is a symbolic link, a directory of a package's source that cannot be listed);
 //! when the path leads out of the project; or when the file is no file of the project,
@@ -450,7 +466,7 @@ mod crates;
 mod docs_path;
 mod docs_tree;
 #[cfg(test)]
-mod fixture;
+pub(crate) mod fixture;
 mod held;
 mod layout;
 mod lookup;
@@ -685,12 +701,19 @@ impl RustItemSpace {
     /// The items of the project at `root`, read at one side (the root as it is), with
     /// `target_dir` the value of `CARGO_TARGET_DIR` (read by the caller; none when it
     /// is not set).
+    ///
+    /// The space holds the docs of each side against its sources once, the first time
+    /// it reads them, and keeps what it found for its whole life (a clone shares it):
+    /// one space serves one run, which writes nothing. A caller that changes the sources
+    /// or the docs and asks again makes the space again; one it keeps answers from the
+    /// first holding.
     pub fn new(root: PathBuf, target_dir: Option<PathBuf>) -> Self {
         Self::on(ProjectTree::files(FileStates::new(root)), target_dir)
     }
 
     /// The items of the project `state` reads, with `target_dir` as for
-    /// [`new`](Self::new).
+    /// [`new`](Self::new); the holding of the docs is kept for the life of the space,
+    /// as there.
     pub fn on(state: ProjectTree, target_dir: Option<PathBuf>) -> Self {
         Self {
             state,
@@ -711,6 +734,12 @@ impl RustItemSpace {
     /// The text of what an item promises as the project is ([`Side::After`], what a
     /// link that compares its text compares), or none when the name is none, or the
     /// item is not there, or its promise cannot be told.
+    ///
+    /// None does not say which: the current bytes of the contract are bytes or none
+    /// ([`SpaceAdapter::current`]), with no reason. Why an item that is there has no
+    /// promise to read (its page cannot be read, is too large, or is laid out another
+    /// way) is said by [`resolve`](Self::resolve), whose reading of it is there for
+    /// presence and cannot be told, with why, for any other comparison.
     pub async fn current(&self, name: &ArtifactName) -> Result<Option<Vec<u8>>, RustItemError> {
         self.current_at(Side::After, name).await
     }
@@ -783,11 +812,11 @@ impl RustItemSpace {
             return Ok(None);
         };
         Ok(match lookup.find(&path).await {
-            Found::There(place) => lookup
-                .promise(&place)
-                .await
-                .ok()
-                .map(|promise| promise.text().into_bytes()),
+            Found::There(place) => match lookup.promise(&place).await {
+                Ok(promise) => Some(promise.text().into_bytes()),
+                // The port has no place for why (see `current`): `resolve` says it.
+                Err(_unreadable) => None,
+            },
             Found::Unread(_) | Found::Absent | Found::CannotTell(_) | Found::NotOfSources(_) => {
                 None
             }
@@ -888,11 +917,11 @@ impl RustItemSpace {
             Ok(at) => at,
             Err(why) => return Ok(Err(NoLookup::Untold(why))),
         };
-        let docs = match DocsTree::of(&self.state, side, at.clone()).await? {
+        let docs = match DocsTree::of(&self.state, side, at).await? {
             Ok(docs) => docs,
             Err(why) => return Ok(Err(NoLookup::Untold(why.as_str().into_owned()))),
         };
-        let sited = Sited::of(&self.state, side, &at, &docs).await?;
+        let sited = Sited::of(&self.state, side, &docs).await?;
         let crates = Crates::of(&self.state, side).await;
         Ok(held::hold(
             &self.state,

@@ -1,0 +1,112 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:6f38791ab06398e455a9f164eb46ac78f363246d70a46a1aafd88cabecdb0950",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_blank_variable_names_no_one_and_a_blank_flag_is_a_wrong_request",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f1d6a6c8514e1efef0377e3b5a56450a2c30f8925a5e19eb8b6cb195aab62487",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_ran_by_given_on_the_command_line_is_kept_beside_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:19035971f9a48e577527f4cd66f17b03f391f995b428cb1d3bf52be96e71af70",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_ran_by_that_is_the_actor_is_one_name_whoever_gave_either",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:43a2e3361bda09db30d4b5ff500ab7221845c3ee99533284f1af487b1fee5e37",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::a_revocation_keeps_who_ran_the_command_too",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d7bb143a3f4c3747d752284b1bb6e5cd047be383ffe25701e54519c0250a6479",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::every_judge_verb_takes_a_ran_by",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:10d5e15d3da7601e5e51654c7f90c97e3ff55145003f76a9cd7d5cdb2501665d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::gits_user_name_and_the_projects_files_are_not_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ab5782cfc530de596cbd50d07aec402f1cfc1f3aab82173f193ac17a22f3a3c7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_answers_show_who_ran_the_command_beside_the_actor_and_null_when_it_is_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c45ede12d50a5d5cd9cddbe4b101a3670d324cd838002694d87dd2675033d960",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_command_line_wins_over_the_variable_for_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ce07cf5598e654137ce9c1025c5c52861f64582925aae08057b2df36755500db",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_exemptions_check_lists_show_who_ran_the_command_beside_the_actor",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ca7293db3027e9e8829e88d40887429028cd5cf7f719b3bbd5a4d142b44aee59",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/ran_by.rs::the_variable_names_who_ran_the_command",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cadb2a8f483f35def74de63b56f01fcd88b66675389a165b06777693a0232107",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/repository_ledger.rs::the_repository_s_ledger_reads_with_no_unreadable_record_and_no_problem",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a9b2fd3c4ceba61ffda41404197124792b3fb23d",
+      "hash": "sha256:d1cbb29f21ce6cbdc780eea2f9611ecbb427d583290301d8825f4234a4b8981d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "91"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f9a4-bea7-7778-ac4a-a68538d58570"
+    }
+  ],
+  "id": "01a2229e-1de9-737c-a80b-59e056835727",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:280ce524cf5d5c387fa906abde39f373d84353bd7a09d1df63b55e9ba25e3249",
+  "seen_address": "9158da0d459ec2445b2675ae91300ef5db279150",
+  "subject": "01a1f9a5-0a13-76af-a15b-b7d44cac4f3b",
+  "v": 1,
+  "verb": "approve"
+}

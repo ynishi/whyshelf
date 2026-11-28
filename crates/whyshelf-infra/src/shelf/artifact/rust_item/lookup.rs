@@ -186,8 +186,14 @@ impl Lookup {
             .await
             .ok()?
         {
-            DirListing::All(entries) | DirListing::Cut { entries, .. } => {
+            DirListing::All(entries) => {
                 self.listings.insert(p.clone(), Some(names_of(entries)));
+                Some(true)
+            }
+            // A directory whose listing is cut at its bound is not read as the entries it
+            // has, as the holding of the docs reads it: it cannot be listed.
+            DirListing::Cut { .. } => {
+                self.listings.insert(p.clone(), None);
                 Some(true)
             }
             DirListing::NotADir(NotADir::File | NotADir::Untold(_) | NotADir::Elsewhere { .. }) => {
@@ -201,10 +207,9 @@ impl Lookup {
     pub(super) async fn listing(&mut self, dir: &DocsPath) -> Option<&BTreeSet<String>> {
         if !self.listings.contains_key(dir) {
             let names = match self.held.docs().list(self.held.side(), Some(dir)).await {
-                Ok(DirListing::All(entries) | DirListing::Cut { entries, .. }) => {
-                    Some(names_of(entries))
-                }
-                Ok(DirListing::NotADir(_)) | Err(_) => None,
+                Ok(DirListing::All(entries)) => Some(names_of(entries)),
+                // Cut at its bound: not read as the entries it has.
+                Ok(DirListing::Cut { .. } | DirListing::NotADir(_)) | Err(_) => None,
             };
             self.listings.insert(dir.clone(), names);
         }
@@ -320,6 +325,11 @@ impl Lookup {
                 self.shown(&crate_dir)
             ));
         }
+        // The docs of a crate that were not held (none of the manifests read): asked
+        // before any page of it is read.
+        if let Err(not) = self.held.crate_of(&path.krate) {
+            return Found::NotOfSources(not);
+        }
         let index = index_of(&crate_dir);
         let html = match self.page(&index).await {
             Ok(html) => html,
@@ -334,10 +344,6 @@ impl Lookup {
                 ));
             }
             Err(why) => return Found::CannotTell(stopped(&self.shown(&index), &why)),
-        }
-        // The docs of a crate of rustdoc's that were not held (a dependency's).
-        if let Err(not) = self.held.crate_of(&path.krate) {
-            return Found::NotOfSources(not);
         }
         let mut at = At::Module(crate_dir);
         for segment in &path.rest {

@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:2d67ee4a94b75c2be31ce932b074d8df6635226809f167612d7940d3fab72edb",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::a_book_and_a_field_answer_the_decisions_that_name_the_issue",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:948538178c6f01565e2fbf9981b1c430976e218fd646c92cf7c12b5b25986496",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::a_filter_that_is_no_request_is_exit_2_and_changes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2f95ec75b5ff6f6b04db3e13b53da66608c403c5ec5b919db2d8b19753caa4e4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::arguments_that_are_no_filter_are_a_usage_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:510214f62f880016cbeda326b7e40fc1e8eb3abc5cadc22a0fd9af2af0513417",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::every_problem_of_a_filter_is_listed",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:48fd3104cb231380e0e163cd4cffb3bb58128312178a88f40ef770bb12fcbfc5",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::no_filter_is_every_document_and_the_filters_are_empty",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d368c866d890d20d21f9bcf16d6d1f342176ea0af24603d9c498a983e6c3445d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_answer_carries_the_filters_as_given_with_the_standings_in_a_fixed_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:87571030bb5b3870dde333d76adf063be13159a2546a17dcf404199803ef69da",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_health_is_of_the_whole_project_whatever_the_rows",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:1b3f5209cd321b06e7b0be06846d72dad1c295085497e8c4c046b0fee8ee6d0d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_schema_of_status_has_the_filters",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2a2fd1918eda48163e196ce9ef96b1510028c930ecd35bda5d48ef5eb040afd7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/status_filters.rs::the_three_filters_combine_and_a_repeated_kind_is_either",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "15dfdba4725af3eb8f621da3e306486ff0032390",
+      "hash": "sha256:78bb4bbd2b5111d439eec7a9cc1ca14d83756fd758164f7234c161103a50b1dc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "70"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1da61-c4da-7651-9e22-b50a80e5726b"
+    }
+  ],
+  "id": "01a2229d-f085-71b6-bf64-4bb0bbd705fc",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:d1f217231d5bc5a61e03783b769b54d1be179a2f46ca45424603a9e5f277b5af",
+  "seen_address": "f162bc2f2cabb16827a52086d740648e0b7f8316",
+  "subject": "01a1da61-caff-75ca-b22e-99dc05dc7b25",
+  "v": 1,
+  "verb": "approve"
+}

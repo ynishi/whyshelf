@@ -3,10 +3,10 @@
 //! and with every symbolic link resolved ([`Sited`]). What a page of the source names
 //! by a whole path is told by these ([`Crates::file_of`](super::crates::Crates::file_of)).
 //!
-//! It is made in one place, from where the docs of the side are
-//! ([`DocsAt`](super::docs_tree::DocsAt), which `docs_at` of the space decides, the one
-//! owner of where the build directory is): the build directory is the parent of the
-//! docs, and the root the top of the tree. The resolved form is asked of the tree
+//! It is made in one place, from the tree of the docs of the side
+//! ([`DocsTree`](super::docs_tree::DocsTree), made from where `docs_at` of the space,
+//! the one owner of where the build directory is, says they are): the build directory
+//! is the parent of the docs, and the root the top of the tree. The resolved form is asked of the tree
 //! ([`ProjectTree::real_path`]) or, for docs outside the project, of what reads them
 //! ([`OutsideDocs`](super::outside_docs::OutsideDocs)); this module reads nothing of
 //! the file system itself.
@@ -17,7 +17,7 @@ use whyshelf_core::app::shelf::{Beyond, Side};
 use whyshelf_core::domain::location::RelPath;
 
 use super::super::super::state::{ProjectTree, StateError};
-use super::docs_tree::{DocsAt, DocsTree};
+use super::docs_tree::DocsTree;
 
 /// One place in its two forms: as given, and with its links resolved (none when it
 /// cannot be, or the side is no directory of the file system).
@@ -72,12 +72,12 @@ pub(super) struct Sited {
 }
 
 impl Sited {
-    /// Where the docs `at` of `side`, read through `docs`, were built: the one place a
-    /// [`Sited`] is made.
+    /// Where the docs of `side` that `docs` reads were built: the one place a [`Sited`]
+    /// is made, from the one value that says where the docs are (a directory of the
+    /// project, or one outside it) and what reads them.
     pub(super) async fn of(
         state: &ProjectTree,
         side: Side,
-        at: &DocsAt,
         docs: &DocsTree,
     ) -> Result<Self, StateError> {
         let top = Beyond {
@@ -88,17 +88,17 @@ impl Sited {
             given: state.beyond_path(side, &top)?,
             real: state.real_path(side, &top).await,
         };
-        let build = match (at, docs) {
-            (_, DocsTree::Outside(outside)) => {
+        let build = match docs {
+            DocsTree::Outside(outside) => {
                 let (given, real) = outside.docs();
                 Forms {
                     given: given.parent().unwrap_or(given).to_path_buf(),
                     real: real.map(|real| real.parent().unwrap_or(real).to_path_buf()),
                 }
             }
-            (DocsAt::Inside(docs), DocsTree::Under(_)) => {
+            DocsTree::Under(under) => {
                 let dir = Beyond {
-                    dir: parent_of(docs),
+                    dir: parent_of(under.docs()),
                     parts: Vec::new(),
                 };
                 Forms {
@@ -106,12 +106,6 @@ impl Sited {
                     real: state.real_path(side, &dir).await,
                 }
             }
-            // A tree under the project is made of docs inside it only.
-            (DocsAt::Outside { docs, .. }, DocsTree::Under(_)) => Forms {
-                given: docs.parent().unwrap_or(docs).to_path_buf(),
-                real: None,
-            },
-            (DocsAt::Untold(_), DocsTree::Under(_)) => root.clone(),
         };
         Ok(Self { root, build })
     }

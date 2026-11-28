@@ -1,0 +1,101 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:9b580142c4353e8920f9b979eb3bf5b3a4bb91c164ea3561745d09bd26945d8f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/parallel.rs::keys_taken_on_two_branches_are_found_on_the_merge_result_and_renumbering_keeps_the_approvals",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b017b9c9c7dff0f9f6db70068f1e4ed021149188debfb16518ec35c5992be2a1",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_document_nothing_decides_is_refused_with_every_such_document_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3e106dd4a468878d978deab31f753fe1a98552c8daad6083c5ada436f2c5f125",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_dry_run_is_the_same_plan_checked_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b459d44f8596aab3f36454f4c5130eec7699a3a11597470f5826a9746793f0ef",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_file_with_conflict_markers_left_in_it_stops_the_rekey_and_is_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:52c5e3eb216cacaa019a3589a6a65e978c255310bddd18c247ba01ff653cc032",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_link_that_means_both_keeps_the_old_key_and_gains_the_new_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:175a989aea8d716af717816b76a9887a6c84059385e42e2f151af62bb0b5dc0f",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::a_link_that_no_approval_decides_is_decided_by_a_word_and_the_files_are_rewritten",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3f9fd8bd70db33e030c5e194058cb110f523ab84641297b1aa6165ae242afa6a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rekey.rs::nobody_else_writing_the_key_every_link_to_it_follows_with_no_word",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3655cc27532bc7c0a4f4319b3476d021d9f0c544",
+      "hash": "sha256:d4438b88b0a9de8eb301c4974bcd4a175aa81b4c64af4af4e237dc16e6647feb",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "36"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ea98-7060-acb2-b3c19c484a89"
+    },
+    {
+      "address": "e2aed96b03458edf9098bce20af62add178aac0e",
+      "hash": "sha256:20c45ea5b73eef914c693eaf331d1db7dfe4c981757a65c5d0ba7063e8fc8625",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "94"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1fc08-2361-765b-8902-8a5ae113e22a"
+    }
+  ],
+  "id": "01a2229e-2978-743d-9ba2-ac127e0025c9",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:dc73f662395577d6d60853ca0eae66a42f2814847c99d5573ea335febe072370",
+  "seen_address": "b1b231e2343edbec889422f6a98c976e069f0bc5",
+  "subject": "01a1fc08-9e76-72a9-b3b2-4640e97ab58d",
+  "v": 1,
+  "verb": "approve"
+}

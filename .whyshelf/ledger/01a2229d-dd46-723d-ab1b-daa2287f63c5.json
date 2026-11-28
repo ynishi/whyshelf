@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:cff376b74d2bdff277ba82e9a78bfa97213bf347c183cc92a454466f7c8f5846",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_test_in_a_file_that_does_not_parse_is_unknown_and_no_approval_stands_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3b18c39ab4abeefac2d5562c95eeda8de97d432f1827b7e6bd2bf4004fc54591",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_text_out_of_the_grammar_makes_the_verification_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:36567da42df49c0fbee97ae6018d74eaa07b70f0604b56a852c4df7cc405a166",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_tests.rs::a_verification_stands_on_the_text_of_the_tests_it_names",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795877076273,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0080b93db1409d7dd08668964b28ac6ada09057a",
+      "hash": "sha256:1f0bbed3d600e6e14ac4e2507d90fb972cfd5444b7f0c0ea06c2e64f63f82892",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    }
+  ],
+  "id": "01a2229d-dd46-723d-ab1b-daa2287f63c5",
+  "kind": "decision",
+  "reason": "For #228, the follow-up of the review of #225: DEC-116 says which manifests rust-item reads (the root's, else each directory at its top), that only a build script's output under the build directory is not compared, that a directory of the docs that cannot be listed whole is unread, and that docs where a crate held depends by a path on a crate of the project whose source pages they lack have no trace; V-145 names the new tests of the holding and of the kind of each unknown name; the shared helpers of the end-to-end tests gained the one fixture of the sources of hand-written docs, and the tests that wrote it by hand use it with no expected answer changed. Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "c9a9d7f530c3de8ba42a37be6006c14aadebeb49",
+  "seen": "sha256:71d508657b3910cb0bd0b86a8cc23352a12e9ef6d85dd8f881236ea757d9ce44",
+  "seen_address": "e81b14d956d81ce1e87e09e35886092b54b8fc1d",
+  "subject": "01a1cad2-3c53-7056-a5ba-b95678ef107e",
+  "v": 1,
+  "verb": "approve"
+}
