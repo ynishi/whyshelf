@@ -1,0 +1,49 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:416a4d2486ef96f0fe0207f87c57230e9a4b39c4c78e69c726fc567d03dc2dc3",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_sources.rs::an_item_added_after_the_docs_were_built_is_not_told_absent_and_is_there_once_they_are_built_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9541230bfcdad62391f8b89a280cef46176399070c254b3a48aecc57aa233ecc",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/rust_item_sources.rs::an_item_removed_after_the_docs_were_built_is_not_told_there_and_is_gone_once_they_are_built_again",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795869844327,
+  "expires": null,
+  "frame": [
+    {
+      "address": "101e9ebb00e7e402d4257c741ca3c3a99c956777",
+      "hash": "sha256:50430d082f32f189274bd2a7408c7f767727ea2a84611c5cf514015c19686977",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "116"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a221c7-6b1b-7014-bd12-a2bc64a49b96"
+    }
+  ],
+  "id": "01a2222f-3dbc-70fa-b51a-725bf7cbf114",
+  "kind": "decision",
+  "reason": "V-145 names whole, under tests, the files whose tests cannot all be listed (DEC-112), in place of single tests of them; what it verifies is the same",
+  "revision": "25f2f6b0829fa695a683d41c27ce5c04b3224cda",
+  "seen": "sha256:43adfaf536516f864dcfc92bd35ff881b46d625814e94e3716190af73d206721",
+  "seen_address": "cfecbdda10035ccb3f7befd566824f981769969a",
+  "subject": "01a221c7-6b1b-7014-bd12-a2bef690da2a",
+  "v": 1,
+  "verb": "approve"
+}
