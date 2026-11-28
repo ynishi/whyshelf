@@ -80,6 +80,10 @@ and this project adheres to
   whole shelf; `status --book` lists one that has a record under the book of
   the file; and another file that carries the identifier of a side is invalid,
   as the file of the conflict is, each naming the other (#217).
+- `judge retire` of a document a side of such a file shows, with no record,
+  retires it as any document that cannot be told: the record keeps that it
+  cannot be told and names the book of the file. Its identifier named nothing
+  before (#217).
 
 - This repository's books: the nine verifications that name the reader tests of
   whyshelf-infra whole under `tests` name again the helper file those tests use.
