@@ -814,7 +814,12 @@ const LIB: &str = "//! A crate of a test.\n";
 /// The sources of the crates `crates` at `root`: a workspace (its `Cargo.toml`) with a
 /// package of each under `crates/<name>`, each a library `src/lib.rs` of [`LIB`].
 async fn sources(root: &Path, crates: &[&str]) {
-    write(root, "Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n").await;
+    write(
+        root,
+        "Cargo.toml",
+        "[workspace]\nmembers = [\"crates/*\"]\n",
+    )
+    .await;
     for krate in crates {
         write(
             root,
