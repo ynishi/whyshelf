@@ -209,7 +209,10 @@ fn a_document_whose_links_cannot_be_read_is_counted_and_said_and_a_bad_reference
     let output = project.run(&["reach", "REQ-1", "REQ-2"]);
     assert_eq!(output.status.code(), Some(0));
     let answer = json(&output);
-    assert_eq!(answer["untold"], json!({"invalid": 1, "unreadable": 0}));
+    assert_eq!(
+        answer["untold"],
+        json!({"invalid": 1, "sided": 0, "unreadable": 0})
+    );
     assert_eq!(answer["docs"].as_array().unwrap().len(), 5, "{answer}");
     let warning = String::from_utf8_lossy(&output.stderr);
     assert_eq!(
@@ -221,4 +224,27 @@ fn a_document_whose_links_cannot_be_read_is_counted_and_said_and_a_bad_reference
     assert_eq!(refused.status.code(), Some(2));
     assert_eq!(json(&refused)["error"], "request");
     assert_eq!(project.run(&["reach"]).status.code(), Some(2));
+}
+
+#[test]
+fn a_file_left_in_a_merge_conflict_whose_sides_are_not_reached_is_counted_and_said() {
+    let project = project("reach-sided");
+    // Both sides of an add of two decisions, neither of which any other file carries.
+    fs::write(
+        project.0.join("books/decision/DEC-8.md"),
+        "---\n<<<<<<< ours\nid: \"01a1c4f0-0000-7000-8000-000000000008\"\nkey: \"DEC-8\"\ntitle: \"DEC-8\"\nserves: [\"REQ-1\"]\n---\nOurs.\n=======\nid: \"01a1c4f0-0000-7000-8000-000000000009\"\nkey: \"DEC-9\"\ntitle: \"DEC-9\"\n---\nTheirs.\n>>>>>>> theirs\n",
+    )
+    .unwrap();
+    let output = project.run(&["reach", "REQ-1"]);
+    assert_eq!(output.status.code(), Some(0));
+    let answer = json(&output);
+    assert_eq!(
+        answer["untold"],
+        json!({"invalid": 0, "sided": 1, "unreadable": 0})
+    );
+    let warning = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        warning.trim_end(),
+        "warning: 1 file left in a merge conflict may depend on the named, so what they reach may be more than this answer says"
+    );
 }

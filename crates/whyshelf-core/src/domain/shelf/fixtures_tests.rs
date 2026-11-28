@@ -24,7 +24,7 @@ use super::artifact::{
     ArtifactHash, ArtifactKey, ArtifactName, ArtifactReading, ArtifactReadings, Comparison,
     LinePrefix, Space,
 };
-use super::build::{DocReading, RawValue, Shelf};
+use super::build::{DocReading, RawProblem, RawValue, ReadId, Shelf};
 use super::ledger::{
     Admit, Decision, DeclaredNow, JudgedAt, JudgementId, Ledger, ReadPin, Record, StandingApproval,
     frame_approve, frame_present, frame_retire,
@@ -222,6 +222,25 @@ pub(super) fn fr_titled(n: u128, title: &str, base: &[&str]) -> DocReading {
         &format!("FR-{n}"),
         &extra,
     )
+}
+
+/// The file `file`, left with both sides of a merge conflict, whose sides show the
+/// identities `sides` ([`ReadId::of_sides`]).
+pub(super) fn sided(file: &str, sides: &[u128]) -> DocReading {
+    DocReading::Unparsed {
+        origin: path(file),
+        id: ReadId::of_sides(sides.iter().map(|n| docid(*n))),
+        why: RawProblem::ConflictMarkers,
+    }
+}
+
+/// The file `file`, whose identity cannot be read: it may hold any.
+pub(super) fn unreadable_at(file: &str) -> DocReading {
+    DocReading::Unparsed {
+        origin: path(file),
+        id: ReadId::Unreadable,
+        why: RawProblem::NotAMapping,
+    }
 }
 
 /// A shelf with nothing at any name its links to artifacts write: the adapter

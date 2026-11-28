@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [],
+  "id": "01a2212c-7969-75d0-8f67-f0693b18c940",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:99925cb09ffbcb0c1b30b2047ee48d53703a7f1f64977cda191caac902ffa799",
+  "seen_address": "69144065e904635eb1f09756dfbd5238cb7c722b",
+  "subject": "01a21d1c-01a0-7288-bdc1-d97b82944de5",
+  "v": 1,
+  "verb": "approve"
+}

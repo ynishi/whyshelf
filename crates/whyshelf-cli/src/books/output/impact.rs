@@ -8,7 +8,8 @@ use serde::Serialize;
 use whyshelf_core::app::shelf::ImpactReport;
 use whyshelf_core::domain::id::DocId;
 use whyshelf_core::domain::location::RelPath;
-use whyshelf_core::domain::nonempty::{NonEmptySet, NonEmptyVec};
+use whyshelf_core::domain::nonempty::NonEmptySet;
+use whyshelf_core::domain::shelf::build::MayHold;
 use whyshelf_core::domain::shelf::freshness::{Holding, RootCause, UntoldPin};
 use whyshelf_core::domain::shelf::impact::{ImpactEntry, Made};
 use whyshelf_core::domain::shelf::within::{
@@ -125,6 +126,12 @@ pub struct UnreadableOut {
     pub files_before: Vec<String>,
     /// The files of the books after the change whose identity cannot be read.
     pub files_after: Vec<String>,
+    /// The files of the books before the change left in a merge conflict whose sides
+    /// show different identities.
+    pub sided_before: Vec<String>,
+    /// The files of the books after the change left in a merge conflict whose sides
+    /// show different identities.
+    pub sided_after: Vec<String>,
     /// The files of the ledger before the change that are no record.
     pub records_before: Vec<String>,
     /// The files of the ledger after the change that are no record.
@@ -251,9 +258,10 @@ pub struct ClaimUntoldOut {
     pub removes: Option<MadeUntoldOut>,
     /// Whether the document is invalid at both ends, so its content cannot be compared.
     pub edit: bool,
-    /// When the document is on the shelf at neither end and may be in a file whose
-    /// identity could not be read, those files at each end; otherwise null.
-    pub shelf: Option<UnknownAtOut>,
+    /// When the document is on the shelf at neither end and a file may hold it, the
+    /// files that may at each end; otherwise null. Boxed, as the rarer answer, so that
+    /// a verdict that holds none is not as large as one that does.
+    pub shelf: Option<Box<UnknownAtOut>>,
 }
 
 /// What `impact` could not tell, read one way.
@@ -267,13 +275,23 @@ pub struct MadeUntoldOut {
     pub uncertain: Vec<RootOut>,
 }
 
-/// The files whose identity could not be read at each end, where a document may be.
+/// The files that may hold a document at each end, in the form of the presence of a
+/// document that cannot be told.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct UnknownAtOut {
-    /// Before the change; empty when the document is gone there.
-    pub before: Vec<String>,
-    /// After the change; empty when the document is gone there.
-    pub after: Vec<String>,
+    /// Before the change; both lists empty when the document is gone there.
+    pub before: MayHoldOut,
+    /// After the change; both lists empty when the document is gone there.
+    pub after: MayHoldOut,
+}
+
+/// The files that may hold a document no file is known to carry, at one end.
+#[derive(Debug, Default, Serialize, JsonSchema)]
+pub struct MayHoldOut {
+    /// The files left in a merge conflict a side of which shows the document.
+    pub shown: Vec<String>,
+    /// The files whose identity could not be read, which may hold any.
+    pub unreadable: Vec<String>,
 }
 
 /// A document of the answer: by the key it has after the change, or before it when it
@@ -291,11 +309,13 @@ fn witnesses_out(witnesses: &NonEmptySet<Witness>) -> Vec<&'static str> {
     witnesses.iter().map(|w| witness_word(*w)).collect()
 }
 
-/// The files of one end, none when there are none.
-fn paths(files: Option<&NonEmptyVec<RelPath>>) -> Vec<String> {
-    files
-        .map(|files| files.iter().map(ToString::to_string).collect())
-        .unwrap_or_default()
+/// The files that may hold the document at one end, none when there are none.
+fn may_hold_out(may: Option<&MayHold>) -> MayHoldOut {
+    may.map(|may| MayHoldOut {
+        shown: path_texts(may.shown()),
+        unreadable: path_texts(may.any()),
+    })
+    .unwrap_or_default()
 }
 
 fn claim_untold_out(before: &Namer<'_>, after: &Namer<'_>, untold: &ClaimUntold) -> ClaimUntoldOut {
@@ -313,9 +333,11 @@ fn claim_untold_out(before: &Namer<'_>, after: &Namer<'_>, untold: &ClaimUntold)
             uncertain: roots_out(before, why.uncertain()),
         }),
         edit: untold.edit().is_some(),
-        shelf: untold.shelf().map(|at| UnknownAtOut {
-            before: paths(at.before()),
-            after: paths(at.after()),
+        shelf: untold.shelf().map(|at| {
+            Box::new(UnknownAtOut {
+                before: may_hold_out(at.before()),
+                after: may_hold_out(at.after()),
+            })
         }),
     }
 }
@@ -381,6 +403,8 @@ fn within_out(before: &Namer<'_>, after: &Namer<'_>, within: &Within) -> WithinO
         unreadable: within.unreadable().map(|found| UnreadableOut {
             files_before: path_texts(found.files_before()),
             files_after: path_texts(found.files_after()),
+            sided_before: path_texts(found.sided_before()),
+            sided_after: path_texts(found.sided_after()),
             records_before: path_texts(found.records_before()),
             records_after: path_texts(found.records_after()),
         }),

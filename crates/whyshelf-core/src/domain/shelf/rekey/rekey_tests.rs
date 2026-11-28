@@ -399,6 +399,26 @@ fn the_target_is_one_file_with_a_key_that_was_read() {
 }
 
 #[test]
+fn a_target_no_side_of_a_conflict_shows_is_gone_and_one_a_side_shows_cannot_be_told() {
+    use crate::domain::shelf::fixtures_tests::sided;
+    // The sides show 5 and 6; 9 is in no file.
+    let s = shelf(vec![fr(1, &[]), sided("findings/x.md", &[5, 6])]);
+    assert_eq!(
+        plan(&s, &ledger(Vec::new()), &ask(9, &[])),
+        Err(RekeyProblem::Gone)
+    );
+    let Err(RekeyProblem::Unknown { may }) = plan(&s, &ledger(Vec::new()), &ask(5, &[])) else {
+        panic!("unknown");
+    };
+    assert_eq!(may.shown(), [path("findings/x.md")]);
+    assert!(may.any().is_empty());
+    assert_eq!(
+        RekeyProblem::Unknown { may }.to_string(),
+        "whether a file carries the document cannot be told; shown by a side of: findings/x.md"
+    );
+}
+
+#[test]
 fn a_key_that_is_given_must_be_free() {
     let s = shelf(vec![fr(1, &[]), fr(2, &[])]);
     let mut taken = ask(1, &[]);

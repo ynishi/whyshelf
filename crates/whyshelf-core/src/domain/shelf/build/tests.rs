@@ -3,8 +3,8 @@
 use super::*;
 use crate::domain::nonempty::NonEmptySet;
 use crate::domain::shelf::fixtures_tests::{
-    decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, shelf_reading,
-    spaces, text,
+    decls, docid, entries, fr, fr_titled, list, path, reading, schema, shelf, shelf_reading, sided,
+    spaces, text, unreadable_at,
 };
 use crate::domain::shelf::graph::CycleId;
 use crate::domain::shelf::schema::{Cardinality, FieldEntryDecl, FieldTypeDecl, FieldWord};
@@ -1128,14 +1128,15 @@ fn an_identity_is_unknown_not_gone_while_a_file_cannot_say_its_id() {
         },
     ]);
     match s.state_of(docid(9)) {
-        DocState::Unknown { unreadable } => {
+        DocState::Unknown(may) => {
             assert_eq!(
-                unreadable
+                may.any()
                     .iter()
                     .map(|p| p.as_str().to_owned())
                     .collect::<Vec<_>>(),
                 vec!["findings/x.md", "findings/y.md"]
             );
+            assert!(may.shown().is_empty());
         }
         other => panic!("{other:?}"),
     }
@@ -1413,10 +1414,263 @@ fn presence_is_unknown_while_a_file_cannot_say_its_id() {
         why: RawProblem::Syntax { line: None },
     }]);
     match s.state_of(docid(9)).presence() {
-        DocPresence::Unknown { unreadable } => {
-            assert_eq!(unreadable.len(), 1);
-            assert_eq!(unreadable.first().as_str(), "findings/x.md");
+        DocPresence::Unknown(may) => {
+            assert_eq!(may.any(), [path("findings/x.md")]);
+            assert!(may.shown().is_empty());
         }
         other => panic!("expected unknown, got {other:?}"),
     }
+}
+
+// A file left with both sides of a merge conflict whose sides show different
+// identities (`ReadId::OneOf`): X shows A and B and is under the book of findings;
+// C is carried by no file; U is a file whose identity cannot be read; Y carries A.
+
+const A: u128 = 10;
+const B: u128 = 11;
+const C: u128 = 12;
+const X: &str = "findings/x.md";
+const U: &str = "findings/u.md";
+
+/// The files that may hold `n`, `(shown, any)`, when it is unknown.
+fn may_hold(s: &Shelf, n: u128) -> Option<(Vec<RelPath>, Vec<RelPath>)> {
+    match s.state_of(docid(n)) {
+        DocState::Unknown(may) => Some((may.shown().to_vec(), may.any().to_vec())),
+        _ => None,
+    }
+}
+
+fn paths(texts: &[&str]) -> Vec<RelPath> {
+    texts.iter().map(|t| path(t)).collect()
+}
+
+/// The problems of the invalid file `file`.
+fn problems_at(s: &Shelf, file: &str) -> Vec<DocProblem> {
+    s.invalid_files()
+        .into_iter()
+        .find(|doc| doc.origin() == &path(file))
+        .unwrap_or_else(|| panic!("{file} is not invalid"))
+        .problems()
+        .iter()
+        .cloned()
+        .collect()
+}
+
+/// The problems of `file` of the id `n` that may be carried twice, by the other files.
+fn maybe_twice(s: &Shelf, file: &str) -> Vec<(DocId, Vec<RelPath>)> {
+    problems_at(s, file)
+        .into_iter()
+        .filter_map(|p| match p {
+            DocProblem::MaybeDuplicateId { id, others } => Some((id, others.into_vec())),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_identities_of_the_sides_are_one_identity_when_they_are_one_and_one_of_them_when_two() {
+    assert_eq!(ReadId::of_sides([]), ReadId::Unreadable);
+    assert_eq!(ReadId::of_sides([docid(A)]), ReadId::Read(docid(A)));
+    assert_eq!(
+        ReadId::of_sides([docid(A), docid(A)]),
+        ReadId::Read(docid(A))
+    );
+    let ReadId::OneOf(sides) = ReadId::of_sides([docid(B), docid(A), docid(B)]) else {
+        panic!("one of two");
+    };
+    assert_eq!(sides.ids(), &BTreeSet::from([docid(A), docid(B)]));
+    assert!(sides.contains(docid(A)) && sides.contains(docid(B)));
+    assert!(!sides.contains(docid(C)));
+    assert_eq!(
+        ReadId::of_sides([docid(A), docid(B)]),
+        ReadId::of_sides([docid(B), docid(A)])
+    );
+}
+
+#[test]
+fn a_file_whose_sides_show_two_identities_is_sorted_apart_with_its_sides_and_no_id() {
+    let s = shelf(vec![sided(X, &[A, B])]);
+    assert_eq!(s.sided().len(), 1);
+    assert!(s.unreadable().is_empty());
+    assert!(s.invalid().is_empty());
+    assert!(s.anonymous().is_empty());
+    let file = &s.sided()[0];
+    assert_eq!(file.origin(), &path(X));
+    assert_eq!(file.id(), None);
+    assert_eq!(
+        file.sides().map(Sides::ids),
+        Some(&BTreeSet::from([docid(A), docid(B)]))
+    );
+    assert!(matches!(
+        file.problems().first(),
+        DocProblem::Unreadable(RawProblem::ConflictMarkers)
+    ));
+    // Any other file shows no sides.
+    let s = shelf(vec![unreadable_at(U), invalid_titleless(A)]);
+    assert!(s.invalid_files().iter().all(|file| file.sides().is_none()));
+}
+
+/// The finding `FR-<n>` at `findings/fr-<n>.md`, invalid: it has no title.
+fn invalid_titleless(n: u128) -> DocReading {
+    reading(&format!("findings/fr-{n}.md"), n, &format!("FR-{n}"), &[])
+}
+
+#[test]
+fn a_document_a_side_shows_is_unknown_in_that_file_and_one_no_side_shows_is_gone() {
+    // X only.
+    let s = shelf(vec![fr(1, &[]), sided(X, &[A, B])]);
+    for n in [A, B] {
+        assert_eq!(may_hold(&s, n), Some((paths(&[X]), Vec::new())), "{n}");
+        assert_eq!(s.state_of(docid(n)).may_be_in(), BTreeSet::from([&path(X)]));
+        assert_eq!(
+            s.state_of(docid(n))
+                .valid_or_failure()
+                .err()
+                .map(|f| f.tag()),
+            Some(FailureTag::Unknown)
+        );
+        assert_eq!(s.now_named(docid(n)), NowNamed::Unknown);
+    }
+    assert_eq!(s.state_of(docid(C)), DocState::Gone);
+    assert_eq!(s.state_of(docid(C)).presence(), DocPresence::Gone);
+    assert_eq!(s.now_named(docid(C)), NowNamed::Gone);
+    assert!(s.state_of(docid(C)).may_be_in().is_empty());
+    // X and U: U may hold any, so C is unknown in U only.
+    let s = shelf(vec![fr(1, &[]), sided(X, &[A, B]), unreadable_at(U)]);
+    assert_eq!(may_hold(&s, A), Some((paths(&[X]), paths(&[U]))));
+    assert_eq!(may_hold(&s, C), Some((Vec::new(), paths(&[U]))));
+    assert_eq!(
+        s.state_of(docid(A)).may_be_in(),
+        BTreeSet::from([&path(X), &path(U)])
+    );
+    let DocPresence::Unknown(may) = s.state_of(docid(A)).presence() else {
+        panic!("unknown");
+    };
+    assert_eq!(may.files(), vec![&path(X), &path(U)]);
+}
+
+#[test]
+fn a_document_a_side_shows_and_another_file_carries_is_invalid_in_that_file_only() {
+    let s = shelf(vec![sided(X, &[A, B]), fr(A, &[])]);
+    let DocState::Invalid(files) = s.state_of(docid(A)) else {
+        panic!("invalid");
+    };
+    assert_eq!(files.len(), 1);
+    assert_eq!(files.first().origin(), &path("findings/fr-10.md"));
+    assert_eq!(
+        s.state_of(docid(A)).may_be_in(),
+        BTreeSet::from([&path("findings/fr-10.md")])
+    );
+    assert_eq!(may_hold(&s, B), Some((paths(&[X]), Vec::new())));
+    let s = shelf(vec![sided(X, &[A, B]), fr(A, &[]), unreadable_at(U)]);
+    assert!(matches!(s.state_of(docid(A)), DocState::Invalid(_)));
+    assert_eq!(may_hold(&s, B), Some((paths(&[X]), paths(&[U]))));
+}
+
+#[test]
+fn the_identities_the_shelf_knows_are_those_carried_and_those_a_side_shows() {
+    let s = shelf(vec![fr(1, &[]), invalid_titleless(2), sided(X, &[A, B])]);
+    assert_eq!(
+        s.known_ids(),
+        BTreeMap::from([
+            (docid(1), Known::Carried),
+            (docid(2), Known::Carried),
+            (docid(A), Known::Shown),
+            (docid(B), Known::Shown),
+        ])
+    );
+    assert_eq!(s.ids(), BTreeSet::from([docid(1), docid(2)]));
+    // An identity a side shows and a file carries is carried.
+    let s = shelf(vec![sided(X, &[A, B]), fr(A, &[])]);
+    assert_eq!(
+        s.known_ids(),
+        BTreeMap::from([(docid(A), Known::Carried), (docid(B), Known::Shown)])
+    );
+    // A file that may hold any adds none.
+    let s = shelf(vec![unreadable_at(U)]);
+    assert!(s.known_ids().is_empty());
+}
+
+#[test]
+fn the_book_of_a_document_a_side_shows_is_the_one_book_of_every_file_that_may_hold_it() {
+    let spec = BookName::new("spec").unwrap();
+    // X under the book of findings.
+    let s = shelf(vec![sided(X, &[A, B])]);
+    assert_eq!(s.book_of(docid(A)), Some(&finding()));
+    assert_eq!(s.book_of(docid(B)), Some(&finding()));
+    assert_eq!(s.book_of(docid(C)), None);
+    // Two files whose sides show A, under two books.
+    let s = shelf(vec![sided(X, &[A, B]), sided("specs/x.md", &[A, C])]);
+    assert_eq!(s.book_of(docid(A)), None);
+    assert_eq!(s.book_of(docid(C)), Some(&spec));
+    // U under the same book, and under another.
+    let s = shelf(vec![sided(X, &[A, B]), unreadable_at(U)]);
+    assert_eq!(s.book_of(docid(A)), Some(&finding()));
+    let s = shelf(vec![sided(X, &[A, B]), unreadable_at("specs/u.md")]);
+    assert_eq!(s.book_of(docid(A)), None);
+    // U alone: no side shows C, so it has no book.
+    let s = shelf(vec![unreadable_at(U)]);
+    assert_eq!(s.book_of(docid(C)), None);
+}
+
+#[test]
+fn a_file_that_carries_an_id_a_side_shows_and_the_file_of_that_side_are_told_so_both() {
+    let y = "findings/fr-10.md";
+    let s = shelf(vec![sided(X, &[A, B]), fr(A, &[])]);
+    assert_eq!(maybe_twice(&s, y), vec![(docid(A), paths(&[X]))]);
+    assert_eq!(maybe_twice(&s, X), vec![(docid(A), paths(&[y]))]);
+    assert!(matches!(
+        problems_at(&s, X).first(),
+        Some(DocProblem::Unreadable(RawProblem::ConflictMarkers))
+    ));
+    assert_eq!(
+        DocProblem::MaybeDuplicateId {
+            id: docid(A),
+            others: NonEmptyVec::new(path(X), Vec::new()),
+        }
+        .to_string(),
+        format!(
+            "the id {} may be carried twice, by this file and findings/x.md: one of them holds both sides of a merge conflict",
+            docid(A)
+        )
+    );
+    // One problem for each id: Y carries A, Y2 carries B.
+    let y2 = "findings/fr-11.md";
+    let s = shelf(vec![sided(X, &[A, B]), fr(A, &[]), fr(B, &[])]);
+    assert_eq!(
+        maybe_twice(&s, X),
+        vec![(docid(A), paths(&[y])), (docid(B), paths(&[y2]))]
+    );
+    assert_eq!(maybe_twice(&s, y), vec![(docid(A), paths(&[X]))]);
+    assert_eq!(maybe_twice(&s, y2), vec![(docid(B), paths(&[X]))]);
+    // A file whose sides show B and C, not A, is told nothing of A.
+    let z = "findings/z.md";
+    let s = shelf(vec![sided(z, &[B, C]), fr(A, &[])]);
+    assert!(maybe_twice(&s, z).is_empty());
+    assert!(matches!(s.state_of(docid(A)), DocState::Valid(_)));
+}
+
+#[test]
+fn the_invalid_files_are_those_read_then_those_left_in_a_conflict_then_the_unreadable_then_the_anonymous()
+ {
+    let anonymous = DocReading::Parsed {
+        origin: path("findings/anonymous.md"),
+        entries: entries(&[("key", text("FR-50")), ("title", text("t"))]),
+        body: "body\n".to_owned(),
+    };
+    let s = shelf(vec![
+        anonymous,
+        unreadable_at(U),
+        sided(X, &[A, B]),
+        invalid_titleless(2),
+    ]);
+    let order: Vec<RelPath> = s
+        .invalid_files()
+        .iter()
+        .map(|file| file.origin().clone())
+        .collect();
+    assert_eq!(
+        order,
+        paths(&["findings/fr-2.md", X, U, "findings/anonymous.md"])
+    );
 }

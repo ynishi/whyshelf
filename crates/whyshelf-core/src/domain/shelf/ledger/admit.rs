@@ -76,7 +76,8 @@ struct Rules {
 
 impl Admit {
     /// The admission of `shelf`: its schema's [`Authority`], read with the books it
-    /// declares and the book of each of its documents ([`Shelf::book_of`]).
+    /// declares and the book of each identity it knows ([`Shelf::book_of`]), one a
+    /// side of a merge conflict shows included.
     pub fn of(shelf: &Shelf) -> Self {
         let authority = shelf.schema().authority().clone();
         if authority.is_unruled() {
@@ -85,8 +86,8 @@ impl Admit {
         Self(Arc::new(Rules {
             declared: shelf.schema().books().keys().cloned().collect(),
             now: shelf
-                .ids()
-                .into_iter()
+                .known_ids()
+                .into_keys()
                 .filter_map(|id| shelf.book_of(id).map(|book| (id, book.clone())))
                 .collect(),
             authority,

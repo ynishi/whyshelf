@@ -62,8 +62,8 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 use crate::domain::shelf::build::{
-    ClaimKeyProblem, DocState, NewDocProblem, NewKey, NextKeyProblem, NowNamed, Shelf, Unread,
-    Writers,
+    ClaimKeyProblem, Detail, DocFailure, DocState, MayHold, NewDocProblem, NewKey, NextKeyProblem,
+    NowNamed, Shelf, Unread, Writers,
 };
 use crate::domain::shelf::doc::DocKey;
 use crate::domain::shelf::ledger::{DeclaredNow, Ledger};
@@ -188,15 +188,15 @@ pub enum RekeyProblem {
     /// No file carries the document.
     #[error("no file in the books' ranges carries the document")]
     Gone,
-    /// No file is known to carry the document, but some file's identity could not be
-    /// read.
+    /// No file is known to carry the document, but a file may: the sentence of
+    /// [`DocFailure::said_of`].
     #[error(
-        "whether a file carries the document cannot be told; unreadable: {}",
-        listed(unreadable.iter(), Mark::Plain, Join::Semicolon)
+        "{}",
+        DocFailure::Unknown(may.clone()).said_of(&"the document", Detail::Full)
     )]
     Unknown {
-        /// The files whose identity could not be read.
-        unreadable: NonEmptyVec<RelPath>,
+        /// The files that may hold it.
+        may: MayHold,
     },
     /// The identity is in more than one file, so the document is not one file to
     /// give a key to.
@@ -549,7 +549,7 @@ fn target_of(shelf: &Shelf, id: DocId) -> Result<Retargeted, RekeyProblem> {
             }
         }
         DocState::Gone => Err(RekeyProblem::Gone),
-        DocState::Unknown { unreadable } => Err(RekeyProblem::Unknown { unreadable }),
+        DocState::Unknown(may) => Err(RekeyProblem::Unknown { may }),
     }
 }
 

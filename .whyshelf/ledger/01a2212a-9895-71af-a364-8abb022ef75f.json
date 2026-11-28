@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795852758098,
+  "expires": null,
+  "frame": [],
+  "id": "01a2212a-9895-71af-a364-8abb022ef75f",
+  "kind": "decision",
+  "reason": "A file left in a merge conflict whose sides each show one identity now holds one of them, so only those documents are told as ones it may hold, each found by its identifier, read with the book of the file and told beside another file of its identifier, as DEC-115 says (#217); checked by an independent design review, the author's reading of the diff, the unit and end-to-end tests these verifications name, and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:0d5cb0c4374f3038667e2135da7b432d1790694780e97be7b6eb37bca3aa754f",
+  "seen_address": "f969b2dfdcad4718d94e00d499cde9b14e63d941",
+  "subject": "01a22124-a9b2-75bb-a72a-25610ddfced7",
+  "v": 1,
+  "verb": "approve"
+}

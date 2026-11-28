@@ -693,6 +693,33 @@ fn what_could_join_units_unseen_is_counted() {
 }
 
 #[test]
+fn a_file_left_in_a_conflict_is_counted_only_when_a_side_it_shows_is_divided_or_named() {
+    use crate::domain::shelf::fixtures_tests::{sided, unreadable_at};
+    let told = |units: &Units| {
+        units
+            .untold()
+            .map(|u| (u.invalid(), u.sided(), u.unreadable()))
+    };
+    // FR-1 approved, then its file left holding both sides of 1 and 2: 1 is undone,
+    // and the file may hold it.
+    let ledger = approved(&shelf(vec![fr(1, &[])]), &[1]);
+    let now = shelf(vec![sided("findings/fr-1.md", &[1, 2])]);
+    let units = divided(&now, &ledger, UnitsOf::Degraded, None);
+    assert_eq!(told(&units), Some((0, 1, 0)));
+    // A file whose sides show what nothing divided stands on or names: not counted.
+    let now = shelf(vec![fr(1, &[]), sided("findings/x.md", &[8, 9])]);
+    let units = divided(&now, &no_records(), UnitsOf::DegradedAndPending, None);
+    assert_eq!(told(&units), None);
+    // Beside a file that may be any document, each is counted apart.
+    let now = shelf(vec![
+        sided("findings/fr-1.md", &[1, 2]),
+        unreadable_at("findings/u.md"),
+    ]);
+    let units = divided(&now, &ledger, UnitsOf::Degraded, None);
+    assert_eq!(told(&units), Some((0, 1, 1)));
+}
+
+#[test]
 fn a_document_not_valid_that_only_the_chain_names_is_counted() {
     // FR-1, stale, waits on FR-11, pending, whose link names FR-9, not valid and never
     // approved: only the chain names it.

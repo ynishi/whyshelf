@@ -16,25 +16,27 @@
 
 use std::collections::BTreeMap;
 
-use crate::domain::nonempty::{NonBlank, NonEmptyVec};
+use crate::domain::nonempty::NonBlank;
 use crate::domain::shelf::artifact::{
     ArtifactHash, ArtifactReading, ArtifactReadings, ArtifactSeen, ArtifactState, Comparison,
     Untold,
 };
 use crate::domain::shelf::build::{
-    DocPresence, DocReading, FailureTag, NowNamed, RawProblem, ReadId, Shelf,
+    DocFailure, DocPresence, DocReading, DocState, FailureTag, NowNamed, RawProblem, ReadId, Shelf,
 };
+use crate::domain::shelf::exemption::{ExemptRefusal, frame_exempt};
 use crate::domain::shelf::fixtures_tests::{
     actor, approve, approved, docid, eid, file_artifact, file_space, fr, ledger, name, path,
-    read_pins, reading, retire, schema, shelf, sp_testing,
+    read_pins, reading, retire, schema, shelf, sided, sp_testing,
 };
 use crate::domain::shelf::freshness::assess_unasked as assess;
 use crate::domain::shelf::freshness::{Assessment, Cause, Freshness, Notice, Standing};
 use crate::domain::shelf::ledger::{
     ApprovalKind, Asked, Before, DecisionVerb, FrameRefusal, JudgedAt, Ledger, MovedOf,
-    MovedRefusal, Record, Seen, frame_approve, frame_moved,
+    MovedRefusal, Record, Seen, frame_approve, frame_moved, frame_present,
 };
 use crate::domain::shelf::lookup::{Absence, Reference, Resolution, resolve};
+use crate::domain::shelf::schema::{BookName, EntryName};
 use crate::domain::shelf::snapshot::{ItemKind, Snapshot, SnapshotItem, doc_now};
 use crate::domain::shelf::stats;
 
@@ -150,7 +152,6 @@ fn a_document_that_cannot_be_told_is_named_as_none_that_is_gone() {
 
 #[test]
 fn a_document_that_cannot_be_told_is_not_gone_to_a_lookup() {
-    let unreadable = NonEmptyVec::new(path("findings/x.md"), Vec::new());
     let reference = |id: u128| -> Reference { eid(id).to_string().parse().unwrap() };
     let known = approvals_of_all();
     let nothing = ledger(Vec::new());
@@ -165,10 +166,16 @@ fn a_document_that_cannot_be_told_is_not_gone_to_a_lookup() {
                 id: docid(id),
                 state: Absence::Gone,
             },
-            Row::Unknown => Resolution::LedgerOnly {
-                id: docid(id),
-                state: Absence::Unknown(unreadable.clone()),
-            },
+            Row::Unknown => {
+                let DocState::Unknown(may) = s.state_of(docid(id)) else {
+                    panic!("unknown");
+                };
+                assert_eq!(may.any(), [path("findings/x.md")]);
+                Resolution::LedgerOnly {
+                    id: docid(id),
+                    state: Absence::Unknown(may),
+                }
+            }
         };
         assert_eq!(with, expected, "{row:?}, with records");
         // It has none: a document with neither a file nor a record is named by nothing.
@@ -218,6 +225,73 @@ fn a_snapshot_keeps_a_document_that_cannot_be_told_apart_from_one_that_is_gone()
         assert_eq!(now.now, expected, "{row:?}");
         assert_eq!(now.file.as_ref().map(|f| f.as_str()), file, "{row:?}");
     }
+}
+
+/// Beside a file left in a merge conflict whose sides show 4 and 5 (`X`), the
+/// finding 3, in no file, is gone, and the finding 4 cannot be told; each was approved.
+fn beside_a_conflict() -> (Shelf, Ledger) {
+    let then = shelf(vec![fr(1, &[]), fr(3, &[]), fr(4, &[])]);
+    let now = shelf(vec![fr(1, &[]), sided("findings/x.md", &[4, 5])]);
+    (now, approved(&then, &[1, 3, 4]))
+}
+
+#[test]
+fn beside_a_conflict_every_reader_tells_a_document_no_side_shows_as_gone_and_one_it_shows_as_unknown()
+ {
+    let (s, known) = beside_a_conflict();
+    for (n, tag) in [(3, FailureTag::Gone), (4, FailureTag::Unknown)] {
+        let id = docid(n);
+        // The snapshot of what it is now: no file carries it.
+        let now = doc_now(&s, id);
+        assert_eq!(now.now, Err(tag), "{n}");
+        assert_eq!(now.file, None, "{n}");
+        // A retirement keeps the tag.
+        let Record::Decision(decision) = retire(&s, n, 2001, 10) else {
+            panic!("a retirement is a decision");
+        };
+        assert_eq!(
+            decision.verb(),
+            &DecisionVerb::Retire {
+                seen: Seen::Not(tag)
+            },
+            "{n}"
+        );
+        // An approval, a presence and an exemption are refused for it.
+        match frame_approve(&s, &known, id) {
+            Err(FrameRefusal::NotValid(failure)) => assert_eq!(failure.tag(), tag, "{n}"),
+            other => panic!("{n}: {other:?}"),
+        }
+        match frame_present(&s, id) {
+            Err(FrameRefusal::NotValid(failure)) => assert_eq!(failure.tag(), tag, "{n}"),
+            other => panic!("{n}: {other:?}"),
+        }
+        assert_eq!(
+            frame_exempt(
+                &s,
+                &known,
+                id,
+                BookName::new("finding").unwrap(),
+                EntryName::new("base").unwrap()
+            ),
+            Err(ExemptRefusal::DocNotValid { id, tag }),
+            "{n}"
+        );
+        // It has changed from what was approved.
+        let snapshot = Snapshot::of(&known, id).expect("an approval stands");
+        assert!(
+            snapshot.items()[0]
+                .compared(&s, &ArtifactReadings::new())
+                .changed(),
+            "{n}"
+        );
+    }
+    // The approval of 4 is refused with the file a side shows it in.
+    let Err(FrameRefusal::NotValid(DocFailure::Unknown(may))) = frame_approve(&s, &known, docid(4))
+    else {
+        panic!("unknown");
+    };
+    assert_eq!(may.shown(), [path("findings/x.md")]);
+    assert!(may.any().is_empty());
 }
 
 #[test]

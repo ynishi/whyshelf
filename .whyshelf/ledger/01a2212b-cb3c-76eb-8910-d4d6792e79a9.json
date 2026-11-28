@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:44b605c0bb0de116169ba5887235eb9623430e87dfe183e4dc94525f40d292e1",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs::a_number_too_large_for_the_parser_is_told_as_too_large",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5979035c1f8ab3ffe947a8970cc12df1090cea5f465f863949311eab1425c671",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value.rs::every_value_a_front_matter_does_not_hold_is_told",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f56899001b5c531e40a596e93a043e082192124d93b447181a9b73090397ae80",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::a_negative_number_beyond_the_parser_is_told_as_too_small",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:48af14fb1a8b58a2e30edb3f6b6e352f27c9345a0f6e5288df81719964bec972",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::a_number_beyond_the_parser_is_told_beside_another_value",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d43c3e60ac300f1261a1c90f6953d95194ac134223b1fe055a0ed7ade899909a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::fmt_tells_every_value_of_a_file_it_leaves_alone",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:51116150695b21571a88416a98ffbf8aa80db1e42eafd78551ee5b7d00a7f21c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::one_value_is_told_once_and_a_held_value_not_at_all",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:12073311e7fc7039fbe5b60209dba86c2a3bc9846e24a0bbe0cef5d46ece5175",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/front_matter_every_value_held_out.rs::other_kinds_are_each_told",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a8d7a5e62c5e622ebe10fcd1dd1daf1607b93c6f",
+      "hash": "sha256:1aa1899d9c765c711045357313b86242f074d50687f172de425dab0790db4d15",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "12"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1228-72b0-9fcb-2a2df7330d46"
+    }
+  ],
+  "id": "01a2212b-cb3c-76eb-8910-d4d6792e79a9",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:35989fdca9026156e234ee9e2d6b199262f9966525397f7f4c5d144cf920de58",
+  "seen_address": "1d1baec1217886182eac551bb46473a0be68e874",
+  "subject": "01a1cc04-8636-721f-a251-50df70adcd68",
+  "v": 1,
+  "verb": "approve"
+}

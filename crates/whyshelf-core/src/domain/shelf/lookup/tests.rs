@@ -1,7 +1,9 @@
 //! Tests of the lookup.
 
 use crate::domain::id::ShortId;
-use crate::domain::shelf::fixtures_tests::{approved, docid, eid, fr, ledger, shelf};
+use crate::domain::shelf::fixtures_tests::{
+    approved, docid, eid, fr, ledger, path, shelf, sided, unreadable_at,
+};
 
 use super::*;
 
@@ -212,6 +214,86 @@ fn a_well_formed_key_nothing_carries_is_missing() {
     let shelf = shelf(vec![fr(1, &[])]);
     assert_eq!(
         resolve(&shelf, &ledger(vec![]), &r("finding:FR-9")),
+        Resolution::Missing
+    );
+}
+
+// X holds both sides of a merge conflict whose sides show A and B; C is in no file.
+const A: u128 = 10;
+const B: u128 = 11;
+const C: u128 = 12;
+
+#[test]
+fn a_document_a_side_shows_with_no_record_is_named_by_its_id_and_its_short_id() {
+    let now = shelf(vec![sided("findings/x.md", &[A, B])]);
+    let nothing = ledger(vec![]);
+    for n in [A, B] {
+        assert_eq!(
+            resolve(&now, &nothing, &r(&eid(n).to_string())),
+            Resolution::Shown(docid(n)),
+            "{n}"
+        );
+        assert_eq!(
+            resolve(&now, &nothing, &r(&ShortId::of(eid(n)).to_string())),
+            Resolution::Shown(docid(n)),
+            "{n}"
+        );
+    }
+    // No side shows C.
+    assert_eq!(
+        resolve(&now, &nothing, &r(&eid(C).to_string())),
+        Resolution::Missing
+    );
+}
+
+#[test]
+fn a_document_a_side_shows_with_a_record_is_named_by_the_ledger_with_the_file_that_shows_it() {
+    let ledger = approved(&shelf(vec![fr(A, &[]), fr(C, &[])]), &[A, C]);
+    let now = shelf(vec![sided("findings/x.md", &[A, B])]);
+    let Resolution::LedgerOnly {
+        id,
+        state: Absence::Unknown(may),
+    } = resolve(&now, &ledger, &r(&eid(A).to_string()))
+    else {
+        panic!("ledger only, unknown");
+    };
+    assert_eq!(id, docid(A));
+    assert_eq!(may.shown(), [path("findings/x.md")]);
+    assert!(may.any().is_empty());
+    // C, which no side shows, is gone, not unknown.
+    assert_eq!(
+        resolve(&now, &ledger, &r(&eid(C).to_string())),
+        Resolution::LedgerOnly {
+            id: docid(C),
+            state: Absence::Gone,
+        }
+    );
+    // Beside a file that may hold any, C is unknown in that file only.
+    let with_u = shelf(vec![
+        sided("findings/x.md", &[A, B]),
+        unreadable_at("findings/u.md"),
+    ]);
+    let Resolution::LedgerOnly {
+        state: Absence::Unknown(may),
+        ..
+    } = resolve(&with_u, &ledger, &r(&eid(C).to_string()))
+    else {
+        panic!("ledger only, unknown");
+    };
+    assert!(may.shown().is_empty());
+    assert_eq!(may.any(), [path("findings/u.md")]);
+}
+
+#[test]
+fn a_document_only_a_file_that_may_hold_any_may_hold_and_no_record_names_is_missing() {
+    let now = shelf(vec![unreadable_at("findings/u.md")]);
+    let nothing = ledger(vec![]);
+    assert_eq!(
+        resolve(&now, &nothing, &r(&eid(A).to_string())),
+        Resolution::Missing
+    );
+    assert_eq!(
+        resolve(&now, &nothing, &r(&ShortId::of(eid(A)).to_string())),
         Resolution::Missing
     );
 }

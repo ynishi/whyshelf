@@ -227,6 +227,38 @@ fn get_finds_a_document_by_its_key_and_says_what_is_not_there() {
 }
 
 #[test]
+fn get_of_a_document_a_side_of_a_conflict_shows_tells_it_unknown_and_an_approval_is_refused() {
+    use crate::domain::shelf::build::{DocFailure, DocReading, RawProblem, ReadId};
+    use crate::domain::shelf::ledger::FrameRefusal;
+    // The file holds both sides of 1 and 2; neither has a record.
+    let mut app = app(vec![DocReading::Unparsed {
+        origin: "findings/x.md".parse().unwrap(),
+        id: ReadId::of_sides([docid(1), docid(2)]),
+        why: RawProblem::ConflictMarkers,
+    }]);
+    let report = block_on(app.get(&r(&docid(1).to_string()))).unwrap();
+    assert_eq!(report.row.id, docid(1));
+    let DocPresence::Unknown(may) = &report.row.presence else {
+        panic!("unknown: {:?}", report.row.presence);
+    };
+    assert_eq!(may.shown(), ["findings/x.md".parse().unwrap()]);
+    assert!(may.any().is_empty());
+    assert!(report.doc.is_none());
+    let err = block_on(app.judge(approve(&docid(2).to_string()))).unwrap_err();
+    assert!(
+        matches!(
+            &err,
+            ShelfError::Refused(FrameRefusal::NotValid(DocFailure::Unknown(_)))
+        ),
+        "{err:?}"
+    );
+    assert_eq!(app.ports().append_count(), 0);
+    // An identity no side shows names nothing.
+    let err = block_on(app.get(&r(&docid(3).to_string()))).unwrap_err();
+    assert!(matches!(err, ShelfError::NotFound { .. }), "{err:?}");
+}
+
+#[test]
 fn get_of_a_book_nobody_declared_is_an_unknown_book() {
     let app = app(vec![fr(1, "slow", &[])]);
     let err = block_on(app.get(&r("nobook:X-1"))).unwrap_err();

@@ -85,6 +85,9 @@ pub struct UntoldOut {
     /// The documents not reached whose links cannot be read (their files are not
     /// valid).
     pub invalid: usize,
+    /// The files left in a merge conflict whose sides show different identities, one
+    /// of which is not reached: each may be that document.
+    pub sided: usize,
     /// The files whose identity cannot be read: each may be any document.
     pub unreadable: usize,
 }
@@ -178,6 +181,7 @@ impl From<Unwalked> for UntoldOut {
     fn from(untold: Unwalked) -> Self {
         Self {
             invalid: untold.invalid(),
+            sided: untold.sided(),
             unreadable: untold.unreadable(),
         }
     }
@@ -202,7 +206,7 @@ impl fmt::Display for Untold {
         write!(
             f,
             "{} may depend on the named, so what they reach may be more than this answer says",
-            unread(self.0.invalid(), self.0.unreadable())
+            unread(self.0.invalid(), self.0.sided(), self.0.unreadable())
         )
     }
 }

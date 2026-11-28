@@ -256,7 +256,10 @@ fn what_could_join_units_unseen_is_counted_and_said() {
     let output = project.run(&["units"]);
     assert_eq!(output.status.code(), Some(0));
     let answer = json(&output);
-    assert_eq!(answer["untold"], json!({"invalid": 1, "unreadable": 1}));
+    assert_eq!(
+        answer["untold"],
+        json!({"invalid": 1, "sided": 0, "unreadable": 1})
+    );
     assert_eq!(
         keys_or_ids(&answer),
         [vec![
@@ -269,6 +272,33 @@ fn what_could_join_units_unseen_is_counted_and_said() {
     assert_eq!(
         warning.trim_end(),
         "warning: 1 document whose links cannot be read and 1 file whose identity cannot be read may join units told apart"
+    );
+}
+
+#[test]
+fn a_file_left_in_a_merge_conflict_whose_side_is_divided_is_counted_and_said() {
+    let project = project("units-sided", "src/b.rs", "tests/b.rs::two");
+    let approve = project.run(&["judge", "approve", "--pending", "--reason", "read"]);
+    assert_eq!(approve.status.code(), Some(0), "{}", json(&approve));
+    // The file of DEC-1, approved, is left holding both sides of an add: DEC-1 and a
+    // decision no other file carries.
+    fs::write(
+        project.0.join("books/decision/DEC-1.md"),
+        "---\n<<<<<<< ours\nid: \"01a1c4f0-0000-7000-8000-000000000003\"\nkey: \"DEC-1\"\ntitle: \"DEC-1\"\nserves: [\"REQ-1\"]\n---\nOurs.\n=======\nid: \"01a1c4f0-0000-7000-8000-000000000009\"\nkey: \"DEC-9\"\ntitle: \"DEC-9\"\n---\nTheirs.\n>>>>>>> theirs\n",
+    )
+    .unwrap();
+    let output = project.run(&["units"]);
+    assert_eq!(output.status.code(), Some(0));
+    let answer = json(&output);
+    assert_eq!(
+        answer["untold"],
+        json!({"invalid": 0, "sided": 1, "unreadable": 0}),
+        "{answer}"
+    );
+    let warning = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        warning.trim_end(),
+        "warning: 1 file left in a merge conflict may join units told apart"
     );
 }
 
@@ -360,7 +390,10 @@ fn two_chains_whose_links_name_one_document_not_valid_are_one_unit_that_waits_on
     );
     assert_eq!(waits[0]["waits"], "unfollowed");
     assert_eq!(waits[0]["why"], json!(["invalid"]));
-    assert_eq!(answer["untold"], json!({"invalid": 1, "unreadable": 0}));
+    assert_eq!(
+        answer["untold"],
+        json!({"invalid": 1, "sided": 0, "unreadable": 0})
+    );
 }
 
 /// The key of each unit's documents, or its identity when it has no key.

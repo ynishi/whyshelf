@@ -331,12 +331,54 @@ impl UnheldKind {
 /// A merge conflict marker in the body, or a broken mapping, leaves the `id:` line
 /// readable more often than not, and then the file is an *invalid document with
 /// that identity* and not a hole.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// A file left with both sides of a merge conflict, whose sides each show one
+/// identity and not the same one, holds one of the documents the sides show:
+/// [`OneOf`](Self::OneOf), which [`ReadId::of_sides`] alone makes.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReadId {
     /// An `id:` line was read.
     Read(DocId),
+    /// The sides of a merge conflict each show one identity, and they differ: the
+    /// file holds the document of one of them, and it is not said which.
+    OneOf(Sides),
     /// None could be.
     Unreadable,
+}
+
+impl ReadId {
+    /// What the identities the sides of a merge conflict show come to, one for each
+    /// side: one identity when they are all the same, [`OneOf`](Self::OneOf) when
+    /// they differ, and [`Unreadable`](Self::Unreadable) when there is none.
+    ///
+    /// The one place a [`Sides`] is made, so a `OneOf` always names two identities
+    /// or more, each once.
+    pub fn of_sides(ids: impl IntoIterator<Item = DocId>) -> Self {
+        let ids: BTreeSet<DocId> = ids.into_iter().collect();
+        let mut each = ids.iter();
+        match (each.next(), each.next()) {
+            (None, _) => Self::Unreadable,
+            (Some(id), None) => Self::Read(*id),
+            (Some(_), Some(_)) => Self::OneOf(Sides(ids)),
+        }
+    }
+}
+
+/// The identities the sides of a merge conflict show: two or more, each once, in
+/// order. The file holds the document of one of them ([`ReadId::OneOf`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sides(BTreeSet<DocId>);
+
+impl Sides {
+    /// Whether a side shows `id`.
+    pub fn contains(&self, id: DocId) -> bool {
+        self.0.contains(&id)
+    }
+
+    /// The identities, in order.
+    pub fn ids(&self) -> &BTreeSet<DocId> {
+        &self.0
+    }
 }
 
 /// A file as an adapter read it, before anything is checked.
@@ -526,6 +568,21 @@ pub enum DocProblem {
         /// The other files.
         others: NonEmptyVec<RelPath>,
     },
+    /// One file carries the id and another holds both sides of a merge conflict, one
+    /// of which shows it ([`ReadId::OneOf`]): the id may be carried twice, and every
+    /// one of them is told so, the file that carries it and the file that holds the
+    /// conflict alike. One problem for each id: the file that holds a conflict whose
+    /// sides show two ids carried elsewhere has two.
+    #[error(
+        "the id {id} may be carried twice, by this file and {}: one of them holds both sides of a merge conflict",
+        listed(others.iter(), Mark::Plain, Join::And)
+    )]
+    MaybeDuplicateId {
+        /// The id.
+        id: DocId,
+        /// The other files, in the order they were read.
+        others: NonEmptyVec<RelPath>,
+    },
     /// Another file of the book writes the same key, whether or not its identity could
     /// be read: all of them are invalid. The sentence names the other files.
     #[error(
@@ -662,7 +719,7 @@ fn key_count(count: usize) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvalidDoc {
     origin: RelPath,
-    id: Option<DocId>,
+    seen: IdSeen,
     problems: NonEmptyVec<DocProblem>,
 }
 
@@ -674,7 +731,23 @@ impl InvalidDoc {
 
     /// The identity, when it could be read.
     pub fn id(&self) -> Option<DocId> {
-        self.id
+        self.seen.id()
+    }
+
+    /// The identities the sides of a merge conflict in the file show, when it holds
+    /// one whose sides show different identities ([`ReadId::OneOf`]); none for any
+    /// other file.
+    pub fn sides(&self) -> Option<&Sides> {
+        match &self.seen {
+            IdSeen::OneOf(sides) => Some(sides),
+            IdSeen::Read(_) | IdSeen::Absent | IdSeen::Unreadable => None,
+        }
+    }
+
+    /// Whether the file shows `id` without carrying it: a side of a merge conflict
+    /// in it shows it ([`IdSeen::shows`]).
+    pub(crate) fn shows(&self, id: DocId) -> bool {
+        self.seen.shows(id)
     }
 
     /// Everything that is wrong with it.
@@ -706,22 +779,58 @@ pub enum DocState<'a> {
     Valid(&'a Doc),
     /// One or more invalid files that carry the identity.
     Invalid(&'a NonEmptyVec<InvalidDoc>),
-    /// No file has it, and no file is left whose identity could not be read: it is
-    /// not there.
+    /// No file has it, no file is left whose identity could not be read, and no side
+    /// of a merge conflict shows it: it is not there.
     Gone,
-    /// No file is known to have it, but some file's identity could not be read, so
-    /// it may be in one of them.
+    /// No file is known to have it, but a file may: one whose identity could not be
+    /// read, or one left in a merge conflict whose side shows it. Which files, and
+    /// how each may, is the [`MayHold`].
     ///
     /// What stands on it is broken, not a notice as a name of an artifact that
-    /// cannot be told is (DEC-12): the files whose identity could not be read are
-    /// the shelf's own and are invalid files, which an assessment lists with the
-    /// other invalid files, so the books that hold the document are not sound, and
-    /// an approval cannot read as holding over them. A name of an artifact cannot
-    /// be told for a reason outside the books.
-    Unknown {
-        /// The files whose identity could not be read.
-        unreadable: NonEmptyVec<RelPath>,
-    },
+    /// cannot be told is (DEC-12): the files that may hold it are the shelf's own
+    /// and are invalid files, which an assessment lists with the other invalid
+    /// files, so the books that hold the document are not sound, and an approval
+    /// cannot read as holding over them. A name of an artifact cannot be told for a
+    /// reason outside the books.
+    Unknown(MayHold),
+}
+
+/// The files that may hold a document no file is known to carry: those a side of a
+/// merge conflict shows it in ([`shown`](Self::shown)), and those whose identity
+/// could not be read, which may hold any ([`any`](Self::any)). No file is in both,
+/// and one of the two has a file.
+///
+/// Made by [`Shelf::state_of`] only, and carried as it is to every answer that says
+/// a document cannot be told.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MayHold {
+    shown: Vec<RelPath>,
+    any: Vec<RelPath>,
+}
+
+impl MayHold {
+    /// The files that may hold the document, or none when there is no such file.
+    fn of(shown: Vec<RelPath>, any: Vec<RelPath>) -> Option<Self> {
+        (!shown.is_empty() || !any.is_empty()).then_some(Self { shown, any })
+    }
+
+    /// The files a side of a merge conflict shows the document in, in the order they
+    /// were read.
+    pub fn shown(&self) -> &[RelPath] {
+        &self.shown
+    }
+
+    /// The files whose identity could not be read, any of which may hold any
+    /// document, in the order they were read.
+    pub fn any(&self) -> &[RelPath] {
+        &self.any
+    }
+
+    /// Every file that may hold the document: those that show it first, then those
+    /// that may hold any.
+    pub fn files(&self) -> Vec<&RelPath> {
+        self.shown.iter().chain(&self.any).collect()
+    }
 }
 
 /// What an identity is called now, in the four ways of [`DocState`]: what
@@ -736,7 +845,7 @@ pub enum NowNamed {
     Invalid(Option<DocKey>),
     /// No file carries it.
     Gone,
-    /// No file is known to carry it, but some file's identity could not be read.
+    /// No file is known to carry it, but a file may ([`DocState::Unknown`]).
     Unknown,
 }
 
@@ -752,8 +861,8 @@ pub enum DocFailure {
     Invalid(NonEmptyVec<DocProblem>),
     /// Not there.
     Gone,
-    /// Not knowable: the files whose identity could not be read.
-    Unknown(NonEmptyVec<RelPath>),
+    /// Not knowable: the files that may hold it.
+    Unknown(MayHold),
 }
 
 /// Which of the three a [`DocFailure`] is, without what it carries: what a record
@@ -826,7 +935,11 @@ impl DocFailure {
     /// |---|---|---|
     /// | [`DocFailure::Invalid`] | `s is invalid: p1; p2` | `s is invalid` |
     /// | [`DocFailure::Gone`] | `no file in the books' ranges carries s` | the same |
-    /// | [`DocFailure::Unknown`] | `whether a file carries s cannot be told; unreadable: a; b` | the same |
+    /// | [`DocFailure::Unknown`] | `whether a file carries s cannot be told; shown by a side of: a; unreadable: b; c` | the same |
+    ///
+    /// Of an unknown one, the files a side of a merge conflict shows it in are told
+    /// when there are any (`shown by a side of`), and the files whose identity could
+    /// not be read when there are any (`unreadable`), in that order.
     ///
     /// The one sentence of why a document is not valid: a refusal and an answer of
     /// A refused approval and the notices of `stale` and `status` say it through this,
@@ -840,11 +953,17 @@ impl DocFailure {
                     listed(problems.iter(), Mark::Plain, Join::Semicolon)
                 )
             }
-            (Self::Unknown(unreadable), Detail::Full | Detail::Short) => {
-                format!(
-                    "{clause}; unreadable: {}",
-                    listed(unreadable.iter(), Mark::Plain, Join::Semicolon)
-                )
+            (Self::Unknown(may), Detail::Full | Detail::Short) => {
+                let mut said = clause;
+                if !may.shown().is_empty() {
+                    said.push_str("; shown by a side of: ");
+                    said.push_str(&listed(may.shown().iter(), Mark::Plain, Join::Semicolon));
+                }
+                if !may.any().is_empty() {
+                    said.push_str("; unreadable: ");
+                    said.push_str(&listed(may.any().iter(), Mark::Plain, Join::Semicolon));
+                }
+                said
             }
             (Self::Invalid(_), Detail::Short) | (Self::Gone, Detail::Full | Detail::Short) => {
                 clause
@@ -878,11 +997,8 @@ pub enum DocPresence {
     },
     /// No file carries it.
     Gone,
-    /// No file is known to carry it, but some file's identity could not be read.
-    Unknown {
-        /// The files whose identity could not be read.
-        unreadable: NonEmptyVec<RelPath>,
-    },
+    /// No file is known to carry it, but these files may.
+    Unknown(MayHold),
 }
 
 /// The files of one book, counted ([`Shelf::tally_by_book`]).
@@ -918,14 +1034,13 @@ impl<'a> DocState<'a> {
             Self::Valid(doc) => Ok(doc),
             Self::Invalid(docs) => Err(DocFailure::Invalid(all_problems(docs))),
             Self::Gone => Err(DocFailure::Gone),
-            Self::Unknown { unreadable } => Err(DocFailure::Unknown(unreadable.clone())),
+            Self::Unknown(may) => Err(DocFailure::Unknown(may.clone())),
         }
     }
 
     /// The files that carry the identity now: a valid document's file, every file of
     /// an invalid one in the order of its [`NonEmptyVec`], and none when it is gone
-    /// or cannot be told (the files whose identity could not be read are not known
-    /// to carry it).
+    /// or cannot be told (the files that may hold it are not known to carry it).
     ///
     /// The one entry for a reader that asks only whether a file carries the identity
     /// or which one does (a book filter, a rekey that checks one document is left on
@@ -941,8 +1056,8 @@ impl<'a> DocState<'a> {
     }
 
     /// The files the identity may be in now: a valid document's file, every file of
-    /// an invalid one, every file whose identity could not be read when no file is
-    /// known to carry it (any of them may), and none when it is gone.
+    /// an invalid one, every file that may hold it when no file is known to carry it
+    /// ([`MayHold::files`]), and none when it is gone.
     ///
     /// The files a question about what a change may touch reads of a document, beside
     /// the places of the artifacts it stands on
@@ -952,7 +1067,7 @@ impl<'a> DocState<'a> {
         match self {
             Self::Valid(doc) => BTreeSet::from([doc.origin()]),
             Self::Invalid(docs) => docs.iter().map(InvalidDoc::origin).collect(),
-            Self::Unknown { unreadable } => unreadable.iter().collect(),
+            Self::Unknown(may) => may.files().into_iter().collect(),
             Self::Gone => BTreeSet::new(),
         }
     }
@@ -977,9 +1092,7 @@ impl<'a> DocState<'a> {
                 problems: all_problems(docs),
             },
             Self::Gone => DocPresence::Gone,
-            Self::Unknown { unreadable } => DocPresence::Unknown {
-                unreadable: unreadable.clone(),
-            },
+            Self::Unknown(may) => DocPresence::Unknown(may.clone()),
         }
     }
 }
@@ -987,13 +1100,16 @@ impl<'a> DocState<'a> {
 /// What a file says about its identity.
 ///
 /// A file with no `id:` entry is known to carry none; a file whose `id:` could not
-/// be read (or that could not be read at all) may carry any. Only the second makes
-/// an identity no readable file has [`DocState::Unknown`] instead of
-/// [`DocState::Gone`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// be read (or that could not be read at all) may carry any; a file left in a merge
+/// conflict whose sides show different identities carries one of them. Only the
+/// last two make an identity no readable file has [`DocState::Unknown`] instead of
+/// [`DocState::Gone`], the last only for the identities its sides show.
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum IdSeen {
     /// The identity was read.
     Read(DocId),
+    /// The sides of a merge conflict show these identities ([`ReadId::OneOf`]).
+    OneOf(Sides),
     /// The file has no `id:` entry.
     Absent,
     /// The file may have one, and it could not be read.
@@ -1005,14 +1121,27 @@ impl IdSeen {
     fn of_read(id: ReadId) -> Self {
         match id {
             ReadId::Read(id) => Self::Read(id),
+            ReadId::OneOf(sides) => Self::OneOf(sides),
             ReadId::Unreadable => Self::Unreadable,
         }
     }
 
-    fn id(self) -> Option<DocId> {
+    fn id(&self) -> Option<DocId> {
         match self {
-            Self::Read(id) => Some(id),
-            Self::Absent | Self::Unreadable => None,
+            Self::Read(id) => Some(*id),
+            Self::OneOf(_) | Self::Absent | Self::Unreadable => None,
+        }
+    }
+
+    /// Whether the file shows `id` without carrying it: a side of a merge conflict
+    /// in it shows it.
+    ///
+    /// The one place this is decided: the check of duplicates and every reading of
+    /// the shelf that asks which files may hold an identity call it.
+    fn shows(&self, id: DocId) -> bool {
+        match self {
+            Self::OneOf(sides) => sides.contains(id),
+            Self::Read(_) | Self::Absent | Self::Unreadable => false,
         }
     }
 
@@ -1223,6 +1352,14 @@ impl Identity {
             Self::Broken { id, .. } => id.id(),
         }
     }
+
+    /// Whether the file shows `id` without carrying it ([`IdSeen::shows`]).
+    fn shows(&self, id: DocId) -> bool {
+        match self {
+            Self::Whole { .. } => false,
+            Self::Broken { id: seen, .. } => seen.shows(id),
+        }
+    }
 }
 
 /// One link a book declares, as a file wrote it: its kind, and the keys written in
@@ -1268,10 +1405,8 @@ enum Judged {
         links: BTreeMap<EntryName, WrittenLink>,
         artifact_links: BTreeMap<EntryName, WrittenArtifacts>,
     },
-    Invalid {
-        id: IdSeen,
-        file: InvalidDoc,
-    },
+    /// The file keeps the identity it showed, which says where it is sorted.
+    Invalid { file: InvalidDoc },
 }
 
 impl Candidate {
@@ -1376,19 +1511,17 @@ impl Candidate {
                     artifact_links,
                 },
                 Ok(problems) => Judged::Invalid {
-                    id: IdSeen::Read(id),
                     file: InvalidDoc {
                         origin,
-                        id: Some(id),
+                        seen: IdSeen::Read(id),
                         problems,
                     },
                 },
             },
             Identity::Broken { id, faults } => Judged::Invalid {
-                id,
                 file: InvalidDoc {
                     origin,
-                    id: id.id(),
+                    seen: id,
                     problems: faults.extended(problems),
                 },
             },
@@ -1921,6 +2054,7 @@ pub struct Shelf {
     schema: Schema,
     docs: BTreeMap<DocId, Doc>,
     invalid: BTreeMap<DocId, NonEmptyVec<InvalidDoc>>,
+    sided: Vec<InvalidDoc>,
     unreadable: Vec<InvalidDoc>,
     anonymous: Vec<InvalidDoc>,
     skipped: Vec<SkippedFile>,
@@ -2033,6 +2167,7 @@ impl Shelf {
         let Sorted {
             drafts,
             invalid,
+            sided,
             unreadable,
             anonymous,
         } = Sorted::of(candidates);
@@ -2058,6 +2193,7 @@ impl Shelf {
             schema: schema.clone(),
             docs,
             invalid,
+            sided,
             unreadable,
             anonymous,
             skipped,
@@ -2140,9 +2276,11 @@ impl Shelf {
     /// What an identity comes to now.
     ///
     /// The one place it is decided. An identity no file carries is
-    /// [`Gone`](DocState::Gone) only when every file's identity could be read;
-    /// otherwise it is [`Unknown`](DocState::Unknown), because it may be in a file
-    /// that could not say.
+    /// [`Unknown`](DocState::Unknown) while a file may hold it: a file left in a
+    /// merge conflict a side of which shows it ([`InvalidDoc::sides`]), or any file whose
+    /// identity could not be read ([`Shelf::unreadable`]); otherwise it is
+    /// [`Gone`](DocState::Gone). A file in a merge conflict whose sides show other
+    /// identities leaves it gone.
     pub fn state_of(&self, id: DocId) -> DocState<'_> {
         if let Some(doc) = self.docs.get(&id) {
             return DocState::Valid(doc);
@@ -2150,10 +2288,16 @@ impl Shelf {
         if let Some(invalid) = self.invalid.get(&id) {
             return DocState::Invalid(invalid);
         }
-        let origins: Vec<RelPath> = self.unreadable.iter().map(|d| d.origin.clone()).collect();
-        match NonEmptyVec::from_vec(origins) {
-            Ok(unreadable) => DocState::Unknown { unreadable },
-            Err(_) => DocState::Gone,
+        let shown = self
+            .sided
+            .iter()
+            .filter(|file| file.shows(id))
+            .map(|file| file.origin.clone())
+            .collect();
+        let any = self.unreadable.iter().map(|d| d.origin.clone()).collect();
+        match MayHold::of(shown, any) {
+            Some(may) => DocState::Unknown(may),
+            None => DocState::Gone,
         }
     }
 
@@ -2176,7 +2320,7 @@ impl Shelf {
                 }
             }
             DocState::Gone => NowNamed::Gone,
-            DocState::Unknown { .. } => NowNamed::Unknown,
+            DocState::Unknown(_) => NowNamed::Unknown,
         }
     }
 
@@ -2213,23 +2357,29 @@ impl Shelf {
     }
 
     /// The book the document `id` is in now, when the shelf can tell one: the book of
-    /// its valid document, or the one book every file that carries it is under. None
-    /// when no file carries it (it is gone, or may be in a file whose identity cannot
-    /// be read) or its files are under two books. The one place the book of an
-    /// identity is told, which a record names in its key `book` and which reads a
-    /// record that names none.
+    /// its valid document, or the one book every file that carries it is under, or,
+    /// when no file carries it and a side of a merge conflict shows it
+    /// ([`MayHold::shown`]), the one book every file that may hold it is under
+    /// ([`MayHold::files`], those that may hold any included). None when it is gone,
+    /// when only files whose identity could not be read may hold it, and when its
+    /// files are under two books. The one place the book of an identity is told,
+    /// which a record names in its key `book` and which reads a record that names
+    /// none.
     pub fn book_of(&self, id: DocId) -> Option<&BookName> {
         if let Some(doc) = self.docs.get(&id) {
             return Some(&doc.key().book);
         }
-        let mut books =
-            self.invalid
-                .get(&id)?
-                .iter()
-                .map(|file| match self.schema.membership(file.origin()) {
-                    Membership::In(book) => Some(book.name()),
-                    Membership::Outside => None,
-                });
+        match self.state_of(id) {
+            DocState::Invalid(files) => self.one_book_of(files.iter().map(InvalidDoc::origin)),
+            DocState::Unknown(may) if !may.shown().is_empty() => self.one_book_of(may.files()),
+            DocState::Valid(_) | DocState::Unknown(_) | DocState::Gone => None,
+        }
+    }
+
+    /// The one book every file of `origins` is under, or none when there is no file,
+    /// one is under no book, or they are under two.
+    fn one_book_of<'f>(&self, origins: impl IntoIterator<Item = &'f RelPath>) -> Option<&BookName> {
+        let mut books = origins.into_iter().map(|origin| self.book_of_file(origin));
         let first = books.next()??;
         books.all(|book| book == Some(first)).then_some(first)
     }
@@ -2257,6 +2407,13 @@ impl Shelf {
         &self.invalid
     }
 
+    /// The invalid files left in a merge conflict whose sides show different
+    /// identities ([`InvalidDoc::sides`]): each may carry one of those, and no other,
+    /// which is why such an identity no readable file has is [`DocState::Unknown`].
+    pub(crate) fn sided(&self) -> &[InvalidDoc] {
+        &self.sided
+    }
+
     /// The invalid files whose identity could not be read: any of them may carry an
     /// identity no readable file has, which is why such an identity is
     /// [`DocState::Unknown`].
@@ -2271,13 +2428,16 @@ impl Shelf {
     }
 
     /// Every file that is no valid document, whether or not its identity could be
-    /// read: those whose identity could be read ([`Shelf::invalid`]), then those whose
-    /// identity could not ([`Shelf::unreadable`]), then those with no `id:` entry
-    /// ([`Shelf::anonymous`]). The one place the three are joined.
+    /// read: those whose identity could be read ([`Shelf::invalid`]), then those left
+    /// in a merge conflict whose sides show different identities
+    /// ([`InvalidDoc::sides`]), then those whose identity could not be read
+    /// ([`Shelf::unreadable`]), then those with no `id:` entry
+    /// ([`Shelf::anonymous`]). The one place the four are joined.
     pub fn invalid_files(&self) -> Vec<InvalidDoc> {
         self.invalid
             .values()
             .flat_map(|docs| docs.iter().cloned())
+            .chain(self.sided.iter().cloned())
             .chain(self.unreadable.iter().cloned())
             .chain(self.anonymous.iter().cloned())
             .collect()
@@ -2334,14 +2494,46 @@ impl Shelf {
         tally
     }
 
-    /// Every identity some file carries, valid or not.
+    /// Every identity some file carries, valid or not: of the identities the shelf
+    /// knows, those a file carries, and not those only a side of a merge conflict
+    /// shows ([`InvalidDoc::sides`]).
     pub fn ids(&self) -> BTreeSet<DocId> {
-        self.docs
-            .keys()
-            .chain(self.invalid.keys())
-            .copied()
+        self.known_ids()
+            .into_iter()
+            .filter(|(_, known)| *known == Known::Carried)
+            .map(|(id, _)| id)
             .collect()
     }
+
+    /// Every identity the shelf knows, and how: carried by a file, valid or not, or
+    /// carried by none and shown by a side of a merge conflict in a file.
+    ///
+    /// The one list of the identities of the shelf; each reader takes from it what it
+    /// asks: [`Shelf::ids`] and the rows of `status` the carried ones only, the lookup
+    /// by a short id and the reading of a record's book both.
+    pub(crate) fn known_ids(&self) -> BTreeMap<DocId, Known> {
+        let mut known: BTreeMap<DocId, Known> = self
+            .docs
+            .keys()
+            .chain(self.invalid.keys())
+            .map(|id| (*id, Known::Carried))
+            .collect();
+        for file in &self.sided {
+            for id in file.sides().into_iter().flat_map(Sides::ids) {
+                known.entry(*id).or_insert(Known::Shown);
+            }
+        }
+        known
+    }
+}
+
+/// How the shelf knows an identity ([`Shelf::known_ids`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Known {
+    /// A file carries it, valid or not.
+    Carried,
+    /// No file carries it, and a side of a merge conflict in a file shows it.
+    Shown,
 }
 
 /// The files judged, by where each goes in the shelf.
@@ -2357,6 +2549,9 @@ struct Sorted {
     )>,
     /// The invalid ones whose identity was read, grouped by identity.
     invalid: BTreeMap<DocId, NonEmptyVec<InvalidDoc>>,
+    /// The invalid ones left in a merge conflict whose sides show different
+    /// identities.
+    sided: Vec<InvalidDoc>,
     /// The invalid ones whose identity could not be read.
     unreadable: Vec<InvalidDoc>,
     /// The invalid ones that have no `id:` entry.
@@ -2374,23 +2569,17 @@ impl Sorted {
                     links,
                     artifact_links,
                 } => sorted.drafts.push((draft, links, artifact_links)),
-                Judged::Invalid {
-                    id: IdSeen::Read(id),
-                    file,
-                } => match sorted.invalid.entry(id) {
-                    Entry::Occupied(mut held) => held.get_mut().push(file),
-                    Entry::Vacant(slot) => {
-                        slot.insert(NonEmptyVec::new(file, Vec::new()));
-                    }
+                Judged::Invalid { file } => match &file.seen {
+                    IdSeen::Read(id) => match sorted.invalid.entry(*id) {
+                        Entry::Occupied(mut held) => held.get_mut().push(file),
+                        Entry::Vacant(slot) => {
+                            slot.insert(NonEmptyVec::new(file, Vec::new()));
+                        }
+                    },
+                    IdSeen::OneOf(_) => sorted.sided.push(file),
+                    IdSeen::Absent => sorted.anonymous.push(file),
+                    IdSeen::Unreadable => sorted.unreadable.push(file),
                 },
-                Judged::Invalid {
-                    id: IdSeen::Absent,
-                    file,
-                } => sorted.anonymous.push(file),
-                Judged::Invalid {
-                    id: IdSeen::Unreadable,
-                    file,
-                } => sorted.unreadable.push(file),
             }
         }
         sorted
@@ -2413,10 +2602,11 @@ fn depends_edges(docs: &BTreeMap<DocId, Doc>) -> BTreeMap<DocId, BTreeSet<DocId>
     edges
 }
 
-/// Marks as invalid every file that shares its `id:` with another, and every file
-/// that writes a key another file of the book writes too, whether or not either
-/// identity could be read: the collisions are [`KeyWriters`]'s reading, and each
-/// file of one is told the others.
+/// Marks as invalid every file that shares its `id:` with another, every file that
+/// carries an `id:` a side of a merge conflict in another file shows and that other
+/// file, and every file that writes a key another file of the book writes too,
+/// whether or not either identity could be read: the collisions of keys are
+/// [`KeyWriters`]'s reading, and each file of one is told the others.
 fn flag_duplicates(mut candidates: Vec<Candidate>, writers: &KeyWriters) -> Vec<Candidate> {
     let mut by_id: BTreeMap<DocId, Vec<usize>> = BTreeMap::new();
     for (i, c) in candidates.iter().enumerate() {
@@ -2430,6 +2620,29 @@ fn flag_duplicates(mut candidates: Vec<Candidate>, writers: &KeyWriters) -> Vec<
         for &i in group {
             if let Some(others) = origins_but(&candidates, group, i) {
                 flags.push((i, DocProblem::DuplicateId { others }));
+            }
+        }
+    }
+    // An id carried by some files and shown by a side of a merge conflict in others:
+    // each file of either is told the files of the other, once for the id. Only a
+    // file that carries no id can show one.
+    let carry_none: Vec<usize> = (0..candidates.len())
+        .filter(|&j| candidates[j].identity.id().is_none())
+        .collect();
+    for (&id, carriers) in &by_id {
+        let showers: Vec<usize> = carry_none
+            .iter()
+            .copied()
+            .filter(|&j| candidates[j].identity.shows(id))
+            .collect();
+        if showers.is_empty() {
+            continue;
+        }
+        for (mine, theirs) in [(carriers, &showers), (&showers, carriers)] {
+            for &i in mine {
+                if let Some(others) = origins_but(&candidates, theirs, i) {
+                    flags.push((i, DocProblem::MaybeDuplicateId { id, others }));
+                }
             }
         }
     }

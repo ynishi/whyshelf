@@ -1017,9 +1017,11 @@ struct ConflictSide {
 /// The conflict touches the front matter when a conflict that ends (`>>>>>>>`)
 /// starts while a side's front matter is open, or opens one. `None` when none does,
 /// and when no side opened a front matter, so the file is read as it would be
-/// without this. Otherwise `Some`: [`ReadId::Read`] when every side that opened one
-/// shows the same single identity, [`ReadId::Unreadable`] when they differ or one
-/// shows none or several (which of them the file is, is not said).
+/// without this. Otherwise `Some`: when every side that opened one shows a single
+/// identity, what [`ReadId::of_sides`] makes of them ([`ReadId::Read`] when they are
+/// the same, [`ReadId::OneOf`] when they differ: the file holds one of them, and
+/// which is not said); [`ReadId::Unreadable`] when one shows none or several, or
+/// opened its front matter with a mistyped delimiter.
 fn conflict(text: &str, opened: Opened) -> Option<ReadId> {
     let start = match opened {
         Opened::Common => Matter::Open,
@@ -1119,7 +1121,7 @@ fn conflict(text: &str, opened: Opened) -> Option<ReadId> {
     if !any_opened {
         return None;
     }
-    Some(the_one(shown).map_or(ReadId::Unreadable, ReadId::Read))
+    Some(ReadId::of_sides(shown))
 }
 
 #[cfg(test)]
@@ -2219,9 +2221,8 @@ mod tests {
             &ArtifactReadings::new(),
         );
         shelf
-            .unreadable()
+            .invalid_files()
             .iter()
-            .chain(shelf.anonymous())
             .flat_map(|doc| doc.problems().iter().map(ToString::to_string))
             .collect::<Vec<_>>()
             .join("; ")
@@ -2308,6 +2309,11 @@ mod tests {
         ReadId::Read(id.parse().unwrap())
     }
 
+    /// The identity of a file one of whose sides shows each of `ids`.
+    fn one_of(ids: &[&str]) -> ReadId {
+        ReadId::of_sides(ids.iter().map(|id| id.parse().unwrap()))
+    }
+
     /// A file both of whose sides are a whole document, as Git leaves an add/add.
     fn both_sides(ours: &str, theirs: &str) -> String {
         format!(
@@ -2316,11 +2322,11 @@ mod tests {
     }
 
     #[test]
-    fn a_file_that_holds_both_sides_of_two_documents_is_a_conflict_of_no_one_identity() {
-        assert_eq!(
-            unread(&both_sides(ID, ID_B)),
-            (RawProblem::ConflictMarkers, ReadId::Unreadable)
-        );
+    fn a_file_that_holds_both_sides_of_two_documents_is_a_conflict_of_one_of_the_two() {
+        let (why, id) = unread(&both_sides(ID, ID_B));
+        assert_eq!(why, RawProblem::ConflictMarkers);
+        assert_eq!(id, one_of(&[ID, ID_B]));
+        assert!(matches!(id, ReadId::OneOf(_)), "{id:?}");
     }
 
     #[test]
@@ -2346,7 +2352,7 @@ mod tests {
         );
         assert_eq!(
             unread(&text),
-            (RawProblem::ConflictMarkers, ReadId::Unreadable)
+            (RawProblem::ConflictMarkers, one_of(&[ID, ID_B]))
         );
     }
 
@@ -2398,7 +2404,7 @@ mod tests {
     fn a_common_ancestor_between_two_different_sides_is_no_side() {
         assert_eq!(
             unread(&with_ancestor(ID, ID_B)),
-            (RawProblem::ConflictMarkers, ReadId::Unreadable)
+            (RawProblem::ConflictMarkers, one_of(&[ID, ID_B]))
         );
     }
 
