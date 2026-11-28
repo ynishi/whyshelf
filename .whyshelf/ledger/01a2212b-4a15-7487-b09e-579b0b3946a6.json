@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:3689440276ba661d1726d90cf8aff7fed16011becbc99827c8a93ae5e4420266",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs::tests::a_chain_is_followed_both_ways_with_depths",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:da15da147e8c3da78b49c48a7aa0db5518cb44fdf39734acae1daa7c26c0d54c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs::tests::a_diamond_expands_each_document_once_and_lists_each_edge_once",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:be2026634c2ec1cafa58d06d7fdc023c876587e0a9836eda0551b7c02dc56327",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs::tests::a_link_that_cannot_be_followed_is_an_edge_upstream",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:86619fe92ccb103ad48fd744620b70ac9ace0f97ded778d73d5dcff21d4cbeb5",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/trace.rs::tests::a_link_to_an_artifact_is_an_edge_upstream_that_ends_there",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "cf903bf283f2281b2fd1dc43a89ab6169688e91a",
+      "hash": "sha256:fc33afb4fad1835d3d606db992f8b02695187c7dfe7773dfc7bd46f1d9613012",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "18"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-1413-758c-a10a-55cdcaa23432"
+    }
+  ],
+  "id": "01a2212b-4a15-7487-b09e-579b0b3946a6",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:2a7d24c71536f0c5aa6ef9c2c54e077ede1e5cac6f9c3c25922071f47fa31cd3",
+  "seen_address": "37bdfef56f82c82f0fb3b8975ad76417fcb7f896",
+  "subject": "01a1c4ba-18f0-70ab-a304-3682b6758c3c",
+  "v": 1,
+  "verb": "approve"
+}

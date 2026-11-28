@@ -1,0 +1,68 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::RawProblem",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::docs::read",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "a42ab3ee9a80f9704177298865ae2aefec7f409f",
+      "hash": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    }
+  ],
+  "id": "01a2212c-7c16-718a-b2cf-96a98c7ee4c0",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:8bb85a9e3ff2718d90a5a5f27e205b1f5ad50af02b0319e88ff4fe9c62928ce1",
+  "seen_address": "4e54584512442fadcdc7b0776a7f3e9f3f6d2067",
+  "subject": "01a21d1c-14f4-76a5-8d36-a9a72bc6c6a8",
+  "v": 1,
+  "verb": "approve"
+}

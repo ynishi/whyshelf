@@ -1,0 +1,140 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:b46e7a8cbde1c602c8712c5e451a16c49787531f591685d54f67a35cfb2b5a28",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/quorum_tests.rs::a_fresh_approval_short_of_names_is_shown_awaiting_and_a_degraded_one_keeps_its_level",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b48adad766aa1f73176cac633634197c06bca6e5a4d2cda8701f57a0b732089b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/quorum_tests.rs::an_upstream_short_of_names_stales_and_holds_back_what_stands_on_it_even_expired",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:66a0cff09fb115da9a5720496d6affc386a5229c5a2e6c4cd8682696f9744a69",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::a_name_that_declared_an_artifact_edit_under_its_old_name_adds_nothing_under_the_new",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ace8270c5b5f5721ffced723131f6db736166b79cb10baa7e532b2b6ffda1481",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::a_name_that_declared_an_edge_adds_nothing_by_declaring_it_again",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d60f6ecea2ba4c6769cb2ce2365dcc3e5fd3c4d68d821029744a137a0bb62bcb",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::a_reader_whose_own_latest_reading_lapsed_counts_no_more_whoever_approved_last",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4a834d82b286cb00c5885f92be12ee0cd4c5ba95ba50b78b09e9e18894bc9a1e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_approval_is_short_until_another_name_approves_the_same_content",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:34b1f496650fc0d60520c44e8cd95fddb8296dcd3e36c3ea7cc1334c55d2baab",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_approval_no_rule_reads_needs_one_name_lapsed_or_not",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3adc4c606d2e4a1e89a05ad7180e1856d434ad90e3a810d55949daf7c8754be3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_artifact_edge_is_counted_over_every_name_of_the_pins_way_as_freshness_reads_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:bc8211718e384ae719e9e0206b080439fc270754e9d0505ab9beaea2b0e80ef7",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_edge_needs_the_least_its_declarations_need_so_a_declaration_added_takes_nothing_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b9d9b1a513a668ef860e62bdb430de8a9c41643cb2c69d3babca789c6515f67a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_edge_no_pin_that_stale_reads_now_meets_is_not_told",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d45fa89c5f534a6175a89a5c6c2f4188730da723617a581ec944bdcfb3e78b96",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::an_edit_is_joined_once_as_many_names_declare_it_as_its_rule_asks_for",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a5ea603865f7517b9ac02f6b12381350e0a2e4c9b8ca6c42699c78b10199f5b2",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/quorum_tests.rs::the_names_are_counted_per_edge_not_per_way",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:daf3c00d4d98d9e5462d21dbb1c6051ac70f5c9e9af7c7a51b37bf6633a2b1a9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/settle.rs::tests::an_upstream_that_awaits_is_approved_by_another_name_and_not_by_stale",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "40a4375cb3971844cc47616914ddadbf9867c6d1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1268cd00de0f70b0a98c647f6aeb03bb24bb7ddfb2971e5e136f7efde84f1ba4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "1fee4494b324b790563306a7337bda79c4e34e8b",
+      "hash": "sha256:960bd0b9091653ef170864b44f6c10f8472eb053f89a46182e4e02c4addf5cbc",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "89"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c42-7a51-8c3e-5d2b9f1e0a74"
+    }
+  ],
+  "id": "01a2212c-1fd4-7736-92cf-ccf1580e6d83",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:00455c126d60569ec8d148449c9947ff3412c1e71b8b8978794d9a17ef98d0b2",
+  "seen_address": "20517ae2f5ad630e58a6c35c5acc709aef180e3c",
+  "subject": "01a1f6a0-2c42-7c3f-a8d2-4e6b1f9c2d07",
+  "v": 1,
+  "verb": "approve"
+}

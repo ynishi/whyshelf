@@ -81,8 +81,10 @@
 //! - What could join units unseen is counted, not left out ([`Unjoined`]): an identity
 //!   whose files are not valid that is undone, or that an undone document or a document
 //!   of a chain stands on or names (its links cannot be read, so what it would join
-//!   cannot be told), and a file whose identity cannot be read (it may be any document).
-//!   An identity not valid that nothing divided stands on or names joins no unit.
+//!   cannot be told), a file left in a merge conflict a side of which shows such an
+//!   identity (it may be that document), and a file whose identity cannot be read (it
+//!   may be any document). An identity not valid that nothing divided stands on or
+//!   names joins no unit.
 //!
 //! # Known limitations
 //!
@@ -335,14 +337,17 @@ pub fn plan<'a>(
         .chain(chain.values())
         .flat_map(|node| node.joins.iter().copied())
         .collect();
-    let invalid = shelf
-        .invalid()
-        .keys()
-        .filter(|id| ids.contains(id) || stood_on_or_named.contains(id))
+    let involved = |id: &DocId| ids.contains(id) || stood_on_or_named.contains(id);
+    let invalid = shelf.invalid().keys().filter(|id| involved(id)).count();
+    let sided = shelf
+        .sided()
+        .iter()
+        .filter(|file| file.shown().any(|id| involved(&id)))
         .count();
     let unreadable = shelf.unreadable().len();
-    let untold = (invalid > 0 || unreadable > 0).then_some(Unjoined {
+    let untold = (invalid > 0 || sided > 0 || unreadable > 0).then_some(Unjoined {
         invalid,
+        sided,
         unreadable,
     });
     UnitsPlan {
@@ -574,10 +579,11 @@ impl Units {
 }
 
 /// What could join units without the division seeing it, counted ([`plan`] counts it);
-/// at least one of the two counts is more than none.
+/// at least one of the three counts is more than none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Unjoined {
     invalid: usize,
+    sided: usize,
     unreadable: usize,
 }
 
@@ -587,6 +593,13 @@ impl Unjoined {
     /// names.
     pub fn invalid(&self) -> usize {
         self.invalid
+    }
+
+    /// The files left in a merge conflict whose sides show different identities, one
+    /// of which is of those [`invalid`](Self::invalid) counts among: undone, or stood
+    /// on or named by an undone document or a document of a chain.
+    pub fn sided(&self) -> usize {
+        self.sided
     }
 
     /// The files whose identity cannot be read: each may be any document.

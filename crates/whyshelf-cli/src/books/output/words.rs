@@ -32,15 +32,22 @@ pub(super) fn plural(count: usize) -> &'static str {
 }
 
 /// What could not be read, counted, as the warnings of `reach` and `units` say it: the
-/// documents whose links cannot be read and the files whose identity cannot be read,
-/// a count of none left unsaid. The one place the two phrases are written; each
-/// warning writes what they may do.
-pub(super) fn unread(invalid: usize, unreadable: usize) -> String {
+/// documents whose links cannot be read, the files left in a merge conflict that may
+/// hold a document of the answer, and the files whose identity cannot be read, a count
+/// of none left unsaid. The one place the three phrases are written; each warning
+/// writes what they may do.
+pub(super) fn unread(invalid: usize, sided: usize, unreadable: usize) -> String {
     let mut parts = Vec::new();
     if invalid > 0 {
         parts.push(format!(
             "{invalid} document{} whose links cannot be read",
             plural(invalid)
+        ));
+    }
+    if sided > 0 {
+        parts.push(format!(
+            "{sided} file{} left in a merge conflict",
+            plural(sided)
         ));
     }
     if unreadable > 0 {

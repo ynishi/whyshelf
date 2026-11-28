@@ -1,0 +1,70 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:be7153c48d02d545c3454ff398c00f8f5b26bc4b886f48ec2bc2b59a52e77ec2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::two_chains_on_one_upstream_decided_against_are_one_unit_that_waits_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7e5f44c46c97e40a177a499e623812f6bf61a4b181435aaf1cd544f461b10308",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::two_chains_that_share_nothing_are_two_units_each_upstream_first",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:0883a818781f34d619024a1859fdcdef838c7432d82db93e80b07af7a14504a6",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::two_chains_whose_artifacts_live_in_one_file_are_one_unit",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d1b4d3c8814fcd9b452bbb582bde86c7d6d9aa5b32277167ab718a5c07835909",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::two_chains_whose_links_name_one_document_not_valid_are_one_unit_that_waits_on_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:e0077b7aee45b98532812013d235d8784cd34ae7321d872b0889a15787d02c70",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::what_could_join_units_unseen_is_counted_and_said",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0d38e2c9259670d183304863d8d780e987a9b0d3",
+      "hash": "sha256:302492aefe6fb9a5a3a129958aca352d250378b2bfeb12850504213c374e475d",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "107"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a208d2-0bb9-75d2-8714-adc41b7c187b"
+    }
+  ],
+  "id": "01a2212c-66bb-703f-a257-af031b34f05f",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:fe504bb960cfefab75537cab9eac338e9dd1aeca571c1040a7002782d8ea11ca",
+  "seen_address": "3002a6e371f1843eade56a27b1407f6195f18b19",
+  "subject": "01a208d2-0bb9-75d2-8714-adc6c7eb06c6",
+  "v": 1,
+  "verb": "approve"
+}

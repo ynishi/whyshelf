@@ -81,7 +81,7 @@ use super::state::Side;
 #[allow(clippy::result_large_err)]
 pub(super) fn identity(loaded: &Loaded, reference: &Reference) -> Result<DocId, ShelfError> {
     match resolve(&loaded.shelf, &loaded.ledger, reference) {
-        Resolution::Found(id) | Resolution::LedgerOnly { id, .. } => Ok(id),
+        Resolution::Found(id) | Resolution::LedgerOnly { id, .. } | Resolution::Shown(id) => Ok(id),
         Resolution::Missing => Err(ShelfError::NotFound {
             reference: reference.clone(),
         }),

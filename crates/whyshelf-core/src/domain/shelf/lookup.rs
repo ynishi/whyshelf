@@ -10,7 +10,8 @@
 //!    state the document is in is [`Shelf::state_of`]'s answer, not this one's. A key
 //!    that only files with no readable identity write is [`Resolution::NoIdentity`].
 //! 2. A UUID in its one written form: a document of the shelf, or failing that, a
-//!    subject of the ledger.
+//!    subject of the ledger, or failing that, an identity a side of a merge conflict
+//!    in a file shows ([`Resolution::Shown`]).
 //! 3. A short id ([`ShortId::looks_like`]): matched against the end of the
 //!    identities of the shelf and of the ledger's subjects. A prefixed key has a `-`
 //!    and a slug is refused when it looks like a short id, so the two never meet.
@@ -33,7 +34,7 @@ use crate::domain::id::{DocId, EntityId, ShortId};
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{Count, NonEmptyVec, TwoOrMore};
 
-use super::build::{DocState, KeyHit, Shelf};
+use super::build::{DocState, KeyHit, MayHold, Shelf};
 use super::ledger::Ledger;
 use super::schema::{BookName, KeyProblem, NameProblem};
 
@@ -168,8 +169,8 @@ impl fmt::Display for Reference {
 pub enum Absence {
     /// No file carries it.
     Gone,
-    /// No file is known to carry it, but these files' identities could not be read.
-    Unknown(NonEmptyVec<RelPath>),
+    /// No file is known to carry it, but these files may.
+    Unknown(MayHold),
 }
 
 /// What a reference comes to.
@@ -177,6 +178,10 @@ pub enum Absence {
 pub enum Resolution {
     /// A document of the shelf, valid or invalid; ask [`Shelf::state_of`] which.
     Found(DocId),
+    /// No file carries the identity and the ledger has no record about it, but a side
+    /// of a merge conflict in a file shows it ([`MayHold::shown`]): the identity is
+    /// named, and [`Shelf::state_of`] tells the files that may hold it.
+    Shown(DocId),
     /// No file of the shelf has the identity, but the ledger has records about it.
     LedgerOnly {
         /// The identity.
@@ -243,19 +248,23 @@ fn by_identity(shelf: &Shelf, ledger: &Ledger, id: DocId) -> Resolution {
     let absence = match shelf.state_of(id) {
         DocState::Valid(_) | DocState::Invalid(_) => return Resolution::Found(id),
         DocState::Gone => Absence::Gone,
-        DocState::Unknown { unreadable } => Absence::Unknown(unreadable),
+        DocState::Unknown(may) => Absence::Unknown(may),
     };
     if ledger.subjects().contains(&id) {
-        Resolution::LedgerOnly { id, state: absence }
-    } else {
-        Resolution::Missing
+        return Resolution::LedgerOnly { id, state: absence };
+    }
+    match absence {
+        Absence::Unknown(may) if !may.shown().is_empty() => Resolution::Shown(id),
+        Absence::Unknown(_) | Absence::Gone => Resolution::Missing,
     }
 }
 
 fn by_short_id(shelf: &Shelf, ledger: &Ledger, short: &ShortId) -> Resolution {
+    // Every identity the shelf knows, shown by a side of a merge conflict as well as
+    // carried: `by_identity` tells which.
     let candidates: BTreeSet<DocId> = shelf
-        .ids()
-        .into_iter()
+        .known_ids()
+        .into_keys()
         .chain(ledger.subjects().iter().copied())
         .filter(|id| short.matches(id.entity()))
         .collect();

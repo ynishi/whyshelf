@@ -7,7 +7,7 @@ use crate::domain::shelf::artifact::{ArtifactHash, ArtifactReadings, Comparison}
 use crate::domain::shelf::build::{DocReading, RawProblem, ReadId};
 use crate::domain::shelf::fixtures_tests::{
     approve, approved, deny, docid, fr, fr_titled, ledger, path, reading, schema, shelf,
-    shelf_with, sp_testing,
+    shelf_with, sided, sp_testing,
 };
 use crate::domain::shelf::freshness::assess_unasked as assess;
 use crate::domain::shelf::impact::{both_ways, impact};
@@ -320,8 +320,7 @@ mod claim {
         let at = why.shelf().expect("unknown at one end");
         assert_eq!(at.before(), None);
         assert_eq!(
-            at.after()
-                .map(|files| files.iter().cloned().collect::<Vec<_>>()),
+            at.after().map(|may| may.any().to_vec()),
             Some(vec![path("findings/x.md")])
         );
         // Unknown at both ends: both are kept.
@@ -332,6 +331,32 @@ mod claim {
         let why = untold_of(change.claim(5));
         let at = why.shelf().expect("unknown at both ends");
         assert!(at.before().is_some() && at.after().is_some(), "{at:?}");
+    }
+
+    /// A file left in a merge conflict whose sides do not show a document leaves it
+    /// gone: a change that leaves such a file does not reach a document gone before;
+    /// one whose side shows it leaves it unknown, with that file.
+    #[test]
+    fn a_document_no_side_of_a_conflict_shows_is_gone_beside_it_and_not_claimed() {
+        let with_five = shelf(vec![fr(1, &[]), fr(5, &[])]);
+        let denied = ledger(vec![deny(&with_five, 5, 3001, 10)]);
+        let gone = || shelf(vec![fr(1, &[])]);
+        let conflict = |sides: &[u128]| shelf(vec![fr(1, &[]), sided("findings/x.md", sides)]);
+        let change = Change::new(
+            (gone(), denied.clone()),
+            (conflict(&[7, 8]), denied.clone()),
+        );
+        assert_eq!(change.claim(5), Claim::NotClaimed);
+        assert_eq!(change.verdict(&[1], 5), VerdictKind::NotClaimed);
+        let change = Change::new((gone(), denied.clone()), (conflict(&[5, 8]), denied));
+        let why = untold_of(change.claim(5));
+        let at = why.shelf().expect("unknown after");
+        assert_eq!(at.before(), None);
+        assert_eq!(
+            at.after()
+                .map(|may| (may.shown().to_vec(), may.any().to_vec())),
+            Some((vec![path("findings/x.md")], Vec::new()))
+        );
     }
 
     /// W5: the text of a pending document, and a valid document made invalid.
@@ -571,6 +596,30 @@ mod unreadable {
             assert_eq!(found.files_before(), at_before.as_slice());
             assert_eq!(found.files_after(), at_after.as_slice());
             assert!(found.records_before().is_empty() && found.records_after().is_empty());
+        }
+    }
+
+    /// A file of the shelf left in a merge conflict whose sides show different
+    /// identities, at either end, holds a document that may have no row: the gate
+    /// carries it apart from the files whose identity cannot be read, and does not
+    /// pass.
+    #[test]
+    fn a_file_left_in_a_conflict_at_either_end_keeps_the_gate_from_passing() {
+        let clean = || shelf(vec![fr(1, &[])]);
+        let conflict = || shelf(vec![fr(1, &[]), sided("findings/x.md", &[7, 8])]);
+        let x = || vec![path("findings/x.md")];
+        for (before, after, at_before, at_after) in [
+            (clean(), conflict(), vec![], x()),
+            (conflict(), clean(), x(), vec![]),
+            (conflict(), conflict(), x(), x()),
+        ] {
+            let change = Change::new((before, ledger(Vec::new())), (after, ledger(Vec::new())));
+            let within = change.within(&[1]);
+            blocked_with_nothing_claimed(&within);
+            let found = within.unreadable().expect("what cannot be read");
+            assert_eq!(found.sided_before(), at_before.as_slice());
+            assert_eq!(found.sided_after(), at_after.as_slice());
+            assert!(found.files_before().is_empty() && found.files_after().is_empty());
         }
     }
 

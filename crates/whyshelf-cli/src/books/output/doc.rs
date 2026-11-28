@@ -40,9 +40,11 @@ pub enum PresenceOut {
     },
     /// No file carries it.
     Gone,
-    /// Unknown: some file's identity could not be read.
+    /// Unknown: no file is known to carry it, and a file may.
     Unknown {
-        /// The files whose identity could not be read.
+        /// The files left in a merge conflict a side of which shows the identity.
+        shown: Vec<String>,
+        /// The files whose identity could not be read, which may hold any.
         unreadable: Vec<String>,
     },
 }
@@ -152,6 +154,10 @@ pub struct InvalidOut {
     pub file: String,
     /// Its identity, if it could be read.
     pub id: Option<String>,
+    /// The identities the sides of a merge conflict in it show, when it holds one
+    /// whose sides show different identities (it holds the document of one of them);
+    /// empty for any other file.
+    pub sides: Vec<String>,
     /// What is wrong.
     pub problems: Vec<String>,
 }
@@ -291,6 +297,12 @@ impl Namer<'_> {
                 .map(|d| InvalidOut {
                     file: d.origin().to_string(),
                     id: d.id().map(|id| id.to_string()),
+                    sides: d
+                        .sides()
+                        .into_iter()
+                        .flat_map(|sides| sides.ids())
+                        .map(ToString::to_string)
+                        .collect(),
                     problems: d.problems().iter().map(ToString::to_string).collect(),
                 })
                 .collect(),
@@ -339,8 +351,9 @@ fn presence(presence: &DocPresence) -> PresenceOut {
             problems: problems.iter().map(ToString::to_string).collect(),
         },
         DocPresence::Gone => PresenceOut::Gone,
-        DocPresence::Unknown { unreadable } => PresenceOut::Unknown {
-            unreadable: unreadable.iter().map(ToString::to_string).collect(),
+        DocPresence::Unknown(may) => PresenceOut::Unknown {
+            shown: may.shown().iter().map(ToString::to_string).collect(),
+            unreadable: may.any().iter().map(ToString::to_string).collect(),
         },
     }
 }

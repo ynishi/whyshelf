@@ -54,9 +54,10 @@
 //!
 //! A verdict passes when it is not claimed or inside ([`Verdict::passes`]). Besides
 //! the verdicts, the gate carries what cannot be read at either end ([`Unreadable`]):
-//! a file of the shelf whose identity cannot be read, and a file of the ledger that
-//! is no record. Neither has an identity, and so a row or a verdict, and each may be
-//! a document, or a record about one, the change touched anywhere; so the gate does
+//! a file of the shelf whose identity cannot be read, a file of the shelf left in a
+//! merge conflict whose sides show different identities, and a file of the ledger
+//! that is no record. None has an identity, and so a row or a verdict, and each may be
+//! a document, or a record about one, the change touched; so the gate does
 //! not pass while one is there, whichever end it is at. The gate passes when every
 //! verdict passes and nothing is unreadable ([`Within::passes`]). `impact --within
 //! --exit-code` exits 1 when it does not pass and 0 when it does; without
@@ -129,7 +130,7 @@ use crate::domain::id::DocId;
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::{NonEmptySet, NonEmptyVec};
 
-use super::build::{DocState, Shelf};
+use super::build::{DocState, InvalidDoc, MayHold, Shelf};
 use super::freshness::{RootCause, UntoldPin};
 use super::impact::{ImpactEntry, Made, MadeCannotTell, Sides};
 use super::ledger::{JudgementId, Ledger, Record, RecordAbout};
@@ -258,8 +259,8 @@ impl ClaimUntold {
         self.edit.as_ref()
     }
 
-    /// The document is on the shelf at neither end, and may be in a file whose
-    /// identity could not be read at one or both.
+    /// The document is on the shelf at neither end, and a file may hold it at one or
+    /// both.
     pub fn shelf(&self) -> Option<&UnknownAt> {
         self.shelf.as_ref()
     }
@@ -301,26 +302,25 @@ impl Backward {
 pub struct InvalidBoth;
 
 /// The document is on the shelf at neither end (`Gone` or `Unknown`), and `Unknown`
-/// at one or both: it may be in a file whose identity could not be read, so whether
-/// the change put it back or rewrote it cannot be told. Each end's files whose
-/// identity could not be read, as [`DocState::Unknown`] gives them; at least one end
-/// has them, and only the gate makes one.
+/// at one or both: a file may hold it, so whether the change put it back or rewrote
+/// it cannot be told. Each end's files that may hold it, as [`DocState::Unknown`]
+/// gives them; at least one end has them, and only the gate makes one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnknownAt {
-    before: Option<NonEmptyVec<RelPath>>,
-    after: Option<NonEmptyVec<RelPath>>,
+    before: Option<MayHold>,
+    after: Option<MayHold>,
 }
 
 impl UnknownAt {
-    /// The files whose identity could not be read before the change, when it is
-    /// `Unknown` there.
-    pub fn before(&self) -> Option<&NonEmptyVec<RelPath>> {
+    /// The files that may hold the document before the change, when it is `Unknown`
+    /// there.
+    pub fn before(&self) -> Option<&MayHold> {
         self.before.as_ref()
     }
 
-    /// The files whose identity could not be read after the change, when it is
-    /// `Unknown` there.
-    pub fn after(&self) -> Option<&NonEmptyVec<RelPath>> {
+    /// The files that may hold the document after the change, when it is `Unknown`
+    /// there.
+    pub fn after(&self) -> Option<&MayHold> {
         self.after.as_ref()
     }
 }
@@ -341,10 +341,10 @@ fn on_shelf(state: &DocState<'_>) -> bool {
     matches!(state, DocState::Valid(_) | DocState::Invalid(_))
 }
 
-/// The files whose identity could not be read, when the document is `Unknown`.
-fn unknown_in(state: &DocState<'_>) -> Option<NonEmptyVec<RelPath>> {
+/// The files that may hold the document, when it is `Unknown`.
+fn unknown_in(state: &DocState<'_>) -> Option<MayHold> {
     match state {
-        DocState::Unknown { unreadable } => Some(unreadable.clone()),
+        DocState::Unknown(may) => Some(may.clone()),
         DocState::Valid(_) | DocState::Invalid(_) | DocState::Gone => None,
     }
 }
@@ -620,16 +620,21 @@ impl WithinEntry {
 }
 
 /// What the gate cannot read at either end: the files of the shelf whose identity
-/// cannot be read, and the files of the ledger that are no record that can be read.
-/// Each may be a document, or a record about one, that the change adds, takes away or
-/// rewrites, anywhere, and neither has an identity to give a verdict of its own; so
-/// whether the change reaches outside the reach cannot be told while any is there,
-/// and the gate does not guess which. At least one list holds a file; only the gate
-/// makes one.
+/// cannot be read, those left in a merge conflict whose sides show different
+/// identities ([`InvalidDoc::sides`]), and the files
+/// of the ledger that are no record that can be read. Each may be a document, or a
+/// record about one, that the change adds, takes away or rewrites, and none has an
+/// identity to give a verdict of its own (a file left in a merge conflict holds one of
+/// the documents its sides show, and a document of a side that has no record has no
+/// verdict); so whether the change reaches outside the reach cannot be told while any
+/// is there, and the gate does not guess which. At least one list holds a file; only
+/// the gate makes one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unreadable {
     files_before: Vec<RelPath>,
     files_after: Vec<RelPath>,
+    sided_before: Vec<RelPath>,
+    sided_after: Vec<RelPath>,
     records_before: Vec<RelPath>,
     records_after: Vec<RelPath>,
 }
@@ -645,6 +650,18 @@ impl Unreadable {
         &self.files_after
     }
 
+    /// The files of the shelf before the change left in a merge conflict whose sides
+    /// show different identities.
+    pub fn sided_before(&self) -> &[RelPath] {
+        &self.sided_before
+    }
+
+    /// The files of the shelf after the change left in a merge conflict whose sides
+    /// show different identities.
+    pub fn sided_after(&self) -> &[RelPath] {
+        &self.sided_after
+    }
+
     /// The files of the ledger before the change that are no record.
     pub fn records_before(&self) -> &[RelPath] {
         &self.records_before
@@ -657,21 +674,21 @@ impl Unreadable {
 
     /// What cannot be read at the two ends, if anything.
     fn of(before: &End<'_>, after: &End<'_>) -> Option<Self> {
-        let files = |end: &End<'_>| -> Vec<RelPath> {
-            end.shelf
-                .unreadable()
-                .iter()
-                .map(|doc| doc.origin().clone())
-                .collect()
+        let origins = |files: &[InvalidDoc]| -> Vec<RelPath> {
+            files.iter().map(|doc| doc.origin().clone()).collect()
         };
         let found = Self {
-            files_before: files(before),
-            files_after: files(after),
+            files_before: origins(before.shelf.unreadable()),
+            files_after: origins(after.shelf.unreadable()),
+            sided_before: origins(before.shelf.sided()),
+            sided_after: origins(after.shelf.sided()),
             records_before: before.unreadable_records.to_vec(),
             records_after: after.unreadable_records.to_vec(),
         };
         let any = !(found.files_before.is_empty()
             && found.files_after.is_empty()
+            && found.sided_before.is_empty()
+            && found.sided_after.is_empty()
             && found.records_before.is_empty()
             && found.records_after.is_empty());
         any.then_some(found)

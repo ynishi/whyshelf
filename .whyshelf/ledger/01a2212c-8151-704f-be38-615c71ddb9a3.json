@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:37e2fddbd3eb1512acba64277fd5709cc36bee6c121ea13734632aca0ae7bc7d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::check_names_the_file_as_one_that_holds_conflict_markers_and_gives_it_no_identity",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:fb2da221b695fa2629b8472a8c4020b426dc1e18618e9d021b6fa8dbdc98864e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::the_documents_of_both_sides_of_a_file_are_neither_gone_nor_invalid_but_unknown",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:13b5f4ab8f1235307600977c48b4022e59cda533caee6047ef3a742d7e030686",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::two_sides_of_one_identity_are_that_documents_file_and_invalid_for_its_conflict",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4e54584512442fadcdc7b0776a7f3e9f3f6d2067",
+      "hash": "sha256:8bb85a9e3ff2718d90a5a5f27e205b1f5ad50af02b0319e88ff4fe9c62928ce1",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "113"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d1c-14f4-76a5-8d36-a9a72bc6c6a8"
+    }
+  ],
+  "id": "01a2212c-8151-704f-be38-615c71ddb9a3",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:fca4e7fc668f0edb2802e35fdf62b6e9aae8965eb6ddb45a58b2f7e720d4097a",
+  "seen_address": "98165322d41a06ea70957c345b3373e3c0512d83",
+  "subject": "01a21d1c-3dcc-7424-8d7c-f4754d3d404c",
+  "v": 1,
+  "verb": "approve"
+}

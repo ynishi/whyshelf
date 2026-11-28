@@ -6,8 +6,9 @@
 //! Which documents the `Depends` links of a document name is `Doc::depends_names`. The
 //! walk takes every valid document of the shelf whose links name one it reached,
 //! until none is left, and counts what it could not read the links of: a document
-//! whose links cannot be read, and a file whose identity cannot be read, may depend
-//! on the named without the walk seeing it.
+//! whose links cannot be read, a file left in a merge conflict a side of which shows a
+//! document not reached, and a file whose identity cannot be read, may depend on the
+//! named without the walk seeing it.
 //!
 //! | rule | what | the one place |
 //! |---|---|---|
@@ -49,10 +50,11 @@ impl Walked {
 }
 
 /// What a walk down from named documents could not follow, counted; at least one of
-/// the two counts is more than none.
+/// the three counts is more than none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Unwalked {
     invalid: usize,
+    sided: usize,
     unreadable: usize,
 }
 
@@ -61,6 +63,13 @@ impl Unwalked {
     /// are not valid.
     pub fn invalid(&self) -> usize {
         self.invalid
+    }
+
+    /// The files left in a merge conflict whose sides show different identities, one
+    /// of which the walk did not reach: each may be a document of a side not
+    /// reached.
+    pub fn sided(&self) -> usize {
+        self.sided
     }
 
     /// The files whose identity cannot be read: each may be any document.
@@ -76,9 +85,12 @@ impl Unwalked {
 ///   two files write may mean, included), until no other
 ///   does: down from the named, through the links as the documents hold them now.
 /// - What it could not follow, counted ([`Unwalked`]): an identity whose files are
-///   not valid and that the walk did not reach (its links cannot be read), and a file
-///   whose identity cannot be read (it may be any document). None when there is
-///   neither.
+///   not valid and that the walk did not reach (its links cannot be read), a file
+///   left in a merge conflict a side of which shows an identity the walk did not
+///   reach (it may be that document), and a file whose identity cannot be read (it
+///   may be any document). None when there is none of them. A file left in a merge
+///   conflict whose sides all show identities reached is not counted: whichever
+///   document it holds is reached.
 /// - Not counted: a file with no `id:` (it is no document and has no approval), and
 ///   a document that is gone (it has no file, and so no link now).
 pub(crate) fn walk(named: &NonEmptySet<DocId>, shelf: &Shelf) -> Walked {
@@ -104,9 +116,15 @@ pub(crate) fn walk(named: &NonEmptySet<DocId>, shelf: &Shelf) -> Walked {
         .keys()
         .filter(|id| !reached.contains(id))
         .count();
+    let sided = shelf
+        .sided()
+        .iter()
+        .filter(|file| file.shown().any(|id| !reached.contains(&id)))
+        .count();
     let unreadable = shelf.unreadable().len();
-    let untold = (invalid > 0 || unreadable > 0).then_some(Unwalked {
+    let untold = (invalid > 0 || sided > 0 || unreadable > 0).then_some(Unwalked {
         invalid,
+        sided,
         unreadable,
     });
     Walked { reached, untold }
@@ -351,6 +369,31 @@ mod tests {
         assert_eq!(untold(&walk(&named(&[1]), &s)), Some((0, 1)));
         let s = shelf(vec![fr(1, &[]), invalid(9), unreadable()]);
         assert_eq!(untold(&walk(&named(&[1]), &s)), Some((1, 1)));
+    }
+
+    #[test]
+    fn a_file_left_in_a_conflict_is_counted_only_while_a_side_it_shows_is_not_reached() {
+        use crate::domain::shelf::fixtures_tests::sided;
+        let counts = |walked: &Walked| {
+            walked
+                .untold()
+                .map(|u| (u.invalid(), u.sided(), u.unreadable()))
+        };
+        // The sides show 5 and 6, which no file carries.
+        let s = shelf(vec![fr(1, &[]), sided("findings/x.md", &[5, 6])]);
+        // Both reached: whichever the file holds is reached.
+        assert_eq!(counts(&walk(&named(&[5, 6]), &s)), None);
+        // One reached, or none.
+        assert_eq!(counts(&walk(&named(&[5]), &s)), Some((0, 1, 0)));
+        assert_eq!(counts(&walk(&named(&[1]), &s)), Some((0, 1, 0)));
+        // Beside a file that may be any document, each is counted apart.
+        let s = shelf(vec![
+            fr(1, &[]),
+            sided("findings/x.md", &[5, 6]),
+            unreadable(),
+        ]);
+        assert_eq!(counts(&walk(&named(&[1]), &s)), Some((0, 1, 1)));
+        assert_eq!(counts(&walk(&named(&[5, 6]), &s)), Some((0, 0, 1)));
     }
 
     #[test]

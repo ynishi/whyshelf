@@ -32,8 +32,12 @@
 //!   directory has no book, so it passes no book condition and no field condition.
 //!   A valid document is in the book of its file; an invalid identity passes the
 //!   book condition when any of its files is in an asked book (its files can lie in
-//!   different books); an identity no file carries ([`DocState::Gone`]) or that may
-//!   be in a file that could not be read ([`DocState::Unknown`]) has no book to ask.
+//!   different books); an identity no file carries and that a file may hold
+//!   ([`DocState::Unknown`]) passes it by the same rule when any file a side of a
+//!   merge conflict shows it in ([`MayHold::shown`](super::build::MayHold::shown)) is
+//!   in an asked book, and a file whose identity could not be read, which may hold
+//!   any, is no ground for it; an identity that is gone ([`DocState::Gone`]) has no
+//!   book to ask.
 //! - **The standing** is the [`StandingKind`] the caller gives, from
 //!   [`Standing::kind`](super::freshness::Standing::kind); any document has one,
 //!   whatever its state.
@@ -396,7 +400,14 @@ impl StatusFilter {
         let in_asked = |origin: &RelPath| {
             book_of(schema, origin).is_some_and(|book| self.ask.books.contains(book))
         };
-        state.files().into_iter().any(in_asked)
+        match state {
+            // The files a side of a merge conflict shows it in, by the same rule as the
+            // files of an invalid identity; a file that may hold any is no ground.
+            DocState::Unknown(may) => may.shown().iter().any(in_asked),
+            DocState::Valid(_) | DocState::Invalid(_) | DocState::Gone => {
+                state.files().into_iter().any(in_asked)
+            }
+        }
     }
 }
 
@@ -926,6 +937,30 @@ mod tests {
             assert!(admits(&by_standing, shelf, n, StandingKind::Retired));
             assert!(!admits(&by_standing, shelf, n, FRESH));
         }
+    }
+
+    #[test]
+    fn an_identity_a_side_of_a_conflict_shows_passes_the_book_of_that_file_and_no_other() {
+        use crate::domain::shelf::fixtures_tests::{sided, unreadable_at};
+        // A file of the book `decision` holds both sides of 1 and 2; a file of the
+        // book `note` may hold any.
+        let shelf = shelf_of(vec![
+            sided("decisions/x.md", &[1, 2]),
+            unreadable_at("notes/u.md"),
+        ]);
+        let in_books = |names: &[&str]| {
+            filter(StatusFilterAsk {
+                books: books(names),
+                ..ask()
+            })
+        };
+        for n in [1, 2] {
+            assert!(admits(&in_books(&["decision"]), &shelf, n, FRESH), "{n}");
+            assert!(!admits(&in_books(&["note"]), &shelf, n, FRESH), "{n}");
+        }
+        // An identity no side shows has no book, though a file may hold it.
+        assert!(!admits(&in_books(&["note"]), &shelf, 3, FRESH));
+        assert!(!admits(&in_books(&["decision"]), &shelf, 3, FRESH));
     }
 
     #[test]

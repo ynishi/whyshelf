@@ -378,11 +378,24 @@
 //! `>>>>>>>` lines) where the conflict touches a front matter is told by `check` as
 //! holding merge conflict markers, not as YAML that cannot be read, and is never
 //! skipped; a conflict only in the body of a file whose front matter reads is not told.
-//! When its sides show different identities, or one of them shows none, the file is
-//! one whose identity cannot be read, so the documents of both sides are `unknown` in
-//! `status`, naming it, until the conflict is resolved, and neither `gone` nor
-//! `invalid`; when every side shows the one identity, the file is that document's, and
-//! invalid.
+//! When each side shows one identity and they differ, the file holds the document of
+//! one of them: until the conflict is resolved, each of those documents that no other
+//! file carries is `unknown`, its presence naming the file in `shown`, and neither
+//! `gone` nor `invalid`; `check` and `health` give the file no `id` and list the
+//! identities in `sides`. Every other document is told as it would be without the
+//! file: one no file carries is `gone`. Such a document is found by its identifier
+//! (`get` answers it `unknown`, an approval refuses it, and `judge retire` retires it
+//! as any document that cannot be told), even with no record; a record of it that names no
+//! book is read with the book of the file (when every file that may hold it is under
+//! that book); `status --book` lists it under the book of the file when it has a
+//! record (one with none is not a row of `status`, the file is); and another file
+//! that carries one of its identifiers is invalid, as the file is, each naming the
+//! other. `reach` and `units` count the file in `untold` (`sided`), and the gate of
+//! `impact --within` does not pass while it is there (`sided_before`,
+//! `sided_after`). When one side shows no identity, or several, the file is one whose
+//! identity cannot be read, which may hold any document: every document no file
+//! carries is `unknown`, its presence naming the file in `unreadable`. When every
+//! side shows the one identity, the file is that document's, and invalid.
 //!
 //! `map` gives, for each book, `include`, `exclude` and `without_front_matter` as
 //! written, each null when not written.
@@ -1156,8 +1169,10 @@
 //!                             files of the project (`place`: `only` these files, `partly` these,
 //!                             or `unplaced` with why); and the files all of it is in. What may
 //!                             depend on them and cannot be read (a document that is not valid,
-//!                             a file whose identity cannot be read) is counted in `untold`, with
-//!                             a warning on stderr
+//!                             a file left in a merge conflict a side of which shows a document
+//!                             not reached, a file whose identity cannot be read) is counted in
+//!                             `untold` (`invalid`, `sided`, `unreadable`), with a warning on
+//!                             stderr
 //!   impact (--since <rev> [--until <rev> | --index] | --before <dir> [--after <dir>])
 //!                             whether a change makes approvals not hold: the project before
 //!                             and after it, read one way at both ends (Git: two commits, or a
@@ -1186,7 +1201,14 @@
 //!                             and whether the change stays inside the documents named
 //!                             (`within`): their reach on the project before the change
 //!                             (`reach_before`), a `verdict` for every document, what
-//!                             cannot be read at either end (`unreadable`), and `passes`.
+//!                             cannot be read at either end (`unreadable`: the files whose
+//!                             identity cannot be read, those left in a merge conflict whose
+//!                             sides show different identities, `sided_before` and
+//!                             `sided_after`, and the files of the ledger that are no record),
+//!                             and `passes`. A verdict that cannot be told because the
+//!                             document is on the shelf at neither end gives, at each end, the
+//!                             files that may hold it in the form of a presence (`shown`,
+//!                             `unreadable`).
 //!                             The verdicts and when the gate passes are on the page of
 //!                             `whyshelf_core::domain::shelf::within`, the one place they
 //!                             are stated. Each reference is read at the end before, or
@@ -1229,8 +1251,10 @@
 //!                             files of the documents and of the declaration are not counted.
 //!                             What could join units unseen (a document whose links cannot be
 //!                             read that is divided, or stood on or named by a document divided
-//!                             or of the chain; a file whose identity cannot be read) is counted
-//!                             in `untold`, with a warning on stderr. It writes nothing; exit 0
+//!                             or of the chain; a file left in a merge conflict a side of which
+//!                             shows such a document; a file whose identity cannot be read) is
+//!                             counted in `untold` (`invalid`, `sided`, `unreadable`), with a
+//!                             warning on stderr. It writes nothing; exit 0
 //!   stats [--since <time>]    how the work went, from the ledger: approvals made again, the time
 //!                             documents stayed pending, the runs of judge, and what changed
 //!                             under approvals made again

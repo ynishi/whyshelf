@@ -1,0 +1,160 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:eb319cef94a18ecaa84705cdc94d109e09bafb9d6d0baf10922b10c3f8978365",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moves_tests.rs::a_name_declared_moved_is_asked_about_as_its_new_name_and_nothing_gone_asks_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:475df32f9eb9f2dfcdb9a8216fd4f5f87e289822eeabb386b0235c7995d9b047",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moves_tests.rs::a_name_pinned_in_two_spaces_is_listed_with_a_note_and_never_asked_about",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:2044877a9d9b05e14fd8b267c41eeaff976c8a62b0f62a5a6de5589f0b13bedf",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moves_tests.rs::a_space_that_cannot_suggest_says_so_and_keeps_its_names",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:56187dfea576ed7b574d42279704dd3277c3fdedb332efb5f11718a177eea7bb",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moves_tests.rs::each_space_is_asked_once_about_its_gone_names_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6cc3c29954a1fdd0645294f67c2dc92cbe56c455eaaa80c07c28e14f396a2eb2",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/moves_tests.rs::the_answer_is_in_one_order_whatever_the_adapter_gives",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3ea946767000bba590ec2e0335b1a4cecce745cfd6451b0a698fe191a37a55d4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_name_is_gone_when_the_adapter_says_nothing_is_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4e76cc021c344d690437f07ab8c63d8a23686c702e544a1ae45a4b22122b0677",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::a_pin_of_presence_only_has_no_content_to_look_for",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c8066a0fbce6b3973977657f4bda2a2cb51d6e3ce2613b22e9ea2c9da1ea202a",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::suggestions_keep_every_gone_name_and_put_candidates_in_one_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:080763aa5586cf632ca157163a4a9e7688014d299dd1f01d15d2c5259e11f4e9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/moved_tests.rs::the_names_asked_about_are_those_pins_of_something_there_are_read_as_now",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "5ce44d3289fd5682822768e56a208f252fc83cd6",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9abd4e39efb864f0552f67a7a8bf0700ac8a900b4912008f5291335a76708637",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "9af5a53c7809fe491b0538ea305d226dc570d2bb",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:6a5f2005218c6a6527e7befaebaa0ca6bd92a5605c37100e04c08b906dc64ff2",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/git.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "9e35d3f7c2d1f74657a0fc24ef027fd45090170f",
+      "hash": "sha256:bf4d38258564cd819c20864b4715464f1cf2cfb7f54276dbcf3975396bd9bcf6",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "7"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3d2-fb7c-725e-8704-96f8a67f82a2"
+    },
+    {
+      "address": "5e1c17298ddd8bb542797aba6eb0d5290479c9a7",
+      "hash": "sha256:a16bbcf75527d6ddc5de0d1a09d38e3463e3138a4b8465865cc117582afe941f",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "45"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c60b-bc99-7728-b8d7-deea06f9c49b"
+    },
+    {
+      "address": "a62ae7682e25304886acc68cd237b34b358453ec",
+      "hash": "sha256:ca489565a7c7318de8e62eeca652efad4af7d092e73feac3582753b85dfd058b",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "60"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c952-5f6d-7754-a742-eed2ac8ed9c6"
+    }
+  ],
+  "id": "01a2212b-b192-72eb-8cdc-0b4801e83e54",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:5a731379c1ea17c2275fa130414cceaf46b370ec0d45bb098bd7d39416990cc2",
+  "seen_address": "dcf23e030721d1103038d70c3f1092d76748623b",
+  "subject": "01a1c952-60fb-7278-821f-98cf49e06403",
+  "v": 1,
+  "verb": "approve"
+}

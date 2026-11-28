@@ -2,13 +2,10 @@
 //! project of files: `check` names it as a file that holds conflict markers (not as a
 //! YAML error), and a document it may hold is not told to be gone or invalid by the
 //! side that happens to open the file. Where the two sides show different identities
-//! the file is one whose identity cannot be told, so `status` says so of the document
-//! of either side; where they show the same one, the file is that document's, and
-//! invalid.
-//!
-//! The last two tests hold what is left as it is: what a file whose identity cannot be
-//! told does to the answers about other documents is the shelf's rule for such a file,
-//! and a conflict is one more way into it.
+//! the file holds the document of one of them: `status` tells each as one that cannot
+//! be told, naming the file as one whose side shows it, and every other document as
+//! it would be without the file; where they show the same one, the file is that
+//! document's, and invalid.
 
 mod common;
 
@@ -84,7 +81,13 @@ fn merged(name: &str) -> Project {
 }
 
 fn status(project: &Project) -> Value {
-    let output = project.run(&["status"]);
+    status_of(project, &[])
+}
+
+fn status_of(project: &Project, args: &[&str]) -> Value {
+    let mut all = vec!["status"];
+    all.extend_from_slice(args);
+    let output = project.run(&all);
     assert_eq!(output.status.code(), Some(0));
     json(&output)
 }
@@ -96,20 +99,10 @@ fn the_documents_of_both_sides_of_a_file_are_neither_gone_nor_invalid_but_unknow
     for id in [A, B] {
         assert_eq!(
             row(&answer, id)["presence"],
-            value!({"state": "unknown", "unreadable": ["notes/N-1.md"]}),
+            value!({"state": "unknown", "shown": ["notes/N-1.md"], "unreadable": []}),
             "{id}"
         );
     }
-}
-
-#[test]
-fn a_document_whose_file_is_gone_is_unknown_while_a_conflict_is_there() {
-    let project = merged("conflict-unrelated");
-    let answer = status(&project);
-    assert_eq!(
-        row(&answer, C)["presence"],
-        value!({"state": "unknown", "unreadable": ["notes/N-1.md"]})
-    );
 }
 
 #[test]
@@ -152,37 +145,238 @@ fn two_sides_of_one_identity_are_that_documents_file_and_invalid_for_its_conflic
     assert!(!problems.is_empty());
 }
 
-/// What is left as it is: while a file holds both sides of two documents, a document
-/// no record is kept of is looked up as absent, though a file that cannot be told may
-/// hold it. The rule is the shelf's for any file whose identity cannot be told.
+/// A document whose file is gone and that no side of the conflict shows is gone, as it
+/// would be without the file.
 #[test]
-fn a_document_with_no_record_is_looked_up_as_absent_while_a_conflict_may_hold_it() {
+fn a_document_no_side_shows_whose_file_is_gone_is_gone_while_a_conflict_is_there() {
+    let project = merged("conflict-unrelated");
+    let answer = status(&project);
+    assert_eq!(row(&answer, C)["presence"], value!({"state": "gone"}));
+}
+
+#[test]
+fn check_tells_the_identities_the_sides_of_the_file_show() {
+    let project = merged("conflict-sides");
+    let answer = json(&project.run(&["check"]));
+    let invalid = answer["health"]["invalid"].as_array().unwrap();
+    let [file] = invalid.as_slice() else {
+        panic!("one file: {answer}");
+    };
+    assert_eq!(file["id"], Value::Null);
+    assert_eq!(file["sides"], value!([A, B]));
+    // A file of one identity has no sides.
+    let project = Project::new("conflict-no-sides");
+    put(&project, "notes/N-1.md", &one_note_in_conflict(A));
+    let answer = json(&project.run(&["check"]));
+    assert_eq!(answer["health"]["invalid"][0]["sides"], value!([]));
+}
+
+/// A document of a side that has no record is found by its identifier, and is told as
+/// one that cannot be told, naming the file.
+#[test]
+fn a_document_of_a_side_with_no_record_is_found_by_its_id_and_told_unknown_in_the_file() {
     let project = Project::new("conflict-lookup");
     put(&project, "notes/N-1.md", &both_sides(A, B));
     let output = project.run(&["get", A]);
     let answer = json(&output);
-    assert_eq!(output.status.code(), Some(2), "{answer}");
+    assert_eq!(output.status.code(), Some(0), "{answer}");
+    assert_eq!(answer["row"]["doc"]["id"], A);
     assert_eq!(
-        answer["messages"],
-        value!([format!("`{A}` names no document")])
+        answer["row"]["presence"],
+        value!({"state": "unknown", "shown": ["notes/N-1.md"], "unreadable": []})
     );
+    // An identifier no side shows names nothing.
+    let output = project.run(&["get", C]);
+    assert_eq!(output.status.code(), Some(2), "{}", json(&output));
 }
 
-/// What is left as it is: another file that writes the identity of one side is valid
-/// while the file that holds the conflict is there, and is not told to repeat it.
+/// Another file that writes the identity of one side, and the file that holds the
+/// conflict, are both invalid, each naming the other.
 #[test]
-fn another_file_of_the_identity_of_a_side_stays_valid_beside_the_conflict() {
+fn another_file_of_the_identity_of_a_side_and_the_file_of_the_conflict_are_both_invalid() {
     let project = Project::new("conflict-duplicate");
     put(&project, "notes/N-1.md", &both_sides(A, B));
     put(&project, "notes/N-3.md", &note(A, "N-3", "Another"));
     let answer = status(&project);
     let presence = &row(&answer, A)["presence"];
-    assert_eq!(presence["state"], "valid", "{presence}");
-    assert_eq!(presence["file"], "notes/N-3.md");
+    assert_eq!(presence["state"], "invalid", "{presence}");
+    assert_eq!(presence["files"], value!(["notes/N-3.md"]));
     let invalid = answer["health"]["invalid"].as_array().unwrap();
-    let files: Vec<&str> = invalid
+    let mut files: Vec<&str> = invalid
         .iter()
         .map(|file| file["file"].as_str().unwrap())
         .collect();
-    assert_eq!(files, ["notes/N-1.md"]);
+    files.sort_unstable();
+    assert_eq!(files, ["notes/N-1.md", "notes/N-3.md"]);
+    for (file, other) in [
+        ("notes/N-1.md", "notes/N-3.md"),
+        ("notes/N-3.md", "notes/N-1.md"),
+    ] {
+        let problems = &invalid.iter().find(|found| found["file"] == file).unwrap()["problems"];
+        let said = format!(
+            "the id {A} may be carried twice, by this file and {other}: one of them holds both sides of a merge conflict"
+        );
+        assert!(
+            problems.as_array().unwrap().iter().any(|p| p == &said),
+            "{file}: {problems}"
+        );
+    }
+}
+
+/// `status --book` lists a document of a side that has a record under the book of the
+/// file, and leaves out one that is gone.
+#[test]
+fn status_of_a_book_lists_the_documents_of_both_sides_with_their_records() {
+    let project = merged("conflict-book");
+    let answer = status_of(&project, &["--book", "note"]);
+    let mut ids: Vec<&str> = answer["docs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["doc"]["id"].as_str().unwrap())
+        .collect();
+    ids.sort_unstable();
+    assert_eq!(ids, [A, B]);
+}
+
+/// The book of notes admits `ana` only; the whole shelf (`[decide]`), `bo` only.
+const RULED: &str = r#"[[group]]
+name = "maintainers"
+members = ["ana"]
+
+[[group]]
+name = "others"
+members = ["bo"]
+
+[decide]
+default = ["others"]
+
+[[book]]
+name = "note"
+dir = "notes"
+key = { prefix = "N" }
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[book.decide]
+approve = ["maintainers"]
+"#;
+
+/// The records of `check` that are not admitted, as the text of its problems.
+fn not_admitted(project: &Project) -> String {
+    json(&project.run(&["check"]))["health"]["ledger_problems"].to_string()
+}
+
+/// A record about a document of a side that names no book is read with the rule of
+/// the book of the file, not with the rule of the whole shelf: an approval by `ana`
+/// is admitted and one by `bo` is not. Beside a file whose identity cannot be read
+/// instead, it is read with the rule of the whole shelf.
+#[test]
+fn a_record_of_a_side_that_names_no_book_is_read_with_the_rule_of_the_book_of_the_file() {
+    let project = Project::with("conflict-record-book", RULED, &note(A, "N-1", "Ours"));
+    let approved = project.run(&["judge", "approve", "N-1", "--actor", "ana"]);
+    let answer = json(&approved);
+    assert_eq!(approved.status.code(), Some(0), "{answer}");
+    assert_eq!(answer["judged"][0]["record"]["book"], "note");
+    // ana's record, made to name no book, and the same by bo under another identity.
+    let id = answer["judged"][0]["record"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let ledger = project.0.join(".whyshelf/ledger");
+    let file = ledger.join(format!("{id}.json"));
+    let mut record: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    record.as_object_mut().unwrap().remove("book");
+    fs::write(&file, serde_json::to_string_pretty(&record).unwrap() + "\n").unwrap();
+    const BY_BO: &str = "01a1c4f0-0000-7000-8000-0000000000fe";
+    record["actor"] = "bo".into();
+    record["id"] = BY_BO.into();
+    fs::write(
+        ledger.join(format!("{BY_BO}.json")),
+        serde_json::to_string_pretty(&record).unwrap() + "\n",
+    )
+    .unwrap();
+    // The file of A is left holding both sides of A and B.
+    put(&project, "notes/N-1.md", &both_sides(A, B));
+    let problems = not_admitted(&project);
+    assert!(
+        problems.contains(BY_BO) && problems.contains("`bo` may not approve"),
+        "{problems}"
+    );
+    assert!(!problems.contains(&id), "{problems}");
+    // A file whose identity cannot be read in its place: the whole shelf's rule.
+    put(&project, "notes/N-1.md", "---\n- a list\n---\nThe body.\n");
+    let problems = not_admitted(&project);
+    assert!(
+        problems.contains(&id) && problems.contains("`ana` may not approve"),
+        "{problems}"
+    );
+    assert!(!problems.contains(BY_BO), "{problems}");
+}
+
+/// `impact --within` does not pass while a file of the end after is left in a merge
+/// conflict, which it names apart from the files whose identity cannot be read; a
+/// document gone before that a side shows after cannot be told, with the file.
+#[test]
+fn impact_within_does_not_pass_while_a_file_is_left_in_a_conflict() {
+    // Before: A (`N-1`) and C (`N-3`), approved, and B, denied (so no approval of it
+    // has a cause the change could add or take away) and then removed.
+    let before = Project::new("conflict-within-before");
+    put(&before, "notes/N-2.md", &note(B, "N-2", "Theirs"));
+    put(&before, "notes/N-3.md", &note(C, "N-3", "Unrelated"));
+    for key in ["N-1", "N-3"] {
+        approve(&before, key);
+    }
+    let denied = before.run(&["judge", "deny", "N-2"]);
+    assert_eq!(denied.status.code(), Some(0), "{denied:?}");
+    fs::remove_file(before.0.join("notes/N-2.md")).unwrap();
+    // After: the same records, and `N-1.md` holds both sides of A and B.
+    let after = Project::new("conflict-within-after");
+    fs::create_dir_all(after.0.join(".whyshelf/ledger")).unwrap();
+    for entry in fs::read_dir(before.0.join(".whyshelf/ledger")).unwrap() {
+        let path = entry.unwrap().path();
+        fs::copy(
+            &path,
+            after
+                .0
+                .join(".whyshelf/ledger")
+                .join(path.file_name().unwrap()),
+        )
+        .unwrap();
+    }
+    put(&after, "notes/N-3.md", &note(C, "N-3", "Unrelated"));
+    put(&after, "notes/N-1.md", &both_sides(A, B));
+    let output = after.run(&[
+        "impact",
+        "--before",
+        before.0.to_str().unwrap(),
+        "--within",
+        "N-3",
+        "--exit-code",
+    ]);
+    let answer = json(&output);
+    assert_eq!(output.status.code(), Some(1), "{answer}");
+    let within = &answer["within"];
+    assert_eq!(within["passes"], false);
+    assert_eq!(
+        within["unreadable"]["sided_after"],
+        value!(["notes/N-1.md"])
+    );
+    assert_eq!(within["unreadable"]["sided_before"], value!([]));
+    assert_eq!(within["unreadable"]["files_after"], value!([]));
+    let b = within["docs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|doc| doc["doc"]["id"] == B)
+        .unwrap_or_else(|| panic!("a verdict of B: {answer}"));
+    assert_eq!(
+        b["verdict"]["untold"]["shelf"],
+        value!({
+            "before": {"shown": [], "unreadable": []},
+            "after": {"shown": ["notes/N-1.md"], "unreadable": []},
+        }),
+        "{b}"
+    );
 }

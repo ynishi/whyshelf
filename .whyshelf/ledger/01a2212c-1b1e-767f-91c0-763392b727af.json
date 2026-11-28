@@ -1,0 +1,129 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:4cec0afed89a0c9790081fd70f69f2c1474456c108a95361e8417b889e6beab3",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_kind_the_rule_neither_names_nor_defaults_is_open",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:8c640bcb90e8163589232c438b1008f83de157574ee1a4190673c30ef5e59e10",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_member_is_in_the_group_only_for_the_records_made_in_its_time",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f360da51721b3d887fb411ae1c3c88abf3a72da9e17e5b217f1d83f693e91656",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_project_that_declares_no_rule_admits_every_name",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9f720053fc17121c6474d33c33968892479a31aa163a57d2f1deac8b153a0d56",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_is_accepted_for_writing_only_when_the_rule_admits_it",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:60acfb0b6453319c7714d027118762706fe32d34f214c60258706c28167ead90",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_is_read_with_the_book_it_names_else_the_one_its_document_is_in_else_decide",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b19312451eab63ad15c3d5d41e21a56322838ce1fa237bbbc9a3e577f2efeb45",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_made_before_since_is_unruled",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7f960c3ce230b455eb6750cce1a38cf5d94452140de2250a63ab6142d20f6a0f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_not_admitted_is_withdrawn_by_a_name_admitted_to_revoke_and_by_no_other",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:36f254f3f41cb171c151ddb74174f5917ffa0f683754cb38c06547fbd4e69f5f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_that_names_no_book_keeps_its_form_and_one_that_names_one_reads_back",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:30951d1f40d199caf0e6312234d97c7ed7e414b73d916994ec2110437c0b27b4",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_the_rule_does_not_admit_is_not_used_and_is_a_problem_of_the_ledger",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "40a4375cb3971844cc47616914ddadbf9867c6d1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1268cd00de0f70b0a98c647f6aeb03bb24bb7ddfb2971e5e136f7efde84f1ba4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "74372b578812f77ad232998a3ae6850437d50c0a",
+      "hash": "sha256:c4919a08b4d76b57c731ea34aa818270de98a6e8e19f22ef683d5beacfec2fda",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "13"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c4ba-127a-726b-bdcc-3cb3ce7e5157"
+    },
+    {
+      "address": "9ace93bd6fff1be46a68ad5b488ded85fa507d0e",
+      "hash": "sha256:6599ee1d0b6414293d727c077a050734aa210b98e3b0fb8e0b64a6823ee85138",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "88"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f6a0-2c41-7b18-8d07-3f9a5e2b6c40"
+    }
+  ],
+  "id": "01a2212c-1b1e-767f-91c0-763392b727af",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:be029a812eddc8b619055a8ac21f0257d987839bc61cec11abe650dbb5650612",
+  "seen_address": "22b9bac11db475eb466dd40bffa0aca59ceecb6d",
+  "subject": "01a1f6a0-2c41-7d05-b6a1-9e4c2d7f3a63",
+  "v": 1,
+  "verb": "approve"
+}

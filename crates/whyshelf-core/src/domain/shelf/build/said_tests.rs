@@ -5,7 +5,7 @@
 use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonEmptyVec;
 
-use super::{Detail, DocFailure, DocProblem, FailureTag};
+use super::{Detail, DocFailure, DocProblem, FailureTag, MayHold};
 
 fn path(text: &str) -> RelPath {
     text.parse().expect("a path")
@@ -19,7 +19,14 @@ fn invalid() -> DocFailure {
 }
 
 fn unknown() -> DocFailure {
-    DocFailure::Unknown(NonEmptyVec::new(path("a.md"), vec![path("b/c.md")]))
+    DocFailure::Unknown(MayHold::of(Vec::new(), vec![path("a.md"), path("b/c.md")]).unwrap())
+}
+
+/// Unknown, with a file a side of a merge conflict shows the document in, and one
+/// that may hold any when `any` says so.
+fn shown(any: bool) -> DocFailure {
+    let any = if any { vec![path("u.md")] } else { Vec::new() };
+    DocFailure::Unknown(MayHold::of(vec![path("x.md")], any).unwrap())
 }
 
 #[test]
@@ -79,6 +86,20 @@ fn a_failure_in_full_tells_what_it_carries() {
         unknown().said_of(&subject, Detail::Full),
         "whether a file carries the document cannot be told; unreadable: a.md; b/c.md"
     );
+}
+
+#[test]
+fn an_unknown_failure_tells_the_files_a_side_shows_it_in_before_those_that_may_hold_any() {
+    for detail in [Detail::Full, Detail::Short] {
+        assert_eq!(
+            shown(false).said_of(&"A", detail),
+            "whether a file carries A cannot be told; shown by a side of: x.md"
+        );
+        assert_eq!(
+            shown(true).said_of(&"A", detail),
+            "whether a file carries A cannot be told; shown by a side of: x.md; unreadable: u.md"
+        );
+    }
 }
 
 #[test]

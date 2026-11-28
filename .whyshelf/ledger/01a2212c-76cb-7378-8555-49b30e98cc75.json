@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:687a7a6e63c2bb792ae21ce1b576ad82e2b9d8333abf8cbabb96c2572d7d62ac",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_declared_book_with_no_document_is_empty_and_a_book_not_declared_is_an_error",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:381cc396b3e8cbee9651f4b207a2772017c62204807fd1e341cd0d519ee952a5",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_file_of_the_book_that_is_no_valid_document_is_named_apart_with_no_id_among_them",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:aae968cb7c82a32b7d5dc5986dc77db996c9919cf269361a91f83c38a6605ca1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::a_null_an_empty_list_and_a_blank_text_name_nothing_and_are_valid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f02d5e02cc63b85aa40d7e0649083be7b9776e501f221ed0f5679e24d82c4dfe",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/book_links_tests.rs::each_document_of_the_book_names_its_artifacts_in_the_order_written_and_no_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:070643ee36de9923bc0de939d9c058e311a4f6f34d4656051b8f079796a1f123",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_counts_an_unreadable_file_as_invalid_in_its_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:517de72cb7c701d102cf6a65393b6ff83bb31df2668ff35db277b1c61facfdec",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_counts_valid_docs_and_invalid_files_per_book",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:003788e534e0aae542694862bff9af8fd652194006a1e4ba219749212ec3c588",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::tally_by_book_lists_an_empty_declared_book_with_zeros",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:af1899ee0c5ef5133f76a3993da7034f2d5884e3ba202024f6413f9ccef691aa",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/build/tests.rs::the_files_that_are_no_valid_document_are_the_invalid_the_unreadable_and_the_anonymous_in_that_order",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8dbfd04081b47210fdcda36617a845eb29e51251",
+      "hash": "sha256:d1fa6f90794b254132ee1d41aa477e97415c94acd431939a88bb97efd575cafe",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "112"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a2102b-3567-73b5-a69f-5a6bc7544b7c"
+    }
+  ],
+  "id": "01a2212c-76cb-7378-8555-49b30e98cc75",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:f9d5bb073e90d876c698929b41f26951d232abab6ddc424194a8679793b0816f",
+  "seen_address": "1dac71f07ede651d28c29194be758ea0f21ee3e4",
+  "subject": "01a2102b-3567-73b5-a69f-5a6cf95957a8",
+  "v": 1,
+  "verb": "approve"
+}

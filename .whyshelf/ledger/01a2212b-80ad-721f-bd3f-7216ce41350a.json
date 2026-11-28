@@ -1,0 +1,154 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:d0830414513800f3e39ca07ca72b92b99a48fef16141c19b887dd72811de7b95",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::a_not_covered_notice_serializes_with_its_kind_link_and_severity",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ff6ad74ff39f092858f2dafb3fe9453976b992c6508e0fd543d8e254d9db8ab2",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::a_notice_of_another_kind_has_no_severity",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:347f23b199e21827c08c217908e3d249962deaf6f7962fa6c3b798af4de8f275",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::a_warn_gap_is_listed_and_the_check_is_clean",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d039fe12e27bd325d71a5bfd9283d77711d11b08d51266cec3c744588ff28110",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::an_uncovered_document_is_listed_and_the_check_is_not_clean",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9222078eb33e200a467c38b795f980a27c2ba9c79d08746dc00ade82c1b549a4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/cover_tests.rs::only_a_warn_gap_is_a_warning_line",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:251f2bab872c4a6e9857430ec8af1a58118ed97cffc443ae4c9e06b7631e629d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs::a_link_to_artifacts_that_covers_shows_its_selection_in_the_json_and_the_drawing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d3773a9999861f539b52edf3d5fe4a1d7669f491dcab952b556c2a1f5c0403f0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/src/books/output/map_tests.rs::the_json_holds_the_books_and_links_as_data",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:999400578c2c2665e93fe33afc85e81a77c114ca583f5dbb7f1ba7f15ca45611",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs::a_warn_gap_is_listed_with_its_strength_and_leaves_the_check_clean",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d9b3129047fbae7115b3c17df83d4299e03e260ed6b28dd4b0701f1c014ddcea",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs::an_error_gap_fails_the_check",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9a399ea55bd006cc6dfe778b27ece17850d52b9fd1be654cee1e5a6cd6df307c",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/cover_tests.rs::books_check_lists_an_uncovered_document_and_is_not_clean",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a44800f8e7a5475ac6ac24f391f87d48e88475652cccf7eb14cc99f882fdb8c1",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/freshness/cover_tests.rs::each_notice_carries_the_strength_its_link_declares",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f3d8735b5950f85e1f29f774f163965207e5e120304cbc317ffaab3e7bc5d39b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs::a_cover_word_that_is_no_strength_is_refused_and_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7902d1eeac68d990cc3e00091650729686218c0bc7c23c01f539da14a2ec6f89",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs::an_unknown_cover_word_on_a_link_to_artifacts_is_refused_and_named",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:841da0d2127a2ab225c7792a14ccf50c71c3c903711de35e578be7bec5b20c3b",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs::cover_is_none_unless_declared",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:edec7af506d273b4d9a33b4341921987d23c23a83306c07ed2dc230969498719",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/schema/cover_tests.rs::each_accepted_cover_is_read_to_its_strength",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "40a4375cb3971844cc47616914ddadbf9867c6d1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:1268cd00de0f70b0a98c647f6aeb03bb24bb7ddfb2971e5e136f7efde84f1ba4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/books.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795852771753,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7f1475e48793df1910e2f24a8c2e80cb5b415735",
+      "hash": "sha256:f90ba654512de18d1e2584482cb12204ca1c85ad3480c661fa7085ab1d72b10a",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "50"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c690-6834-77b2-8c4a-bd554e7eb233"
+    }
+  ],
+  "id": "01a2212b-80ad-721f-bd3f-7216ce41350a",
+  "kind": "decision",
+  "reason": "The shelf now keeps a file left in a merge conflict whose sides show different identities apart and tells what may hold a document as one value (#217), so the tests and helpers these verifications name changed in their imports, fixtures and the shape of what cannot be told, and DEC-12, DEC-36, DEC-113, F-91, V-139 and V-140 say what DEC-115 now decides; what each of these documents claims and the tests it names still hold, checked by the author's reading of the diff and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:b19f15118eb521cdb2bda9a472dcded6103faa244512f79c08e8c953640965e8",
+  "seen_address": "c811212b7ff0044c341e4c916260935bd3bb2239",
+  "subject": "01a1c690-6934-715f-b849-9529ca617d8a",
+  "v": 1,
+  "verb": "approve"
+}

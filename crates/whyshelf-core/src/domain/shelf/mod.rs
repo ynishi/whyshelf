@@ -258,7 +258,11 @@
 //!   snapshot keeps it apart too: the [`FailureTag`] of a document it cannot tell is
 //!   `Unknown`, not `Gone`. That it is broken, and not a notice as a name of an
 //!   artifact that cannot be told is ([`ArtifactState::Unknown`]), is because the
-//!   files it may be in are the shelf's own and invalid.
+//!   files it may be in are the shelf's own and invalid. A file left in a merge
+//!   conflict whose sides each show one identity, and not the same one
+//!   ([`ReadId::OneOf`]), may hold only those: an identity none of its sides shows is
+//!   not made unknown by it. A document of a side that has no record is no row of
+//!   `status`; the file is listed with the identities its sides show.
 //! - **Incremental reading is out of scope.** [`Shelf::build`] takes every file.
 //! - **A key in a file that cannot be parsed is not seen.** A file whose front
 //!   matter is no mapping shows no key, so [`Shelf::next_key`] and
@@ -359,6 +363,7 @@
 //! [`Linkage`]: trace::Linkage
 //! [`DocState::Unknown`]: build::DocState::Unknown
 //! [`DocState::Gone`]: build::DocState::Gone
+//! [`ReadId::OneOf`]: build::ReadId::OneOf
 //! [`Cycle`]: graph::Cycle
 //! [`CycleSource::Links`]: graph::CycleSource::Links
 //! [`CycleSource::Frames`]: graph::CycleSource::Frames

@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c54035133245ca19890a033e254ec6437692a014aaedae149af68f50d99f30b7",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_no_side_shows_whose_file_is_gone_is_gone_while_a_conflict_is_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:d2c47dff92dc8c1d8e2636b0c38fe0d548429886ef29d2144f685f8490b31258",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_of_a_side_with_no_record_is_found_by_its_id_and_told_unknown_in_the_file",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:7be466b975942812ae42038e6dd63a83e1f6c4f6440f6b9eccaf58c4b177020c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::another_file_of_the_identity_of_a_side_and_the_file_of_the_conflict_are_both_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a9658c59f636987aa72f1df3b9f492f0343c7d40470d1ed2dafeebc3a5ea039a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::check_tells_the_identities_the_sides_of_the_file_show",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3266058a27c0ba0590eb08ecb70db3efd4562cd8d37083ff4d727e2f6816c0f0",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::impact_within_does_not_pass_while_a_file_is_left_in_a_conflict",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:baef35c25704cd85265920d6089e40beb3235f368efbbe3141c94202a2eade9c",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::status_of_a_book_lists_the_documents_of_both_sides_with_their_records",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:eede7939eb51256c0036ddba1e16085c3e69f4e5dc45a82f7c0d0ee23735c32e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_file_left_in_a_merge_conflict_whose_sides_are_not_reached_is_counted_and_said",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:09599642bf895875712f830992c98117b47be9e39d15d27cbebb804c3ab29195",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::a_file_left_in_a_merge_conflict_whose_side_is_divided_is_counted_and_said",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795852758098,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7a9c36b367e113087eca7e905c0cf238ebff9c93",
+      "hash": "sha256:bbf8f0e9bfe405e59888ac366381df2a4981646888d9fcf6c99e19f7d2c5e446",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "115"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a22124-cc85-770f-a545-bfdbd5f53974"
+    }
+  ],
+  "id": "01a2212a-9f58-7201-99b9-e4f847a6a25e",
+  "kind": "decision",
+  "reason": "A file left in a merge conflict whose sides each show one identity now holds one of them, so only those documents are told as ones it may hold, each found by its identifier, read with the book of the file and told beside another file of its identifier, as DEC-115 says (#217); checked by an independent design review, the author's reading of the diff, the unit and end-to-end tests these verifications name, and the full test suite",
+  "revision": "7519030307d85ac29d95c8f455b7c3448df2db95",
+  "seen": "sha256:48fb080fa63a3f194ca435703123d3112d1414ae7bdc2fe4511a83f1886c81dc",
+  "seen_address": "da545de2e7dd40b262323f999796be1debd1c660",
+  "subject": "01a22125-2876-752b-8a78-b21833a93ac5",
+  "v": 1,
+  "verb": "approve"
+}

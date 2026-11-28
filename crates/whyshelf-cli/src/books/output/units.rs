@@ -106,6 +106,10 @@ pub struct UnjoinedOut {
     /// The documents whose links cannot be read (their files are not valid) that are
     /// divided, or stood on or named by a divided document or one of the chain.
     pub invalid: usize,
+    /// The files left in a merge conflict whose sides show different identities, one
+    /// of which is divided, or stood on or named by a divided document or one of the
+    /// chain.
+    pub sided: usize,
     /// The files whose identity cannot be read: each may be any document.
     pub unreadable: usize,
 }
@@ -226,6 +230,7 @@ pub fn units(report: &UnitsReport) -> UnitsOut {
             .collect(),
         untold: report.units.untold().map(|u| UnjoinedOut {
             invalid: u.invalid(),
+            sided: u.sided(),
             unreadable: u.unreadable(),
         }),
         health: namer.health(&report.health),
@@ -242,7 +247,7 @@ pub fn units_warnings(report: &UnitsReport) -> Vec<String> {
         .map(|u| {
             format!(
                 "warning: {} may join units told apart",
-                unread(u.invalid(), u.unreadable())
+                unread(u.invalid(), u.sided(), u.unreadable())
             )
         })
         .collect()
