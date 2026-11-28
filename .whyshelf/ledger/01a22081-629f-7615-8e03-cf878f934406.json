@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:c57dae99c25dbbc8ea3170e698f055fd510129abb21199041c03c229fd6312ef",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/ledger/admit_tests.rs::a_record_naming_no_book_is_read_with_decide_when_only_a_file_without_an_identity_may_hold_its_document",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "01e00d954be4f2c8f5985055daffac1b23f7eac3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0f0db7057d295a989cd715c60885ff1a2082bb8e6ca8685e89311062aa610e6c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795841654339,
+  "expires": null,
+  "frame": [
+    {
+      "address": "7d2610b8c2f4f61315a6b8f879801bdd52cfd720",
+      "hash": "sha256:372e60e6a8a65af827135faafe936ca93aff0d13e4427a4d385ab8b8bc7d0c48",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "113"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d1c-14f4-76a5-8d36-a9a72bc6c6a8"
+    }
+  ],
+  "id": "01a22081-629f-7615-8e03-cf878f934406",
+  "kind": "decision",
+  "reason": "The reading of a conflict sets a byte order mark before the marker that starts the text aside, in the one function the reading of the first line calls too, and DEC-113 and V-139 say so (#221); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "0ca4b65d85edad09af0c7ae487aaa84a1497bbf5",
+  "seen": "sha256:0d3c586eab632d6672083a8ed8c96964b17fd74ab12432b083064b447269f16c",
+  "seen_address": "d357551b0834fc38e7628a085ef7ebe962f5bd1d",
+  "subject": "01a21d1c-291c-77b7-8e67-8824d74f1d69",
+  "v": 1,
+  "verb": "approve"
+}

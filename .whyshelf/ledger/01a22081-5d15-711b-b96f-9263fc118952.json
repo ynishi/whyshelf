@@ -1,0 +1,68 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::build::RawProblem",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::docs::read",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795841654339,
+  "expires": null,
+  "frame": [
+    {
+      "address": "cb8244680bcb0664dbb1895e66bee8ae3968ac50",
+      "hash": "sha256:8e0fccfd105966422f6b6742e250c2d94d40fa555f9f7b1566f6a13851b5882e",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a1c4ba-1073-7374-81ec-909d2fd379d1"
+    }
+  ],
+  "id": "01a22081-5d15-711b-b96f-9263fc118952",
+  "kind": "decision",
+  "reason": "The reading of a conflict sets a byte order mark before the marker that starts the text aside, in the one function the reading of the first line calls too, and DEC-113 and V-139 say so (#221); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "0ca4b65d85edad09af0c7ae487aaa84a1497bbf5",
+  "seen": "sha256:372e60e6a8a65af827135faafe936ca93aff0d13e4427a4d385ab8b8bc7d0c48",
+  "seen_address": "7d2610b8c2f4f61315a6b8f879801bdd52cfd720",
+  "subject": "01a21d1c-14f4-76a5-8d36-a9a72bc6c6a8",
+  "v": 1,
+  "verb": "approve"
+}

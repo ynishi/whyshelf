@@ -1,0 +1,160 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:97a10eb4a17d8411c2735f756f56b72d6573ac343e48f5fbcf865ebd6bbcef8e",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/new_doc_tests.rs::a_file_already_at_the_path_is_never_replaced",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a2fc159a0d289a97902d5e431e039f93e3d2f9a06400a1b6efa95e2b338f75cb",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs::a_refused_later_request_writes_none_of_the_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:4c17a10cd81795b6cf4492261d107875c055dd7f4ebb623f0d1b6392104f3548",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs::a_run_declares_an_upstream_and_its_downstream_in_order",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b034f1eb0a79beffc0a9ceb862c2c65b09869d2edfe2bed3c07a24a8a9e836e0",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs::the_same_edit_named_twice_in_one_run_is_refused_the_second_time",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:27f0b6e1f0f5b35224cde09b916f790bc71ca5a9b8fa666248eeb2dc3822452f",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/same_meaning_tests.rs::withdrawing_what_cannot_be_withdrawn_is_refused_and_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b0633d1d3ac0908bdc61464154cc1b39b84b6dcfd67081edc05eff339018c068",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::a_refused_judgement_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3a5a90f10a0b93b3f588296ea87191d79b8d81ccfe3eaa042857a26c365c8120",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::judge_all_approves_an_upstream_and_its_downstream_in_one_run",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:db8fb2c4cdb450b3d18f117ea492a76ee1ac1f150e5b4476e0a5fd9b72133e93",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::judge_all_of_nothing_is_an_empty_run_that_writes_nothing",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:c72ae587ef261971cf59d7f6e7f8b816eab10700b64a75501339946db40071c9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/tests.rs::judge_all_writes_nothing_when_a_later_request_is_refused",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "01e00d954be4f2c8f5985055daffac1b23f7eac3",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0f0db7057d295a989cd715c60885ff1a2082bb8e6ca8685e89311062aa610e6c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/docs.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "47e2c6c9b0f0d9a8461ab457b9049d72b051b0b1",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:73798f986fabc1f7508efca306c6ceae359173019f05c91d13e9b89362e36f80",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/ledger.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795841654339,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d1d881bcfe383a435dc95a44292907393ab16dbc",
+      "hash": "sha256:b0d7183d426e1c555cd1199b5ace3d0a55ce10fd6f4a7b4d8cf1fa9ffd2e9c12",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "8"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c3eb-4cc2-7179-8acb-f6442ce9a900"
+    },
+    {
+      "address": "b2658e3ea467b40ba29fb5f907ece7c9fffb8c1b",
+      "hash": "sha256:4801f4277e4358483975f11c893726ace7decb09a0fc761397164c782163738e",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "27"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-ce54-705b-a4fb-17382395564a"
+    },
+    {
+      "address": "70a5dd9de54859341dbb149ca40373305205c37d",
+      "hash": "sha256:cd35831f4a42399efcdeb7bd78922f5392b0d77c54ab52fe052d07d73e6453b5",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "29"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c55d-d380-7483-b160-18e3d1ecd75a"
+    }
+  ],
+  "id": "01a22081-3dcd-74e8-8e86-2bf1f89d68ec",
+  "kind": "decision",
+  "reason": "The reading of a conflict sets a byte order mark before the marker that starts the text aside, in the one function the reading of the first line calls too, and DEC-113 and V-139 say so (#221); what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "0ca4b65d85edad09af0c7ae487aaa84a1497bbf5",
+  "seen": "sha256:d62fa60dd298e63c294806ae4a292703e599438d10324162c2b31b39e5b73ffd",
+  "seen_address": "6f12dc5a8151c480999d8470a766dc452043d7a6",
+  "subject": "01a1c4ba-19a6-76f9-a7c1-40f9f8460ecf",
+  "v": 1,
+  "verb": "approve"
+}
