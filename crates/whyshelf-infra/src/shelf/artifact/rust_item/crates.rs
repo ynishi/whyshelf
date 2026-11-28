@@ -305,15 +305,21 @@ mod tests {
     /// What the page `text` is of, as a file or the reason an item placed by it is
     /// told, where neither the root nor the build directory is a whole path of it.
     async fn of(crates: &Crates, text: &str) -> Result<RelPath, String> {
+        let page = page(text);
+        match source_of(crates, text).await {
+            SourceOf::File(file) => Ok(file),
+            other => Err(other.unplaced(&page).unwrap_or_default()),
+        }
+    }
+
+    /// What the page `text` is of, as the value itself, where neither the root nor the
+    /// build directory is a whole path of it.
+    async fn source_of(crates: &Crates, text: &str) -> SourceOf {
         let sited = Sited {
             root: Forms::new(PathBuf::from("/nowhere/root"), None),
             build: Forms::new(PathBuf::from("/nowhere/build"), None),
         };
-        let page = page(text);
-        match crates.file_of(&page, &sited).await {
-            SourceOf::File(file) => Ok(file),
-            other => Err(other.unplaced(&page).unwrap_or_default()),
-        }
+        crates.file_of(&page(text), &sited).await
     }
 
     async fn crates_at(root: &Path) -> Crates {
@@ -358,11 +364,11 @@ mod tests {
                 .unwrap_err()
                 .contains("out of the project")
         );
-        assert!(
-            of(&crates, "src/serde/lib.rs.html")
-                .await
-                .unwrap_err()
-                .contains("is no crate of the manifests read")
+        // A crate the manifests read do not name, every manifest read: no crate of
+        // them, told apart from one not found while a manifest could not be read.
+        assert_eq!(
+            source_of(&crates, "src/serde/lib.rs.html").await,
+            SourceOf::NoCrate
         );
         assert!(of(&crates, "my_demo/struct.A.html").await.is_err());
     }
