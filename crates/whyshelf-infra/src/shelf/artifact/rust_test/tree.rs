@@ -1991,7 +1991,8 @@ pub(super) struct ModuleTrees {
 impl ModuleTrees {
     /// The targets of the project at `side` and the tree of each.
     pub(super) async fn of(space: &RustTestSpace, side: Side) -> Self {
-        let targets = Targets::of(&space.state, side).await;
+        // The manifests the space `rust-item` reads too: one rule for both.
+        let targets = Targets::of_project(&space.state, side).await;
         let mut reads = Reads::default();
         let mut trees = Vec::with_capacity(targets.all().len());
         for target in targets.all() {
@@ -3144,6 +3145,35 @@ mod tests {
             held(&text(r, "tests/common/mod.rs::in_common").await),
             ["tests/a.rs crate", "tests/b.rs crate", "tests/c.rs crate"]
         );
+    }
+
+    #[tokio::test]
+    async fn with_no_manifest_at_the_root_the_crate_of_a_directory_at_the_top_is_read_as_rust_item_reads_it()
+     {
+        let dir = project(&[
+            ("crate/Cargo.toml", PACKAGE),
+            ("crate/src/lib.rs", "pub fn x() {}\n"),
+            (
+                "crate/tests/a.rs",
+                "mod common;\n#[test]\nfn a() { common::help(); }\n",
+            ),
+            ("crate/tests/common/mod.rs", "pub fn help() {}\n"),
+            // One deeper is no package of the manifests read: its test holds nothing.
+            ("deep/er/Cargo.toml", PACKAGE),
+            ("deep/er/src/lib.rs", "pub fn x() {}\n"),
+            (
+                "deep/er/tests/b.rs",
+                "mod common;\n#[test]\nfn b() { common::help(); }\n",
+            ),
+            ("deep/er/tests/common/mod.rs", "pub fn help() {}\n"),
+        ])
+        .await;
+        let r = dir.path();
+        assert_eq!(
+            held(&text(r, "crate/tests/a.rs::a").await),
+            ["crate/tests/common/mod.rs crate::common"]
+        );
+        assert!(held(&text(r, "deep/er/tests/b.rs::b").await).is_empty());
     }
 
     #[tokio::test]

@@ -548,7 +548,10 @@
 //! of an outer attribute of the part or of a module above it (a `cfg` there that
 //! stops the part from being compiled among them) leaves it fresh, while an inner
 //! `#![cfg(..)]` inside the part is an item beside; and a test in a file no crate
-//! compiles reads as there. A file that cannot be read, is too large
+//! compiles reads as there. The crates are those of the manifests read by the one
+//! rule `rust-item` reads them by (the `Cargo.toml` at the root with its workspace,
+//! else that of each directory at the top of the tree with its own), so a crate in a
+//! directory of its own compiles its files for both spaces. A file that cannot be read, is too large
 //! or does not lex cannot be told, nor can a test under a module declared out of line
 //! (`mod x;`), whose file is not followed: name such a test by the file of its
 //! module. Macros are not expanded: a test not found where a macro may make it (an

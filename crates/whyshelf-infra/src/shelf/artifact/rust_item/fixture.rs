@@ -14,6 +14,8 @@ use std::path::{Path, PathBuf};
 
 use whyshelf_core::app::shelf::Side;
 
+use super::super::super::state::ProjectTree;
+use super::super::super::state::files::FileStates;
 use super::docs_tree::DocsTree;
 use super::held::HeldDocs;
 use super::layout::GENERATOR_MARK;
@@ -23,8 +25,10 @@ use super::lookup::Lookup;
 /// against nothing ([`HeldDocs::for_walk_tests`]): what a test of how a page is walked
 /// makes, with no space around it.
 pub(super) async fn walk_lookup(root: &Path, docs: PathBuf, max_page: u64) -> Lookup {
+    let state = ProjectTree::files(FileStates::new(root.to_path_buf()));
+    let docs = DocsTree::at(root, docs).await;
     Lookup::on(
-        HeldDocs::for_walk_tests(DocsTree::at(root, docs).await, Side::After),
+        HeldDocs::for_walk_tests(&state, docs, Side::After).await,
         max_page,
     )
 }

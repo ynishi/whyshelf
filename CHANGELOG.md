@@ -74,7 +74,9 @@ and this project adheres to
   read are the `Cargo.toml` at the root with its workspace, and, when the root
   has none, the `Cargo.toml` of each directory at the top of the tree with its
   workspace, so a project whose crate is in a directory of its own is answered
-  as before (#228).
+  as before (#228). The space `rust-test` reads the crates of a project by the
+  same rule, so a test of such a crate now holds the helpers it names (an
+  approval of one may go stale once) where its file was in no crate (#228).
 - Docs built for some crates of the project only, where a crate documented
   depends by a path on a crate of the project whose pages of the source they do
   not hold, cannot be told (`not_of_sources`, `no_trace`): what it re-exports of

@@ -1,0 +1,84 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:883acaeed36f01918e5679ee5908043b690e238cddf9f3573fe2bc74b6dfc951",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact/comparison_tests.rs::a_thing_there_with_no_content_read_has_the_presence_hash_only",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "4130ab62bc40d59309f0c1d45d6339059cfb4714",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:36efa595e1f222bbb8a455965d0df48085ba89e90f7596c54d676601c47199ac",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "d72a1248156a0808c7434ec28ce2ae27e20bd282",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:678233a3ef9145d882af3832422140a48c890e139b533638ebfa167af82ffec8",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "aea99f69b14b05ce7f02d5f9742e28186182a94d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a87cca64c098f0d3d592b806caa6fcb561ce75b7c249f9b0c7b4eb86c93aa1c7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/tree_fixtures_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795877905440,
+  "expires": null,
+  "frame": [
+    {
+      "address": "da6b7f80d19decb4aaa221ee08a900089ae2b27e",
+      "hash": "sha256:8ba365062086afa6bb84e836ddee30c711abcbc12caa06d085e4d524b0029c54",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "54"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c811-cfe5-739d-9535-559effdfed85"
+    }
+  ],
+  "id": "01a222aa-5515-77d5-bc77-622708f86fbc",
+  "kind": "decision",
+  "reason": "For #228, after a second review of the follow-up of #225: DEC-116 says a build script's output is told by cargo's form of the package directory, and that rust-test reads the crates of a project by the one rule of rust-item; DEC-90 and DEC-99 say the same of the manifests read; V-145 and V-111 say what the new tests hold (a link at the top of the docs passed over, a look-alike path compared, the reason that names a crate and the one whose pages are missing, a crate at the top of a project with no manifest at its root read by rust-test). Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "e40bd2805eca166a53dc5600d275581095f5a721",
+  "seen": "sha256:5edc3a43fb4cf2a6cc90015168cb3dadfeae87c8150209ff76f2ec152aafa821",
+  "seen_address": "314a00b073099e2cc8320848329f86660f0817af",
+  "subject": "01a1c811-d70c-739c-8751-d1f0cc5e7347",
+  "v": 1,
+  "verb": "approve"
+}

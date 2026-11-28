@@ -92,25 +92,35 @@ pub(super) struct HeldDocs {
     docs: DocsTree,
     /// What the docs are said as.
     read: NonBlank,
-    /// The crates of the project held; none for the tests of the walk, every crate.
-    held: Option<BTreeSet<String>>,
-    /// The crates of the manifests and where the docs were built: none for the tests
-    /// of the walk.
-    sources: Option<(Crates, Sited)>,
+    /// The crates of the project held.
+    held: BTreeSet<String>,
+    /// The crates of the manifests and where the docs were built.
+    sources: (Crates, Sited),
 }
 
 impl HeldDocs {
-    /// The docs `docs` of `side`, held against nothing: the mark the tests of how a
-    /// page is walked use, every crate taken as held.
+    /// The docs `docs` of `side` of the tree `state`, held against nothing: the mark
+    /// the tests of how a page is walked use, each directory at the top of the docs
+    /// taken as a crate held. It is a mark of the one shape [`hold`] makes, so the code
+    /// that reads one has no other to tell apart.
     #[cfg(test)]
-    pub(super) fn for_walk_tests(docs: DocsTree, side: Side) -> Self {
+    pub(super) async fn for_walk_tests(state: &ProjectTree, docs: DocsTree, side: Side) -> Self {
         let read = NonBlank::from(TextLiteral::new("the built docs of a test"));
+        let held = match listed(&docs, side, &DocsPath::top()).await {
+            Listed::Entries(top) => top.into_keys().collect(),
+            Listed::Absent | Listed::NotADir(_) | Listed::Unread(_) => BTreeSet::new(),
+        };
+        let crates = Crates::of(state, side).await;
+        let sited = match Sited::of(state, side, &docs).await {
+            Ok(sited) => sited,
+            Err(e) => panic!("the places of the docs of a test: {e}"),
+        };
         Self {
             side,
             docs,
             read,
-            held: None,
-            sources: None,
+            held,
+            sources: (crates, sited),
         }
     }
 
@@ -125,24 +135,24 @@ impl HeldDocs {
     }
 
     /// The crates of the manifests and where the docs were built, to place a name.
-    pub(super) fn sources(&self) -> Option<(&Crates, &Sited)> {
-        self.sources.as_ref().map(|(crates, sited)| (crates, sited))
+    pub(super) fn sources(&self) -> (&Crates, &Sited) {
+        (&self.sources.0, &self.sources.1)
     }
 
     /// Whether the docs of the crate `krate` were held: a crate of the manifests read
     /// is, and any other (a dependency's, or one of a package those manifests do not
     /// reach) is not of the sources of the project, with no trace of them.
     pub(super) fn crate_of(&self, krate: &str) -> Result<(), NotOfSources> {
-        match &self.held {
-            Some(held) if !held.contains(krate) => Err(NotOfSources::new(
-                reason(format!("the docs of the crate `{krate}` in {}", self.read)),
-                NotOfSourcesWhy::NoTrace,
-                NonBlank::from(TextLiteral::new(
-                    "it is no crate of the manifests read (the one at the root of the project, else the one of each directory at its top): name an item of a crate they name, or make them name it",
-                )),
-            )),
-            Some(_) | None => Ok(()),
+        if self.held.contains(krate) {
+            return Ok(());
         }
+        Err(NotOfSources::new(
+            reason(format!("the docs of the crate `{krate}` in {}", self.read)),
+            NotOfSourcesWhy::NoTrace,
+            NonBlank::from(TextLiteral::new(
+                "it is no crate of the manifests read (the one at the root of the project, else the one of each directory at its top): name an item of a crate they name, or make them name it",
+            )),
+        ))
     }
 }
 
@@ -182,8 +192,8 @@ pub(super) async fn hold(
                 side,
                 docs,
                 read,
-                held: Some(held),
-                sources: Some((crates, sited)),
+                held,
+                sources: (crates, sited),
             });
         }
         Listed::NotADir(why) | Listed::Unread(why) => return Err(unread(why)),
@@ -197,9 +207,13 @@ pub(super) async fn hold(
         },
         _ => BTreeSet::new(),
     };
+    // The directories of crates at the top of the docs; anything else there (a file, a
+    // symbolic link, whatever it leads to) is no crate the build wrote, and is passed
+    // over. A crate of the project is held by its pages of the source, which are listed
+    // apart, so a link at the top hides none.
     let mut built = BTreeSet::new();
     for (name, kind) in &top {
-        if name == SOURCE_DIR || !matches!(kind, EntryKind::Dir | EntryKind::Link) {
+        if name == SOURCE_DIR || *kind != EntryKind::Dir {
             continue;
         }
         let Some(dir) = DocsPath::top().join(name) else {
@@ -240,12 +254,18 @@ pub(super) async fn hold(
     // What a crate held re-exports of a crate of the project it depends on is held
     // only through the pages of that crate's source.
     for krate in &held {
-        if crates
+        if let Some(missing) = crates
             .path_dependencies(krate)
-            .iter()
-            .any(|dependency| !held.contains(dependency))
+            .into_iter()
+            .find(|dependency| !held.contains(dependency))
         {
-            return Err(not(NotOfSourcesWhy::NoTrace));
+            return Err(NotOfSources::new(
+                read.clone(),
+                NotOfSourcesWhy::NoTrace,
+                reason(format!(
+                    "the docs of `{krate}` hold no page of the source of `{missing}`, which it depends on by a path: build the docs of both (such as `cargo doc --no-deps` of every crate of the project)"
+                )),
+            ));
         }
     }
     pages.sort();
@@ -329,8 +349,8 @@ pub(super) async fn hold(
         side,
         docs,
         read,
-        held: Some(held),
-        sources: Some((crates, sited)),
+        held,
+        sources: (crates, sited),
     })
 }
 

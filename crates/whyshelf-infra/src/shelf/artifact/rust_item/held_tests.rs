@@ -388,7 +388,7 @@ async fn a_page_by_the_whole_path_of_the_build_directory_is_not_compared_and_one
     crate_docs(&docs, "demo").await;
     write(&docs, "src/demo/lib.rs.html", &source_page(LIB)).await;
     let built = format!(
-        "{}/debug/build/demo-1/out/made.rs",
+        "{}/debug/build/demo-0123456789abcdef/out/made.rs",
         whole_path(&root.join("out"))
     );
     write(
@@ -503,7 +503,10 @@ async fn a_page_by_the_resolved_path_of_a_build_directory_reached_through_a_link
         .await
         .unwrap();
     assert_ne!(resolved, root.join(TARGET_DIR_NAME));
-    let built = format!("{}/debug/build/demo-1/out/made.rs", whole_path(&resolved));
+    let built = format!(
+        "{}/debug/build/demo-0123456789abcdef/out/made.rs",
+        whole_path(&resolved)
+    );
     write(
         &docs_of(&root),
         &format!("src/demo/{built}.html"),
@@ -639,6 +642,26 @@ async fn docs_that_cannot_be_listed_are_unread_and_no_crate_of_the_project_is_to
     }
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn a_symbolic_link_at_the_top_of_the_docs_is_no_crate_and_is_passed_over() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    project(root).await;
+    let outside = tempfile::tempdir().unwrap();
+    write(outside.path(), "far/index.html", &whole("")).await;
+    let docs = docs_of(root);
+    // A link to a file of the root, and one to a directory out of the root.
+    tokio::fs::symlink(root.join("src/lib.rs"), docs.join("linked.html"))
+        .await
+        .unwrap();
+    tokio::fs::symlink(outside.path().join("far"), docs.join("far"))
+        .await
+        .unwrap();
+    let found = read(root, &["demo::Shelf"]).await;
+    assert!(is_there(&found, "demo::Shelf"), "{found:?}");
+}
+
 #[tokio::test]
 async fn with_the_build_directory_at_the_root_a_page_of_a_file_of_the_root_is_compared_and_one_a_build_script_made_is_not()
  {
@@ -650,7 +673,10 @@ async fn with_the_build_directory_at_the_root_a_page_of_a_file_of_the_root_is_co
     let docs = root.join("doc");
     crate_docs(&docs, "demo").await;
     write(&docs, "src/demo/lib.rs.html", &source_page(LIB)).await;
-    let built = format!("{}/debug/build/demo-1/out/made.rs", whole_path(root));
+    let built = format!(
+        "{}/debug/build/demo-0123456789abcdef/out/made.rs",
+        whole_path(root)
+    );
     write(
         &docs,
         &format!("src/demo/{built}.html"),
@@ -658,6 +684,26 @@ async fn with_the_build_directory_at_the_root_a_page_of_a_file_of_the_root_is_co
     )
     .await;
     assert!(is_there(&read(root, &["demo::Shelf"]).await, "demo::Shelf"));
+    // A file of the project on a path of the same words, with no package directory of
+    // cargo's form, is compared: it is no output of a build script.
+    write(root, "x/build/y/out/z.rs", "pub fn z() {}\n").await;
+    let alike = format!("{}/x/build/y/out/z.rs", whole_path(root));
+    write(
+        &docs,
+        &format!("src/demo/{alike}.html"),
+        &source_page("pub fn old() {}\n"),
+    )
+    .await;
+    all_not_of(
+        &read(root, &["demo::Shelf"]).await,
+        &["demo::Shelf"],
+        &NotOfSourcesWhy::Differs {
+            file: file("x/build/y/out/z.rs"),
+        },
+    );
+    tokio::fs::remove_file(docs.join(format!("src/demo/{alike}.html")))
+        .await
+        .unwrap();
     // A file of the root a crate reads by its whole path is compared, the build
     // directory being the root.
     write(root, "src/abs.rs", "pub fn abs() {}\n").await;
@@ -776,18 +822,26 @@ async fn docs_of_a_crate_that_depends_by_a_path_on_one_of_the_project_whose_sour
     let docs = docs_of(r);
     crate_docs(&docs, "a").await;
     write(&docs, "src/a/lib.rs.html", &source_page(LIB)).await;
-    all_not_of(
-        &read(r, &["a::Shelf"]).await,
-        &["a::Shelf"],
-        &NotOfSourcesWhy::NoTrace,
+    let found = read(r, &["a::Shelf"]).await;
+    all_not_of(&found, &["a::Shelf"], &NotOfSourcesWhy::NoTrace);
+    let why = said(&found, "a::Shelf");
+    assert!(
+        why.contains(
+            "the docs of `a` hold no page of the source of `b`, which it depends on by a path: build the docs of both"
+        ),
+        "{why}"
     );
-    // With `b`'s pages, and so `c`'s (a dependency of the workspace), all are held.
+    // With `b`'s pages, `b` depends on `c` (through the dependencies of the root) and
+    // the docs hold no page of `c`: still no trace, now of `c`.
     write(&docs, "src/b/lib.rs.html", &source_page(LIB)).await;
-    all_not_of(
-        &read(r, &["a::Shelf"]).await,
-        &["a::Shelf"],
-        &NotOfSourcesWhy::NoTrace,
+    let found = read(r, &["a::Shelf"]).await;
+    all_not_of(&found, &["a::Shelf"], &NotOfSourcesWhy::NoTrace);
+    let why = said(&found, "a::Shelf");
+    assert!(
+        why.contains("the docs of `b` hold no page of the source of `c`"),
+        "{why}"
     );
+    // With `c`'s pages too, all are held.
     write(&docs, "src/c/lib.rs.html", &source_page(LIB)).await;
     assert!(is_there(&read(r, &["a::Shelf"]).await, "a::Shelf"));
 }

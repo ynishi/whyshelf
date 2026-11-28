@@ -1,0 +1,156 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::CannotPlace",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::NamePlaces",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::NamePlaces::places",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::PlacesWay",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::app::shelf::ports::ArtifactSource::places",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::placement",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_core::domain::shelf::placement::Placement",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::file",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::js_test",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_item",
+      "space": "rust-item",
+      "state": "present"
+    },
+    {
+      "compare": {
+        "ignore": [],
+        "kind": "presence"
+      },
+      "hash": "sha256:e86fb6c6adb04d99ee15cc74f1959a203404f46b768a35dce19456d469a7bdc4",
+      "link": "rustdoc",
+      "name": "whyshelf_infra::shelf::artifact::rust_test",
+      "space": "rust-item",
+      "state": "present"
+    }
+  ],
+  "at": 1795877905440,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0ea6a701aca38a113fa0876be6d8a41d3d7bb5ee",
+      "hash": "sha256:e5510bccfa3f6b92fd7f402548a960d74bf50bd4d6beb031262a972e7a52fbec",
+      "key": {
+        "book": "requirement",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "REQ",
+          "tail": {
+            "kind": "number",
+            "value": "42"
+          }
+        }
+      },
+      "link": "serves",
+      "target": "01a20869-ab6e-762c-9771-9e8d81baecb9"
+    }
+  ],
+  "id": "01a222aa-6e44-74be-a5b4-1ba6482d9494",
+  "kind": "decision",
+  "reason": "For #228, after a second review of the follow-up of #225: DEC-116 says a build script's output is told by cargo's form of the package directory, and that rust-test reads the crates of a project by the one rule of rust-item; DEC-90 and DEC-99 say the same of the manifests read; V-145 and V-111 say what the new tests hold (a link at the top of the docs passed over, a look-alike path compared, the reason that names a crate and the one whose pages are missing, a crate at the top of a project with no manifest at its root read by rust-test). Read against the code by its author; what each document claims still holds, by the tests it names, which are left to CI on the pull request",
+  "revision": "e40bd2805eca166a53dc5600d275581095f5a721",
+  "seen": "sha256:37ecca4eebb5e924600cef923d52e894a84dae1766039f7bdb7c84c5fb694da5",
+  "seen_address": "f50ab89ed97157345a3e5b9355507f35cb458a53",
+  "subject": "01a20869-ab6e-762c-9771-9e8e84ae5744",
+  "v": 1,
+  "verb": "approve"
+}

@@ -422,7 +422,8 @@
 //! top of the tree (but one whose name starts with `.`) is read the same way, its
 //! package and the members of its workspace, from that directory: a project whose
 //! crate is in a directory of its own (`crate/Cargo.toml`) is read so, and one deeper
-//! is not. The dependencies of a package are not read as crates of the project: an
+//! is not. The space `rust-test` reads the crates of the project by this one rule too.
+//! The dependencies of a package are not read as crates of the project: an
 //! item of one is none; a dependency by a path on a package of the project is read as
 //! an edge between the two, for the holding of the docs (above).
 //!
@@ -864,13 +865,13 @@ impl RustItemSpace {
                 Found::There(place) => match lookup.source(&place).await {
                     // What the page of the source is of, by the rule the holding of the
                     // docs reads it by.
-                    Ok(source) => match lookup.held().sources() {
-                        Some((crates, sited)) => match crates.file_of(&source, sited).await {
+                    Ok(source) => {
+                        let (crates, sited) = lookup.held().sources();
+                        match crates.file_of(&source, sited).await {
                             SourceOf::File(file) => Ok(file),
                             other => Err(other.unplaced(&source).unwrap_or_default()),
-                        },
-                        None => Err(NonBlank::from(NOT_IN_THE_DOCS).into_string()),
-                    },
+                        }
+                    }
                     Err(why) => Err(why),
                 },
                 Found::Unread(why) | Found::CannotTell(why) => Err(why),
@@ -2085,7 +2086,7 @@ mod tests {
         // which no file of the project is at. Its page is not held against a file (its
         // text would be no file's).
         let built = format!(
-            "{}/debug/build/demo-1/out/built",
+            "{}/debug/build/demo-0123456789abcdef/out/built",
             d.display().to_string().trim_start_matches('/')
         );
         write(

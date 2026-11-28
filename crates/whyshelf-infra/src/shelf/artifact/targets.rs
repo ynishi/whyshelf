@@ -8,7 +8,7 @@
 //! | what | what it does |
 //! |---|---|
 //! | `Targets::of` | reads the manifest at the root (`Cargo.toml`): its package, and each member of its workspace by the member's own manifest |
-//! | `Targets::of_project` | the same; and, with no manifest at the root, the manifest of each directory at the top of the tree read the same way: the manifests the space `rust-item` reads |
+//! | `Targets::of_project` | the same; and, with no manifest at the root, the manifest of each directory at the top of the tree read the same way: the manifests the spaces `rust-item` and `rust-test` read, by the one rule of both |
 //! | `Targets::path_dependencies` | the libraries of the project a package depends on by a path, of its own or of its workspace's |
 //! | `Targets::crate_named` | the library or the binary a crate's name is: the library first, and two of them when two packages have a crate of the name under two directories |
 //!
@@ -173,7 +173,8 @@ impl Targets {
         targets
     }
 
-    /// The targets of the project at `side` as the space `rust-item` reads them: those
+    /// The targets of the project at `side` as the spaces `rust-item` and `rust-test`
+    /// read them, by the one rule of both: those
     /// of [`of`](Self::of); and, when the root has no manifest, those of the manifest
     /// of each directory at the top of the tree (not one whose name starts with `.`),
     /// each read as the root's would be (its package and the members of its

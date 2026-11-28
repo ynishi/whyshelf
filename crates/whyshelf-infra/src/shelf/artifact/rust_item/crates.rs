@@ -22,7 +22,7 @@
 //!
 //! | rule | when | the page is of |
 //! |---|---|---|
-//! | 1 | `P` starts with the parts of the build directory, as an absolute path ([`Sited`], either form), and goes on as the output of a build script does (`<profile>/build/<package>-<hash>/out/…`, or with a target triple before the profile) | a source a build made ([`SourceOf::MadeByBuild`]) |
+//! | 1 | `P` starts with the parts of the build directory, as an absolute path ([`Sited`], either form), and goes on as the output of a build script does (`<profile>/build/<package>-<hash>/out/…`, the hash 16 hexadecimal digits, or with a target triple before the profile) | a source a build made ([`SourceOf::MadeByBuild`]) |
 //! | 2 | `P` starts with the parts of the root of the project, as an absolute path | the file of the rest of `P` ([`SourceOf::File`]) |
 //! | 3 | `P` has a part `up` (rustdoc's `..`, as older versions write it) | the file `P` names from the directory of the crate's root file, `up` read as `..`; one that climbs past the root leaves the project ([`SourceOf::LeavesProject`]) |
 //! | 4 | any other | the first file of the side of `P` under the directory of the crate's root file, then under each directory above it up to the root: rustdoc drops a `..` of a path and does not say how many there were; with none there, the one under the directory of the crate's root file |
@@ -245,12 +245,24 @@ impl Crates {
 
 /// Whether `rest`, the parts of a place under the build directory, is in the output of
 /// a build script, as cargo lays it out: `<profile>/build/<package>-<hash>/out/…`, or
-/// `<triple>/<profile>/build/<package>-<hash>/out/…`.
+/// `<triple>/<profile>/build/<package>-<hash>/out/…`, the directory of the package
+/// its name, `-` and 16 hexadecimal digits. A file of the project that happens to sit
+/// on a path of those words (`x/build/y/out/z.rs`, the build directory being the root)
+/// is not.
 fn made_by_a_build_script(rest: &[String]) -> bool {
     [1, 2].into_iter().any(|at| {
         rest.get(at).is_some_and(|part| part == "build")
+            && rest.get(at + 1).is_some_and(|part| is_package_dir(part))
             && rest.get(at + 2).is_some_and(|part| part == "out")
             && rest.len() > at + 3
+    })
+}
+
+/// Whether `part` is the name cargo gives the directory of a package's build output:
+/// a name, `-`, and a hash of 16 hexadecimal digits.
+fn is_package_dir(part: &str) -> bool {
+    part.rsplit_once('-').is_some_and(|(name, hash)| {
+        !name.is_empty() && hash.len() == 16 && hash.chars().all(|c| c.is_ascii_hexdigit())
     })
 }
 
