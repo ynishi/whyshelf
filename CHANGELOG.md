@@ -36,6 +36,10 @@ and this project adheres to
 
 ### Fixed
 
+- A file left with both sides of a merge conflict whose text starts with the
+  marker after a byte order mark is told as holding merge conflict markers too;
+  it was told as having no front matter, which a book that skips such files
+  passes over (#221).
 - A file that a merge left both sides of a conflict in, where the conflict
   touches a front matter, is told by `check` as holding merge conflict markers,
   not as YAML that cannot be read, and is never skipped. When its sides show
